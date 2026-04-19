@@ -1,5 +1,5 @@
 import { v7 as uuidv7 } from "uuid";
 
-export function getUUID() {
+export function genUUID() {
   return uuidv7();
 }
