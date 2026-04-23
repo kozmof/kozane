@@ -1,21 +1,22 @@
 {
-  "name": "workspace",
+  "name": "kozane",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
+    "dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check"
   },
   "dependencies": {
-    "@hono/node-server": "^1.19.13",
     "@libsql/client": "^0.17.2",
     "dotenv": "^17.4.1",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.12",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
@@ -24,6 +25,12 @@
     "oxfmt": "^0.44.0",
     "oxlint": "^1.59.0",
     "tsx": "^4.7.1",
-    "typescript": "^5.8.3"
+    "@sveltejs/adapter-auto": "^7.0.1",
+		"@sveltejs/kit": "^2.57.0",
+		"@sveltejs/vite-plugin-svelte": "^7.0.0",
+		"svelte": "^5.55.2",
+		"svelte-check": "^4.4.6",
+    "typescript": "^6.0.2",
+		"vite": "^8.0.7"
   }
 }

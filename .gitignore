@@ -11,10 +11,22 @@
 # deps
 node_modules/
 
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
 # env
 .env
-.env.test
-.env.production
+.env.*
 
 # logs
 logs/
@@ -27,6 +39,7 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+Thumbs.db
 
 .pnpm-store
 .devcontainer
