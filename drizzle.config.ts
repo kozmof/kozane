@@ -1,13 +1,11 @@
-import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
-
-const version = "v1";
+import { getDBURL } from "./src/db/internal/config.js";
 
 export default defineConfig({
   out: "./drizzle",
-  schema: `./src/db/${version}/schema.ts`,
+  schema: "./src/db/schema.ts",
   dialect: "sqlite",
   dbCredentials: {
-    url: process.env.DATABASE_URL!,
+    url: getDBURL(),
   },
 });
