@@ -3,11 +3,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt",
@@ -20,17 +20,17 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.57.0",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@types/node": "^20.11.17",
     "drizzle-kit": "^0.31.10",
     "oxfmt": "^0.44.0",
     "oxlint": "^1.59.0",
+    "svelte": "^5.55.2",
+    "svelte-check": "^4.4.6",
     "tsx": "^4.7.1",
-    "@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/kit": "^2.57.0",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"svelte": "^5.55.2",
-		"svelte-check": "^4.4.6",
     "typescript": "^6.0.2",
-		"vite": "^8.0.7"
+    "vite": "^8.0.7"
   }
 }
