@@ -1,21 +1,18 @@
 import { workingCopyTable } from "../schema";
 import { eq, isNull } from "drizzle-orm";
-import type { DB } from "../client";
-import type { WorkingCopy } from "./types";
+import type { WithDB, WithScope, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
 
-type WithScopeId = { db: DB; scopeId: string };
-
-export async function listWorkingCopies({ db, scopeId }: WithScopeId): Promise<WorkingCopy[]> {
+export async function listWorkingCopies({ db, scopeId }: WithScope): Promise<WorkingCopy[]> {
   return db.select().from(workingCopyTable).where(eq(workingCopyTable.scopeId, scopeId));
 }
 
 // Returns working copies whose scope was deleted (scopeId set to null on scope delete)
-export async function listOrphanedWorkingCopies({ db }: { db: DB }): Promise<WorkingCopy[]> {
+export async function listOrphanedWorkingCopies({ db }: WithDB): Promise<WorkingCopy[]> {
   return db.select().from(workingCopyTable).where(isNull(workingCopyTable.scopeId));
 }
 
-export async function addWorkingCopy({ db, scopeId }: WithScopeId): Promise<string> {
+export async function addWorkingCopy({ db, scopeId }: WithScope): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
     .values({ scopeId })
@@ -23,7 +20,7 @@ export async function addWorkingCopy({ db, scopeId }: WithScopeId): Promise<stri
   return row.id;
 }
 
-type GetWorkingCopy = { db: DB; workingCopyId: string };
+type GetWorkingCopy = WithDB & { workingCopyId: string };
 export async function getWorkingCopy({
   db,
   workingCopyId,
@@ -35,7 +32,7 @@ export async function getWorkingCopy({
     .get();
 }
 
-type DeleteWorkingCopy = { db: DB; workingCopyId: string };
+type DeleteWorkingCopy = WithDB & { workingCopyId: string };
 export async function deleteWorkingCopy({ db, workingCopyId }: DeleteWorkingCopy): Promise<void> {
   const deleted = await db
     .delete(workingCopyTable)

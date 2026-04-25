@@ -1,6 +1,6 @@
 # Kozane — Codebase Analysis
 
-**Date:** 2026-04-25
+**Date:** 2026-04-25 (improvements applied 2026-04-25)
 **Stack:** SvelteKit 5 · Svelte 5 Runes · Drizzle ORM · libSQL (SQLite) · TypeScript 6 · Vite 8
 
 ---
@@ -78,19 +78,18 @@ src/
 ## 3. Type and Interface Relations
 
 ```
-WithDB = { db: DB }                              (api/types.ts — used by project.ts, scope.ts)
+WithDB      = { db: DB }                         (api/types.ts)
+WithProject = WithDB & { projectId: string }     (api/types.ts — used by bundle.ts)
+WithBundle  = WithDB & { bundleId: string }      (api/types.ts — used by card.ts)
+WithScope   = WithDB & { scopeId: string }       (api/types.ts — used by working-copy.ts, scope-rel.ts)
 
-BundleBase   = { db: DB; projectId: string }     (bundle.ts — local, mirrors WithDB)
-CardBase     = { db: DB; bundleId: string }      (card.ts — local, mirrors WithDB)
-WithScopeId  = { db: DB; scopeId: string }       (working-copy.ts — local)
-ScopeRelBase = { db: DB; scopeId: string }       (scope-rel.ts — local)
-ScopeRelKey  = { db: DB; scopeId: string; cardId: string }
+ScopeRelKey = WithScope & { cardId: string }     (scope-rel.ts — local)
 
 Domain row types (InferSelectModel):
-  Project, Bundle, Card, Scope, WorkingCopy      (api/types.ts)
-  ScopeRel                                       ← NOT exported (gap)
+  Project, Bundle, Card, Scope, ScopeRel, WorkingCopy   (api/types.ts)
 
 DB = typeof db   (client.ts — full LibSQLDatabase<schema>)
+Tx = LibSQLDatabase<typeof schema>               (client.ts — transaction handle, lacks `batch`)
 ```
 
 ---
@@ -124,22 +123,25 @@ All functions follow `async fn({ db, ...params }): Promise<T>`.
 ### Dependency injection via context object
 The `db` handle is always passed explicitly as part of a `{ db, ...params }` argument. The singleton is never imported directly in API functions — they are all injectable and unit-testable without module mocking.
 
+### Typed context hierarchy
+Shared context types (`WithDB`, `WithProject`, `WithBundle`, `WithScope`) are defined centrally in `api/types.ts` and composed with intersection types (`WithProject = WithDB & { projectId: string }`). Per-module local aliases (e.g., `type BundleBase = WithProject`) keep call-site names readable without duplicating structure.
+
 ---
 
 ## 6. Pitfalls
 
-| # | Location | Issue |
-|---|----------|-------|
-| 1 | `client.ts:13` | `(db as any).transaction(fn)` — `any` cast hides API changes at runtime; `Promise<T>` return masks it |
-| 2 | `client.ts:5` | DB singleton initialises at import time; build steps without `DATABASE_URL` throw immediately |
-| 3 | `scope.ts:7` | `listScopes` returns all scopes globally — unbounded, no pagination |
-| 4 | `utils.ts:2` | `assertFound` throws plain `Error`; becomes a generic 500 in SvelteKit, not a typed 404 |
-| 5 | `working-copy.ts` | No `updateWorkingCopy` — cannot re-link a working copy to a different scope |
-| 6 | `schema.ts:22` | `scopeTable` has only `id` — no name, label, or any human-readable attribute |
-| 7 | `card.ts:22` | `addCard` accepts arbitrary `workingCopyId` with no validation it belongs to the card's project context |
-| 8 | `drizzle.config.ts:8` | Calls `getDBURL()` at config-parse time — `drizzle-kit generate` fails if `DATABASE_URL` unset |
-| 9 | `bundle.ts:3` | Imports `DB` directly from `client` instead of `WithDB` from `types.ts` |
-| 10 | `schema-types/` | Empty directory — likely planned but never implemented |
+| # | Location | Status | Issue |
+|---|----------|--------|-------|
+| 1 | `client.ts` | ✅ Fixed | `withTx` now calls `db.transaction()` on the typed `db`; only the callback argument carries a narrow `any` cast (documented). `Tx = LibSQLDatabase<typeof schema>` is the public-facing type. |
+| 2 | `client.ts:5` | open | DB singleton initialises at import time; build steps without `DATABASE_URL` throw immediately |
+| 3 | `scope.ts:7` | open | `listScopes` returns all scopes globally — unbounded, no pagination |
+| 4 | `utils.ts` | ✅ Fixed | `assertFound` now throws `NotFoundError extends Error`; route handlers can distinguish 404 from 500 via `instanceof NotFoundError`. |
+| 5 | `working-copy.ts` | open | No `updateWorkingCopy` — cannot re-link a working copy to a different scope |
+| 6 | `schema.ts:22` | open | `scopeTable` has only `id` — no name, label, or any human-readable attribute |
+| 7 | `card.ts` | open | `addCard` accepts arbitrary `workingCopyId` with no validation it belongs to the card's project context |
+| 8 | `drizzle.config.ts` | ✅ Fixed | Now uses `process.env.DATABASE_URL ?? 'file:./sqlite/local.db'`; `drizzle-kit generate` works without a live DB. |
+| 9 | `bundle.ts`, `card.ts`, `working-copy.ts`, `scope-rel.ts` | ✅ Fixed | All local `{ db: DB; ... }` types replaced with `WithProject`, `WithBundle`, `WithScope` from `types.ts`. `DB` imports removed from consumer files. |
+| 10 | `schema-types/` | open | Empty directory — likely planned but never implemented |
 
 ---
 
@@ -186,53 +188,23 @@ When a working copy is created, only `scopeId` is stored. The set of cards gathe
 
 ## 8. Improvement Points
 
-### Types / Interfaces
+### Types / Interfaces — ✅ Applied
 
-1. **Standardise the base context type.** Four files define a local `{ db: DB; ... }` instead of extending `WithDB`. Consolidate in `types.ts`:
-   ```ts
-   export type WithProject = WithDB & { projectId: string };
-   export type WithBundle  = WithDB & { bundleId: string };
-   export type WithScope   = WithDB & { scopeId: string };
-   ```
+1. ~~Standardise the base context type~~ — `WithProject`, `WithBundle`, `WithScope` added to `api/types.ts`; all consumer files updated.
+2. ~~Export `ScopeRel`~~ — `ScopeRel = InferSelectModel<typeof scopeRelTable>` added to `api/types.ts`.
+3. ~~Fix the `withTx` type cast~~ — `db` is now typed; callback cast is narrowed to `fn as any` with a comment explaining `SQLiteTransaction` lacks `batch`. Public `Tx` type exported from `client.ts`.
 
-2. **Export `ScopeRel`.** Add `InferSelectModel<typeof scopeRelTable>` to `types.ts`.
+### Implementations — ✅ Applied
 
-3. **Fix the `withTx` type cast.** Replace `(db as any)` with a proper Drizzle transaction type:
-   ```ts
-   import type { LibSQLDatabase } from 'drizzle-orm/libsql';
-   export async function withTx<T>(
-     db: LibSQLDatabase<typeof schema>,
-     fn: (tx: LibSQLDatabase<typeof schema>) => Promise<T>
-   ): Promise<T> {
-     return db.transaction(fn);
-   }
-   ```
-
-### Implementations
-
-4. **Typed `NotFoundError`:**
-   ```ts
-   export class NotFoundError extends Error {
-     constructor(label: string) { super(`${label} not found`); this.name = 'NotFoundError'; }
-   }
-   ```
-   Lets route handlers distinguish 404 from 500 via `instanceof`.
-
-5. **Guard `drizzle.config.ts` against missing env var during schema generation:**
-   ```ts
-   url: process.env.DATABASE_URL ?? 'file:./sqlite/local.db',
-   ```
-
-6. **Wire `withTx` into multi-step operations.** `withTx` is defined but unused. Operations that span multiple tables (scope + working copy + card creation) should run inside a transaction.
-
+4. ~~Typed `NotFoundError`~~ — `NotFoundError extends Error` added to `api/utils.ts`; `assertFound` throws it.
+5. ~~Guard `drizzle.config.ts`~~ — `process.env.DATABASE_URL ?? 'file:./sqlite/local.db'` inline; `getDBURL` import removed.
+6. **Wire `withTx` into multi-step operations.** `withTx` is correctly typed and available. No composite operations exist yet — apply when the first multi-table write is introduced.
 7. **Add a composite `createCardFromWorkingCopy` function** that encapsulates the working-copy-id + bundle-id placement in one call.
 
-### Design
+### Design — open
 
 8. **Add attributes to `scope` and `working_copy`.** At minimum: a `createdAt` timestamp; optionally a `label` for scope and a `userId`/`ownerId` for working copy.
-
 9. **Decide and document the gathered vs. originated relationship.** Either auto-insert `scope_rel` on card creation from a working copy, or add an explicit API to query both paths.
-
 10. **Add scope → projects reverse query** as a convenience function.
 
 ---

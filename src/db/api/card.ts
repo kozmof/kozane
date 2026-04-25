@@ -1,10 +1,9 @@
 import { cardTable } from "../schema";
 import { and, eq } from "drizzle-orm";
-import type { DB } from "../client";
-import type { Card } from "./types";
+import type { WithBundle, Card } from "./types";
 import { assertFound } from "./utils";
 
-type CardBase = { db: DB; bundleId: string };
+type CardBase = WithBundle;
 
 export async function listCards({ db, bundleId }: CardBase): Promise<Card[]> {
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
