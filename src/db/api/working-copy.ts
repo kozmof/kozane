@@ -25,11 +25,7 @@ export async function getWorkingCopy({
   db,
   workingCopyId,
 }: GetWorkingCopy): Promise<WorkingCopy | undefined> {
-  return db
-    .select()
-    .from(workingCopyTable)
-    .where(eq(workingCopyTable.id, workingCopyId))
-    .get();
+  return db.select().from(workingCopyTable).where(eq(workingCopyTable.id, workingCopyId)).get();
 }
 
 type DeleteWorkingCopy = WithDB & { workingCopyId: string };

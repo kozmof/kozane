@@ -10,7 +10,11 @@ export async function listBundles({ db, projectId }: BundleBase): Promise<Bundle
 }
 
 type GetBundle = BundleBase & { bundleId: string };
-export async function getBundle({ db, projectId, bundleId }: GetBundle): Promise<Bundle | undefined> {
+export async function getBundle({
+  db,
+  projectId,
+  bundleId,
+}: GetBundle): Promise<Bundle | undefined> {
   // bundleId alone would uniquely identify the row (UUID), but projectId is checked too as a
   // defence-in-depth access boundary so callers cannot reach across project lines via a bare ID.
   return db

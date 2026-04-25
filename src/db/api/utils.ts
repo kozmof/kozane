@@ -1,7 +1,7 @@
 export class NotFoundError extends Error {
   constructor(label: string) {
     super(`${label} not found`);
-    this.name = 'NotFoundError';
+    this.name = "NotFoundError";
   }
 }
 
