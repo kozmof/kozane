@@ -1,6 +1,6 @@
-import { workingCopyTable } from "../schema";
-import { eq, isNull } from "drizzle-orm";
-import type { WithDB, WithScope, WorkingCopy } from "./types";
+import { cardTable, workingCopyTable } from "../schema";
+import { eq, getTableColumns, isNull } from "drizzle-orm";
+import type { WithDB, WithScope, Card, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
 
 export async function listWorkingCopies({ db, scopeId }: WithScope): Promise<WorkingCopy[]> {
@@ -10,6 +10,15 @@ export async function listWorkingCopies({ db, scopeId }: WithScope): Promise<Wor
 // Returns working copies whose scope was deleted (scopeId set to null on scope delete)
 export async function listOrphanedWorkingCopies({ db }: WithDB): Promise<WorkingCopy[]> {
   return db.select().from(workingCopyTable).where(isNull(workingCopyTable.scopeId));
+}
+
+// Returns cards whose working copy has lost its scope (second-level orphan chain from scope deletion)
+export async function listCardsWithOrphanedWorkingCopy({ db }: WithDB): Promise<Card[]> {
+  return db
+    .select(getTableColumns(cardTable))
+    .from(cardTable)
+    .innerJoin(workingCopyTable, eq(cardTable.workingCopyId, workingCopyTable.id))
+    .where(isNull(workingCopyTable.scopeId));
 }
 
 export async function addWorkingCopy({ db, scopeId }: WithScope): Promise<string> {
