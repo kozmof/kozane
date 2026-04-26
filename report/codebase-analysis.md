@@ -1,6 +1,6 @@
 # Kozane — Codebase Analysis
 
-**Date:** 2026-04-25 (improvements applied 2026-04-25)
+**Date:** 2026-04-25 (improvements applied 2026-04-25, 2026-04-26)
 **Stack:** SvelteKit 5 · Svelte 5 Runes · Drizzle ORM · libSQL (SQLite) · TypeScript 6 · Vite 8
 
 ---
@@ -66,7 +66,8 @@ src/
 │       ├── card.ts       # CRUD: card    (bundleId + cardId access boundary)
 │       ├── scope.ts      # CRUD: scope   (cross-project, id-only entity)
 │       ├── scope-rel.ts  # M:N ops: scope ↔ card
-│       └── working-copy.ts # CRUD: working_copy + orphan listing
+│       ├── working-copy.ts # CRUD: working_copy + orphan listing (two levels)
+│       └── composite.ts  # Cross-module: createCardFromWorkingCopy
 └── routes/
     ├── +layout.svelte    # Favicon, renders children
     ├── +page.server.ts   # load: listProjects
@@ -104,8 +105,9 @@ All functions follow `async fn({ db, ...params }): Promise<T>`.
 | `bundle.ts`       | `listBundles`, `getBundle`, `addBundle`, `deleteBundle`, `updateBundleName`                               |
 | `card.ts`         | `listCards`, `getCard`, `addCard`, `deleteCard`, `updateCardContent`                                      |
 | `scope.ts`        | `listScopes`, `getScope`, `addScope`, `deleteScope`                                                       |
-| `working-copy.ts` | `listWorkingCopies`, `listOrphanedWorkingCopies`, `addWorkingCopy`, `getWorkingCopy`, `deleteWorkingCopy` |
+| `working-copy.ts` | `listWorkingCopies`, `listOrphanedWorkingCopies`, `listCardsWithOrphanedWorkingCopy`, `addWorkingCopy`, `getWorkingCopy`, `deleteWorkingCopy` |
 | `scope-rel.ts`    | `listCardsByScope`, `addScopeRel` (idempotent), `removeScopeRel`                                          |
+| `composite.ts`    | `createCardFromWorkingCopy` (transactional: addCard + auto addScopeRel)                                   |
 
 ---
 
@@ -152,31 +154,27 @@ Shared context types (`WithDB`, `WithProject`, `WithBundle`, `WithScope`) are de
 
 ## 7. Domain-Level Design Gaps
 
-### 7-1. Two card→scope relationships are semantically distinct but not unified
+### 7-1. Two card→scope relationships are semantically distinct but not unified — ✅ Fixed
 
 There are two independent paths by which a card relates to a scope:
 
 - **Gathered**: `scope_rel (scopeId, cardId)` — an existing card is explicitly collected into a scope.
 - **Originated**: `card.workingCopyId → working_copy.scopeId` — a card was created inside a working copy that belongs to a scope.
 
-The schema does not distinguish these. A query "all cards belonging to scope X" requires a `UNION` of both paths. No such API function exists today, and creating a card from a working copy does NOT automatically insert a `scope_rel` row.
+`createCardFromWorkingCopy` (see 7-2) resolves this by auto-inserting a `scope_rel` row at card creation time when the working copy has a live scope. "Originated" and "gathered" are therefore unified at the point of creation; `listCardsByScope` captures both without a UNION.
 
-**Open question:** Should a card created from a working copy be auto-added to `scope_rel`? Or are "gathered" and "originated" intentionally separate?
+### 7-2. `card.bundleId NOT NULL` creates a hidden placement decision at creation time — ✅ Fixed
 
-### 7-2. `card.bundleId NOT NULL` creates a hidden placement decision at creation time
+`src/db/api/composite.ts` exports `createCardFromWorkingCopy({ db, workingCopyId, bundleId, content })`. It encapsulates both concerns — working-copy context and bundle placement — in a single transactional call. `addCard` remains the low-level primitive for plain card creation.
 
-A card derived from a working copy still requires a `bundleId`. The working copy carries no target bundle. The caller must simultaneously resolve two independent concerns: (1) which scope context originated the card (working copy), and (2) which project/bundle stores it. These are orthogonal but both required at `addCard` time.
-
-A higher-level composite function — e.g., `createCardFromWorkingCopy({ db, workingCopyId, bundleId, content })` — would make this contract explicit.
-
-### 7-3. Scope deletion creates a two-level orphan chain
+### 7-3. Scope deletion creates a two-level orphan chain — ✅ Fixed
 
 When a scope is deleted:
 
 - `working_copy.scope_id → null` (orphan working copy — modeled)
 - Cards born from that working copy still hold `workingCopyId` pointing to the now-orphaned working copy
 
-A card can therefore have a `workingCopyId` whose working copy has `scopeId = null` — the card has silently lost its scope origin. `listOrphanedWorkingCopies` exposes the first level; there is no `listCardsWithOrphanedWorkingCopy` for the second.
+`listCardsWithOrphanedWorkingCopy({ db })` in `working-copy.ts` surfaces the second level via an inner join on `working_copy.scope_id IS NULL`. Use it alongside `listOrphanedWorkingCopies` for full orphan-chain cleanup.
 
 ### 7-4. Multiple working copies per scope — intent is undefined
 
@@ -205,12 +203,12 @@ When a working copy is created, only `scopeId` is stored. The set of cards gathe
 4. ~~Typed `NotFoundError`~~ — `NotFoundError extends Error` added to `api/utils.ts`; `assertFound` throws it.
 5. ~~Guard `drizzle.config.ts`~~ — `process.env.DATABASE_URL ?? 'file:./sqlite/local.db'` inline; `getDBURL` import removed.
 6. **Wire `withTx` into multi-step operations.** `withTx` is correctly typed and available. No composite operations exist yet — apply when the first multi-table write is introduced.
-7. **Add a composite `createCardFromWorkingCopy` function** that encapsulates the working-copy-id + bundle-id placement in one call.
+7. ~~Add a composite `createCardFromWorkingCopy` function~~ — `composite.ts` exports `createCardFromWorkingCopy`; auto-inserts `scope_rel` when working copy has a live scope.
 
 ### Design — open
 
 8. **Add attributes to `scope` and `working_copy`.** At minimum: a `createdAt` timestamp; optionally a `label` for scope and a `userId`/`ownerId` for working copy.
-9. **Decide and document the gathered vs. originated relationship.** Either auto-insert `scope_rel` on card creation from a working copy, or add an explicit API to query both paths.
+9. ~~Decide and document the gathered vs. originated relationship~~ — resolved by auto-insert in `createCardFromWorkingCopy`; `listCardsByScope` now covers both paths.
 10. **Add scope → projects reverse query** as a convenience function.
 
 ---
