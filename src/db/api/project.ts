@@ -1,24 +1,24 @@
 import { projectTable } from "../schema";
 import { eq } from "drizzle-orm";
-import type { WithDB, Project } from "./types";
+import type { NeedsDB, Project } from "./types";
 import { assertFound } from "./utils";
 
-export async function getAllProjects({ db }: WithDB): Promise<Project[]> {
+export async function getAllProjects({ db }: NeedsDB): Promise<Project[]> {
   return db.select().from(projectTable);
 }
 
-type GetProject = WithDB & { projectId: string };
+type GetProject = NeedsDB & { projectId: string };
 export async function getProject({ db, projectId }: GetProject): Promise<Project | undefined> {
   return db.select().from(projectTable).where(eq(projectTable.id, projectId)).get();
 }
 
-type AddProject = WithDB & { name: string };
+type AddProject = NeedsDB & { name: string };
 export async function addProject({ db, name }: AddProject): Promise<string> {
   const [row] = await db.insert(projectTable).values({ name }).returning({ id: projectTable.id });
   return row.id;
 }
 
-type DeleteProject = WithDB & { projectId: string };
+type DeleteProject = NeedsDB & { projectId: string };
 export async function deleteProject({ db, projectId }: DeleteProject): Promise<void> {
   const deleted = await db
     .delete(projectTable)
@@ -27,7 +27,7 @@ export async function deleteProject({ db, projectId }: DeleteProject): Promise<v
   assertFound(deleted, `Project projectId=${projectId}`);
 }
 
-type UpdateProjectName = WithDB & { projectId: string; name: string };
+type UpdateProjectName = NeedsDB & { projectId: string; name: string };
 export async function updateProjectName({ db, projectId, name }: UpdateProjectName): Promise<void> {
   const updated = await db
     .update(projectTable)

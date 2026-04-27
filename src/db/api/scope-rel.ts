@@ -1,11 +1,11 @@
 import { and, eq, getTableColumns } from "drizzle-orm";
 import { cardTable, scopeRelTable } from "../schema";
-import type { WithScope, Card } from "./types";
+import type { NeedsScope, Card } from "./types";
 import { assertFound } from "./utils";
 
-type ScopeRelKey = WithScope & { cardId: string };
+type ScopeRelKey = NeedsScope & { cardId: string };
 
-export async function getAllCardsByScope({ db, scopeId }: WithScope): Promise<Card[]> {
+export async function getAllCardsByScope({ db, scopeId }: NeedsScope): Promise<Card[]> {
   return db
     .select(getTableColumns(cardTable))
     .from(cardTable)

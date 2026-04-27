@@ -1,15 +1,13 @@
 import { bundleTable } from "../schema";
 import { and, eq } from "drizzle-orm";
-import type { WithProject, Bundle } from "./types";
+import type { NeedsProject, Bundle } from "./types";
 import { assertFound } from "./utils";
 
-type BundleBase = WithProject;
-
-export async function getAllBundles({ db, projectId }: BundleBase): Promise<Bundle[]> {
+export async function getAllBundles({ db, projectId }: NeedsProject): Promise<Bundle[]> {
   return db.select().from(bundleTable).where(eq(bundleTable.projectId, projectId));
 }
 
-type GetBundle = BundleBase & { bundleId: string };
+type GetBundle = NeedsProject & { bundleId: string };
 export async function getBundle({
   db,
   projectId,
@@ -24,7 +22,7 @@ export async function getBundle({
     .get();
 }
 
-type AddBundle = BundleBase & { name: string };
+type AddBundle = NeedsProject & { name: string };
 export async function addBundle({ db, projectId, name }: AddBundle): Promise<string> {
   const [row] = await db
     .insert(bundleTable)
@@ -33,7 +31,7 @@ export async function addBundle({ db, projectId, name }: AddBundle): Promise<str
   return row.id;
 }
 
-type DeleteBundle = BundleBase & { bundleId: string };
+type DeleteBundle = NeedsProject & { bundleId: string };
 export async function deleteBundle({ db, projectId, bundleId }: DeleteBundle): Promise<void> {
   const deleted = await db
     .delete(bundleTable)
@@ -42,7 +40,7 @@ export async function deleteBundle({ db, projectId, bundleId }: DeleteBundle): P
   assertFound(deleted, `Bundle projectId=${projectId} bundleId=${bundleId}`);
 }
 
-type UpdateBundleName = BundleBase & { bundleId: string; name: string };
+type UpdateBundleName = NeedsProject & { bundleId: string; name: string };
 export async function updateBundleName({
   db,
   projectId,

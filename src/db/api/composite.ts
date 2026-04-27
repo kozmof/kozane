@@ -2,10 +2,10 @@ import { withTx, type DB } from "../client";
 import { addCard } from "./card";
 import { addScopeRel } from "./scope-rel";
 import { getWorkingCopy } from "./working-copy";
-import type { WithDB } from "./types";
+import type { NeedsDB } from "./types";
 import { NotFoundError } from "./utils";
 
-type CreateCardFromWorkingCopy = WithDB & {
+type CreateCardFromWorkingCopy = NeedsDB & {
   workingCopyId: string;
   bundleId: string;
   content: string;

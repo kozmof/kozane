@@ -9,10 +9,10 @@ import type {
   workingCopyTable,
 } from "../schema";
 
-export type WithDB = { db: DB };
-export type WithProject = WithDB & { projectId: string };
-export type WithBundle = WithDB & { bundleId: string };
-export type WithScope = WithDB & { scopeId: string };
+export type NeedsDB = { db: DB };
+export type NeedsProject = NeedsDB & { projectId: string };
+export type NeedsBundle = NeedsDB & { bundleId: string };
+export type NeedsScope = NeedsDB & { scopeId: string };
 
 export type Project = InferSelectModel<typeof projectTable>;
 export type Bundle = InferSelectModel<typeof bundleTable>;
