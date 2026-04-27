@@ -99,15 +99,15 @@ Tx = LibSQLDatabase<typeof schema>               (client.ts — transaction hand
 
 All functions follow `async fn({ db, ...params }): Promise<T>`.
 
-| Module            | Functions                                                                                                 |
-| ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `project.ts`      | `getAllProjects`, `getProject`, `addProject`, `deleteProject`, `updateProjectName`                          |
-| `bundle.ts`       | `getAllBundles`, `getBundle`, `addBundle`, `deleteBundle`, `updateBundleName`                               |
-| `card.ts`         | `getAllCards`, `getCard`, `addCard`, `deleteCard`, `updateCardContent`                                      |
-| `scope.ts`        | `getAllScopes`, `getScope`, `addScope`, `deleteScope`                                                       |
+| Module            | Functions                                                                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `project.ts`      | `getAllProjects`, `getProject`, `addProject`, `deleteProject`, `updateProjectName`                                                                  |
+| `bundle.ts`       | `getAllBundles`, `getBundle`, `addBundle`, `deleteBundle`, `updateBundleName`                                                                       |
+| `card.ts`         | `getAllCards`, `getCard`, `addCard`, `deleteCard`, `updateCardContent`                                                                              |
+| `scope.ts`        | `getAllScopes`, `getScope`, `addScope`, `deleteScope`                                                                                               |
 | `working-copy.ts` | `getAllWorkingCopies`, `getAllOrphanedWorkingCopies`, `getAllCardsWithOrphanedWorkingCopy`, `addWorkingCopy`, `getWorkingCopy`, `deleteWorkingCopy` |
-| `scope-rel.ts`    | `getAllCardsByScope`, `addScopeRel` (idempotent), `removeScopeRel`                                          |
-| `composite.ts`    | `createCardFromWorkingCopy` (transactional: addCard + auto addScopeRel)                                   |
+| `scope-rel.ts`    | `getAllCardsByScope`, `addScopeRel` (idempotent), `removeScopeRel`                                                                                  |
+| `composite.ts`    | `createCardFromWorkingCopy` (transactional: addCard + auto addScopeRel)                                                                             |
 
 ---
 
@@ -141,7 +141,7 @@ Shared context types (`WithDB`, `WithProject`, `WithBundle`, `WithScope`) are de
 | --- | --------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `client.ts`                                               | ✅ Fixed | `withTx` now calls `db.transaction()` on the typed `db`; only the callback argument carries a narrow `any` cast (documented). `Tx = LibSQLDatabase<typeof schema>` is the public-facing type. |
 | 2   | `client.ts:5`                                             | open     | DB singleton initialises at import time; build steps without `DATABASE_URL` throw immediately                                                                                                 |
-| 3   | `scope.ts:7`                                              | open     | `getAllScopes` returns all scopes globally — unbounded, no pagination                                                                                                                           |
+| 3   | `scope.ts:7`                                              | open     | `getAllScopes` returns all scopes globally — unbounded, no pagination                                                                                                                         |
 | 4   | `utils.ts`                                                | ✅ Fixed | `assertFound` now throws `NotFoundError extends Error`; route handlers can distinguish 404 from 500 via `instanceof NotFoundError`.                                                           |
 | 5   | `working-copy.ts`                                         | open     | No `updateWorkingCopy` — cannot re-link a working copy to a different scope                                                                                                                   |
 | 6   | `schema.ts:22`                                            | open     | `scopeTable` has only `id` — no name, label, or any human-readable attribute                                                                                                                  |
