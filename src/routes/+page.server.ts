@@ -1,7 +1,7 @@
 import type { PageServerLoad } from "./$types";
-import { listProjects } from "../db/api/project";
+import { getAllProjects } from "../db/api/project";
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const projects = await listProjects({ db: locals.db });
+  const projects = await getAllProjects({ db: locals.db });
   return { projects };
 };

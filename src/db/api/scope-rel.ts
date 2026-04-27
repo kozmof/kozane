@@ -5,7 +5,7 @@ import { assertFound } from "./utils";
 
 type ScopeRelKey = WithScope & { cardId: string };
 
-export async function listCardsByScope({ db, scopeId }: WithScope): Promise<Card[]> {
+export async function getAllCardsByScope({ db, scopeId }: WithScope): Promise<Card[]> {
   return db
     .select(getTableColumns(cardTable))
     .from(cardTable)

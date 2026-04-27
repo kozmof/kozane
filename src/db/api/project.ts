@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { WithDB, Project } from "./types";
 import { assertFound } from "./utils";
 
-export async function listProjects({ db }: WithDB): Promise<Project[]> {
+export async function getAllProjects({ db }: WithDB): Promise<Project[]> {
   return db.select().from(projectTable);
 }
 

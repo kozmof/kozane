@@ -5,7 +5,7 @@ import { assertFound } from "./utils";
 
 type CardBase = WithBundle;
 
-export async function listCards({ db, bundleId }: CardBase): Promise<Card[]> {
+export async function getAllCards({ db, bundleId }: CardBase): Promise<Card[]> {
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
 }
 

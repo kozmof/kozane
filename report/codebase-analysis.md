@@ -70,7 +70,7 @@ src/
 │       └── composite.ts  # Cross-module: createCardFromWorkingCopy
 └── routes/
     ├── +layout.svelte    # Favicon, renders children
-    ├── +page.server.ts   # load: listProjects
+    ├── +page.server.ts   # load: getAllProjects
     └── +page.svelte      # Project list (Svelte 5 runes)
 ```
 
@@ -101,12 +101,12 @@ All functions follow `async fn({ db, ...params }): Promise<T>`.
 
 | Module            | Functions                                                                                                 |
 | ----------------- | --------------------------------------------------------------------------------------------------------- |
-| `project.ts`      | `listProjects`, `getProject`, `addProject`, `deleteProject`, `updateProjectName`                          |
-| `bundle.ts`       | `listBundles`, `getBundle`, `addBundle`, `deleteBundle`, `updateBundleName`                               |
-| `card.ts`         | `listCards`, `getCard`, `addCard`, `deleteCard`, `updateCardContent`                                      |
-| `scope.ts`        | `listScopes`, `getScope`, `addScope`, `deleteScope`                                                       |
-| `working-copy.ts` | `listWorkingCopies`, `listOrphanedWorkingCopies`, `listCardsWithOrphanedWorkingCopy`, `addWorkingCopy`, `getWorkingCopy`, `deleteWorkingCopy` |
-| `scope-rel.ts`    | `listCardsByScope`, `addScopeRel` (idempotent), `removeScopeRel`                                          |
+| `project.ts`      | `getAllProjects`, `getProject`, `addProject`, `deleteProject`, `updateProjectName`                          |
+| `bundle.ts`       | `getAllBundles`, `getBundle`, `addBundle`, `deleteBundle`, `updateBundleName`                               |
+| `card.ts`         | `getAllCards`, `getCard`, `addCard`, `deleteCard`, `updateCardContent`                                      |
+| `scope.ts`        | `getAllScopes`, `getScope`, `addScope`, `deleteScope`                                                       |
+| `working-copy.ts` | `getAllWorkingCopies`, `getAllOrphanedWorkingCopies`, `getAllCardsWithOrphanedWorkingCopy`, `addWorkingCopy`, `getWorkingCopy`, `deleteWorkingCopy` |
+| `scope-rel.ts`    | `getAllCardsByScope`, `addScopeRel` (idempotent), `removeScopeRel`                                          |
 | `composite.ts`    | `createCardFromWorkingCopy` (transactional: addCard + auto addScopeRel)                                   |
 
 ---
@@ -119,7 +119,7 @@ All functions follow `async fn({ db, ...params }): Promise<T>`.
 
 ### Soft-orphan on nullable FKs
 
-`working_copy.scope_id` and `card.working_copy_id` are nullable with `onDelete: set null`. Rows are retained on parent deletion; `listOrphanedWorkingCopies` (filtering `isNull(scopeId)`) is the cleanup entry point.
+`working_copy.scope_id` and `card.working_copy_id` are nullable with `onDelete: set null`. Rows are retained on parent deletion; `getAllOrphanedWorkingCopies` (filtering `isNull(scopeId)`) is the cleanup entry point.
 
 ### Idempotent many-to-many insert
 
@@ -141,7 +141,7 @@ Shared context types (`WithDB`, `WithProject`, `WithBundle`, `WithScope`) are de
 | --- | --------------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `client.ts`                                               | ✅ Fixed | `withTx` now calls `db.transaction()` on the typed `db`; only the callback argument carries a narrow `any` cast (documented). `Tx = LibSQLDatabase<typeof schema>` is the public-facing type. |
 | 2   | `client.ts:5`                                             | open     | DB singleton initialises at import time; build steps without `DATABASE_URL` throw immediately                                                                                                 |
-| 3   | `scope.ts:7`                                              | open     | `listScopes` returns all scopes globally — unbounded, no pagination                                                                                                                           |
+| 3   | `scope.ts:7`                                              | open     | `getAllScopes` returns all scopes globally — unbounded, no pagination                                                                                                                           |
 | 4   | `utils.ts`                                                | ✅ Fixed | `assertFound` now throws `NotFoundError extends Error`; route handlers can distinguish 404 from 500 via `instanceof NotFoundError`.                                                           |
 | 5   | `working-copy.ts`                                         | open     | No `updateWorkingCopy` — cannot re-link a working copy to a different scope                                                                                                                   |
 | 6   | `schema.ts:22`                                            | open     | `scopeTable` has only `id` — no name, label, or any human-readable attribute                                                                                                                  |
@@ -161,7 +161,7 @@ There are two independent paths by which a card relates to a scope:
 - **Gathered**: `scope_rel (scopeId, cardId)` — an existing card is explicitly collected into a scope.
 - **Originated**: `card.workingCopyId → working_copy.scopeId` — a card was created inside a working copy that belongs to a scope.
 
-`createCardFromWorkingCopy` (see 7-2) resolves this by auto-inserting a `scope_rel` row at card creation time when the working copy has a live scope. "Originated" and "gathered" are therefore unified at the point of creation; `listCardsByScope` captures both without a UNION.
+`createCardFromWorkingCopy` (see 7-2) resolves this by auto-inserting a `scope_rel` row at card creation time when the working copy has a live scope. "Originated" and "gathered" are therefore unified at the point of creation; `getAllCardsByScope` captures both without a UNION.
 
 ### 7-2. `card.bundleId NOT NULL` creates a hidden placement decision at creation time — ✅ Fixed
 
@@ -174,7 +174,7 @@ When a scope is deleted:
 - `working_copy.scope_id → null` (orphan working copy — modeled)
 - Cards born from that working copy still hold `workingCopyId` pointing to the now-orphaned working copy
 
-`listCardsWithOrphanedWorkingCopy({ db })` in `working-copy.ts` surfaces the second level via an inner join on `working_copy.scope_id IS NULL`. Use it alongside `listOrphanedWorkingCopies` for full orphan-chain cleanup.
+`getAllCardsWithOrphanedWorkingCopy({ db })` in `working-copy.ts` surfaces the second level via an inner join on `working_copy.scope_id IS NULL`. Use it alongside `getAllOrphanedWorkingCopies` for full orphan-chain cleanup.
 
 ### 7-4. Multiple working copies per scope — intent is undefined
 
@@ -186,7 +186,7 @@ When a working copy is created, only `scopeId` is stored. The set of cards gathe
 
 ### 7-6. No reverse path: scope → contributing projects
 
-`listCardsByScope` returns cards for a scope, but there is no query for "which projects or bundles contribute cards to this scope?" — it requires `scope_rel → card → bundle → project`, a multi-join not covered by any current API function.
+`getAllCardsByScope` returns cards for a scope, but there is no query for "which projects or bundles contribute cards to this scope?" — it requires `scope_rel → card → bundle → project`, a multi-join not covered by any current API function.
 
 ---
 
@@ -208,7 +208,7 @@ When a working copy is created, only `scopeId` is stored. The set of cards gathe
 ### Design — open
 
 8. **Add attributes to `scope` and `working_copy`.** At minimum: a `createdAt` timestamp; optionally a `label` for scope and a `userId`/`ownerId` for working copy.
-9. ~~Decide and document the gathered vs. originated relationship~~ — resolved by auto-insert in `createCardFromWorkingCopy`; `listCardsByScope` now covers both paths.
+9. ~~Decide and document the gathered vs. originated relationship~~ — resolved by auto-insert in `createCardFromWorkingCopy`; `getAllCardsByScope` now covers both paths.
 10. **Add scope → projects reverse query** as a convenience function.
 
 ---

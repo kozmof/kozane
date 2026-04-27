@@ -5,7 +5,7 @@ import { assertFound } from "./utils";
 
 type BundleBase = WithProject;
 
-export async function listBundles({ db, projectId }: BundleBase): Promise<Bundle[]> {
+export async function getAllBundles({ db, projectId }: BundleBase): Promise<Bundle[]> {
   return db.select().from(bundleTable).where(eq(bundleTable.projectId, projectId));
 }
 

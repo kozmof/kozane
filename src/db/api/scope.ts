@@ -4,7 +4,7 @@ import type { WithDB, Scope } from "./types";
 import { assertFound } from "./utils";
 
 // Scopes are cross-project by design — they are not owned by any project or bundle
-export async function listScopes({ db }: WithDB): Promise<Scope[]> {
+export async function getAllScopes({ db }: WithDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
 }
 
