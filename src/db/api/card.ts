@@ -1,6 +1,6 @@
 import { cardTable } from "../schema";
 import { and, eq } from "drizzle-orm";
-import type { NeedsBundle, Card } from "./types";
+import type { NeedsDB, NeedsBundle, Card } from "./types";
 import { assertFound } from "./utils";
 
 export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
@@ -47,4 +47,14 @@ export async function updateCardContent({
     .where(and(eq(cardTable.bundleId, bundleId), eq(cardTable.id, cardId)))
     .returning({ id: cardTable.id });
   assertFound(updated, `Card bundleId=${bundleId} cardId=${cardId}`);
+}
+
+type UpdateCardPosition = NeedsDB & { cardId: string; posX: number; posY: number };
+export async function updateCardPosition({ db, cardId, posX, posY }: UpdateCardPosition): Promise<void> {
+  const updated = await db
+    .update(cardTable)
+    .set({ posX, posY })
+    .where(eq(cardTable.id, cardId))
+    .returning({ id: cardTable.id });
+  assertFound(updated, `Card cardId=${cardId}`);
 }

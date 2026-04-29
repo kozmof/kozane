@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
 export const projectTable = sqliteTable("project", {
@@ -23,6 +23,7 @@ export const scopeTable = sqliteTable("scope", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
+  name: text().notNull().default(""),
 });
 
 export const workingCopyTable = sqliteTable("working_copy", {
@@ -34,6 +35,8 @@ export const workingCopyTable = sqliteTable("working_copy", {
     onDelete: "set null",
     onUpdate: "cascade",
   }),
+  name: text().notNull().default(""),
+  dirPath: text("dir_path"),
 });
 
 export const cardTable = sqliteTable("card", {
@@ -49,6 +52,21 @@ export const cardTable = sqliteTable("card", {
     onUpdate: "cascade",
   }),
   content: text().notNull(),
+  posX: integer("pos_x").notNull().default(0),
+  posY: integer("pos_y").notNull().default(0),
+});
+
+export const tieTable = sqliteTable("tie", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  fromCardId: text("from_card_id")
+    .notNull()
+    .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  toCardId: text("to_card_id")
+    .notNull()
+    .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  relType: text("rel_type"),
 });
 
 export const scopeRelTable = sqliteTable(
@@ -83,6 +101,21 @@ export const cardRelations = relations(cardTable, ({ one, many }) => ({
     references: [workingCopyTable.id],
   }),
   scopeRels: many(scopeRelTable),
+  tiesFrom: many(tieTable, { relationName: "tiesFrom" }),
+  tiesTo: many(tieTable, { relationName: "tiesTo" }),
+}));
+
+export const tieRelations = relations(tieTable, ({ one }) => ({
+  fromCard: one(cardTable, {
+    fields: [tieTable.fromCardId],
+    references: [cardTable.id],
+    relationName: "tiesFrom",
+  }),
+  toCard: one(cardTable, {
+    fields: [tieTable.toCardId],
+    references: [cardTable.id],
+    relationName: "tiesTo",
+  }),
 }));
 
 export const scopeRelations = relations(scopeTable, ({ many }) => ({

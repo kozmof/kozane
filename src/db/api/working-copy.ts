@@ -1,6 +1,6 @@
-import { cardTable, workingCopyTable } from "../schema";
-import { eq, getTableColumns, isNull } from "drizzle-orm";
-import type { NeedsDB, NeedsScope, WorkingCopy } from "./types";
+import { workingCopyTable } from "../schema";
+import { eq } from "drizzle-orm";
+import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
 
 // scopeId is possibly null
@@ -8,12 +8,23 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
   return db.select().from(workingCopyTable);
 }
 
-export async function addWorkingCopy({ db, scopeId }: NeedsScope): Promise<string> {
+type AddWorkingCopy = NeedsScope & { name?: string; dirPath?: string };
+export async function addWorkingCopy({ db, scopeId, name = "", dirPath }: AddWorkingCopy): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
-    .values({ scopeId })
+    .values({ scopeId, name, dirPath })
     .returning({ id: workingCopyTable.id });
   return row.id;
+}
+
+type UpdateWorkingCopy = NeedsWorkingCopy & { name?: string; dirPath?: string };
+export async function updateWorkingCopy({ db, workingCopyId, name, dirPath }: UpdateWorkingCopy): Promise<void> {
+  const updated = await db
+    .update(workingCopyTable)
+    .set({ ...(name !== undefined && { name }), ...(dirPath !== undefined && { dirPath }) })
+    .where(eq(workingCopyTable.id, workingCopyId))
+    .returning({ id: workingCopyTable.id });
+  assertFound(updated, `WorkingCopy workingCopyId=${workingCopyId}`);
 }
 
 type GetWorkingCopy = NeedsDB & { workingCopyId: string };

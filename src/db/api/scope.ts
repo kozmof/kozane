@@ -1,6 +1,6 @@
 import { scopeTable } from "../schema";
 import { eq } from "drizzle-orm";
-import type { NeedsDB, Scope } from "./types";
+import type { NeedsDB, NeedsScope, Scope } from "./types";
 import { assertFound } from "./utils";
 
 // Scopes are cross-project by design — they are not owned by any project or bundle
@@ -13,9 +13,20 @@ export async function getScope({ db, scopeId }: GetScope): Promise<Scope | undef
   return db.select().from(scopeTable).where(eq(scopeTable.id, scopeId)).get();
 }
 
-export async function addScope({ db }: NeedsDB): Promise<string> {
-  const [row] = await db.insert(scopeTable).values({}).returning({ id: scopeTable.id });
+type AddScope = NeedsDB & { name?: string };
+export async function addScope({ db, name = "" }: AddScope): Promise<string> {
+  const [row] = await db.insert(scopeTable).values({ name }).returning({ id: scopeTable.id });
   return row.id;
+}
+
+type UpdateScopeName = NeedsScope & { name: string };
+export async function updateScopeName({ db, scopeId, name }: UpdateScopeName): Promise<void> {
+  const updated = await db
+    .update(scopeTable)
+    .set({ name })
+    .where(eq(scopeTable.id, scopeId))
+    .returning({ id: scopeTable.id });
+  assertFound(updated, `Scope scopeId=${scopeId}`);
 }
 
 type DeleteScope = NeedsDB & { scopeId: string };
