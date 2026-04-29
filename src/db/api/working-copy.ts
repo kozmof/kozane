@@ -9,7 +9,12 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
 }
 
 type AddWorkingCopy = NeedsScope & { name?: string; dirPath?: string };
-export async function addWorkingCopy({ db, scopeId, name = "", dirPath }: AddWorkingCopy): Promise<string> {
+export async function addWorkingCopy({
+  db,
+  scopeId,
+  name = "",
+  dirPath,
+}: AddWorkingCopy): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
     .values({ scopeId, name, dirPath })
@@ -18,7 +23,12 @@ export async function addWorkingCopy({ db, scopeId, name = "", dirPath }: AddWor
 }
 
 type UpdateWorkingCopy = NeedsWorkingCopy & { name?: string; dirPath?: string };
-export async function updateWorkingCopy({ db, workingCopyId, name, dirPath }: UpdateWorkingCopy): Promise<void> {
+export async function updateWorkingCopy({
+  db,
+  workingCopyId,
+  name,
+  dirPath,
+}: UpdateWorkingCopy): Promise<void> {
   const updated = await db
     .update(workingCopyTable)
     .set({ ...(name !== undefined && { name }), ...(dirPath !== undefined && { dirPath }) })

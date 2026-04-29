@@ -50,7 +50,12 @@ export async function updateCardContent({
 }
 
 type UpdateCardPosition = NeedsDB & { cardId: string; posX: number; posY: number };
-export async function updateCardPosition({ db, cardId, posX, posY }: UpdateCardPosition): Promise<void> {
+export async function updateCardPosition({
+  db,
+  cardId,
+  posX,
+  posY,
+}: UpdateCardPosition): Promise<void> {
   const updated = await db
     .update(cardTable)
     .set({ posX, posY })
