@@ -1,9 +1,14 @@
 {
   "name": "kozane",
+  "bin": {
+    "kozane": "./bin/kozane.js"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
+    "build:cli": "tsc --project tsconfig.cli.json",
+    "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -15,6 +20,7 @@
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
+    "commander": "^14.0.3",
     "dotenv": "^17.4.1",
     "drizzle-orm": "^0.45.2",
     "uuid": "^13.0.0"

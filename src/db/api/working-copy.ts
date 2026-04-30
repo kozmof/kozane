@@ -1,5 +1,5 @@
 import { workingCopyTable } from "../schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
 
@@ -8,30 +8,50 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
   return db.select().from(workingCopyTable);
 }
 
-type AddWorkingCopy = NeedsScope & { name?: string; dirPath?: string };
+type AddWorkingCopy = NeedsScope & {
+  projectId?: string;
+  name?: string;
+  path?: string;
+  pathKind?: "project_relative" | "absolute";
+};
 export async function addWorkingCopy({
   db,
   scopeId,
+  projectId,
   name = "",
-  dirPath,
+  path,
+  pathKind = "project_relative",
 }: AddWorkingCopy): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
-    .values({ scopeId, name, dirPath })
+    .values({ scopeId, projectId, name, path, pathKind })
     .returning({ id: workingCopyTable.id });
   return row.id;
 }
 
-type UpdateWorkingCopy = NeedsWorkingCopy & { name?: string; dirPath?: string };
+type UpdateWorkingCopy = NeedsWorkingCopy & {
+  name?: string;
+  path?: string;
+  pathKind?: "project_relative" | "absolute";
+  lastSeenAt?: Date;
+};
 export async function updateWorkingCopy({
   db,
   workingCopyId,
   name,
-  dirPath,
+  path,
+  pathKind,
+  lastSeenAt,
 }: UpdateWorkingCopy): Promise<void> {
   const updated = await db
     .update(workingCopyTable)
-    .set({ ...(name !== undefined && { name }), ...(dirPath !== undefined && { dirPath }) })
+    .set({
+      ...(name !== undefined && { name }),
+      ...(path !== undefined && { path }),
+      ...(pathKind !== undefined && { pathKind }),
+      ...(lastSeenAt !== undefined && { lastSeenAt }),
+      updatedAt: sql`(unixepoch())`,
+    })
     .where(eq(workingCopyTable.id, workingCopyId))
     .returning({ id: workingCopyTable.id });
   assertFound(updated, `WorkingCopy workingCopyId=${workingCopyId}`);

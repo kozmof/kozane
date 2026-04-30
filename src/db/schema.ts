@@ -30,13 +30,27 @@ export const workingCopyTable = sqliteTable("working_copy", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
+  projectId: text("project_id").references(() => projectTable.id, {
+    onDelete: "cascade",
+    onUpdate: "cascade",
+  }),
   scopeId: text("scope_id").references(() => scopeTable.id, {
     // When scopeId is deleted, workingCopy is retained but set to null.
     onDelete: "set null",
     onUpdate: "cascade",
   }),
   name: text().notNull().default(""),
-  dirPath: text("dir_path"),
+  path: text("path"),
+  pathKind: text("path_kind", { enum: ["project_relative", "absolute"] })
+    .notNull()
+    .default("project_relative"),
+  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
 });
 
 export const cardTable = sqliteTable("card", {
