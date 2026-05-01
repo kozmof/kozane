@@ -60,6 +60,14 @@ function readMarker(dir: string): WcMarker | null {
   }
 }
 
+export function resolveWorkingCopyPath(
+  storedPath: string,
+  pathKind: "project_relative" | "absolute",
+  projectRoot: string,
+): string {
+  return pathKind === "absolute" ? storedPath : join(projectRoot, storedPath);
+}
+
 export function scanWorkingCopies(searchRoots: string[]): FoundWorkingCopy[] {
   const found: FoundWorkingCopy[] = [];
   const seen = new Set<string>(); // deduplicate by workingCopyId+path

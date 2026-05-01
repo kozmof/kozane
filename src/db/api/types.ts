@@ -15,6 +15,7 @@ export type NeedsProject = NeedsDB & { projectId: string };
 export type NeedsBundle = NeedsDB & { bundleId: string };
 export type NeedsScope = NeedsDB & { scopeId: string };
 export type NeedsWorkingCopy = NeedsDB & { workingCopyId: string };
+export type NeedsTie = NeedsDB & { tieId: string };
 
 export type Project = InferSelectModel<typeof projectTable>;
 export type Bundle = InferSelectModel<typeof bundleTable>;

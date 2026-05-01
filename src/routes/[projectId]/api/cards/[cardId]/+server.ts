@@ -3,6 +3,11 @@ import { json, error } from "@sveltejs/kit";
 import { bundleTable, cardTable } from "../../../../../db/schema";
 import { and, eq } from "drizzle-orm";
 
+const CONTENT_MAX = 10_000;
+const CANVAS_W = 2800;
+const CANVAS_H = 2000;
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId, cardId } = params;
@@ -20,10 +25,15 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   if (!card) throw error(404, "Card not found");
 
+  if (body.content !== undefined) {
+    if (typeof body.content !== "string" || body.content.length > CONTENT_MAX)
+      throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
+  }
+
   const updates: Record<string, unknown> = {};
   if (body.content !== undefined) updates.content = body.content;
-  if (body.posX !== undefined) updates.posX = body.posX;
-  if (body.posY !== undefined) updates.posY = body.posY;
+  if (body.posX !== undefined) updates.posX = clamp(body.posX, 0, CANVAS_W);
+  if (body.posY !== undefined) updates.posY = clamp(body.posY, 0, CANVAS_H);
 
   if (body.bundleId !== undefined) {
     const newBundle = await db

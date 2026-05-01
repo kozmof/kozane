@@ -6,6 +6,7 @@ import { dbUrl } from "../lib/config.js";
 import { openDb } from "../lib/db.js";
 import {
   scanWorkingCopies,
+  resolveWorkingCopyPath,
   WC_MARKER_DIR,
   WC_MARKER_FILE,
   WC_MARKER_KIND,
@@ -65,15 +66,18 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
     if (record.path !== storedPath || record.pathKind !== pathKind) {
       console.log(`  moved   ${wc.workingCopyId}`);
-      console.log(`    old: ${record.path ?? "(none)"}`);
-      console.log(`    new: ${storedPath}`);
+      const oldAbsolute = record.path
+        ? resolveWorkingCopyPath(record.path, record.pathKind, root)
+        : "(none)";
+      console.log(`    old: ${oldAbsolute}`);
+      console.log(`    new: ${wc.path}`);
       await db
         .update(workingCopyTable)
         .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
         .where(eq(workingCopyTable.id, wc.workingCopyId));
       updated++;
     } else {
-      console.log(`  ok      ${wc.workingCopyId}  ${storedPath}`);
+      console.log(`  ok      ${wc.workingCopyId}  ${wc.path}`);
       await db
         .update(workingCopyTable)
         .set({ lastSeenAt: new Date() })
@@ -85,7 +89,10 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   const foundIds = new Set(found.map((f) => f.workingCopyId));
   for (const record of dbRecords) {
     if (!foundIds.has(record.id)) {
-      console.log(`  missing ${record.id}  ${record.path ?? "(no path)"}`);
+      const absolutePath = record.path
+        ? resolveWorkingCopyPath(record.path, record.pathKind, root)
+        : "(no path)";
+      console.log(`  missing ${record.id}  ${absolutePath}`);
     }
   }
 

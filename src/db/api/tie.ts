@@ -1,6 +1,6 @@
 import { tieTable } from "../schema";
 import { eq, or } from "drizzle-orm";
-import type { NeedsDB, Tie } from "./types";
+import type { NeedsDB, NeedsTie, Tie } from "./types";
 import { assertFound } from "./utils";
 
 export async function getTiesByCard({ db, cardId }: NeedsDB & { cardId: string }): Promise<Tie[]> {
@@ -15,12 +15,12 @@ export async function addTie({ db, fromCardId, toCardId, relType }: AddTie): Pro
   const [row] = await db
     .insert(tieTable)
     .values({ fromCardId, toCardId, relType })
+    .onConflictDoNothing()
     .returning({ id: tieTable.id });
   return row.id;
 }
 
-type DeleteTie = NeedsDB & { tieId: string };
-export async function deleteTie({ db, tieId }: DeleteTie): Promise<void> {
+export async function deleteTie({ db, tieId }: NeedsTie): Promise<void> {
   const deleted = await db
     .delete(tieTable)
     .where(eq(tieTable.id, tieId))

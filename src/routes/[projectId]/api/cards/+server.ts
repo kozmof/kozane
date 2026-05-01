@@ -3,6 +3,11 @@ import { json, error } from "@sveltejs/kit";
 import { bundleTable, cardTable } from "../../../../db/schema";
 import { and, eq } from "drizzle-orm";
 
+const CONTENT_MAX = 10_000;
+const CANVAS_W = 2800;
+const CANVAS_H = 2000;
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
@@ -10,6 +15,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { bundleId, content, posX = 0, posY = 0 } = body;
 
   if (!bundleId || !content) throw error(400, "bundleId and content are required");
+  if (typeof content !== "string" || content.length > CONTENT_MAX)
+    throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
 
   const bundle = await db
     .select({ id: bundleTable.id })
@@ -21,7 +28,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
   const [row] = await db
     .insert(cardTable)
-    .values({ bundleId, content, posX, posY })
+    .values({ bundleId, content, posX: clamp(posX, 0, CANVAS_W), posY: clamp(posY, 0, CANVAS_H) })
     .returning({ id: cardTable.id });
 
   return json({ id: row.id });

@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, unique } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
 export const projectTable = sqliteTable("project", {
@@ -70,18 +70,22 @@ export const cardTable = sqliteTable("card", {
   posY: integer("pos_y").notNull().default(0),
 });
 
-export const tieTable = sqliteTable("tie", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  fromCardId: text("from_card_id")
-    .notNull()
-    .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  toCardId: text("to_card_id")
-    .notNull()
-    .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  relType: text("rel_type"),
-});
+export const tieTable = sqliteTable(
+  "tie",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    fromCardId: text("from_card_id")
+      .notNull()
+      .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    toCardId: text("to_card_id")
+      .notNull()
+      .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    relType: text("rel_type"),
+  },
+  (t) => [unique("tie_from_to_uniq").on(t.fromCardId, t.toCardId)],
+);
 
 export const scopeRelTable = sqliteTable(
   "scope_rel",
