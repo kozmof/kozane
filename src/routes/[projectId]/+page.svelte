@@ -482,16 +482,16 @@
   }
 
   .sidebar-left {
-    border-right: 1px solid #d5d0c8;
+    border-right: 1px solid #cccccc;
   }
 
   .sidebar-right {
-    border-left: 1px solid #d5d0c8;
+    border-left: 1px solid #cccccc;
   }
 
   .logo {
     padding: 18px 20px 14px;
-    border-bottom: 1px solid #d5d0c8;
+    border-bottom: 1px solid #cccccc;
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -614,7 +614,7 @@
     gap: 1px;
     background: #f1f1f1;
     border-radius: 7px;
-    border: 1px solid #d5d0c8;
+    border: 1px solid #cccccc;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     z-index: 51;
     overflow: hidden;
@@ -636,7 +636,7 @@
     padding: 0 8px;
     font-size: 11px;
     color: #918c83;
-    border-left: 1px solid #d5d0c8;
+    border-left: 1px solid #cccccc;
     height: 28px;
     display: flex;
     align-items: center;
@@ -659,7 +659,7 @@
   /* ── Right sidebar ── */
   .scopes-header {
     padding: 18px 20px 14px;
-    border-bottom: 1px solid #d5d0c8;
+    border-bottom: 1px solid #cccccc;
   }
 
   .scopes-header .section-label {
@@ -705,7 +705,7 @@
   }
 
   .scope-item.active {
-    border-color: #c8c3bb;
+    border-color: #a8a8a8;
   }
 
   .add-to-scope {
@@ -714,7 +714,7 @@
     background: #1c1a17;
     color: #f1f1f1;
     border: none;
-    border-top: 1px solid #d5d0c8;
+    border-top: 1px solid #cccccc;
     cursor: pointer;
     font-size: 11px;
     font-family: inherit;
@@ -726,7 +726,7 @@
 
   .new-scope {
     padding: 10px;
-    border-top: 1px solid #d5d0c8;
+    border-top: 1px solid #cccccc;
     margin-top: 8px;
     display: flex;
     gap: 5px;
@@ -735,7 +735,7 @@
   .new-scope input {
     flex: 1;
     padding: 7px 10px;
-    border: 1px solid #d5d0c8;
+    border: 1px solid #cccccc;
     border-radius: 6px;
     font-size: 11.5px;
     background: #ffffff;

@@ -46,7 +46,7 @@
       ? `1.5px solid ${color.dot}`
       : isSelected
         ? "1.5px solid oklch(62% 0.15 272)"
-        : "1px solid #e4e4e4",
+        : "1px solid #dbdbdb",
   );
 </script>
 
@@ -65,8 +65,8 @@
   style:border-radius="2px"
   style:border={border}
   style:box-shadow={isDragging
-    ? "0 5px 14px rgba(0,0,0,0.2)"
-    : "0 1px 2px rgba(0,0,0,0.03), 0 4px 6px rgba(0,0,0,0.02)"}
+    ? "0 3px 8px rgba(0,0,0,0.2)"
+    : "0 1px 2px rgba(0,0,0,0.01), 0 1px 2px rgba(0,0,0,0.02)"}
   style:cursor={isDragging ? "grabbing" : "grab"}
   style:user-select="none"
   style:opacity={dimmed ? 0.3 : 1}
@@ -120,7 +120,6 @@
     font-size: 10px;
     color: #b0aaa2;
     gap: 6px;
-    border-top: 1px solid #f0ebe3;
   }
 
   .ties {
