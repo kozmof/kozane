@@ -3,8 +3,9 @@ import { error } from "@sveltejs/kit";
 import { getProject } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getAllScopes } from "../../db/api/scope";
-import { cardTable, scopeRelTable, tieTable } from "../../db/schema";
-import { inArray, or } from "drizzle-orm";
+import { getCardsByBundles } from "../../db/api/card";
+import { getTiesByCards } from "../../db/api/tie";
+import { getScopeRelsByCards } from "../../db/api/scope-rel";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -19,20 +20,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   ]);
 
   const bundleIds = bundles.map((b) => b.id);
-
-  const cards = bundleIds.length
-    ? await db.select().from(cardTable).where(inArray(cardTable.bundleId, bundleIds))
-    : [];
-
+  const cards = await getCardsByBundles({ db, bundleIds });
   const cardIds = cards.map((c) => c.id);
 
   const [ties, scopeRels] = await Promise.all([
-    cardIds.length
-      ? db.select().from(tieTable).where(or(inArray(tieTable.fromCardId, cardIds), inArray(tieTable.toCardId, cardIds)))
-      : Promise.resolve([]),
-    cardIds.length
-      ? db.select().from(scopeRelTable).where(inArray(scopeRelTable.cardId, cardIds))
-      : Promise.resolve([]),
+    getTiesByCards({ db, cardIds }),
+    getScopeRelsByCards({ db, cardIds }),
   ]);
 
   const tieCountMap = new Map<string, number>();

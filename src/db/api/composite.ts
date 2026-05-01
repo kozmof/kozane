@@ -2,10 +2,12 @@ import { withTx, type DB } from "../client";
 import { addCard } from "./card";
 import { addScopeRel } from "./scope-rel";
 import { getWorkingCopy } from "./working-copy";
-import type { NeedsDB } from "./types";
 import { NotFoundError } from "./utils";
 
-type CreateCardFromWorkingCopy = NeedsDB & {
+// createCardFromWorkingCopy must start a transaction, so it requires the outer DB connection,
+// not a Tx handle (transactions cannot be nested in libsql).
+type CreateCardFromWorkingCopy = {
+  db: DB;
   workingCopyId: string;
   bundleId: string;
   content: string;
@@ -24,13 +26,12 @@ export async function createCardFromWorkingCopy({
   bundleId,
   content,
 }: CreateCardFromWorkingCopy): Promise<string> {
-  const wc = await getWorkingCopy({ db, workingCopyId });
-  if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
-
   return withTx(db, async (tx) => {
-    const cardId = await addCard({ db: tx as unknown as DB, bundleId, content, workingCopyId });
+    const wc = await getWorkingCopy({ db: tx, workingCopyId });
+    if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
+    const cardId = await addCard({ db: tx, bundleId, content, workingCopyId });
     if (wc.scopeId) {
-      await addScopeRel({ db: tx as unknown as DB, scopeId: wc.scopeId, cardId });
+      await addScopeRel({ db: tx, scopeId: wc.scopeId, cardId });
     }
     return cardId;
   });

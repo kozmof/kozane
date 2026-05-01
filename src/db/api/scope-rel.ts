@@ -1,6 +1,6 @@
-import { and, eq, getTableColumns } from "drizzle-orm";
-import { cardTable, scopeRelTable } from "../schema";
-import type { NeedsScope, Card } from "./types";
+import { and, eq, getTableColumns, inArray } from "drizzle-orm";
+import { bundleTable, cardTable, scopeRelTable } from "../schema";
+import type { NeedsDB, NeedsScope, Card } from "./types";
 import { assertFound } from "./utils";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
@@ -24,4 +24,37 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
     .where(and(eq(scopeRelTable.scopeId, scopeId), eq(scopeRelTable.cardId, cardId)))
     .returning({ scopeId: scopeRelTable.scopeId });
   assertFound(deleted, `ScopeRel scopeId=${scopeId} cardId=${cardId}`);
+}
+
+type AddScopeMembers = NeedsScope & { projectId: string; cardIds: string[] };
+/** Bulk-adds cards to a scope. Returns false if any cardId doesn't belong to projectId. */
+export async function addScopeMembers({
+  db,
+  scopeId,
+  projectId,
+  cardIds,
+}: AddScopeMembers): Promise<boolean> {
+  const found = await db
+    .select({ id: cardTable.id })
+    .from(cardTable)
+    .innerJoin(
+      bundleTable,
+      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+    )
+    .where(inArray(cardTable.id, cardIds));
+
+  if (found.length !== cardIds.length) return false;
+
+  await db
+    .insert(scopeRelTable)
+    .values(found.map(({ id: cardId }) => ({ scopeId, cardId })))
+    .onConflictDoNothing();
+
+  return true;
+}
+
+type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
+export async function getScopeRelsByCards({ db, cardIds }: GetScopeRelsByCards) {
+  if (cardIds.length === 0) return [];
+  return db.select().from(scopeRelTable).where(inArray(scopeRelTable.cardId, cardIds));
 }

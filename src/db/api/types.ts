@@ -1,5 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import type { DB } from "../client";
+import type { AnyDB } from "../client";
 import type {
   projectTable,
   bundleTable,
@@ -10,7 +10,7 @@ import type {
   workingCopyTable,
 } from "../schema";
 
-export type NeedsDB = { db: DB };
+export type NeedsDB = { db: AnyDB };
 export type NeedsProject = NeedsDB & { projectId: string };
 export type NeedsBundle = NeedsDB & { bundleId: string };
 export type NeedsScope = NeedsDB & { scopeId: string };

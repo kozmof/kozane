@@ -1,6 +1,6 @@
 import { workingCopyTable } from "../schema";
 import type { PathKind } from "../schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
 
@@ -10,7 +10,7 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
 }
 
 type AddWorkingCopy = NeedsScope & {
-  projectId?: string;
+  projectId: string;
   name?: string;
   path?: string;
   pathKind?: PathKind;
@@ -51,7 +51,7 @@ export async function updateWorkingCopy({
       ...(path !== undefined && { path }),
       ...(pathKind !== undefined && { pathKind }),
       ...(lastSeenAt !== undefined && { lastSeenAt }),
-      updatedAt: sql`(unixepoch())`,
+      updatedAt: new Date(),
     })
     .where(eq(workingCopyTable.id, workingCopyId))
     .returning({ id: workingCopyTable.id });

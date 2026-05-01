@@ -38,6 +38,7 @@
   let sidebarsVisible = $state(true);
   let zoom = $state(1);
   let newScopeName = $state("");
+  let lastError = $state<string | null>(null);
 
   // ── DOM refs (non-reactive) ────────────────────────────────────
   let canvasEl: HTMLDivElement;
@@ -49,6 +50,8 @@
     offsetY: number;
     startX: number;
     startY: number;
+    prevX: number;
+    prevY: number;
     moved: boolean;
   } | null = null;
 
@@ -100,19 +103,23 @@
       }
     }
 
-    function onUp() {
+    async function onUp() {
       if (dragState) {
-        const { cardId, moved } = dragState;
+        const { cardId, moved, prevX, prevY } = dragState;
         dragState = null;
         draggingId = null;
         if (moved) {
           const card = cards.find((c) => c.id === cardId);
           if (card) {
-            fetch(`/${data.project.id}/api/cards/${cardId}`, {
+            const res = await fetch(`/${data.project.id}/api/cards/${cardId}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ posX: card.posX, posY: card.posY }),
             });
+            if (!res.ok) {
+              cards = cards.map((c) => (c.id === cardId ? { ...c, posX: prevX, posY: prevY } : c));
+              lastError = "Failed to save card position";
+            }
           }
         }
       }
@@ -167,6 +174,8 @@
       offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - card.posY,
       startX: e.clientX,
       startY: e.clientY,
+      prevX: card.posX,
+      prevY: card.posY,
       moved: false,
     };
     draggingId = cardId;
@@ -220,7 +229,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, bundleId }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        lastError = "Failed to save card";
+        return;
+      }
       cards = cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       composerCard = null;
     } else {
@@ -231,7 +243,10 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bundleId, content, posX, posY }),
       });
-      if (!res.ok) return;
+      if (!res.ok) {
+        lastError = "Failed to create card";
+        return;
+      }
       const { id: newId } = await res.json();
       cards = [
         ...cards,
@@ -248,7 +263,10 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newScopeName.trim() }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      lastError = "Failed to create scope";
+      return;
+    }
     const { id } = await res.json();
     scopes = [...scopes, { id, name: newScopeName.trim() }];
     newScopeName = "";
@@ -262,7 +280,10 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIds }),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      lastError = "Failed to add cards to scope";
+      return;
+    }
     const newRels = cardIds
       .filter((cid) => !scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
       .map((cardId) => ({ scopeId, cardId }));
@@ -374,6 +395,14 @@
         </div>
       </div>
     </div>
+
+    <!-- Error banner -->
+    {#if lastError}
+      <div class="error-banner" role="alert">
+        <span>{lastError}</span>
+        <button class="error-dismiss" onclick={() => (lastError = null)}>×</button>
+      </div>
+    {/if}
 
     <!-- Sidebar toggle -->
     <button
@@ -591,6 +620,35 @@
   }
 
   /* ── Overlays ── */
+  .error-banner {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 52;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: oklch(30% 0.18 18);
+    color: #fff;
+    border-radius: 7px;
+    font-size: 12.5px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+    white-space: nowrap;
+  }
+
+  .error-dismiss {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.75);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
   .sidebar-toggle {
     position: absolute;
     top: 12px;

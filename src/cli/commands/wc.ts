@@ -12,7 +12,7 @@ import {
   WC_MARKER_KIND,
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
-import { workingCopyTable } from "../../db/schema.js";
+import { workingCopyTable, projectTable } from "../../db/schema.js";
 import { v7 as uuidv7 } from "uuid";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
@@ -127,10 +127,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
 
   // Get the project id from the DB (first project, or from scope's bundle)
   let projectId: string | undefined;
-  const projects = await db
-    .select({ id: (await import("../../db/schema.js")).projectTable.id })
-    .from((await import("../../db/schema.js")).projectTable)
-    .limit(1);
+  const projects = await db.select({ id: projectTable.id }).from(projectTable).limit(1);
   if (projects.length > 0) projectId = projects[0].id;
 
   const id = uuidv7();

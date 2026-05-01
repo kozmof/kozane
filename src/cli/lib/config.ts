@@ -32,7 +32,17 @@ export function defaultConfig(name: string): ProjectConfig {
 export function readConfig(projectRoot: string): ProjectConfig {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
-  return JSON.parse(raw) as ProjectConfig;
+  const parsed: unknown = JSON.parse(raw);
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    typeof (parsed as Record<string, unknown>).name !== "string" ||
+    typeof (parsed as Record<string, unknown>).server !== "object" ||
+    typeof (parsed as Record<string, unknown>).workingCopy !== "object"
+  ) {
+    throw new Error(`Invalid Kozane config at ${configPath}`);
+  }
+  return parsed as ProjectConfig;
 }
 
 export function writeConfig(projectRoot: string, config: ProjectConfig): void {
