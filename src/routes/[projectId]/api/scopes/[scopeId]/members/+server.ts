@@ -1,7 +1,6 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addScopeRel } from "../../../../../../db/api/scope-rel";
-import { bundleTable, cardTable } from "../../../../../../db/schema";
+import { scopeRelTable, bundleTable, cardTable } from "../../../../../../db/schema";
 import { and, eq, inArray } from "drizzle-orm";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
@@ -24,9 +23,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
   if (found.length !== cardIds.length) throw error(400, "Some cards not found in project");
 
-  for (const { id: cardId } of found) {
-    await addScopeRel({ db, scopeId, cardId });
-  }
+  await db
+    .insert(scopeRelTable)
+    .values(found.map(({ id: cardId }) => ({ scopeId, cardId })))
+    .onConflictDoNothing();
 
   return json({ ok: true });
 };

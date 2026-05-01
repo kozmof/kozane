@@ -3,13 +3,12 @@
   import type { PageProps } from "./$types";
   import KozaneCard from "./KozaneCard.svelte";
   import CardComposer from "./CardComposer.svelte";
+  import { CANVAS_W, CANVAS_H } from "$lib/constants";
 
   let { data }: PageProps = $props();
 
   // ── Constants ──────────────────────────────────────────────────
   const GRID = 24;
-  const CANVAS_W = 2800;
-  const CANVAS_H = 2000;
   const ZOOM_MIN = 0.25;
   const ZOOM_MAX = 2;
   const ZOOM_STEP = 0.1;
@@ -216,11 +215,12 @@
     bundleId: string,
   ) {
     if (id) {
-      await fetch(`/${data.project.id}/api/cards/${id}`, {
+      const res = await fetch(`/${data.project.id}/api/cards/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content, bundleId }),
       });
+      if (!res.ok) return;
       cards = cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       composerCard = null;
     } else {
@@ -231,6 +231,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bundleId, content, posX, posY }),
       });
+      if (!res.ok) return;
       const { id: newId } = await res.json();
       cards = [
         ...cards,
@@ -247,6 +248,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newScopeName.trim() }),
     });
+    if (!res.ok) return;
     const { id } = await res.json();
     scopes = [...scopes, { id, name: newScopeName.trim() }];
     newScopeName = "";
@@ -255,11 +257,12 @@
   async function handleAddToScope(scopeId: string) {
     if (selectedCards.size === 0) return;
     const cardIds = [...selectedCards];
-    await fetch(`/${data.project.id}/api/scopes/${scopeId}/members`, {
+    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIds }),
     });
+    if (!res.ok) return;
     const newRels = cardIds
       .filter((cid) => !scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
       .map((cardId) => ({ scopeId, cardId }));

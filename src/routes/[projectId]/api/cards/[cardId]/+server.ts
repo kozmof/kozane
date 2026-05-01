@@ -2,11 +2,7 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { bundleTable, cardTable } from "../../../../../db/schema";
 import { and, eq } from "drizzle-orm";
-
-const CONTENT_MAX = 10_000;
-const CANVAS_W = 2800;
-const CANVAS_H = 2000;
-const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

@@ -11,13 +11,13 @@ export async function getTiesByCard({ db, cardId }: NeedsDB & { cardId: string }
 }
 
 type AddTie = NeedsDB & { fromCardId: string; toCardId: string; relType?: string };
-export async function addTie({ db, fromCardId, toCardId, relType }: AddTie): Promise<string> {
+export async function addTie({ db, fromCardId, toCardId, relType }: AddTie): Promise<string | undefined> {
   const [row] = await db
     .insert(tieTable)
     .values({ fromCardId, toCardId, relType })
     .onConflictDoNothing()
     .returning({ id: tieTable.id });
-  return row.id;
+  return row?.id;
 }
 
 export async function deleteTie({ db, tieId }: NeedsTie): Promise<void> {

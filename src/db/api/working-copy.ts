@@ -1,4 +1,5 @@
 import { workingCopyTable } from "../schema";
+import type { PathKind } from "../schema";
 import { eq, sql } from "drizzle-orm";
 import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types";
 import { assertFound } from "./utils";
@@ -12,7 +13,7 @@ type AddWorkingCopy = NeedsScope & {
   projectId?: string;
   name?: string;
   path?: string;
-  pathKind?: "project_relative" | "absolute";
+  pathKind?: PathKind;
 };
 export async function addWorkingCopy({
   db,
@@ -32,7 +33,7 @@ export async function addWorkingCopy({
 type UpdateWorkingCopy = NeedsWorkingCopy & {
   name?: string;
   path?: string;
-  pathKind?: "project_relative" | "absolute";
+  pathKind?: PathKind;
   lastSeenAt?: Date;
 };
 export async function updateWorkingCopy({

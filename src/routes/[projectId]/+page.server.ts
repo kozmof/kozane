@@ -13,7 +13,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const project = await getProject({ db, projectId });
   if (!project) throw error(404, "Project not found");
 
-  const bundles = await getAllBundles({ db, projectId });
+  const [bundles, scopes] = await Promise.all([
+    getAllBundles({ db, projectId }),
+    getAllScopes({ db }),
+  ]);
+
   const bundleIds = bundles.map((b) => b.id);
 
   const cards = bundleIds.length
@@ -22,12 +26,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
   const cardIds = cards.map((c) => c.id);
 
-  const ties = cardIds.length
-    ? await db
-        .select()
-        .from(tieTable)
-        .where(or(inArray(tieTable.fromCardId, cardIds), inArray(tieTable.toCardId, cardIds)))
-    : [];
+  const [ties, scopeRels] = await Promise.all([
+    cardIds.length
+      ? db.select().from(tieTable).where(or(inArray(tieTable.fromCardId, cardIds), inArray(tieTable.toCardId, cardIds)))
+      : Promise.resolve([]),
+    cardIds.length
+      ? db.select().from(scopeRelTable).where(inArray(scopeRelTable.cardId, cardIds))
+      : Promise.resolve([]),
+  ]);
 
   const tieCountMap = new Map<string, number>();
   for (const tie of ties) {
@@ -39,15 +45,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     ...c,
     tieCount: tieCountMap.get(c.id) ?? 0,
   }));
-
-  const scopes = await getAllScopes({ db });
-
-  const scopeRels = cardIds.length
-    ? await db
-        .select()
-        .from(scopeRelTable)
-        .where(inArray(scopeRelTable.cardId, cardIds))
-    : [];
 
   return { project, bundles, cards: cardsWithTies, scopes, scopeRels };
 };

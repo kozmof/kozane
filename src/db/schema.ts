@@ -26,6 +26,9 @@ export const scopeTable = sqliteTable("scope", {
   name: text().notNull().default(""),
 });
 
+export const PATH_KINDS = ["project_relative", "absolute"] as const;
+export type PathKind = (typeof PATH_KINDS)[number];
+
 export const workingCopyTable = sqliteTable("working_copy", {
   id: text("id")
     .primaryKey()
@@ -41,7 +44,7 @@ export const workingCopyTable = sqliteTable("working_copy", {
   }),
   name: text().notNull().default(""),
   path: text("path"),
-  pathKind: text("path_kind", { enum: ["project_relative", "absolute"] })
+  pathKind: text("path_kind", { enum: PATH_KINDS })
     .notNull()
     .default("project_relative"),
   lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
