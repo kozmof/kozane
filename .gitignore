@@ -50,3 +50,5 @@ sqlite/
 drizzle/
 
 .claude/
+
+tmp/

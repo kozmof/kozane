@@ -1,7 +1,11 @@
 import { spawn } from "node:child_process";
-import { resolve, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve, join } from "node:path";
 import { requireProject } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
+
+// dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 type DevOptions = {
   host?: string;
@@ -17,15 +21,16 @@ export function dev(options: DevOptions): void {
 
   const dbURL = dbUrl(resolve(root));
 
-  const args = ["vite", "dev", "--host", host, "--port", port];
+  const vite = join(packageRoot, "node_modules", ".bin", "vite");
+  const args = ["dev", "--host", host, "--port", port];
   if (options.open) args.push("--open");
 
   console.log(`Kozane project: ${config.name}`);
   console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
   console.log(`\nLocal UI:\nhttp://${host}:${port}\n`);
 
-  const child = spawn("npx", args, {
-    cwd: resolve(root),
+  const child = spawn(vite, args, {
+    cwd: packageRoot,
     env: { ...process.env, DATABASE_URL: dbURL },
     stdio: "inherit",
   });

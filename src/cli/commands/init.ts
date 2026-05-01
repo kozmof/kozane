@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
-import { runMigrations } from "../lib/db.js";
+import { runMigrations, openDb } from "../lib/db.js";
+import { projectTable, bundleTable } from "../../db/schema.js";
 
 export async function init(): Promise<void> {
   const projectRoot = process.cwd();
@@ -22,7 +23,15 @@ export async function init(): Promise<void> {
 
   console.log(`Initializing Kozane project "${projectName}"...`);
 
-  await runMigrations(dbUrl(projectRoot));
+  const url = dbUrl(projectRoot);
+  await runMigrations(url);
+
+  const db = openDb(url);
+  const [{ id: projectId }] = await db
+    .insert(projectTable)
+    .values({ name: projectName })
+    .returning({ id: projectTable.id });
+  await db.insert(bundleTable).values({ projectId, name: "General" });
 
   console.log(`
 Kozane initialized.
