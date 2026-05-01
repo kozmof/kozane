@@ -467,14 +467,14 @@
     display: flex;
     height: 100vh;
     overflow: hidden;
-    background: #f0ece5;
+    background: #f2f2f2;
   }
 
   /* ── Sidebars ── */
   .sidebar-left,
   .sidebar-right {
     flex-shrink: 0;
-    background: #f7f4ed;
+    background: #f1f1f1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -584,7 +584,7 @@
     flex: 1;
     overflow: auto;
     position: relative;
-    background: #f0ece5;
+    background: #f2f2f2;
   }
 
   /* ── Overlays ── */
@@ -596,7 +596,7 @@
     width: 28px;
     height: 28px;
     border-radius: 6px;
-    background: #f7f4ed;
+    background: #f1f1f1;
     border: 1px solid #e6e1d8;
     cursor: pointer;
     display: flex;
@@ -612,7 +612,7 @@
     display: flex;
     align-items: center;
     gap: 1px;
-    background: #f7f4ed;
+    background: #f1f1f1;
     border-radius: 7px;
     border: 1px solid #d5d0c8;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -712,7 +712,7 @@
     width: 100%;
     padding: 6px 10px;
     background: #1c1a17;
-    color: #f7f4ed;
+    color: #f1f1f1;
     border: none;
     border-top: 1px solid #d5d0c8;
     cursor: pointer;
@@ -746,7 +746,7 @@
   .add-scope-btn {
     padding: 7px 11px;
     background: #1c1a17;
-    color: #f7f4ed;
+    color: #f1f1f1;
     border: none;
     border-radius: 6px;
     cursor: pointer;

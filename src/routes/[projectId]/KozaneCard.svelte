@@ -46,7 +46,7 @@
       ? `1.5px solid ${color.dot}`
       : isSelected
         ? "1.5px solid oklch(62% 0.15 272)"
-        : "1px solid #e6e1d8",
+        : "1px solid #e4e4e4",
   );
 </script>
 
@@ -62,11 +62,11 @@
   style:top="{card.posY}px"
   style:width="{CARD_W}px"
   style:background={isSelected ? "oklch(97% 0.025 272)" : "#ffffff"}
-  style:border-radius="7px"
+  style:border-radius="2px"
   style:border={border}
   style:box-shadow={isDragging
-    ? "0 10px 28px rgba(0,0,0,0.2)"
-    : "0 1px 3px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04)"}
+    ? "0 5px 14px rgba(0,0,0,0.2)"
+    : "0 1px 2px rgba(0,0,0,0.03), 0 4px 6px rgba(0,0,0,0.02)"}
   style:cursor={isDragging ? "grabbing" : "grab"}
   style:user-select="none"
   style:opacity={dimmed ? 0.3 : 1}
@@ -74,7 +74,7 @@
   style:z-index={isDragging ? 200 : isSelected ? 10 : 1}
 >
   <!-- Content -->
-  <div class="content" style:color={card.content ? "#1c1a17" : "#b8b2a8"}>
+  <div class="content" style:color={card.content ? "#575757" : "#b4b4b4"}>
     {card.content || "Empty card…"}
   </div>
 

@@ -23,7 +23,7 @@
 <style>
   main {
     padding: 48px;
-    background: #f0ece5;
+    background: #f2f2f2;
     min-height: 100vh;
   }
 

@@ -116,7 +116,7 @@
 
 <style>
   .composer {
-    background: #f7f4ed;
+    background: #f1f1f1;
     border-radius: 10px;
     padding: 10px 16px 14px;
     flex-shrink: 0;
