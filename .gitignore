@@ -52,3 +52,5 @@ drizzle/
 .claude/
 
 tmp/
+
+coverage/

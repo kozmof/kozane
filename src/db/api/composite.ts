@@ -1,17 +1,38 @@
-import { withTx, type DB } from "../client.js";
+import { withTx, type DB, type AnyDB } from "../client.js";
 import { addCard } from "./card.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";
 import { NotFoundError } from "./utils.js";
 
-// createCardFromWorkingCopy must start a transaction, so it requires the outer DB connection,
-// not a Tx handle (transactions cannot be nested in libsql).
 type CreateCardFromWorkingCopy = {
   db: DB;
   workingCopyId: string;
   bundleId: string;
   content: string;
 };
+
+/**
+ * Core logic for creating a card within a working-copy context.
+ * Exported separately so it can be tested without a transaction.
+ * Production callers should use `createCardFromWorkingCopy`, which wraps
+ * this in a transaction to keep the card insert and scope_rel insert atomic.
+ */
+export async function createCardInWorkingCopyContext(
+  db: AnyDB,
+  {
+    workingCopyId,
+    bundleId,
+    content,
+  }: { workingCopyId: string; bundleId: string; content: string },
+): Promise<string> {
+  const wc = await getWorkingCopy({ db, workingCopyId });
+  if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
+  const cardId = await addCard({ db, bundleId, content, workingCopyId });
+  if (wc.scopeId) {
+    await addScopeRel({ db, scopeId: wc.scopeId, cardId });
+  }
+  return cardId;
+}
 
 /**
  * Creates a card in the given bundle within a working-copy context.
@@ -26,13 +47,5 @@ export async function createCardFromWorkingCopy({
   bundleId,
   content,
 }: CreateCardFromWorkingCopy): Promise<string> {
-  return withTx(db, async (tx) => {
-    const wc = await getWorkingCopy({ db: tx, workingCopyId });
-    if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
-    const cardId = await addCard({ db: tx, bundleId, content, workingCopyId });
-    if (wc.scopeId) {
-      await addScopeRel({ db: tx, scopeId: wc.scopeId, cardId });
-    }
-    return cardId;
-  });
+  return withTx(db, (tx) => createCardInWorkingCopyContext(tx, { workingCopyId, bundleId, content }));
 }

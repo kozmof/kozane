@@ -103,4 +103,15 @@ describe("KozaneCard", () => {
     const card = container.querySelector("[role=button]") as HTMLElement;
     expect(card.style.cursor).toBe("grab");
   });
+
+  it("Enter key on card triggers onCardDblClick", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    const onCardDblClick = vi.fn();
+    render(KozaneCard, { props: makeProps({ onCardDblClick }) });
+    const card = screen.getByRole("button");
+    card.focus();
+    await user.keyboard("{Enter}");
+    expect(onCardDblClick).toHaveBeenCalledOnce();
+  });
 });

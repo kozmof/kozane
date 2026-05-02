@@ -18,7 +18,8 @@
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
@@ -35,6 +36,7 @@
     "@testing-library/svelte": "^5.3.1",
     "@testing-library/user-event": "^14.6.1",
     "@types/node": "^20.11.17",
+    "@vitest/coverage-v8": "^4.1.5",
     "drizzle-kit": "^0.31.10",
     "jsdom": "^29.0.2",
     "oxfmt": "^0.44.0",
