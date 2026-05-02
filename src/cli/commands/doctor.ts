@@ -1,7 +1,7 @@
 import { existsSync, accessSync, constants } from "node:fs";
 import { join, resolve } from "node:path";
 import { createConnection } from "node:net";
-import { detectProject } from "../lib/project.js";
+import { detectWorkspace } from "../lib/project.js";
 import { KOZANE_DIR, CONFIG_FILE, DB_FILE, readConfig, dbUrl } from "../lib/config.js";
 import { openDb } from "../lib/db.js";
 
@@ -29,17 +29,17 @@ export async function doctor(): Promise<void> {
   const cwd = process.cwd();
   const checks: Check[] = [];
 
-  // 1. Project detected
-  const project = detectProject(cwd);
-  checks.push(check("Kozane project found", !!project, project?.root ?? "run kozane init"));
+  // 1. Workspace detected
+  const workspace = detectWorkspace(cwd);
+  checks.push(check("Kozane workspace found", !!workspace, workspace?.root ?? "run kozane init"));
 
-  if (!project) {
+  if (!workspace) {
     printChecks(checks);
     process.exit(1);
     return; // satisfies TS control-flow narrowing
   }
 
-  const { root } = project;
+  const { root } = workspace;
 
   // 2. .kozane/ directory
   const kozaneDir = join(root, KOZANE_DIR);
@@ -47,7 +47,7 @@ export async function doctor(): Promise<void> {
 
   // 3. config.json readable
   const configPath = join(root, KOZANE_DIR, CONFIG_FILE);
-  let config = project.config;
+  let config = workspace.config;
   let configOk = existsSync(configPath);
   if (configOk) {
     try {

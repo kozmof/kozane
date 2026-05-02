@@ -8,7 +8,7 @@
   <h1>kozane <span>こざね</span></h1>
 
   {#if data.projects.length === 0}
-    <p>No projects yet. Run <code>kozane init</code> to create one.</p>
+    <p>No projects yet. Run <code>kozane project create &lt;name&gt;</code> to create one.</p>
   {:else}
     <ul>
       {#each data.projects as project (project.id)}

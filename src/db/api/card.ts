@@ -1,7 +1,7 @@
-import { cardTable } from "../schema";
+import { cardTable } from "../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
-import type { NeedsDB, NeedsBundle, Card } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsDB, NeedsBundle, Card } from "./types.js";
+import { assertFound } from "./utils.js";
 
 export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));

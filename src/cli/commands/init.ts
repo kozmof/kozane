@@ -1,45 +1,36 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
-import { runMigrations, openDb } from "../lib/db.js";
-import { projectTable, bundleTable } from "../../db/schema.js";
+import { runMigrations } from "../lib/db.js";
 
 export async function init(): Promise<void> {
   const projectRoot = process.cwd();
   const kozaneDir = join(projectRoot, KOZANE_DIR);
 
   if (existsSync(kozaneDir)) {
-    console.error(`Kozane project already exists at ${kozaneDir}`);
+    console.error(`Kozane workspace already exists at ${kozaneDir}`);
     process.exit(1);
   }
 
-  const projectName = basename(resolve(projectRoot));
+  const workspaceName = basename(resolve(projectRoot));
 
   mkdirSync(kozaneDir, { recursive: true });
   mkdirSync(join(kozaneDir, "working-copies"), { recursive: true });
 
-  const config = defaultConfig(projectName);
+  const config = defaultConfig(workspaceName);
   writeConfig(projectRoot, config);
 
-  console.log(`Initializing Kozane project "${projectName}"...`);
+  console.log(`Initializing Kozane workspace "${workspaceName}"...`);
 
-  const url = dbUrl(projectRoot);
-  await runMigrations(url);
-
-  const db = openDb(url);
-  const [{ id: projectId }] = await db
-    .insert(projectTable)
-    .values({ name: projectName })
-    .returning({ id: projectTable.id });
-  await db.insert(bundleTable).values({ projectId, name: "General" });
+  await runMigrations(dbUrl(projectRoot));
 
   console.log(`
 Kozane initialized.
 
-  Project : ${projectName}
-  Config  : ${KOZANE_DIR}/config.json
-  Database: ${KOZANE_DIR}/kozane.db
+  Workspace: ${workspaceName}
+  Config   : ${KOZANE_DIR}/config.json
+  Database : ${KOZANE_DIR}/kozane.db
 
-Run "kozane dev" to start the local UI.
+Next: run "kozane project create <name>" to create your first project.
 `);
 }

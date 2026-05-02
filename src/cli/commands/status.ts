@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { count } from "drizzle-orm";
-import { requireProject } from "../lib/project.js";
+import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 import { openDb } from "../lib/db.js";
 import {
@@ -12,7 +12,7 @@ import {
 } from "../../db/schema.js";
 
 export async function status(): Promise<void> {
-  const { root, config } = requireProject();
+  const { root, config } = requireWorkspace();
   const db = openDb(dbUrl(resolve(root)));
 
   const [[projects], [bundles], [cards], [scopes], [workingCopies]] = await Promise.all([
@@ -23,7 +23,7 @@ export async function status(): Promise<void> {
     db.select({ count: count() }).from(workingCopyTable),
   ]);
 
-  console.log(`Project      : ${config.name}`);
+  console.log(`Workspace    : ${config.name}`);
   console.log(`Projects     : ${projects.count}`);
   console.log(`Bundles      : ${bundles.count}`);
   console.log(`Cards        : ${cards.count}`);

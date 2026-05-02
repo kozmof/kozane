@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/libsql";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { getDBURL } from "./internal/config.js";
-import * as schema from "./schema";
+import * as schema from "./schema.js";
 
 export const db = drizzle(getDBURL(), { schema });
 

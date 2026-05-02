@@ -1,8 +1,8 @@
-import { workingCopyTable } from "../schema";
-import type { PathKind } from "../schema";
+import { workingCopyTable } from "../schema.js";
+import type { PathKind } from "../schema.js";
 import { eq } from "drizzle-orm";
-import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsDB, NeedsScope, NeedsWorkingCopy, WorkingCopy } from "./types.js";
+import { assertFound } from "./utils.js";
 
 // scopeId is possibly null
 export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[]> {

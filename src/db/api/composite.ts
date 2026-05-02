@@ -1,8 +1,8 @@
-import { withTx, type DB } from "../client";
-import { addCard } from "./card";
-import { addScopeRel } from "./scope-rel";
-import { getWorkingCopy } from "./working-copy";
-import { NotFoundError } from "./utils";
+import { withTx, type DB } from "../client.js";
+import { addCard } from "./card.js";
+import { addScopeRel } from "./scope-rel.js";
+import { getWorkingCopy } from "./working-copy.js";
+import { NotFoundError } from "./utils.js";
 
 // createCardFromWorkingCopy must start a transaction, so it requires the outer DB connection,
 // not a Tx handle (transactions cannot be nested in libsql).

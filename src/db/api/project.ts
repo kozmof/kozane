@@ -1,7 +1,7 @@
-import { projectTable } from "../schema";
+import { projectTable } from "../schema.js";
 import { eq } from "drizzle-orm";
-import type { NeedsDB, Project } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsDB, Project } from "./types.js";
+import { assertFound } from "./utils.js";
 
 export async function getAllProjects({ db }: NeedsDB): Promise<Project[]> {
   return db.select().from(projectTable);

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && tsc --project tsconfig.cli.json",
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",

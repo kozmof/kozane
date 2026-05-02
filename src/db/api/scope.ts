@@ -1,7 +1,7 @@
-import { scopeTable } from "../schema";
+import { scopeTable } from "../schema.js";
 import { eq } from "drizzle-orm";
-import type { NeedsDB, NeedsScope, Scope } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsDB, NeedsScope, Scope } from "./types.js";
+import { assertFound } from "./utils.js";
 
 // Scopes are cross-project by design — they are not owned by any project or bundle
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {

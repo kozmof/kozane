@@ -1,13 +1,13 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { type ProjectConfig, KOZANE_DIR, CONFIG_FILE, readConfig } from "./config.js";
+import { type WorkspaceConfig, KOZANE_DIR, CONFIG_FILE, readConfig } from "./config.js";
 
-export type KozaneProject = {
+export type KozaneWorkspace = {
   root: string;
-  config: ProjectConfig;
+  config: WorkspaceConfig;
 };
 
-export function detectProject(startDir: string = process.cwd()): KozaneProject | null {
+export function detectWorkspace(startDir: string = process.cwd()): KozaneWorkspace | null {
   let dir = startDir;
   while (true) {
     const configPath = join(dir, KOZANE_DIR, CONFIG_FILE);
@@ -20,11 +20,11 @@ export function detectProject(startDir: string = process.cwd()): KozaneProject |
   }
 }
 
-export function requireProject(startDir: string = process.cwd()): KozaneProject {
-  const project = detectProject(startDir);
-  if (!project) {
-    console.error('No Kozane project found. Run "kozane init" first.');
+export function requireWorkspace(startDir: string = process.cwd()): KozaneWorkspace {
+  const workspace = detectWorkspace(startDir);
+  if (!workspace) {
+    console.error('No Kozane workspace found. Run "kozane init" first.');
     process.exit(1);
   }
-  return project;
+  return workspace;
 }

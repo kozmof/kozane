@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-export type ProjectConfig = {
+export type WorkspaceConfig = {
   name: string;
   server: {
     host: string;
@@ -18,7 +18,7 @@ export const CONFIG_FILE = "config.json";
 export const DB_FILE = "kozane.db";
 export const MIGRATION_DIR = "drizzle";
 
-export function defaultConfig(name: string): ProjectConfig {
+export function defaultConfig(name: string): WorkspaceConfig {
   return {
     name,
     server: { host: "127.0.0.1", port: 5173 },
@@ -29,7 +29,7 @@ export function defaultConfig(name: string): ProjectConfig {
   };
 }
 
-export function readConfig(projectRoot: string): ProjectConfig {
+export function readConfig(projectRoot: string): WorkspaceConfig {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
   const parsed: unknown = JSON.parse(raw);
@@ -42,10 +42,10 @@ export function readConfig(projectRoot: string): ProjectConfig {
   ) {
     throw new Error(`Invalid Kozane config at ${configPath}`);
   }
-  return parsed as ProjectConfig;
+  return parsed as WorkspaceConfig;
 }
 
-export function writeConfig(projectRoot: string, config: ProjectConfig): void {
+export function writeConfig(projectRoot: string, config: WorkspaceConfig): void {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
 }

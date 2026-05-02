@@ -1,7 +1,7 @@
-import { tieTable } from "../schema";
+import { tieTable } from "../schema.js";
 import { and, eq, inArray, or } from "drizzle-orm";
-import type { NeedsDB, NeedsTie, Tie } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsDB, NeedsTie, Tie } from "./types.js";
+import { assertFound } from "./utils.js";
 
 export async function getTiesByCard({ db, cardId }: NeedsDB & { cardId: string }): Promise<Tie[]> {
   return db

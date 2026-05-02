@@ -6,6 +6,7 @@ import { dev } from "./commands/dev.js";
 import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
+import { projectCreate } from "./commands/project.js";
 
 const program = new Command();
 
@@ -33,13 +34,20 @@ program
 
 program
   .command("doctor")
-  .description("Check Kozane project health")
+  .description("Check Kozane workspace health")
   .action(() => doctor());
 
 program
   .command("status")
-  .description("Show current project state")
+  .description("Show current workspace state")
   .action(() => status());
+
+const project = program.command("project").description("Project management");
+
+project
+  .command("create <name>")
+  .description("Create a new project in the current workspace")
+  .action((name) => projectCreate(name));
 
 const wc = program.command("wc").description("Working copy management");
 

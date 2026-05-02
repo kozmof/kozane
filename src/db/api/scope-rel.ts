@@ -1,7 +1,7 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, scopeRelTable } from "../schema";
-import type { NeedsDB, NeedsScope, Card } from "./types";
-import { assertFound } from "./utils";
+import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
+import type { NeedsDB, NeedsScope, Card } from "./types.js";
+import { assertFound } from "./utils.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
 

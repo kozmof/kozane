@@ -1,7 +1,7 @@
-import { bundleTable } from "../schema";
+import { bundleTable } from "../schema.js";
 import { and, eq } from "drizzle-orm";
-import type { NeedsProject, Bundle } from "./types";
-import { assertFound } from "./utils";
+import type { NeedsProject, Bundle } from "./types.js";
+import { assertFound } from "./utils.js";
 
 export async function getAllBundles({ db, projectId }: NeedsProject): Promise<Bundle[]> {
   return db.select().from(bundleTable).where(eq(bundleTable.projectId, projectId));

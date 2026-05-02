@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
-import { requireProject } from "../lib/project.js";
+import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
@@ -14,7 +14,7 @@ type DevOptions = {
 };
 
 export function dev(options: DevOptions): void {
-  const { root, config } = requireProject();
+  const { root, config } = requireWorkspace();
 
   const host = options.host ?? config.server.host;
   const port = options.port ?? String(config.server.port);
@@ -25,7 +25,7 @@ export function dev(options: DevOptions): void {
   const args = ["dev", "--host", host, "--port", port];
   if (options.open) args.push("--open");
 
-  console.log(`Kozane project: ${config.name}`);
+  console.log(`Kozane workspace: ${config.name}`);
   console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
   console.log(`\nLocal UI:\nhttp://${host}:${port}\n`);
 

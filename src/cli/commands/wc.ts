@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
-import { requireProject } from "../lib/project.js";
+import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 import { openDb } from "../lib/db.js";
 import {
@@ -20,7 +20,7 @@ import { v7 as uuidv7 } from "uuid";
 type ScanOptions = { reattach?: boolean };
 
 export async function wcScan(options: ScanOptions = {}): Promise<void> {
-  const { root, config } = requireProject();
+  const { root, config } = requireWorkspace();
   const db = openDb(dbUrl(resolve(root)));
 
   const searchRoots = config.workingCopy.searchRoots.map((r) =>
@@ -104,7 +104,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 type CreateOptions = { scope?: string; dir?: string };
 
 export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
-  const { root, config } = requireProject();
+  const { root, config } = requireWorkspace();
   const db = openDb(dbUrl(resolve(root)));
 
   const targetDir = options.dir
