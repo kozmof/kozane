@@ -274,6 +274,17 @@
     newScopeName = "";
   }
 
+  async function handleDeleteScope(scopeId: string) {
+    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}`, { method: "DELETE" });
+    if (!res.ok) {
+      lastError = "Failed to delete scope";
+      return;
+    }
+    scopes = scopes.filter((s) => s.id !== scopeId);
+    scopeRels = scopeRels.filter((r) => r.scopeId !== scopeId);
+    if (activeScope === scopeId) activeScope = null;
+  }
+
   async function handleAddToScope(scopeId: string) {
     if (selectedCards.size === 0) return;
     const cardIds = [...selectedCards];
@@ -626,19 +637,45 @@
           css({ borderRadius: "6px", overflow: "hidden", border: "1px solid transparent" }),
           active && css({ borderColor: "warm.scroll" }),
         )}>
-          <button
-            class={sideBtn(active)}
-            onclick={() => (activeScope = active ? null : scope.id)}
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
-              <path d="M3 5h4M3 3.5h2" stroke="var(--colors-warm-icon-dim)" stroke-width="1" stroke-linecap="round" />
-            </svg>
-            <span class={flex1Class}>{scope.name}</span>
-            <span class={countClass}>
-              {scopeRels.filter((r) => r.scopeId === scope.id).length}
-            </span>
-          </button>
+          <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .scope-delete": { opacity: "1" } })}>
+            <button
+              class={cx(sideBtn(active), css({ paddingRight: "28px" }))}
+              onclick={() => (activeScope = active ? null : scope.id)}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
+                <path d="M3 5h4M3 3.5h2" stroke="var(--colors-warm-icon-dim)" stroke-width="1" stroke-linecap="round" />
+              </svg>
+              <span class={flex1Class}>{scope.name}</span>
+              <span class={countClass}>
+                {scopeRels.filter((r) => r.scopeId === scope.id).length}
+              </span>
+            </button>
+            <button
+              class={cx("scope-delete", css({
+                position: "absolute",
+                right: "6px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "18px",
+                height: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: "3px",
+                fontSize: "13px",
+                color: "warm.subtle",
+                opacity: "0",
+                transition: "opacity 0.12s, color 0.12s",
+                "&:hover": { color: "state.error" },
+              }))}
+              title="Delete scope"
+              onclick={(e) => { e.stopPropagation(); handleDeleteScope(scope.id); }}
+            >×</button>
+          </div>
 
           {#if selectedCards.size > 0}
             <button

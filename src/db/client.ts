@@ -1,9 +1,12 @@
+import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import type { LibSQLDatabase } from "drizzle-orm/libsql";
 import { getDBURL } from "./internal/config.js";
 import * as schema from "./schema.js";
 
-export const db = drizzle(getDBURL(), { schema });
+const client = createClient({ url: getDBURL() });
+await client.execute("PRAGMA foreign_keys = ON");
+export const db = drizzle(client, { schema });
 
 // Canonical DB type for dependency injection in API functions
 export type DB = typeof db;
