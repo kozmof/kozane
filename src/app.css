@@ -1,1 +1,37 @@
 @layer reset, base, tokens, recipes, utilities;
+
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer base {
+  body {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    color: #1c1a17;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #a8a8a8;
+    border-radius: 3px;
+  }
+
+  input:focus,
+  textarea:focus {
+    outline: none;
+  }
+}
