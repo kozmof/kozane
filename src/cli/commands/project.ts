@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
-import { dbUrl, } from "../lib/config.js";
+import { dbUrl } from "../lib/config.js";
 import { openDb, runMigrations } from "../lib/db.js";
 import { addProject } from "../../db/api/project.js";
 import { addBundle } from "../../db/api/bundle.js";

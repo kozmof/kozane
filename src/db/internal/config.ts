@@ -17,12 +17,16 @@ function findWorkspaceRoot(startDir: string | undefined): string | null {
 }
 
 function workspaceDbUrl(): string | null {
-  const root = findWorkspaceRoot(process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd());
+  const root = findWorkspaceRoot(
+    process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd(),
+  );
   return root ? `file:${join(root, ".kozane", "kozane.db")}` : null;
 }
 
 export function getWorkspaceRoot(): string | null {
-  return findWorkspaceRoot(process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd());
+  return findWorkspaceRoot(
+    process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd(),
+  );
 }
 
 export function getDBURL(): string {

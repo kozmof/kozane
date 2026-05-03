@@ -24,7 +24,11 @@ describe("createCardInWorkingCopyContext", () => {
   it("creates a card and returns its id", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext(db, { workingCopyId: wcId, bundleId, content: "Hi" });
+    const cardId = await createCardInWorkingCopyContext(db, {
+      workingCopyId: wcId,
+      bundleId,
+      content: "Hi",
+    });
     expect(cardId).toBeTruthy();
   });
 
@@ -61,7 +65,11 @@ describe("createCardInWorkingCopyContext", () => {
       .values({ projectId, name: "no-scope-wc" })
       .returning({ id: workingCopyTable.id });
 
-    const cardId = await createCardInWorkingCopyContext(db, { workingCopyId: wcId, bundleId, content: "X" });
+    const cardId = await createCardInWorkingCopyContext(db, {
+      workingCopyId: wcId,
+      bundleId,
+      content: "X",
+    });
 
     expect(await getCard({ db, bundleId, cardId })).toBeDefined();
     const scopeCards = await getAllCardsByScope({ db, scopeId });
@@ -83,7 +91,12 @@ describe("createCardFromWorkingCopy", () => {
   it("returns a card id", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardFromWorkingCopy({ db, workingCopyId: wcId, bundleId, content: "Tx" });
+    const cardId = await createCardFromWorkingCopy({
+      db,
+      workingCopyId: wcId,
+      bundleId,
+      content: "Tx",
+    });
     expect(typeof cardId).toBe("string");
     expect(cardId.length).toBeGreaterThan(0);
   });

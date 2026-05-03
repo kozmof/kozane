@@ -23,7 +23,12 @@ export async function getBundle({
 }
 
 type AddBundle = NeedsProject & { name: string; isDefault?: boolean };
-export async function addBundle({ db, projectId, name, isDefault = false }: AddBundle): Promise<string> {
+export async function addBundle({
+  db,
+  projectId,
+  name,
+  isDefault = false,
+}: AddBundle): Promise<string> {
   const [row] = await db
     .insert(bundleTable)
     .values({ projectId, name, isDefault })

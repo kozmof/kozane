@@ -47,5 +47,7 @@ export async function createCardFromWorkingCopy({
   bundleId,
   content,
 }: CreateCardFromWorkingCopy): Promise<string> {
-  return withTx(db, (tx) => createCardInWorkingCopyContext(tx, { workingCopyId, bundleId, content }));
+  return withTx(db, (tx) =>
+    createCardInWorkingCopyContext(tx, { workingCopyId, bundleId, content }),
+  );
 }

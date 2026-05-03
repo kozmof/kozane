@@ -141,9 +141,9 @@ describe("updateCardContent", () => {
 
   it("throws NotFoundError for a missing card", async () => {
     const { db, bundleId } = await setup();
-    await expect(updateCardContent({ db, bundleId, cardId: "ghost", content: "X" })).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(
+      updateCardContent({ db, bundleId, cardId: "ghost", content: "X" }),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 

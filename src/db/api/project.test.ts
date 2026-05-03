@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
-import { addProject, getProject, getAllProjects, deleteProject, updateProjectName } from "./project.js";
+import {
+  addProject,
+  getProject,
+  getAllProjects,
+  deleteProject,
+  updateProjectName,
+} from "./project.js";
 import { NotFoundError } from "./utils.js";
 
 async function db() {

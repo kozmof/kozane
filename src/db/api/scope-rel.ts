@@ -54,7 +54,11 @@ export async function addScopeMembers({
 }
 
 type RemoveScopeMembers = NeedsScope & { cardIds: string[] };
-export async function removeScopeMembers({ db, scopeId, cardIds }: RemoveScopeMembers): Promise<void> {
+export async function removeScopeMembers({
+  db,
+  scopeId,
+  cardIds,
+}: RemoveScopeMembers): Promise<void> {
   await db
     .delete(scopeRelTable)
     .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
