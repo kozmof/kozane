@@ -22,9 +22,10 @@
     defaultBundleId: string;
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
+    onBundleChange?: (bundleId: string) => void;
   }
 
-  let { editingCard, bundles, defaultBundleId, onSubmit, onCancel }: Props = $props();
+  let { editingCard, bundles, defaultBundleId, onSubmit, onCancel, onBundleChange }: Props = $props();
 
   let content = $state(untrack(() => editingCard?.content ?? ""));
   let bundleId = $state(untrack(() => editingCard?.bundleId ?? defaultBundleId));
@@ -71,7 +72,7 @@
 <div class={css({ backgroundColor: "ink.light", borderRadius: "10px", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + cancel hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
-    <BundleDropdown {bundles} {bundleId} onChange={(id) => (bundleId = id)} />
+    <BundleDropdown {bundles} {bundleId} onChange={(id) => { bundleId = id; if (isEditing) onBundleChange?.(id); }} />
     {#if isEditing}
       <button
         class={css({ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "warm.muted", fontFamily: "inherit", padding: "0" })}

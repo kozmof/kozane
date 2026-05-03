@@ -259,6 +259,21 @@
     }
   }
 
+  async function handleCardBundleChange(newBundleId: string) {
+    if (!composerCard) return;
+    const cardId = composerCard.id;
+    const res = await fetch(`/${data.project.id}/api/cards/${cardId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bundleId: newBundleId }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to change bundle";
+      return;
+    }
+    cards = cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
+  }
+
   // ── Bundles ───────────────────────────────────────────────────
   async function handleCreateBundle() {
     if (!newBundleName.trim()) return;
@@ -688,6 +703,7 @@
         {defaultBundleId}
         onSubmit={handleComposerSubmit}
         onCancel={() => (composerCard = null)}
+        onBundleChange={handleCardBundleChange}
       />
     </div>
   </div>
