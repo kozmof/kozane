@@ -363,9 +363,26 @@
     })}
     style:width={sidebarsVisible ? "216px" : "0"}
   >
-    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid token(colors.warm.dim)", display: "flex", alignItems: "baseline", gap: "8px" })}>
-      <span class={css({ fontSize: "15px", fontWeight: "500", letterSpacing: "-0.02em", color: "ink.black" })}>kozane</span>
-      <span class={css({ fontSize: "10px", color: "warm.muted", letterSpacing: "0.04em" })}>こざね</span>
+    <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.warm.dim)" })}>
+      <a
+        href="/"
+        class={css({
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "6px 8px",
+          borderRadius: "6px",
+          textDecoration: "none",
+          color: "ink.secondary",
+          fontSize: "12.5px",
+          "&:hover": { backgroundColor: "warm.bg", color: "ink.black" },
+        })}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        Projects
+      </a>
     </div>
 
     <div class={css({ padding: "14px 0 8px" })}>
