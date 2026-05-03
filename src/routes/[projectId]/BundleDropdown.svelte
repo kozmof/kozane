@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { css } from "styled-system/css";
+
   interface Bundle {
     id: string;
     name: string;
@@ -27,11 +29,13 @@
     document.addEventListener("mousedown", handleDown);
     return () => document.removeEventListener("mousedown", handleDown);
   });
+
+  const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
 </script>
 
-<div bind:this={dropdownEl} class="wrapper">
+<div bind:this={dropdownEl} class={css({ position: "relative", flexShrink: "0" })}>
   <button
-    class="trigger"
+    class={css({ display: "flex", alignItems: "center", gap: "5px", padding: "3px 8px 3px 6px", border: "1px solid", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px", color: "ink.black", transition: "all 0.1s" })}
     style:border-color={open ? active?.dot : "#e6e1d8"}
     style:background={open ? active?.bg : "transparent"}
     onmousedown={(e) => {
@@ -39,25 +43,34 @@
       open = !open;
     }}
   >
-    <span class="dot" style:background={active?.dot}></span>
-    <span class="label">{active?.name ?? "Bundle"}</span>
-    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" class="chevron">
-      <path
-        d="M1.5 3L4 5.5L6.5 3"
-        stroke="#1c1a17"
-        stroke-width="1.2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
+    <span class={dotClass} style:background={active?.dot}></span>
+    <span class={css({ maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
+      {active?.name ?? "Bundle"}
+    </span>
+    <svg width="8" height="8" viewBox="0 0 8 8" fill="none" class={css({ opacity: "0.5", marginLeft: "1px", flexShrink: "0" })}>
+      <path d="M1.5 3L4 5.5L6.5 3" stroke="#1c1a17" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   </button>
 
   {#if open}
-    <div class="popover">
+    <div
+      class={css({
+        position: "absolute",
+        bottom: "calc(100% + 6px)",
+        left: "0",
+        background: "#ffffff",
+        border: "1px solid #e6e1d8",
+        borderRadius: "7px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+        padding: "4px",
+        minWidth: "160px",
+        zIndex: "100",
+      })}
+    >
       {#each bundles as b (b.id)}
         {@const isActive = b.id === bundleId}
         <button
-          class="option"
+          class={css({ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 10px", border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", color: "ink.black", textAlign: "left" })}
           style:background={isActive ? b.bg : "transparent"}
           onmousedown={(e) => {
             e.preventDefault();
@@ -65,23 +78,11 @@
             open = false;
           }}
         >
-          <span class="dot" style:background={b.dot}></span>
+          <span class={dotClass} style:background={b.dot}></span>
           {b.name}
           {#if isActive}
-            <svg
-              width="10"
-              height="8"
-              viewBox="0 0 10 8"
-              fill="none"
-              style:margin-left="auto"
-            >
-              <path
-                d="M1 4l3 3 5-6"
-                stroke={b.dot}
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
+            <svg width="10" height="8" viewBox="0 0 10 8" fill="none" style:margin-left="auto">
+              <path d="M1 4l3 3 5-6" stroke={b.dot} stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           {/if}
         </button>
@@ -89,72 +90,3 @@
     </div>
   {/if}
 </div>
-
-<style>
-  .wrapper {
-    position: relative;
-    flex-shrink: 0;
-  }
-
-  .trigger {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 8px 3px 6px;
-    border: 1px solid;
-    border-radius: 5px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 11px;
-    color: #1c1a17;
-    transition: all 0.1s;
-  }
-
-  .label {
-    max-width: 100px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .chevron {
-    opacity: 0.5;
-    margin-left: 1px;
-    flex-shrink: 0;
-  }
-
-  .popover {
-    position: absolute;
-    bottom: calc(100% + 6px);
-    left: 0;
-    background: #ffffff;
-    border: 1px solid #e6e1d8;
-    border-radius: 7px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-    padding: 4px;
-    min-width: 160px;
-    z-index: 100;
-  }
-
-  .option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    padding: 6px 10px;
-    border: none;
-    border-radius: 5px;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
-    color: #1c1a17;
-    text-align: left;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-</style>

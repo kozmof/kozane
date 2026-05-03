@@ -4,6 +4,7 @@
   import KozaneCard from "./KozaneCard.svelte";
   import CardComposer from "./CardComposer.svelte";
   import { CANVAS_W, CANVAS_H } from "$lib/constants";
+  import { css, cx } from "styled-system/css";
 
   let { data }: PageProps = $props();
 
@@ -291,27 +292,63 @@
     selectedCards = new Set();
   }
 
-  // ── Sidebar helpers ───────────────────────────────────────────
+  // ── Shared classes (reused inside each-loops or conditional) ──
+  const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
+  const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
+  const countClass = css({ fontSize: "10.5px", color: "warm.subtle", flexShrink: "0" });
+
+  const sideBtnBase = css({
+    display: "flex",
+    alignItems: "center",
+    gap: "9px",
+    padding: "7px 10px",
+    width: "100%",
+    background: "transparent",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    textAlign: "left",
+    fontSize: "12.5px",
+    color: "ink.black",
+    fontFamily: "inherit",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  });
+  const sideBtnActiveClass = css({ backgroundColor: "warm.bg" });
+
   function sideBtn(active: boolean) {
-    return active ? "side-btn active" : "side-btn";
+    return cx(sideBtnBase, active && sideBtnActiveClass);
   }
 </script>
 
-<div class="app">
+<div class={css({ display: "flex", height: "100vh", overflow: "hidden", backgroundColor: "ink.lighter" })}>
   <!-- ── Left sidebar: Bundles ── -->
-  <aside class="sidebar-left" style:width={sidebarsVisible ? "216px" : "0"}>
-    <div class="logo">
-      <span class="logo-name">kozane</span>
-      <span class="logo-ja">こざね</span>
+  <aside
+    class={css({
+      flexShrink: "0",
+      backgroundColor: "ink.light",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      transition: "width 0.22s ease",
+      borderRight: "1px solid #cccccc",
+    })}
+    style:width={sidebarsVisible ? "216px" : "0"}
+  >
+    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid #cccccc", display: "flex", alignItems: "baseline", gap: "8px" })}>
+      <span class={css({ fontSize: "15px", fontWeight: "500", letterSpacing: "-0.02em", color: "ink.black" })}>kozane</span>
+      <span class={css({ fontSize: "10px", color: "warm.muted", letterSpacing: "0.04em" })}>こざね</span>
     </div>
 
-    <div class="section">
-      <div class="section-label">Bundles</div>
-      <div class="btn-list">
+    <div class={css({ padding: "14px 0 8px" })}>
+      <div class={css({ padding: "0 20px 8px", fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
+        Bundles
+      </div>
+      <div class={css({ padding: "0 8px", display: "flex", flexDirection: "column", gap: "1px" })}>
         <button class={sideBtn(activeBundle === null)} onclick={() => (activeBundle = null)}>
-          <span class="dot" style:background="#b8b2a8"></span>
-          <span class="flex-1">All cards</span>
-          <span class="count">{cards.length}</span>
+          <span class={dotClass} style:background="#b8b2a8"></span>
+          <span class={flex1Class}>All cards</span>
+          <span class={countClass}>{cards.length}</span>
         </button>
 
         {#each bundlesWithColors as b (b.id)}
@@ -321,9 +358,9 @@
             style:background={active ? b.bg : "transparent"}
             onclick={() => (activeBundle = active ? null : b.id)}
           >
-            <span class="dot" style:background={b.dot}></span>
-            <span class="flex-1">{b.name}</span>
-            <span class="count">{cards.filter((c) => c.bundleId === b.id).length}</span>
+            <span class={dotClass} style:background={b.dot}></span>
+            <span class={flex1Class}>{b.name}</span>
+            <span class={countClass}>{cards.filter((c) => c.bundleId === b.id).length}</span>
           </button>
         {/each}
       </div>
@@ -331,10 +368,10 @@
   </aside>
 
   <!-- ── Center column: canvas + overlays ── -->
-  <div class="center">
+  <div class={css({ flex: "1", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" })}>
     <!-- Canvas -->
     <div
-      class="canvas"
+      class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.lighter" })}
       role="presentation"
       bind:this={canvasEl}
       onmousedown={handleCanvasMouseDown}
@@ -398,15 +435,52 @@
 
     <!-- Error banner -->
     {#if lastError}
-      <div class="error-banner" role="alert">
+      <div
+        class={css({
+          position: "absolute",
+          top: "12px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: "52",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "8px 14px",
+          background: "oklch(30% 0.18 18)",
+          color: "#fff",
+          borderRadius: "7px",
+          fontSize: "12.5px",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+          whiteSpace: "nowrap",
+        })}
+        role="alert"
+      >
         <span>{lastError}</span>
-        <button class="error-dismiss" onclick={() => (lastError = null)}>×</button>
+        <button
+          class={css({ background: "none", border: "none", color: "rgba(255,255,255,0.75)", cursor: "pointer", fontSize: "15px", lineHeight: "1", padding: "0", flexShrink: "0" })}
+          onclick={() => (lastError = null)}
+        >×</button>
       </div>
     {/if}
 
     <!-- Sidebar toggle -->
     <button
-      class="sidebar-toggle"
+      class={css({
+        position: "absolute",
+        top: "12px",
+        right: "16px",
+        zIndex: "51",
+        width: "28px",
+        height: "28px",
+        borderRadius: "6px",
+        backgroundColor: "ink.light",
+        border: "1px solid #e6e1d8",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+      })}
       title={sidebarsVisible ? "Hide panels" : "Show panels"}
       onclick={() => (sidebarsVisible = !sidebarsVisible)}
     >
@@ -422,15 +496,47 @@
     </button>
 
     <!-- Zoom controls -->
-    <div class="zoom-controls">
+    <div
+      class={css({
+        position: "absolute",
+        bottom: "20px",
+        right: "16px",
+        display: "flex",
+        alignItems: "center",
+        gap: "1px",
+        backgroundColor: "ink.light",
+        borderRadius: "7px",
+        border: "1px solid #cccccc",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        zIndex: "51",
+        overflow: "hidden",
+      })}
+    >
       {#each [["−", -ZOOM_STEP], ["+", ZOOM_STEP]] as [label, delta] (label)}
-        <button class="zoom-btn" onclick={() => applyZoom(delta as number)}>{label}</button>
+        <button
+          class={css({ width: "30px", height: "28px", border: "none", background: "transparent", cursor: "pointer", fontSize: "16px", color: "#5a5650", lineHeight: "1", fontFamily: "inherit" })}
+          onclick={() => applyZoom(delta as number)}
+        >{label}</button>
       {/each}
-      <div class="zoom-pct">{Math.round(zoom * 100)}%</div>
+      <div class={css({ padding: "0 8px", fontSize: "11px", color: "#918c83", borderLeft: "1px solid #cccccc", height: "28px", display: "flex", alignItems: "center", minWidth: "40px", justifyContent: "center" })}>
+        {Math.round(zoom * 100)}%
+      </div>
     </div>
 
     <!-- Floating composer -->
-    <div class="composer-wrap">
+    <div
+      class={css({
+        position: "absolute",
+        bottom: "20px",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: "540px",
+        maxWidth: "calc(100% - 40px)",
+        borderRadius: "10px",
+        boxShadow: "0 4px 24px rgba(0,0,0,0.13), 0 1px 4px rgba(0,0,0,0.08)",
+        zIndex: "50",
+      })}
+    >
       <CardComposer
         editingCard={composerCard}
         bundles={bundlesWithColors}
@@ -442,22 +548,53 @@
   </div>
 
   <!-- ── Right sidebar: Scopes ── -->
-  <aside class="sidebar-right" style:width={sidebarsVisible ? "232px" : "0"}>
-    <div class="scopes-header">
-      <div class="section-label">Scopes</div>
+  <aside
+    class={css({
+      flexShrink: "0",
+      backgroundColor: "ink.light",
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden",
+      transition: "width 0.22s ease",
+      borderLeft: "1px solid #cccccc",
+    })}
+    style:width={sidebarsVisible ? "232px" : "0"}
+  >
+    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid #cccccc" })}>
+      <div class={css({ fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
+        Scopes
+      </div>
     </div>
 
     {#if selectedCards.size > 0}
-      <div class="selection-pill">
+      <div
+        class={css({
+          margin: "10px 10px 2px",
+          padding: "8px 12px",
+          background: "oklch(93% 0.055 272)",
+          borderRadius: "6px",
+          fontSize: "11.5px",
+          color: "oklch(38% 0.15 272)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        })}
+      >
         <span><strong>{selectedCards.size}</strong> card{selectedCards.size > 1 ? "s" : ""} selected</span>
-        <button class="clear-sel" onclick={() => (selectedCards = new Set())}>×</button>
+        <button
+          class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "oklch(55% 0.15 272)", lineHeight: "1", padding: "0" })}
+          onclick={() => (selectedCards = new Set())}
+        >×</button>
       </div>
     {/if}
 
-    <div class="scope-list">
+    <div class={css({ flex: "1", overflowY: "auto", padding: "8px 8px 0", display: "flex", flexDirection: "column", gap: "1px" })}>
       {#each scopes as scope (scope.id)}
         {@const active = activeScope === scope.id}
-        <div class="scope-item" class:active>
+        <div class={cx(
+          css({ borderRadius: "6px", overflow: "hidden", border: "1px solid transparent" }),
+          active && css({ borderColor: "#a8a8a8" }),
+        )}>
           <button
             class={sideBtn(active)}
             onclick={() => (activeScope = active ? null : scope.id)}
@@ -466,14 +603,31 @@
               <rect x="1" y="1" width="8" height="8" rx="1" stroke="#9a9490" stroke-width="1.2" />
               <path d="M3 5h4M3 3.5h2" stroke="#9a9490" stroke-width="1" stroke-linecap="round" />
             </svg>
-            <span class="flex-1">{scope.name}</span>
-            <span class="count">
+            <span class={flex1Class}>{scope.name}</span>
+            <span class={countClass}>
               {scopeRels.filter((r) => r.scopeId === scope.id).length}
             </span>
           </button>
 
           {#if selectedCards.size > 0}
-            <button class="add-to-scope" onclick={() => handleAddToScope(scope.id)}>
+            <button
+              class={css({
+                width: "100%",
+                padding: "6px 10px",
+                backgroundColor: "ink.black",
+                color: "ink.light",
+                border: "none",
+                borderTop: "1px solid #cccccc",
+                cursor: "pointer",
+                fontSize: "11px",
+                fontFamily: "inherit",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "6px",
+              })}
+              onclick={() => handleAddToScope(scope.id)}
+            >
               <span>Add selected to scope</span>
               <span>→</span>
             </button>
@@ -483,336 +637,17 @@
     </div>
 
     <!-- New scope input -->
-    <div class="new-scope">
+    <div class={css({ padding: "10px", borderTop: "1px solid #cccccc", marginTop: "8px", display: "flex", gap: "5px" })}>
       <input
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid #cccccc", borderRadius: "6px", fontSize: "11.5px", background: "#ffffff", fontFamily: "inherit", color: "ink.black" })}
         bind:value={newScopeName}
         onkeydown={(e) => e.key === "Enter" && handleCreateScope()}
         placeholder="New scope…"
       />
-      <button class="add-scope-btn" onclick={handleCreateScope}>+</button>
+      <button
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        onclick={handleCreateScope}
+      >+</button>
     </div>
   </aside>
 </div>
-
-<style>
-  .app {
-    display: flex;
-    height: 100vh;
-    overflow: hidden;
-    background: #f2f2f2;
-  }
-
-  /* ── Sidebars ── */
-  .sidebar-left,
-  .sidebar-right {
-    flex-shrink: 0;
-    background: #f1f1f1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    transition: width 0.22s ease;
-  }
-
-  .sidebar-left {
-    border-right: 1px solid #cccccc;
-  }
-
-  .sidebar-right {
-    border-left: 1px solid #cccccc;
-  }
-
-  .logo {
-    padding: 18px 20px 14px;
-    border-bottom: 1px solid #cccccc;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-
-  .logo-name {
-    font-size: 15px;
-    font-weight: 500;
-    letter-spacing: -0.02em;
-    color: #1c1a17;
-  }
-
-  .logo-ja {
-    font-size: 10px;
-    color: #b0aaa2;
-    letter-spacing: 0.04em;
-  }
-
-  .section {
-    padding: 14px 0 8px;
-  }
-
-  .section-label {
-    padding: 0 20px 8px;
-    font-size: 10px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: #9e9890;
-    text-transform: uppercase;
-  }
-
-  .btn-list {
-    padding: 0 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .side-btn {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 7px 10px;
-    width: 100%;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    text-align: left;
-    font-size: 12.5px;
-    color: #1c1a17;
-    font-family: inherit;
-    white-space: nowrap;
-    overflow: hidden;
-  }
-
-  .side-btn.active {
-    background: #ede9e1;
-  }
-
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .flex-1 {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .count {
-    font-size: 10.5px;
-    color: #9e9890;
-    flex-shrink: 0;
-  }
-
-  /* ── Center column ── */
-  .center {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .canvas {
-    flex: 1;
-    overflow: auto;
-    position: relative;
-    background: #f2f2f2;
-  }
-
-  /* ── Overlays ── */
-  .error-banner {
-    position: absolute;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 52;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 14px;
-    background: oklch(30% 0.18 18);
-    color: #fff;
-    border-radius: 7px;
-    font-size: 12.5px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
-    white-space: nowrap;
-  }
-
-  .error-dismiss {
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.75);
-    cursor: pointer;
-    font-size: 15px;
-    line-height: 1;
-    padding: 0;
-    flex-shrink: 0;
-  }
-
-  .sidebar-toggle {
-    position: absolute;
-    top: 12px;
-    right: 16px;
-    z-index: 51;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    background: #f1f1f1;
-    border: 1px solid #e6e1d8;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
-  }
-
-  .zoom-controls {
-    position: absolute;
-    bottom: 20px;
-    right: 16px;
-    display: flex;
-    align-items: center;
-    gap: 1px;
-    background: #f1f1f1;
-    border-radius: 7px;
-    border: 1px solid #cccccc;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    z-index: 51;
-    overflow: hidden;
-  }
-
-  .zoom-btn {
-    width: 30px;
-    height: 28px;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    font-size: 16px;
-    color: #5a5650;
-    line-height: 1;
-    font-family: inherit;
-  }
-
-  .zoom-pct {
-    padding: 0 8px;
-    font-size: 11px;
-    color: #918c83;
-    border-left: 1px solid #cccccc;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    min-width: 40px;
-    justify-content: center;
-  }
-
-  .composer-wrap {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 540px;
-    max-width: calc(100% - 40px);
-    border-radius: 10px;
-    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.13), 0 1px 4px rgba(0, 0, 0, 0.08);
-    z-index: 50;
-  }
-
-  /* ── Right sidebar ── */
-  .scopes-header {
-    padding: 18px 20px 14px;
-    border-bottom: 1px solid #cccccc;
-  }
-
-  .scopes-header .section-label {
-    padding: 0;
-    margin-bottom: 0;
-  }
-
-  .selection-pill {
-    margin: 10px 10px 2px;
-    padding: 8px 12px;
-    background: oklch(93% 0.055 272);
-    border-radius: 6px;
-    font-size: 11.5px;
-    color: oklch(38% 0.15 272);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .clear-sel {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 13px;
-    color: oklch(55% 0.15 272);
-    line-height: 1;
-    padding: 0;
-  }
-
-  .scope-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 8px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-  }
-
-  .scope-item {
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid transparent;
-  }
-
-  .scope-item.active {
-    border-color: #a8a8a8;
-  }
-
-  .add-to-scope {
-    width: 100%;
-    padding: 6px 10px;
-    background: #1c1a17;
-    color: #f1f1f1;
-    border: none;
-    border-top: 1px solid #cccccc;
-    cursor: pointer;
-    font-size: 11px;
-    font-family: inherit;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-  }
-
-  .new-scope {
-    padding: 10px;
-    border-top: 1px solid #cccccc;
-    margin-top: 8px;
-    display: flex;
-    gap: 5px;
-  }
-
-  .new-scope input {
-    flex: 1;
-    padding: 7px 10px;
-    border: 1px solid #cccccc;
-    border-radius: 6px;
-    font-size: 11.5px;
-    background: #ffffff;
-    font-family: inherit;
-    color: #1c1a17;
-  }
-
-  .add-scope-btn {
-    padding: 7px 11px;
-    background: #1c1a17;
-    color: #f1f1f1;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 14px;
-    font-family: inherit;
-    line-height: 1;
-  }
-</style>

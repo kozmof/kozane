@@ -54,3 +54,7 @@ drizzle/
 tmp/
 
 coverage/
+
+// PandaCSS
+styled-system
+styled-system-static

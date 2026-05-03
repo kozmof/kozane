@@ -20,6 +20,7 @@ export default defineConfig({
     conditions: ["browser"],
     alias: {
       $lib: path.resolve("./src/lib"),
+      "styled-system": path.resolve("./styled-system"),
       "@libsql/client": libsqlNodeEntry,
     },
   },

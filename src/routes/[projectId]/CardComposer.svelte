@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from "svelte";
   import BundleDropdown from "./BundleDropdown.svelte";
+  import { css } from "styled-system/css";
 
   interface CardData {
     id: string;
@@ -64,23 +65,28 @@
 
   let isEditing = $derived(!!editingCard);
   let activeBundleColor = $derived(bundles.find((b) => b.id === bundleId));
-  let borderColor = $derived(
-    isEditing ? (activeBundleColor?.dot ?? "#e6e1d8") : "#e6e1d8",
-  );
+  let borderColor = $derived(isEditing ? (activeBundleColor?.dot ?? "#e6e1d8") : "#e6e1d8");
 </script>
 
-<div class="composer">
+<div class={css({ backgroundColor: "ink.light", borderRadius: "10px", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + cancel hint -->
-  <div class="top-row">
+  <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <BundleDropdown {bundles} {bundleId} onChange={(id) => (bundleId = id)} />
     {#if isEditing}
-      <button class="cancel-hint" onclick={onCancel}>Esc to cancel</button>
+      <button
+        class={css({ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "warm.muted", fontFamily: "inherit", padding: "0" })}
+        onclick={onCancel}
+      >Esc to cancel</button>
     {/if}
   </div>
 
   <!-- Input row -->
-  <div class="input-row" style:border-color={borderColor}>
+  <div
+    class={css({ display: "flex", alignItems: "center", gap: "8px", background: "#ffffff", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
+    style:border-color={borderColor}
+  >
     <textarea
+      class={css({ flex: "1", resize: "none", border: "none", background: "transparent", padding: "2px 0", fontSize: "12.5px", lineHeight: "1.65", fontFamily: "mono", color: "ink.black", minHeight: "24px" })}
       bind:this={textareaEl}
       bind:value={content}
       oninput={(e) => autoResize(e.currentTarget)}
@@ -92,7 +98,7 @@
     ></textarea>
 
     <button
-      class="send-btn"
+      class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "6px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
       aria-label={isEditing ? "Save" : "Create card"}
       style:background={content.trim() ? "#1c1a17" : "#e0dbd3"}
       style:cursor={content.trim() ? "pointer" : "default"}
@@ -111,74 +117,7 @@
     </button>
   </div>
 
-  <div class="hint">Enter to {isEditing ? "save" : "create"} · Shift+Enter for newline</div>
+  <div class={css({ marginTop: "5px", fontSize: "10px", color: "warm.muted" })}>
+    Enter to {isEditing ? "save" : "create"} · Shift+Enter for newline
+  </div>
 </div>
-
-<style>
-  .composer {
-    background: #f1f1f1;
-    border-radius: 10px;
-    padding: 10px 16px 14px;
-    flex-shrink: 0;
-  }
-
-  .top-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-  }
-
-  .cancel-hint {
-    margin-left: auto;
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 11px;
-    color: #b0aaa2;
-    font-family: inherit;
-    padding: 0;
-  }
-
-  .input-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: #ffffff;
-    border: 1px solid;
-    border-radius: 8px;
-    padding: 8px 10px;
-    transition: border-color 0.15s;
-  }
-
-  textarea {
-    flex: 1;
-    resize: none;
-    border: none;
-    background: transparent;
-    padding: 2px 0;
-    font-size: 12.5px;
-    line-height: 1.65;
-    font-family: "IBM Plex Mono", monospace;
-    color: #1c1a17;
-    min-height: 24px;
-  }
-
-  .send-btn {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s;
-  }
-
-  .hint {
-    margin-top: 5px;
-    font-size: 10px;
-    color: #b0aaa2;
-  }
-</style>
