@@ -13,7 +13,7 @@
 @layer base {
   body {
     font-family: "IBM Plex Sans", system-ui, sans-serif;
-    color: #1c1a17;
+    color: var(--colors-ink-black);
   }
 
   ::-webkit-scrollbar {
@@ -26,7 +26,7 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #a8a8a8;
+    background: var(--colors-warm-scroll);
     border-radius: 3px;
   }
 

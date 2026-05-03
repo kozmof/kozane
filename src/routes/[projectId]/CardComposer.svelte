@@ -65,7 +65,7 @@
 
   let isEditing = $derived(!!editingCard);
   let activeBundleColor = $derived(bundles.find((b) => b.id === bundleId));
-  let borderColor = $derived(isEditing ? (activeBundleColor?.dot ?? "#e6e1d8") : "#e6e1d8");
+  let borderColor = $derived(isEditing ? (activeBundleColor?.dot ?? "var(--colors-warm-border)") : "var(--colors-warm-border)");
 </script>
 
 <div class={css({ backgroundColor: "ink.light", borderRadius: "10px", padding: "10px 16px 14px", flexShrink: "0" })}>
@@ -82,7 +82,7 @@
 
   <!-- Input row -->
   <div
-    class={css({ display: "flex", alignItems: "center", gap: "8px", background: "#ffffff", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
+    class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
     style:border-color={borderColor}
   >
     <textarea
@@ -100,7 +100,7 @@
     <button
       class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "6px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
       aria-label={isEditing ? "Save" : "Create card"}
-      style:background={content.trim() ? "#1c1a17" : "#e0dbd3"}
+      style:background={content.trim() ? "var(--colors-ink-black)" : "var(--colors-warm-disabled)"}
       style:cursor={content.trim() ? "pointer" : "default"}
       onclick={handleSubmit}
       disabled={!content.trim()}
@@ -108,7 +108,7 @@
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path
           d="M2 7h10M8 3l4 4-4 4"
-          stroke={content.trim() ? "#ffffff" : "#b8b2a8"}
+          stroke={content.trim() ? "var(--colors-ink-white)" : "var(--colors-warm-faded)"}
           stroke-width="1.5"
           stroke-linecap="round"
           stroke-linejoin="round"

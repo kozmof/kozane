@@ -36,7 +36,7 @@
 <div bind:this={dropdownEl} class={css({ position: "relative", flexShrink: "0" })}>
   <button
     class={css({ display: "flex", alignItems: "center", gap: "5px", padding: "3px 8px 3px 6px", border: "1px solid", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px", color: "ink.black", transition: "all 0.1s" })}
-    style:border-color={open ? active?.dot : "#e6e1d8"}
+    style:border-color={open ? active?.dot : "var(--colors-warm-border)"}
     style:background={open ? active?.bg : "transparent"}
     onmousedown={(e) => {
       e.preventDefault();
@@ -48,7 +48,7 @@
       {active?.name ?? "Bundle"}
     </span>
     <svg width="8" height="8" viewBox="0 0 8 8" fill="none" class={css({ opacity: "0.5", marginLeft: "1px", flexShrink: "0" })}>
-      <path d="M1.5 3L4 5.5L6.5 3" stroke="#1c1a17" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M1.5 3L4 5.5L6.5 3" stroke="var(--colors-ink-black)" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
   </button>
 
@@ -58,8 +58,8 @@
         position: "absolute",
         bottom: "calc(100% + 6px)",
         left: "0",
-        background: "#ffffff",
-        border: "1px solid #e6e1d8",
+        background: "ink.white",
+        border: "1px solid token(colors.warm.border)",
         borderRadius: "7px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
         padding: "4px",

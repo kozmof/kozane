@@ -331,11 +331,11 @@
       flexDirection: "column",
       overflow: "hidden",
       transition: "width 0.22s ease",
-      borderRight: "1px solid #cccccc",
+      borderRight: "1px solid token(colors.warm.dim)",
     })}
     style:width={sidebarsVisible ? "216px" : "0"}
   >
-    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid #cccccc", display: "flex", alignItems: "baseline", gap: "8px" })}>
+    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid token(colors.warm.dim)", display: "flex", alignItems: "baseline", gap: "8px" })}>
       <span class={css({ fontSize: "15px", fontWeight: "500", letterSpacing: "-0.02em", color: "ink.black" })}>kozane</span>
       <span class={css({ fontSize: "10px", color: "warm.muted", letterSpacing: "0.04em" })}>こざね</span>
     </div>
@@ -346,7 +346,7 @@
       </div>
       <div class={css({ padding: "0 8px", display: "flex", flexDirection: "column", gap: "1px" })}>
         <button class={sideBtn(activeBundle === null)} onclick={() => (activeBundle = null)}>
-          <span class={dotClass} style:background="#b8b2a8"></span>
+          <span class={dotClass} style:background="var(--colors-warm-faded)"></span>
           <span class={flex1Class}>All cards</span>
           <span class={countClass}>{cards.length}</span>
         </button>
@@ -404,7 +404,7 @@
           >
             <defs>
               <pattern id="dotgrid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-                <circle cx={GRID / 2} cy={GRID / 2} r="0.9" fill="#dedad4" />
+                <circle cx={GRID / 2} cy={GRID / 2} r="0.9" fill="var(--colors-warm-grid)" />
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#dotgrid)" />
@@ -446,7 +446,7 @@
           alignItems: "center",
           gap: "10px",
           padding: "8px 14px",
-          background: "oklch(30% 0.18 18)",
+          background: "state.error",
           color: "#fff",
           borderRadius: "7px",
           fontSize: "12.5px",
@@ -474,7 +474,7 @@
         height: "28px",
         borderRadius: "6px",
         backgroundColor: "ink.light",
-        border: "1px solid #e6e1d8",
+        border: "1px solid token(colors.warm.border)",
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -486,11 +486,11 @@
     >
       <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
         {#if sidebarsVisible}
-          <rect x="0" y="0" width="4" height="10" rx="1" fill="#9e9890" />
-          <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="#cdc8be" />
+          <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-warm-subtle)" />
+          <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-warm-icon)" />
         {:else}
-          <rect x="0" y="0" width="4" height="10" rx="1" fill="#cdc8be" />
-          <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="#9e9890" />
+          <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-warm-icon)" />
+          <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-warm-subtle)" />
         {/if}
       </svg>
     </button>
@@ -506,7 +506,7 @@
         gap: "1px",
         backgroundColor: "ink.light",
         borderRadius: "7px",
-        border: "1px solid #cccccc",
+        border: "1px solid token(colors.warm.dim)",
         boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
         zIndex: "51",
         overflow: "hidden",
@@ -514,11 +514,11 @@
     >
       {#each [["−", -ZOOM_STEP], ["+", ZOOM_STEP]] as [label, delta] (label)}
         <button
-          class={css({ width: "30px", height: "28px", border: "none", background: "transparent", cursor: "pointer", fontSize: "16px", color: "#5a5650", lineHeight: "1", fontFamily: "inherit" })}
+          class={css({ width: "30px", height: "28px", border: "none", background: "transparent", cursor: "pointer", fontSize: "16px", color: "ink.secondary", lineHeight: "1", fontFamily: "inherit" })}
           onclick={() => applyZoom(delta as number)}
         >{label}</button>
       {/each}
-      <div class={css({ padding: "0 8px", fontSize: "11px", color: "#918c83", borderLeft: "1px solid #cccccc", height: "28px", display: "flex", alignItems: "center", minWidth: "40px", justifyContent: "center" })}>
+      <div class={css({ padding: "0 8px", fontSize: "11px", color: "warm.secondary", borderLeft: "1px solid token(colors.warm.dim)", height: "28px", display: "flex", alignItems: "center", minWidth: "40px", justifyContent: "center" })}>
         {Math.round(zoom * 100)}%
       </div>
     </div>
@@ -556,11 +556,11 @@
       flexDirection: "column",
       overflow: "hidden",
       transition: "width 0.22s ease",
-      borderLeft: "1px solid #cccccc",
+      borderLeft: "1px solid token(colors.warm.dim)",
     })}
     style:width={sidebarsVisible ? "232px" : "0"}
   >
-    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid #cccccc" })}>
+    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid token(colors.warm.dim)" })}>
       <div class={css({ fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
         Scopes
       </div>
@@ -571,10 +571,10 @@
         class={css({
           margin: "10px 10px 2px",
           padding: "8px 12px",
-          background: "oklch(93% 0.055 272)",
+          background: "select.bg",
           borderRadius: "6px",
           fontSize: "11.5px",
-          color: "oklch(38% 0.15 272)",
+          color: "select.text",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -582,7 +582,7 @@
       >
         <span><strong>{selectedCards.size}</strong> card{selectedCards.size > 1 ? "s" : ""} selected</span>
         <button
-          class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "oklch(55% 0.15 272)", lineHeight: "1", padding: "0" })}
+          class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "select.dim", lineHeight: "1", padding: "0" })}
           onclick={() => (selectedCards = new Set())}
         >×</button>
       </div>
@@ -593,15 +593,15 @@
         {@const active = activeScope === scope.id}
         <div class={cx(
           css({ borderRadius: "6px", overflow: "hidden", border: "1px solid transparent" }),
-          active && css({ borderColor: "#a8a8a8" }),
+          active && css({ borderColor: "warm.scroll" }),
         )}>
           <button
             class={sideBtn(active)}
             onclick={() => (activeScope = active ? null : scope.id)}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1" y="1" width="8" height="8" rx="1" stroke="#9a9490" stroke-width="1.2" />
-              <path d="M3 5h4M3 3.5h2" stroke="#9a9490" stroke-width="1" stroke-linecap="round" />
+              <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
+              <path d="M3 5h4M3 3.5h2" stroke="var(--colors-warm-icon-dim)" stroke-width="1" stroke-linecap="round" />
             </svg>
             <span class={flex1Class}>{scope.name}</span>
             <span class={countClass}>
@@ -617,7 +617,7 @@
                 backgroundColor: "ink.black",
                 color: "ink.light",
                 border: "none",
-                borderTop: "1px solid #cccccc",
+                borderTop: "1px solid token(colors.warm.dim)",
                 cursor: "pointer",
                 fontSize: "11px",
                 fontFamily: "inherit",
@@ -637,9 +637,9 @@
     </div>
 
     <!-- New scope input -->
-    <div class={css({ padding: "10px", borderTop: "1px solid #cccccc", marginTop: "8px", display: "flex", gap: "5px" })}>
+    <div class={css({ padding: "10px", borderTop: "1px solid token(colors.warm.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
       <input
-        class={css({ flex: "1", padding: "7px 10px", border: "1px solid #cccccc", borderRadius: "6px", fontSize: "11.5px", background: "#ffffff", fontFamily: "inherit", color: "ink.black" })}
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
         bind:value={newScopeName}
         onkeydown={(e) => e.key === "Enter" && handleCreateScope()}
         placeholder="New scope…"
