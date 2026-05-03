@@ -6,11 +6,8 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <h1 class={css({ fontSize: "20px", fontWeight: "500", letterSpacing: "-0.02em", marginBottom: "24px" })}>
-    kozane
-    <span class={css({ fontSize: "12px", color: "warm.muted", letterSpacing: "0.04em", fontWeight: "400", marginLeft: "8px" })}>
-      こざね
-    </span>
+  <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "warm.muted", marginBottom: "24px" })}>
+    {data.workspaceRoot}
   </h1>
 
   {#if data.projects.length === 0}
