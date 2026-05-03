@@ -53,6 +53,13 @@ export async function addScopeMembers({
   return true;
 }
 
+type RemoveScopeMembers = NeedsScope & { cardIds: string[] };
+export async function removeScopeMembers({ db, scopeId, cardIds }: RemoveScopeMembers): Promise<void> {
+  await db
+    .delete(scopeRelTable)
+    .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
+}
+
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
 export async function getScopeRelsByCards({ db, cardIds }: GetScopeRelsByCards) {
   if (cardIds.length === 0) return [];

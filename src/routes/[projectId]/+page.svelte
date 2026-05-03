@@ -304,6 +304,22 @@
     selectedCards = new Set();
   }
 
+  async function handleRemoveFromScope(scopeId: string) {
+    if (selectedCards.size === 0) return;
+    const cardIds = [...selectedCards];
+    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}/members`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to remove cards from scope";
+      return;
+    }
+    scopeRels = scopeRels.filter((r) => !(r.scopeId === scopeId && cardIds.includes(r.cardId)));
+    selectedCards = new Set();
+  }
+
   // ── Shared classes (reused inside each-loops or conditional) ──
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
@@ -678,12 +694,13 @@
           </div>
 
           {#if selectedCards.size > 0}
+            {@const allInScope = [...selectedCards].every((cid) => scopeRels.some((r) => r.scopeId === scope.id && r.cardId === cid))}
             <button
               class={css({
                 width: "100%",
                 padding: "6px 10px",
-                backgroundColor: "ink.black",
-                color: "ink.light",
+                backgroundColor: allInScope ? "warm.faded" : "ink.black",
+                color: allInScope ? "ink.secondary" : "ink.light",
                 border: "none",
                 borderTop: "1px solid token(colors.warm.dim)",
                 cursor: "pointer",
@@ -694,10 +711,10 @@
                 justifyContent: "space-between",
                 gap: "6px",
               })}
-              onclick={() => handleAddToScope(scope.id)}
+              onclick={() => allInScope ? handleRemoveFromScope(scope.id) : handleAddToScope(scope.id)}
             >
-              <span>Add selected to scope</span>
-              <span>→</span>
+              <span>{allInScope ? "Remove from scope" : "Add to scope"}</span>
+              <span>{allInScope ? "−" : "→"}</span>
             </button>
           {/if}
         </div>
