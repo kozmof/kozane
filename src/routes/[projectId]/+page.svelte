@@ -417,9 +417,6 @@
     </div>
 
     <div class={css({ flex: "1", overflowY: "auto", padding: "14px 0 8px" })}>
-      <div class={css({ padding: "0 20px 8px", fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
-        Bundles
-      </div>
       <div class={css({ padding: "0 8px", display: "flex", flexDirection: "column", gap: "1px" })}>
         <button class={sideBtn(activeBundle === null)} onclick={() => (activeBundle = null)}>
           <span class={dotClass} style:background="var(--colors-warm-faded)"></span>
