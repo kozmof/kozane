@@ -29,6 +29,7 @@
     onCardMouseDown: (e: MouseEvent) => void;
     onCardClick: (e: MouseEvent) => void;
     onCardDblClick: () => void;
+    showFooters: boolean;
   }
 
   let {
@@ -41,6 +42,7 @@
     onCardMouseDown,
     onCardClick,
     onCardDblClick,
+    showFooters,
   }: Props = $props();
 
   let border = $derived(
@@ -84,6 +86,7 @@
   </div>
 
   <!-- Footer -->
+  {#if showFooters}
   <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "warm.muted", gap: "6px" })}>
     {#if card.tieCount > 0}
       <span class={css({ display: "flex", alignItems: "center", gap: "3px" })}>
@@ -112,4 +115,5 @@
       </span>
     </span>
   </div>
+  {/if}
 </div>

@@ -37,6 +37,7 @@
   let draggingId = $state<string | null>(null);
   let isPanning = $state(false);
   let sidebarsVisible = $state(true);
+  let showFooters = $state(true);
   let zoom = $state(1);
   let newScopeName = $state("");
   let lastError = $state<string | null>(null);
@@ -424,6 +425,7 @@
               isComposing={composerCard?.id === card.id}
               dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
               isDragging={draggingId === card.id}
+              {showFooters}
               onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
               onCardClick={(e) => handleCardClick(e, card.id)}
               onCardDblClick={() => handleCardDblClick(card.id)}
@@ -462,6 +464,35 @@
         >×</button>
       </div>
     {/if}
+
+    <!-- Footer toggle -->
+    <button
+      class={css({
+        position: "absolute",
+        top: "12px",
+        right: "52px",
+        zIndex: "51",
+        width: "28px",
+        height: "28px",
+        borderRadius: "6px",
+        backgroundColor: "ink.light",
+        border: "1px solid token(colors.warm.border)",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+      })}
+      title={showFooters ? "Hide footers" : "Show footers"}
+      onclick={() => (showFooters = !showFooters)}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <rect x="0" y="0" width="12" height="8" rx="1.5"
+          fill={showFooters ? "var(--colors-warm-icon)" : "var(--colors-warm-subtle)"} />
+        <rect x="0" y="9" width="12" height="3" rx="1"
+          fill={showFooters ? "var(--colors-warm-subtle)" : "var(--colors-warm-icon)"} />
+      </svg>
+    </button>
 
     <!-- Sidebar toggle -->
     <button
