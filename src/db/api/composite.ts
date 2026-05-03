@@ -1,4 +1,4 @@
-import { withTx, type DB, type AnyDB } from "../client.js";
+import { withTx, type DB, type AnyDB } from "../tx.js";
 import { addCard } from "./card.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";

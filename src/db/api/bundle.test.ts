@@ -30,7 +30,7 @@ describe("getBundle", () => {
     const { db, projectId } = await setup();
     const bundleId = await addBundle({ db, projectId, name: "General" });
     const bundle = await getBundle({ db, projectId, bundleId });
-    expect(bundle).toEqual({ id: bundleId, projectId, name: "General" });
+    expect(bundle).toEqual({ id: bundleId, projectId, name: "General", isDefault: false });
   });
 
   it("returns undefined for a missing bundleId", async () => {
