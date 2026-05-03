@@ -618,34 +618,6 @@
     })}
     style:width={sidebarsVisible ? "232px" : "0"}
   >
-    <div class={css({ padding: "18px 20px 14px", borderBottom: "1px solid token(colors.warm.dim)" })}>
-      <div class={css({ fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
-        Scopes
-      </div>
-    </div>
-
-    {#if selectedCards.size > 0}
-      <div
-        class={css({
-          margin: "10px 10px 2px",
-          padding: "8px 12px",
-          background: "select.bg",
-          borderRadius: "6px",
-          fontSize: "11.5px",
-          color: "select.text",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        })}
-      >
-        <span><strong>{selectedCards.size}</strong> card{selectedCards.size > 1 ? "s" : ""} selected</span>
-        <button
-          class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "select.dim", lineHeight: "1", padding: "0" })}
-          onclick={() => (selectedCards = new Set())}
-        >×</button>
-      </div>
-    {/if}
-
     <div class={css({ flex: "1", overflowY: "auto", padding: "8px 8px 0", display: "flex", flexDirection: "column", gap: "1px" })}>
       {#each scopes as scope (scope.id)}
         {@const active = activeScope === scope.id}
