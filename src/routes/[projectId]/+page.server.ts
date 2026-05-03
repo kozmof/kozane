@@ -4,7 +4,7 @@ import { getProject } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getAllScopes } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
-import { getTiesByCards } from "../../db/api/tie";
+import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
@@ -23,21 +23,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const cards = await getCardsByBundles({ db, bundleIds });
   const cardIds = cards.map((c) => c.id);
 
-  const [ties, scopeRels] = await Promise.all([
-    getTiesByCards({ db, cardIds }),
+  const [glueRels, scopeRels] = await Promise.all([
+    getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
   ]);
 
-  const tieCountMap = new Map<string, number>();
-  for (const tie of ties) {
-    tieCountMap.set(tie.fromCardId, (tieCountMap.get(tie.fromCardId) ?? 0) + 1);
-    tieCountMap.set(tie.toCardId, (tieCountMap.get(tie.toCardId) ?? 0) + 1);
-  }
+  const cardGlueMap = new Map(glueRels.map((r) => [r.cardId, r.glueId]));
 
-  const cardsWithTies = cards.map((c) => ({
+  const cardsWithGlue = cards.map((c) => ({
     ...c,
-    tieCount: tieCountMap.get(c.id) ?? 0,
+    glueId: cardGlueMap.get(c.id) ?? null,
   }));
 
-  return { project, bundles, cards: cardsWithTies, scopes, scopeRels };
+  return { project, bundles, cards: cardsWithGlue, glueRels, scopes, scopeRels };
 };

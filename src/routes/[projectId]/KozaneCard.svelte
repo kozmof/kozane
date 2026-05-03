@@ -9,7 +9,7 @@
     content: string;
     posX: number;
     posY: number;
-    tieCount: number;
+    glueId: string | null;
     workingCopyId: string | null;
   }
 
@@ -23,6 +23,7 @@
     card: CardData;
     color: BundleColor;
     isSelected: boolean;
+    isPrimaryUnglue: boolean;
     isComposing: boolean;
     dimmed: boolean;
     isDragging: boolean;
@@ -36,6 +37,7 @@
     card,
     color,
     isSelected,
+    isPrimaryUnglue,
     isComposing,
     dimmed,
     isDragging,
@@ -45,10 +47,18 @@
     showFooters,
   }: Props = $props();
 
+  let background = $derived(
+    isPrimaryUnglue
+      ? "var(--colors-select-bg)"
+      : isSelected
+        ? "var(--colors-select-surface)"
+        : "var(--colors-ink-white)",
+  );
+
   let border = $derived(
     isComposing
       ? `1.5px solid ${color.dot}`
-      : isSelected
+      : isSelected || isPrimaryUnglue
         ? "1.5px solid var(--colors-select-accent)"
         : "1px solid var(--colors-warm-card)",
   );
@@ -65,7 +75,7 @@
   style:left="{card.posX}px"
   style:top="{card.posY}px"
   style:width="{CARD_W}px"
-  style:background={isSelected ? "var(--colors-select-surface)" : "var(--colors-ink-white)"}
+  style:background={background}
   style:border-radius="2px"
   style:border={border}
   style:box-shadow={isDragging
@@ -88,14 +98,13 @@
   <!-- Footer -->
   {#if showFooters}
   <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "warm.muted", gap: "6px" })}>
-    {#if card.tieCount > 0}
+    {#if card.glueId}
       <span class={css({ display: "flex", alignItems: "center", gap: "3px" })}>
         <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
           <circle cx="1.5" cy="4.5" r="1.5" fill="var(--colors-warm-muted)" />
           <circle cx="7.5" cy="4.5" r="1.5" fill="var(--colors-warm-muted)" />
           <line x1="3" y1="4.5" x2="6" y2="4.5" stroke="var(--colors-warm-muted)" stroke-width="1" />
         </svg>
-        {card.tieCount}
       </span>
     {/if}
 

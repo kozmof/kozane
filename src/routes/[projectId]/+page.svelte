@@ -30,8 +30,10 @@
   let bundles = $state(untrack(() => data.bundles));
   let scopes = $state(untrack(() => data.scopes));
   let scopeRels = $state(untrack(() => data.scopeRels));
+  let glueRels = $state(untrack(() => data.glueRels));
 
   let selectedCards = $state(new Set<string>());
+  let primarySelectedId = $state<string | null>(null);
   let activeBundle = $state<string | null>(null);
   let activeScope = $state<string | null>(null);
   let composerCard = $state<(typeof cards)[0] | null>(null);
@@ -56,6 +58,10 @@
     startY: number;
     prevX: number;
     prevY: number;
+    lastX: number;
+    lastY: number;
+    groupIds: string[];
+    groupPrevPositions: Map<string, { x: number; y: number }>;
     moved: boolean;
   } | null = null;
 
@@ -85,11 +91,23 @@
 
   let defaultBundleId = $derived(activeBundle ?? bundlesWithColors[0]?.id ?? "");
 
+  let selectedCardObjects = $derived(
+    [...selectedCards].map((id) => cards.find((c) => c.id === id)!).filter(Boolean),
+  );
+
+  let selectionGlueRels = $derived(
+    glueRels.filter((r) => selectedCards.has(r.cardId)),
+  );
+
+  let primaryCard = $derived(
+    primarySelectedId ? (cards.find((c) => c.id === primarySelectedId) ?? null) : null,
+  );
+
   // ── Window event listeners (drag + pan) ──────────────────────
   $effect(() => {
     function onMove(e: MouseEvent) {
       if (dragState) {
-        const { cardId, offsetX, offsetY, startX, startY } = dragState;
+        const { cardId, offsetX, offsetY, startX, startY, groupIds } = dragState;
         if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
           dragState.moved = true;
         }
@@ -98,7 +116,16 @@
         const rawY = (e.clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
         const x = Math.max(0, Math.round(rawX / GRID) * GRID);
         const y = Math.max(0, Math.round(rawY / GRID) * GRID);
-        cards = cards.map((c) => (c.id === cardId ? { ...c, posX: x, posY: y } : c));
+        const dx = x - dragState.lastX;
+        const dy = y - dragState.lastY;
+        dragState.lastX = x;
+        dragState.lastY = y;
+        cards = cards.map((c) => {
+          if (c.id === cardId) return { ...c, posX: x, posY: y };
+          if (groupIds.includes(c.id))
+            return { ...c, posX: Math.max(0, c.posX + dx), posY: Math.max(0, c.posY + dy) };
+          return c;
+        });
       }
       if (panState) {
         const { startX, startY, scrollLeft, scrollTop } = panState;
@@ -109,21 +136,30 @@
 
     async function onUp() {
       if (dragState) {
-        const { cardId, moved, prevX, prevY } = dragState;
+        const { cardId, moved, prevX, prevY, groupIds, groupPrevPositions } = dragState;
         dragState = null;
         draggingId = null;
         if (moved) {
-          const card = cards.find((c) => c.id === cardId);
-          if (card) {
-            const res = await fetch(`/${data.project.id}/api/cards/${cardId}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ posX: card.posX, posY: card.posY }),
+          const allIds = [cardId, ...groupIds];
+          const results = await Promise.all(
+            allIds.map((id) => {
+              const c = cards.find((c) => c.id === id);
+              if (!c) return Promise.resolve({ ok: true } as Response);
+              return fetch(`/${data.project.id}/api/cards/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ posX: c.posX, posY: c.posY }),
+              });
+            }),
+          );
+          if (results.some((r) => !r.ok)) {
+            cards = cards.map((c) => {
+              if (c.id === cardId) return { ...c, posX: prevX, posY: prevY };
+              const prev = groupPrevPositions.get(c.id);
+              if (prev) return { ...c, posX: prev.x, posY: prev.y };
+              return c;
             });
-            if (!res.ok) {
-              cards = cards.map((c) => (c.id === cardId ? { ...c, posX: prevX, posY: prevY } : c));
-              lastError = "Failed to save card position";
-            }
+            lastError = "Failed to save card position";
           }
         }
       }
@@ -172,6 +208,19 @@
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
+
+    // BFS through glueRels to find all cards in the same glue group
+    const glueRel = glueRels.find((r) => r.cardId === cardId);
+    const groupIds = glueRel
+      ? glueRels.filter((r) => r.glueId === glueRel.glueId && r.cardId !== cardId).map((r) => r.cardId)
+      : [];
+    const groupPrevPositions = new Map(
+      groupIds.map((id) => {
+        const c = cards.find((c) => c.id === id)!;
+        return [id, { x: c.posX, y: c.posY }];
+      }),
+    );
+
     dragState = {
       cardId,
       offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - card.posX,
@@ -180,22 +229,41 @@
       startY: e.clientY,
       prevX: card.posX,
       prevY: card.posY,
+      lastX: card.posX,
+      lastY: card.posY,
+      groupIds,
+      groupPrevPositions,
       moved: false,
     };
     draggingId = cardId;
   }
 
+  function glueGroupIds(cardId: string): string[] {
+    const rel = glueRels.find((r) => r.cardId === cardId);
+    if (!rel) return [cardId];
+    return glueRels.filter((r) => r.glueId === rel.glueId).map((r) => r.cardId);
+  }
+
   function handleCardClick(e: MouseEvent, cardId: string) {
     if (dragState?.moved) return;
+    const groupIds = glueGroupIds(cardId);
     if (e.shiftKey) {
       const next = new Set(selectedCards);
-      next.has(cardId) ? next.delete(cardId) : next.add(cardId);
+      if (next.has(cardId)) {
+        groupIds.forEach((id) => next.delete(id));
+      } else {
+        groupIds.forEach((id) => next.add(id));
+      }
       selectedCards = next;
+    } else if (selectedCards.has(cardId) && groupIds.length > 1) {
+      // Clicking within an already-selected glue group: change primary without clearing selection
+      primarySelectedId = cardId;
     } else {
-      selectedCards =
-        selectedCards.size === 1 && selectedCards.has(cardId)
-          ? new Set()
-          : new Set([cardId]);
+      primarySelectedId = cardId;
+      const allSelected =
+        groupIds.every((id) => selectedCards.has(id)) &&
+        selectedCards.size === groupIds.length;
+      selectedCards = allSelected ? new Set() : new Set(groupIds);
     }
   }
 
@@ -207,7 +275,7 @@
 
   function handleCanvasMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
-    if (!e.shiftKey) selectedCards = new Set();
+    if (!e.shiftKey) { selectedCards = new Set(); primarySelectedId = null; }
     panState = {
       startX: e.clientX,
       startY: e.clientY,
@@ -254,7 +322,7 @@
       const { id: newId } = await res.json();
       cards = [
         ...cards,
-        { id: newId, bundleId, content, posX, posY, tieCount: 0, workingCopyId: null },
+        { id: newId, bundleId, content, posX, posY, glueId: null, workingCopyId: null },
       ];
     }
   }
@@ -272,6 +340,71 @@
       return;
     }
     cards = cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
+  }
+
+  // ── Selection ─────────────────────────────────────────────────
+  async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
+    const results = await Promise.all(
+      cardIds.map((id) =>
+        fetch(`/${data.project.id}/api/cards/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bundleId: newBundleId }),
+        }),
+      ),
+    );
+    if (results.some((r) => !r.ok)) {
+      lastError = "Failed to change bundle for selected cards";
+      return;
+    }
+    cards = cards.map((c) => (cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c));
+  }
+
+  async function handleGlueSelected(cardIds: string[]) {
+    const res = await fetch(`/${data.project.id}/api/glues`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to glue cards";
+      return;
+    }
+    const { glueId } = await res.json();
+    // Remove old glueRel entries for these cards, add new ones
+    glueRels = [
+      ...glueRels.filter((r) => !cardIds.includes(r.cardId)),
+      ...cardIds.map((cardId) => ({ glueId, cardId })),
+    ];
+    cards = cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId } : c));
+  }
+
+  async function handleUnglueOne(cardId: string) {
+    const res = await fetch(`/${data.project.id}/api/glues`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: [cardId] }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to unglue card";
+      return;
+    }
+    glueRels = glueRels.filter((r) => r.cardId !== cardId);
+    cards = cards.map((c) => (c.id === cardId ? { ...c, glueId: null } : c));
+  }
+
+  async function handleUnglueSelected(cardIds: string[]) {
+    const res = await fetch(`/${data.project.id}/api/glues`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to unglue cards";
+      return;
+    }
+    glueRels = glueRels.filter((r) => !cardIds.includes(r.cardId));
+    cards = cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId: null } : c));
   }
 
   // ── Bundles ───────────────────────────────────────────────────
@@ -551,6 +684,7 @@
               {card}
               {color}
               isSelected={selectedCards.has(card.id)}
+              isPrimaryUnglue={card.id === primarySelectedId && !!card.glueId}
               isComposing={composerCard?.id === card.id}
               dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
               isDragging={draggingId === card.id}
@@ -699,11 +833,18 @@
     >
       <CardComposer
         editingCard={composerCard}
+        selectedCards={selectedCardObjects}
+        {selectionGlueRels}
+        {primaryCard}
         bundles={bundlesWithColors}
         {defaultBundleId}
         onSubmit={handleComposerSubmit}
-        onCancel={() => (composerCard = null)}
+        onCancel={() => { composerCard = null; selectedCards = new Set(); primarySelectedId = null; }}
         onBundleChange={handleCardBundleChange}
+        onSelectionBundleChange={handleSelectionBundleChange}
+        onGlueSelected={handleGlueSelected}
+        onUnglueSelected={handleUnglueSelected}
+        onUnglueOne={handleUnglueOne}
       />
     </div>
   </div>

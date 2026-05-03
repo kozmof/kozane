@@ -12,11 +12,12 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       content: "Hello world",
       posX: 100,
       posY: 200,
-      tieCount: 0,
+      glueId: null,
       workingCopyId: null,
     },
     color,
     isSelected: false,
+    isPrimaryUnglue: false,
     isComposing: false,
     dimmed: false,
     isDragging: false,
@@ -41,16 +42,18 @@ describe("KozaneCard", () => {
     expect(screen.getByText("Empty card…")).toBeInTheDocument();
   });
 
-  it("shows tie count when tieCount > 0", () => {
-    render(KozaneCard, {
-      props: makeProps({ card: { ...makeProps().card, tieCount: 3 } }),
+  it("shows glue icon when glueId is set", () => {
+    const { container } = render(KozaneCard, {
+      props: makeProps({ card: { ...makeProps().card, glueId: "glue-1" } }),
     });
-    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeInTheDocument();
   });
 
-  it("does not show tie count when tieCount is 0", () => {
-    render(KozaneCard, { props: makeProps() });
-    expect(screen.queryByText("0")).not.toBeInTheDocument();
+  it("does not show glue icon when glueId is null", () => {
+    const { container } = render(KozaneCard, { props: makeProps() });
+    // Only the bundle dot SVG should not appear in footer area — glue svg is absent
+    const footerSvgs = container.querySelectorAll("svg");
+    expect(footerSvgs.length).toBe(0);
   });
 
   it("shows wc badge when workingCopyId is set", () => {

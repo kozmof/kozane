@@ -11,6 +11,9 @@ const bundles = [
 function makeProps(overrides: Record<string, unknown> = {}) {
   return {
     editingCard: null,
+    selectedCards: [],
+    selectionGlueRels: [],
+    primaryCard: null,
     bundles,
     defaultBundleId: "b1",
     onSubmit: vi.fn(),
