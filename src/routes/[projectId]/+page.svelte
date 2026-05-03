@@ -27,6 +27,7 @@
 
   // ── State ──────────────────────────────────────────────────────
   let cards = $state(untrack(() => data.cards));
+  let bundles = $state(untrack(() => data.bundles));
   let scopes = $state(untrack(() => data.scopes));
   let scopeRels = $state(untrack(() => data.scopeRels));
 
@@ -39,6 +40,7 @@
   let sidebarsVisible = $state(true);
   let showFooters = $state(true);
   let zoom = $state(1);
+  let newBundleName = $state("");
   let newScopeName = $state("");
   let lastError = $state<string | null>(null);
 
@@ -66,7 +68,7 @@
 
   // ── Derived ───────────────────────────────────────────────────
   let bundlesWithColors = $derived(
-    data.bundles.map((b, i) => ({ ...b, ...PALETTE[i % PALETTE.length] })),
+    bundles.map((b, i) => ({ ...b, ...PALETTE[i % PALETTE.length] })),
   );
 
   let bundleColorById = $derived(new Map(bundlesWithColors.map((b) => [b.id, b])));
@@ -257,6 +259,35 @@
     }
   }
 
+  // ── Bundles ───────────────────────────────────────────────────
+  async function handleCreateBundle() {
+    if (!newBundleName.trim()) return;
+    const res = await fetch(`/${data.project.id}/api/bundles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newBundleName.trim() }),
+    });
+    if (!res.ok) {
+      lastError = "Failed to create bundle";
+      return;
+    }
+    const { id } = await res.json();
+    bundles = [...bundles, { id, projectId: data.project.id, name: newBundleName.trim(), isDefault: false }];
+    newBundleName = "";
+  }
+
+  async function handleDeleteBundle(bundleId: string) {
+    const res = await fetch(`/${data.project.id}/api/bundles/${bundleId}`, { method: "DELETE" });
+    if (!res.ok) {
+      lastError = "Failed to delete bundle";
+      return;
+    }
+    const { defaultBundleId } = await res.json();
+    cards = cards.map((c) => c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c);
+    bundles = bundles.filter((b) => b.id !== bundleId);
+    if (activeBundle === bundleId) activeBundle = null;
+  }
+
   // ── Scopes ────────────────────────────────────────────────────
   async function handleCreateScope() {
     if (!newScopeName.trim()) return;
@@ -385,7 +416,7 @@
       </a>
     </div>
 
-    <div class={css({ padding: "14px 0 8px" })}>
+    <div class={css({ flex: "1", overflowY: "auto", padding: "14px 0 8px" })}>
       <div class={css({ padding: "0 20px 8px", fontSize: "10px", fontWeight: "500", letterSpacing: "0.08em", color: "warm.subtle", textTransform: "uppercase" })}>
         Bundles
       </div>
@@ -398,17 +429,59 @@
 
         {#each bundlesWithColors as b (b.id)}
           {@const active = activeBundle === b.id}
-          <button
-            class={sideBtn(active)}
-            style:background={active ? b.bg : "transparent"}
-            onclick={() => (activeBundle = active ? null : b.id)}
-          >
-            <span class={dotClass} style:background={b.dot}></span>
-            <span class={flex1Class}>{b.name}</span>
-            <span class={countClass}>{cards.filter((c) => c.bundleId === b.id).length}</span>
-          </button>
+          <div class={css({ position: "relative", "&:hover .bundle-delete": { opacity: "1" } })}>
+            <button
+              class={cx(sideBtn(active), css({ paddingRight: "28px" }))}
+              style:background={active ? b.bg : "transparent"}
+              onclick={() => (activeBundle = active ? null : b.id)}
+            >
+              <span class={dotClass} style:background={b.dot}></span>
+              <span class={flex1Class}>{b.name}</span>
+              <span class={countClass}>{cards.filter((c) => c.bundleId === b.id).length}</span>
+            </button>
+            {#if !b.isDefault}
+            <button
+              class={cx("bundle-delete", css({
+                position: "absolute",
+                right: "6px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: "18px",
+                height: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                borderRadius: "3px",
+                fontSize: "13px",
+                color: "warm.subtle",
+                opacity: "0",
+                transition: "opacity 0.12s, color 0.12s",
+                "&:hover": { color: "state.error" },
+              }))}
+              title="Delete bundle"
+              onclick={(e) => { e.stopPropagation(); handleDeleteBundle(b.id); }}
+            >×</button>
+            {/if}
+          </div>
         {/each}
       </div>
+    </div>
+
+    <!-- New bundle input -->
+    <div class={css({ padding: "10px", borderTop: "1px solid token(colors.warm.dim)", display: "flex", gap: "5px" })}>
+      <input
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+        bind:value={newBundleName}
+        onkeydown={(e) => e.key === "Enter" && handleCreateBundle()}
+        placeholder="New bundle…"
+      />
+      <button
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        onclick={handleCreateBundle}
+      >+</button>
     </div>
   </aside>
 

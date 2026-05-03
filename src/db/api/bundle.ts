@@ -22,13 +22,24 @@ export async function getBundle({
     .get();
 }
 
-type AddBundle = NeedsProject & { name: string };
-export async function addBundle({ db, projectId, name }: AddBundle): Promise<string> {
+type AddBundle = NeedsProject & { name: string; isDefault?: boolean };
+export async function addBundle({ db, projectId, name, isDefault = false }: AddBundle): Promise<string> {
   const [row] = await db
     .insert(bundleTable)
-    .values({ projectId, name })
+    .values({ projectId, name, isDefault })
     .returning({ id: bundleTable.id });
   return row.id;
+}
+
+export async function getDefaultBundle({
+  db,
+  projectId,
+}: NeedsProject): Promise<Bundle | undefined> {
+  return db
+    .select()
+    .from(bundleTable)
+    .where(and(eq(bundleTable.projectId, projectId), eq(bundleTable.isDefault, true)))
+    .get();
 }
 
 type DeleteBundle = NeedsProject & { bundleId: string };

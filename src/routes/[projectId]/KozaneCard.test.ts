@@ -20,6 +20,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     isComposing: false,
     dimmed: false,
     isDragging: false,
+    showFooters: true,
     onCardMouseDown: vi.fn(),
     onCardClick: vi.fn(),
     onCardDblClick: vi.fn(),

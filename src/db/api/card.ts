@@ -88,6 +88,18 @@ export async function updateCardPosition({
   assertFound(updated, `Card cardId=${cardId}`);
 }
 
+type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
+export async function reassignBundleCards({
+  db,
+  fromBundleId,
+  toBundleId,
+}: ReassignBundleCards): Promise<void> {
+  await db
+    .update(cardTable)
+    .set({ bundleId: toBundleId })
+    .where(eq(cardTable.bundleId, fromBundleId));
+}
+
 type UpdateCard = NeedsDB & {
   cardId: string;
   content?: string;

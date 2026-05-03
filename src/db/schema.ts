@@ -17,6 +17,7 @@ export const bundleTable = sqliteTable("bundle", {
     .notNull()
     .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
   name: text().notNull(),
+  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
 });
 
 export const scopeTable = sqliteTable("scope", {
