@@ -89,7 +89,7 @@
 >
   <!-- Content -->
   <div
-    class={css({ padding: "10px 10px 6px", fontSize: "11.5px", lineHeight: "1.65", fontFamily: "mono", minHeight: "44px", wordBreak: "break-word", textWrap: "pretty" })}
+    class={css({ padding: "10px 10px 6px", fontSize: "11.5px", lineHeight: "1.65", fontFamily: "mono", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-warm-placeholder)"}
   >
     {card.content || "Empty card…"}
