@@ -44,7 +44,13 @@ describe("Project page", () => {
       json: async () => ({ glueId: "glue-1" }),
     });
     vi.stubGlobal("fetch", fetch);
-    render(ProjectPage, { props: { data } });
+    render(ProjectPage, {
+      props: {
+        data,
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
 
     await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
     await fireEvent.click(screen.getByRole("button", { name: "Card: Beta" }), {
