@@ -45,6 +45,7 @@
   let newBundleName = $state("");
   let newScopeName = $state("");
   let lastError = $state<string | null>(null);
+  let newCardSeq = 0;
 
   // ── DOM refs (non-reactive) ────────────────────────────────────
   let canvasEl: HTMLDivElement;
@@ -310,8 +311,11 @@
       cards = cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       composerCard = null;
     } else {
-      const posX = Math.round((canvasEl.scrollLeft / zoom + 80) / GRID) * GRID;
-      const posY = Math.round((canvasEl.scrollTop / zoom + 80) / GRID) * GRID;
+      const step = (newCardSeq % 8) * GRID;
+      newCardSeq++;
+      const base = -7 * GRID;
+      const posX = Math.max(0, Math.round((canvasEl.scrollLeft + canvasEl.clientWidth / 2) / zoom / GRID) * GRID + base + step);
+      const posY = Math.max(0, Math.round((canvasEl.scrollTop + canvasEl.clientHeight / 2) / zoom / GRID) * GRID + base + step);
       const res = await fetch(`/${data.project.id}/api/cards`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
