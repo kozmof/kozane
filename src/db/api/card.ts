@@ -2,6 +2,7 @@ import { cardTable } from "../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { assertFound } from "./utils.js";
+import { withTx, type DB } from "../tx.js";
 
 export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
@@ -130,4 +131,30 @@ export async function updateCard({
     .where(eq(cardTable.id, cardId))
     .returning({ id: cardTable.id });
   assertFound(updated, `Card cardId=${cardId}`);
+}
+
+export type CardPositionUpdate = {
+  cardId: string;
+  posX: number;
+  posY: number;
+};
+
+type UpdateCardPositions = {
+  db: DB;
+  positions: CardPositionUpdate[];
+};
+
+export async function updateCardPositions({ db, positions }: UpdateCardPositions): Promise<void> {
+  if (positions.length === 0) return;
+
+  await withTx(db, async (tx) => {
+    for (const { cardId, posX, posY } of positions) {
+      const updated = await tx
+        .update(cardTable)
+        .set({ posX, posY })
+        .where(eq(cardTable.id, cardId))
+        .returning({ id: cardTable.id });
+      assertFound(updated, `Card cardId=${cardId}`);
+    }
+  });
 }

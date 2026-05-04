@@ -8,6 +8,7 @@ import {
   deleteCard,
   updateCardContent,
   updateCardPosition,
+  updateCardPositions,
   updateCard,
 } from "./card.js";
 import { addProject } from "./project.js";
@@ -162,6 +163,48 @@ describe("updateCardPosition", () => {
     await expect(updateCardPosition({ db, cardId: "ghost", posX: 0, posY: 0 })).rejects.toThrow(
       NotFoundError,
     );
+  });
+});
+
+describe("updateCardPositions", () => {
+  it("updates multiple card positions in one transaction", async () => {
+    const { db, bundleId } = await setup();
+    const firstId = await addCard({ db, bundleId, content: "First", posX: 1, posY: 2 });
+    const secondId = await addCard({ db, bundleId, content: "Second", posX: 3, posY: 4 });
+
+    await updateCardPositions({
+      db,
+      positions: [
+        { cardId: firstId, posX: 30, posY: 40 },
+        { cardId: secondId, posX: 50, posY: 60 },
+      ],
+    });
+
+    expect(await getCard({ db, bundleId, cardId: firstId })).toMatchObject({
+      posX: 30,
+      posY: 40,
+    });
+    expect(await getCard({ db, bundleId, cardId: secondId })).toMatchObject({
+      posX: 50,
+      posY: 60,
+    });
+  });
+
+  it("rolls back all position updates when any card is missing", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Still here", posX: 1, posY: 2 });
+
+    await expect(
+      updateCardPositions({
+        db,
+        positions: [
+          { cardId, posX: 30, posY: 40 },
+          { cardId: "ghost", posX: 50, posY: 60 },
+        ],
+      }),
+    ).rejects.toThrow(NotFoundError);
+
+    expect(await getCard({ db, bundleId, cardId })).toMatchObject({ posX: 1, posY: 2 });
   });
 });
 

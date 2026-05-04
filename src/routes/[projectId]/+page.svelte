@@ -5,8 +5,10 @@
   import CardComposer from "./CardComposer.svelte";
   import { CANVAS_W, CANVAS_H } from "$lib/constants";
   import { css, cx } from "styled-system/css";
+  import { patchCardPositions } from "./lib/project-api";
   import {
     applyPalette,
+    cardPositionPatches,
     clampZoom,
     clientToWorld as toWorldPoint,
     dragGroupIds,
@@ -161,18 +163,9 @@
         draggingId = null;
         if (moved) {
           const allIds = [cardId, ...groupIds];
-          const results = await Promise.all(
-            allIds.map((id) => {
-              const c = cards.find((c) => c.id === id);
-              if (!c) return Promise.resolve({ ok: true } as Response);
-              return fetch(`/${data.project.id}/api/cards/${id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ posX: c.posX, posY: c.posY }),
-              });
-            }),
-          );
-          if (results.some((r) => !r.ok)) {
+          const positions = cardPositionPatches(cards, allIds);
+          const res = await patchCardPositions(fetch, data.project.id, positions);
+          if (!res.ok) {
             cards = cards.map((c) => {
               if (c.id === cardId) return { ...c, posX: prevX, posY: prevY };
               const prev = groupPrevPositions.get(c.id);

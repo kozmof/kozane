@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPalette,
+  cardPositionPatches,
   cardsWithGlueIds,
   clampZoom,
   clientToWorld,
@@ -115,6 +116,15 @@ describe("previousPositions", () => {
     expect(previousPositions(cards, ["card-2", "missing"])).toEqual(
       new Map([["card-2", { x: 72, y: 96 }]]),
     );
+  });
+});
+
+describe("cardPositionPatches", () => {
+  it("builds batch position update payloads and ignores missing ids", () => {
+    expect(cardPositionPatches(cards, ["card-2", "missing", "card-1"])).toEqual([
+      { cardId: "card-2", posX: 72, posY: 96 },
+      { cardId: "card-1", posX: 24, posY: 48 },
+    ]);
   });
 });
 

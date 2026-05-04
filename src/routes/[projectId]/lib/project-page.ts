@@ -22,6 +22,7 @@ export type WorldRect = Point & { w: number; h: number };
 export type ScreenRect = { left: number; top: number; right: number; bottom: number };
 export type RectLike = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 export type CardPosition = { x: number; y: number };
+export type CardPositionPatch = { cardId: string; posX: number; posY: number };
 
 export function applyPalette<T extends { id: string }>(bundles: T[]) {
   return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
@@ -68,6 +69,17 @@ export function previousPositions<T extends { id: string; posX: number; posY: nu
       return card ? [[id, { x: card.posX, y: card.posY }]] : [];
     }),
   );
+}
+
+export function cardPositionPatches<T extends { id: string; posX: number; posY: number }>(
+  cards: T[],
+  cardIds: string[],
+): CardPositionPatch[] {
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  return cardIds.flatMap((id) => {
+    const card = byId.get(id);
+    return card ? [{ cardId: id, posX: card.posX, posY: card.posY }] : [];
+  });
 }
 
 export function clientToWorld(
