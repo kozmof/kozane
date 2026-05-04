@@ -7,7 +7,7 @@ import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate } from "./commands/project.js";
-import { dbMigrate, dbStatus } from "./commands/db.js";
+import { dbExport, dbImport, dbMigrate, dbStatus } from "./commands/db.js";
 
 const program = new Command();
 
@@ -59,6 +59,16 @@ db.command("status")
 db.command("migrate")
   .description("Back up and migrate the workspace database")
   .action(() => dbMigrate());
+
+db.command("export [file]")
+  .description("Export workspace database data as JSON")
+  .option("--compact", "Write compact JSON instead of formatted JSON")
+  .action((file, opts) => dbExport(file, { pretty: !opts.compact }));
+
+db.command("import <file>")
+  .description("Import workspace database data from JSON")
+  .option("--force", "Replace existing workspace database data")
+  .action((file, opts) => dbImport(file, opts));
 
 const wc = program.command("wc").description("Working copy management");
 
