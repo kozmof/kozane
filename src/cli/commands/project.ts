@@ -9,7 +9,7 @@ export async function projectCreate(name: string): Promise<void> {
   const { root } = requireWorkspace();
   const url = dbUrl(resolve(root));
   await runMigrations(url);
-  const db = openDb(url);
+  const db = await openDb(url);
   const projectId = await addProject({ db, name });
   await addBundle({ db, projectId, name: "General", isDefault: true });
   console.log(`Project created.`);

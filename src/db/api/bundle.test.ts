@@ -1,6 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
-import { addBundle, getBundle, getAllBundles, deleteBundle, updateBundleName } from "./bundle.js";
+import {
+  addBundle,
+  getBundle,
+  getAllBundles,
+  deleteBundle,
+  updateBundleName,
+  getDefaultBundle,
+} from "./bundle.js";
 import { addProject } from "./project.js";
 import { NotFoundError } from "./utils.js";
 
@@ -22,6 +29,30 @@ describe("addBundle", () => {
     const id1 = await addBundle({ db, projectId, name: "A" });
     const id2 = await addBundle({ db, projectId, name: "B" });
     expect(id1).not.toBe(id2);
+  });
+
+  it("allows only one default bundle per project", async () => {
+    const { db, projectId } = await setup();
+    const id = await addBundle({ db, projectId, name: "General", isDefault: true });
+
+    await expect(
+      addBundle({ db, projectId, name: "Second default", isDefault: true }),
+    ).rejects.toThrow();
+
+    expect(await getDefaultBundle({ db, projectId })).toMatchObject({ id, isDefault: true });
+  });
+
+  it("allows different projects to each have a default bundle", async () => {
+    const db = await createTestDB();
+    const p1 = await addProject({ db, name: "P1" });
+    const p2 = await addProject({ db, name: "P2" });
+
+    await expect(
+      Promise.all([
+        addBundle({ db, projectId: p1, name: "General", isDefault: true }),
+        addBundle({ db, projectId: p2, name: "General", isDefault: true }),
+      ]),
+    ).resolves.toHaveLength(2);
   });
 });
 

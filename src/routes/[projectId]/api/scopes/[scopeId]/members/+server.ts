@@ -1,14 +1,13 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addScopeMembers, removeScopeMembers } from "../../../../../../db/api/scope-rel";
+import { addScopeMembers, removeScopeMembersFromProject } from "../../../../../../db/api/scope-rel";
+import { readJsonObject, requireStringArray } from "../../../../lib/request";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId, scopeId } = params;
-  const body = await request.json();
-  const { cardIds } = body;
-
-  if (!Array.isArray(cardIds) || cardIds.length === 0) throw error(400, "cardIds is required");
+  const body = await readJsonObject(request);
+  const cardIds = requireStringArray(body, "cardIds");
 
   const ok = await addScopeMembers({ db, scopeId, projectId, cardIds });
   if (!ok) throw error(400, "Some cards not found in project");
@@ -18,12 +17,12 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
-  const { scopeId } = params;
-  const body = await request.json();
-  const { cardIds } = body;
+  const { projectId, scopeId } = params;
+  const body = await readJsonObject(request);
+  const cardIds = requireStringArray(body, "cardIds");
 
-  if (!Array.isArray(cardIds) || cardIds.length === 0) throw error(400, "cardIds is required");
+  const ok = await removeScopeMembersFromProject({ db, scopeId, projectId, cardIds });
+  if (!ok) throw error(400, "Some cards do not belong to this project");
 
-  await removeScopeMembers({ db, scopeId, cardIds });
   return json({ ok: true });
 };

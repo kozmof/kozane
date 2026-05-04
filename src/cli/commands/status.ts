@@ -13,7 +13,7 @@ import {
 
 export async function status(): Promise<void> {
   const { root, config } = requireWorkspace();
-  const db = openDb(dbUrl(resolve(root)));
+  const db = await openDb(dbUrl(resolve(root)));
 
   const [[projects], [bundles], [cards], [scopes], [workingCopies]] = await Promise.all([
     db.select({ count: count() }).from(projectTable),

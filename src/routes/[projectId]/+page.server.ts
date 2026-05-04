@@ -6,6 +6,7 @@ import { getAllScopes } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
+import { glueIdByCardId } from "./lib/project-page";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -30,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     getScopeRelsByCards({ db, cardIds }),
   ]);
 
-  const cardGlueMap = new Map(glueRels.map((r) => [r.cardId, r.glueId]));
+  const cardGlueMap = glueIdByCardId(glueRels);
 
   const cardsWithGlue = cards.map((c) => ({
     ...c,

@@ -76,7 +76,7 @@ export async function doctor(): Promise<void> {
   if (dbOk) {
     let schemaOk = false;
     try {
-      const db = openDb(dbUrl(resolve(root)));
+      const db = await openDb(dbUrl(resolve(root)));
       await db
         .select()
         .from((await import("../../db/schema.js")).projectTable)

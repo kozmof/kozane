@@ -6,6 +6,7 @@ import {
   getAllCardsByScope,
   addScopeMembers,
   removeScopeMembers,
+  removeScopeMembersFromProject,
   getScopeRelsByCards,
 } from "./scope-rel.js";
 import { addProject } from "./project.js";
@@ -129,5 +130,43 @@ describe("removeScopeMembers", () => {
     await removeScopeMembers({ db, scopeId, cardIds: [cardId, c2] });
 
     expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
+  });
+});
+
+describe("removeScopeMembersFromProject", () => {
+  it("removes members when every card belongs to the project", async () => {
+    const { db, projectId, bundleId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, bundleId, content: "Card B" });
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRel({ db, scopeId, cardId: c2 });
+
+    const ok = await removeScopeMembersFromProject({
+      db,
+      scopeId,
+      projectId,
+      cardIds: [cardId, c2],
+    });
+
+    expect(ok).toBe(true);
+    expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
+  });
+
+  it("does not remove anything when a card belongs to another project", async () => {
+    const { db, projectId, scopeId, cardId } = await setup();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRel({ db, scopeId, cardId: otherCardId });
+
+    const ok = await removeScopeMembersFromProject({
+      db,
+      scopeId,
+      projectId,
+      cardIds: [cardId, otherCardId],
+    });
+
+    expect(ok).toBe(false);
+    expect(await getScopeRelsByCards({ db, cardIds: [cardId, otherCardId] })).toHaveLength(2);
   });
 });

@@ -4,11 +4,12 @@ import { getBundle } from "../../../../../db/api/bundle";
 import { updateCard, deleteCard } from "../../../../../db/api/card";
 import { requireCardInProject } from "../../../lib/guards";
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
+import { optionalNumber, readJsonObject } from "../../../lib/request";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId, cardId } = params;
-  const body = await request.json();
+  const body = await readJsonObject(request);
 
   await requireCardInProject(db, projectId, cardId);
 
@@ -19,21 +20,17 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   let newBundleId: string | undefined;
   if (body.bundleId !== undefined) {
+    if (typeof body.bundleId !== "string" || body.bundleId.length === 0)
+      throw error(400, "bundleId is required");
     const newBundle = await getBundle({ db, projectId, bundleId: body.bundleId });
     if (!newBundle) throw error(400, "New bundle not found in project");
     newBundleId = body.bundleId;
   }
 
-  let posX: number | undefined;
-  let posY: number | undefined;
-  if (body.posX !== undefined) {
-    if (typeof body.posX !== "number") throw error(400, "posX must be a number");
-    posX = clamp(body.posX, 0, CANVAS_W);
-  }
-  if (body.posY !== undefined) {
-    if (typeof body.posY !== "number") throw error(400, "posY must be a number");
-    posY = clamp(body.posY, 0, CANVAS_H);
-  }
+  const rawPosX = optionalNumber(body, "posX");
+  const rawPosY = optionalNumber(body, "posY");
+  const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
+  const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, CANVAS_H);
 
   await updateCard({ db, cardId, content: body.content, posX, posY, bundleId: newBundleId });
 

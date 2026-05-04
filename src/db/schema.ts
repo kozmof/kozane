@@ -1,5 +1,5 @@
-import { relations } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { relations, sql } from "drizzle-orm";
+import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
 export const projectTable = sqliteTable("project", {
@@ -9,16 +9,24 @@ export const projectTable = sqliteTable("project", {
   name: text().notNull(),
 });
 
-export const bundleTable = sqliteTable("bundle", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  name: text().notNull(),
-  isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
-});
+export const bundleTable = sqliteTable(
+  "bundle",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    name: text().notNull(),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex("bundle_one_default_per_project")
+      .on(t.projectId)
+      .where(sql`is_default = 1`),
+  ],
+);
 
 export const scopeTable = sqliteTable("scope", {
   // A scope is intentionally cross-project. Do not add project_id here; projects see

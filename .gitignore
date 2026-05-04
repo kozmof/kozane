@@ -50,6 +50,7 @@ sqlite/
 drizzle/
 
 .claude/
+.agents/
 
 tmp/
 

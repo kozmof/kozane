@@ -5,25 +5,9 @@
   import CardComposer from "./CardComposer.svelte";
   import { CANVAS_W, CANVAS_H } from "$lib/constants";
   import { css, cx } from "styled-system/css";
+  import { applyPalette, GRID, PALETTE, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "./lib/project-page";
 
   let { data }: PageProps = $props();
-
-  // ── Constants ──────────────────────────────────────────────────
-  const GRID = 24;
-  const ZOOM_MIN = 0.25;
-  const ZOOM_MAX = 2;
-  const ZOOM_STEP = 0.1;
-
-  const PALETTE = [
-    { bg: "oklch(93% 0.055 52)", dot: "oklch(62% 0.15 52)" },
-    { bg: "oklch(93% 0.055 158)", dot: "oklch(62% 0.15 158)" },
-    { bg: "oklch(93% 0.055 272)", dot: "oklch(62% 0.15 272)" },
-    { bg: "oklch(93% 0.055 18)", dot: "oklch(62% 0.15 18)" },
-    { bg: "oklch(93% 0.055 220)", dot: "oklch(62% 0.15 220)" },
-    { bg: "oklch(93% 0.055 100)", dot: "oklch(62% 0.15 100)" },
-    { bg: "oklch(93% 0.055 310)", dot: "oklch(62% 0.15 310)" },
-    { bg: "oklch(93% 0.055 180)", dot: "oklch(62% 0.15 180)" },
-  ];
 
   // ── State ──────────────────────────────────────────────────────
   let cards = $state(untrack(() => data.cards));
@@ -83,9 +67,7 @@
   } | null = null;
 
   // ── Derived ───────────────────────────────────────────────────
-  let bundlesWithColors = $derived(
-    bundles.map((b, i) => ({ ...b, ...PALETTE[i % PALETTE.length] })),
-  );
+  let bundlesWithColors = $derived(applyPalette(bundles));
 
   let bundleColorById = $derived(new Map(bundlesWithColors.map((b) => [b.id, b])));
 

@@ -2,14 +2,13 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { glueCards, unglueCards } from "../../../../db/api/glue";
 import { allCardsBelongToProject } from "../../lib/guards";
+import { readJsonObject, requireStringArray } from "../../lib/request";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
-  const { cardIds } = await request.json();
-
-  if (!Array.isArray(cardIds) || cardIds.length < 2)
-    throw error(400, "cardIds must be an array of at least 2");
+  const body = await readJsonObject(request);
+  const cardIds = requireStringArray(body, "cardIds", 2);
 
   if (!(await allCardsBelongToProject(db, projectId, cardIds)))
     throw error(400, "Some cards do not belong to this project");
@@ -21,9 +20,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
-  const { cardIds } = await request.json();
-
-  if (!Array.isArray(cardIds) || cardIds.length === 0) throw error(400, "cardIds is required");
+  const body = await readJsonObject(request);
+  const cardIds = requireStringArray(body, "cardIds");
 
   if (!(await allCardsBelongToProject(db, projectId, cardIds)))
     throw error(400, "Some cards do not belong to this project");

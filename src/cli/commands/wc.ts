@@ -21,7 +21,7 @@ type ScanOptions = { reattach?: boolean };
 
 export async function wcScan(options: ScanOptions = {}): Promise<void> {
   const { root, config } = requireWorkspace();
-  const db = openDb(dbUrl(resolve(root)));
+  const db = await openDb(dbUrl(resolve(root)));
 
   const searchRoots = config.workingCopy.searchRoots.map((r) =>
     isAbsolute(r) ? r : join(root, r),
@@ -105,7 +105,7 @@ type CreateOptions = { scope?: string; dir?: string };
 
 export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
   const { root, config } = requireWorkspace();
-  const db = openDb(dbUrl(resolve(root)));
+  const db = await openDb(dbUrl(resolve(root)));
 
   const targetDir = options.dir
     ? resolve(options.dir)

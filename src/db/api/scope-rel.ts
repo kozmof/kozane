@@ -64,6 +64,29 @@ export async function removeScopeMembers({
     .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
 }
 
+type RemoveScopeMembersFromProject = RemoveScopeMembers & { projectId: string };
+/** Bulk-removes cards from a scope. Returns false if any cardId doesn't belong to projectId. */
+export async function removeScopeMembersFromProject({
+  db,
+  scopeId,
+  projectId,
+  cardIds,
+}: RemoveScopeMembersFromProject): Promise<boolean> {
+  const found = await db
+    .select({ id: cardTable.id })
+    .from(cardTable)
+    .innerJoin(
+      bundleTable,
+      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+    )
+    .where(inArray(cardTable.id, cardIds));
+
+  if (found.length !== cardIds.length) return false;
+
+  await removeScopeMembers({ db, scopeId, cardIds });
+  return true;
+}
+
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
 export async function getScopeRelsByCards({ db, cardIds }: GetScopeRelsByCards) {
   if (cardIds.length === 0) return [];

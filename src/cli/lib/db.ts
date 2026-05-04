@@ -6,8 +6,9 @@ import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
 import type { DB } from "../../db/tx.js";
 
-export function openDb(dbUrl: string): DB {
+export async function openDb(dbUrl: string): Promise<DB> {
   const client = createClient({ url: dbUrl });
+  await client.execute("PRAGMA foreign_keys = ON");
   return drizzle(client, { schema }) as unknown as DB;
 }
 
