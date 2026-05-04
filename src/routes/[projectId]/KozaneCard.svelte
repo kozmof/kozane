@@ -96,8 +96,7 @@
   </div>
 
   <!-- Footer -->
-  {#if showFooters}
-  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "warm.muted", gap: "6px" })}>
+  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "warm.muted", gap: "6px" })} style:visibility={showFooters ? "visible" : "hidden"}>
     {#if card.glueId}
       <span class={css({ display: "flex", alignItems: "center", gap: "3px" })}>
         <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
@@ -124,5 +123,4 @@
       </span>
     </span>
   </div>
-  {/if}
 </div>
