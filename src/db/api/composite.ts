@@ -1,5 +1,6 @@
 import { withTx, type DB, type AnyDB } from "../tx.js";
-import { addCard } from "./card.js";
+import { addCard, reassignBundleCards } from "./card.js";
+import { deleteBundle, getBundle, getDefaultBundle } from "./bundle.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";
 import { NotFoundError } from "./utils.js";
@@ -50,4 +51,30 @@ export async function createCardFromWorkingCopy({
   return withTx(db, (tx) =>
     createCardInWorkingCopyContext(tx, { workingCopyId, bundleId, content }),
   );
+}
+
+type DeleteBundleWithReassign = { db: DB; projectId: string; bundleId: string };
+
+/**
+ * Deletes a non-default bundle and reassigns its cards to the project's default
+ * bundle, atomically. Throws NotFoundError if the bundle doesn't exist.
+ */
+export async function deleteBundleWithReassign({
+  db,
+  projectId,
+  bundleId,
+}: DeleteBundleWithReassign): Promise<{ defaultBundleId: string }> {
+  return withTx(db, async (tx) => {
+    const bundle = await getBundle({ db: tx, projectId, bundleId });
+    if (!bundle) throw new NotFoundError(`Bundle projectId=${projectId} bundleId=${bundleId}`);
+    if (bundle.isDefault) throw new Error("Cannot delete the default bundle");
+
+    const defaultBundle = await getDefaultBundle({ db: tx, projectId });
+    if (!defaultBundle) throw new Error("No default bundle found for this project");
+
+    await reassignBundleCards({ db: tx, fromBundleId: bundleId, toBundleId: defaultBundle.id });
+    await deleteBundle({ db: tx, projectId, bundleId });
+
+    return { defaultBundleId: defaultBundle.id };
+  });
 }

@@ -2,7 +2,7 @@ import type { PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
 import { getProject } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
-import { getAllScopes } from "../../db/api/scope";
+import { getScopesByProject } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
@@ -16,7 +16,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
   const [bundles, scopes] = await Promise.all([
     getAllBundles({ db, projectId }),
-    getAllScopes({ db }),
+    getScopesByProject({ db, projectId }),
   ]);
 
   const bundleIds = bundles.map((b) => b.id);

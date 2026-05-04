@@ -4,12 +4,11 @@ import { createClient } from "@libsql/client";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
+import type { DB } from "../../db/tx.js";
 
-export type CliDB = ReturnType<typeof openDb>;
-
-export function openDb(dbUrl: string) {
+export function openDb(dbUrl: string): DB {
   const client = createClient({ url: dbUrl });
-  return drizzle(client, { schema });
+  return drizzle(client, { schema }) as unknown as DB;
 }
 
 export async function runMigrations(dbUrl: string): Promise<void> {

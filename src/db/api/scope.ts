@@ -1,11 +1,20 @@
-import { scopeTable } from "../schema.js";
-import { eq } from "drizzle-orm";
-import type { NeedsDB, NeedsScope, Scope } from "./types.js";
+import { scopeTable, workingCopyTable } from "../schema.js";
+import { eq, getTableColumns } from "drizzle-orm";
+import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
 import { assertFound } from "./utils.js";
 
 // Scopes are cross-project by design — they are not owned by any project or bundle
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
+}
+
+/** Returns only scopes whose working copies reference the given project. */
+export async function getScopesByProject({ db, projectId }: NeedsProject): Promise<Scope[]> {
+  return db
+    .selectDistinct(getTableColumns(scopeTable))
+    .from(scopeTable)
+    .innerJoin(workingCopyTable, eq(workingCopyTable.scopeId, scopeTable.id))
+    .where(eq(workingCopyTable.projectId, projectId));
 }
 
 type GetScope = NeedsDB & { scopeId: string };

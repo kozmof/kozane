@@ -1,15 +1,9 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-
-  interface Bundle {
-    id: string;
-    name: string;
-    bg: string;
-    dot: string;
-  }
+  import type { BundleWithColor } from "$lib/types";
 
   interface Props {
-    bundles: Bundle[];
+    bundles: BundleWithColor[];
     bundleId: string;
     onChange: (id: string) => void;
   }

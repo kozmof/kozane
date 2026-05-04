@@ -31,7 +31,7 @@ export function dev(options: DevOptions): void {
 
   const child = spawn(vite, args, {
     cwd: packageRoot,
-    env: { ...process.env, DATABASE_URL: dbURL },
+    env: { ...process.env, DATABASE_URL: dbURL, KOZANE_WORKSPACE_ROOT: resolve(root) },
     stdio: "inherit",
   });
 

@@ -2,32 +2,14 @@
   import { untrack, tick } from "svelte";
   import BundleDropdown from "./BundleDropdown.svelte";
   import { css } from "styled-system/css";
-
-  interface CardData {
-    id: string;
-    content: string;
-    bundleId: string;
-    glueId: string | null;
-  }
-
-  interface Bundle {
-    id: string;
-    name: string;
-    bg: string;
-    dot: string;
-  }
-
-  interface GlueRel {
-    glueId: string;
-    cardId: string;
-  }
+  import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
 
   interface Props {
     editingCard: CardData | null;
     selectedCards: CardData[];
     selectionGlueRels: GlueRel[];
     primaryCard: CardData | null;
-    bundles: Bundle[];
+    bundles: BundleWithColor[];
     defaultBundleId: string;
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
@@ -76,8 +58,10 @@
     // Reading scrollHeight after overflow:hidden or height:auto gives only 1 row.
     el.style.overflowY = "hidden";
     el.style.height = "0";
-    // 12.5px font-size × 1.65 line-height + 4px vertical padding
-    const maxH = MAX_TEXTAREA_LINES * (12.5 * 1.65) + 4;
+    const style = getComputedStyle(el);
+    const lineH = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.65;
+    const padV = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+    const maxH = MAX_TEXTAREA_LINES * lineH + padV;
     if (el.scrollHeight > maxH) {
       el.style.height = maxH + "px";
       el.style.overflowY = "auto";

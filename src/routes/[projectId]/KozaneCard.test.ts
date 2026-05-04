@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import KozaneCard from "./KozaneCard.svelte";
 
-const color = { bg: "#fff7ed", dot: "#f59e0b", name: "General" };
+const color = { id: "bundle-1", bg: "#fff7ed", dot: "#f59e0b", name: "General" };
 
 function makeProps(overrides: Record<string, unknown> = {}) {
   return {

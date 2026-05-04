@@ -3,7 +3,7 @@ import { dirname, join, resolve } from "node:path";
 
 const explicitDatabaseUrl = process.env.DATABASE_URL;
 
-function findWorkspaceRoot(startDir: string | undefined): string | null {
+export function findWorkspaceRoot(startDir: string | undefined): string | null {
   if (!startDir) return null;
 
   let dir = resolve(startDir);

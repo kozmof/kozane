@@ -786,6 +786,7 @@
           <!-- Cards -->
           {#each visibleCards as card (card.id)}
             {@const color = bundleColorById.get(card.bundleId) ?? {
+              id: "",
               bg: PALETTE[0].bg,
               dot: PALETTE[0].dot,
               name: "Unknown",

@@ -1,27 +1,12 @@
 <script lang="ts">
   import { css } from "styled-system/css";
+  import type { CardData, BundleWithColor } from "$lib/types";
 
   const CARD_W = 240;
 
-  interface CardData {
-    id: string;
-    bundleId: string;
-    content: string;
-    posX: number;
-    posY: number;
-    glueId: string | null;
-    workingCopyId: string | null;
-  }
-
-  interface BundleColor {
-    bg: string;
-    dot: string;
-    name: string;
-  }
-
   interface Props {
     card: CardData;
-    color: BundleColor;
+    color: BundleWithColor;
     isSelected: boolean;
     isPrimaryUnglue: boolean;
     isComposing: boolean;

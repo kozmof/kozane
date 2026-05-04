@@ -1,6 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { type WorkspaceConfig, KOZANE_DIR, CONFIG_FILE, readConfig } from "./config.js";
+import { type WorkspaceConfig, readConfig } from "./config.js";
+import { findWorkspaceRoot } from "../../db/internal/config.js";
 
 export type KozaneWorkspace = {
   root: string;
@@ -8,16 +7,9 @@ export type KozaneWorkspace = {
 };
 
 export function detectWorkspace(startDir: string = process.cwd()): KozaneWorkspace | null {
-  let dir = startDir;
-  while (true) {
-    const configPath = join(dir, KOZANE_DIR, CONFIG_FILE);
-    if (existsSync(configPath)) {
-      return { root: dir, config: readConfig(dir) };
-    }
-    const parent = dirname(dir);
-    if (parent === dir) return null; // reached filesystem root
-    dir = parent;
-  }
+  const root = findWorkspaceRoot(startDir);
+  if (!root) return null;
+  return { root, config: readConfig(root) };
 }
 
 export function requireWorkspace(startDir: string = process.cwd()): KozaneWorkspace {

@@ -1,21 +1,46 @@
 import { glueTable, glueRelTable } from "../schema.js";
-import { eq, inArray } from "drizzle-orm";
+import { and, count, inArray, lte, notInArray } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
+import { withTx, type DB, type AnyDB } from "../tx.js";
 import { v7 as uuidv7 } from "uuid";
-
-export type GlueRel = { glueId: string; cardId: string };
 
 export async function getGlueRelsByCards({
   db,
   cardIds,
-}: NeedsDB & { cardIds: string[] }): Promise<GlueRel[]> {
+}: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 }
 
-export async function glueCards({ db, cardIds }: NeedsDB & { cardIds: string[] }): Promise<string> {
-  if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
+async function dissolveOrphanGroups(db: AnyDB, affectedGlueIds: string[]): Promise<void> {
+  if (affectedGlueIds.length === 0) return;
 
+  // Groups with ≤1 remaining member should be dissolved.
+  const dissolveSubquery = db
+    .select({ id: glueRelTable.glueId })
+    .from(glueRelTable)
+    .where(inArray(glueRelTable.glueId, affectedGlueIds))
+    .groupBy(glueRelTable.glueId)
+    .having(lte(count(), 1));
+
+  // Remove any remaining lone glue_rel entries for those groups.
+  await db.delete(glueRelTable).where(inArray(glueRelTable.glueId, dissolveSubquery));
+
+  // Remove glue records that now have no glue_rel entries at all.
+  const stillLinked = db
+    .select({ id: glueRelTable.glueId })
+    .from(glueRelTable)
+    .where(inArray(glueRelTable.glueId, affectedGlueIds));
+
+  await db.delete(glueTable).where(
+    and(inArray(glueTable.id, affectedGlueIds), notInArray(glueTable.id, stillLinked)),
+  );
+}
+
+async function glueCardsCore(
+  db: AnyDB,
+  cardIds: string[],
+): Promise<string> {
   const existingRels = await db
     .select()
     .from(glueRelTable)
@@ -23,19 +48,12 @@ export async function glueCards({ db, cardIds }: NeedsDB & { cardIds: string[] }
 
   const affectedGlueIds = [...new Set(existingRels.map((r) => r.glueId))];
 
-  // Remove selected cards from their existing groups
+  // Remove selected cards from their existing groups.
   await db.delete(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 
-  // Clean up glue groups that now have <=1 member
-  for (const glueId of affectedGlueIds) {
-    const remaining = await db.select().from(glueRelTable).where(eq(glueRelTable.glueId, glueId));
-    if (remaining.length <= 1) {
-      await db.delete(glueRelTable).where(eq(glueRelTable.glueId, glueId));
-      await db.delete(glueTable).where(eq(glueTable.id, glueId));
-    }
-  }
+  await dissolveOrphanGroups(db, affectedGlueIds);
 
-  // Create new glue group
+  // Create a new glue group for all specified cards.
   const newGlueId = uuidv7();
   await db.insert(glueTable).values({ id: newGlueId });
   await db.insert(glueRelTable).values(cardIds.map((cardId) => ({ glueId: newGlueId, cardId })));
@@ -43,9 +61,7 @@ export async function glueCards({ db, cardIds }: NeedsDB & { cardIds: string[] }
   return newGlueId;
 }
 
-export async function unglueCards({ db, cardIds }: NeedsDB & { cardIds: string[] }): Promise<void> {
-  if (cardIds.length === 0) return;
-
+async function unglueCardsCore(db: AnyDB, cardIds: string[]): Promise<void> {
   const existingRels = await db
     .select()
     .from(glueRelTable)
@@ -55,11 +71,21 @@ export async function unglueCards({ db, cardIds }: NeedsDB & { cardIds: string[]
 
   await db.delete(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 
-  for (const glueId of affectedGlueIds) {
-    const remaining = await db.select().from(glueRelTable).where(eq(glueRelTable.glueId, glueId));
-    if (remaining.length <= 1) {
-      await db.delete(glueRelTable).where(eq(glueRelTable.glueId, glueId));
-      await db.delete(glueTable).where(eq(glueTable.id, glueId));
-    }
-  }
+  await dissolveOrphanGroups(db, affectedGlueIds);
+}
+
+export async function glueCards({
+  db,
+  cardIds,
+}: { db: DB } & { cardIds: string[] }): Promise<string> {
+  if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
+  return withTx(db, (tx) => glueCardsCore(tx, cardIds));
+}
+
+export async function unglueCards({
+  db,
+  cardIds,
+}: { db: DB } & { cardIds: string[] }): Promise<void> {
+  if (cardIds.length === 0) return;
+  return withTx(db, (tx) => unglueCardsCore(tx, cardIds));
 }

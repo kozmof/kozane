@@ -8,7 +8,6 @@ import { addWorkingCopy } from "./working-copy.js";
 import { getCard } from "./card.js";
 import { getAllCardsByScope } from "./scope-rel.js";
 import { NotFoundError } from "./utils.js";
-import { workingCopyTable } from "../schema.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -59,11 +58,7 @@ describe("createCardInWorkingCopyContext", () => {
 
   it("does NOT add to scope when working copy has no scope", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    // Insert a WC directly with scopeId = null (addWorkingCopy API always requires a scopeId)
-    const [{ id: wcId }] = await db
-      .insert(workingCopyTable)
-      .values({ projectId, name: "no-scope-wc" })
-      .returning({ id: workingCopyTable.id });
+    const wcId = await addWorkingCopy({ db, projectId });
 
     const cardId = await createCardInWorkingCopyContext(db, {
       workingCopyId: wcId,
