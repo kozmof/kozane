@@ -147,7 +147,6 @@
       class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
       bind:value={newScopeName}
       onkeydown={(e) => e.key === "Enter" && onCreateScope()}
-      placeholder="New scope…"
     />
     <button
       class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}

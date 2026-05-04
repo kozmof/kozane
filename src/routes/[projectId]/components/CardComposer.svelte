@@ -210,9 +210,6 @@
         bind:value={content}
         oninput={(e) => autoResize(e.currentTarget)}
         onkeydown={handleKeyDown}
-        placeholder={mode === "edit"
-          ? "Edit card… (Enter to save, Esc to cancel)"
-          : "Write a card… (Enter to create, Shift+Enter for newline)"}
         rows={1}
       ></textarea>
 
