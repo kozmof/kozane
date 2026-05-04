@@ -7,6 +7,7 @@ import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate } from "./commands/project.js";
+import { dbMigrate, dbStatus } from "./commands/db.js";
 
 const program = new Command();
 
@@ -48,6 +49,16 @@ project
   .command("create <name>")
   .description("Create a new project in the current workspace")
   .action((name) => projectCreate(name));
+
+const db = program.command("db").description("Database management");
+
+db.command("status")
+  .description("Show workspace database migration status")
+  .action(() => dbStatus());
+
+db.command("migrate")
+  .description("Back up and migrate the workspace database")
+  .action(() => dbMigrate());
 
 const wc = program.command("wc").description("Working copy management");
 

@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
+import { getMigrationStatus } from "../lib/db.js";
+import { migrationStatusMessage } from "./db.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -13,13 +15,25 @@ type DevOptions = {
   open?: boolean;
 };
 
-export function dev(options: DevOptions): void {
+export async function dev(options: DevOptions): Promise<void> {
   const { root, config } = requireWorkspace();
 
   const host = options.host ?? config.server.host;
   const port = options.port ?? String(config.server.port);
 
   const dbURL = dbUrl(resolve(root));
+  const migrationStatus = await getMigrationStatus(dbURL);
+  if (migrationStatus.state !== "current") {
+    console.error("Kozane database needs attention before the UI can start.");
+    console.error(migrationStatusMessage(migrationStatus));
+    if (migrationStatus.state === "pending") {
+      console.error("\nRun: kozane db migrate");
+    } else {
+      console.error("\nRun: kozane db status");
+      console.error("Run: kozane doctor");
+    }
+    process.exit(1);
+  }
 
   const vite = join(packageRoot, "node_modules", ".bin", "vite");
   const args = ["dev", "--host", host, "--port", port];

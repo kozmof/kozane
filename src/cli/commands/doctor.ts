@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { createConnection } from "node:net";
 import { detectWorkspace } from "../lib/project.js";
 import { KOZANE_DIR, CONFIG_FILE, DB_FILE, readConfig, dbUrl } from "../lib/config.js";
-import { openDb } from "../lib/db.js";
+import { getMigrationStatus } from "../lib/db.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
 
@@ -72,20 +72,25 @@ export async function doctor(): Promise<void> {
     check("kozane.db readable/writable", dbOk, dbOk ? undefined : "file missing or inaccessible"),
   );
 
-  // 5. DB schema check (tables exist)
+  // 5. DB migration status
   if (dbOk) {
-    let schemaOk = false;
+    let migrationOk = false;
+    let detail: string | undefined;
     try {
-      const db = await openDb(dbUrl(resolve(root)));
-      await db
-        .select()
-        .from((await import("../../db/schema.js")).projectTable)
-        .limit(1);
-      schemaOk = true;
-    } catch {
-      schemaOk = false;
+      const status = await getMigrationStatus(dbUrl(resolve(root)));
+      migrationOk = status.state === "current";
+      if (status.state === "pending") {
+        detail = `${status.pendingCount} pending; run kozane db migrate`;
+      } else if (status.state === "unknown") {
+        detail = status.error;
+      } else if (status.state === "missing") {
+        detail = "file missing";
+      }
+    } catch (e) {
+      migrationOk = false;
+      detail = e instanceof Error ? e.message : String(e);
     }
-    checks.push(check("DB schema valid", schemaOk));
+    checks.push(check("DB migrations current", migrationOk, detail));
   }
 
   // 6. Port available
