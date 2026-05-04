@@ -246,6 +246,7 @@
 
   function handleCardClick(e: MouseEvent, cardId: string) {
     if (dragState?.moved) return;
+    if (composerCard && composerCard.id !== cardId) composerCard = null;
     const groupIds = glueGroupIds(cardId);
     if (e.shiftKey) {
       const next = new Set(selectedCards);
@@ -275,6 +276,7 @@
 
   function handleCanvasMouseDown(e: MouseEvent) {
     if (e.button !== 0) return;
+    composerCard = null;
     if (!e.shiftKey) { selectedCards = new Set(); primarySelectedId = null; }
     panState = {
       startX: e.clientX,
