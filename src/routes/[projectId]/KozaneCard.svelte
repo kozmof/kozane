@@ -67,6 +67,7 @@
 <div
   role="button"
   tabindex="0"
+  data-card-id={card.id}
   onmousedown={onCardMouseDown}
   onclick={onCardClick}
   ondblclick={onCardDblClick}

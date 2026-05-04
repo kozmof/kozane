@@ -39,6 +39,7 @@
   let composerCard = $state<(typeof cards)[0] | null>(null);
   let draggingId = $state<string | null>(null);
   let isPanning = $state(false);
+  let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
   let sidebarsVisible = $state(true);
   let showFooters = $state(true);
   let zoom = $state(1);
@@ -71,6 +72,14 @@
     startY: number;
     scrollLeft: number;
     scrollTop: number;
+  } | null = null;
+
+  let rectangleSelectionState: {
+    startClientX: number;
+    startClientY: number;
+    startWorldX: number;
+    startWorldY: number;
+    moved: boolean;
   } | null = null;
 
   // ── Derived ───────────────────────────────────────────────────
@@ -107,6 +116,19 @@
   // ── Window event listeners (drag + pan) ──────────────────────
   $effect(() => {
     function onMove(e: MouseEvent) {
+      if (rectangleSelectionState) {
+        const { startClientX, startClientY, startWorldX, startWorldY } = rectangleSelectionState;
+        if (Math.abs(e.clientX - startClientX) > 4 || Math.abs(e.clientY - startClientY) > 4) {
+          rectangleSelectionState.moved = true;
+        }
+        const current = clientToWorld(e.clientX, e.clientY);
+        selectionRect = {
+          x: Math.min(startWorldX, current.x),
+          y: Math.min(startWorldY, current.y),
+          w: Math.abs(current.x - startWorldX),
+          h: Math.abs(current.y - startWorldY),
+        };
+      }
       if (dragState) {
         const { cardId, offsetX, offsetY, startX, startY, groupIds } = dragState;
         if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
@@ -136,6 +158,13 @@
     }
 
     async function onUp() {
+      if (rectangleSelectionState) {
+        if (rectangleSelectionState.moved) {
+          applyRectangleSelection();
+        }
+        rectangleSelectionState = null;
+        selectionRect = null;
+      }
       if (dragState) {
         const { cardId, moved, prevX, prevY, groupIds, groupPrevPositions } = dragState;
         dragState = null;
@@ -203,6 +232,39 @@
   });
 
   // ── Card interaction handlers ─────────────────────────────────
+  function clientToWorld(clientX: number, clientY: number) {
+    const rect = canvasEl.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left + canvasEl.scrollLeft) / zoom,
+      y: (clientY - rect.top + canvasEl.scrollTop) / zoom,
+    };
+  }
+
+  function intersects(a: DOMRect, b: { left: number; top: number; right: number; bottom: number }) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+
+  function applyRectangleSelection() {
+    if (!selectionRect) return;
+    const canvasRect = canvasEl.getBoundingClientRect();
+    const screenRect = {
+      left: canvasRect.left + selectionRect.x * zoom - canvasEl.scrollLeft,
+      top: canvasRect.top + selectionRect.y * zoom - canvasEl.scrollTop,
+      right: canvasRect.left + (selectionRect.x + selectionRect.w) * zoom - canvasEl.scrollLeft,
+      bottom: canvasRect.top + (selectionRect.y + selectionRect.h) * zoom - canvasEl.scrollTop,
+    };
+    const next = new Set<string>();
+    let primaryId: string | null = null;
+    canvasEl.querySelectorAll<HTMLElement>("[data-card-id]").forEach((el) => {
+      const cardId = el.dataset.cardId;
+      if (!cardId || !intersects(el.getBoundingClientRect(), screenRect)) return;
+      primaryId ??= cardId;
+      glueGroupIds(cardId).forEach((id) => next.add(id));
+    });
+    selectedCards = next;
+    primarySelectedId = primaryId;
+  }
+
   function handleCardMouseDown(e: MouseEvent, cardId: string) {
     if (e.button !== 0) return;
     e.stopPropagation();
@@ -276,6 +338,24 @@
   }
 
   function handleCanvasMouseDown(e: MouseEvent) {
+    if (e.button === 0 && e.shiftKey) {
+      e.preventDefault();
+      composerCard = null;
+      dragState = null;
+      draggingId = null;
+      panState = null;
+      isPanning = false;
+      const start = clientToWorld(e.clientX, e.clientY);
+      rectangleSelectionState = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startWorldX: start.x,
+        startWorldY: start.y,
+        moved: false,
+      };
+      selectionRect = { x: start.x, y: start.y, w: 0, h: 0 };
+      return;
+    }
     if (e.button !== 0) return;
     composerCard = null;
     if (!e.shiftKey) { selectedCards = new Set(); primarySelectedId = null; }
@@ -286,6 +366,10 @@
       scrollTop: canvasEl.scrollTop,
     };
     isPanning = true;
+  }
+
+  function handleCanvasContextMenu(e: MouseEvent) {
+    if (rectangleSelectionState) e.preventDefault();
   }
 
   function applyZoom(delta: number) {
@@ -644,6 +728,7 @@
       role="presentation"
       bind:this={canvasEl}
       onmousedown={handleCanvasMouseDown}
+      oncontextmenu={handleCanvasContextMenu}
       style:cursor={draggingId || isPanning ? "grabbing" : "grab"}
     >
       <!-- Scroll spacer (scaled outer) -->
@@ -700,6 +785,20 @@
               onCardDblClick={() => handleCardDblClick(card.id)}
             />
           {/each}
+
+          {#if selectionRect}
+            <div
+              style:position="absolute"
+              style:left="{selectionRect.x}px"
+              style:top="{selectionRect.y}px"
+              style:width="{selectionRect.w}px"
+              style:height="{selectionRect.h}px"
+              style:border="1px solid var(--colors-select-accent)"
+              style:background="color-mix(in oklch, var(--colors-select-accent) 16%, transparent)"
+              style:pointer-events="none"
+              style:z-index="300"
+            ></div>
+          {/if}
         </div>
       </div>
     </div>
