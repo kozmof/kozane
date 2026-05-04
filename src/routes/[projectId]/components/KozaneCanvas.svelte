@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import KozaneCard from "../KozaneCard.svelte";
+  import KozaneCard from "./KozaneCard.svelte";
   import SelectionRect from "./SelectionRect.svelte";
   import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
   import {

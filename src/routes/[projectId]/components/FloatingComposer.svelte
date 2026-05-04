@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import CardComposer from "../CardComposer.svelte";
+  import CardComposer from "./CardComposer.svelte";
   import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
 
   interface Props {
