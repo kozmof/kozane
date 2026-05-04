@@ -62,21 +62,21 @@ Behavior:
 
 1. Refuses if `.kozane/` already exists.
 2. Creates `.kozane/` and `.kozane/working-copies/`.
-3. Writes `.kozane/config.json` with defaults (project name = current directory name).
+3. Writes `.kozane/config.json` with defaults (workspace name = current directory name).
 4. Runs Drizzle migrations to create `.kozane/kozane.db`.
 
 Output:
 
 ```
-Initializing Kozane project "my-project"...
+Initializing Kozane workspace "my-project"...
 
 Kozane initialized.
 
-  Project : my-project
-  Config  : .kozane/config.json
-  Database: .kozane/kozane.db
+  Workspace: my-project
+  Config   : .kozane/config.json
+  Database : .kozane/kozane.db
 
-Run "kozane dev" to start the local UI.
+Next: run "kozane project create <name>" to create your first project.
 ```
 
 ---
@@ -107,7 +107,7 @@ Behavior:
 Output:
 
 ```
-Kozane project: my-project
+Kozane workspace: my-project
 Database: .kozane/kozane.db
 
 Local UI:
@@ -138,7 +138,7 @@ Checks (in order):
 
 | Check                         | Pass condition                                     |
 | ----------------------------- | -------------------------------------------------- |
-| Kozane project found          | `.kozane/config.json` found by walking up from CWD |
+| Kozane workspace found        | `.kozane/config.json` found by walking up from CWD |
 | `.kozane/` directory exists   | directory present at project root                  |
 | `config.json` valid           | parses as valid JSON with expected shape           |
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
@@ -150,7 +150,7 @@ Exit code `0` if all checks pass, `1` otherwise.
 Output:
 
 ```
-  ✓  Kozane project found — /path/to/project
+  ✓  Kozane workspace found — /path/to/project
   ✓  .kozane/ directory exists
   ✓  config.json valid
   ✓  kozane.db readable/writable
@@ -171,12 +171,37 @@ kozane status
 Output:
 
 ```
-Project      : my-project
+Workspace    : my-project
 Projects     : 1
 Bundles      : 6
 Cards        : 128
 Scopes       : 4
 Working copies: 3
+```
+
+---
+
+### `kozane project create <name>`
+
+Creates a new project in the current workspace.
+
+```bash
+kozane project create <name>
+```
+
+Behavior:
+
+1. Requires a Kozane workspace (walks up from CWD).
+2. Runs Drizzle migrations (idempotent).
+3. Inserts a `project` DB record → gets a stable UUID.
+4. Creates a default "General" bundle for the project.
+
+Output:
+
+```
+Project created.
+  id  : 019dddef-87e3-7000-0000-000000000000
+  name: my-project
 ```
 
 ---
@@ -297,19 +322,19 @@ path. Renaming or moving the directory does not change the working copy's identi
 
 ## Project detection
 
-Any command that needs a project (all except `init`) walks up from `process.cwd()`
+Any command that needs a workspace (all except `init`) walks up from `process.cwd()`
 looking for `.kozane/config.json`. This allows running commands from any
-subdirectory of a project:
+subdirectory of a workspace:
 
 ```bash
 cd my-project/docs/chapter-1
 kozane status   # resolves to my-project/.kozane/
 ```
 
-If no project is found, the command prints:
+If no workspace is found, the command prints:
 
 ```
-No Kozane project found. Run "kozane init" first.
+No Kozane workspace found. Run "kozane init" first.
 ```
 
 and exits with code `1`.
@@ -362,6 +387,7 @@ CLI:
   kozane dev / open
   kozane doctor
   kozane status
+  kozane project create
   kozane wc scan
   kozane wc create
 
