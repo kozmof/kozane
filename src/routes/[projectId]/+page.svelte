@@ -272,11 +272,14 @@
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
 
-    // BFS through glueRels to find all cards in the same glue group
     const glueRel = glueRels.find((r) => r.cardId === cardId);
-    const groupIds = glueRel
+    const glueGroupIds = glueRel
       ? glueRels.filter((r) => r.glueId === glueRel.glueId && r.cardId !== cardId).map((r) => r.cardId)
       : [];
+    const selectionIds = selectedCards.has(cardId)
+      ? [...selectedCards].filter((id) => id !== cardId)
+      : [];
+    const groupIds = [...new Set([...glueGroupIds, ...selectionIds])];
     const groupPrevPositions = new Map(
       groupIds.map((id) => {
         const c = cards.find((c) => c.id === id)!;
