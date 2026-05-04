@@ -220,6 +220,13 @@ describe("CardComposer — selection mode", () => {
     expect(onDeleteSelected).toHaveBeenCalledWith(["card-1", "card-2"]);
   });
 
+  it("shows the selected card bundle instead of the default bundle", () => {
+    const researchCards = selectedCards.map((card) => ({ ...card, bundleId: "b2" }));
+    render(CardComposer, { props: makeProps({ selectedCards: researchCards }) });
+
+    expect(screen.getByText("Research")).toBeInTheDocument();
+  });
+
   it("calls onSelectionBundleChange when the bundle changes", async () => {
     const user = userEvent.setup();
     const onSelectionBundleChange = vi.fn();

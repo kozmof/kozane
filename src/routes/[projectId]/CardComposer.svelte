@@ -40,13 +40,16 @@
 
   const MAX_TEXTAREA_LINES = 12;
 
+  const composerBundleId = () =>
+    editingCard?.bundleId ?? primaryCard?.bundleId ?? selectedCards[0]?.bundleId ?? defaultBundleId;
+
   let content = $state(untrack(() => editingCard?.content ?? ""));
-  let bundleId = $state(untrack(() => editingCard?.bundleId ?? defaultBundleId));
+  let bundleId = $state(untrack(composerBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
 
   $effect(() => {
     content = editingCard?.content ?? "";
-    bundleId = editingCard?.bundleId ?? defaultBundleId;
+    bundleId = composerBundleId();
     tick().then(() => {
       textareaEl?.focus();
       if (textareaEl) autoResize(textareaEl);
