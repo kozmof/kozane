@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { untrack, tick } from "svelte";
   import BundleDropdown from "./BundleDropdown.svelte";
   import { css } from "styled-system/css";
 
@@ -54,6 +54,8 @@
     onUnglueOne,
   }: Props = $props();
 
+  const MAX_TEXTAREA_LINES = 12;
+
   let content = $state(untrack(() => editingCard?.content ?? ""));
   let bundleId = $state(untrack(() => editingCard?.bundleId ?? defaultBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
@@ -61,13 +63,25 @@
   $effect(() => {
     content = editingCard?.content ?? "";
     bundleId = editingCard?.bundleId ?? defaultBundleId;
-    textareaEl?.focus();
-    if (textareaEl) autoResize(textareaEl);
+    tick().then(() => {
+      textareaEl?.focus();
+      if (textareaEl) autoResize(textareaEl);
+    });
   });
 
   function autoResize(el: HTMLTextAreaElement) {
-    el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 160) + "px";
+    // Set height to 0 first so scrollHeight always reports full content height.
+    // Reading scrollHeight after overflow:hidden or height:auto gives only 1 row.
+    el.style.overflowY = "hidden";
+    el.style.height = "0";
+    // 12.5px font-size × 1.65 line-height + 4px vertical padding
+    const maxH = MAX_TEXTAREA_LINES * (12.5 * 1.65) + 4;
+    if (el.scrollHeight > maxH) {
+      el.style.height = maxH + "px";
+      el.style.overflowY = "auto";
+    } else {
+      el.style.height = el.scrollHeight + "px";
+    }
   }
 
   function handleKeyDown(e: KeyboardEvent) {
