@@ -36,6 +36,7 @@
     onGlueSelected?: (cardIds: string[]) => void;
     onUnglueSelected?: (cardIds: string[]) => void;
     onUnglueOne?: (cardId: string) => void;
+    onDeleteSelected?: (cardIds: string[]) => void;
   }
 
   let {
@@ -52,6 +53,7 @@
     onGlueSelected,
     onUnglueSelected,
     onUnglueOne,
+    onDeleteSelected,
   }: Props = $props();
 
   const MAX_TEXTAREA_LINES = 12;
@@ -154,7 +156,7 @@
   {#if mode === "selection"}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
     {#if selectedCards.length >= 2}
-      <div class={css({ display: "flex", gap: "6px" })}>
+      <div class={css({ display: "flex", gap: "6px", marginBottom: "6px" })}>
         {#if allGlued}
           <button
             class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
@@ -197,6 +199,18 @@
         {/if}
       </div>
     {/if}
+    <!-- Delete: always visible in selection mode -->
+    <button
+      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
+      onclick={() => onDeleteSelected?.(selectedCards.map((c) => c.id))}
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M4.5 2h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M1.5 4h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <path d="M2.5 4l.7 6h5.6l.7-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Delete {selectedCards.length === 1 ? "card" : `${selectedCards.length} cards`}
+    </button>
   {:else}
     <!-- Input row (create / edit) -->
     <div

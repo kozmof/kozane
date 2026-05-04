@@ -497,6 +497,22 @@
     cards = cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId: null } : c));
   }
 
+  async function handleDeleteSelected(cardIds: string[]) {
+    const results = await Promise.all(
+      cardIds.map((id) =>
+        fetch(`/${data.project.id}/api/cards/${id}`, { method: "DELETE" }),
+      ),
+    );
+    if (results.some((r) => !r.ok)) {
+      lastError = "Failed to delete cards";
+      return;
+    }
+    cards = cards.filter((c) => !cardIds.includes(c.id));
+    glueRels = glueRels.filter((r) => !cardIds.includes(r.cardId));
+    selectedCards = new Set();
+    primarySelectedId = null;
+  }
+
   // ── Bundles ───────────────────────────────────────────────────
   async function handleCreateBundle() {
     if (!newBundleName.trim()) return;
@@ -950,6 +966,7 @@
         onGlueSelected={handleGlueSelected}
         onUnglueSelected={handleUnglueSelected}
         onUnglueOne={handleUnglueOne}
+        onDeleteSelected={handleDeleteSelected}
       />
     </div>
   </div>
