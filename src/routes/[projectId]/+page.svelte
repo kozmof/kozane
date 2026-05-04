@@ -5,7 +5,20 @@
   import CardComposer from "./CardComposer.svelte";
   import { CANVAS_W, CANVAS_H } from "$lib/constants";
   import { css, cx } from "styled-system/css";
-  import { patchCardPositions } from "./lib/project-api";
+  import {
+    addCardsToScope,
+    createBundle,
+    createCard,
+    createScope,
+    deleteBundle,
+    deleteCard,
+    deleteScope,
+    glueCards,
+    patchCardPositions,
+    removeCardsFromScope,
+    unglueCards,
+    updateCard,
+  } from "./lib/project-api";
   import {
     applyPalette,
     cardPositionPatches,
@@ -109,6 +122,33 @@
   let primaryCard = $derived(
     primarySelectedId ? (cards.find((c) => c.id === primarySelectedId) ?? null) : null,
   );
+
+  let loadedProjectId = $state(untrack(() => data.project.id));
+
+  $effect(() => {
+    if (data.project.id === loadedProjectId) return;
+
+    loadedProjectId = data.project.id;
+    cards = data.cards;
+    bundles = data.bundles;
+    scopes = data.scopes;
+    scopeRels = data.scopeRels;
+    glueRels = data.glueRels;
+    selectedCards = new Set();
+    primarySelectedId = null;
+    activeBundle = null;
+    activeScope = null;
+    composerCard = null;
+    draggingId = null;
+    dragState = null;
+    panState = null;
+    rectangleSelectionState = null;
+    selectionRect = null;
+    lastError = null;
+    newBundleName = "";
+    newScopeName = "";
+    newCardSeq = 0;
+  });
 
   // ── Window event listeners (drag + pan) ──────────────────────
   $effect(() => {
@@ -348,11 +388,7 @@
     bundleId: string,
   ) {
     if (id) {
-      const res = await fetch(`/${data.project.id}/api/cards/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, bundleId }),
-      });
+      const res = await updateCard(fetch, data.project.id, id, { content, bundleId });
       if (!res.ok) {
         lastError = "Failed to save card";
         return;
@@ -365,11 +401,7 @@
       const base = -7 * GRID;
       const posX = Math.max(0, Math.round((canvasEl.scrollLeft + canvasEl.clientWidth / 2) / zoom / GRID) * GRID + base + step);
       const posY = Math.max(0, Math.round((canvasEl.scrollTop + canvasEl.clientHeight / 2) / zoom / GRID) * GRID + base + step);
-      const res = await fetch(`/${data.project.id}/api/cards`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bundleId, content, posX, posY }),
-      });
+      const res = await createCard(fetch, data.project.id, { bundleId, content, posX, posY });
       if (!res.ok) {
         lastError = "Failed to create card";
         return;
@@ -385,11 +417,7 @@
   async function handleCardBundleChange(newBundleId: string) {
     if (!composerCard) return;
     const cardId = composerCard.id;
-    const res = await fetch(`/${data.project.id}/api/cards/${cardId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bundleId: newBundleId }),
-    });
+    const res = await updateCard(fetch, data.project.id, cardId, { bundleId: newBundleId });
     if (!res.ok) {
       lastError = "Failed to change bundle";
       return;
@@ -400,13 +428,7 @@
   // ── Selection ─────────────────────────────────────────────────
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
     const results = await Promise.all(
-      cardIds.map((id) =>
-        fetch(`/${data.project.id}/api/cards/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ bundleId: newBundleId }),
-        }),
-      ),
+      cardIds.map((id) => updateCard(fetch, data.project.id, id, { bundleId: newBundleId })),
     );
     if (results.some((r) => !r.ok)) {
       lastError = "Failed to change bundle for selected cards";
@@ -416,11 +438,7 @@
   }
 
   async function handleGlueSelected(cardIds: string[]) {
-    const res = await fetch(`/${data.project.id}/api/glues`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds }),
-    });
+    const res = await glueCards(fetch, data.project.id, cardIds);
     if (!res.ok) {
       lastError = "Failed to glue cards";
       return;
@@ -435,11 +453,7 @@
   }
 
   async function handleUnglueOne(cardId: string) {
-    const res = await fetch(`/${data.project.id}/api/glues`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds: [cardId] }),
-    });
+    const res = await unglueCards(fetch, data.project.id, [cardId]);
     if (!res.ok) {
       lastError = "Failed to unglue card";
       return;
@@ -449,11 +463,7 @@
   }
 
   async function handleUnglueSelected(cardIds: string[]) {
-    const res = await fetch(`/${data.project.id}/api/glues`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds }),
-    });
+    const res = await unglueCards(fetch, data.project.id, cardIds);
     if (!res.ok) {
       lastError = "Failed to unglue cards";
       return;
@@ -464,9 +474,7 @@
 
   async function handleDeleteSelected(cardIds: string[]) {
     const results = await Promise.all(
-      cardIds.map((id) =>
-        fetch(`/${data.project.id}/api/cards/${id}`, { method: "DELETE" }),
-      ),
+      cardIds.map((id) => deleteCard(fetch, data.project.id, id)),
     );
     if (results.some((r) => !r.ok)) {
       lastError = "Failed to delete cards";
@@ -481,22 +489,19 @@
   // ── Bundles ───────────────────────────────────────────────────
   async function handleCreateBundle() {
     if (!newBundleName.trim()) return;
-    const res = await fetch(`/${data.project.id}/api/bundles`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newBundleName.trim() }),
-    });
+    const name = newBundleName.trim();
+    const res = await createBundle(fetch, data.project.id, name);
     if (!res.ok) {
       lastError = "Failed to create bundle";
       return;
     }
     const { id } = await res.json();
-    bundles = [...bundles, { id, projectId: data.project.id, name: newBundleName.trim(), isDefault: false }];
+    bundles = [...bundles, { id, projectId: data.project.id, name, isDefault: false }];
     newBundleName = "";
   }
 
   async function handleDeleteBundle(bundleId: string) {
-    const res = await fetch(`/${data.project.id}/api/bundles/${bundleId}`, { method: "DELETE" });
+    const res = await deleteBundle(fetch, data.project.id, bundleId);
     if (!res.ok) {
       lastError = "Failed to delete bundle";
       return;
@@ -510,22 +515,19 @@
   // ── Scopes ────────────────────────────────────────────────────
   async function handleCreateScope() {
     if (!newScopeName.trim()) return;
-    const res = await fetch(`/${data.project.id}/api/scopes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newScopeName.trim() }),
-    });
+    const name = newScopeName.trim();
+    const res = await createScope(fetch, data.project.id, name);
     if (!res.ok) {
       lastError = "Failed to create scope";
       return;
     }
     const { id } = await res.json();
-    scopes = [...scopes, { id, name: newScopeName.trim() }];
+    scopes = [...scopes, { id, name }];
     newScopeName = "";
   }
 
   async function handleDeleteScope(scopeId: string) {
-    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}`, { method: "DELETE" });
+    const res = await deleteScope(fetch, data.project.id, scopeId);
     if (!res.ok) {
       lastError = "Failed to delete scope";
       return;
@@ -538,11 +540,7 @@
   async function handleAddToScope(scopeId: string) {
     if (selectedCards.size === 0) return;
     const cardIds = [...selectedCards];
-    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds }),
-    });
+    const res = await addCardsToScope(fetch, data.project.id, scopeId, cardIds);
     if (!res.ok) {
       lastError = "Failed to add cards to scope";
       return;
@@ -557,11 +555,7 @@
   async function handleRemoveFromScope(scopeId: string) {
     if (selectedCards.size === 0) return;
     const cardIds = [...selectedCards];
-    const res = await fetch(`/${data.project.id}/api/scopes/${scopeId}/members`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds }),
-    });
+    const res = await removeCardsFromScope(fetch, data.project.id, scopeId, cardIds);
     if (!res.ok) {
       lastError = "Failed to remove cards from scope";
       return;

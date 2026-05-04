@@ -5,6 +5,7 @@ import {
   requireString,
   requireStringArray,
   requireTrimmedString,
+  requireUniqueStrings,
 } from "./request.js";
 
 function expectHttpError(fn: () => unknown, status: number, message: string) {
@@ -121,6 +122,28 @@ describe("requireStringArray", () => {
       () => requireStringArray({ cardIds: ["card-1", 2] }, "cardIds"),
       400,
       "cardIds is required",
+    );
+  });
+
+  it("throws when the array contains duplicates", () => {
+    expectHttpError(
+      () => requireStringArray({ cardIds: ["card-1", "card-1"] }, "cardIds"),
+      400,
+      "cardIds must be unique",
+    );
+  });
+});
+
+describe("requireUniqueStrings", () => {
+  it("accepts unique string lists", () => {
+    expect(() => requireUniqueStrings(["card-1", "card-2"], "cardIds")).not.toThrow();
+  });
+
+  it("throws when strings repeat", () => {
+    expectHttpError(
+      () => requireUniqueStrings(["card-1", "card-1"], "cardIds"),
+      400,
+      "cardIds must be unique",
     );
   });
 });

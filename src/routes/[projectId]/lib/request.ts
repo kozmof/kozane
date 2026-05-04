@@ -48,5 +48,10 @@ export function requireStringArray(body: JsonRecord, key: string, minLength = 1)
   ) {
     throw error(400, `${key} is required`);
   }
+  requireUniqueStrings(value, key);
   return value;
+}
+
+export function requireUniqueStrings(values: string[], key: string): void {
+  if (new Set(values).size !== values.length) throw error(400, `${key} must be unique`);
 }

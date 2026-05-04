@@ -1,4 +1,4 @@
-import { cardTable } from "../schema.js";
+import { bundleTable, cardTable } from "../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { assertFound } from "./utils.js";
@@ -156,5 +156,44 @@ export async function updateCardPositions({ db, positions }: UpdateCardPositions
         .returning({ id: cardTable.id });
       assertFound(updated, `Card cardId=${cardId}`);
     }
+  });
+}
+
+type UpdateProjectCardPositions = {
+  db: DB;
+  projectId: string;
+  positions: CardPositionUpdate[];
+};
+
+export async function updateProjectCardPositions({
+  db,
+  projectId,
+  positions,
+}: UpdateProjectCardPositions): Promise<boolean> {
+  if (positions.length === 0) return true;
+
+  return withTx(db, async (tx) => {
+    const cardIds = positions.map((position) => position.cardId);
+    const owned = await tx
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .innerJoin(
+        bundleTable,
+        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+      )
+      .where(inArray(cardTable.id, cardIds));
+
+    if (owned.length !== cardIds.length) return false;
+
+    for (const { cardId, posX, posY } of positions) {
+      const updated = await tx
+        .update(cardTable)
+        .set({ posX, posY })
+        .where(eq(cardTable.id, cardId))
+        .returning({ id: cardTable.id });
+      assertFound(updated, `Card projectId=${projectId} cardId=${cardId}`);
+    }
+
+    return true;
   });
 }

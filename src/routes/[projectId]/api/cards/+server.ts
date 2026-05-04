@@ -1,10 +1,19 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../db/api/bundle";
-import { addCard, updateCardPositions, type CardPositionUpdate } from "../../../../db/api/card";
+import {
+  addCard,
+  updateProjectCardPositions,
+  type CardPositionUpdate,
+} from "../../../../db/api/card";
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
-import { optionalNumber, readJsonObject, requireString } from "../../lib/request";
-import { allCardsBelongToProject } from "../../lib/guards";
+import {
+  optionalNumber,
+  readJsonObject,
+  requireString,
+  requireTrimmedString,
+  requireUniqueStrings,
+} from "../../lib/request";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
   const value = body.positions;
@@ -35,7 +44,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { projectId } = params;
   const body = await readJsonObject(request);
   const bundleId = requireString(body, "bundleId");
-  const content = requireString(body, "content");
+  const content = requireTrimmedString(body, "content");
   const posX = optionalNumber(body, "posX") ?? 0;
   const posY = optionalNumber(body, "posY") ?? 0;
 
@@ -62,11 +71,10 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const positions = requirePositionUpdates(body);
   const cardIds = positions.map((position) => position.cardId);
+  requireUniqueStrings(cardIds, "cardId");
 
-  if (!(await allCardsBelongToProject(db, projectId, cardIds)))
+  if (!(await updateProjectCardPositions({ db, projectId, positions })))
     throw error(400, "Some cards do not belong to this project");
-
-  await updateCardPositions({ db, positions });
 
   return json({ ok: true });
 };
