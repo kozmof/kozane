@@ -35,6 +35,7 @@
   let zoom = $state(data.uiConfig.defaultZoom);
   let newBundleName = $state("");
   let newScopeName = $state("");
+  let newWcName = $state("");
   let lastError = $state<string | null>(null);
   let newCardSeq = 0;
 
@@ -82,6 +83,7 @@
     lastError = null;
     newBundleName = "";
     newScopeName = "";
+    newWcName = "";
     newCardSeq = 0;
     sidebarsVisible = data.uiConfig.defaultShowSidePanel;
     showFooters = data.uiConfig.defaultShowFooter;
@@ -128,6 +130,9 @@
 
     get newScopeName() { return newScopeName; },
     set newScopeName(v) { newScopeName = v; },
+
+    get newWcName() { return newWcName; },
+    set newWcName(v) { newWcName = v; },
 
     setError(message) { lastError = message; },
   });
@@ -226,9 +231,11 @@
     {selectedCards}
     bind:activeScope
     bind:newScopeName
+    bind:newWcName
     onCreateScope={actions.handleCreateScope}
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
+    onCreateWorkingCopy={actions.handleCreateWorkingCopy}
   />
 </div>

@@ -113,3 +113,11 @@ export function removeCardsFromScope(
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/scopes/${scopeId}/members`, "DELETE", { cardIds });
 }
+
+export function createWorkingCopy(
+  fetcher: typeof fetch,
+  projectId: string,
+  workingCopy: { name: string; scopeId: string },
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/working-copies`, "POST", workingCopy);
+}

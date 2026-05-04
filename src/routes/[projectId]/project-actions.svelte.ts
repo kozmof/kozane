@@ -41,6 +41,9 @@ export type ProjectPageState = {
   get newScopeName(): string;
   set newScopeName(value: string);
 
+  get newWcName(): string;
+  set newWcName(value: string);
+
   setError(message: string): void;
 };
 
@@ -153,6 +156,20 @@ export function createProjectActions(state: ProjectPageState) {
     state.newScopeName = "";
   }
 
+  async function handleCreateWorkingCopy() {
+    const name = state.newWcName.trim();
+    if (!name || !state.activeScope) return;
+    const res = await api.createWorkingCopy(state.fetcher, state.projectId, {
+      name,
+      scopeId: state.activeScope,
+    });
+    if (!res.ok) {
+      state.setError("Failed to create working copy");
+      return;
+    }
+    state.newWcName = "";
+  }
+
   async function handleDeleteScope(scopeId: string) {
     const res = await api.deleteScope(state.fetcher, state.projectId, scopeId);
     if (!res.ok) {
@@ -204,5 +221,6 @@ export function createProjectActions(state: ProjectPageState) {
     handleDeleteScope,
     handleAddToScope,
     handleRemoveFromScope,
+    handleCreateWorkingCopy,
   };
 }

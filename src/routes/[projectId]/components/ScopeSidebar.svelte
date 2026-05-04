@@ -10,10 +10,12 @@
     selectedCards,
     activeScope = $bindable(),
     newScopeName = $bindable(),
+    newWcName = $bindable(),
     onCreateScope,
     onDeleteScope,
     onAddToScope,
     onRemoveFromScope,
+    onCreateWorkingCopy,
   }: {
     visible: boolean;
     panelWidth: number;
@@ -22,10 +24,12 @@
     selectedCards: Set<string>;
     activeScope: string | null;
     newScopeName: string;
+    newWcName: string;
     onCreateScope: () => void;
     onDeleteScope: (scopeId: string) => void;
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
+    onCreateWorkingCopy: () => void;
   } = $props();
 
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
@@ -137,6 +141,21 @@
             <span>{allInScope ? "Remove from scope" : "Add to scope"}</span>
             <span>{allInScope ? "−" : "→"}</span>
           </button>
+        {/if}
+
+        {#if active}
+          <div class={css({ padding: "8px", borderTop: "1px solid token(colors.warm.dim)", display: "flex", gap: "5px" })}>
+            <input
+              class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+              placeholder="working copy name"
+              bind:value={newWcName}
+              onkeydown={(e) => e.key === "Enter" && onCreateWorkingCopy()}
+            />
+            <button
+              class={css({ padding: "6px 10px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontFamily: "inherit" })}
+              onclick={onCreateWorkingCopy}
+            >Create</button>
+          </div>
         {/if}
       </div>
     {/each}

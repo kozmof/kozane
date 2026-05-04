@@ -48,8 +48,8 @@ export function defaultConfig(name: string): WorkspaceConfig {
     name,
     server: { host: "127.0.0.1", port: 5173 },
     workingCopy: {
-      defaultDir: ".kozane/working-copies",
-      searchRoots: [".", ".kozane/working-copies"],
+      defaultDir: ".",
+      searchRoots: ["."],
     },
   };
 }

@@ -79,8 +79,9 @@ wc.command("scan")
 
 wc.command("create <name>")
   .description("Create a new working copy")
-  .option("--scope <scopeId>", "Attach to a scope")
-  .option("--dir <path>", "Target directory (default: .kozane/working-copies/<name>)")
+  .option("--scope <scopeId>", "Attach to a scope (required unless --no-scope is given)")
+  .option("--no-scope", "Create without a scope")
+  .option("--dir <path>", "Target directory (default: <projectRoot>/<name>)")
   .action((name, opts) => wcCreate(name, opts));
 
 program.parse();

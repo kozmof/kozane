@@ -101,9 +101,13 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
 // ─── wc create ──────────────────────────────────────────────────────────────
 
-type CreateOptions = { scope?: string; dir?: string };
+type CreateOptions = { scope?: string; noScope?: boolean; dir?: string };
 
 export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
+  if (!options.scope && !options.noScope) {
+    console.error("Error: --scope <scopeId> is required. Use --no-scope to create without one.");
+    process.exit(1);
+  }
   const { root, config } = requireWorkspace();
   const db = await openDb(dbUrl(resolve(root)));
 
