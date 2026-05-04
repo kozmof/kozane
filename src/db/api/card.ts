@@ -115,7 +115,9 @@ export async function updateCard({
   posY,
   bundleId,
 }: UpdateCard): Promise<void> {
-  type CardUpdate = Partial<Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">>;
+  type CardUpdate = Partial<
+    Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">
+  >;
   const fields: CardUpdate = {};
   if (content !== undefined) fields.content = content;
   if (posX !== undefined) fields.posX = posX;

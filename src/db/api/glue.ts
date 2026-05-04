@@ -4,10 +4,7 @@ import type { NeedsDB } from "./types.js";
 import { withTx, type DB, type AnyDB } from "../tx.js";
 import { v7 as uuidv7 } from "uuid";
 
-export async function getGlueRelsByCards({
-  db,
-  cardIds,
-}: NeedsDB & { cardIds: string[] }) {
+export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 }
@@ -32,15 +29,12 @@ async function dissolveOrphanGroups(db: AnyDB, affectedGlueIds: string[]): Promi
     .from(glueRelTable)
     .where(inArray(glueRelTable.glueId, affectedGlueIds));
 
-  await db.delete(glueTable).where(
-    and(inArray(glueTable.id, affectedGlueIds), notInArray(glueTable.id, stillLinked)),
-  );
+  await db
+    .delete(glueTable)
+    .where(and(inArray(glueTable.id, affectedGlueIds), notInArray(glueTable.id, stillLinked)));
 }
 
-async function glueCardsCore(
-  db: AnyDB,
-  cardIds: string[],
-): Promise<string> {
+async function glueCardsCore(db: AnyDB, cardIds: string[]): Promise<string> {
   const existingRels = await db
     .select()
     .from(glueRelTable)
