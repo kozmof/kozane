@@ -4,6 +4,7 @@
 
   let {
     visible,
+    panelWidth,
     scopes,
     scopeRels,
     selectedCards,
@@ -15,6 +16,7 @@
     onRemoveFromScope,
   }: {
     visible: boolean;
+    panelWidth: number;
     scopes: Scope[];
     scopeRels: ScopeRel[];
     selectedCards: Set<string>;
@@ -63,7 +65,7 @@
     transition: "width 0.22s ease",
     borderLeft: "1px solid token(colors.warm.dim)",
   })}
-  style:width={visible ? "232px" : "0"}
+  style:width={visible ? `${panelWidth}px` : "0"}
 >
   <div class={css({ flex: "1", overflowY: "auto", padding: "8px 8px 0", display: "flex", flexDirection: "column", gap: "1px" })}>
     {#each scopes as scope (scope.id)}

@@ -30,9 +30,9 @@
   let composerCard = $state<(typeof cards)[0] | null>(null);
 
   // ── UI state ──────────────────────────────────────────────────
-  let sidebarsVisible = $state(true);
-  let showFooters = $state(true);
-  let zoom = $state(1);
+  let sidebarsVisible = $state(data.uiConfig.defaultShowSidePanel);
+  let showFooters = $state(data.uiConfig.defaultShowFooter);
+  let zoom = $state(data.uiConfig.defaultZoom);
   let newBundleName = $state("");
   let newScopeName = $state("");
   let lastError = $state<string | null>(null);
@@ -83,6 +83,9 @@
     newBundleName = "";
     newScopeName = "";
     newCardSeq = 0;
+    sidebarsVisible = data.uiConfig.defaultShowSidePanel;
+    showFooters = data.uiConfig.defaultShowFooter;
+    zoom = data.uiConfig.defaultZoom;
   });
 
   // ── Domain action handlers ────────────────────────────────────
@@ -154,6 +157,7 @@
 <div class={css({ display: "flex", height: "100vh", overflow: "hidden", backgroundColor: "ink.lighter" })}>
   <BundleSidebar
     visible={sidebarsVisible}
+    panelWidth={data.uiConfig.leftPanelWidth}
     {cards}
     bundles={bundlesWithColors}
     bind:activeBundle
@@ -175,6 +179,10 @@
       {scopeCardIds}
       {showFooters}
       bind:zoom
+      canvasWidth={data.uiConfig.canvasWidth}
+      canvasHeight={data.uiConfig.canvasHeight}
+      cardWidth={data.uiConfig.defaultCardWidth}
+      fontSize={data.uiConfig.defaultFontSize}
       onPersistPositions={handlePersistPositions}
       onError={(msg) => (lastError = msg)}
     />
@@ -212,6 +220,7 @@
 
   <ScopeSidebar
     visible={sidebarsVisible}
+    panelWidth={data.uiConfig.rightPanelWidth}
     {scopes}
     {scopeRels}
     {selectedCards}

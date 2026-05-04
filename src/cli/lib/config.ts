@@ -1,6 +1,30 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+export type UiConfig = {
+  defaultFontSize: number;
+  defaultCardWidth: number;
+  defaultZoom: number;
+  leftPanelWidth: number;
+  rightPanelWidth: number;
+  defaultShowFooter: boolean;
+  defaultShowSidePanel: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+};
+
+export const DEFAULT_UI_CONFIG: UiConfig = {
+  defaultFontSize: 11.5,
+  defaultCardWidth: 240,
+  defaultZoom: 1,
+  leftPanelWidth: 216,
+  rightPanelWidth: 232,
+  defaultShowFooter: true,
+  defaultShowSidePanel: true,
+  canvasWidth: 2800,
+  canvasHeight: 2000,
+};
+
 export type WorkspaceConfig = {
   name: string;
   server: {
@@ -11,6 +35,7 @@ export type WorkspaceConfig = {
     defaultDir: string;
     searchRoots: string[];
   };
+  ui?: Partial<UiConfig>;
 };
 
 export const KOZANE_DIR = ".kozane";

@@ -4,10 +4,6 @@
   import SelectionRect from "./SelectionRect.svelte";
   import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
   import {
-    CANVAS_W,
-    CANVAS_H,
-  } from "$lib/constants";
-  import {
     GRID,
     PALETTE,
     ZOOM_STEP,
@@ -34,6 +30,10 @@
     scopeCardIds,
     showFooters,
     zoom = $bindable(),
+    canvasWidth,
+    canvasHeight,
+    cardWidth,
+    fontSize,
     onPersistPositions,
     onError,
   }: {
@@ -47,6 +47,10 @@
     scopeCardIds: Set<string> | null;
     showFooters: boolean;
     zoom: number;
+    canvasWidth: number;
+    canvasHeight: number;
+    cardWidth: number;
+    fontSize: number;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
     onError: (message: string) => void;
   } = $props();
@@ -326,14 +330,14 @@
   style:cursor={draggingId || isPanning ? "grabbing" : "grab"}
 >
   <div
-    style:width="{CANVAS_W * zoom}px"
-    style:height="{CANVAS_H * zoom}px"
+    style:width="{canvasWidth * zoom}px"
+    style:height="{canvasHeight * zoom}px"
     style:position="relative"
     style:flex-shrink="0"
   >
     <div
-      style:width="{CANVAS_W}px"
-      style:height="{CANVAS_H}px"
+      style:width="{canvasWidth}px"
+      style:height="{canvasHeight}px"
       style:position="absolute"
       style:top="0"
       style:left="0"
@@ -373,6 +377,8 @@
           dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
           isDragging={draggingId === card.id}
           {showFooters}
+          {cardWidth}
+          {fontSize}
           onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
           onCardClick={(e) => handleCardClick(e, card.id)}
           onCardDblClick={() => handleCardDblClick(card.id)}

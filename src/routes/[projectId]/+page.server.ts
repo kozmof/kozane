@@ -7,6 +7,7 @@ import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
+import { getWorkspaceUiConfig } from "../../db/internal/config";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -38,5 +39,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     glueRels,
     scopes,
     scopeRels,
+    uiConfig: getWorkspaceUiConfig(),
   };
 };

@@ -4,6 +4,7 @@
 
   let {
     visible,
+    panelWidth,
     cards,
     bundles,
     activeBundle = $bindable(),
@@ -12,6 +13,7 @@
     onDeleteBundle,
   }: {
     visible: boolean;
+    panelWidth: number;
     cards: CardData[];
     bundles: BundleWithColor[];
     activeBundle: string | null;
@@ -58,7 +60,7 @@
     transition: "width 0.22s ease",
     borderRight: "1px solid token(colors.warm.dim)",
   })}
-  style:width={visible ? "216px" : "0"}
+  style:width={visible ? `${panelWidth}px` : "0"}
 >
   <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.warm.dim)" })}>
     <a

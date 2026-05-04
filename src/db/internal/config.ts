@@ -1,5 +1,6 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { DEFAULT_UI_CONFIG, type UiConfig } from "../../cli/lib/config.js";
 
 const explicitDatabaseUrl = process.env.DATABASE_URL;
 
@@ -27,6 +28,18 @@ export function getWorkspaceRoot(): string | null {
   return findWorkspaceRoot(
     process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd(),
   );
+}
+
+export function getWorkspaceUiConfig(): UiConfig {
+  const root = getWorkspaceRoot();
+  if (!root) return { ...DEFAULT_UI_CONFIG };
+  try {
+    const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as { ui?: Partial<UiConfig> };
+    return { ...DEFAULT_UI_CONFIG, ...(parsed.ui ?? {}) };
+  } catch {
+    return { ...DEFAULT_UI_CONFIG };
+  }
 }
 
 export function getDBURL(): string {

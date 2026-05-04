@@ -2,8 +2,6 @@
   import { css } from "styled-system/css";
   import type { CardData, BundleWithColor } from "$lib/types";
 
-  const CARD_W = 240;
-
   interface Props {
     card: CardData;
     color: BundleWithColor;
@@ -12,10 +10,12 @@
     isComposing: boolean;
     dimmed: boolean;
     isDragging: boolean;
+    showFooters: boolean;
+    cardWidth: number;
+    fontSize: number;
     onCardMouseDown: (e: MouseEvent) => void;
-  onCardClick: (e: MouseEvent) => void;
-  onCardDblClick: () => void;
-  showFooters: boolean;
+    onCardClick: (e: MouseEvent) => void;
+    onCardDblClick: () => void;
   }
 
   let {
@@ -26,10 +26,12 @@
     isComposing,
     dimmed,
     isDragging,
+    showFooters,
+    cardWidth,
+    fontSize,
     onCardMouseDown,
     onCardClick,
     onCardDblClick,
-    showFooters,
   }: Props = $props();
 
   let background = $derived(
@@ -66,7 +68,7 @@
   style:position="absolute"
   style:left="{card.posX}px"
   style:top="{card.posY}px"
-  style:width="{CARD_W}px"
+  style:width="{cardWidth}px"
   style:background={background}
   style:border-radius="2px"
   style:border={border}
@@ -81,7 +83,8 @@
 >
   <!-- Content -->
   <div
-    class={css({ padding: "10px 10px 6px", fontSize: "11.5px", lineHeight: "1.65", fontFamily: "mono", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+    class={css({ padding: "10px 10px 6px", lineHeight: "1.65", fontFamily: "mono", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+    style:font-size="{fontSize}px"
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-warm-placeholder)"}
   >
     {card.content || "Empty card…"}
