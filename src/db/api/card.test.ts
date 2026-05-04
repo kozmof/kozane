@@ -193,6 +193,18 @@ describe("updateCard", () => {
     expect(await getCard({ db, bundleId, cardId })).toBeUndefined();
   });
 
+  it("can update position fields with content", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Original", posX: 1, posY: 2 });
+
+    await updateCard({ db, cardId, content: "Moved", posX: 30, posY: 40 });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.content).toBe("Moved");
+    expect(card?.posX).toBe(30);
+    expect(card?.posY).toBe(40);
+  });
+
   it("throws NotFoundError for a missing card", async () => {
     const { db } = await setup();
     await expect(updateCard({ db, cardId: "ghost", content: "X" })).rejects.toThrow(NotFoundError);

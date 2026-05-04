@@ -5,6 +5,7 @@ import {
   removeScopeRel,
   getAllCardsByScope,
   addScopeMembers,
+  removeScopeMembers,
   getScopeRelsByCards,
 } from "./scope-rel.js";
 import { addProject } from "./project.js";
@@ -115,5 +116,18 @@ describe("getScopeRelsByCards", () => {
     const rels = await getScopeRelsByCards({ db, cardIds: [cardId] });
     expect(rels).toHaveLength(1);
     expect(rels[0]).toMatchObject({ scopeId, cardId });
+  });
+});
+
+describe("removeScopeMembers", () => {
+  it("removes all requested cards from the scope", async () => {
+    const { db, bundleId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, bundleId, content: "Card B" });
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRel({ db, scopeId, cardId: c2 });
+
+    await removeScopeMembers({ db, scopeId, cardIds: [cardId, c2] });
+
+    expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
   });
 });

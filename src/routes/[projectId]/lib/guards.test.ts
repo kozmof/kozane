@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { requireCardInProject } from "./guards.js";
+import { allCardsBelongToProject, requireCardInProject } from "./guards.js";
 import { createTestDB } from "../../../test-utils/db.js";
 import { addProject } from "../../../db/api/project.js";
 import { addBundle } from "../../../db/api/bundle.js";
@@ -33,5 +33,33 @@ describe("requireCardInProject", () => {
     await expect(requireCardInProject(db, projectId, "no-such-card")).rejects.toMatchObject({
       status: 404,
     });
+  });
+});
+
+describe("allCardsBelongToProject", () => {
+  it("returns true for an empty card list", async () => {
+    const { db, projectId } = await setup();
+    expect(await allCardsBelongToProject(db, projectId, [])).toBe(true);
+  });
+
+  it("returns true when every card belongs to the project", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    const secondCardId = await addCard({ db, bundleId, content: "second" });
+
+    expect(await allCardsBelongToProject(db, projectId, [cardId, secondCardId])).toBe(true);
+  });
+
+  it("returns false when any card belongs to another project", async () => {
+    const { db, projectId, cardId } = await setup();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
+
+    expect(await allCardsBelongToProject(db, projectId, [cardId, otherCardId])).toBe(false);
+  });
+
+  it("returns false for a missing card", async () => {
+    const { db, projectId, cardId } = await setup();
+    expect(await allCardsBelongToProject(db, projectId, [cardId, "ghost"])).toBe(false);
   });
 });
