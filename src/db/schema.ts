@@ -21,6 +21,8 @@ export const bundleTable = sqliteTable("bundle", {
 });
 
 export const scopeTable = sqliteTable("scope", {
+  // A scope is intentionally cross-project. Do not add project_id here; projects see
+  // the shared scope list, while membership is expressed through scope_rel/card rows.
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
@@ -132,7 +134,7 @@ export const glueRelRelations = relations(glueRelTable, ({ one }) => ({
 }));
 
 export const scopeRelations = relations(scopeTable, ({ many }) => ({
-  // scopes are cross-project; ownership is expressed through scopeRel, not a direct FK
+  // Scope has no project owner; these relations describe usage, not ownership.
   workingCopies: many(workingCopyTable),
   scopeRels: many(scopeRelTable),
 }));
