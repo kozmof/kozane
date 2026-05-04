@@ -200,7 +200,7 @@
   {:else}
     <!-- Input row (create / edit) -->
     <div
-      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
+      class={css({ display: "flex", alignItems: "flex-end", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
       style:border-color={borderColor}
     >
       <textarea
@@ -225,7 +225,7 @@
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path
-            d="M2 7h10M8 3l4 4-4 4"
+            d="M7 12V2M3 6l4-4 4 4"
             stroke={content.trim() ? "var(--colors-ink-white)" : "var(--colors-warm-faded)"}
             stroke-width="1.5"
             stroke-linecap="round"
