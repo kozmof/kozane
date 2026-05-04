@@ -27,8 +27,7 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const { projectId } = params;
   const { cardIds } = await request.json();
 
-  if (!Array.isArray(cardIds) || cardIds.length === 0)
-    throw error(400, "cardIds is required");
+  if (!Array.isArray(cardIds) || cardIds.length === 0) throw error(400, "cardIds is required");
 
   const bundles = await getAllBundles({ db, projectId });
   const cards = await getCardsByBundles({ db, bundleIds: bundles.map((b) => b.id) });
