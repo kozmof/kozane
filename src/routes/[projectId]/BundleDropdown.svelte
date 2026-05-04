@@ -11,7 +11,7 @@
   let { bundles, bundleId, onChange }: Props = $props();
 
   let open = $state(false);
-  let dropdownEl: HTMLDivElement;
+  let dropdownEl: HTMLDivElement = $state()!;
 
   let active = $derived(bundles.find((b) => b.id === bundleId) ?? bundles[0]);
 
@@ -30,6 +30,9 @@
 <div bind:this={dropdownEl} class={css({ position: "relative", flexShrink: "0" })}>
   <button
     class={css({ display: "flex", alignItems: "center", gap: "5px", padding: "3px 8px 3px 6px", border: "1px solid", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px", color: "ink.black", transition: "all 0.1s" })}
+    aria-label="Select bundle"
+    aria-expanded={open}
+    aria-haspopup="listbox"
     style:border-color={open ? active?.dot : "var(--colors-warm-border)"}
     style:background={open ? active?.bg : "transparent"}
     onmousedown={(e) => {
@@ -48,6 +51,8 @@
 
   {#if open}
     <div
+      role="listbox"
+      aria-label="Bundles"
       class={css({
         position: "absolute",
         bottom: "calc(100% + 6px)",
@@ -65,6 +70,8 @@
         {@const isActive = b.id === bundleId}
         <button
           class={css({ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 10px", border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", color: "ink.black", textAlign: "left" })}
+          role="option"
+          aria-selected={isActive}
           style:background={isActive ? b.bg : "transparent"}
           onmousedown={(e) => {
             e.preventDefault();

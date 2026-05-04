@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
+import userEvent from "@testing-library/user-event";
 import KozaneCard from "./KozaneCard.svelte";
 
 const color = { id: "bundle-1", bg: "#fff7ed", dot: "#f59e0b", name: "General" };
@@ -109,7 +110,6 @@ describe("KozaneCard", () => {
   });
 
   it("Enter key on card triggers onCardDblClick", async () => {
-    const { default: userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     const onCardDblClick = vi.fn();
     render(KozaneCard, { props: makeProps({ onCardDblClick }) });
@@ -117,5 +117,44 @@ describe("KozaneCard", () => {
     card.focus();
     await user.keyboard("{Enter}");
     expect(onCardDblClick).toHaveBeenCalledOnce();
+  });
+
+  it("Space key on card triggers onCardDblClick", async () => {
+    const user = userEvent.setup();
+    const onCardDblClick = vi.fn();
+    render(KozaneCard, { props: makeProps({ onCardDblClick }) });
+    const card = screen.getByRole("button");
+    card.focus();
+    await user.keyboard(" ");
+    expect(onCardDblClick).toHaveBeenCalledOnce();
+  });
+
+  it("calls mouse handlers", async () => {
+    const user = userEvent.setup();
+    const onCardMouseDown = vi.fn();
+    const onCardClick = vi.fn();
+    render(KozaneCard, {
+      props: makeProps({ onCardMouseDown, onCardClick }),
+    });
+
+    await user.click(screen.getByRole("button"));
+
+    expect(onCardMouseDown).toHaveBeenCalledOnce();
+    expect(onCardClick).toHaveBeenCalledOnce();
+  });
+
+  it("calls double-click handler", async () => {
+    const user = userEvent.setup();
+    const onCardDblClick = vi.fn();
+    render(KozaneCard, { props: makeProps({ onCardDblClick }) });
+
+    await user.dblClick(screen.getByRole("button"));
+
+    expect(onCardDblClick).toHaveBeenCalledOnce();
+  });
+
+  it("exposes selected state with aria-pressed", () => {
+    render(KozaneCard, { props: makeProps({ isSelected: true }) });
+    expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
   });
 });

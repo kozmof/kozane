@@ -49,7 +49,7 @@
   let newCardSeq = 0;
 
   // ── DOM refs (non-reactive) ────────────────────────────────────
-  let canvasEl: HTMLDivElement;
+  let canvasEl: HTMLDivElement = $state()!;
 
   // Non-reactive event state (updated inside event handlers, not reactive)
   let dragState: {

@@ -83,6 +83,19 @@ describe("CardComposer — create mode", () => {
     await user.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
   });
+
+  it("submits new cards with the selected bundle", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(CardComposer, { props: makeProps({ onSubmit }) });
+
+    await user.click(screen.getByRole("button", { name: "Select bundle" }));
+    await user.click(screen.getByRole("option", { name: /Research/ }));
+    await user.type(screen.getByRole("textbox"), "Bundled");
+    await user.keyboard("{Enter}");
+
+    expect(onSubmit).toHaveBeenCalledWith(null, "Bundled", "b2");
+  });
 });
 
 describe("CardComposer — edit mode", () => {
@@ -112,5 +125,109 @@ describe("CardComposer — edit mode", () => {
     await user.type(textarea, "Updated");
     await user.keyboard("{Enter}");
     expect(onSubmit).toHaveBeenCalledWith("card-1", "Updated", "b1");
+  });
+
+  it("calls onBundleChange when the bundle changes in edit mode", async () => {
+    const user = userEvent.setup();
+    const onBundleChange = vi.fn();
+    render(CardComposer, { props: makeProps({ editingCard, onBundleChange }) });
+
+    await user.click(screen.getByRole("button", { name: "Select bundle" }));
+    await user.click(screen.getByRole("option", { name: /Research/ }));
+
+    expect(onBundleChange).toHaveBeenCalledWith("b2");
+  });
+});
+
+describe("CardComposer — selection mode", () => {
+  const selectedCards = [
+    {
+      id: "card-1",
+      content: "One",
+      bundleId: "b1",
+      posX: 0,
+      posY: 0,
+      glueId: null,
+      workingCopyId: null,
+    },
+    {
+      id: "card-2",
+      content: "Two",
+      bundleId: "b1",
+      posX: 0,
+      posY: 0,
+      glueId: null,
+      workingCopyId: null,
+    },
+  ];
+
+  it("shows selected count and clear selection action", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, onCancel }) });
+
+    expect(screen.getByText("2 cards")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "×" }));
+
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("calls onGlueSelected for unglued multi-selection", async () => {
+    const user = userEvent.setup();
+    const onGlueSelected = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, onGlueSelected }) });
+
+    await user.click(screen.getByRole("button", { name: /Glue/ }));
+
+    expect(onGlueSelected).toHaveBeenCalledWith(["card-1", "card-2"]);
+  });
+
+  it("calls onUnglueSelected when every selected card shares a glue group", async () => {
+    const user = userEvent.setup();
+    const gluedCards = selectedCards.map((card) => ({ ...card, glueId: "glue-1" }));
+    const onUnglueSelected = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards: gluedCards, onUnglueSelected }) });
+
+    await user.click(screen.getByRole("button", { name: /Unglue all/ }));
+
+    expect(onUnglueSelected).toHaveBeenCalledWith(["card-1", "card-2"]);
+  });
+
+  it("calls onUnglueOne for the primary glued card", async () => {
+    const user = userEvent.setup();
+    const primaryCard = { ...selectedCards[0], glueId: "glue-1" };
+    const onUnglueOne = vi.fn();
+    render(CardComposer, {
+      props: makeProps({
+        selectedCards: [primaryCard, selectedCards[1]],
+        primaryCard,
+        onUnglueOne,
+      }),
+    });
+
+    await user.click(screen.getByRole("button", { name: /Unglue this/ }));
+
+    expect(onUnglueOne).toHaveBeenCalledWith("card-1");
+  });
+
+  it("calls onDeleteSelected with selected card ids", async () => {
+    const user = userEvent.setup();
+    const onDeleteSelected = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, onDeleteSelected }) });
+
+    await user.click(screen.getByRole("button", { name: /Delete 2 cards/ }));
+
+    expect(onDeleteSelected).toHaveBeenCalledWith(["card-1", "card-2"]);
+  });
+
+  it("calls onSelectionBundleChange when the bundle changes", async () => {
+    const user = userEvent.setup();
+    const onSelectionBundleChange = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, onSelectionBundleChange }) });
+
+    await user.click(screen.getByRole("button", { name: "Select bundle" }));
+    await user.click(screen.getByRole("option", { name: /Research/ }));
+
+    expect(onSelectionBundleChange).toHaveBeenCalledWith(["card-1", "card-2"], "b2");
   });
 });

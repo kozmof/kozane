@@ -13,9 +13,9 @@
     dimmed: boolean;
     isDragging: boolean;
     onCardMouseDown: (e: MouseEvent) => void;
-    onCardClick: (e: MouseEvent) => void;
-    onCardDblClick: () => void;
-    showFooters: boolean;
+  onCardClick: (e: MouseEvent) => void;
+  onCardDblClick: () => void;
+  showFooters: boolean;
   }
 
   let {
@@ -51,12 +51,18 @@
 
 <div
   role="button"
+  aria-label={card.content ? `Card: ${card.content}` : "Empty card"}
+  aria-pressed={isSelected}
   tabindex="0"
   data-card-id={card.id}
   onmousedown={onCardMouseDown}
   onclick={onCardClick}
   ondblclick={onCardDblClick}
-  onkeydown={(e) => e.key === "Enter" && onCardDblClick()}
+  onkeydown={(e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    e.preventDefault();
+    onCardDblClick();
+  }}
   style:position="absolute"
   style:left="{card.posX}px"
   style:top="{card.posY}px"
