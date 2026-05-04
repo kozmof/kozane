@@ -5,7 +5,20 @@
   import CardComposer from "./CardComposer.svelte";
   import { CANVAS_W, CANVAS_H } from "$lib/constants";
   import { css, cx } from "styled-system/css";
-  import { applyPalette, GRID, PALETTE, ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "./lib/project-page";
+  import {
+    applyPalette,
+    clampZoom,
+    clientToWorld as toWorldPoint,
+    dragGroupIds,
+    glueGroupIds,
+    GRID,
+    PALETTE,
+    previousPositions,
+    rectsIntersect,
+    selectionRectFromPoints,
+    worldRectToScreenRect,
+    ZOOM_STEP,
+  } from "./lib/project-page";
 
   let { data }: PageProps = $props();
 
@@ -104,12 +117,7 @@
           rectangleSelectionState.moved = true;
         }
         const current = clientToWorld(e.clientX, e.clientY);
-        selectionRect = {
-          x: Math.min(startWorldX, current.x),
-          y: Math.min(startWorldY, current.y),
-          w: Math.abs(current.x - startWorldX),
-          h: Math.abs(current.y - startWorldY),
-        };
+        selectionRect = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
       }
       if (dragState) {
         const { cardId, offsetX, offsetY, startX, startY, groupIds } = dragState;
@@ -200,7 +208,7 @@
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
       const prev = zoom;
-      const next = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((prev + delta) * 10) / 10));
+      const next = clampZoom(prev + delta);
       const worldX = (canvas.scrollLeft + mouseX) / prev;
       const worldY = (canvas.scrollTop + mouseY) / prev;
       zoom = next;
@@ -215,33 +223,30 @@
 
   // ── Card interaction handlers ─────────────────────────────────
   function clientToWorld(clientX: number, clientY: number) {
-    const rect = canvasEl.getBoundingClientRect();
-    return {
-      x: (clientX - rect.left + canvasEl.scrollLeft) / zoom,
-      y: (clientY - rect.top + canvasEl.scrollTop) / zoom,
-    };
-  }
-
-  function intersects(a: DOMRect, b: { left: number; top: number; right: number; bottom: number }) {
-    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    return toWorldPoint(
+      clientX,
+      clientY,
+      canvasEl.getBoundingClientRect(),
+      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
+      zoom,
+    );
   }
 
   function applyRectangleSelection() {
     if (!selectionRect) return;
-    const canvasRect = canvasEl.getBoundingClientRect();
-    const screenRect = {
-      left: canvasRect.left + selectionRect.x * zoom - canvasEl.scrollLeft,
-      top: canvasRect.top + selectionRect.y * zoom - canvasEl.scrollTop,
-      right: canvasRect.left + (selectionRect.x + selectionRect.w) * zoom - canvasEl.scrollLeft,
-      bottom: canvasRect.top + (selectionRect.y + selectionRect.h) * zoom - canvasEl.scrollTop,
-    };
+    const screenRect = worldRectToScreenRect(
+      selectionRect,
+      canvasEl.getBoundingClientRect(),
+      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
+      zoom,
+    );
     const next = new Set<string>();
     let primaryId: string | null = null;
     canvasEl.querySelectorAll<HTMLElement>("[data-card-id]").forEach((el) => {
       const cardId = el.dataset.cardId;
-      if (!cardId || !intersects(el.getBoundingClientRect(), screenRect)) return;
+      if (!cardId || !rectsIntersect(el.getBoundingClientRect(), screenRect)) return;
       primaryId ??= cardId;
-      glueGroupIds(cardId).forEach((id) => next.add(id));
+      glueGroupIds(glueRels, cardId).forEach((id) => next.add(id));
     });
     selectedCards = next;
     primarySelectedId = primaryId;
@@ -254,20 +259,8 @@
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
 
-    const glueRel = glueRels.find((r) => r.cardId === cardId);
-    const glueGroupIds = glueRel
-      ? glueRels.filter((r) => r.glueId === glueRel.glueId && r.cardId !== cardId).map((r) => r.cardId)
-      : [];
-    const selectionIds = selectedCards.has(cardId)
-      ? [...selectedCards].filter((id) => id !== cardId)
-      : [];
-    const groupIds = [...new Set([...glueGroupIds, ...selectionIds])];
-    const groupPrevPositions = new Map(
-      groupIds.map((id) => {
-        const c = cards.find((c) => c.id === id)!;
-        return [id, { x: c.posX, y: c.posY }];
-      }),
-    );
+    const groupIds = dragGroupIds(glueRels, selectedCards, cardId);
+    const groupPrevPositions = previousPositions(cards, groupIds);
 
     dragState = {
       cardId,
@@ -286,16 +279,10 @@
     draggingId = cardId;
   }
 
-  function glueGroupIds(cardId: string): string[] {
-    const rel = glueRels.find((r) => r.cardId === cardId);
-    if (!rel) return [cardId];
-    return glueRels.filter((r) => r.glueId === rel.glueId).map((r) => r.cardId);
-  }
-
   function handleCardClick(e: MouseEvent, cardId: string) {
     if (dragState?.moved) return;
     if (composerCard && composerCard.id !== cardId) composerCard = null;
-    const groupIds = glueGroupIds(cardId);
+    const groupIds = glueGroupIds(glueRels, cardId);
     if (e.shiftKey) {
       const next = new Set(selectedCards);
       if (next.has(cardId)) {
@@ -358,7 +345,7 @@
   }
 
   function applyZoom(delta: number) {
-    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((zoom + delta) * 10) / 10));
+    zoom = clampZoom(zoom + delta);
   }
 
   // ── Composer ──────────────────────────────────────────────────
