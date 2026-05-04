@@ -64,6 +64,7 @@
 >
   <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.warm.dim)" })}>
     <a
+      title="to projects"
       href="/"
       class={css({
         display: "flex",
@@ -80,7 +81,6 @@
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
         <path d="M8 1L3 6l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
       </svg>
-      Projects
     </a>
   </div>
 
