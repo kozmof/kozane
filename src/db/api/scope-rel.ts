@@ -1,5 +1,5 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
+import { bundleTable, cardTable, glueRelTable, scopeRelTable } from "../schema.js";
 import type { NeedsDB, NeedsScope, Card } from "./types.js";
 import { assertFound } from "./utils.js";
 
@@ -10,6 +10,25 @@ export async function getAllCardsByScope({ db, scopeId }: NeedsScope): Promise<C
     .select(getTableColumns(cardTable))
     .from(cardTable)
     .innerJoin(scopeRelTable, eq(scopeRelTable.cardId, cardTable.id))
+    .where(eq(scopeRelTable.scopeId, scopeId));
+}
+
+export type CardWithBundleName = Card & { bundleName: string; glueId: string | null };
+
+export async function getCardsByScopeWithBundleName({
+  db,
+  scopeId,
+}: NeedsScope): Promise<CardWithBundleName[]> {
+  return db
+    .select({
+      ...getTableColumns(cardTable),
+      bundleName: bundleTable.name,
+      glueId: glueRelTable.glueId,
+    })
+    .from(cardTable)
+    .innerJoin(scopeRelTable, eq(scopeRelTable.cardId, cardTable.id))
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .leftJoin(glueRelTable, eq(glueRelTable.cardId, cardTable.id))
     .where(eq(scopeRelTable.scopeId, scopeId));
 }
 
