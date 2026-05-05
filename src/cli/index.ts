@@ -73,8 +73,10 @@ db.command("import <file>")
 const wc = program.command("wc").description("Working copy management");
 
 wc.command("scan")
-  .description("Scan filesystem for working copies and sync paths")
-  .option("--reattach", "Re-link orphan working copies found on disk")
+  .description("Scan filesystem for working copies (dry run by default)")
+  .option("--apply", "Write changes to the database")
+  .option("--reattach", "Re-link orphan working copies found on disk (requires --apply)")
+  .option("--cleanup", "Delete DB records for missing working copies (requires --apply)")
   .action((opts) => wcScan(opts));
 
 wc.command("create <name>")

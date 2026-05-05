@@ -17,9 +17,18 @@ import { v7 as uuidv7 } from "uuid";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
 
-type ScanOptions = { reattach?: boolean };
+type ScanOptions = { apply?: boolean; reattach?: boolean; cleanup?: boolean };
 
 export async function wcScan(options: ScanOptions = {}): Promise<void> {
+  if (options.reattach && !options.apply) {
+    console.error("Error: --reattach requires --apply");
+    process.exit(1);
+  }
+  if (options.cleanup && !options.apply) {
+    console.error("Error: --cleanup requires --apply");
+    process.exit(1);
+  }
+
   const { root, config } = requireWorkspace();
   const db = await openDb(dbUrl(resolve(root)));
 
@@ -32,16 +41,19 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   const diff = diffWorkingCopies(found, dbRecords, root);
 
   let updated = 0;
+  let deleted = 0;
 
   const movedIds = new Set(diff.moved.map(({ record }) => record.id));
   const orphanIds = new Set(diff.orphans.map((wc) => wc.workingCopyId));
   for (const wc of found) {
     if (movedIds.has(wc.workingCopyId) || orphanIds.has(wc.workingCopyId)) continue;
     console.log(`  ok      ${wc.workingCopyId}  ${wc.path}`);
-    await db
-      .update(workingCopyTable)
-      .set({ lastSeenAt: new Date() })
-      .where(eq(workingCopyTable.id, wc.workingCopyId));
+    if (options.apply) {
+      await db
+        .update(workingCopyTable)
+        .set({ lastSeenAt: new Date() })
+        .where(eq(workingCopyTable.id, wc.workingCopyId));
+    }
   }
 
   for (const { record, scanned } of diff.moved) {
@@ -51,20 +63,22 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
       : "(none)";
     console.log(`    old: ${oldAbsolute}`);
     console.log(`    new: ${scanned.path}`);
-    const pathKind = scanned.path.startsWith(root)
-      ? ("project_relative" as const)
-      : ("absolute" as const);
-    const storedPath = pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
-    await db
-      .update(workingCopyTable)
-      .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
-      .where(eq(workingCopyTable.id, record.id));
-    updated++;
+    if (options.apply) {
+      const pathKind = scanned.path.startsWith(root)
+        ? ("project_relative" as const)
+        : ("absolute" as const);
+      const storedPath = pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
+      await db
+        .update(workingCopyTable)
+        .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
+        .where(eq(workingCopyTable.id, record.id));
+      updated++;
+    }
   }
 
   for (const wc of diff.orphans) {
     console.log(`  orphan  ${wc.workingCopyId}  ${wc.path}`);
-    if (options.reattach) {
+    if (options.apply && options.reattach) {
       const pathKind = wc.path.startsWith(root)
         ? ("project_relative" as const)
         : ("absolute" as const);
@@ -87,9 +101,32 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
       ? resolveWorkingCopyPath(record.path, record.pathKind, root)
       : "(no path)";
     console.log(`  missing ${record.id}  ${absolutePath}`);
+    if (options.apply && options.cleanup) {
+      await db.delete(workingCopyTable).where(eq(workingCopyTable.id, record.id));
+      console.log(`    → deleted`);
+      deleted++;
+    }
   }
 
-  console.log(`\nScan complete. ${updated} updated, ${diff.orphans.length} orphan(s).`);
+  if (!options.apply) {
+    const hints: string[] = [];
+    if (diff.moved.length > 0)
+      hints.push(`  wc scan --apply             update ${diff.moved.length} moved path(s)`);
+    if (diff.orphans.length > 0)
+      hints.push(`  wc scan --apply --reattach  reattach ${diff.orphans.length} orphan(s)`);
+    if (diff.missing.length > 0)
+      hints.push(`  wc scan --apply --cleanup   delete ${diff.missing.length} missing record(s)`);
+    if (hints.length > 0) {
+      console.log(`\nTo apply changes, run:`);
+      hints.forEach((h) => console.log(h));
+    } else {
+      console.log(`\nScan complete. Nothing to apply.`);
+    }
+  } else {
+    const parts = [`${updated} updated`];
+    if (options.cleanup) parts.push(`${deleted} deleted`);
+    console.log(`\nScan complete. ${parts.join(", ")}.`);
+  }
 }
 
 // ─── wc create ──────────────────────────────────────────────────────────────
