@@ -1,12 +1,13 @@
 {
   "name": "kozane",
+  "version": "0.1.0",
   "bin": {
     "kozane": "./bin/kozane.js"
   },
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && tsc --project tsconfig.cli.json",
+    "build": "drizzle-kit generate && vite build && tsc --project tsconfig.cli.json",
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",
@@ -24,7 +25,8 @@
   "files": [
     "bin",
     "dist",
-    "build"
+    "build",
+    "drizzle"
   ],
   "dependencies": {
     "@libsql/client": "^0.17.2",

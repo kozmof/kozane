@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { createClient } from "@libsql/client";
-import { existsSync, mkdirSync, copyFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
@@ -218,6 +218,15 @@ export function backupDb(projectRoot: string): string {
 
   copyFileSync(source, target);
   return target;
+}
+
+export function listBackups(projectRoot: string): string[] {
+  const backupDir = join(projectRoot, ".kozane", "backups");
+  if (!existsSync(backupDir)) return [];
+  return readdirSync(backupDir)
+    .filter((f) => f.endsWith(".db"))
+    .sort()
+    .map((f) => join(backupDir, f));
 }
 
 export async function runMigrations(dbUrl: string): Promise<void> {

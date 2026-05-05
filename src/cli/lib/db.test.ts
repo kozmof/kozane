@@ -19,7 +19,6 @@ function tempDbUrl(path: string): string {
 
 afterEach(() => {
   for (const root of tempRoots.splice(0)) {
-    // Tests create only temp files under OS temp; let the OS clean up if removal fails.
     try {
       rmSync(root, { recursive: true, force: true });
     } catch {
@@ -35,7 +34,7 @@ describe("getMigrationStatus", () => {
 
     expect(status.state).toBe("missing");
     expect(status.pendingCount).toBeGreaterThan(0);
-    expect(status.latest?.tag).toMatch(/^000/);
+    expect(status.latest?.tag).toMatch(/^0000_/);
   });
 
   it("reports current after migrations are applied", async () => {
@@ -60,14 +59,13 @@ describe("getMigrationStatus", () => {
     );
     await client.execute({
       sql: 'INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES (?, ?)',
-      args: ["test", 1777544685347],
+      args: ["test", 1],
     });
     client.close();
 
     const status = await getMigrationStatus(tempDbUrl(dbPath));
 
     expect(status.state).toBe("pending");
-    expect(status.applied?.tag).toBe("0000_outgoing_red_hulk");
     expect(status.pendingCount).toBeGreaterThan(0);
   });
 

@@ -1,8 +1,9 @@
 import { resolve } from "node:path";
-import { readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
+import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { requireWorkspace } from "../lib/project.js";
 import { dbPath, dbUrl } from "../lib/config.js";
-import { backupDb, getMigrationStatus, runMigrations, type MigrationStatus } from "../lib/db.js";
+import { backupDb, getMigrationStatus, listBackups, runMigrations, type MigrationStatus } from "../lib/db.js";
 import { exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "../lib/db-json.js";
 
 type DbExportOptions = {
@@ -171,4 +172,46 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
     console.error(`Backup remains at: ${backupPath}`);
     process.exit(1);
   }
+}
+
+export function dbRestore(file?: string): void {
+  const { root } = requireWorkspace();
+  const projectRoot = resolve(root);
+
+  let backupPath: string;
+
+  if (file) {
+    backupPath = resolve(file);
+    if (!existsSync(backupPath)) {
+      console.error(`Backup file not found: ${backupPath}`);
+      process.exit(1);
+    }
+  } else {
+    const backups = listBackups(projectRoot);
+    if (backups.length === 0) {
+      console.error("No backups found in .kozane/backups/");
+      console.error("Run: kozane db migrate  (creates a backup before migrating)");
+      process.exit(1);
+    }
+    backupPath = backups[backups.length - 1];
+    console.log("Available backups:");
+    for (const b of backups) {
+      const marker = b === backupPath ? " ← most recent" : "";
+      console.log(`  ${basename(b)}${marker}`);
+    }
+    console.log();
+  }
+
+  const current = dbPath(projectRoot);
+  if (existsSync(current)) {
+    try {
+      const safety = backupDb(projectRoot);
+      console.log(`Current database backed up: ${safety}`);
+    } catch {
+      // current db may be corrupted; proceed anyway
+    }
+  }
+
+  copyFileSync(backupPath, current);
+  console.log(`Restored: ${backupPath}`);
 }
