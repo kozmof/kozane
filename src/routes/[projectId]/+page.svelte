@@ -162,7 +162,16 @@
     const res = await patchCardPositions(fetch, data.project.id, positions);
     return res.ok;
   }
+
+  function handleKeydown(e: KeyboardEvent) {
+    const target = e.target as HTMLElement;
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+    if (e.key === "f") showFooters = !showFooters;
+    if (e.key === "b") sidebarsVisible = !sidebarsVisible;
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <div class={css({ display: "flex", height: "100vh", overflow: "hidden", backgroundColor: "ink.lighter" })}>
   <BundleSidebar
