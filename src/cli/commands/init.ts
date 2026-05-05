@@ -15,7 +15,6 @@ export async function init(): Promise<void> {
   const workspaceName = basename(resolve(projectRoot));
 
   mkdirSync(kozaneDir, { recursive: true });
-  mkdirSync(join(kozaneDir, "working-copies"), { recursive: true });
 
   const config = defaultConfig(workspaceName);
   writeConfig(projectRoot, config);
