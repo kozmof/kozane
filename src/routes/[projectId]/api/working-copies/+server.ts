@@ -6,10 +6,7 @@ import { addWorkingCopy } from "../../../../db/api/working-copy";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
 import { getWorkspaceRoot } from "../../../../db/internal/config";
 import { readConfig } from "../../../../cli/lib/config";
-import { WC_MARKER_DIR, WC_MARKER_FILE } from "../../../../cli/lib/wc-scan";
-
-const WC_MARKER_KIND = "kozane.workingCopy";
-const WC_MARKER_VERSION = 1;
+import { WC_MARKER_FILE, WC_MARKER_KIND, WC_MARKER_VERSION } from "../../../../cli/lib/wc-scan";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -37,9 +34,9 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     pathKind,
   });
 
-  mkdirSync(join(targetDir, WC_MARKER_DIR), { recursive: true });
+  mkdirSync(targetDir, { recursive: true });
   writeFileSync(
-    join(targetDir, WC_MARKER_DIR, WC_MARKER_FILE),
+    join(targetDir, WC_MARKER_FILE),
     JSON.stringify({ kind: WC_MARKER_KIND, version: WC_MARKER_VERSION, workingCopyId: id, projectId: params.projectId }, null, 2) + "\n",
   );
 

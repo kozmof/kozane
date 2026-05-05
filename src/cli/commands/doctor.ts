@@ -1,11 +1,9 @@
 import { existsSync, accessSync, constants } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, isAbsolute } from "node:path";
 import { createConnection } from "node:net";
 import { detectWorkspace } from "../lib/project.js";
 import { KOZANE_DIR, CONFIG_FILE, DB_FILE, readConfig, dbUrl } from "../lib/config.js";
 import { getMigrationStatus, openDb } from "../lib/db.js";
-import { workingCopyTable } from "../../db/schema.js";
-import { resolveWorkingCopyPath } from "../lib/wc-scan.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
 
@@ -95,27 +93,7 @@ export async function doctor(): Promise<void> {
     checks.push(check("DB migrations current", migrationOk, detail));
   }
 
-  // 6. Working copies on disk
-  if (dbOk) {
-    try {
-      const db = await openDb(dbUrl(resolve(root)));
-      const wcs = await db.select().from(workingCopyTable);
-      const missing = wcs.filter((wc) => {
-        if (!wc.path) return false;
-        const absPath = resolveWorkingCopyPath(wc.path, wc.pathKind, root);
-        return !existsSync(absPath);
-      });
-      const ok = missing.length === 0;
-      const detail = ok
-        ? undefined
-        : missing.map((wc) => `${wc.name || wc.id}`).join(", ");
-      checks.push(check("Working copies on disk", ok, detail ? `missing: ${detail}` : undefined));
-    } catch (e) {
-      checks.push(check("Working copies on disk", false, e instanceof Error ? e.message : String(e)));
-    }
-  }
-
-  // 7. Port available
+  // 6 Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);

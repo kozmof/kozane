@@ -1,8 +1,7 @@
 import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const WC_MARKER_DIR = ".kozane";
-export const WC_MARKER_FILE = "working-copy.json";
+export const WC_MARKER_FILE = ".working-copy.json";
 export const WC_MARKER_KIND = "kozane.workingCopy";
 export const WC_MARKER_VERSION = 1;
 
@@ -35,7 +34,7 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
 
   for (const entry of entries) {
     const fullPath = join(root, entry);
-    if (entry.startsWith(".") && entry !== ".kozane") continue; // skip hidden except our own
+    if (entry.startsWith(".")) continue; // skip hidden directories
     try {
       if (statSync(fullPath).isDirectory()) {
         yield* walkDirectories(fullPath, depth + 1);
@@ -47,7 +46,7 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
 }
 
 function readMarker(dir: string): WcMarker | null {
-  const markerPath = join(dir, WC_MARKER_DIR, WC_MARKER_FILE);
+  const markerPath = join(dir, WC_MARKER_FILE);
   if (!existsSync(markerPath)) return null;
   try {
     const raw = readFileSync(markerPath, "utf-8");
@@ -66,6 +65,49 @@ export function resolveWorkingCopyPath(
   projectRoot: string,
 ): string {
   return pathKind === "absolute" ? storedPath : join(projectRoot, storedPath);
+}
+
+export type WorkingCopyRecord = {
+  id: string;
+  name: string | null;
+  path: string | null;
+  pathKind: "project_relative" | "absolute";
+};
+
+export type WorkingCopyDiff = {
+  missing: WorkingCopyRecord[];
+  moved: Array<{ record: WorkingCopyRecord; scanned: FoundWorkingCopy }>;
+  orphans: FoundWorkingCopy[];
+};
+
+export function diffWorkingCopies(
+  found: FoundWorkingCopy[],
+  dbRecords: WorkingCopyRecord[],
+  projectRoot: string,
+): WorkingCopyDiff {
+  const foundById = new Map(found.map((f) => [f.workingCopyId, f]));
+  const dbIds = new Set(dbRecords.map((r) => r.id));
+  const missing: WorkingCopyRecord[] = [];
+  const moved: Array<{ record: WorkingCopyRecord; scanned: FoundWorkingCopy }> = [];
+  const orphans: FoundWorkingCopy[] = [];
+
+  for (const record of dbRecords) {
+    const scanned = foundById.get(record.id);
+    if (!scanned) {
+      missing.push(record);
+    } else {
+      const resolvedStored = record.path
+        ? resolveWorkingCopyPath(record.path, record.pathKind, projectRoot)
+        : null;
+      if (resolvedStored !== scanned.path) moved.push({ record, scanned });
+    }
+  }
+
+  for (const wc of found) {
+    if (!dbIds.has(wc.workingCopyId)) orphans.push(wc);
+  }
+
+  return { missing, moved, orphans };
 }
 
 export function scanWorkingCopies(searchRoots: string[]): FoundWorkingCopy[] {
