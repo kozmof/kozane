@@ -2,7 +2,7 @@
 
 import { Command } from "commander";
 import { init } from "./commands/init.js";
-import { dev } from "./commands/dev.js";
+import { open } from "./commands/open.js";
 import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
@@ -19,19 +19,12 @@ program
   .action(() => init());
 
 program
-  .command("dev")
-  .description("Start the local Kozane UI")
-  .option("--host <host>", "Bind host")
-  .option("--port <port>", "Port number")
-  .option("--open", "Open browser automatically")
-  .action((opts) => dev(opts));
-
-program
   .command("open")
   .description("Start the local Kozane UI and open browser")
   .option("--host <host>", "Bind host")
   .option("--port <port>", "Port number")
-  .action((opts) => dev({ ...opts, open: true }));
+  .option("--no-open", "Start server without opening browser")
+  .action((opts) => open(opts));
 
 program
   .command("doctor")
