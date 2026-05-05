@@ -21,8 +21,8 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultZoom: 1,
   leftPanelWidth: 216,
   rightPanelWidth: 232,
-  defaultShowFooter: true,
-  defaultShowSidePanel: true,
+  defaultShowFooter: false,
+  defaultShowSidePanel: false,
   canvasWidth: 2800,
   canvasHeight: 2000,
 };
@@ -53,6 +53,7 @@ export function defaultConfig(name: string): WorkspaceConfig {
       defaultDir: ".",
       searchRoots: ["."],
     },
+    ui: { ...DEFAULT_UI_CONFIG },
   };
 }
 
