@@ -177,9 +177,9 @@
               onkeydown={(e) => e.key === "Enter" && onCreateWorkingCopy()}
             />
             <button
-              class={css({ padding: "6px 10px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontFamily: "inherit" })}
+              class={css({ padding: "6px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
               onclick={onCreateWorkingCopy}
-            >Create</button>
+            >+</button>
           </div>
         {/if}
       </div>
