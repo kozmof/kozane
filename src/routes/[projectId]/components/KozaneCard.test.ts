@@ -22,6 +22,8 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     isComposing: false,
     dimmed: false,
     isDragging: false,
+    cardWidth: 240,
+    fontSize: 11.5,
     showFooters: true,
     onCardMouseDown: vi.fn(),
     onCardClick: vi.fn(),

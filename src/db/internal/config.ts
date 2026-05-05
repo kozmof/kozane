@@ -36,7 +36,7 @@ export function getWorkspaceUiConfig(): UiConfig {
   try {
     const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
     const parsed = JSON.parse(raw) as { ui?: Partial<UiConfig> };
-    return { ...DEFAULT_UI_CONFIG, ...(parsed.ui ?? {}) };
+    return { ...DEFAULT_UI_CONFIG, ...parsed.ui };
   } catch {
     return { ...DEFAULT_UI_CONFIG };
   }

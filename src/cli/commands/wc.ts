@@ -67,7 +67,8 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
       const pathKind = scanned.path.startsWith(root)
         ? ("project_relative" as const)
         : ("absolute" as const);
-      const storedPath = pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
+      const storedPath =
+        pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
       await db
         .update(workingCopyTable)
         .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
@@ -182,10 +183,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     workingCopyId: id,
     projectId: projectId ?? "",
   };
-  writeFileSync(
-    join(targetDir, WC_MARKER_FILE),
-    JSON.stringify(marker, null, 2) + "\n",
-  );
+  writeFileSync(join(targetDir, WC_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
 
   console.log(`Working copy created.`);
   console.log(`  id   : ${id}`);

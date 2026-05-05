@@ -30,9 +30,9 @@
   let composerCard = $state<(typeof cards)[0] | null>(null);
 
   // ── UI state ──────────────────────────────────────────────────
-  let sidebarsVisible = $state(data.uiConfig.defaultShowSidePanel);
-  let showFooters = $state(data.uiConfig.defaultShowFooter);
-  let zoom = $state(data.uiConfig.defaultZoom);
+  let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
+  let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
+  let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let newBundleName = $state("");
   let newScopeName = $state("");
   let newWcName = $state("");

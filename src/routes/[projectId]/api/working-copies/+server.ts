@@ -23,7 +23,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const pathKind = targetDir.startsWith(resolve(root))
     ? ("project_relative" as const)
     : ("absolute" as const);
-  const storedPath = pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
+  const storedPath =
+    pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
 
   const id = await addWorkingCopy({
     db,
@@ -37,7 +38,16 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(
     join(targetDir, WC_MARKER_FILE),
-    JSON.stringify({ kind: WC_MARKER_KIND, version: WC_MARKER_VERSION, workingCopyId: id, projectId: params.projectId }, null, 2) + "\n",
+    JSON.stringify(
+      {
+        kind: WC_MARKER_KIND,
+        version: WC_MARKER_VERSION,
+        workingCopyId: id,
+        projectId: params.projectId,
+      },
+      null,
+      2,
+    ) + "\n",
   );
 
   return json({ id });

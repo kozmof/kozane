@@ -31,6 +31,17 @@ const data = {
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
   glueRels: [],
+  uiConfig: {
+    defaultFontSize: 11.5,
+    defaultCardWidth: 240,
+    defaultZoom: 1,
+    leftPanelWidth: 216,
+    rightPanelWidth: 232,
+    defaultShowFooter: true,
+    defaultShowSidePanel: true,
+    canvasWidth: 2800,
+    canvasHeight: 2000,
+  },
 };
 
 afterEach(() => {

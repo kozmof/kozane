@@ -1,4 +1,4 @@
-import type { CardData, Bundle, BundleWithColor, Scope, ScopeRel, GlueRel } from "$lib/types";
+import type { CardData, Bundle, Scope, ScopeRel, GlueRel } from "$lib/types";
 import * as api from "./lib/project-api";
 
 export type ProjectPageState = {
@@ -51,7 +51,9 @@ export function createProjectActions(state: ProjectPageState) {
   async function handleCardBundleChange(newBundleId: string) {
     if (!state.composerCard) return;
     const cardId = state.composerCard.id;
-    const res = await api.updateCard(state.fetcher, state.projectId, cardId, { bundleId: newBundleId });
+    const res = await api.updateCard(state.fetcher, state.projectId, cardId, {
+      bundleId: newBundleId,
+    });
     if (!res.ok) {
       state.setError("Failed to change bundle");
       return;
@@ -61,13 +63,17 @@ export function createProjectActions(state: ProjectPageState) {
 
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
     const results = await Promise.all(
-      cardIds.map((id) => api.updateCard(state.fetcher, state.projectId, id, { bundleId: newBundleId })),
+      cardIds.map((id) =>
+        api.updateCard(state.fetcher, state.projectId, id, { bundleId: newBundleId }),
+      ),
     );
     if (results.some((r) => !r.ok)) {
       state.setError("Failed to change bundle for selected cards");
       return;
     }
-    state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c));
+    state.cards = state.cards.map((c) =>
+      cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c,
+    );
   }
 
   async function handleGlueSelected(cardIds: string[]) {
@@ -138,7 +144,9 @@ export function createProjectActions(state: ProjectPageState) {
       return;
     }
     const { defaultBundleId } = await res.json();
-    state.cards = state.cards.map((c) => c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c);
+    state.cards = state.cards.map((c) =>
+      c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c,
+    );
     state.bundles = state.bundles.filter((b) => b.id !== bundleId);
     if (state.activeBundle === bundleId) state.activeBundle = null;
   }
@@ -204,7 +212,9 @@ export function createProjectActions(state: ProjectPageState) {
       state.setError("Failed to remove cards from scope");
       return;
     }
-    state.scopeRels = state.scopeRels.filter((r) => !(r.scopeId === scopeId && cardIds.includes(r.cardId)));
+    state.scopeRels = state.scopeRels.filter(
+      (r) => !(r.scopeId === scopeId && cardIds.includes(r.cardId)),
+    );
     state.selectedCards = new Set();
   }
 

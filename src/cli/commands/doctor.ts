@@ -1,9 +1,9 @@
 import { existsSync, accessSync, constants } from "node:fs";
-import { join, resolve, isAbsolute } from "node:path";
+import { join, resolve } from "node:path";
 import { createConnection } from "node:net";
 import { detectWorkspace } from "../lib/project.js";
 import { KOZANE_DIR, CONFIG_FILE, DB_FILE, readConfig, dbUrl } from "../lib/config.js";
-import { getMigrationStatus, openDb } from "../lib/db.js";
+import { getMigrationStatus } from "../lib/db.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
 
