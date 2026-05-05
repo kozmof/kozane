@@ -13,6 +13,7 @@
     showFooters: boolean;
     cardWidth: number;
     fontSize: number;
+    fontFamily: string;
     onCardMouseDown: (e: MouseEvent) => void;
     onCardClick: (e: MouseEvent) => void;
     onCardDblClick: () => void;
@@ -29,6 +30,7 @@
     showFooters,
     cardWidth,
     fontSize,
+    fontFamily,
     onCardMouseDown,
     onCardClick,
     onCardDblClick,
@@ -83,8 +85,9 @@
 >
   <!-- Content -->
   <div
-    class={css({ padding: "10px 10px 6px", lineHeight: "1.65", fontFamily: "mono", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+    class={css({ padding: "10px 10px 6px", lineHeight: "1.65", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
     style:font-size="{fontSize}px"
+    style:font-family={fontFamily}
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-warm-placeholder)"}
   >
     {card.content || "Empty card…"}

@@ -34,6 +34,7 @@
     canvasHeight,
     cardWidth,
     fontSize,
+    fontFamily,
     onPersistPositions,
     onError,
   }: {
@@ -51,6 +52,7 @@
     canvasHeight: number;
     cardWidth: number;
     fontSize: number;
+    fontFamily: string;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
     onError: (message: string) => void;
   } = $props();
@@ -379,6 +381,7 @@
           {showFooters}
           {cardWidth}
           {fontSize}
+          {fontFamily}
           onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
           onCardClick={(e) => handleCardClick(e, card.id)}
           onCardDblClick={() => handleCardDblClick(card.id)}

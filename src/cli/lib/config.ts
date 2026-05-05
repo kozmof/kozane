@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 export type UiConfig = {
   defaultFontSize: number;
+  defaultFontFamily: string;
   defaultCardWidth: number;
   defaultZoom: number;
   leftPanelWidth: number;
@@ -15,6 +16,7 @@ export type UiConfig = {
 
 export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultFontSize: 11.5,
+  defaultFontFamily: "monospace",
   defaultCardWidth: 240,
   defaultZoom: 1,
   leftPanelWidth: 216,

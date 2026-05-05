@@ -193,6 +193,7 @@
       canvasHeight={data.uiConfig.canvasHeight}
       cardWidth={data.uiConfig.defaultCardWidth}
       fontSize={data.uiConfig.defaultFontSize}
+      fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
       onError={(msg) => (lastError = msg)}
     />
