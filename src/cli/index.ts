@@ -6,7 +6,7 @@ import { dev } from "./commands/dev.js";
 import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
-import { projectCreate } from "./commands/project.js";
+import { projectCreate, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbStatus } from "./commands/db.js";
 
 const program = new Command();
@@ -46,9 +46,19 @@ program
 const project = program.command("project").description("Project management");
 
 project
+  .command("list")
+  .description("List all projects in the current workspace")
+  .action(() => projectList());
+
+project
   .command("create <name>")
   .description("Create a new project in the current workspace")
   .action((name) => projectCreate(name));
+
+project
+  .command("delete <id>")
+  .description("Delete a project by ID")
+  .action((id) => projectDelete(id));
 
 const db = program.command("db").description("Database management");
 
