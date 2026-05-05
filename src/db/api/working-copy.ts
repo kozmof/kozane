@@ -8,6 +8,14 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
   return db.select().from(workingCopyTable);
 }
 
+type GetWorkingCopiesByProject = NeedsDB & { projectId: string };
+export async function getWorkingCopiesByProject({
+  db,
+  projectId,
+}: GetWorkingCopiesByProject): Promise<WorkingCopy[]> {
+  return db.select().from(workingCopyTable).where(eq(workingCopyTable.projectId, projectId));
+}
+
 type AddWorkingCopy = NeedsDB & {
   projectId: string;
   scopeId?: string;

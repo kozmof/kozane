@@ -1,12 +1,13 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { Scope, ScopeRel } from "$lib/types";
+  import type { Scope, ScopeRel, WorkingCopy } from "$lib/types";
 
   let {
     visible,
     panelWidth,
     scopes,
     scopeRels,
+    workingCopies,
     selectedCards,
     activeScope = $bindable(),
     newScopeName = $bindable(),
@@ -21,6 +22,7 @@
     panelWidth: number;
     scopes: Scope[];
     scopeRels: ScopeRel[];
+    workingCopies: WorkingCopy[];
     selectedCards: Set<string>;
     activeScope: string | null;
     newScopeName: string;
@@ -144,6 +146,29 @@
         {/if}
 
         {#if active}
+          {@const scopeWcs = workingCopies.filter((wc) => wc.scopeId === scope.id && wc.path !== null)}
+          {#if scopeWcs.length > 0}
+            <div class={css({ borderTop: "1px solid token(colors.warm.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
+              {#each scopeWcs as wc (wc.id)}
+                <div class={css({
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "4px 6px",
+                  borderRadius: "4px",
+                  fontSize: "11.5px",
+                  color: "ink.secondary",
+                })}>
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+                    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
+                    <path d="M1 4.5h8" stroke="var(--colors-warm-icon-dim)" stroke-width="1" />
+                    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-warm-icon-dim)" />
+                  </svg>
+                  <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>{wc.name}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
           <div class={css({ padding: "8px", borderTop: "1px solid token(colors.warm.dim)", display: "flex", gap: "5px" })}>
             <input
               class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}

@@ -31,6 +31,7 @@ const data = {
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
   glueRels: [],
+  workingCopies: [],
   uiConfig: {
     defaultFontSize: 11.5,
     defaultCardWidth: 240,

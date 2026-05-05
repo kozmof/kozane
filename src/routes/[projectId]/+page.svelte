@@ -21,6 +21,7 @@
   let scopes = $state(untrack(() => data.scopes));
   let scopeRels = $state(untrack(() => data.scopeRels));
   let glueRels = $state(untrack(() => data.glueRels));
+  let workingCopies = $state(untrack(() => data.workingCopies));
 
   // ── Selection / filter state ──────────────────────────────────
   let selectedCards = $state(new Set<string>());
@@ -75,6 +76,7 @@
     scopes = data.scopes;
     scopeRels = data.scopeRels;
     glueRels = data.glueRels;
+    workingCopies = data.workingCopies;
     selectedCards = new Set();
     primarySelectedId = null;
     activeBundle = null;
@@ -133,6 +135,9 @@
 
     get newWcName() { return newWcName; },
     set newWcName(v) { newWcName = v; },
+
+    get workingCopies() { return workingCopies; },
+    set workingCopies(v) { workingCopies = v; },
 
     setError(message) { lastError = message; },
   });
@@ -228,6 +233,7 @@
     panelWidth={data.uiConfig.rightPanelWidth}
     {scopes}
     {scopeRels}
+    {workingCopies}
     {selectedCards}
     bind:activeScope
     bind:newScopeName

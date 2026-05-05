@@ -50,5 +50,5 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     ) + "\n",
   );
 
-  return json({ id });
+  return json({ id, path: storedPath });
 };

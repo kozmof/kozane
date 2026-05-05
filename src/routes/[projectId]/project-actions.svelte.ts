@@ -1,4 +1,4 @@
-import type { CardData, Bundle, Scope, ScopeRel, GlueRel } from "$lib/types";
+import type { CardData, Bundle, Scope, ScopeRel, GlueRel, WorkingCopy } from "$lib/types";
 import * as api from "./lib/project-api";
 
 export type ProjectPageState = {
@@ -43,6 +43,9 @@ export type ProjectPageState = {
 
   get newWcName(): string;
   set newWcName(value: string);
+
+  get workingCopies(): WorkingCopy[];
+  set workingCopies(value: WorkingCopy[]);
 
   setError(message: string): void;
 };
@@ -167,14 +170,14 @@ export function createProjectActions(state: ProjectPageState) {
   async function handleCreateWorkingCopy() {
     const name = state.newWcName.trim();
     if (!name || !state.activeScope) return;
-    const res = await api.createWorkingCopy(state.fetcher, state.projectId, {
-      name,
-      scopeId: state.activeScope,
-    });
+    const scopeId = state.activeScope;
+    const res = await api.createWorkingCopy(state.fetcher, state.projectId, { name, scopeId });
     if (!res.ok) {
       state.setError("Failed to create working copy");
       return;
     }
+    const { id, path } = await res.json();
+    state.workingCopies = [...state.workingCopies, { id, name, scopeId, path }];
     state.newWcName = "";
   }
 

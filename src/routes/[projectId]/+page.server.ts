@@ -8,6 +8,7 @@ import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
+import { getWorkingCopiesByProject } from "../../db/api/working-copy";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -27,9 +28,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const cards = await getCardsByBundles({ db, bundleIds });
   const cardIds = cards.map((c) => c.id);
 
-  const [glueRels, scopeRels] = await Promise.all([
+  const [glueRels, scopeRels, workingCopies] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
+    getWorkingCopiesByProject({ db, projectId }),
   ]);
 
   return {
@@ -39,6 +41,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     glueRels,
     scopes,
     scopeRels,
+    workingCopies: workingCopies.map((wc) => ({
+      id: wc.id,
+      name: wc.name,
+      scopeId: wc.scopeId,
+      path: wc.path,
+    })),
     uiConfig: getWorkspaceUiConfig(),
   };
 };

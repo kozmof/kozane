@@ -37,3 +37,10 @@ export interface GlueRel {
   glueId: string;
   cardId: string;
 }
+
+export interface WorkingCopy {
+  id: string;
+  name: string;
+  scopeId: string | null;
+  path: string | null;
+}
