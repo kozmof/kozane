@@ -4,6 +4,7 @@ import {
   addWorkingCopy,
   getWorkingCopy,
   getAllWorkingCopies,
+  getWorkingCopiesByProject,
   updateWorkingCopy,
   deleteWorkingCopy,
 } from "./working-copy.js";
@@ -73,6 +74,22 @@ describe("getWorkingCopy", () => {
   it("returns undefined for a missing id", async () => {
     const { db } = await setup();
     expect(await getWorkingCopy({ db, workingCopyId: "ghost" })).toBeUndefined();
+  });
+});
+
+describe("getWorkingCopiesByProject", () => {
+  it("returns only working copies for the given project", async () => {
+    const { db, projectId, scopeId } = await setup();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const id1 = await addWorkingCopy({ db, projectId, scopeId, name: "wc-mine" });
+    await addWorkingCopy({ db, projectId: otherProjectId, scopeId, name: "wc-other" });
+    const results = await getWorkingCopiesByProject({ db, projectId });
+    expect(results.map((w) => w.id)).toEqual([id1]);
+  });
+
+  it("returns empty array when project has no working copies", async () => {
+    const { db, projectId } = await setup();
+    expect(await getWorkingCopiesByProject({ db, projectId })).toEqual([]);
   });
 });
 

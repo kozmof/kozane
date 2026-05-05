@@ -4,6 +4,7 @@ import {
   addScopeRel,
   removeScopeRel,
   getAllCardsByScope,
+  getCardsByScopeWithBundleName,
   addScopeMembers,
   removeScopeMembers,
   removeScopeMembersFromProject,
@@ -68,6 +69,23 @@ describe("getAllCardsByScope", () => {
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards.map((c) => c.id)).toEqual(expect.arrayContaining([cardId, c2]));
     expect(cards).toHaveLength(2);
+  });
+});
+
+describe("getCardsByScopeWithBundleName", () => {
+  it("returns cards with bundleName and glueId fields", async () => {
+    const { db, scopeId, cardId } = await setup();
+    await addScopeRel({ db, scopeId, cardId });
+    const cards = await getCardsByScopeWithBundleName({ db, scopeId });
+    expect(cards).toHaveLength(1);
+    expect(cards[0].id).toBe(cardId);
+    expect(cards[0].bundleName).toBe("B");
+    expect(cards[0].glueId).toBeNull();
+  });
+
+  it("returns empty array when scope has no members", async () => {
+    const { db, scopeId } = await setup();
+    expect(await getCardsByScopeWithBundleName({ db, scopeId })).toEqual([]);
   });
 });
 

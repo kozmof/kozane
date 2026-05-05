@@ -3,7 +3,13 @@ import { basename } from "node:path";
 import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
 import { requireWorkspace } from "../lib/project.js";
 import { dbPath, dbUrl } from "../lib/config.js";
-import { backupDb, getMigrationStatus, listBackups, runMigrations, type MigrationStatus } from "../lib/db.js";
+import {
+  backupDb,
+  getMigrationStatus,
+  listBackups,
+  runMigrations,
+  type MigrationStatus,
+} from "../lib/db.js";
 import { exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "../lib/db-json.js";
 
 type DbExportOptions = {

@@ -4,6 +4,12 @@
   "bin": {
     "kozane": "./bin/kozane.js"
   },
+  "files": [
+    "bin",
+    "dist",
+    "build",
+    "drizzle"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -22,12 +28,6 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
-  "files": [
-    "bin",
-    "dist",
-    "build",
-    "drizzle"
-  ],
   "dependencies": {
     "@libsql/client": "^0.17.2",
     "@sveltejs/adapter-node": "^5.5.4",

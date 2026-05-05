@@ -9,6 +9,7 @@ import {
   updateCardContent,
   updateCardPosition,
   updateCardPositions,
+  updateProjectCardPositions,
   updateCard,
 } from "./card.js";
 import { addProject } from "./project.js";
@@ -167,6 +168,11 @@ describe("updateCardPosition", () => {
 });
 
 describe("updateCardPositions", () => {
+  it("is a no-op for an empty positions array", async () => {
+    const { db } = await setup();
+    await expect(updateCardPositions({ db, positions: [] })).resolves.toBeUndefined();
+  });
+
   it("updates multiple card positions in one transaction", async () => {
     const { db, bundleId } = await setup();
     const firstId = await addCard({ db, bundleId, content: "First", posX: 1, posY: 2 });
@@ -251,5 +257,51 @@ describe("updateCard", () => {
   it("throws NotFoundError for a missing card", async () => {
     const { db } = await setup();
     await expect(updateCard({ db, cardId: "ghost", content: "X" })).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("updateProjectCardPositions", () => {
+  it("returns true for an empty positions array", async () => {
+    const { db, projectId } = await setup();
+    await expect(updateProjectCardPositions({ db, projectId, positions: [] })).resolves.toBe(true);
+  });
+
+  it("updates positions and returns true when all cards belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A", posX: 0, posY: 0 });
+    const c2 = await addCard({ db, bundleId, content: "B", posX: 0, posY: 0 });
+
+    const ok = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [
+        { cardId: c1, posX: 10, posY: 20 },
+        { cardId: c2, posX: 30, posY: 40 },
+      ],
+    });
+
+    expect(ok).toBe(true);
+    expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ posX: 10, posY: 20 });
+    expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ posX: 30, posY: 40 });
+  });
+
+  it("returns false when a card does not belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const ownCard = await addCard({ db, bundleId, content: "Mine", posX: 0, posY: 0 });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const ok = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [
+        { cardId: ownCard, posX: 5, posY: 5 },
+        { cardId: foreignCard, posX: 9, posY: 9 },
+      ],
+    });
+
+    expect(ok).toBe(false);
+    expect(await getCard({ db, bundleId, cardId: ownCard })).toMatchObject({ posX: 0, posY: 0 });
   });
 });
