@@ -303,9 +303,9 @@ kozane db export [file] [--compact]
 
 Options:
 
-| Flag        | Description                              |
-| ----------- | ---------------------------------------- |
-| `--compact` | Write compact JSON instead of formatted  |
+| Flag        | Description                             |
+| ----------- | --------------------------------------- |
+| `--compact` | Write compact JSON instead of formatted |
 
 Behavior:
 
@@ -330,8 +330,8 @@ kozane db import <file> [--force]
 
 Options:
 
-| Flag      | Description                                             |
-| --------- | ------------------------------------------------------- |
+| Flag      | Description                                                   |
+| --------- | ------------------------------------------------------------- |
 | `--force` | Replace existing workspace data (required if DB is not empty) |
 
 Behavior:
@@ -390,10 +390,10 @@ kozane wc scan [--apply] [--reattach] [--cleanup]
 
 Options:
 
-| Flag         | Description                                                                  |
-| ------------ | ---------------------------------------------------------------------------- |
-| `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)     |
-| `--reattach` | Re-link orphan working copies found on disk but missing from DB (needs `--apply`) |
+| Flag         | Description                                                                         |
+| ------------ | ----------------------------------------------------------------------------------- |
+| `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)            |
+| `--reattach` | Re-link orphan working copies found on disk but missing from DB (needs `--apply`)   |
 | `--cleanup`  | Delete DB records for working copies whose marker file is missing (needs `--apply`) |
 
 Behavior:
@@ -444,11 +444,11 @@ kozane wc create <name> [--scope <scopeId>] [--no-scope] [--dir <path>]
 
 Options:
 
-| Flag                | Description                                                              |
-| ------------------- | ------------------------------------------------------------------------ |
-| `--scope <scopeId>` | Attach working copy to an existing scope                                 |
-| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)               |
-| `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)                       |
+| Flag                | Description                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `--scope <scopeId>` | Attach working copy to an existing scope                   |
+| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
+| `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
 
 Either `--scope` or `--no-scope` is required.
 
@@ -548,10 +548,10 @@ and exits with code `1`.
 
 ## Path storage policy
 
-| Location relative to project root | Stored `path_kind`  | Stored `path`            |
-| --------------------------------- | ------------------- | ------------------------ |
-| Inside project root               | `project_relative`  | relative path from root  |
-| Outside project root              | `absolute`          | absolute filesystem path |
+| Location relative to project root | Stored `path_kind` | Stored `path`            |
+| --------------------------------- | ------------------ | ------------------------ |
+| Inside project root               | `project_relative` | relative path from root  |
+| Outside project root              | `absolute`         | absolute filesystem path |
 
 This keeps repo-local paths portable across machines while still supporting
 working copies placed anywhere on the filesystem.
@@ -576,11 +576,11 @@ working copies placed anywhere on the filesystem.
 
 ## Collision handling (wc scan)
 
-| Situation                                    | Behavior                                            |
-| -------------------------------------------- | --------------------------------------------------- |
-| Marker found, DB record missing              | Reported as orphan; `--apply --reattach` re-links   |
-| DB record exists, marker missing             | Reported as "missing"; `--apply --cleanup` deletes  |
-| Same `workingCopyId` in multiple directories | Reported as duplicate; use `kozane wc fork` (v0.2)  |
+| Situation                                    | Behavior                                           |
+| -------------------------------------------- | -------------------------------------------------- |
+| Marker found, DB record missing              | Reported as orphan; `--apply --reattach` re-links  |
+| DB record exists, marker missing             | Reported as "missing"; `--apply --cleanup` deletes |
+| Same `workingCopyId` in multiple directories | Reported as duplicate; use `kozane wc fork` (v0.2) |
 
 ---
 
