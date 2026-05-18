@@ -24,7 +24,8 @@ describe("createCardInWorkingCopyContext", () => {
   it("creates a card and returns its id", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext(db, {
+    const cardId = await createCardInWorkingCopyContext({
+      db,
       workingCopyId: wcId,
       bundleId,
       content: "Hi",
@@ -35,7 +36,8 @@ describe("createCardInWorkingCopyContext", () => {
   it("card is stored in the correct bundle with the workingCopyId set", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext(db, {
+    const cardId = await createCardInWorkingCopyContext({
+      db,
       workingCopyId: wcId,
       bundleId,
       content: "Content",
@@ -48,7 +50,8 @@ describe("createCardInWorkingCopyContext", () => {
   it("auto-adds the card to the scope when working copy has a scope", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext(db, {
+    const cardId = await createCardInWorkingCopyContext({
+      db,
       workingCopyId: wcId,
       bundleId,
       content: "Scoped",
@@ -61,7 +64,8 @@ describe("createCardInWorkingCopyContext", () => {
     const { db, projectId, bundleId, scopeId } = await setup();
     const wcId = await addWorkingCopy({ db, projectId });
 
-    const cardId = await createCardInWorkingCopyContext(db, {
+    const cardId = await createCardInWorkingCopyContext({
+      db,
       workingCopyId: wcId,
       bundleId,
       content: "X",
@@ -75,7 +79,7 @@ describe("createCardInWorkingCopyContext", () => {
   it("throws NotFoundError for a missing workingCopyId", async () => {
     const { db, bundleId } = await setup();
     await expect(
-      createCardInWorkingCopyContext(db, { workingCopyId: "ghost", bundleId, content: "Hi" }),
+      createCardInWorkingCopyContext({ db, workingCopyId: "ghost", bundleId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 });

@@ -68,18 +68,14 @@ async function unglueCardsCore(db: AnyDB, cardIds: string[]): Promise<void> {
   await dissolveOrphanGroups(db, affectedGlueIds);
 }
 
-export async function glueCards({
-  db,
-  cardIds,
-}: { db: DB } & { cardIds: string[] }): Promise<string> {
+type GlueCards = { db: DB; cardIds: string[] };
+export async function glueCards({ db, cardIds }: GlueCards): Promise<string> {
   if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
   return withTx(db, (tx) => glueCardsCore(tx, cardIds));
 }
 
-export async function unglueCards({
-  db,
-  cardIds,
-}: { db: DB } & { cardIds: string[] }): Promise<void> {
+type UnglueCards = { db: DB; cardIds: string[] };
+export async function unglueCards({ db, cardIds }: UnglueCards): Promise<void> {
   if (cardIds.length === 0) return;
   return withTx(db, (tx) => unglueCardsCore(tx, cardIds));
 }

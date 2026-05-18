@@ -12,20 +12,25 @@ type CreateCardFromWorkingCopy = {
   content: string;
 };
 
+type CreateCardInWorkingCopyContext = {
+  db: AnyDB;
+  workingCopyId: string;
+  bundleId: string;
+  content: string;
+};
+
 /**
  * Core logic for creating a card within a working-copy context.
  * Exported separately so it can be tested without a transaction.
  * Production callers should use `createCardFromWorkingCopy`, which wraps
  * this in a transaction to keep the card insert and scope_rel insert atomic.
  */
-export async function createCardInWorkingCopyContext(
-  db: AnyDB,
-  {
-    workingCopyId,
-    bundleId,
-    content,
-  }: { workingCopyId: string; bundleId: string; content: string },
-): Promise<string> {
+export async function createCardInWorkingCopyContext({
+  db,
+  workingCopyId,
+  bundleId,
+  content,
+}: CreateCardInWorkingCopyContext): Promise<string> {
   const wc = await getWorkingCopy({ db, workingCopyId });
   if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
   const cardId = await addCard({ db, bundleId, content, workingCopyId });
@@ -49,7 +54,7 @@ export async function createCardFromWorkingCopy({
   content,
 }: CreateCardFromWorkingCopy): Promise<string> {
   return withTx(db, (tx) =>
-    createCardInWorkingCopyContext(tx, { workingCopyId, bundleId, content }),
+    createCardInWorkingCopyContext({ db: tx, workingCopyId, bundleId, content }),
   );
 }
 
