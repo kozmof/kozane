@@ -7,7 +7,7 @@ export const WC_MARKER_VERSION = 1;
 
 export type WcMarker = {
   kind: typeof WC_MARKER_KIND;
-  version: number;
+  version: typeof WC_MARKER_VERSION;
   workingCopyId: string;
   projectId: string;
 };
@@ -34,14 +34,17 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
 
   for (const entry of entries) {
     const fullPath = join(root, entry);
-    if (entry.startsWith(".")) continue; // skip hidden directories
     try {
-      if (statSync(fullPath).isDirectory()) {
-        yield* walkDirectories(fullPath, depth + 1);
-      }
+      if (!statSync(fullPath).isDirectory()) continue;
     } catch {
-      // skip unreadable entries
+      continue; // skip unreadable entries
     }
+    if (entry.startsWith(".")) {
+      // Yield for marker check but do not recurse (avoids .git etc.)
+      yield fullPath;
+      continue;
+    }
+    yield* walkDirectories(fullPath, depth + 1);
   }
 }
 

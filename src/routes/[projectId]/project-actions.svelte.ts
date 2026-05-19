@@ -3,8 +3,8 @@ import type { ProjectState } from "./project-state.svelte.js";
 
 export function createProjectActions(state: ProjectState) {
   async function handleCardBundleChange(newBundleId: string) {
-    if (!state.composerCard) return;
-    const cardId = state.composerCard.id;
+    if (!state.selection.composerCard) return;
+    const cardId = state.selection.composerCard.id;
     const res = await api.updateCard(state.fetcher, state.projectId, cardId, {
       bundleId: newBundleId,
     });
@@ -66,24 +66,22 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleDeleteSelected(cardIds: string[]) {
-    const results = await Promise.all(
-      cardIds.map(async (id) => ({
-        id,
-        ok: (await api.deleteCard(state.fetcher, state.projectId, id)).ok,
-      })),
-    );
-    const deletedIds = results.filter((r) => r.ok).map((r) => r.id);
-    if (deletedIds.length < cardIds.length) state.setError("Failed to delete some cards");
-    if (deletedIds.length > 0) {
-      state.cards = state.cards.filter((c) => !deletedIds.includes(c.id));
-      state.glueRels = state.glueRels.filter((r) => !deletedIds.includes(r.cardId));
-      state.selectedCards = new Set([...state.selectedCards].filter((id) => !deletedIds.includes(id)));
-      if (deletedIds.includes(state.primarySelectedId ?? "")) state.primarySelectedId = null;
+    const res = await api.deleteCards(state.fetcher, state.projectId, cardIds);
+    if (!res.ok) {
+      state.setError("Failed to delete cards");
+      return;
     }
+    state.cards = state.cards.filter((c) => !cardIds.includes(c.id));
+    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
+    state.selection.selectedCards = new Set(
+      [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
+    );
+    if (cardIds.includes(state.selection.primarySelectedId ?? ""))
+      state.selection.primarySelectedId = null;
   }
 
   async function handleCreateBundle() {
-    const name = state.newBundleName.trim();
+    const name = state.sidebar.newBundleName.trim();
     if (!name) return;
     const res = await api.createBundle(state.fetcher, state.projectId, name);
     if (!res.ok) {
@@ -92,7 +90,7 @@ export function createProjectActions(state: ProjectState) {
     }
     const { id } = await res.json();
     state.bundles = [...state.bundles, { id, projectId: state.projectId, name, isDefault: false }];
-    state.newBundleName = "";
+    state.sidebar.newBundleName = "";
   }
 
   async function handleDeleteBundle(bundleId: string) {
@@ -106,11 +104,11 @@ export function createProjectActions(state: ProjectState) {
       c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c,
     );
     state.bundles = state.bundles.filter((b) => b.id !== bundleId);
-    if (state.activeBundle === bundleId) state.activeBundle = null;
+    if (state.sidebar.activeBundle === bundleId) state.sidebar.activeBundle = null;
   }
 
   async function handleCreateScope() {
-    const name = state.newScopeName.trim();
+    const name = state.sidebar.newScopeName.trim();
     if (!name) return;
     const res = await api.createScope(state.fetcher, state.projectId, name);
     if (!res.ok) {
@@ -119,13 +117,13 @@ export function createProjectActions(state: ProjectState) {
     }
     const { id } = await res.json();
     state.scopes = [...state.scopes, { id, name }];
-    state.newScopeName = "";
+    state.sidebar.newScopeName = "";
   }
 
   async function handleCreateWorkingCopy() {
-    const name = state.newWcName.trim();
-    if (!name || !state.activeScope) return;
-    const scopeId = state.activeScope;
+    const name = state.sidebar.newWcName.trim();
+    if (!name || !state.sidebar.activeScope) return;
+    const scopeId = state.sidebar.activeScope;
     const res = await api.createWorkingCopy(state.fetcher, state.projectId, { name, scopeId });
     if (!res.ok) {
       state.setError("Failed to create working copy");
@@ -133,7 +131,7 @@ export function createProjectActions(state: ProjectState) {
     }
     const { id, path } = await res.json();
     state.workingCopies = [...state.workingCopies, { id, name, scopeId, path }];
-    state.newWcName = "";
+    state.sidebar.newWcName = "";
   }
 
   async function handleDeleteScope(scopeId: string) {
@@ -144,12 +142,12 @@ export function createProjectActions(state: ProjectState) {
     }
     state.scopes = state.scopes.filter((s) => s.id !== scopeId);
     state.scopeRels = state.scopeRels.filter((r) => r.scopeId !== scopeId);
-    if (state.activeScope === scopeId) state.activeScope = null;
+    if (state.sidebar.activeScope === scopeId) state.sidebar.activeScope = null;
   }
 
   async function handleAddToScope(scopeId: string) {
-    if (state.selectedCards.size === 0) return;
-    const cardIds = [...state.selectedCards];
+    if (state.selection.selectedCards.size === 0) return;
+    const cardIds = [...state.selection.selectedCards];
     const res = await api.addCardsToScope(state.fetcher, state.projectId, scopeId, cardIds);
     if (!res.ok) {
       state.setError("Failed to add cards to scope");
@@ -159,12 +157,12 @@ export function createProjectActions(state: ProjectState) {
       .filter((cid) => !state.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
       .map((cardId) => ({ scopeId, cardId }));
     state.scopeRels = [...state.scopeRels, ...newRels];
-    state.selectedCards = new Set();
+    state.selection.selectedCards = new Set();
   }
 
   async function handleRemoveFromScope(scopeId: string) {
-    if (state.selectedCards.size === 0) return;
-    const cardIds = [...state.selectedCards];
+    if (state.selection.selectedCards.size === 0) return;
+    const cardIds = [...state.selection.selectedCards];
     const res = await api.removeCardsFromScope(state.fetcher, state.projectId, scopeId, cardIds);
     if (!res.ok) {
       state.setError("Failed to remove cards from scope");
@@ -173,7 +171,7 @@ export function createProjectActions(state: ProjectState) {
     state.scopeRels = state.scopeRels.filter(
       (r) => !(r.scopeId === scopeId && cardIds.includes(r.cardId)),
     );
-    state.selectedCards = new Set();
+    state.selection.selectedCards = new Set();
   }
 
   return {

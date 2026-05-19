@@ -3,8 +3,10 @@ import { eq, getTableColumns } from "drizzle-orm";
 import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
 import { assertFound } from "./utils.js";
 
-// Scopes are cross-project by design; use getAllScopes for UI lists that should
-// include newly-created scopes even before they have working copies or members.
+// Scopes are cross-project by design. getAllScopes returns every scope in the DB regardless of
+// project, which grows unbounded in multi-project workspaces. Prefer getScopesByProject for
+// page loads. getAllScopes is still useful for admin/CLI operations or a future "browse all scopes"
+// UI that lets users attach an existing scope from another project to the current one.
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
 }

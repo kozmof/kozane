@@ -24,14 +24,18 @@ async function dissolveOrphanGroups(db: AnyDB, affectedGlueIds: string[]): Promi
   await db.delete(glueRelTable).where(inArray(glueRelTable.glueId, dissolveSubquery));
 
   // Remove glue records that now have no glue_rel entries at all.
-  const stillLinked = db
-    .select({ id: glueRelTable.glueId })
-    .from(glueRelTable)
-    .where(inArray(glueRelTable.glueId, affectedGlueIds));
-
   await db
     .delete(glueTable)
-    .where(and(inArray(glueTable.id, affectedGlueIds), notInArray(glueTable.id, stillLinked)));
+    .where(
+      and(
+        inArray(glueTable.id, affectedGlueIds),
+        notInArray(
+          glueTable.id,
+          db.select({ id: glueRelTable.glueId }).from(glueRelTable)
+            .where(inArray(glueRelTable.glueId, affectedGlueIds)),
+        ),
+      ),
+    );
 }
 
 async function glueCardsCore(db: AnyDB, cardIds: string[]): Promise<string> {

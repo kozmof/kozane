@@ -77,34 +77,15 @@ export async function deleteCard({ db, bundleId, cardId }: DeleteCard): Promise<
   assertFound(deleted, `Card bundleId=${bundleId} cardId=${cardId}`);
 }
 
-type UpdateCardContent = NeedsBundle & { cardId: string; content: string };
-export async function updateCardContent({
-  db,
-  bundleId,
-  cardId,
-  content,
-}: UpdateCardContent): Promise<void> {
-  const updated = await db
-    .update(cardTable)
-    .set({ content })
-    .where(and(eq(cardTable.bundleId, bundleId), eq(cardTable.id, cardId)))
-    .returning({ id: cardTable.id });
-  assertFound(updated, `Card bundleId=${bundleId} cardId=${cardId}`);
-}
-
-type UpdateCardPosition = NeedsDB & { cardId: string; posX: number; posY: number };
-export async function updateCardPosition({
-  db,
-  cardId,
-  posX,
-  posY,
-}: UpdateCardPosition): Promise<void> {
-  const updated = await db
-    .update(cardTable)
-    .set({ posX, posY })
-    .where(eq(cardTable.id, cardId))
-    .returning({ id: cardTable.id });
-  assertFound(updated, `Card cardId=${cardId}`);
+type DeleteCards = { db: DB; projectId: string; cardIds: string[] };
+export async function deleteCards({ db, projectId, cardIds }: DeleteCards): Promise<boolean> {
+  if (cardIds.length === 0) return true;
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, cardIds);
+    if (owned.length !== cardIds.length) return false;
+    await tx.delete(cardTable).where(inArray(cardTable.id, cardIds));
+    return true;
+  });
 }
 
 type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
@@ -126,6 +107,8 @@ type UpdateCard = NeedsDB & {
   posY?: number;
   bundleId?: string;
 };
+type CardUpdate = Partial<Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">>;
+
 export async function updateCard({
   db,
   cardId,
@@ -134,9 +117,6 @@ export async function updateCard({
   posY,
   bundleId,
 }: UpdateCard): Promise<void> {
-  type CardUpdate = Partial<
-    Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">
-  >;
   const fields: CardUpdate = {};
   if (content !== undefined) fields.content = content;
   if (posX !== undefined) fields.posX = posX;

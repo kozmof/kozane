@@ -48,6 +48,14 @@ export function deleteCard(
   return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "DELETE");
 }
 
+export function deleteCards(
+  fetcher: typeof fetch,
+  projectId: string,
+  cardIds: string[],
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/cards`, "DELETE", { cardIds });
+}
+
 export function glueCards(
   fetcher: typeof fetch,
   projectId: string,
@@ -120,7 +128,7 @@ export function batchReassignBundle(
   cardIds: string[],
   bundleId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards`, "PATCH", { cardIds, bundleId });
+  return jsonRequest(fetcher, `/${projectId}/api/cards/bundle`, "PATCH", { cardIds, bundleId });
 }
 
 export function createWorkingCopy(

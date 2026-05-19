@@ -16,3 +16,7 @@ export async function getDb(): Promise<DB> {
   _db = drizzle(client, { schema }) as unknown as DB;
   return _db;
 }
+
+export function resetDb(): void {
+  _db = null;
+}

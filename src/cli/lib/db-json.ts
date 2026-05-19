@@ -240,11 +240,42 @@ export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
   }
 }
 
+function validateDumpRefs(tables: TableRows): void {
+  const projectIds = new Set(tables.project.map((r) => r.id as string));
+  const bundleIds = new Set(tables.bundle.map((r) => r.id as string));
+  const cardIds = new Set(tables.card.map((r) => r.id as string));
+  const glueIds = new Set(tables.glue.map((r) => r.id as string));
+
+  for (const row of tables.bundle) {
+    if (!projectIds.has(row.project_id as string))
+      throw new Error(`bundle ${row.id}: references unknown project_id ${row.project_id}`);
+  }
+  for (const row of tables.card) {
+    if (!bundleIds.has(row.bundle_id as string))
+      throw new Error(`card ${row.id}: references unknown bundle_id ${row.bundle_id}`);
+  }
+  for (const row of tables.working_copy) {
+    if (row.project_id !== null && !projectIds.has(row.project_id as string))
+      throw new Error(`working_copy ${row.id}: references unknown project_id ${row.project_id}`);
+  }
+  for (const row of tables.glue_rel) {
+    if (!glueIds.has(row.glue_id as string))
+      throw new Error(`glue_rel: references unknown glue_id ${row.glue_id}`);
+    if (!cardIds.has(row.card_id as string))
+      throw new Error(`glue_rel: references unknown card_id ${row.card_id}`);
+  }
+  for (const row of tables.scope_rel) {
+    if (!cardIds.has(row.card_id as string))
+      throw new Error(`scope_rel: references unknown card_id ${row.card_id}`);
+  }
+}
+
 export async function importDbJson(
   dbUrl: string,
   input: unknown,
 ): Promise<Record<TableName, number>> {
   const dump = parseDump(input);
+  validateDumpRefs(dump.tables);
   const client = createClient({ url: dbUrl });
 
   try {

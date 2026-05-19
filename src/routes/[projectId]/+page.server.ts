@@ -1,9 +1,9 @@
 import type { PageServerLoad } from "./$types";
-import type { WorkingCopy } from "$lib/types";
+import type { WorkingCopySummary } from "$lib/types";
 import { error } from "@sveltejs/kit";
 import { getProject } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
-import { getAllScopes } from "../../db/api/scope";
+import { getScopesByProject } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
@@ -20,9 +20,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
   const [bundles, scopes] = await Promise.all([
     getAllBundles({ db, projectId }),
-    // The sidebar is a global scope picker. Scope membership is project-specific,
-    // but scope definitions themselves are shared across projects.
-    getAllScopes({ db }),
+    // Load only scopes that have working copies in this project. Scopes are global by design,
+    // but for the initial load we only need the ones relevant here. New scopes created by the
+    // user are optimistically appended to client state without a reload.
+    getScopesByProject({ db, projectId }),
   ]);
 
   const bundleIds = bundles.map((b) => b.id);
@@ -47,7 +48,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       name: wc.name,
       scopeId: wc.scopeId,
       path: wc.path,
-    } satisfies WorkingCopy)),
+    } satisfies WorkingCopySummary)),
     uiConfig: getWorkspaceUiConfig(),
   };
 };

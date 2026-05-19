@@ -28,9 +28,11 @@ export function migrationStatusMessage(status: MigrationStatus): string {
   const lines = [
     `Database: ${status.dbPath ?? "unknown"}`,
     `Status  : ${status.state}`,
-    `Applied : ${migrationLabel(status.applied)}`,
     `Latest  : ${migrationLabel(status.latest)}`,
   ];
+  if (status.state !== "unknown") {
+    lines.push(`Applied : ${migrationLabel(status.applied)}`);
+  }
 
   if (status.state === "pending") {
     lines.push(`Pending : ${status.pendingCount}`);
@@ -118,7 +120,7 @@ export async function dbExport(file?: string, options: DbExportOptions = {}): Pr
   requireCurrentStatus(status);
 
   const dump = await exportDbJson(url, {
-    applied: status.applied?.tag ?? null,
+    applied: status.state !== "unknown" ? (status.applied?.tag ?? null) : null,
     latest: status.latest?.tag ?? null,
   });
   const json = stringifyDbJson(dump, options.pretty ?? true);

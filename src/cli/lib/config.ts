@@ -62,14 +62,19 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
   const parsed: unknown = JSON.parse(raw);
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    typeof (parsed as Record<string, unknown>).name !== "string" ||
-    typeof (parsed as Record<string, unknown>).server !== "object" ||
-    typeof (parsed as Record<string, unknown>).workingCopy !== "object"
-  ) {
+  const p = parsed as Record<string, unknown>;
+  if (typeof parsed !== "object" || parsed === null || typeof p.name !== "string") {
     throw new Error(`Invalid Kozane config at ${configPath}`);
+  }
+  const server = p.server as Record<string, unknown> | undefined;
+  if (typeof server !== "object" || server === null ||
+      typeof server.host !== "string" || typeof server.port !== "number") {
+    throw new Error(`Invalid server config at ${configPath}`);
+  }
+  const wc = p.workingCopy as Record<string, unknown> | undefined;
+  if (typeof wc !== "object" || wc === null ||
+      typeof wc.defaultDir !== "string" || !Array.isArray(wc.searchRoots)) {
+    throw new Error(`Invalid workingCopy config at ${configPath}`);
   }
   return parsed as WorkspaceConfig;
 }

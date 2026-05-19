@@ -33,6 +33,7 @@ describe("getMigrationStatus", () => {
     const status = await getMigrationStatus(tempDbUrl(join(root, "missing.db")));
 
     expect(status.state).toBe("missing");
+    if (status.state !== "missing") return;
     expect(status.pendingCount).toBeGreaterThan(0);
     expect(status.latest?.tag).toMatch(/^0001_/);
   });
@@ -45,6 +46,7 @@ describe("getMigrationStatus", () => {
     const status = await getMigrationStatus(tempDbUrl(dbPath));
 
     expect(status.state).toBe("current");
+    if (status.state !== "current") return;
     expect(status.pendingCount).toBe(0);
     expect(status.applied?.tag).toBe(status.latest?.tag);
   });
@@ -66,6 +68,7 @@ describe("getMigrationStatus", () => {
     const status = await getMigrationStatus(tempDbUrl(dbPath));
 
     expect(status.state).toBe("pending");
+    if (status.state !== "pending") return;
     expect(status.pendingCount).toBeGreaterThan(0);
   });
 

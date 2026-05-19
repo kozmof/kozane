@@ -3,8 +3,8 @@ import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../db/api/bundle";
 import {
   addCard,
+  deleteCards,
   updateProjectCardPositions,
-  reassignCardsToBundle,
   type CardPositionUpdate,
 } from "../../../../db/api/card";
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
@@ -71,19 +71,6 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
   const body = await readJsonObject(request);
-
-  if (body.bundleId !== undefined) {
-    const bundleId = requireString(body, "bundleId");
-    const bundle = await getBundle({ db, projectId, bundleId });
-    if (!bundle) throw error(400, "Bundle not found in project");
-    const cardIds = requireStringArray(body, "cardIds");
-
-    if (!(await reassignCardsToBundle({ db, projectId, cardIds, bundleId })))
-      throw error(400, "Some cards do not belong to this project");
-
-    return json({ ok: true });
-  }
-
   const positions = requirePositionUpdates(body);
   const cardIds = positions.map((position) => position.cardId);
   requireUniqueStrings(cardIds, "cardId");
@@ -91,5 +78,15 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (!(await updateProjectCardPositions({ db, projectId, positions })))
     throw error(400, "Some cards do not belong to this project");
 
+  return json({ ok: true });
+};
+
+export const DELETE: RequestHandler = async ({ locals, params, request }) => {
+  const { db } = locals;
+  const { projectId } = params;
+  const body = await readJsonObject(request);
+  const cardIds = requireStringArray(body, "cardIds");
+  if (!(await deleteCards({ db, projectId, cardIds })))
+    throw error(400, "Some cards do not belong to this project");
   return json({ ok: true });
 };

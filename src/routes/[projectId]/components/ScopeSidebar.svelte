@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { Scope, ScopeRel, WorkingCopy } from "$lib/types";
+  import type { Scope, ScopeRel, WorkingCopySummary } from "$lib/types";
 
   let {
     visible,
@@ -22,7 +22,7 @@
     panelWidth: number;
     scopes: Scope[];
     scopeRels: ScopeRel[];
-    workingCopies: WorkingCopy[];
+    workingCopies: WorkingCopySummary[];
     selectedCards: Set<string>;
     activeScope: string | null;
     newScopeName: string;

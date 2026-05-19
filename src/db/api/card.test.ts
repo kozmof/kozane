@@ -6,8 +6,6 @@ import {
   getAllCards,
   getCardsByBundles,
   deleteCard,
-  updateCardContent,
-  updateCardPosition,
   updateCardPositions,
   updateProjectCardPositions,
   updateCard,
@@ -132,28 +130,26 @@ describe("deleteCard", () => {
   });
 });
 
-describe("updateCardContent", () => {
+describe("updateCard (content)", () => {
   it("changes the content", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Old" });
-    await updateCardContent({ db, bundleId, cardId, content: "New" });
+    await updateCard({ db, cardId, content: "New" });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.content).toBe("New");
   });
 
   it("throws NotFoundError for a missing card", async () => {
-    const { db, bundleId } = await setup();
-    await expect(
-      updateCardContent({ db, bundleId, cardId: "ghost", content: "X" }),
-    ).rejects.toThrow(NotFoundError);
+    const { db } = await setup();
+    await expect(updateCard({ db, cardId: "ghost", content: "X" })).rejects.toThrow(NotFoundError);
   });
 });
 
-describe("updateCardPosition", () => {
+describe("updateCard (position)", () => {
   it("changes posX and posY", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Hi" });
-    await updateCardPosition({ db, cardId, posX: 300, posY: 400 });
+    await updateCard({ db, cardId, posX: 300, posY: 400 });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.posX).toBe(300);
     expect(card?.posY).toBe(400);
@@ -161,7 +157,7 @@ describe("updateCardPosition", () => {
 
   it("throws NotFoundError for a missing card", async () => {
     const { db } = await setup();
-    await expect(updateCardPosition({ db, cardId: "ghost", posX: 0, posY: 0 })).rejects.toThrow(
+    await expect(updateCard({ db, cardId: "ghost", posX: 0, posY: 0 })).rejects.toThrow(
       NotFoundError,
     );
   });

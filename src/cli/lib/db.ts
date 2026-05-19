@@ -40,14 +40,7 @@ export type MigrationStatus =
       applied: MigrationJournalEntry | null;
       pendingCount: number;
     }
-  | {
-      state: "unknown";
-      dbPath: string | null;
-      latest: MigrationJournalEntry | null;
-      applied: MigrationJournalEntry | null;
-      pendingCount: number | null;
-      error: string;
-    };
+  | { state: "unknown"; dbPath: string | null; latest: MigrationJournalEntry | null; error: string };
 
 export async function openDb(dbUrl: string): Promise<DB> {
   const client = createClient({ url: dbUrl });
@@ -119,8 +112,6 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
       state: "unknown",
       dbPath: pathFromDbUrl(dbUrl),
       latest: null,
-      applied: null,
-      pendingCount: null,
       error: e instanceof Error ? e.message : String(e),
     };
   }
@@ -183,8 +174,6 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
       state: "unknown",
       dbPath: filePath,
       latest,
-      applied: null,
-      pendingCount: null,
       error: e instanceof Error ? e.message : String(e),
     };
   } finally {

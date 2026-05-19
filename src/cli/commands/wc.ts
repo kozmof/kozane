@@ -17,6 +17,16 @@ import { v7 as uuidv7 } from "uuid";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
 
+function formatAge(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
 type ScanOptions = { apply?: boolean; reattach?: boolean; cleanup?: boolean };
 
 export async function wcScan(options: ScanOptions = {}): Promise<void> {
@@ -45,9 +55,15 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
   const movedIds = new Set(diff.moved.map(({ record }) => record.id));
   const orphanIds = new Set(diff.orphans.map((wc) => wc.workingCopyId));
+  const recordById = new Map(dbRecords.map((r) => [r.id, r]));
+  const now = Date.now();
   for (const wc of found) {
     if (movedIds.has(wc.workingCopyId) || orphanIds.has(wc.workingCopyId)) continue;
-    console.log(`  ok      ${wc.workingCopyId}  ${wc.path}`);
+    const record = recordById.get(wc.workingCopyId);
+    const seenSuffix = record?.lastSeenAt
+      ? `  (last seen ${formatAge(now - record.lastSeenAt.getTime())} ago)`
+      : "  (never seen)";
+    console.log(`  ok      ${wc.workingCopyId}  ${wc.path}${seenSuffix}`);
     if (options.apply) {
       await db
         .update(workingCopyTable)
@@ -132,7 +148,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
 // ─── wc create ──────────────────────────────────────────────────────────────
 
-type CreateOptions = { scope?: string; noScope?: boolean; dir?: string };
+type CreateOptions = { scope?: string; noScope?: boolean; project?: string; dir?: string };
 
 export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
   if (!options.scope && !options.noScope) {
@@ -160,10 +176,27 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
   const storedPath =
     pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
 
-  // Get the project id from the DB (first project, or from scope's bundle)
   let projectId: string | undefined;
-  const projects = await db.select({ id: projectTable.id }).from(projectTable).limit(1);
-  if (projects.length > 0) projectId = projects[0].id;
+  if (options.project) {
+    const found = await db
+      .select({ id: projectTable.id })
+      .from(projectTable)
+      .where(eq(projectTable.id, options.project))
+      .get();
+    if (!found) {
+      console.error(`Error: project not found: ${options.project}`);
+      process.exit(1);
+    }
+    projectId = found.id;
+  } else {
+    const projects = await db.select({ id: projectTable.id }).from(projectTable);
+    if (projects.length === 1) {
+      projectId = projects[0].id;
+    } else if (projects.length > 1) {
+      console.error("Error: workspace has multiple projects. Use --project <projectId> to specify one.");
+      process.exit(1);
+    }
+  }
 
   const id = uuidv7();
   await db.insert(workingCopyTable).values({
