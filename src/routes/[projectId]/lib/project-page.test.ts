@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPalette,
+  buildGlueGroupMap,
   cardPositionPatches,
   cardsWithGlueIds,
   clampZoom,
@@ -90,24 +91,25 @@ describe("cardsWithGlueIds", () => {
 
 describe("glueGroupIds", () => {
   it("returns all cards in a glue group", () => {
-    expect(glueGroupIds(glueRels, "card-1")).toEqual(["card-1", "card-2"]);
+    expect(glueGroupIds(buildGlueGroupMap(glueRels), "card-1")).toEqual(["card-1", "card-2"]);
   });
 
   it("returns the card itself when it is not glued", () => {
-    expect(glueGroupIds(glueRels, "card-3")).toEqual(["card-3"]);
+    expect(glueGroupIds(buildGlueGroupMap(glueRels), "card-3")).toEqual(["card-3"]);
   });
 });
 
 describe("dragGroupIds", () => {
   it("combines glued peers with selected peers without duplicates", () => {
-    expect(dragGroupIds(glueRels, new Set(["card-1", "card-2", "card-3"]), "card-1")).toEqual([
-      "card-2",
-      "card-3",
-    ]);
+    expect(
+      dragGroupIds(buildGlueGroupMap(glueRels), new Set(["card-1", "card-2", "card-3"]), "card-1"),
+    ).toEqual(["card-2", "card-3"]);
   });
 
   it("does not drag selected cards when the active card is not selected", () => {
-    expect(dragGroupIds(glueRels, new Set(["card-3"]), "card-1")).toEqual(["card-2"]);
+    expect(dragGroupIds(buildGlueGroupMap(glueRels), new Set(["card-3"]), "card-1")).toEqual([
+      "card-2",
+    ]);
   });
 });
 

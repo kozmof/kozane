@@ -4,8 +4,8 @@ import userEvent from "@testing-library/user-event";
 import BundleDropdown from "./BundleDropdown.svelte";
 
 const bundles = [
-  { id: "b1", name: "General", bg: "#fff7ed", dot: "#f59e0b" },
-  { id: "b2", name: "Research", bg: "#f0fdf4", dot: "#22c55e" },
+  { id: "b1", name: "General", bg: "#fff7ed", dot: "#f59e0b", isDefault: true },
+  { id: "b2", name: "Research", bg: "#f0fdf4", dot: "#22c55e", isDefault: false },
 ];
 
 function makeProps(overrides: Record<string, unknown> = {}) {

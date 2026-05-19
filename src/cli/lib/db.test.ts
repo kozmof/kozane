@@ -34,7 +34,7 @@ describe("getMigrationStatus", () => {
 
     expect(status.state).toBe("missing");
     expect(status.pendingCount).toBeGreaterThan(0);
-    expect(status.latest?.tag).toMatch(/^0000_/);
+    expect(status.latest?.tag).toMatch(/^0001_/);
   });
 
   it("reports current after migrations are applied", async () => {

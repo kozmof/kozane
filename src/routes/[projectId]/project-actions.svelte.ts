@@ -1,12 +1,12 @@
-import type { CardData, Bundle, Scope, ScopeRel, GlueRel, WorkingCopy } from "$lib/types";
+import type { CardWithGlue, Bundle, Scope, ScopeRel, GlueRel, WorkingCopy } from "$lib/types";
 import * as api from "./lib/project-api";
 
 export type ProjectPageState = {
   projectId: string;
   fetcher: typeof fetch;
 
-  get cards(): CardData[];
-  set cards(value: CardData[]);
+  get cards(): CardWithGlue[];
+  set cards(value: CardWithGlue[]);
 
   get bundles(): Bundle[];
   set bundles(value: Bundle[]);
@@ -26,8 +26,8 @@ export type ProjectPageState = {
   get primarySelectedId(): string | null;
   set primarySelectedId(value: string | null);
 
-  get composerCard(): CardData | null;
-  set composerCard(value: CardData | null);
+  get composerCard(): CardWithGlue | null;
+  set composerCard(value: CardWithGlue | null);
 
   get activeBundle(): string | null;
   set activeBundle(value: string | null);
@@ -65,12 +65,13 @@ export function createProjectActions(state: ProjectPageState) {
   }
 
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
-    const results = await Promise.all(
-      cardIds.map((id) =>
-        api.updateCard(state.fetcher, state.projectId, id, { bundleId: newBundleId }),
-      ),
+    const res = await api.batchReassignBundle(
+      state.fetcher,
+      state.projectId,
+      cardIds,
+      newBundleId,
     );
-    if (results.some((r) => !r.ok)) {
+    if (!res.ok) {
       state.setError("Failed to change bundle for selected cards");
       return;
     }

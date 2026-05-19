@@ -2,11 +2,12 @@
   import { css } from "styled-system/css";
   import KozaneCard from "./KozaneCard.svelte";
   import SelectionRect from "./SelectionRect.svelte";
-  import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
   import {
     GRID,
     PALETTE,
     ZOOM_STEP,
+    buildGlueGroupMap,
     clampZoom,
     clientToWorld as toWorldPoint,
     dragGroupIds,
@@ -38,13 +39,13 @@
     onPersistPositions,
     onError,
   }: {
-    cards: CardData[];
-    visibleCards: CardData[];
+    cards: CardWithGlue[];
+    visibleCards: CardWithGlue[];
     glueRels: GlueRel[];
     bundleColorById: Map<string, BundleWithColor>;
     selectedCards: Set<string>;
     primarySelectedId: string | null;
-    composerCard: CardData | null;
+    composerCard: CardWithGlue | null;
     scopeCardIds: Set<string> | null;
     showFooters: boolean;
     zoom: number;
@@ -56,6 +57,8 @@
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
     onError: (message: string) => void;
   } = $props();
+
+  const glueGroupMap = $derived(buildGlueGroupMap(glueRels));
 
   let canvasEl: HTMLDivElement = $state()!;
   let draggingId = $state<string | null>(null);
@@ -125,7 +128,7 @@
       const cardId = el.dataset.cardId;
       if (!cardId || !rectsIntersect(el.getBoundingClientRect(), screenRect)) return;
       primaryId ??= cardId;
-      glueGroupIds(glueRels, cardId).forEach((id) => next.add(id));
+      glueGroupIds(glueGroupMap, cardId).forEach((id) => next.add(id));
     });
     selectedCards = next;
     primarySelectedId = primaryId;
@@ -137,7 +140,7 @@
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
-    const groupIds = dragGroupIds(glueRels, selectedCards, cardId);
+    const groupIds = dragGroupIds(glueGroupMap, selectedCards, cardId);
     const groupPrevPositions = previousPositions(cards, groupIds);
     dragState = {
       cardId,
@@ -159,7 +162,7 @@
   export function handleCardClick(e: MouseEvent, cardId: string) {
     if (dragState?.moved) return;
     if (composerCard && composerCard.id !== cardId) composerCard = null;
-    const groupIds = glueGroupIds(glueRels, cardId);
+    const groupIds = glueGroupIds(glueGroupMap, cardId);
     if (e.shiftKey) {
       const next = new Set(selectedCards);
       if (next.has(cardId)) {

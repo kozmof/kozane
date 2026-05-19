@@ -1,4 +1,7 @@
 import type { Card, GlueRel } from "../../../db/api/types.js";
+import type { CardWithGlue } from "$lib/types.js";
+
+export type { CardWithGlue };
 
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;
@@ -16,7 +19,6 @@ export const PALETTE = [
   { bg: "oklch(93% 0.055 180)", dot: "oklch(62% 0.15 180)" },
 ] as const;
 
-export type CardWithGlue = Card & { glueId: string | null };
 export type Point = { x: number; y: number };
 export type WorldRect = Point & { w: number; h: number };
 export type ScreenRect = { left: number; top: number; right: number; bottom: number };
@@ -24,6 +26,7 @@ export type RectLike = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 export type CardPosition = { x: number; y: number };
 export type CardPositionPatch = { cardId: string; posX: number; posY: number };
 
+// Colors repeat intentionally when bundles exceed PALETTE.length (8).
 export function applyPalette<T extends { id: string }>(bundles: T[]) {
   return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
 }
@@ -40,29 +43,44 @@ export function cardsWithGlueIds(cards: Card[], glueRels: GlueRel[]): CardWithGl
   }));
 }
 
-export function glueGroupIds(glueRels: GlueRel[], cardId: string): string[] {
-  const rel = glueRels.find((r) => r.cardId === cardId);
-  if (!rel) return [cardId];
-  return glueRels.filter((r) => r.glueId === rel.glueId).map((r) => r.cardId);
+export function buildGlueGroupMap(glueRels: GlueRel[]): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const rel of glueRels) {
+    const group = map.get(rel.glueId);
+    if (group) group.push(rel.cardId);
+    else map.set(rel.glueId, [rel.cardId]);
+  }
+  return map;
+}
+
+export function glueGroupIds(groupMap: Map<string, string[]>, cardId: string): string[] {
+  for (const group of groupMap.values()) {
+    if (group.includes(cardId)) return group;
+  }
+  return [cardId];
 }
 
 export function dragGroupIds(
-  glueRels: GlueRel[],
+  groupMap: Map<string, string[]>,
   selectedCards: ReadonlySet<string>,
   cardId: string,
 ): string[] {
-  const glueIds = glueGroupIds(glueRels, cardId).filter((id) => id !== cardId);
+  const glueIds = glueGroupIds(groupMap, cardId).filter((id) => id !== cardId);
   const selectionIds = selectedCards.has(cardId)
     ? [...selectedCards].filter((id) => id !== cardId)
     : [];
   return [...new Set([...glueIds, ...selectionIds])];
 }
 
+function buildCardMap<T extends { id: string }>(cards: T[]): Map<string, T> {
+  return new Map(cards.map((card) => [card.id, card]));
+}
+
 export function previousPositions<T extends { id: string; posX: number; posY: number }>(
   cards: T[],
   cardIds: string[],
 ): Map<string, CardPosition> {
-  const byId = new Map(cards.map((card) => [card.id, card]));
+  const byId = buildCardMap(cards);
   return new Map(
     cardIds.flatMap((id) => {
       const card = byId.get(id);
@@ -75,7 +93,7 @@ export function cardPositionPatches<T extends { id: string; posX: number; posY: 
   cards: T[],
   cardIds: string[],
 ): CardPositionPatch[] {
-  const byId = new Map(cards.map((card) => [card.id, card]));
+  const byId = buildCardMap(cards);
   return cardIds.flatMap((id) => {
     const card = byId.get(id);
     return card ? [{ cardId: id, posX: card.posX, posY: card.posY }] : [];

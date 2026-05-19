@@ -1,4 +1,5 @@
 import type { PageServerLoad } from "./$types";
+import type { WorkingCopy } from "$lib/types";
 import { error } from "@sveltejs/kit";
 import { getProject } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
@@ -46,7 +47,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       name: wc.name,
       scopeId: wc.scopeId,
       path: wc.path,
-    })),
+    } satisfies WorkingCopy)),
     uiConfig: getWorkspaceUiConfig(),
   };
 };

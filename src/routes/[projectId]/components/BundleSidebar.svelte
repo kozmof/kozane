@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { CardData, BundleWithColor } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor } from "$lib/types";
 
   let {
     visible,
@@ -14,7 +14,7 @@
   }: {
     visible: boolean;
     panelWidth: number;
-    cards: CardData[];
+    cards: CardWithGlue[];
     bundles: BundleWithColor[];
     activeBundle: string | null;
     newBundleName: string;

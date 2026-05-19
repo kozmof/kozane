@@ -1,8 +1,26 @@
 import { bundleTable, cardTable } from "../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
+import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
+
+export async function cardsInProject(
+  db: AnyDB,
+  projectId: string,
+  cardIds: string[],
+): Promise<string[]> {
+  if (cardIds.length === 0) return [];
+  const rows = await db
+    .select({ id: cardTable.id })
+    .from(cardTable)
+    .innerJoin(
+      bundleTable,
+      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+    )
+    .where(inArray(cardTable.id, cardIds));
+  return rows.map((r) => r.id);
+}
 
 export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
@@ -174,15 +192,7 @@ export async function updateProjectCardPositions({
 
   return withTx(db, async (tx) => {
     const cardIds = positions.map((position) => position.cardId);
-    const owned = await tx
-      .select({ id: cardTable.id })
-      .from(cardTable)
-      .innerJoin(
-        bundleTable,
-        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-      )
-      .where(inArray(cardTable.id, cardIds));
-
+    const owned = await cardsInProject(tx, projectId, cardIds);
     if (owned.length !== cardIds.length) return false;
 
     for (const { cardId, posX, posY } of positions) {
@@ -193,6 +203,34 @@ export async function updateProjectCardPositions({
         .returning({ id: cardTable.id });
       assertFound(updated, `Card projectId=${projectId} cardId=${cardId}`);
     }
+
+    return true;
+  });
+}
+
+type ReassignCardsToBundle = {
+  db: DB;
+  projectId: string;
+  cardIds: string[];
+  bundleId: string;
+};
+
+export async function reassignCardsToBundle({
+  db,
+  projectId,
+  cardIds,
+  bundleId,
+}: ReassignCardsToBundle): Promise<boolean> {
+  if (cardIds.length === 0) return true;
+
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, cardIds);
+    if (owned.length !== cardIds.length) return false;
+
+    await tx
+      .update(cardTable)
+      .set({ bundleId })
+      .where(inArray(cardTable.id, cardIds));
 
     return true;
   });

@@ -1,5 +1,5 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, uniqueIndex, check } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
 export const projectTable = sqliteTable("project", {
@@ -28,14 +28,18 @@ export const bundleTable = sqliteTable(
   ],
 );
 
-export const scopeTable = sqliteTable("scope", {
-  // A scope is intentionally cross-project. Do not add project_id here; projects see
-  // the shared scope list, while membership is expressed through scope_rel/card rows.
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  name: text().notNull().default(""),
-});
+export const scopeTable = sqliteTable(
+  "scope",
+  {
+    // A scope is intentionally cross-project. Do not add project_id here; projects see
+    // the shared scope list, while membership is expressed through scope_rel/card rows.
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    name: text().notNull().default(""),
+  },
+  (t) => [check("scope_name_nonempty", sql`length(${t.name}) > 0`)],
+);
 
 export const PATH_KINDS = ["project_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];

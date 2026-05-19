@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import KozaneCard from "./KozaneCard.svelte";
 
-const color = { id: "bundle-1", bg: "#fff7ed", dot: "#f59e0b", name: "General" };
+const color = { id: "bundle-1", bg: "#fff7ed", dot: "#f59e0b", name: "General", isDefault: false };
 
 function makeProps(overrides: Record<string, unknown> = {}) {
   return {
@@ -24,6 +24,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     isDragging: false,
     cardWidth: 240,
     fontSize: 11.5,
+    fontFamily: "sans-serif",
     showFooters: true,
     onCardMouseDown: vi.fn(),
     onCardClick: vi.fn(),

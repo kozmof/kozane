@@ -114,6 +114,15 @@ export function removeCardsFromScope(
   return jsonRequest(fetcher, `/${projectId}/api/scopes/${scopeId}/members`, "DELETE", { cardIds });
 }
 
+export function batchReassignBundle(
+  fetcher: typeof fetch,
+  projectId: string,
+  cardIds: string[],
+  bundleId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/cards`, "PATCH", { cardIds, bundleId });
+}
+
 export function createWorkingCopy(
   fetcher: typeof fetch,
   projectId: string,

@@ -66,7 +66,7 @@ export async function updateWorkingCopy({
   assertFound(updated, `WorkingCopy workingCopyId=${workingCopyId}`);
 }
 
-type GetWorkingCopy = NeedsDB & { workingCopyId: string };
+type GetWorkingCopy = NeedsWorkingCopy;
 export async function getWorkingCopy({
   db,
   workingCopyId,
@@ -74,7 +74,7 @@ export async function getWorkingCopy({
   return db.select().from(workingCopyTable).where(eq(workingCopyTable.id, workingCopyId)).get();
 }
 
-type DeleteWorkingCopy = NeedsDB & { workingCopyId: string };
+type DeleteWorkingCopy = NeedsWorkingCopy;
 export async function deleteWorkingCopy({ db, workingCopyId }: DeleteWorkingCopy): Promise<void> {
   const deleted = await db
     .delete(workingCopyTable)

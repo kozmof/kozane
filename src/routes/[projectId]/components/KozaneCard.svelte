@@ -1,9 +1,9 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import type { CardData, BundleWithColor } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor } from "$lib/types";
 
   interface Props {
-    card: CardData;
+    card: CardWithGlue;
     color: BundleWithColor;
     isSelected: boolean;
     isPrimaryUnglue: boolean;

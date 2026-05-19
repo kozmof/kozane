@@ -23,13 +23,6 @@ describe("addScope", () => {
     expect(id).toBeTruthy();
   });
 
-  it("defaults name to empty string when omitted", async () => {
-    const d = await db();
-    const id = await addScope({ db: d });
-    const scope = await getScope({ db: d, scopeId: id });
-    expect(scope?.name).toBe("");
-  });
-
   it("assigns unique ids", async () => {
     const d = await db();
     const id1 = await addScope({ db: d, name: "A" });

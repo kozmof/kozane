@@ -4,8 +4,11 @@ export interface CardData {
   bundleId: string;
   posX: number;
   posY: number;
-  glueId: string | null;
   workingCopyId: string | null;
+}
+
+export interface CardWithGlue extends CardData {
+  glueId: string | null;
 }
 
 export interface Bundle {
@@ -20,7 +23,7 @@ export interface BundleWithColor {
   name: string;
   bg: string;
   dot: string;
-  isDefault?: boolean;
+  isDefault: boolean;
 }
 
 export interface Scope {

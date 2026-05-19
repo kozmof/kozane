@@ -9,6 +9,7 @@ export type Tx = LibSQLDatabase<typeof schema> & { readonly [__tx]: true };
 export type AnyDB = DB | Tx;
 
 export async function withTx<T>(db: DB, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  // drizzle-orm/libsql does not accept the generic callback signature; cast is required upstream.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return db.transaction(fn as any);
 }

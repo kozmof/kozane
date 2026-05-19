@@ -1,13 +1,13 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import CardComposer from "./CardComposer.svelte";
-  import type { CardData, BundleWithColor, GlueRel } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
 
   interface Props {
-    editingCard: CardData | null;
-    selectedCards: CardData[];
+    editingCard: CardWithGlue | null;
+    selectedCards: CardWithGlue[];
     selectionGlueRels: GlueRel[];
-    primaryCard: CardData | null;
+    primaryCard: CardWithGlue | null;
     bundles: BundleWithColor[];
     defaultBundleId: string;
     onSubmit: (id: string | null, content: string, bundleId: string) => void;

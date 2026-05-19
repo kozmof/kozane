@@ -23,8 +23,8 @@ export async function getScope({ db, scopeId }: GetScope): Promise<Scope | undef
   return db.select().from(scopeTable).where(eq(scopeTable.id, scopeId)).get();
 }
 
-type AddScope = NeedsDB & { name?: string };
-export async function addScope({ db, name = "" }: AddScope): Promise<string> {
+type AddScope = NeedsDB & { name: string };
+export async function addScope({ db, name }: AddScope): Promise<string> {
   const [row] = await db.insert(scopeTable).values({ name }).returning({ id: scopeTable.id });
   return row.id;
 }
