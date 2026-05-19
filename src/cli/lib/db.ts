@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
 import type { DB } from "../../db/tx.js";
+import { createDb } from "../../db/client.js";
 import { dbPath } from "./config.js";
 
 type MigrationJournal = {
@@ -43,9 +44,7 @@ export type MigrationStatus =
   | { state: "unknown"; dbPath: string | null; latest: MigrationJournalEntry | null; error: string };
 
 export async function openDb(dbUrl: string): Promise<DB> {
-  const client = createClient({ url: dbUrl });
-  await client.execute("PRAGMA foreign_keys = ON");
-  return drizzle(client, { schema }) as unknown as DB;
+  return createDb(dbUrl);
 }
 
 export function resolveMigrationsFolder(): string {
@@ -182,16 +181,8 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
 }
 
 function timestamp(date = new Date()): string {
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-    "-",
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join("");
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
 export function backupDb(projectRoot: string): string {

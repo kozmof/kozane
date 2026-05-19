@@ -21,7 +21,7 @@ function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpda
   const value = body.positions;
   if (!Array.isArray(value) || value.length === 0) throw error(400, "positions is required");
 
-  return value.map((item) => {
+  const positions = value.map((item) => {
     if (typeof item !== "object" || item === null || Array.isArray(item))
       throw error(400, "positions must contain objects");
 
@@ -39,6 +39,9 @@ function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpda
       posY: clamp(row.posY, 0, CANVAS_H),
     };
   });
+
+  requireUniqueStrings(positions.map((p) => p.cardId), "cardId");
+  return positions;
 }
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
@@ -72,8 +75,6 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { projectId } = params;
   const body = await readJsonObject(request);
   const positions = requirePositionUpdates(body);
-  const cardIds = positions.map((position) => position.cardId);
-  requireUniqueStrings(cardIds, "cardId");
 
   if (!(await updateProjectCardPositions({ db, projectId, positions })))
     throw error(400, "Some cards do not belong to this project");

@@ -48,6 +48,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       name: wc.name,
       scopeId: wc.scopeId,
       path: wc.path,
+      pathKind: wc.pathKind,
     } satisfies WorkingCopySummary)),
     uiConfig: getWorkspaceUiConfig(),
   };

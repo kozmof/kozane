@@ -98,11 +98,13 @@
   } | null = null;
 
   export function getNewCardPosition(seq: number): { posX: number; posY: number } {
-    const step = (seq % 8) * GRID;
-    const base = -7 * GRID;
+    const col = seq % 4;
+    const row = Math.floor(seq / 4);
+    const centerX = Math.round((canvasEl.scrollLeft + canvasEl.clientWidth / 2) / zoom / GRID) * GRID;
+    const centerY = Math.round((canvasEl.scrollTop + canvasEl.clientHeight / 2) / zoom / GRID) * GRID;
     return {
-      posX: Math.max(0, Math.round((canvasEl.scrollLeft + canvasEl.clientWidth / 2) / zoom / GRID) * GRID + base + step),
-      posY: Math.max(0, Math.round((canvasEl.scrollTop + canvasEl.clientHeight / 2) / zoom / GRID) * GRID + base + step),
+      posX: Math.max(0, centerX - 3 * GRID + col * 2 * GRID),
+      posY: Math.max(0, centerY - 3 * GRID + row * 2 * GRID),
     };
   }
 
@@ -278,12 +280,17 @@
         if (moved) {
           const allIds = [cardId, ...groupIds];
           const positions = cardPositionPatches(cards, allIds);
+          const sentByCardId = new Map(positions.map((p) => [p.cardId, p]));
           const ok = await onPersistPositions(positions);
           if (!ok) {
             cards = cards.map((c) => {
-              if (c.id === cardId) return { ...c, posX: prevX, posY: prevY };
+              const sent = sentByCardId.get(c.id);
+              if (!sent) return c;
+              if (c.id === cardId && c.posX === sent.posX && c.posY === sent.posY)
+                return { ...c, posX: prevX, posY: prevY };
               const prev = groupPrevPositions.get(c.id);
-              if (prev) return { ...c, posX: prev.x, posY: prev.y };
+              if (prev && c.posX === sent.posX && c.posY === sent.posY)
+                return { ...c, posX: prev.x, posY: prev.y };
               return c;
             });
             onError("Failed to save card position");

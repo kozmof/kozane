@@ -3,8 +3,6 @@ import type { CardWithGlue } from "$lib/types.js";
 import type { CardPositionUpdate } from "../../../db/api/card.js";
 export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/card.js";
 
-export type { CardWithGlue };
-
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;

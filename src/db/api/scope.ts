@@ -1,4 +1,4 @@
-import { scopeTable, workingCopyTable } from "../schema.js";
+import { scopeTable, projectScopeRelTable } from "../schema.js";
 import { eq, getTableColumns } from "drizzle-orm";
 import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
 import { assertFound } from "./utils.js";
@@ -11,13 +11,18 @@ export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
 }
 
-/** Returns only scopes inferred from working copies in the given project. */
+/** Returns only scopes explicitly associated with the given project via project_scope_rel. */
 export async function getScopesByProject({ db, projectId }: NeedsProject): Promise<Scope[]> {
   return db
     .selectDistinct(getTableColumns(scopeTable))
     .from(scopeTable)
-    .innerJoin(workingCopyTable, eq(workingCopyTable.scopeId, scopeTable.id))
-    .where(eq(workingCopyTable.projectId, projectId));
+    .innerJoin(projectScopeRelTable, eq(projectScopeRelTable.scopeId, scopeTable.id))
+    .where(eq(projectScopeRelTable.projectId, projectId));
+}
+
+type AddProjectScopeRel = NeedsProject & { scopeId: string };
+export async function addProjectScopeRel({ db, projectId, scopeId }: AddProjectScopeRel): Promise<void> {
+  await db.insert(projectScopeRelTable).values({ projectId, scopeId }).onConflictDoNothing();
 }
 
 type GetScope = NeedsDB & { scopeId: string };

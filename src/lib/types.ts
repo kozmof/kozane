@@ -20,4 +20,5 @@ export interface WorkingCopySummary {
   name: string;
   scopeId: string | null;
   path: string | null;
+  pathKind: "project_relative" | "absolute";
 }

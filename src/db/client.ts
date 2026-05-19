@@ -7,13 +7,17 @@ import type { DB } from "./tx.js";
 export type { DB, Tx, AnyDB } from "./tx.js";
 export { withTx } from "./tx.js";
 
+export async function createDb(url: string): Promise<DB> {
+  const client = createClient({ url });
+  await client.execute("PRAGMA foreign_keys = ON");
+  return drizzle(client, { schema }) as unknown as DB;
+}
+
 let _db: DB | null = null;
 
 export async function getDb(): Promise<DB> {
   if (_db) return _db;
-  const client = createClient({ url: getDBURL() });
-  await client.execute("PRAGMA foreign_keys = ON");
-  _db = drizzle(client, { schema }) as unknown as DB;
+  _db = await createDb(getDBURL());
   return _db;
 }
 

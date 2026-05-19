@@ -114,10 +114,24 @@ export const scopeRelTable = sqliteTable(
   (t) => [primaryKey({ columns: [t.scopeId, t.cardId] })],
 );
 
+export const projectScopeRelTable = sqliteTable(
+  "project_scope_rel",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    scopeId: text("scope_id")
+      .notNull()
+      .references(() => scopeTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.scopeId] })],
+);
+
 // Relations enable the .query.* relational API (db.query.projectTable.findMany({ with: { bundles: true } }))
 
 export const projectRelations = relations(projectTable, ({ many }) => ({
   bundles: many(bundleTable),
+  projectScopeRels: many(projectScopeRelTable),
 }));
 
 export const bundleRelations = relations(bundleTable, ({ one, many }) => ({
@@ -149,6 +163,7 @@ export const scopeRelations = relations(scopeTable, ({ many }) => ({
   // Scope has no project owner; these relations describe usage, not ownership.
   workingCopies: many(workingCopyTable),
   scopeRels: many(scopeRelTable),
+  projectScopeRels: many(projectScopeRelTable),
 }));
 
 export const workingCopyRelations = relations(workingCopyTable, ({ one, many }) => ({
@@ -160,4 +175,9 @@ export const workingCopyRelations = relations(workingCopyTable, ({ one, many }) 
 export const scopeRelRelations = relations(scopeRelTable, ({ one }) => ({
   scope: one(scopeTable, { fields: [scopeRelTable.scopeId], references: [scopeTable.id] }),
   card: one(cardTable, { fields: [scopeRelTable.cardId], references: [cardTable.id] }),
+}));
+
+export const projectScopeRelRelations = relations(projectScopeRelTable, ({ one }) => ({
+  project: one(projectTable, { fields: [projectScopeRelTable.projectId], references: [projectTable.id] }),
+  scope: one(scopeTable, { fields: [projectScopeRelTable.scopeId], references: [scopeTable.id] }),
 }));

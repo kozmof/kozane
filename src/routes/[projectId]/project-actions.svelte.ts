@@ -122,15 +122,19 @@ export function createProjectActions(state: ProjectState) {
 
   async function handleCreateWorkingCopy() {
     const name = state.sidebar.newWcName.trim();
-    if (!name || !state.sidebar.activeScope) return;
+    if (!state.sidebar.activeScope) {
+      state.setError("Select a scope before creating a working copy");
+      return;
+    }
+    if (!name) return;
     const scopeId = state.sidebar.activeScope;
     const res = await api.createWorkingCopy(state.fetcher, state.projectId, { name, scopeId });
     if (!res.ok) {
       state.setError("Failed to create working copy");
       return;
     }
-    const { id, path } = await res.json();
-    state.workingCopies = [...state.workingCopies, { id, name, scopeId, path }];
+    const { id, path, pathKind } = await res.json();
+    state.workingCopies = [...state.workingCopies, { id, name, scopeId, path, pathKind }];
     state.sidebar.newWcName = "";
   }
 

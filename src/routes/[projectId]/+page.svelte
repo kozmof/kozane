@@ -90,13 +90,13 @@
   // ── Composer submit (needs canvas ref for new card position) ──
   async function handleComposerSubmit(id: string | null, content: string, bundleId: string) {
     if (id) {
-      const res = await updateCard(fetch, data.project.id, id, { content, bundleId });
+      const res = await updateCard(s.fetcher, data.project.id, id, { content, bundleId });
       if (!res.ok) { s.lastError = "Failed to save card"; return; }
       s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       s.selection.composerCard = null;
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
-      const res = await createCard(fetch, data.project.id, { bundleId, content, posX, posY });
+      const res = await createCard(s.fetcher, data.project.id, { bundleId, content, posX, posY });
       if (!res.ok) { s.lastError = "Failed to create card"; return; }
       const { id: newId } = await res.json();
       s.cards = [...s.cards, { id: newId, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];

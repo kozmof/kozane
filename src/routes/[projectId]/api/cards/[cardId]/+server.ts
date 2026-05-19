@@ -11,7 +11,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { projectId, cardId } = params;
   const body = await readJsonObject(request);
 
-  await requireCardInProject(db, projectId, cardId);
+  const { bundleId } = await requireCardInProject(db, projectId, cardId);
 
   const content = optionalString(body, "content");
   if (content !== undefined && content.length > CONTENT_MAX)
@@ -19,10 +19,10 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   let newBundleId: string | undefined;
   if (body.bundleId !== undefined) {
-    const bundleId = requireString(body, "bundleId");
-    const newBundle = await getBundle({ db, projectId, bundleId });
+    const requestedBundleId = requireString(body, "bundleId");
+    const newBundle = await getBundle({ db, projectId, bundleId: requestedBundleId });
     if (!newBundle) throw error(400, "New bundle not found in project");
-    newBundleId = bundleId;
+    newBundleId = requestedBundleId;
   }
 
   const rawPosX = optionalNumber(body, "posX");
@@ -30,7 +30,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
   const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, CANVAS_H);
 
-  await updateCard({ db, cardId, content, posX, posY, bundleId: newBundleId });
+  await updateCard({ db, cardId, bundleId, newBundleId, content, posX, posY });
 
   return json({ ok: true });
 };

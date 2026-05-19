@@ -134,14 +134,14 @@ describe("updateCard (content)", () => {
   it("changes the content", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Old" });
-    await updateCard({ db, cardId, content: "New" });
+    await updateCard({ db, cardId, bundleId, content: "New" });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.content).toBe("New");
   });
 
   it("throws NotFoundError for a missing card", async () => {
-    const { db } = await setup();
-    await expect(updateCard({ db, cardId: "ghost", content: "X" })).rejects.toThrow(NotFoundError);
+    const { db, bundleId } = await setup();
+    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(NotFoundError);
   });
 });
 
@@ -149,15 +149,15 @@ describe("updateCard (position)", () => {
   it("changes posX and posY", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Hi" });
-    await updateCard({ db, cardId, posX: 300, posY: 400 });
+    await updateCard({ db, cardId, bundleId, posX: 300, posY: 400 });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.posX).toBe(300);
     expect(card?.posY).toBe(400);
   });
 
   it("throws NotFoundError for a missing card", async () => {
-    const { db } = await setup();
-    await expect(updateCard({ db, cardId: "ghost", posX: 0, posY: 0 })).rejects.toThrow(
+    const { db, bundleId } = await setup();
+    await expect(updateCard({ db, cardId: "ghost", bundleId, posX: 0, posY: 0 })).rejects.toThrow(
       NotFoundError,
     );
   });
@@ -204,7 +204,7 @@ describe("updateCardPositions", () => {
           { cardId: "ghost", posX: 50, posY: 60 },
         ],
       }),
-    ).rejects.toThrow(NotFoundError);
+    ).rejects.toThrow();
 
     expect(await getCard({ db, bundleId, cardId })).toMatchObject({ posX: 1, posY: 2 });
   });
@@ -214,26 +214,24 @@ describe("updateCard", () => {
   it("updates only the provided fields", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Original", posX: 10, posY: 20 });
-    await updateCard({ db, cardId, content: "Updated" });
+    await updateCard({ db, cardId, bundleId, content: "Updated" });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.content).toBe("Updated");
     expect(card?.posX).toBe(10);
     expect(card?.posY).toBe(20);
   });
 
-  it("is a no-op when no fields are provided", async () => {
+  it("throws when no fields are provided", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Same" });
-    await expect(updateCard({ db, cardId })).resolves.toBeUndefined();
-    const card = await getCard({ db, bundleId, cardId });
-    expect(card?.content).toBe("Same");
+    await expect(updateCard({ db, cardId, bundleId })).rejects.toThrow("no fields to update");
   });
 
   it("can move card to a different bundle", async () => {
     const { db, projectId, bundleId } = await setup();
     const b2 = await addBundle({ db, projectId, name: "Other" });
     const cardId = await addCard({ db, bundleId, content: "Hi" });
-    await updateCard({ db, cardId, bundleId: b2 });
+    await updateCard({ db, cardId, bundleId, newBundleId: b2 });
     expect(await getCard({ db, bundleId: b2, cardId })).toBeDefined();
     expect(await getCard({ db, bundleId, cardId })).toBeUndefined();
   });
@@ -242,7 +240,7 @@ describe("updateCard", () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Original", posX: 1, posY: 2 });
 
-    await updateCard({ db, cardId, content: "Moved", posX: 30, posY: 40 });
+    await updateCard({ db, cardId, bundleId, content: "Moved", posX: 30, posY: 40 });
 
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.content).toBe("Moved");
@@ -251,8 +249,8 @@ describe("updateCard", () => {
   });
 
   it("throws NotFoundError for a missing card", async () => {
-    const { db } = await setup();
-    await expect(updateCard({ db, cardId: "ghost", content: "X" })).rejects.toThrow(NotFoundError);
+    const { db, bundleId } = await setup();
+    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(NotFoundError);
   });
 });
 

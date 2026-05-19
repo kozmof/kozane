@@ -1,5 +1,5 @@
 import { bundleTable, cardTable } from "../schema.js";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { assertFound } from "./utils.js";
@@ -102,31 +102,33 @@ export async function reassignBundleCards({
 
 type UpdateCard = NeedsDB & {
   cardId: string;
+  bundleId: string;
+  newBundleId?: string;
   content?: string;
   posX?: number;
   posY?: number;
-  bundleId?: string;
 };
 type CardUpdate = Partial<Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">>;
 
 export async function updateCard({
   db,
   cardId,
+  bundleId,
+  newBundleId,
   content,
   posX,
   posY,
-  bundleId,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
   if (content !== undefined) fields.content = content;
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;
-  if (bundleId !== undefined) fields.bundleId = bundleId;
-  if (Object.keys(fields).length === 0) return;
+  if (newBundleId !== undefined) fields.bundleId = newBundleId;
+  if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
   const updated = await db
     .update(cardTable)
     .set(fields)
-    .where(eq(cardTable.id, cardId))
+    .where(and(eq(cardTable.id, cardId), eq(cardTable.bundleId, bundleId)))
     .returning({ id: cardTable.id });
   assertFound(updated, `Card cardId=${cardId}`);
 }
@@ -146,14 +148,19 @@ export async function updateCardPositions({ db, positions }: UpdateCardPositions
   if (positions.length === 0) return;
 
   await withTx(db, async (tx) => {
-    for (const { cardId, posX, posY } of positions) {
-      const updated = await tx
-        .update(cardTable)
-        .set({ posX, posY })
-        .where(eq(cardTable.id, cardId))
-        .returning({ id: cardTable.id });
-      assertFound(updated, `Card cardId=${cardId}`);
-    }
+    const ids = positions.map((p) => p.cardId);
+    const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
+    const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
+    const updated = await tx
+      .update(cardTable)
+      .set({
+        posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
+        posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
+      })
+      .where(inArray(cardTable.id, ids))
+      .returning({ id: cardTable.id });
+    if (updated.length !== positions.length)
+      throw new Error(`updateCardPositions: expected ${positions.length} updates, got ${updated.length}`);
   });
 }
 
@@ -171,18 +178,19 @@ export async function updateProjectCardPositions({
   if (positions.length === 0) return true;
 
   return withTx(db, async (tx) => {
-    const cardIds = positions.map((position) => position.cardId);
+    const cardIds = positions.map((p) => p.cardId);
     const owned = await cardsInProject(tx, projectId, cardIds);
     if (owned.length !== cardIds.length) return false;
 
-    for (const { cardId, posX, posY } of positions) {
-      const updated = await tx
-        .update(cardTable)
-        .set({ posX, posY })
-        .where(eq(cardTable.id, cardId))
-        .returning({ id: cardTable.id });
-      assertFound(updated, `Card projectId=${projectId} cardId=${cardId}`);
-    }
+    const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
+    const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
+    await tx
+      .update(cardTable)
+      .set({
+        posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
+        posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
+      })
+      .where(inArray(cardTable.id, cardIds));
 
     return true;
   });

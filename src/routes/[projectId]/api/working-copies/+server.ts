@@ -3,6 +3,7 @@ import { join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { addWorkingCopy } from "../../../../db/api/working-copy";
+import { addProjectScopeRel } from "../../../../db/api/scope";
 import { getCardsByScopeWithBundleName } from "../../../../db/api/scope-rel";
 import { renderCardsMarkdown } from "../../../../cli/lib/cards-template";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
@@ -36,6 +37,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     path: storedPath,
     pathKind,
   });
+  await addProjectScopeRel({ db, projectId: params.projectId, scopeId });
 
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(
@@ -58,5 +60,5 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     renderCardsMarkdown({ name, scopeId, cards, projectRoot: root }),
   );
 
-  return json({ id, path: storedPath });
+  return json({ id, path: storedPath, pathKind });
 };

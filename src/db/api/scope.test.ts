@@ -5,6 +5,7 @@ import {
   getScope,
   getAllScopes,
   getScopesByProject,
+  addProjectScopeRel,
   updateScopeName,
   deleteScope,
 } from "./scope.js";
@@ -62,26 +63,27 @@ describe("getAllScopes", () => {
 });
 
 describe("getScopesByProject", () => {
-  it("returns only scopes referenced by working copies in the project", async () => {
+  it("returns only scopes associated with the project", async () => {
     const d = await db();
     const projectId = await addProject({ db: d, name: "P1" });
     const otherProjectId = await addProject({ db: d, name: "P2" });
     const scopeId = await addScope({ db: d, name: "Mine" });
     const otherScopeId = await addScope({ db: d, name: "Elsewhere" });
-    await addWorkingCopy({ db: d, projectId, scopeId });
-    await addWorkingCopy({ db: d, projectId: otherProjectId, scopeId: otherScopeId });
+    await addProjectScopeRel({ db: d, projectId, scopeId });
+    await addProjectScopeRel({ db: d, projectId: otherProjectId, scopeId: otherScopeId });
 
     const scopes = await getScopesByProject({ db: d, projectId });
 
     expect(scopes).toEqual([{ id: scopeId, name: "Mine" }]);
   });
 
-  it("deduplicates scopes referenced by multiple working copies", async () => {
+  it("deduplicates multiple associations to the same scope", async () => {
     const d = await db();
     const projectId = await addProject({ db: d, name: "P" });
     const scopeId = await addScope({ db: d, name: "Shared" });
-    await addWorkingCopy({ db: d, projectId, scopeId, name: "wc1" });
-    await addWorkingCopy({ db: d, projectId, scopeId, name: "wc2" });
+    // addProjectScopeRel is idempotent — a second insert should not duplicate
+    await addProjectScopeRel({ db: d, projectId, scopeId });
+    await addProjectScopeRel({ db: d, projectId, scopeId });
 
     expect(await getScopesByProject({ db: d, projectId })).toEqual([
       { id: scopeId, name: "Shared" },

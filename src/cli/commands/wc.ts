@@ -12,7 +12,7 @@ import {
   WC_MARKER_KIND,
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
-import { workingCopyTable, projectTable } from "../../db/schema.js";
+import { workingCopyTable, projectTable, projectScopeRelTable } from "../../db/schema.js";
 import { v7 as uuidv7 } from "uuid";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
@@ -208,6 +208,13 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     pathKind,
     lastSeenAt: new Date(),
   });
+
+  if (projectId && options.scope) {
+    await db
+      .insert(projectScopeRelTable)
+      .values({ projectId, scopeId: options.scope })
+      .onConflictDoNothing();
+  }
 
   mkdirSync(targetDir, { recursive: true });
   const marker = {

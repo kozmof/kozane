@@ -62,20 +62,51 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
   const parsed: unknown = JSON.parse(raw);
-  const p = parsed as Record<string, unknown>;
-  if (typeof parsed !== "object" || parsed === null || typeof p.name !== "string") {
+  if (typeof parsed !== "object" || parsed === null) {
     throw new Error(`Invalid Kozane config at ${configPath}`);
   }
-  const server = p.server as Record<string, unknown> | undefined;
-  if (typeof server !== "object" || server === null ||
-      typeof server.host !== "string" || typeof server.port !== "number") {
-    throw new Error(`Invalid server config at ${configPath}`);
+  const p = parsed as Record<string, unknown>;
+
+  if (typeof p.name !== "string") throw new Error(`Invalid Kozane config: name must be a string`);
+
+  const server = p.server;
+  if (typeof server !== "object" || server === null || Array.isArray(server)) {
+    throw new Error(`Invalid Kozane config: server must be an object`);
   }
-  const wc = p.workingCopy as Record<string, unknown> | undefined;
-  if (typeof wc !== "object" || wc === null ||
-      typeof wc.defaultDir !== "string" || !Array.isArray(wc.searchRoots)) {
-    throw new Error(`Invalid workingCopy config at ${configPath}`);
+  const s = server as Record<string, unknown>;
+  if (typeof s.host !== "string") throw new Error(`Invalid Kozane config: server.host must be a string`);
+  if (typeof s.port !== "number") throw new Error(`Invalid Kozane config: server.port must be a number`);
+
+  const wc = p.workingCopy;
+  if (typeof wc !== "object" || wc === null || Array.isArray(wc)) {
+    throw new Error(`Invalid Kozane config: workingCopy must be an object`);
   }
+  const w = wc as Record<string, unknown>;
+  if (typeof w.defaultDir !== "string") throw new Error(`Invalid Kozane config: workingCopy.defaultDir must be a string`);
+  if (!Array.isArray(w.searchRoots) || w.searchRoots.some((r) => typeof r !== "string")) {
+    throw new Error(`Invalid Kozane config: workingCopy.searchRoots must be an array of strings`);
+  }
+
+  const ui = p.ui;
+  if (ui !== undefined) {
+    if (typeof ui !== "object" || ui === null || Array.isArray(ui)) {
+      throw new Error(`Invalid Kozane config: ui must be an object`);
+    }
+    const u = ui as Record<string, unknown>;
+    const numFields = ["defaultFontSize", "defaultCardWidth", "defaultZoom", "leftPanelWidth", "rightPanelWidth", "canvasWidth", "canvasHeight"] as const;
+    const boolFields = ["defaultShowFooter", "defaultShowSidePanel"] as const;
+    const strFields = ["defaultFontFamily"] as const;
+    for (const f of numFields) {
+      if (u[f] !== undefined && typeof u[f] !== "number") throw new Error(`Invalid Kozane config: ui.${f} must be a number`);
+    }
+    for (const f of boolFields) {
+      if (u[f] !== undefined && typeof u[f] !== "boolean") throw new Error(`Invalid Kozane config: ui.${f} must be a boolean`);
+    }
+    for (const f of strFields) {
+      if (u[f] !== undefined && typeof u[f] !== "string") throw new Error(`Invalid Kozane config: ui.${f} must be a string`);
+    }
+  }
+
   return parsed as WorkspaceConfig;
 }
 

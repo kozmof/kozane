@@ -1,7 +1,7 @@
 import { glueTable, glueRelTable } from "../schema.js";
 import { and, count, inArray, lte, notInArray } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
-import { withTx, type DB, type AnyDB } from "../tx.js";
+import { withTx, type DB, type Tx } from "../tx.js";
 import { v7 as uuidv7 } from "uuid";
 
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
@@ -9,7 +9,7 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 }
 
-async function dissolveOrphanGroups(db: AnyDB, affectedGlueIds: string[]): Promise<void> {
+async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<void> {
   if (affectedGlueIds.length === 0) return;
 
   // Groups with ≤1 remaining member should be dissolved.
@@ -38,7 +38,7 @@ async function dissolveOrphanGroups(db: AnyDB, affectedGlueIds: string[]): Promi
     );
 }
 
-async function glueCardsCore(db: AnyDB, cardIds: string[]): Promise<string> {
+async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
   const existingRels = await db
     .select()
     .from(glueRelTable)
@@ -59,7 +59,7 @@ async function glueCardsCore(db: AnyDB, cardIds: string[]): Promise<string> {
   return newGlueId;
 }
 
-async function unglueCardsCore(db: AnyDB, cardIds: string[]): Promise<void> {
+async function unglueCardsCore(db: Tx, cardIds: string[]): Promise<void> {
   const existingRels = await db
     .select()
     .from(glueRelTable)
