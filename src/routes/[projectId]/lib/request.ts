@@ -31,6 +31,13 @@ export function requireString(body: JsonRecord, key: string): string {
   return value;
 }
 
+export function optionalString(body: JsonRecord, key: string): string | undefined {
+  const value = body[key];
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw error(400, `${key} must be a string`);
+  return value;
+}
+
 export function optionalNumber(body: JsonRecord, key: string): number | undefined {
   const value = body[key];
   if (value === undefined) return undefined;

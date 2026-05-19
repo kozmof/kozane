@@ -1,56 +1,7 @@
-import type { CardWithGlue, Bundle, Scope, ScopeRel, GlueRel, WorkingCopy } from "$lib/types";
 import * as api from "./lib/project-api";
+import type { ProjectState } from "./project-state.svelte.js";
 
-export type ProjectPageState = {
-  projectId: string;
-  fetcher: typeof fetch;
-
-  get cards(): CardWithGlue[];
-  set cards(value: CardWithGlue[]);
-
-  get bundles(): Bundle[];
-  set bundles(value: Bundle[]);
-
-  get scopes(): Scope[];
-  set scopes(value: Scope[]);
-
-  get scopeRels(): ScopeRel[];
-  set scopeRels(value: ScopeRel[]);
-
-  get glueRels(): GlueRel[];
-  set glueRels(value: GlueRel[]);
-
-  get selectedCards(): Set<string>;
-  set selectedCards(value: Set<string>);
-
-  get primarySelectedId(): string | null;
-  set primarySelectedId(value: string | null);
-
-  get composerCard(): CardWithGlue | null;
-  set composerCard(value: CardWithGlue | null);
-
-  get activeBundle(): string | null;
-  set activeBundle(value: string | null);
-
-  get activeScope(): string | null;
-  set activeScope(value: string | null);
-
-  get newBundleName(): string;
-  set newBundleName(value: string);
-
-  get newScopeName(): string;
-  set newScopeName(value: string);
-
-  get newWcName(): string;
-  set newWcName(value: string);
-
-  get workingCopies(): WorkingCopy[];
-  set workingCopies(value: WorkingCopy[]);
-
-  setError(message: string): void;
-};
-
-export function createProjectActions(state: ProjectPageState) {
+export function createProjectActions(state: ProjectState) {
   async function handleCardBundleChange(newBundleId: string) {
     if (!state.composerCard) return;
     const cardId = state.composerCard.id;
@@ -116,16 +67,19 @@ export function createProjectActions(state: ProjectPageState) {
 
   async function handleDeleteSelected(cardIds: string[]) {
     const results = await Promise.all(
-      cardIds.map((id) => api.deleteCard(state.fetcher, state.projectId, id)),
+      cardIds.map(async (id) => ({
+        id,
+        ok: (await api.deleteCard(state.fetcher, state.projectId, id)).ok,
+      })),
     );
-    if (results.some((r) => !r.ok)) {
-      state.setError("Failed to delete cards");
-      return;
+    const deletedIds = results.filter((r) => r.ok).map((r) => r.id);
+    if (deletedIds.length < cardIds.length) state.setError("Failed to delete some cards");
+    if (deletedIds.length > 0) {
+      state.cards = state.cards.filter((c) => !deletedIds.includes(c.id));
+      state.glueRels = state.glueRels.filter((r) => !deletedIds.includes(r.cardId));
+      state.selectedCards = new Set([...state.selectedCards].filter((id) => !deletedIds.includes(id)));
+      if (deletedIds.includes(state.primarySelectedId ?? "")) state.primarySelectedId = null;
     }
-    state.cards = state.cards.filter((c) => !cardIds.includes(c.id));
-    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
-    state.selectedCards = new Set();
-    state.primarySelectedId = null;
   }
 
   async function handleCreateBundle() {

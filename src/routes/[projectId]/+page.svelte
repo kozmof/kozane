@@ -3,8 +3,9 @@
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
-  import { applyPalette, GRID, clampZoom } from "./lib/project-page";
+  import { applyPalette, clampZoom } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
+  import { ProjectState } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
   import BundleSidebar from "./components/BundleSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
@@ -15,54 +16,44 @@
 
   let { data }: PageProps = $props();
 
-  // ── Project data state ────────────────────────────────────────
-  let cards = $state(untrack(() => data.cards));
-  let bundles = $state(untrack(() => data.bundles));
-  let scopes = $state(untrack(() => data.scopes));
-  let scopeRels = $state(untrack(() => data.scopeRels));
-  let glueRels = $state(untrack(() => data.glueRels));
-  let workingCopies = $state(untrack(() => data.workingCopies));
-
-  // ── Selection / filter state ──────────────────────────────────
-  let selectedCards = $state(new Set<string>());
-  let primarySelectedId = $state<string | null>(null);
-  let activeBundle = $state<string | null>(null);
-  let activeScope = $state<string | null>(null);
-  let composerCard = $state<(typeof cards)[0] | null>(null);
+  // ── Reactive project state ────────────────────────────────────
+  const s = new ProjectState();
+  s.projectId = untrack(() => data.project.id);
+  s.fetcher = fetch;
+  s.cards = untrack(() => data.cards);
+  s.bundles = untrack(() => data.bundles);
+  s.scopes = untrack(() => data.scopes);
+  s.scopeRels = untrack(() => data.scopeRels);
+  s.glueRels = untrack(() => data.glueRels);
+  s.workingCopies = untrack(() => data.workingCopies);
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
   let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
-  let newBundleName = $state("");
-  let newScopeName = $state("");
-  let newWcName = $state("");
-  let lastError = $state<string | null>(null);
   let newCardSeq = 0;
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: { getNewCardPosition: (seq: number) => { posX: number; posY: number } } = $state()!;
 
   // ── Derived values ────────────────────────────────────────────
-  let bundlesWithColors = $derived(applyPalette(bundles));
+  let bundlesWithColors = $derived(applyPalette(s.bundles));
   let bundleColorById = $derived(new Map(bundlesWithColors.map((b) => [b.id, b])));
   let visibleCards = $derived(
-    activeBundle ? cards.filter((c) => c.bundleId === activeBundle) : cards,
+    s.activeBundle ? s.cards.filter((c) => c.bundleId === s.activeBundle) : s.cards,
   );
   let scopeCardIds = $derived(
-    activeScope
-      ? new Set(scopeRels.filter((r) => r.scopeId === activeScope).map((r) => r.cardId))
+    s.activeScope
+      ? new Set(s.scopeRels.filter((r) => r.scopeId === s.activeScope).map((r) => r.cardId))
       : null,
   );
-  let defaultBundleId = $derived(activeBundle ?? bundlesWithColors[0]?.id ?? "");
+  let defaultBundleId = $derived(s.activeBundle ?? bundlesWithColors[0]?.id ?? "");
   let selectedCardObjects = $derived(
-    [...selectedCards].map((id) => cards.find((c) => c.id === id)!).filter(Boolean),
+    [...s.selectedCards].map((id) => s.cards.find((c) => c.id === id)!).filter(Boolean),
   );
-  let selectionGlueRels = $derived(
-    glueRels.filter((r) => selectedCards.has(r.cardId)),
-  );
+  let selectionGlueRels = $derived(s.glueRels.filter((r) => s.selectedCards.has(r.cardId)));
   let primaryCard = $derived(
-    primarySelectedId ? (cards.find((c) => c.id === primarySelectedId) ?? null) : null,
+    s.primarySelectedId ? (s.cards.find((c) => c.id === s.primarySelectedId) ?? null) : null,
   );
 
   // ── Reset on project navigation ───────────────────────────────
@@ -71,21 +62,22 @@
   $effect(() => {
     if (data.project.id === loadedProjectId) return;
     loadedProjectId = data.project.id;
-    cards = data.cards;
-    bundles = data.bundles;
-    scopes = data.scopes;
-    scopeRels = data.scopeRels;
-    glueRels = data.glueRels;
-    workingCopies = data.workingCopies;
-    selectedCards = new Set();
-    primarySelectedId = null;
-    activeBundle = null;
-    activeScope = null;
-    composerCard = null;
-    lastError = null;
-    newBundleName = "";
-    newScopeName = "";
-    newWcName = "";
+    s.projectId = data.project.id;
+    s.cards = data.cards;
+    s.bundles = data.bundles;
+    s.scopes = data.scopes;
+    s.scopeRels = data.scopeRels;
+    s.glueRels = data.glueRels;
+    s.workingCopies = data.workingCopies;
+    s.selectedCards = new Set();
+    s.primarySelectedId = null;
+    s.activeBundle = null;
+    s.activeScope = null;
+    s.composerCard = null;
+    s.lastError = null;
+    s.newBundleName = "";
+    s.newScopeName = "";
+    s.newWcName = "";
     newCardSeq = 0;
     sidebarsVisible = data.uiConfig.defaultShowSidePanel;
     showFooters = data.uiConfig.defaultShowFooter;
@@ -93,68 +85,21 @@
   });
 
   // ── Domain action handlers ────────────────────────────────────
-  const actions = createProjectActions({
-    get projectId() { return data.project.id; },
-    fetcher: fetch,
-
-    get cards() { return cards; },
-    set cards(v) { cards = v; },
-
-    get bundles() { return bundles; },
-    set bundles(v) { bundles = v; },
-
-    get scopes() { return scopes; },
-    set scopes(v) { scopes = v; },
-
-    get scopeRels() { return scopeRels; },
-    set scopeRels(v) { scopeRels = v; },
-
-    get glueRels() { return glueRels; },
-    set glueRels(v) { glueRels = v; },
-
-    get selectedCards() { return selectedCards; },
-    set selectedCards(v) { selectedCards = v; },
-
-    get primarySelectedId() { return primarySelectedId; },
-    set primarySelectedId(v) { primarySelectedId = v; },
-
-    get composerCard() { return composerCard; },
-    set composerCard(v) { composerCard = v; },
-
-    get activeBundle() { return activeBundle; },
-    set activeBundle(v) { activeBundle = v; },
-
-    get activeScope() { return activeScope; },
-    set activeScope(v) { activeScope = v; },
-
-    get newBundleName() { return newBundleName; },
-    set newBundleName(v) { newBundleName = v; },
-
-    get newScopeName() { return newScopeName; },
-    set newScopeName(v) { newScopeName = v; },
-
-    get newWcName() { return newWcName; },
-    set newWcName(v) { newWcName = v; },
-
-    get workingCopies() { return workingCopies; },
-    set workingCopies(v) { workingCopies = v; },
-
-    setError(message) { lastError = message; },
-  });
+  const actions = createProjectActions(s);
 
   // ── Composer submit (needs canvas ref for new card position) ──
   async function handleComposerSubmit(id: string | null, content: string, bundleId: string) {
     if (id) {
       const res = await updateCard(fetch, data.project.id, id, { content, bundleId });
-      if (!res.ok) { lastError = "Failed to save card"; return; }
-      cards = cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
-      composerCard = null;
+      if (!res.ok) { s.lastError = "Failed to save card"; return; }
+      s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
+      s.composerCard = null;
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const res = await createCard(fetch, data.project.id, { bundleId, content, posX, posY });
-      if (!res.ok) { lastError = "Failed to create card"; return; }
+      if (!res.ok) { s.lastError = "Failed to create card"; return; }
       const { id: newId } = await res.json();
-      cards = [...cards, { id: newId, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
+      s.cards = [...s.cards, { id: newId, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
     }
   }
 
@@ -177,10 +122,10 @@
   <BundleSidebar
     visible={sidebarsVisible}
     panelWidth={data.uiConfig.leftPanelWidth}
-    {cards}
+    cards={s.cards}
     bundles={bundlesWithColors}
-    bind:activeBundle
-    bind:newBundleName
+    bind:activeBundle={s.activeBundle}
+    bind:newBundleName={s.newBundleName}
     onCreateBundle={actions.handleCreateBundle}
     onDeleteBundle={actions.handleDeleteBundle}
   />
@@ -188,13 +133,13 @@
   <div class={css({ flex: "1", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" })}>
     <KozaneCanvas
       bind:this={canvasComponent}
-      bind:cards
+      bind:cards={s.cards}
       {visibleCards}
-      {glueRels}
+      glueRels={s.glueRels}
       {bundleColorById}
-      bind:selectedCards
-      bind:primarySelectedId
-      bind:composerCard
+      bind:selectedCards={s.selectedCards}
+      bind:primarySelectedId={s.primarySelectedId}
+      bind:composerCard={s.composerCard}
       {scopeCardIds}
       {showFooters}
       bind:zoom
@@ -204,11 +149,11 @@
       fontSize={data.uiConfig.defaultFontSize}
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
-      onError={(msg) => (lastError = msg)}
+      onError={(msg) => (s.lastError = msg)}
     />
 
-    {#if lastError}
-      <ErrorBanner message={lastError} onDismiss={() => (lastError = null)} />
+    {#if s.lastError}
+      <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />
     {/if}
 
     <FloatingControls
@@ -221,14 +166,14 @@
     />
 
     <FloatingComposer
-      editingCard={composerCard}
+      editingCard={s.composerCard}
       selectedCards={selectedCardObjects}
       {selectionGlueRels}
       {primaryCard}
       bundles={bundlesWithColors}
       {defaultBundleId}
       onSubmit={handleComposerSubmit}
-      onCancel={() => { composerCard = null; selectedCards = new Set(); primarySelectedId = null; }}
+      onCancel={() => { s.composerCard = null; s.selectedCards = new Set(); s.primarySelectedId = null; }}
       onBundleChange={actions.handleCardBundleChange}
       onSelectionBundleChange={actions.handleSelectionBundleChange}
       onGlueSelected={actions.handleGlueSelected}
@@ -241,13 +186,13 @@
   <ScopeSidebar
     visible={sidebarsVisible}
     panelWidth={data.uiConfig.rightPanelWidth}
-    {scopes}
-    {scopeRels}
-    {workingCopies}
-    {selectedCards}
-    bind:activeScope
-    bind:newScopeName
-    bind:newWcName
+    scopes={s.scopes}
+    scopeRels={s.scopeRels}
+    workingCopies={s.workingCopies}
+    selectedCards={s.selectedCards}
+    bind:activeScope={s.activeScope}
+    bind:newScopeName={s.newScopeName}
+    bind:newWcName={s.newWcName}
     onCreateScope={actions.handleCreateScope}
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}

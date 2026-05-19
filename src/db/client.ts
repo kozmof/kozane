@@ -7,6 +7,12 @@ import type { DB } from "./tx.js";
 export type { DB, Tx, AnyDB } from "./tx.js";
 export { withTx } from "./tx.js";
 
-const client = createClient({ url: getDBURL() });
-await client.execute("PRAGMA foreign_keys = ON");
-export const db = drizzle(client, { schema }) as unknown as DB;
+let _db: DB | null = null;
+
+export async function getDb(): Promise<DB> {
+  if (_db) return _db;
+  const client = createClient({ url: getDBURL() });
+  await client.execute("PRAGMA foreign_keys = ON");
+  _db = drizzle(client, { schema }) as unknown as DB;
+  return _db;
+}

@@ -152,9 +152,11 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
     const createdAt =
       typeof rawCreatedAt === "number"
         ? rawCreatedAt
-        : typeof rawCreatedAt === "string"
+        : typeof rawCreatedAt === "bigint"
           ? Number(rawCreatedAt)
-          : null;
+          : typeof rawCreatedAt === "string"
+            ? Number(rawCreatedAt)
+            : null;
     if (createdAt !== null && !Number.isFinite(createdAt)) {
       throw new Error("Invalid latest applied migration timestamp");
     }

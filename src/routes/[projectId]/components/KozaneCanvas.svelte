@@ -12,6 +12,7 @@
     clientToWorld as toWorldPoint,
     dragGroupIds,
     glueGroupIds,
+    glueIdByCardId,
     cardPositionPatches,
     previousPositions,
     rectsIntersect,
@@ -59,6 +60,7 @@
   } = $props();
 
   const glueGroupMap = $derived(buildGlueGroupMap(glueRels));
+  const cardToGlue = $derived(glueIdByCardId(glueRels));
 
   let canvasEl: HTMLDivElement = $state()!;
   let draggingId = $state<string | null>(null);
@@ -128,7 +130,7 @@
       const cardId = el.dataset.cardId;
       if (!cardId || !rectsIntersect(el.getBoundingClientRect(), screenRect)) return;
       primaryId ??= cardId;
-      glueGroupIds(glueGroupMap, cardId).forEach((id) => next.add(id));
+      glueGroupIds(glueGroupMap, cardToGlue, cardId).forEach((id) => next.add(id));
     });
     selectedCards = next;
     primarySelectedId = primaryId;
@@ -140,7 +142,7 @@
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
-    const groupIds = dragGroupIds(glueGroupMap, selectedCards, cardId);
+    const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selectedCards, cardId);
     const groupPrevPositions = previousPositions(cards, groupIds);
     dragState = {
       cardId,
@@ -162,7 +164,7 @@
   export function handleCardClick(e: MouseEvent, cardId: string) {
     if (dragState?.moved) return;
     if (composerCard && composerCard.id !== cardId) composerCard = null;
-    const groupIds = glueGroupIds(glueGroupMap, cardId);
+    const groupIds = glueGroupIds(glueGroupMap, cardToGlue, cardId);
     if (e.shiftKey) {
       const next = new Set(selectedCards);
       if (next.has(cardId)) {

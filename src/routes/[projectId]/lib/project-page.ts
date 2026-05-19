@@ -1,5 +1,7 @@
 import type { Card, GlueRel } from "../../../db/api/types.js";
 import type { CardWithGlue } from "$lib/types.js";
+import type { CardPositionUpdate } from "../../../db/api/card.js";
+export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/card.js";
 
 export type { CardWithGlue };
 
@@ -24,7 +26,6 @@ export type WorldRect = Point & { w: number; h: number };
 export type ScreenRect = { left: number; top: number; right: number; bottom: number };
 export type RectLike = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 export type CardPosition = { x: number; y: number };
-export type CardPositionPatch = { cardId: string; posX: number; posY: number };
 
 // Colors repeat intentionally when bundles exceed PALETTE.length (8).
 export function applyPalette<T extends { id: string }>(bundles: T[]) {
@@ -53,19 +54,22 @@ export function buildGlueGroupMap(glueRels: GlueRel[]): Map<string, string[]> {
   return map;
 }
 
-export function glueGroupIds(groupMap: Map<string, string[]>, cardId: string): string[] {
-  for (const group of groupMap.values()) {
-    if (group.includes(cardId)) return group;
-  }
-  return [cardId];
+export function glueGroupIds(
+  groupMap: Map<string, string[]>,
+  cardToGlue: Map<string, string>,
+  cardId: string,
+): string[] {
+  const glueId = cardToGlue.get(cardId);
+  return glueId ? (groupMap.get(glueId) ?? [cardId]) : [cardId];
 }
 
 export function dragGroupIds(
   groupMap: Map<string, string[]>,
+  cardToGlue: Map<string, string>,
   selectedCards: ReadonlySet<string>,
   cardId: string,
 ): string[] {
-  const glueIds = glueGroupIds(groupMap, cardId).filter((id) => id !== cardId);
+  const glueIds = glueGroupIds(groupMap, cardToGlue, cardId).filter((id) => id !== cardId);
   const selectionIds = selectedCards.has(cardId)
     ? [...selectedCards].filter((id) => id !== cardId)
     : [];
@@ -92,7 +96,7 @@ export function previousPositions<T extends { id: string; posX: number; posY: nu
 export function cardPositionPatches<T extends { id: string; posX: number; posY: number }>(
   cards: T[],
   cardIds: string[],
-): CardPositionPatch[] {
+): CardPositionUpdate[] {
   const byId = buildCardMap(cards);
   return cardIds.flatMap((id) => {
     const card = byId.get(id);

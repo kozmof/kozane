@@ -91,23 +91,23 @@ describe("cardsWithGlueIds", () => {
 
 describe("glueGroupIds", () => {
   it("returns all cards in a glue group", () => {
-    expect(glueGroupIds(buildGlueGroupMap(glueRels), "card-1")).toEqual(["card-1", "card-2"]);
+    expect(glueGroupIds(buildGlueGroupMap(glueRels), glueIdByCardId(glueRels), "card-1")).toEqual(["card-1", "card-2"]);
   });
 
   it("returns the card itself when it is not glued", () => {
-    expect(glueGroupIds(buildGlueGroupMap(glueRels), "card-3")).toEqual(["card-3"]);
+    expect(glueGroupIds(buildGlueGroupMap(glueRels), glueIdByCardId(glueRels), "card-3")).toEqual(["card-3"]);
   });
 });
 
 describe("dragGroupIds", () => {
   it("combines glued peers with selected peers without duplicates", () => {
     expect(
-      dragGroupIds(buildGlueGroupMap(glueRels), new Set(["card-1", "card-2", "card-3"]), "card-1"),
+      dragGroupIds(buildGlueGroupMap(glueRels), glueIdByCardId(glueRels), new Set(["card-1", "card-2", "card-3"]), "card-1"),
     ).toEqual(["card-2", "card-3"]);
   });
 
   it("does not drag selected cards when the active card is not selected", () => {
-    expect(dragGroupIds(buildGlueGroupMap(glueRels), new Set(["card-3"]), "card-1")).toEqual([
+    expect(dragGroupIds(buildGlueGroupMap(glueRels), glueIdByCardId(glueRels), new Set(["card-3"]), "card-1")).toEqual([
       "card-2",
     ]);
   });

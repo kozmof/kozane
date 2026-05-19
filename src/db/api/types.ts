@@ -14,6 +14,7 @@ import type {
 export type NeedsDB = { db: AnyDB };
 export type NeedsProject = NeedsDB & { projectId: string };
 export type NeedsBundle = NeedsDB & { bundleId: string };
+export type NeedsProjectBundle = NeedsProject & { bundleId: string };
 export type NeedsScope = NeedsDB & { scopeId: string };
 export type NeedsWorkingCopy = NeedsDB & { workingCopyId: string };
 

@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { CANVAS_W, CANVAS_H } from "../../lib/constants.js";
 
 export type UiConfig = {
   defaultFontSize: number;
@@ -23,8 +24,8 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   rightPanelWidth: 232,
   defaultShowFooter: false,
   defaultShowSidePanel: false,
-  canvasWidth: 2800,
-  canvasHeight: 2000,
+  canvasWidth: CANVAS_W,
+  canvasHeight: CANVAS_H,
 };
 
 export type WorkspaceConfig = {

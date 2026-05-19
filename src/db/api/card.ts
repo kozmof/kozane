@@ -227,6 +227,13 @@ export async function reassignCardsToBundle({
     const owned = await cardsInProject(tx, projectId, cardIds);
     if (owned.length !== cardIds.length) return false;
 
+    const bundle = await tx
+      .select({ id: bundleTable.id })
+      .from(bundleTable)
+      .where(and(eq(bundleTable.id, bundleId), eq(bundleTable.projectId, projectId)))
+      .get();
+    if (!bundle) return false;
+
     await tx
       .update(cardTable)
       .set({ bundleId })

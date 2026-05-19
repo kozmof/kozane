@@ -1,13 +1,13 @@
 import { bundleTable } from "../schema.js";
 import { and, eq } from "drizzle-orm";
-import type { NeedsProject, Bundle } from "./types.js";
+import type { NeedsProject, NeedsProjectBundle, Bundle } from "./types.js";
 import { assertFound } from "./utils.js";
 
 export async function getAllBundles({ db, projectId }: NeedsProject): Promise<Bundle[]> {
   return db.select().from(bundleTable).where(eq(bundleTable.projectId, projectId));
 }
 
-type GetBundle = NeedsProject & { bundleId: string };
+type GetBundle = NeedsProjectBundle;
 export async function getBundle({
   db,
   projectId,
@@ -47,7 +47,7 @@ export async function getDefaultBundle({
     .get();
 }
 
-type DeleteBundle = NeedsProject & { bundleId: string };
+type DeleteBundle = NeedsProjectBundle;
 export async function deleteBundle({ db, projectId, bundleId }: DeleteBundle): Promise<void> {
   const deleted = await db
     .delete(bundleTable)
@@ -56,7 +56,7 @@ export async function deleteBundle({ db, projectId, bundleId }: DeleteBundle): P
   assertFound(deleted, `Bundle projectId=${projectId} bundleId=${bundleId}`);
 }
 
-type UpdateBundleName = NeedsProject & { bundleId: string; name: string };
+type UpdateBundleName = NeedsProjectBundle & { name: string };
 export async function updateBundleName({
   db,
   projectId,
