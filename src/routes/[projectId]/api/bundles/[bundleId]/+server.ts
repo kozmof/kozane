@@ -1,7 +1,23 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
+import { updateBundleName } from "../../../../../db/api/bundle";
 import { deleteBundleWithReassign } from "../../../../../db/api/composite";
 import { NotFoundError } from "../../../../../db/api/utils";
+import { readJsonObject, requireTrimmedString } from "../../../lib/request";
+
+export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+  const { db } = locals;
+  const { projectId, bundleId } = params;
+  const body = await readJsonObject(request);
+  const name = requireTrimmedString(body, "name");
+  try {
+    await updateBundleName({ db, projectId, bundleId, name });
+  } catch (e) {
+    if (e instanceof NotFoundError) throw error(404, e.message);
+    throw e;
+  }
+  return json({ ok: true });
+};
 
 export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;

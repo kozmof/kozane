@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { DEFAULT_UI_CONFIG, type UiConfig } from "../../cli/lib/config.js";
+import { DEFAULT_UI_CONFIG, type UiConfig } from "../../lib/ui-config.js";
 
 const explicitDatabaseUrl = process.env.DATABASE_URL;
 

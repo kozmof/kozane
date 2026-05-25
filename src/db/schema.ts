@@ -91,7 +91,6 @@ export const glueTable = sqliteTable("glue", {
     .primaryKey()
     .$defaultFn(() => uuidv7()),
 });
-
 export const glueRelTable = sqliteTable("glue_rel", {
   glueId: text("glue_id")
     .notNull()

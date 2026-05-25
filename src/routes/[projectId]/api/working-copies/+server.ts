@@ -4,6 +4,7 @@ import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
 import { addWorkingCopy } from "../../../../db/api/working-copy";
 import { addProjectScopeRel } from "../../../../db/api/scope";
+import { withTx } from "../../../../db/tx";
 import { getCardsByScopeWithBundleName } from "../../../../db/api/scope-rel";
 import { renderCardsMarkdown } from "../../../../cli/lib/cards-template";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
@@ -29,15 +30,18 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const storedPath =
     pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
 
-  const id = await addWorkingCopy({
-    db,
-    projectId: params.projectId,
-    scopeId,
-    name,
-    path: storedPath,
-    pathKind,
+  const id = await withTx(db, async (tx) => {
+    const wcId = await addWorkingCopy({
+      db: tx,
+      projectId: params.projectId,
+      scopeId,
+      name,
+      path: storedPath,
+      pathKind,
+    });
+    await addProjectScopeRel({ db: tx, projectId: params.projectId, scopeId });
+    return wcId;
   });
-  await addProjectScopeRel({ db, projectId: params.projectId, scopeId });
 
   mkdirSync(targetDir, { recursive: true });
   writeFileSync(

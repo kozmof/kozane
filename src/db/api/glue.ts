@@ -2,7 +2,6 @@ import { glueTable, glueRelTable } from "../schema.js";
 import { and, count, inArray, lte, notInArray } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
-import { v7 as uuidv7 } from "uuid";
 
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -55,8 +54,7 @@ async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
   await dissolveOrphanGroups(db, affectedGlueIds);
 
   // Create a new glue group for all specified cards.
-  const newGlueId = uuidv7();
-  await db.insert(glueTable).values({ id: newGlueId });
+  const [{ id: newGlueId }] = await db.insert(glueTable).values({}).returning({ id: glueTable.id });
   await db.insert(glueRelTable).values(cardIds.map((cardId) => ({ glueId: newGlueId, cardId })));
 
   return newGlueId;

@@ -17,11 +17,12 @@ export async function getWorkingCopiesByProject({
 }
 
 type AddWorkingCopy = NeedsDB & {
-  projectId: string;
+  projectId?: string;
   scopeId?: string;
   name?: string;
   path?: string;
   pathKind?: PathKind;
+  lastSeenAt?: Date;
 };
 export async function addWorkingCopy({
   db,
@@ -30,10 +31,11 @@ export async function addWorkingCopy({
   name = "",
   path,
   pathKind = "project_relative",
+  lastSeenAt,
 }: AddWorkingCopy): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
-    .values({ scopeId, projectId, name, path, pathKind })
+    .values({ scopeId, projectId, name, path, pathKind, ...(lastSeenAt !== undefined && { lastSeenAt }) })
     .returning({ id: workingCopyTable.id });
   return row.id;
 }

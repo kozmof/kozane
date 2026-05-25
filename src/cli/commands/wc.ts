@@ -12,8 +12,9 @@ import {
   WC_MARKER_KIND,
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
-import { workingCopyTable, projectTable, projectScopeRelTable } from "../../db/schema.js";
-import { v7 as uuidv7 } from "uuid";
+import { workingCopyTable, projectTable } from "../../db/schema.js";
+import { addWorkingCopy } from "../../db/api/working-copy.js";
+import { addProjectScopeRel } from "../../db/api/scope.js";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
 
@@ -198,11 +199,10 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     }
   }
 
-  const id = uuidv7();
-  await db.insert(workingCopyTable).values({
-    id,
-    projectId: projectId ?? null,
-    scopeId: options.scope ?? null,
+  const id = await addWorkingCopy({
+    db,
+    projectId,
+    scopeId: options.scope,
     name,
     path: storedPath,
     pathKind,
@@ -210,10 +210,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
   });
 
   if (projectId && options.scope) {
-    await db
-      .insert(projectScopeRelTable)
-      .values({ projectId, scopeId: options.scope })
-      .onConflictDoNothing();
+    await addProjectScopeRel({ db, projectId, scopeId: options.scope });
   }
 
   mkdirSync(targetDir, { recursive: true });
