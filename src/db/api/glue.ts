@@ -39,6 +39,9 @@ async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<
 }
 
 async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
+  if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
+  if (new Set(cardIds).size !== cardIds.length) throw new Error("glueCards: cardIds must be unique");
+
   const existingRels = await db
     .select()
     .from(glueRelTable)
@@ -74,7 +77,6 @@ async function unglueCardsCore(db: Tx, cardIds: string[]): Promise<void> {
 
 type GlueCards = { db: DB; cardIds: string[] };
 export async function glueCards({ db, cardIds }: GlueCards): Promise<string> {
-  if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
   return withTx(db, (tx) => glueCardsCore(tx, cardIds));
 }
 

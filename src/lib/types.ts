@@ -1,5 +1,5 @@
 export type { Bundle, Scope, ScopeRel, GlueRel } from "../db/api/types.js";
-import type { Card } from "../db/api/types.js";
+import type { Card, WorkingCopy } from "../db/api/types.js";
 
 export type CardData = Pick<Card, "id" | "content" | "bundleId" | "posX" | "posY" | "workingCopyId">;
 
@@ -15,10 +15,4 @@ export interface BundleWithColor {
   isDefault: boolean;
 }
 
-export interface WorkingCopySummary {
-  id: string;
-  name: string;
-  scopeId: string | null;
-  path: string | null;
-  pathKind: "project_relative" | "absolute";
-}
+export type WorkingCopySummary = Pick<WorkingCopy, "id" | "name" | "scopeId" | "path" | "pathKind">;

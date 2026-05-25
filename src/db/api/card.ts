@@ -1,9 +1,12 @@
 import { bundleTable, cardTable } from "../schema.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
+
+// ── Simple operations (no ownership check) ────────────────────────────────────
 
 export async function cardsInProject(
   db: AnyDB,
@@ -77,6 +80,8 @@ export async function deleteCard({ db, bundleId, cardId }: DeleteCard): Promise<
   assertFound(deleted, `Card bundleId=${bundleId} cardId=${cardId}`);
 }
 
+// ── Project-scoped transactional operations (verify ownership before mutating) ─
+
 type DeleteCards = { db: DB; projectId: string; cardIds: string[] };
 export async function deleteCards({ db, projectId, cardIds }: DeleteCards): Promise<boolean> {
   if (cardIds.length === 0) return true;
@@ -139,6 +144,15 @@ export type CardPositionUpdate = {
   posY: number;
 };
 
+function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; posY: SQL } {
+  const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
+  const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
+  return {
+    posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
+    posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
+  };
+}
+
 type UpdateCardPositions = {
   db: DB;
   positions: CardPositionUpdate[];
@@ -149,14 +163,9 @@ export async function updateCardPositions({ db, positions }: UpdateCardPositions
 
   await withTx(db, async (tx) => {
     const ids = positions.map((p) => p.cardId);
-    const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
-    const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
     const updated = await tx
       .update(cardTable)
-      .set({
-        posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
-        posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
-      })
+      .set(buildPositionCaseWhen(positions))
       .where(inArray(cardTable.id, ids))
       .returning({ id: cardTable.id });
     if (updated.length !== positions.length)
@@ -182,14 +191,9 @@ export async function updateProjectCardPositions({
     const owned = await cardsInProject(tx, projectId, cardIds);
     if (owned.length !== cardIds.length) return false;
 
-    const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
-    const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
     await tx
       .update(cardTable)
-      .set({
-        posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
-        posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
-      })
+      .set(buildPositionCaseWhen(positions))
       .where(inArray(cardTable.id, cardIds));
 
     return true;

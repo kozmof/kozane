@@ -62,22 +62,7 @@
   $effect(() => {
     if (data.project.id === loadedProjectId) return;
     loadedProjectId = data.project.id;
-    s.projectId = data.project.id;
-    s.cards = data.cards;
-    s.bundles = data.bundles;
-    s.scopes = data.scopes;
-    s.scopeRels = data.scopeRels;
-    s.glueRels = data.glueRels;
-    s.workingCopies = data.workingCopies;
-    s.selection.selectedCards = new Set();
-    s.selection.primarySelectedId = null;
-    s.selection.composerCard = null;
-    s.sidebar.activeBundle = null;
-    s.sidebar.activeScope = null;
-    s.sidebar.newBundleName = "";
-    s.sidebar.newScopeName = "";
-    s.sidebar.newWcName = "";
-    s.lastError = null;
+    s.resetFromData(data);
     newCardSeq = 0;
     sidebarsVisible = data.uiConfig.defaultShowSidePanel;
     showFooters = data.uiConfig.defaultShowFooter;
@@ -104,7 +89,7 @@
   }
 
   async function handlePersistPositions(positions: CardPositionPatch[]): Promise<boolean> {
-    const res = await patchCardPositions(fetch, data.project.id, positions);
+    const res = await patchCardPositions(s.fetcher, data.project.id, positions);
     return res.ok;
   }
 

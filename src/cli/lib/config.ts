@@ -87,27 +87,56 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
     throw new Error(`Invalid Kozane config: workingCopy.searchRoots must be an array of strings`);
   }
 
+  type NumRange = [lo: number, hi: number];
+  const UI_NUM_RANGES: Record<string, NumRange> = {
+    defaultFontSize:   [4,   128],
+    defaultCardWidth:  [40,  1200],
+    defaultZoom:       [0.1, 10],
+    leftPanelWidth:    [80,  800],
+    rightPanelWidth:   [80,  800],
+    canvasWidth:       [400, 20000],
+    canvasHeight:      [400, 20000],
+  };
+  const UI_BOOL_FIELDS = ["defaultShowFooter", "defaultShowSidePanel"] as const;
+  const UI_STR_FIELDS  = ["defaultFontFamily"] as const;
+
+  let parsedUi: Partial<UiConfig> | undefined;
   const ui = p.ui;
   if (ui !== undefined) {
     if (typeof ui !== "object" || ui === null || Array.isArray(ui)) {
       throw new Error(`Invalid Kozane config: ui must be an object`);
     }
     const u = ui as Record<string, unknown>;
-    const numFields = ["defaultFontSize", "defaultCardWidth", "defaultZoom", "leftPanelWidth", "rightPanelWidth", "canvasWidth", "canvasHeight"] as const;
-    const boolFields = ["defaultShowFooter", "defaultShowSidePanel"] as const;
-    const strFields = ["defaultFontFamily"] as const;
-    for (const f of numFields) {
-      if (u[f] !== undefined && typeof u[f] !== "number") throw new Error(`Invalid Kozane config: ui.${f} must be a number`);
+    parsedUi = {};
+
+    for (const [f, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
+      if (u[f] === undefined) continue;
+      if (typeof u[f] !== "number") throw new Error(`Invalid Kozane config: ui.${f} must be a number`);
+      if ((u[f] as number) < lo || (u[f] as number) > hi)
+        throw new Error(`Invalid Kozane config: ui.${f} must be between ${lo} and ${hi}`);
+      (parsedUi as Record<string, unknown>)[f] = u[f];
     }
-    for (const f of boolFields) {
-      if (u[f] !== undefined && typeof u[f] !== "boolean") throw new Error(`Invalid Kozane config: ui.${f} must be a boolean`);
+    for (const f of UI_BOOL_FIELDS) {
+      if (u[f] === undefined) continue;
+      if (typeof u[f] !== "boolean") throw new Error(`Invalid Kozane config: ui.${f} must be a boolean`);
+      parsedUi[f] = u[f] as boolean;
     }
-    for (const f of strFields) {
-      if (u[f] !== undefined && typeof u[f] !== "string") throw new Error(`Invalid Kozane config: ui.${f} must be a string`);
+    for (const f of UI_STR_FIELDS) {
+      if (u[f] === undefined) continue;
+      if (typeof u[f] !== "string") throw new Error(`Invalid Kozane config: ui.${f} must be a string`);
+      parsedUi[f] = u[f] as string;
     }
   }
 
-  return parsed as WorkspaceConfig;
+  return {
+    name: p.name as string,
+    server: { host: s.host as string, port: s.port as number },
+    workingCopy: {
+      defaultDir: w.defaultDir as string,
+      searchRoots: w.searchRoots as string[],
+    },
+    ...(parsedUi !== undefined && { ui: parsedUi }),
+  };
 }
 
 export function writeConfig(projectRoot: string, config: WorkspaceConfig): void {

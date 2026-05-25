@@ -40,7 +40,7 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
       continue; // skip unreadable entries
     }
     if (entry.startsWith(".")) {
-      // Yield for marker check but do not recurse (avoids .git etc.)
+      // Check for a marker file but do not recurse — avoids descending into .git, .kozane, etc.
       yield fullPath;
       continue;
     }
