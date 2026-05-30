@@ -4,6 +4,7 @@ import {
   createCard,
   updateCard,
   deleteCard,
+  deleteCards,
   glueCards,
   unglueCards,
   createBundle,
@@ -12,6 +13,8 @@ import {
   deleteScope,
   addCardsToScope,
   removeCardsFromScope,
+  batchReassignBundle,
+  moveCardsToProject,
   createWorkingCopy,
 } from "./project-api.js";
 
@@ -157,6 +160,42 @@ describe("removeCardsFromScope", () => {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIds: ["c-1"] }),
+    });
+  });
+});
+
+describe("deleteCards", () => {
+  it("sends DELETE with cardIds to the cards endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(deleteCards(fetcher, "p-1", ["c-1", "c-2"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"] }),
+    });
+  });
+});
+
+describe("batchReassignBundle", () => {
+  it("PATCHes cardIds and bundleId to the cards/bundle endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(batchReassignBundle(fetcher, "p-1", ["c-1", "c-2"], "b-1")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/bundle", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"], bundleId: "b-1" }),
+    });
+  });
+});
+
+describe("moveCardsToProject", () => {
+  it("POSTs cardIds and targetProjectId to the cards/move endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(moveCardsToProject(fetcher, "p-1", ["c-1", "c-2"], "p-2")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"], targetProjectId: "p-2" }),
     });
   });
 });

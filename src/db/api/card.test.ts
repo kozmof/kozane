@@ -6,10 +6,12 @@ import {
   getAllCards,
   getCardsByBundles,
   deleteCard,
+  deleteCards,
   updateCardPositions,
   updateProjectCardPositions,
   updateCard,
   getCardBundleNames,
+  reassignCardsToBundle,
 } from "./card.js";
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
@@ -332,6 +334,83 @@ describe("getCardBundleNames", () => {
     const result = await getCardBundleNames({ db, cardIds: [c1] });
     expect(result).toHaveLength(1);
     expect(result[0].cardId).toBe(c1);
+  });
+});
+
+describe("deleteCards", () => {
+  it("returns true for an empty cardIds array", async () => {
+    const { db, projectId } = await setup();
+    await expect(deleteCards({ db, projectId, cardIds: [] })).resolves.toBe(true);
+  });
+
+  it("deletes all cards and returns true when all belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+
+    const ok = await deleteCards({ db, projectId, cardIds: [c1, c2] });
+
+    expect(ok).toBe(true);
+    expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
+    expect(await getCard({ db, bundleId, cardId: c2 })).toBeUndefined();
+  });
+
+  it("returns false and does not delete when a card does not belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const ownCard = await addCard({ db, bundleId, content: "Mine" });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const ok = await deleteCards({ db, projectId, cardIds: [ownCard, foreignCard] });
+
+    expect(ok).toBe(false);
+    expect(await getCard({ db, bundleId, cardId: ownCard })).toBeDefined();
+  });
+});
+
+describe("reassignCardsToBundle", () => {
+  it("returns true for an empty cardIds array", async () => {
+    const { db, projectId, bundleId } = await setup();
+    await expect(reassignCardsToBundle({ db, projectId, cardIds: [], bundleId })).resolves.toBe(true);
+  });
+
+  it("reassigns cards to the target bundle and returns true", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const targetBundle = await addBundle({ db, projectId, name: "Target" });
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+
+    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [c1, c2], bundleId: targetBundle });
+
+    expect(ok).toBe(true);
+    expect(await getCard({ db, bundleId: targetBundle, cardId: c1 })).toBeDefined();
+    expect(await getCard({ db, bundleId: targetBundle, cardId: c2 })).toBeDefined();
+    expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
+  });
+
+  it("returns false when a card does not belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const targetBundle = await addBundle({ db, projectId, name: "Target" });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [foreignCard], bundleId: targetBundle });
+
+    expect(ok).toBe(false);
+  });
+
+  it("returns false when the target bundle does not belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const foreignBundle = await addBundle({ db, projectId: otherProjectId, name: "Foreign" });
+
+    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [c1], bundleId: foreignBundle });
+
+    expect(ok).toBe(false);
+    expect(await getCard({ db, bundleId, cardId: c1 })).toBeDefined();
   });
 });
 

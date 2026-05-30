@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   optionalNumber,
+  optionalString,
   readJsonObject,
   requireString,
   requireStringArray,
@@ -67,6 +68,20 @@ describe("requireString", () => {
   it("throws when the value is empty or not a string", () => {
     expectHttpError(() => requireString({ content: "" }, "content"), 400, "content is required");
     expectHttpError(() => requireString({ content: null }, "content"), 400, "content is required");
+  });
+});
+
+describe("optionalString", () => {
+  it("returns undefined when the key is absent", () => {
+    expect(optionalString({}, "tag")).toBeUndefined();
+  });
+
+  it("returns the string value when present", () => {
+    expect(optionalString({ tag: "hello" }, "tag")).toBe("hello");
+  });
+
+  it("throws when the value is not a string", () => {
+    expectHttpError(() => optionalString({ tag: 42 }, "tag"), 400, "tag must be a string");
   });
 });
 
