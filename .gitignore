@@ -46,9 +46,6 @@ Thumbs.db
 .npm-cache
 dist
 
-sqlite/
-drizzle/
-
 .claude/
 .agents/
 

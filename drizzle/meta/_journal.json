@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1777962083593,
+      "tag": "0000_amazing_boomer",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779189541372,
+      "tag": "0001_flowery_anita_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779228204879,
+      "tag": "0002_chemical_payback",
+      "breakpoints": true
+    }
+  ]
+}
