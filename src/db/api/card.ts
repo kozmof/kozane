@@ -93,6 +93,24 @@ export async function deleteCards({ db, projectId, cardIds }: DeleteCards): Prom
   });
 }
 
+type GetCardBundleNames = NeedsDB & { cardIds: string[] };
+export async function getCardBundleNames({
+  db,
+  cardIds,
+}: GetCardBundleNames): Promise<{ cardId: string; bundleId: string; bundleName: string }[]> {
+  if (cardIds.length === 0) return [];
+  const rows = await db
+    .select({
+      cardId: cardTable.id,
+      bundleId: bundleTable.id,
+      bundleName: bundleTable.name,
+    })
+    .from(cardTable)
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .where(inArray(cardTable.id, cardIds));
+  return rows;
+}
+
 type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
 export async function reassignBundleCards({
   db,

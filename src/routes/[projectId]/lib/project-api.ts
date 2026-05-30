@@ -131,6 +131,15 @@ export function batchReassignBundle(
   return jsonRequest(fetcher, `/${projectId}/api/cards/bundle`, "PATCH", { cardIds, bundleId });
 }
 
+export function moveCardsToProject(
+  fetcher: typeof fetch,
+  projectId: string,
+  cardIds: string[],
+  targetProjectId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/cards/move`, "POST", { cardIds, targetProjectId });
+}
+
 export function createWorkingCopy(
   fetcher: typeof fetch,
   projectId: string,

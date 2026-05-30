@@ -32,6 +32,7 @@ const data = {
   scopeRels: [],
   glueRels: [],
   workingCopies: [],
+  otherProjects: [],
   uiConfig: {
     defaultFontSize: 11.5,
     defaultFontFamily: "monospace",

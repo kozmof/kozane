@@ -80,6 +80,26 @@ export function createProjectActions(state: ProjectState) {
       state.selection.primarySelectedId = null;
   }
 
+  async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
+    const res = await api.moveCardsToProject(
+      state.fetcher,
+      state.projectId,
+      cardIds,
+      targetProjectId,
+    );
+    if (!res.ok) {
+      state.setError("Failed to move cards to project");
+      return;
+    }
+    state.cards = state.cards.filter((c) => !cardIds.includes(c.id));
+    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
+    state.selection.selectedCards = new Set(
+      [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
+    );
+    if (cardIds.includes(state.selection.primarySelectedId ?? ""))
+      state.selection.primarySelectedId = null;
+  }
+
   async function handleCreateBundle() {
     const name = state.sidebar.newBundleName.trim();
     if (!name) return;
@@ -185,6 +205,7 @@ export function createProjectActions(state: ProjectState) {
     handleUnglueOne,
     handleUnglueSelected,
     handleDeleteSelected,
+    handleMoveSelectionToProject,
     handleCreateBundle,
     handleDeleteBundle,
     handleCreateScope,

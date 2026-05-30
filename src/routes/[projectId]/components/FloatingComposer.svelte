@@ -10,6 +10,7 @@
     primaryCard: CardWithGlue | null;
     bundles: BundleWithColor[];
     defaultBundleId: string;
+    otherProjects: { id: string; name: string }[];
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
     onBundleChange?: (bundleId: string) => void;
@@ -18,6 +19,7 @@
     onUnglueSelected?: (cardIds: string[]) => void;
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
+    onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
   }
 
   let {
@@ -27,6 +29,7 @@
     primaryCard,
     bundles,
     defaultBundleId,
+    otherProjects,
     onSubmit,
     onCancel,
     onBundleChange,
@@ -35,6 +38,7 @@
     onUnglueSelected,
     onUnglueOne,
     onDeleteSelected,
+    onMoveToProject,
   }: Props = $props();
 </script>
 
@@ -58,6 +62,7 @@
     {primaryCard}
     {bundles}
     {defaultBundleId}
+    {otherProjects}
     {onSubmit}
     {onCancel}
     {onBundleChange}
@@ -66,5 +71,6 @@
     {onUnglueSelected}
     {onUnglueOne}
     {onDeleteSelected}
+    {onMoveToProject}
   />
 </div>

@@ -165,6 +165,8 @@
       onUnglueSelected={actions.handleUnglueSelected}
       onUnglueOne={actions.handleUnglueOne}
       onDeleteSelected={actions.handleDeleteSelected}
+      otherProjects={data.otherProjects}
+      onMoveToProject={actions.handleMoveSelectionToProject}
     />
   </div>
 

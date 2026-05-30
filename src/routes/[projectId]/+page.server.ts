@@ -1,7 +1,7 @@
 import type { PageServerLoad } from "./$types";
 import type { WorkingCopySummary } from "$lib/types";
 import { error } from "@sveltejs/kit";
-import { getProject } from "../../db/api/project";
+import { getProject, getAllProjects } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getScopesByProject } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
@@ -18,12 +18,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const project = await getProject({ db, projectId });
   if (!project) throw error(404, "Project not found");
 
-  const [bundles, scopes] = await Promise.all([
+  const [bundles, scopes, allProjects] = await Promise.all([
     getAllBundles({ db, projectId }),
     // Load only scopes that have working copies in this project. Scopes are global by design,
     // but for the initial load we only need the ones relevant here. New scopes created by the
     // user are optimistically appended to client state without a reload.
     getScopesByProject({ db, projectId }),
+    getAllProjects({ db }),
   ]);
 
   const bundleIds = bundles.map((b) => b.id);
@@ -39,6 +40,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   return {
     project,
     bundles,
+    otherProjects: allProjects.filter((p) => p.id !== projectId),
     cards: cardsWithGlueIds(cards, glueRels),
     glueRels,
     scopes,

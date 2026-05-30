@@ -1,9 +1,11 @@
 import { withTx, type DB, type AnyDB } from "../tx.js";
-import { addCard, reassignBundleCards } from "./card.js";
-import { deleteBundle, getBundle, getDefaultBundle } from "./bundle.js";
+import { addCard, reassignBundleCards, cardsInProject, getCardBundleNames } from "./card.js";
+import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";
 import { NotFoundError } from "./utils.js";
+import { inArray } from "drizzle-orm";
+import { cardTable } from "../schema.js";
 
 type CreateCardFromWorkingCopy = {
   db: DB;
@@ -56,6 +58,66 @@ export async function createCardFromWorkingCopy({
   return withTx(db, (tx) =>
     createCardInWorkingCopyContext({ db: tx, workingCopyId, bundleId, content }),
   );
+}
+
+type MoveCardsToProject = {
+  db: DB;
+  sourceProjectId: string;
+  targetProjectId: string;
+  cardIds: string[];
+};
+
+/**
+ * Moves cards from one project to another, preserving bundle names.
+ * For each unique source bundle name, a matching bundle is found in the target
+ * project or created if absent. All updates are atomic.
+ * Returns false if any card does not belong to sourceProjectId.
+ */
+export async function moveCardsToProject({
+  db,
+  sourceProjectId,
+  targetProjectId,
+  cardIds,
+}: MoveCardsToProject): Promise<boolean> {
+  if (cardIds.length === 0) return true;
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, sourceProjectId, cardIds);
+    if (owned.length !== cardIds.length) return false;
+
+    const cardBundles = await getCardBundleNames({ db: tx, cardIds });
+    const targetBundles = await getAllBundles({ db: tx, projectId: targetProjectId });
+
+    // Build a map from source bundle name → target bundle id (find or create)
+    const bundleNameToTargetId = new Map<string, string>();
+    for (const { bundleName } of cardBundles) {
+      if (bundleNameToTargetId.has(bundleName)) continue;
+      const existing = targetBundles.find((b) => b.name === bundleName);
+      if (existing) {
+        bundleNameToTargetId.set(bundleName, existing.id);
+      } else {
+        const newId = await addBundle({ db: tx, projectId: targetProjectId, name: bundleName });
+        bundleNameToTargetId.set(bundleName, newId);
+      }
+    }
+
+    // Group card ids by their target bundle id and bulk-update each group
+    const groupsByTarget = new Map<string, string[]>();
+    for (const { cardId, bundleName } of cardBundles) {
+      const targetBundleId = bundleNameToTargetId.get(bundleName)!;
+      const group = groupsByTarget.get(targetBundleId) ?? [];
+      group.push(cardId);
+      groupsByTarget.set(targetBundleId, group);
+    }
+
+    for (const [targetBundleId, ids] of groupsByTarget) {
+      await tx
+        .update(cardTable)
+        .set({ bundleId: targetBundleId })
+        .where(inArray(cardTable.id, ids));
+    }
+
+    return true;
+  });
 }
 
 type DeleteBundleWithReassign = { db: DB; projectId: string; bundleId: string };

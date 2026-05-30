@@ -9,6 +9,7 @@ import {
   updateCardPositions,
   updateProjectCardPositions,
   updateCard,
+  getCardBundleNames,
 } from "./card.js";
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
@@ -299,3 +300,38 @@ describe("updateProjectCardPositions", () => {
     expect(await getCard({ db, bundleId, cardId: ownCard })).toMatchObject({ posX: 0, posY: 0 });
   });
 });
+
+describe("getCardBundleNames", () => {
+  it("returns empty array for empty input", async () => {
+    const { db } = await setup();
+    expect(await getCardBundleNames({ db, cardIds: [] })).toEqual([]);
+  });
+
+  it("returns cardId, bundleId, and bundleName for each card", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    const result = await getCardBundleNames({ db, cardIds: [cardId] });
+    expect(result).toEqual([{ cardId, bundleId, bundleName: "General" }]);
+  });
+
+  it("returns one row per card across different bundles", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const b2 = await addBundle({ db, projectId, name: "Research" });
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId: b2, content: "B" });
+    const result = await getCardBundleNames({ db, cardIds: [c1, c2] });
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.cardId === c1)?.bundleName).toBe("General");
+    expect(result.find((r) => r.cardId === c2)?.bundleName).toBe("Research");
+  });
+
+  it("only returns rows for the requested card ids", async () => {
+    const { db, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "Included" });
+    await addCard({ db, bundleId, content: "Excluded" });
+    const result = await getCardBundleNames({ db, cardIds: [c1] });
+    expect(result).toHaveLength(1);
+    expect(result[0].cardId).toBe(c1);
+  });
+});
+

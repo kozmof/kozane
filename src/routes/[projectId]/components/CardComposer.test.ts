@@ -8,6 +8,11 @@ const bundles = [
   { id: "b2", name: "Research", bg: "#f0fdf4", dot: "#22c55e", isDefault: false },
 ];
 
+const otherProjects = [
+  { id: "p2", name: "Project Beta" },
+  { id: "p3", name: "Project Gamma" },
+];
+
 function makeProps(overrides: Record<string, unknown> = {}) {
   return {
     editingCard: null,
@@ -16,6 +21,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     primaryCard: null,
     bundles,
     defaultBundleId: "b1",
+    otherProjects: [],
     onSubmit: vi.fn(),
     onCancel: vi.fn(),
     ...overrides,
@@ -236,5 +242,59 @@ describe("CardComposer — selection mode", () => {
     await user.click(screen.getByRole("option", { name: /Research/ }));
 
     expect(onSelectionBundleChange).toHaveBeenCalledWith(["card-1", "card-2"], "b2");
+  });
+});
+
+describe("CardComposer — Move to project", () => {
+  const selectedCards = [
+    { id: "card-1", content: "One", bundleId: "b1", posX: 0, posY: 0, glueId: null, workingCopyId: null },
+    { id: "card-2", content: "Two", bundleId: "b1", posX: 0, posY: 0, glueId: null, workingCopyId: null },
+  ];
+
+  it("does not show the Move to project button when otherProjects is empty", () => {
+    render(CardComposer, { props: makeProps({ selectedCards, otherProjects: [] }) });
+    expect(screen.queryByRole("button", { name: /Move to project/ })).not.toBeInTheDocument();
+  });
+
+  it("shows the Move to project button in selection mode when other projects exist", () => {
+    render(CardComposer, { props: makeProps({ selectedCards, otherProjects }) });
+    expect(screen.getByRole("button", { name: /Move to project/ })).toBeInTheDocument();
+  });
+
+  it("does not show the Move to project button in create mode even with other projects", () => {
+    render(CardComposer, { props: makeProps({ otherProjects }) });
+    expect(screen.queryByRole("button", { name: /Move to project/ })).not.toBeInTheDocument();
+  });
+
+  it("opens a dropdown listing other projects on click", async () => {
+    const user = userEvent.setup();
+    render(CardComposer, { props: makeProps({ selectedCards, otherProjects }) });
+
+    await user.click(screen.getByRole("button", { name: /Move to project/ }));
+
+    expect(screen.getByRole("button", { name: "Project Beta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Project Gamma" })).toBeInTheDocument();
+  });
+
+  it("calls onMoveToProject with selected card ids and target project id", async () => {
+    const user = userEvent.setup();
+    const onMoveToProject = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, otherProjects, onMoveToProject }) });
+
+    await user.click(screen.getByRole("button", { name: /Move to project/ }));
+    await user.click(screen.getByRole("button", { name: "Project Beta" }));
+
+    expect(onMoveToProject).toHaveBeenCalledOnce();
+    expect(onMoveToProject).toHaveBeenCalledWith(["card-1", "card-2"], "p2");
+  });
+
+  it("closes the dropdown after selecting a project", async () => {
+    const user = userEvent.setup();
+    render(CardComposer, { props: makeProps({ selectedCards, otherProjects, onMoveToProject: vi.fn() }) });
+
+    await user.click(screen.getByRole("button", { name: /Move to project/ }));
+    await user.click(screen.getByRole("button", { name: "Project Beta" }));
+
+    expect(screen.queryByRole("button", { name: "Project Beta" })).not.toBeInTheDocument();
   });
 });
