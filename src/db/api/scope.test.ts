@@ -10,7 +10,6 @@ import {
   deleteScope,
 } from "./scope.js";
 import { addProject } from "./project.js";
-import { addWorkingCopy } from "./working-copy.js";
 import { NotFoundError } from "./utils.js";
 
 async function db() {

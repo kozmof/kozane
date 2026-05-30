@@ -401,7 +401,7 @@ describe("reassignCardsToBundle", () => {
   });
 
   it("returns false when a card does not belong to the project", async () => {
-    const { db, projectId, bundleId } = await setup();
+    const { db, projectId } = await setup();
     const targetBundle = await addBundle({ db, projectId, name: "Target" });
     const otherProjectId = await addProject({ db, name: "Other" });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
