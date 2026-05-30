@@ -1,5 +1,12 @@
 import { relations, sql } from "drizzle-orm";
-import { sqliteTable, text, integer, primaryKey, uniqueIndex, check } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  primaryKey,
+  uniqueIndex,
+  check,
+} from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
 export const projectTable = sqliteTable("project", {
@@ -177,6 +184,9 @@ export const scopeRelRelations = relations(scopeRelTable, ({ one }) => ({
 }));
 
 export const projectScopeRelRelations = relations(projectScopeRelTable, ({ one }) => ({
-  project: one(projectTable, { fields: [projectScopeRelTable.projectId], references: [projectTable.id] }),
+  project: one(projectTable, {
+    fields: [projectScopeRelTable.projectId],
+    references: [projectTable.id],
+  }),
   scope: one(scopeTable, { fields: [projectScopeRelTable.scopeId], references: [scopeTable.id] }),
 }));

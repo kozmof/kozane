@@ -247,8 +247,24 @@ describe("CardComposer — selection mode", () => {
 
 describe("CardComposer — Move to project", () => {
   const selectedCards = [
-    { id: "card-1", content: "One", bundleId: "b1", posX: 0, posY: 0, glueId: null, workingCopyId: null },
-    { id: "card-2", content: "Two", bundleId: "b1", posX: 0, posY: 0, glueId: null, workingCopyId: null },
+    {
+      id: "card-1",
+      content: "One",
+      bundleId: "b1",
+      posX: 0,
+      posY: 0,
+      glueId: null,
+      workingCopyId: null,
+    },
+    {
+      id: "card-2",
+      content: "Two",
+      bundleId: "b1",
+      posX: 0,
+      posY: 0,
+      glueId: null,
+      workingCopyId: null,
+    },
   ];
 
   it("does not show the Move to project button when otherProjects is empty", () => {
@@ -290,7 +306,9 @@ describe("CardComposer — Move to project", () => {
 
   it("closes the dropdown after selecting a project", async () => {
     const user = userEvent.setup();
-    render(CardComposer, { props: makeProps({ selectedCards, otherProjects, onMoveToProject: vi.fn() }) });
+    render(CardComposer, {
+      props: makeProps({ selectedCards, otherProjects, onMoveToProject: vi.fn() }),
+    });
 
     await user.click(screen.getByRole("button", { name: /Move to project/ }));
     await user.click(screen.getByRole("button", { name: "Project Beta" }));

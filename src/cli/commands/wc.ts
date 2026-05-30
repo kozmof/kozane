@@ -194,7 +194,9 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     if (projects.length === 1) {
       projectId = projects[0].id;
     } else if (projects.length > 1) {
-      console.error("Error: workspace has multiple projects. Use --project <projectId> to specify one.");
+      console.error(
+        "Error: workspace has multiple projects. Use --project <projectId> to specify one.",
+      );
       process.exit(1);
     }
   }

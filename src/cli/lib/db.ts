@@ -41,7 +41,12 @@ export type MigrationStatus =
       applied: MigrationJournalEntry | null;
       pendingCount: number;
     }
-  | { state: "unknown"; dbPath: string | null; latest: MigrationJournalEntry | null; error: string };
+  | {
+      state: "unknown";
+      dbPath: string | null;
+      latest: MigrationJournalEntry | null;
+      error: string;
+    };
 
 export async function openDb(dbUrl: string): Promise<DB> {
   return createDb(dbUrl);

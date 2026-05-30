@@ -4,7 +4,12 @@ import { getBundle } from "../../../../../db/api/bundle";
 import { updateCard, deleteCard } from "../../../../../db/api/card";
 import { requireCardInProject } from "../../../lib/guards";
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
-import { optionalNumber, optionalString, readJsonObject, requireString } from "../../../lib/request";
+import {
+  optionalNumber,
+  optionalString,
+  readJsonObject,
+  requireString,
+} from "../../../lib/request";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

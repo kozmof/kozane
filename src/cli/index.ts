@@ -90,7 +90,10 @@ wc.command("create <name>")
   .description("Create a new working copy")
   .option("--scope <scopeId>", "Attach to a scope (required unless --no-scope is given)")
   .option("--no-scope", "Create without a scope")
-  .option("--project <projectId>", "Project to associate with (required when workspace has multiple projects)")
+  .option(
+    "--project <projectId>",
+    "Project to associate with (required when workspace has multiple projects)",
+  )
   .option("--dir <path>", "Target directory (default: <projectRoot>/<name>)")
   .action((name, opts) => wcCreate(name, opts));
 

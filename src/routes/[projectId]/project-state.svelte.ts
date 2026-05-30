@@ -1,4 +1,11 @@
-import type { CardWithGlue, Bundle, Scope, ScopeRel, GlueRel, WorkingCopySummary } from "$lib/types";
+import type {
+  CardWithGlue,
+  Bundle,
+  Scope,
+  ScopeRel,
+  GlueRel,
+  WorkingCopySummary,
+} from "$lib/types";
 
 export class SelectionState {
   selectedCards = $state(new Set<string>());

@@ -144,7 +144,9 @@ describe("updateCard (content)", () => {
 
   it("throws NotFoundError for a missing card", async () => {
     const { db, bundleId } = await setup();
-    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(NotFoundError);
+    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -253,7 +255,9 @@ describe("updateCard", () => {
 
   it("throws NotFoundError for a missing card", async () => {
     const { db, bundleId } = await setup();
-    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(NotFoundError);
+    await expect(updateCard({ db, cardId: "ghost", bundleId, content: "X" })).rejects.toThrow(
+      NotFoundError,
+    );
   });
 });
 
@@ -372,7 +376,9 @@ describe("deleteCards", () => {
 describe("reassignCardsToBundle", () => {
   it("returns true for an empty cardIds array", async () => {
     const { db, projectId, bundleId } = await setup();
-    await expect(reassignCardsToBundle({ db, projectId, cardIds: [], bundleId })).resolves.toBe(true);
+    await expect(reassignCardsToBundle({ db, projectId, cardIds: [], bundleId })).resolves.toBe(
+      true,
+    );
   });
 
   it("reassigns cards to the target bundle and returns true", async () => {
@@ -381,7 +387,12 @@ describe("reassignCardsToBundle", () => {
     const c1 = await addCard({ db, bundleId, content: "A" });
     const c2 = await addCard({ db, bundleId, content: "B" });
 
-    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [c1, c2], bundleId: targetBundle });
+    const ok = await reassignCardsToBundle({
+      db,
+      projectId,
+      cardIds: [c1, c2],
+      bundleId: targetBundle,
+    });
 
     expect(ok).toBe(true);
     expect(await getCard({ db, bundleId: targetBundle, cardId: c1 })).toBeDefined();
@@ -396,7 +407,12 @@ describe("reassignCardsToBundle", () => {
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
 
-    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [foreignCard], bundleId: targetBundle });
+    const ok = await reassignCardsToBundle({
+      db,
+      projectId,
+      cardIds: [foreignCard],
+      bundleId: targetBundle,
+    });
 
     expect(ok).toBe(false);
   });
@@ -407,10 +423,14 @@ describe("reassignCardsToBundle", () => {
     const otherProjectId = await addProject({ db, name: "Other" });
     const foreignBundle = await addBundle({ db, projectId: otherProjectId, name: "Foreign" });
 
-    const ok = await reassignCardsToBundle({ db, projectId, cardIds: [c1], bundleId: foreignBundle });
+    const ok = await reassignCardsToBundle({
+      db,
+      projectId,
+      cardIds: [c1],
+      bundleId: foreignBundle,
+    });
 
     expect(ok).toBe(false);
     expect(await getCard({ db, bundleId, cardId: c1 })).toBeDefined();
   });
 });
-

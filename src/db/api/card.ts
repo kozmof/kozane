@@ -131,7 +131,9 @@ type UpdateCard = NeedsDB & {
   posX?: number;
   posY?: number;
 };
-type CardUpdate = Partial<Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">>;
+type CardUpdate = Partial<
+  Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">
+>;
 
 export async function updateCard({
   db,
@@ -187,7 +189,9 @@ export async function updateCardPositions({ db, positions }: UpdateCardPositions
       .where(inArray(cardTable.id, ids))
       .returning({ id: cardTable.id });
     if (updated.length !== positions.length)
-      throw new Error(`updateCardPositions: expected ${positions.length} updates, got ${updated.length}`);
+      throw new Error(
+        `updateCardPositions: expected ${positions.length} updates, got ${updated.length}`,
+      );
   });
 }
 
@@ -244,10 +248,7 @@ export async function reassignCardsToBundle({
       .get();
     if (!bundle) return false;
 
-    await tx
-      .update(cardTable)
-      .set({ bundleId })
-      .where(inArray(cardTable.id, cardIds));
+    await tx.update(cardTable).set({ bundleId }).where(inArray(cardTable.id, cardIds));
 
     return true;
   });

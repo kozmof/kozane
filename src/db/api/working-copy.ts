@@ -35,7 +35,14 @@ export async function addWorkingCopy({
 }: AddWorkingCopy): Promise<string> {
   const [row] = await db
     .insert(workingCopyTable)
-    .values({ scopeId, projectId, name, path, pathKind, ...(lastSeenAt !== undefined && { lastSeenAt }) })
+    .values({
+      scopeId,
+      projectId,
+      name,
+      path,
+      pathKind,
+      ...(lastSeenAt !== undefined && { lastSeenAt }),
+    })
     .returning({ id: workingCopyTable.id });
   return row.id;
 }

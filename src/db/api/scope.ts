@@ -21,7 +21,11 @@ export async function getScopesByProject({ db, projectId }: NeedsProject): Promi
 }
 
 type AddProjectScopeRel = NeedsProject & { scopeId: string };
-export async function addProjectScopeRel({ db, projectId, scopeId }: AddProjectScopeRel): Promise<void> {
+export async function addProjectScopeRel({
+  db,
+  projectId,
+  scopeId,
+}: AddProjectScopeRel): Promise<void> {
   await db.insert(projectScopeRelTable).values({ projectId, scopeId }).onConflictDoNothing();
 }
 

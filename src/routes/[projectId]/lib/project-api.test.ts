@@ -179,7 +179,9 @@ describe("deleteCards", () => {
 describe("batchReassignBundle", () => {
   it("PATCHes cardIds and bundleId to the cards/bundle endpoint", async () => {
     const { fetcher, response } = makeFetcher();
-    await expect(batchReassignBundle(fetcher, "p-1", ["c-1", "c-2"], "b-1")).resolves.toBe(response);
+    await expect(batchReassignBundle(fetcher, "p-1", ["c-1", "c-2"], "b-1")).resolves.toBe(
+      response,
+    );
     expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/bundle", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

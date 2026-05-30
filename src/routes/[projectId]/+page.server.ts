@@ -45,13 +45,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     glueRels,
     scopes,
     scopeRels,
-    workingCopies: workingCopies.map((wc) => ({
-      id: wc.id,
-      name: wc.name,
-      scopeId: wc.scopeId,
-      path: wc.path,
-      pathKind: wc.pathKind,
-    } satisfies WorkingCopySummary)),
+    workingCopies: workingCopies.map(
+      (wc) =>
+        ({
+          id: wc.id,
+          name: wc.name,
+          scopeId: wc.scopeId,
+          path: wc.path,
+          pathKind: wc.pathKind,
+        }) satisfies WorkingCopySummary,
+    ),
     uiConfig: getWorkspaceUiConfig(),
   };
 };

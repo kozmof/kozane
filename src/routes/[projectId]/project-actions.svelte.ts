@@ -16,12 +16,7 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
-    const res = await api.batchReassignBundle(
-      state.fetcher,
-      state.projectId,
-      cardIds,
-      newBundleId,
-    );
+    const res = await api.batchReassignBundle(state.fetcher, state.projectId, cardIds, newBundleId);
     if (!res.ok) {
       state.setError("Failed to change bundle for selected cards");
       return;

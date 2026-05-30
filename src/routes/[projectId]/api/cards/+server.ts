@@ -40,7 +40,10 @@ function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpda
     };
   });
 
-  requireUniqueStrings(positions.map((p) => p.cardId), "cardId");
+  requireUniqueStrings(
+    positions.map((p) => p.cardId),
+    "cardId",
+  );
   return positions;
 }
 
