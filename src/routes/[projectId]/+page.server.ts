@@ -9,7 +9,7 @@ import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
-import { getWorkingCopiesByProject } from "../../db/api/working-copy";
+import { getAllWorkingCopies } from "../../db/api/working-copy";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -31,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const [glueRels, scopeRels, workingCopies] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
-    getWorkingCopiesByProject({ db, projectId }),
+    getAllWorkingCopies({ db }),
   ]);
 
   return {
