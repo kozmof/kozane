@@ -102,7 +102,7 @@ function migrationByWhen(
 
 function pathFromDbUrl(dbUrl: string): string | null {
   if (!dbUrl.startsWith("file:")) return null;
-  return fileURLToPath(dbUrl);
+  return dbUrl.slice("file:".length);
 }
 
 export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus> {

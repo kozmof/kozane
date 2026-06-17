@@ -83,8 +83,9 @@
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const res = await createCard(s.fetcher, data.project.id, { bundleId, content, posX, posY });
       if (!res.ok) { s.lastError = "Failed to create card"; return; }
-      const { id: newId } = await res.json();
-      s.cards = [...s.cards, { id: newId, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
+      const parsed = await res.json().catch(() => null);
+      if (!parsed) { s.lastError = "Failed to create card"; return; }
+      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
     }
   }
 

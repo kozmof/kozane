@@ -8,11 +8,13 @@ import { renderCardsMarkdown } from "../../../../lib/cards-template";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
 import { getWorkspaceRoot, getWorkingCopyDefaultDir } from "../../../../db/internal/config";
 import { WC_MARKER_FILE, WC_MARKER_KIND, WC_MARKER_VERSION } from "../../../../lib/wc-marker";
+import { NAME_MAX } from "$lib/constants";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
   const name = requireTrimmedString(body, "name");
+  if (name.length > NAME_MAX) throw error(400, `name must be ${NAME_MAX} characters or fewer`);
   const scopeId = requireTrimmedString(body, "scopeId");
 
   const root = getWorkspaceRoot();

@@ -26,6 +26,6 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   if (!(await allCardsBelongToProject(db, projectId, cardIds)))
     throw error(400, "Some cards do not belong to this project");
 
-  await unglueCards({ db, cardIds });
-  return json({ ok: true });
+  const clearedCardIds = await unglueCards({ db, cardIds });
+  return json({ ok: true, clearedCardIds });
 };

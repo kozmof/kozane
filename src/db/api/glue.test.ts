@@ -69,7 +69,7 @@ describe("glueCards", () => {
 describe("unglueCards", () => {
   it("is a no-op for an empty card list", async () => {
     const { db } = await setup();
-    await expect(unglueCards({ db, cardIds: [] })).resolves.toBeUndefined();
+    expect(await unglueCards({ db, cardIds: [] })).toEqual([]);
   });
 
   it("removes selected cards and keeps groups with multiple remaining members", async () => {

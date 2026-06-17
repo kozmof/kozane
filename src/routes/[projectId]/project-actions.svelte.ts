@@ -32,7 +32,9 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to glue cards");
       return;
     }
-    const { glueId } = await res.json();
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to glue cards"); return; }
+    const { glueId } = parsed;
     state.glueRels = [
       ...state.glueRels.filter((r) => !cardIds.includes(r.cardId)),
       ...cardIds.map((cardId) => ({ glueId, cardId })),
@@ -46,14 +48,11 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to unglue card");
       return;
     }
-    // The server dissolves the whole glue group when only 1 member would remain
-    // (dissolveOrphanGroups). For a 2-card pair this means the partner is also
-    // unglued server-side, so we must clear its state here too.
-    const myRel = state.glueRels.find((r) => r.cardId === cardId);
-    const groupRels = myRel ? state.glueRels.filter((r) => r.glueId === myRel.glueId) : [];
-    const clearedIds = new Set(groupRels.length <= 2 ? groupRels.map((r) => r.cardId) : [cardId]);
-    state.glueRels = state.glueRels.filter((r) => !clearedIds.has(r.cardId));
-    state.cards = state.cards.map((c) => (clearedIds.has(c.id) ? { ...c, glueId: null } : c));
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to unglue card"); return; }
+    const clearedSet = new Set<string>(parsed.clearedCardIds);
+    state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
+    state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
   }
 
   async function handleUnglueSelected(cardIds: string[]) {
@@ -62,8 +61,11 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to unglue cards");
       return;
     }
-    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
-    state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId: null } : c));
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to unglue cards"); return; }
+    const clearedSet = new Set<string>(parsed.clearedCardIds);
+    state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
+    state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
   }
 
   async function handleDeleteSelected(cardIds: string[]) {
@@ -109,8 +111,9 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to create bundle");
       return;
     }
-    const { id } = await res.json();
-    state.bundles = [...state.bundles, { id, projectId: state.projectId, name, isDefault: false }];
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to create bundle"); return; }
+    state.bundles = [...state.bundles, { id: parsed.id, projectId: state.projectId, name, isDefault: false }];
     state.sidebar.newBundleName = "";
   }
 
@@ -120,9 +123,10 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to delete bundle");
       return;
     }
-    const { defaultBundleId } = await res.json();
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to delete bundle"); return; }
     state.cards = state.cards.map((c) =>
-      c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c,
+      c.bundleId === bundleId ? { ...c, bundleId: parsed.defaultBundleId } : c,
     );
     state.bundles = state.bundles.filter((b) => b.id !== bundleId);
     if (state.sidebar.activeBundle === bundleId) state.sidebar.activeBundle = null;
@@ -154,8 +158,9 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to create working copy");
       return;
     }
-    const { id, path, pathKind } = await res.json();
-    state.workingCopies = [...state.workingCopies, { id, name, scopeId, path, pathKind }];
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) { state.setError("Failed to create working copy"); return; }
+    state.workingCopies = [...state.workingCopies, { id: parsed.id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind }];
     state.sidebar.newWcName = "";
   }
 
