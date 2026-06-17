@@ -23,6 +23,9 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const defaultDir = getWorkingCopyDefaultDir(root);
   const targetDir = resolve(join(root, defaultDir, name));
 
+  if (!targetDir.startsWith(resolve(root) + "/") && targetDir !== resolve(root))
+    throw error(400, "Working copy path must be inside the workspace root");
+
   const pathKind = targetDir.startsWith(resolve(root))
     ? ("project_relative" as const)
     : ("absolute" as const);

@@ -11,7 +11,7 @@ import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/d
 
 const program = new Command();
 
-program.name("kozane").description("Local card-based thinking workspace").version("0.1.0");
+program.name("kozane").description("Local card-based thinking workspace").version("0.1.2");
 
 program
   .command("init")

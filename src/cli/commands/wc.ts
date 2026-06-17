@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
@@ -13,8 +13,9 @@ import {
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
 import { workingCopyTable, projectTable } from "../../db/schema.js";
-import { addWorkingCopy } from "../../db/api/working-copy.js";
+import { addWorkingCopy, deleteWorkingCopy } from "../../db/api/working-copy.js";
 import { addProjectScopeRel } from "../../db/api/scope.js";
+import { withTx } from "../../db/tx.js";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
 
@@ -201,28 +202,39 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     }
   }
 
-  const id = await addWorkingCopy({
-    db,
-    projectId,
-    scopeId: options.scope,
-    name,
-    path: storedPath,
-    pathKind,
-    lastSeenAt: new Date(),
+  const id = await withTx(db, async (tx) => {
+    const wcId = await addWorkingCopy({
+      db: tx,
+      projectId,
+      scopeId: options.scope,
+      name,
+      path: storedPath,
+      pathKind,
+      lastSeenAt: new Date(),
+    });
+    if (projectId && options.scope) {
+      await addProjectScopeRel({ db: tx, projectId, scopeId: options.scope });
+    }
+    return wcId;
   });
 
-  if (projectId && options.scope) {
-    await addProjectScopeRel({ db, projectId, scopeId: options.scope });
+  const dirCreated = !existsSync(targetDir);
+  try {
+    mkdirSync(targetDir, { recursive: true });
+    const marker = {
+      kind: WC_MARKER_KIND,
+      version: WC_MARKER_VERSION,
+      workingCopyId: id,
+      projectId: projectId ?? "",
+    };
+    writeFileSync(join(targetDir, WC_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
+  } catch (e) {
+    await deleteWorkingCopy({ db, workingCopyId: id });
+    if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
+    console.error("Failed to initialize working copy directory.");
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
   }
-
-  mkdirSync(targetDir, { recursive: true });
-  const marker = {
-    kind: WC_MARKER_KIND,
-    version: WC_MARKER_VERSION,
-    workingCopyId: id,
-    projectId: projectId ?? "",
-  };
-  writeFileSync(join(targetDir, WC_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
 
   console.log(`Working copy created.`);
   console.log(`  id   : ${id}`);
