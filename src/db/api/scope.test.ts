@@ -4,8 +4,6 @@ import {
   addScope,
   getScope,
   getAllScopes,
-  getScopesByProject,
-  addProjectScopeRel,
   updateScopeName,
   deleteScope,
   deleteScopeFromProject,
@@ -65,35 +63,6 @@ describe("getAllScopes", () => {
   });
 });
 
-describe("getScopesByProject", () => {
-  it("returns only scopes associated with the project", async () => {
-    const d = await db();
-    const projectId = await addProject({ db: d, name: "P1" });
-    const otherProjectId = await addProject({ db: d, name: "P2" });
-    const scopeId = await addScope({ db: d, name: "Mine" });
-    const otherScopeId = await addScope({ db: d, name: "Elsewhere" });
-    await addProjectScopeRel({ db: d, projectId, scopeId });
-    await addProjectScopeRel({ db: d, projectId: otherProjectId, scopeId: otherScopeId });
-
-    const scopes = await getScopesByProject({ db: d, projectId });
-
-    expect(scopes).toEqual([{ id: scopeId, name: "Mine" }]);
-  });
-
-  it("deduplicates multiple associations to the same scope", async () => {
-    const d = await db();
-    const projectId = await addProject({ db: d, name: "P" });
-    const scopeId = await addScope({ db: d, name: "Shared" });
-    // addProjectScopeRel is idempotent — a second insert should not duplicate
-    await addProjectScopeRel({ db: d, projectId, scopeId });
-    await addProjectScopeRel({ db: d, projectId, scopeId });
-
-    expect(await getScopesByProject({ db: d, projectId })).toEqual([
-      { id: scopeId, name: "Shared" },
-    ]);
-  });
-});
-
 describe("updateScopeName", () => {
   it("changes the scope name", async () => {
     const d = await db();
@@ -131,21 +100,18 @@ describe("deleteScopeFromProject", () => {
     const projectId = await addProject({ db: d, name: "P" });
     const bundleId = await addBundle({ db: d, projectId, name: "B" });
     const scopeId = await addScope({ db: d, name: "S" });
-    await addProjectScopeRel({ db: d, projectId, scopeId });
     return { d, projectId, bundleId, scopeId };
   }
 
-  it("returns false when scope is not associated with the project", async () => {
+  it("returns false when the scope does not exist", async () => {
     const { d, projectId } = await setup();
-    const otherId = await addScope({ db: d, name: "Other" });
-    expect(await deleteScopeFromProject({ db: d, projectId, scopeId: otherId })).toBe(false);
+    expect(await deleteScopeFromProject({ db: d, projectId, scopeId: "ghost" })).toBe(false);
   });
 
-  it("removes the project_scope_rel and deletes the scope when no other project references it", async () => {
+  it("deletes an empty scope (no members anywhere)", async () => {
     const { d, projectId, scopeId } = await setup();
     expect(await deleteScopeFromProject({ db: d, projectId, scopeId })).toBe(true);
     expect(await getScope({ db: d, scopeId })).toBeUndefined();
-    expect(await getScopesByProject({ db: d, projectId })).toHaveLength(0);
   });
 
   it("removes scope_rel rows for cards belonging to this project", async () => {
@@ -158,15 +124,13 @@ describe("deleteScopeFromProject", () => {
     expect(await getScopeRelsByCards({ db: d, cardIds: [cardId] })).toHaveLength(0);
   });
 
-  it("preserves scope and scope_rel for another project's cards when scope is shared", async () => {
+  it("preserves scope when another project's cards are still members", async () => {
     const d = await createTestDB();
     const p1 = await addProject({ db: d, name: "P1" });
     const p2 = await addProject({ db: d, name: "P2" });
     const b1 = await addBundle({ db: d, projectId: p1, name: "B1" });
     const b2 = await addBundle({ db: d, projectId: p2, name: "B2" });
     const scopeId = await addScope({ db: d, name: "Shared" });
-    await addProjectScopeRel({ db: d, projectId: p1, scopeId });
-    await addProjectScopeRel({ db: d, projectId: p2, scopeId });
 
     const card1 = await addCard({ db: d, bundleId: b1, content: "c1" });
     const card2 = await addCard({ db: d, bundleId: b2, content: "c2" });
@@ -175,9 +139,9 @@ describe("deleteScopeFromProject", () => {
 
     await deleteScopeFromProject({ db: d, projectId: p1, scopeId });
 
-    // Scope still exists because p2 still references it
+    // Scope still exists because p2's card remains
     expect(await getScope({ db: d, scopeId })).toBeDefined();
-    // p1's card is removed from scope; p2's card is preserved
+    // p1's card is removed; p2's card is preserved
     expect(await getScopeRelsByCards({ db: d, cardIds: [card1] })).toHaveLength(0);
     expect(await getScopeRelsByCards({ db: d, cardIds: [card2] })).toHaveLength(1);
   });

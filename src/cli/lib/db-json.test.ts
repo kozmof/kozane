@@ -79,10 +79,6 @@ async function seedDb(dbUrl: string): Promise<void> {
           sql: "INSERT INTO scope_rel (scope_id, card_id) VALUES (?, ?)",
           args: ["scope-1", "card-1"],
         },
-        {
-          sql: "INSERT INTO project_scope_rel (project_id, scope_id) VALUES (?, ?)",
-          args: ["project-1", "scope-1"],
-        },
       ],
       "write",
     );
@@ -120,7 +116,6 @@ describe("db JSON export/import", () => {
       glue: 1,
       glue_rel: 2,
       scope_rel: 1,
-      project_scope_rel: 1,
     });
     expect({ ...targetDump, exportedAt: sourceDump.exportedAt }).toEqual(sourceDump);
   });

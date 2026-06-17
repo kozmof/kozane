@@ -16,6 +16,52 @@ kozane
 
 ---
 
+## Core concepts
+
+### Projects
+
+A project is the top-level container. It owns bundles, and bundles own cards.
+Most operations (card creation, bundle management, card positions) are scoped to a single project.
+
+### Bundles
+
+A bundle is a named label attached to every card. Each project has one default bundle
+("General") created automatically. Bundles give cards a colour in the UI and act as
+a coarse categorisation — not a folder hierarchy.
+
+### Scopes
+
+A scope is a **named cross-project grouping of cards**. Unlike projects and bundles,
+a scope does not belong to any one project — the same scope can contain cards from
+multiple projects simultaneously.
+
+```
+scope "Q3 planning"
+  ├── card from project "backend"   (bundle: Roadmap)
+  ├── card from project "backend"   (bundle: Risks)
+  └── card from project "frontend"  (bundle: Roadmap)
+```
+
+Scopes are the bridge between the card canvas and the filesystem. When you create a
+**working copy** for a scope, Kozane writes a `cards.md` file containing all cards
+currently in that scope, regardless of which project they belong to.
+
+Cards are added to a scope explicitly (via the UI's scope panel or `wc create --scope`).
+Deleting a scope from the UI removes that project's cards from it; the scope itself
+is only deleted when it has no member cards left across any project.
+
+### Working copies
+
+A working copy is a filesystem directory tied to a scope. It holds:
+
+- `.working-copy.json` — identity anchor (stable UUID, survives rename/move)
+- `cards.md` — the scope's cards rendered as Markdown
+
+Working copies are discovered by `kozane wc scan`, which walks the directories listed
+in `config.workingCopy.searchRoots` and reconciles what is on disk with the database.
+
+---
+
 ## Installation
 
 Development (from source):

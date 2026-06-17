@@ -1,33 +1,11 @@
-import { scopeTable, projectScopeRelTable, scopeRelTable, cardTable, bundleTable } from "../schema.js";
-import { and, eq, getTableColumns, inArray } from "drizzle-orm";
-import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
+import { scopeTable, scopeRelTable, cardTable, bundleTable } from "../schema.js";
+import { and, eq, inArray } from "drizzle-orm";
+import type { NeedsDB, NeedsScope, Scope } from "./types.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
-// Scopes are cross-project by design. getAllScopes returns every scope in the DB regardless of
-// project, which grows unbounded in multi-project workspaces. Prefer getScopesByProject for
-// page loads. getAllScopes is still useful for admin/CLI operations or a future "browse all scopes"
-// UI that lets users attach an existing scope from another project to the current one.
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
-}
-
-/** Returns only scopes explicitly associated with the given project via project_scope_rel. */
-export async function getScopesByProject({ db, projectId }: NeedsProject): Promise<Scope[]> {
-  return db
-    .selectDistinct(getTableColumns(scopeTable))
-    .from(scopeTable)
-    .innerJoin(projectScopeRelTable, eq(projectScopeRelTable.scopeId, scopeTable.id))
-    .where(eq(projectScopeRelTable.projectId, projectId));
-}
-
-type AddProjectScopeRel = NeedsProject & { scopeId: string };
-export async function addProjectScopeRel({
-  db,
-  projectId,
-  scopeId,
-}: AddProjectScopeRel): Promise<void> {
-  await db.insert(projectScopeRelTable).values({ projectId, scopeId }).onConflictDoNothing();
 }
 
 type GetScope = NeedsDB & { scopeId: string };
@@ -61,11 +39,9 @@ export async function deleteScope({ db, scopeId }: DeleteScope): Promise<void> {
 }
 
 /**
- * Removes a scope from a specific project's view. Deletes scope_rel rows for
- * cards belonging to this project. If no other project references the scope,
- * deletes the scope itself (FK cascade clears remaining scope_rel rows and
- * nullifies working_copy.scope_id). Returns false if the scope was not
- * associated with this project.
+ * Removes this project's cards from a scope. If the scope has no remaining
+ * members across any project, deletes it entirely (FK cascade nullifies
+ * working_copy.scope_id). Returns false when the scope does not exist.
  */
 export async function deleteScopeFromProject({
   db,
@@ -77,19 +53,13 @@ export async function deleteScopeFromProject({
   scopeId: string;
 }): Promise<boolean> {
   return withTx(db, async (tx) => {
-    const removed = await tx
-      .delete(projectScopeRelTable)
-      .where(
-        and(
-          eq(projectScopeRelTable.projectId, projectId),
-          eq(projectScopeRelTable.scopeId, scopeId),
-        ),
-      )
-      .returning({ scopeId: projectScopeRelTable.scopeId });
+    const scope = await tx
+      .select({ id: scopeTable.id })
+      .from(scopeTable)
+      .where(eq(scopeTable.id, scopeId))
+      .get();
+    if (!scope) return false;
 
-    if (removed.length === 0) return false;
-
-    // Remove scope memberships for cards that belong to this project
     const projectCardSubq = tx
       .select({ id: cardTable.id })
       .from(cardTable)
@@ -101,15 +71,13 @@ export async function deleteScopeFromProject({
       .delete(scopeRelTable)
       .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, projectCardSubq)));
 
-    // If no other project references this scope, delete it entirely.
-    // FK cascade handles remaining scope_rel rows and nullifies working_copy.scope_id.
-    const stillReferenced = await tx
-      .select({ scopeId: projectScopeRelTable.scopeId })
-      .from(projectScopeRelTable)
-      .where(eq(projectScopeRelTable.scopeId, scopeId))
+    const stillHasMembers = await tx
+      .select({ cardId: scopeRelTable.cardId })
+      .from(scopeRelTable)
+      .where(eq(scopeRelTable.scopeId, scopeId))
       .get();
 
-    if (!stillReferenced) {
+    if (!stillHasMembers) {
       await tx.delete(scopeTable).where(eq(scopeTable.id, scopeId));
     }
 

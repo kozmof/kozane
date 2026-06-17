@@ -54,11 +54,6 @@ const TABLES = [
     columns: ["scope_id", "card_id"],
     orderBy: ["scope_id", "card_id"],
   },
-  {
-    name: "project_scope_rel",
-    columns: ["project_id", "scope_id"],
-    orderBy: ["project_id", "scope_id"],
-  },
 ] as const;
 
 type TableName = (typeof TABLES)[number]["name"];
@@ -116,7 +111,6 @@ function emptyTables(): TableRows {
     glue: [],
     glue_rel: [],
     scope_rel: [],
-    project_scope_rel: [],
   };
 }
 

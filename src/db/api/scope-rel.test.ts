@@ -121,6 +121,7 @@ describe("addScopeMembers", () => {
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards).toHaveLength(1);
   });
+
 });
 
 describe("getScopeRelsByCards", () => {

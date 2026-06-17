@@ -14,8 +14,6 @@ import {
 } from "../lib/wc-scan.js";
 import { workingCopyTable, projectTable } from "../../db/schema.js";
 import { addWorkingCopy, deleteWorkingCopy } from "../../db/api/working-copy.js";
-import { addProjectScopeRel } from "../../db/api/scope.js";
-import { withTx } from "../../db/tx.js";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
 
@@ -202,20 +200,14 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     }
   }
 
-  const id = await withTx(db, async (tx) => {
-    const wcId = await addWorkingCopy({
-      db: tx,
-      projectId,
-      scopeId: options.scope,
-      name,
-      path: storedPath,
-      pathKind,
-      lastSeenAt: new Date(),
-    });
-    if (projectId && options.scope) {
-      await addProjectScopeRel({ db: tx, projectId, scopeId: options.scope });
-    }
-    return wcId;
+  const id = await addWorkingCopy({
+    db,
+    projectId,
+    scopeId: options.scope,
+    name,
+    path: storedPath,
+    pathKind,
+    lastSeenAt: new Date(),
   });
 
   const dirCreated = !existsSync(targetDir);
