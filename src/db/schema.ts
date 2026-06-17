@@ -55,6 +55,9 @@ export const workingCopyTable = sqliteTable("working_copy", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
+  // nullable: the CLI creates a WC without a project_id when the workspace has
+  // 0 projects or multiple projects and --project is not supplied. Cascade delete
+  // removes the record if the linked project is later deleted.
   projectId: text("project_id").references(() => projectTable.id, {
     onDelete: "cascade",
     onUpdate: "cascade",

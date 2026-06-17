@@ -24,11 +24,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (!targetDir.startsWith(resolve(root) + "/") && targetDir !== resolve(root))
     throw error(400, "Working copy path must be inside the workspace root");
 
-  const pathKind = targetDir.startsWith(resolve(root))
-    ? ("project_relative" as const)
-    : ("absolute" as const);
-  const storedPath =
-    pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
+  // The guard above ensures targetDir is always inside the workspace root,
+  // so the path is always stored as project_relative. Absolute paths are
+  // only produced by the CLI (kozane wc create --dir <outside-root>).
+  const storedPath = relative(resolve(root), targetDir);
 
   const id = await addWorkingCopy({
     db,
@@ -36,7 +35,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     scopeId,
     name,
     path: storedPath,
-    pathKind,
+    pathKind: "project_relative",
   });
 
   // Fetch cards before touching the filesystem so a DB error cannot leave
@@ -68,5 +67,5 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     throw error(500, "Failed to initialize working copy directory");
   }
 
-  return json({ id, path: storedPath, pathKind });
+  return json({ id, path: storedPath, pathKind: "project_relative" });
 };

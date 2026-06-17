@@ -4,6 +4,9 @@ import { eq } from "drizzle-orm";
 import type { NeedsDB, NeedsWorkingCopy, WorkingCopy } from "./types.js";
 import { assertFound } from "./utils.js";
 
+// Intentionally unscoped: working copies are tied to scopes, and scopes are
+// cross-project. The UI needs all working copies to show their scope associations
+// regardless of which project is currently viewed (per spec §Scopes).
 export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[]> {
   return db.select().from(workingCopyTable);
 }

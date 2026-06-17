@@ -46,8 +46,14 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to unglue card");
       return;
     }
-    state.glueRels = state.glueRels.filter((r) => r.cardId !== cardId);
-    state.cards = state.cards.map((c) => (c.id === cardId ? { ...c, glueId: null } : c));
+    // The server dissolves the whole glue group when only 1 member would remain
+    // (dissolveOrphanGroups). For a 2-card pair this means the partner is also
+    // unglued server-side, so we must clear its state here too.
+    const myRel = state.glueRels.find((r) => r.cardId === cardId);
+    const groupRels = myRel ? state.glueRels.filter((r) => r.glueId === myRel.glueId) : [];
+    const clearedIds = new Set(groupRels.length <= 2 ? groupRels.map((r) => r.cardId) : [cardId]);
+    state.glueRels = state.glueRels.filter((r) => !clearedIds.has(r.cardId));
+    state.cards = state.cards.map((c) => (clearedIds.has(c.id) ? { ...c, glueId: null } : c));
   }
 
   async function handleUnglueSelected(cardIds: string[]) {
