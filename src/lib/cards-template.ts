@@ -29,14 +29,9 @@ export const CARDS_TEMPLATE_FILE = "cards.template.md";
 //   {{posX}} {{posY}} — canvas position
 const DEFAULT_TEMPLATE = `# {{name}}
 
-{{#each glues}}---
-
-{{#each cards}}{{contentBreak}}
+{{#each glues}}{{#each cards}}- {{contentInline}}
 {{/each}}
-
-{{/each}}---
-
-{{#each ungluedCards}}{{contentBreak}}
+{{/each}}{{#each ungluedCards}}- {{contentInline}}
 {{/each}}`;
 
 type TemplateContext = Record<string, unknown>;
