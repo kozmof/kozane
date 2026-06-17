@@ -5,36 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1777962083593,
-      "tag": "0000_amazing_boomer",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1779189541372,
-      "tag": "0001_flowery_anita_blake",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1779228204879,
-      "tag": "0002_chemical_payback",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1781693258357,
-      "tag": "0003_right_toad",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1781695151808,
-      "tag": "0004_tense_rockslide",
+      "when": 1781734555597,
+      "tag": "0000_lethal_lord_tyger",
       "breakpoints": true
     }
   ]

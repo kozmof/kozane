@@ -44,7 +44,8 @@ CREATE TABLE `scope_rel` (
 --> statement-breakpoint
 CREATE TABLE `scope` (
 	`id` text PRIMARY KEY NOT NULL,
-	`name` text DEFAULT '' NOT NULL
+	`name` text NOT NULL,
+	CONSTRAINT "scope_name_nonempty" CHECK(length("scope"."name") > 0)
 );
 --> statement-breakpoint
 CREATE TABLE `working_copy` (

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4307e516-8d7a-4af9-aba3-36b93102aee3",
+  "id": "9a9f810f-f62f-4793-be94-c95611bdde90",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "bundle": {
@@ -313,15 +313,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "''"
+          "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "scope_name_nonempty": {
+          "name": "scope_name_nonempty",
+          "value": "length(\"scope\".\"name\") > 0"
+        }
+      }
     },
     "working_copy": {
       "name": "working_copy",
