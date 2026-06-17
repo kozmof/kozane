@@ -43,7 +43,7 @@ export const scopeTable = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    name: text().notNull().default(""),
+    name: text().notNull(),
   },
   (t) => [check("scope_name_nonempty", sql`length(${t.name}) > 0`)],
 );

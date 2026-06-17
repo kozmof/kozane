@@ -47,3 +47,14 @@ export function getDBURL(): string {
   if (!url) throw new Error('No Kozane workspace found. Run "kozane init" first.');
   return url;
 }
+
+export function getWorkingCopyDefaultDir(root: string): string {
+  try {
+    const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
+    const parsed = JSON.parse(raw) as { workingCopy?: { defaultDir?: string } };
+    const dir = parsed?.workingCopy?.defaultDir;
+    return typeof dir === "string" && dir ? dir : ".";
+  } catch {
+    return ".";
+  }
+}

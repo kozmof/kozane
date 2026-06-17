@@ -1,16 +1,13 @@
 import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  WC_MARKER_FILE,
+  WC_MARKER_KIND,
+  WC_MARKER_VERSION,
+  type WcMarker,
+} from "../../lib/wc-marker.js";
 
-export const WC_MARKER_FILE = ".working-copy.json";
-export const WC_MARKER_KIND = "kozane.workingCopy";
-export const WC_MARKER_VERSION = 1;
-
-export type WcMarker = {
-  kind: typeof WC_MARKER_KIND;
-  version: typeof WC_MARKER_VERSION;
-  workingCopyId: string;
-  projectId: string;
-};
+export { WC_MARKER_FILE, WC_MARKER_KIND, WC_MARKER_VERSION, type WcMarker };
 
 export type FoundWorkingCopy = {
   workingCopyId: string;
