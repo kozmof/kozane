@@ -117,7 +117,7 @@
   );
 </script>
 
-<div class={css({ backgroundColor: "ink.light", borderRadius: "10px", padding: "10px 16px 14px", flexShrink: "0" })}>
+<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + mode hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <BundleDropdown
