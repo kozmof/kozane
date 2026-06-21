@@ -8,6 +8,13 @@
       "when": 1781734555597,
       "tag": "0000_lethal_lord_tyger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1782044156615,
+      "tag": "0001_hot_shatterstar",
+      "breakpoints": true
     }
   ]
 }

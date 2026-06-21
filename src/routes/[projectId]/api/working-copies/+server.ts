@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
@@ -64,8 +64,13 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       renderCardsMarkdown({ name, scopeId, cards, projectRoot: root }),
     );
   } catch {
-    // Compensate: roll back the DB record so the UI doesn't show a broken entry.
+    // Compensate: roll back the DB record and remove any partially-created directory.
     await deleteWorkingCopy({ db, workingCopyId: id });
+    try {
+      rmSync(targetDir, { recursive: true, force: true });
+    } catch {
+      /* best-effort */
+    }
     throw error(500, "Failed to initialize working copy directory");
   }
 

@@ -1,6 +1,6 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, glueRelTable, scopeRelTable } from "../schema.js";
-import type { NeedsDB, NeedsScope, Card } from "./types.js";
+import type { NeedsDB, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound } from "./utils.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
@@ -107,7 +107,10 @@ export async function removeScopeMembersFromProject({
 }
 
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
-export async function getScopeRelsByCards({ db, cardIds }: GetScopeRelsByCards) {
+export async function getScopeRelsByCards({
+  db,
+  cardIds,
+}: GetScopeRelsByCards): Promise<ScopeRel[]> {
   if (cardIds.length === 0) return [];
   return db.select().from(scopeRelTable).where(inArray(scopeRelTable.cardId, cardIds));
 }

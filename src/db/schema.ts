@@ -32,6 +32,7 @@ export const bundleTable = sqliteTable(
     uniqueIndex("bundle_one_default_per_project")
       .on(t.projectId)
       .where(sql`is_default = 1`),
+    uniqueIndex("bundle_name_per_project").on(t.projectId, t.name),
   ],
 );
 
@@ -45,7 +46,10 @@ export const scopeTable = sqliteTable(
       .$defaultFn(() => uuidv7()),
     name: text().notNull(),
   },
-  (t) => [check("scope_name_nonempty", sql`length(${t.name}) > 0`)],
+  (t) => [
+    check("scope_name_nonempty", sql`length(${t.name}) > 0`),
+    uniqueIndex("scope_name_unique").on(t.name),
+  ],
 );
 
 export const PATH_KINDS = ["project_relative", "absolute"] as const;
