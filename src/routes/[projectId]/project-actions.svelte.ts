@@ -5,25 +5,27 @@ export function createProjectActions(state: ProjectState) {
   async function handleCardBundleChange(newBundleId: string) {
     if (!state.selection.composerCard) return;
     const cardId = state.selection.composerCard.id;
+    const prevCards = state.cards;
+    state.cards = state.cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
     const res = await api.updateCard(state.fetcher, state.projectId, cardId, {
       bundleId: newBundleId,
     });
     if (!res.ok) {
+      state.cards = prevCards;
       state.setError("Failed to change bundle");
-      return;
     }
-    state.cards = state.cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
   }
 
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
-    const res = await api.batchReassignBundle(state.fetcher, state.projectId, cardIds, newBundleId);
-    if (!res.ok) {
-      state.setError("Failed to change bundle for selected cards");
-      return;
-    }
+    const prevCards = state.cards;
     state.cards = state.cards.map((c) =>
       cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c,
     );
+    const res = await api.batchReassignBundle(state.fetcher, state.projectId, cardIds, newBundleId);
+    if (!res.ok) {
+      state.cards = prevCards;
+      state.setError("Failed to change bundle for selected cards");
+    }
   }
 
   async function handleGlueSelected(cardIds: string[]) {
@@ -75,13 +77,14 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to delete cards");
       return;
     }
-    state.cards = state.cards.filter((c) => !cardIds.includes(c.id));
-    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
+    const cardIdSet = new Set(cardIds);
+    state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
+    state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
     state.selection.selectedCards = new Set(
-      [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
+      [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
     );
     const pid = state.selection.primarySelectedId;
-    if (pid !== null && cardIds.includes(pid)) state.selection.primarySelectedId = null;
+    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
   }
 
   async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
@@ -95,13 +98,14 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to move cards to project");
       return;
     }
-    state.cards = state.cards.filter((c) => !cardIds.includes(c.id));
-    state.glueRels = state.glueRels.filter((r) => !cardIds.includes(r.cardId));
+    const cardIdSet = new Set(cardIds);
+    state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
+    state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
     state.selection.selectedCards = new Set(
-      [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
+      [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
     );
     const pid = state.selection.primarySelectedId;
-    if (pid !== null && cardIds.includes(pid)) state.selection.primarySelectedId = null;
+    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
   }
 
   async function handleCreateBundle() {

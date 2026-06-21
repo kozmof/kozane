@@ -9,6 +9,7 @@ import { addScope } from "../../../../db/api/scope.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import type { DB } from "../../../../db/tx.js";
 import { WC_MARKER_FILE } from "../../../../lib/wc-marker.js";
+import { _resetWorkspaceRootForTest } from "../../../../db/internal/config.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/working-copies", {
@@ -44,11 +45,13 @@ describe("POST /[projectId]/api/working-copies", () => {
 
     prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
     process.env.KOZANE_WORKSPACE_ROOT = tmpRoot;
+    _resetWorkspaceRootForTest();
   });
 
   afterEach(() => {
     if (prevEnv === undefined) delete process.env.KOZANE_WORKSPACE_ROOT;
     else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
+    _resetWorkspaceRootForTest();
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 

@@ -31,7 +31,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const [glueRels, scopeRels, workingCopies] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
-    getAllWorkingCopies({ db }),
+    getAllWorkingCopies({ db }), // intentionally unscoped — see working-copy.ts
   ]);
 
   return {

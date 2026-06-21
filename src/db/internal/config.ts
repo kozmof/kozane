@@ -23,17 +23,31 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
   }
 }
 
-function workspaceDbUrl(): string | null {
-  const root = findWorkspaceRoot(
+// Resolved lazily on first call so tests can set KOZANE_WORKSPACE_ROOT in
+// beforeEach. After the first resolution the value is cached for the lifetime
+// of the process (production never changes the workspace mid-run).
+let _workspaceRoot: string | null | undefined = undefined;
+
+function resolveWorkspaceRoot(): string | null {
+  if (_workspaceRoot !== undefined) return _workspaceRoot;
+  _workspaceRoot = findWorkspaceRoot(
     process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd(),
   );
+  return _workspaceRoot;
+}
+
+// For tests only — resets the cache so a fresh KOZANE_WORKSPACE_ROOT is picked up.
+export function _resetWorkspaceRootForTest(): void {
+  _workspaceRoot = undefined;
+}
+
+function workspaceDbUrl(): string | null {
+  const root = resolveWorkspaceRoot();
   return root ? `file:${join(root, ".kozane", "kozane.db")}` : null;
 }
 
 export function getWorkspaceRoot(): string | null {
-  return findWorkspaceRoot(
-    process.env.KOZANE_WORKSPACE_ROOT ?? process.env.INIT_CWD ?? process.cwd(),
-  );
+  return resolveWorkspaceRoot();
 }
 
 function extractUiOverrides(raw: unknown): Partial<UiConfig> {
@@ -57,7 +71,7 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
 }
 
 export function getWorkspaceUiConfig(): UiConfig {
-  const root = getWorkspaceRoot();
+  const root = resolveWorkspaceRoot();
   if (!root) return { ...DEFAULT_UI_CONFIG };
   try {
     const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");

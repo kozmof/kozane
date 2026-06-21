@@ -76,15 +76,15 @@
   async function handleComposerSubmit(id: string | null, content: string, bundleId: string) {
     if (id) {
       const res = await updateCard(s.fetcher, data.project.id, id, { content, bundleId });
-      if (!res.ok) { s.lastError = "Failed to save card"; return; }
+      if (!res.ok) { s.setError("Failed to save card"); return; }
       s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       s.selection.composerCard = null;
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const res = await createCard(s.fetcher, data.project.id, { bundleId, content, posX, posY });
-      if (!res.ok) { s.lastError = "Failed to create card"; return; }
+      if (!res.ok) { s.setError("Failed to create card"); return; }
       const parsed = await res.json().catch(() => null);
-      if (!parsed) { s.lastError = "Failed to create card"; return; }
+      if (!parsed) { s.setError("Failed to create card"); return; }
       s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
     }
   }
