@@ -10,7 +10,8 @@ process.env.HOST ??= "127.0.0.1";
 export const handle: Handle = async ({ event, resolve }) => {
   try {
     event.locals.db = await getDb();
-  } catch {
+  } catch (e) {
+    console.error("[kozane] Failed to open database:", e);
     throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
   }
   return resolve(event);

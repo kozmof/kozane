@@ -85,10 +85,11 @@ export async function deleteCard({ db, bundleId, cardId }: DeleteCard): Promise<
 type DeleteCards = { db: DB; projectId: string; cardIds: string[] };
 export async function deleteCards({ db, projectId, cardIds }: DeleteCards): Promise<boolean> {
   if (cardIds.length === 0) return true;
+  const uniqueIds = [...new Set(cardIds)];
   return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, projectId, cardIds);
-    if (owned.length !== cardIds.length) return false;
-    await tx.delete(cardTable).where(inArray(cardTable.id, cardIds));
+    const owned = await cardsInProject(tx, projectId, uniqueIds);
+    if (owned.length !== uniqueIds.length) return false;
+    await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
     return true;
   });
 }

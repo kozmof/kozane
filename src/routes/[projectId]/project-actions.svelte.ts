@@ -29,6 +29,8 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleGlueSelected(cardIds: string[]) {
+    const prevGlueRels = state.glueRels;
+    const prevCards = state.cards;
     const res = await api.glueCards(state.fetcher, state.projectId, cardIds);
     if (!res.ok) {
       state.setError("Failed to glue cards");
@@ -36,6 +38,8 @@ export function createProjectActions(state: ProjectState) {
     }
     const parsed = await res.json().catch(() => null);
     if (!parsed) {
+      state.glueRels = prevGlueRels;
+      state.cards = prevCards;
       state.setError("Failed to glue cards");
       return;
     }
@@ -48,6 +52,8 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function unglue(cardIds: string[], errorMsg: string) {
+    const prevGlueRels = state.glueRels;
+    const prevCards = state.cards;
     const res = await api.unglueCards(state.fetcher, state.projectId, cardIds);
     if (!res.ok) {
       state.setError(errorMsg);
@@ -55,6 +61,8 @@ export function createProjectActions(state: ProjectState) {
     }
     const parsed = await res.json().catch(() => null);
     if (!parsed) {
+      state.glueRels = prevGlueRels;
+      state.cards = prevCards;
       state.setError(errorMsg);
       return;
     }
@@ -202,6 +210,7 @@ export function createProjectActions(state: ProjectState) {
   async function handleAddToScope(scopeId: string) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
+    const prevScopeRels = state.scopeRels;
     const res = await api.addCardsToScope(state.fetcher, state.projectId, scopeId, cardIds);
     if (!res.ok) {
       state.setError("Failed to add cards to scope");
@@ -210,6 +219,12 @@ export function createProjectActions(state: ProjectState) {
     const newRels = cardIds
       .filter((cid) => !state.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
       .map((cardId) => ({ scopeId, cardId }));
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.scopeRels = prevScopeRels;
+      state.setError("Failed to add cards to scope");
+      return;
+    }
     state.scopeRels = [...state.scopeRels, ...newRels];
     state.selection.selectedCards = new Set();
   }
@@ -217,8 +232,15 @@ export function createProjectActions(state: ProjectState) {
   async function handleRemoveFromScope(scopeId: string) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
+    const prevScopeRels = state.scopeRels;
     const res = await api.removeCardsFromScope(state.fetcher, state.projectId, scopeId, cardIds);
     if (!res.ok) {
+      state.setError("Failed to remove cards from scope");
+      return;
+    }
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.scopeRels = prevScopeRels;
       state.setError("Failed to remove cards from scope");
       return;
     }

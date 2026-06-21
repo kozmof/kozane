@@ -8,8 +8,6 @@ import {
   UI_STR_FIELDS,
 } from "../../lib/ui-config.js";
 
-const explicitDatabaseUrl = process.env.DATABASE_URL;
-
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
   if (!startDir) return null;
 
@@ -27,6 +25,7 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
 // beforeEach. After the first resolution the value is cached for the lifetime
 // of the process (production never changes the workspace mid-run).
 let _workspaceRoot: string | null | undefined = undefined;
+let _parsedConfig: Record<string, unknown> | null | undefined = undefined;
 let _uiConfig: UiConfig | undefined = undefined;
 
 function resolveWorkspaceRoot(): string | null {
@@ -40,7 +39,23 @@ function resolveWorkspaceRoot(): string | null {
 // For tests only — resets the cache so a fresh KOZANE_WORKSPACE_ROOT is picked up.
 export function _resetWorkspaceRootForTest(): void {
   _workspaceRoot = undefined;
+  _parsedConfig = undefined;
   _uiConfig = undefined;
+}
+
+function readParsedConfig(root: string): Record<string, unknown> | null {
+  if (_parsedConfig !== undefined) return _parsedConfig;
+  try {
+    const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
+    const parsed: unknown = JSON.parse(raw);
+    _parsedConfig =
+      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+  } catch {
+    _parsedConfig = null;
+  }
+  return _parsedConfig;
 }
 
 function workspaceDbUrl(): string | null {
@@ -76,30 +91,21 @@ export function getWorkspaceUiConfig(): UiConfig {
   if (_uiConfig) return _uiConfig;
   const root = resolveWorkspaceRoot();
   if (!root) return (_uiConfig = { ...DEFAULT_UI_CONFIG });
-  try {
-    const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
-    return (_uiConfig = { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(JSON.parse(raw)) });
-  } catch {
-    return (_uiConfig = { ...DEFAULT_UI_CONFIG });
-  }
+  const parsed = readParsedConfig(root);
+  return (_uiConfig = { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(parsed) });
 }
 
 export function getDBURL(): string {
-  const url = explicitDatabaseUrl ?? workspaceDbUrl();
+  const url = process.env.DATABASE_URL ?? workspaceDbUrl();
   if (!url) throw new Error('No Kozane workspace found. Run "kozane init" first.');
   return url;
 }
 
 export function getWorkingCopyDefaultDir(root: string): string {
-  try {
-    const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return ".";
-    const wc = (parsed as Record<string, unknown>).workingCopy;
-    if (typeof wc !== "object" || wc === null) return ".";
-    const dir = (wc as Record<string, unknown>).defaultDir;
-    return typeof dir === "string" && dir ? dir : ".";
-  } catch {
-    return ".";
-  }
+  const parsed = readParsedConfig(root);
+  if (!parsed) return ".";
+  const wc = parsed.workingCopy;
+  if (typeof wc !== "object" || wc === null) return ".";
+  const dir = (wc as Record<string, unknown>).defaultDir;
+  return typeof dir === "string" && dir ? dir : ".";
 }
