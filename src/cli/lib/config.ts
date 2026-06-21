@@ -1,6 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type UiConfig, DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
+import {
+  type UiConfig,
+  DEFAULT_UI_CONFIG,
+  UI_NUM_RANGES,
+  UI_BOOL_FIELDS,
+  UI_STR_FIELDS,
+} from "../../lib/ui-config.js";
 
 export type { UiConfig };
 export { DEFAULT_UI_CONFIG };
@@ -66,19 +72,6 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   if (!Array.isArray(w.searchRoots) || w.searchRoots.some((r) => typeof r !== "string")) {
     throw new Error(`Invalid Kozane config: workingCopy.searchRoots must be an array of strings`);
   }
-
-  type NumRange = [lo: number, hi: number];
-  const UI_NUM_RANGES: Record<string, NumRange> = {
-    defaultFontSize: [4, 128],
-    defaultCardWidth: [40, 1200],
-    defaultZoom: [0.1, 10],
-    leftPanelWidth: [80, 800],
-    rightPanelWidth: [80, 800],
-    canvasWidth: [400, 20000],
-    canvasHeight: [400, 20000],
-  };
-  const UI_BOOL_FIELDS = ["defaultShowFooter", "defaultShowSidePanel"] as const;
-  const UI_STR_FIELDS = ["defaultFontFamily"] as const;
 
   let parsedUi: Partial<UiConfig> | undefined;
   const ui = p.ui;

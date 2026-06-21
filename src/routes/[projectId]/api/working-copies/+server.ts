@@ -63,7 +63,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       join(targetDir, "cards.md"),
       renderCardsMarkdown({ name, scopeId, cards, projectRoot: root }),
     );
-  } catch {
+  } catch (e) {
+    console.error("Failed to initialize working copy directory:", e);
     // Compensate: roll back the DB record and remove any partially-created directory.
     await deleteWorkingCopy({ db, workingCopyId: id });
     try {

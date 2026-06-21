@@ -80,8 +80,8 @@ export function createProjectActions(state: ProjectState) {
     state.selection.selectedCards = new Set(
       [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
     );
-    if (cardIds.includes(state.selection.primarySelectedId ?? ""))
-      state.selection.primarySelectedId = null;
+    const pid = state.selection.primarySelectedId;
+    if (pid !== null && cardIds.includes(pid)) state.selection.primarySelectedId = null;
   }
 
   async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
@@ -100,8 +100,8 @@ export function createProjectActions(state: ProjectState) {
     state.selection.selectedCards = new Set(
       [...state.selection.selectedCards].filter((id) => !cardIds.includes(id)),
     );
-    if (cardIds.includes(state.selection.primarySelectedId ?? ""))
-      state.selection.primarySelectedId = null;
+    const pid = state.selection.primarySelectedId;
+    if (pid !== null && cardIds.includes(pid)) state.selection.primarySelectedId = null;
   }
 
   async function handleCreateBundle() {

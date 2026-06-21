@@ -112,31 +112,37 @@ describe("requireStringArray", () => {
     ]);
   });
 
-  it("throws when the value is not an acceptable string array", () => {
+  it("throws when the value is not an array", () => {
     expectHttpError(
       () => requireStringArray({ cardIds: "card-1" }, "cardIds"),
       400,
-      "cardIds is required",
+      "cardIds must be an array",
     );
+  });
+
+  it("throws when the array is shorter than minLength", () => {
     expectHttpError(
       () => requireStringArray({ cardIds: [] }, "cardIds"),
       400,
-      "cardIds is required",
+      "cardIds must have at least 1 item",
     );
     expectHttpError(
       () => requireStringArray({ cardIds: ["card-1"] }, "cardIds", 2),
       400,
-      "cardIds is required",
+      "cardIds must have at least 2 items",
     );
+  });
+
+  it("throws when the array contains empty or non-string elements", () => {
     expectHttpError(
       () => requireStringArray({ cardIds: ["card-1", ""] }, "cardIds"),
       400,
-      "cardIds is required",
+      "cardIds must contain non-empty strings",
     );
     expectHttpError(
       () => requireStringArray({ cardIds: ["card-1", 2] }, "cardIds"),
       400,
-      "cardIds is required",
+      "cardIds must contain non-empty strings",
     );
   });
 

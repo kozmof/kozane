@@ -86,7 +86,7 @@ describe("POST /[projectId]/api/cards/move", () => {
     await expectHttpRejection(
       POST(event(db, srcId, jsonRequest({ targetProjectId: dstId }))),
       400,
-      "cardIds is required",
+      "cardIds must be an array",
     );
   });
 });

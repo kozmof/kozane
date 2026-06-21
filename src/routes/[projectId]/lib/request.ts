@@ -48,13 +48,11 @@ export function optionalNumber(body: JsonRecord, key: string): number | undefine
 
 export function requireStringArray(body: JsonRecord, key: string, minLength = 1): string[] {
   const value = body[key];
-  if (
-    !Array.isArray(value) ||
-    value.length < minLength ||
-    value.some((item) => typeof item !== "string" || item.length === 0)
-  ) {
-    throw error(400, `${key} is required`);
-  }
+  if (!Array.isArray(value)) throw error(400, `${key} must be an array`);
+  if (value.length < minLength)
+    throw error(400, `${key} must have at least ${minLength} item${minLength === 1 ? "" : "s"}`);
+  if (value.some((item) => typeof item !== "string" || item.length === 0))
+    throw error(400, `${key} must contain non-empty strings`);
   requireUniqueStrings(value, key);
   return value;
 }

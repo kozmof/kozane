@@ -1,6 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { DEFAULT_UI_CONFIG, type UiConfig } from "../../lib/ui-config.js";
+import {
+  DEFAULT_UI_CONFIG,
+  type UiConfig,
+  UI_NUM_RANGES,
+  UI_BOOL_FIELDS,
+  UI_STR_FIELDS,
+} from "../../lib/ui-config.js";
 
 const explicitDatabaseUrl = process.env.DATABASE_URL;
 
@@ -37,24 +43,16 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   if (typeof ui !== "object" || ui === null || Array.isArray(ui)) return {};
   const u = ui as Record<string, unknown>;
   const out: Partial<UiConfig> = {};
-  const NUM_FIELDS: (keyof UiConfig)[] = [
-    "defaultFontSize",
-    "defaultCardWidth",
-    "defaultZoom",
-    "leftPanelWidth",
-    "rightPanelWidth",
-    "canvasWidth",
-    "canvasHeight",
-  ];
-  const BOOL_FIELDS: (keyof UiConfig)[] = ["defaultShowFooter", "defaultShowSidePanel"];
-  for (const f of NUM_FIELDS) {
+  for (const f of Object.keys(UI_NUM_RANGES)) {
     if (typeof u[f] === "number" && Number.isFinite(u[f]))
       (out as Record<string, unknown>)[f] = u[f];
   }
-  for (const f of BOOL_FIELDS) {
+  for (const f of UI_BOOL_FIELDS) {
     if (typeof u[f] === "boolean") (out as Record<string, unknown>)[f] = u[f];
   }
-  if (typeof u.defaultFontFamily === "string") out.defaultFontFamily = u.defaultFontFamily;
+  for (const f of UI_STR_FIELDS) {
+    if (typeof u[f] === "string") (out as Record<string, unknown>)[f] = u[f];
+  }
   return out;
 }
 
