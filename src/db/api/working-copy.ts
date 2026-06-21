@@ -11,7 +11,6 @@ export async function getAllWorkingCopies({ db }: NeedsDB): Promise<WorkingCopy[
   return db.select().from(workingCopyTable);
 }
 
-
 type AddWorkingCopy = NeedsDB & {
   projectId?: string;
   scopeId?: string;

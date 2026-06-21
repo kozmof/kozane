@@ -123,7 +123,6 @@ export const scopeRelTable = sqliteTable(
   (t) => [primaryKey({ columns: [t.scopeId, t.cardId] })],
 );
 
-
 // Relations enable the .query.* relational API (db.query.projectTable.findMany({ with: { bundles: true } }))
 
 export const projectRelations = relations(projectTable, ({ many }) => ({
@@ -170,4 +169,3 @@ export const scopeRelRelations = relations(scopeRelTable, ({ one }) => ({
   scope: one(scopeTable, { fields: [scopeRelTable.scopeId], references: [scopeTable.id] }),
   card: one(cardTable, { fields: [scopeRelTable.cardId], references: [cardTable.id] }),
 }));
-

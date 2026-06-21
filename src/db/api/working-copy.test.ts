@@ -76,7 +76,6 @@ describe("getWorkingCopy", () => {
   });
 });
 
-
 describe("getAllWorkingCopies", () => {
   it("returns empty array when none exist", async () => {
     const { db } = await setup();

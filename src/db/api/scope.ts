@@ -69,7 +69,9 @@ export async function deleteScopeFromProject({
       );
     await tx
       .delete(scopeRelTable)
-      .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, projectCardSubq)));
+      .where(
+        and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, projectCardSubq)),
+      );
 
     const stillHasMembers = await tx
       .select({ cardId: scopeRelTable.cardId })

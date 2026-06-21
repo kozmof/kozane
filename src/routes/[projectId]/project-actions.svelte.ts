@@ -33,7 +33,10 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to glue cards"); return; }
+    if (!parsed) {
+      state.setError("Failed to glue cards");
+      return;
+    }
     const { glueId } = parsed;
     state.glueRels = [
       ...state.glueRels.filter((r) => !cardIds.includes(r.cardId)),
@@ -49,7 +52,10 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to unglue card"); return; }
+    if (!parsed) {
+      state.setError("Failed to unglue card");
+      return;
+    }
     const clearedSet = new Set<string>(parsed.clearedCardIds);
     state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
     state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
@@ -62,7 +68,10 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to unglue cards"); return; }
+    if (!parsed) {
+      state.setError("Failed to unglue cards");
+      return;
+    }
     const clearedSet = new Set<string>(parsed.clearedCardIds);
     state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
     state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
@@ -112,8 +121,14 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to create bundle"); return; }
-    state.bundles = [...state.bundles, { id: parsed.id, projectId: state.projectId, name, isDefault: false }];
+    if (!parsed) {
+      state.setError("Failed to create bundle");
+      return;
+    }
+    state.bundles = [
+      ...state.bundles,
+      { id: parsed.id, projectId: state.projectId, name, isDefault: false },
+    ];
     state.sidebar.newBundleName = "";
   }
 
@@ -124,7 +139,10 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to delete bundle"); return; }
+    if (!parsed) {
+      state.setError("Failed to delete bundle");
+      return;
+    }
     state.cards = state.cards.map((c) =>
       c.bundleId === bundleId ? { ...c, bundleId: parsed.defaultBundleId } : c,
     );
@@ -140,8 +158,12 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to create scope");
       return;
     }
-    const { id } = await res.json();
-    state.scopes = [...state.scopes, { id, name }];
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.setError("Failed to create scope");
+      return;
+    }
+    state.scopes = [...state.scopes, { id: parsed.id, name }];
     state.sidebar.newScopeName = "";
   }
 
@@ -159,8 +181,14 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) { state.setError("Failed to create working copy"); return; }
-    state.workingCopies = [...state.workingCopies, { id: parsed.id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind }];
+    if (!parsed) {
+      state.setError("Failed to create working copy");
+      return;
+    }
+    state.workingCopies = [
+      ...state.workingCopies,
+      { id: parsed.id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind },
+    ];
     state.sidebar.newWcName = "";
   }
 

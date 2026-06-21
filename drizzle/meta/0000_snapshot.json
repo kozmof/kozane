@@ -40,9 +40,7 @@
       "indexes": {
         "bundle_one_default_per_project": {
           "name": "bundle_one_default_per_project",
-          "columns": [
-            "project_id"
-          ],
+          "columns": ["project_id"],
           "isUnique": true,
           "where": "is_default = 1"
         }
@@ -52,12 +50,8 @@
           "name": "bundle_project_id_project_id_fk",
           "tableFrom": "bundle",
           "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         }
@@ -120,12 +114,8 @@
           "name": "card_bundle_id_bundle_id_fk",
           "tableFrom": "card",
           "tableTo": "bundle",
-          "columnsFrom": [
-            "bundle_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["bundle_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         },
@@ -133,12 +123,8 @@
           "name": "card_working_copy_id_working_copy_id_fk",
           "tableFrom": "card",
           "tableTo": "working_copy",
-          "columnsFrom": [
-            "working_copy_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["working_copy_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "cascade"
         }
@@ -171,12 +157,8 @@
           "name": "glue_rel_glue_id_glue_id_fk",
           "tableFrom": "glue_rel",
           "tableTo": "glue",
-          "columnsFrom": [
-            "glue_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["glue_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         },
@@ -184,12 +166,8 @@
           "name": "glue_rel_card_id_card_id_fk",
           "tableFrom": "glue_rel",
           "tableTo": "card",
-          "columnsFrom": [
-            "card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["card_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         }
@@ -263,12 +241,8 @@
           "name": "scope_rel_scope_id_scope_id_fk",
           "tableFrom": "scope_rel",
           "tableTo": "scope",
-          "columnsFrom": [
-            "scope_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scope_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         },
@@ -276,22 +250,15 @@
           "name": "scope_rel_card_id_card_id_fk",
           "tableFrom": "scope_rel",
           "tableTo": "card",
-          "columnsFrom": [
-            "card_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["card_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {
         "scope_rel_scope_id_card_id_pk": {
-          "columns": [
-            "scope_id",
-            "card_id"
-          ],
+          "columns": ["scope_id", "card_id"],
           "name": "scope_rel_scope_id_card_id_pk"
         }
       },
@@ -402,12 +369,8 @@
           "name": "working_copy_project_id_project_id_fk",
           "tableFrom": "working_copy",
           "tableTo": "project",
-          "columnsFrom": [
-            "project_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["project_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "cascade"
         },
@@ -415,12 +378,8 @@
           "name": "working_copy_scope_id_scope_id_fk",
           "tableFrom": "working_copy",
           "tableTo": "scope",
-          "columnsFrom": [
-            "scope_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["scope_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "cascade"
         }

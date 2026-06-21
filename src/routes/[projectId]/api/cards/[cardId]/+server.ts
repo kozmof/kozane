@@ -19,8 +19,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { bundleId } = await requireCardInProject(db, projectId, cardId);
 
   const content = optionalString(body, "content");
-  if (content !== undefined && !content.trim())
-    throw error(400, "content must not be empty");
+  if (content !== undefined && !content.trim()) throw error(400, "content must not be empty");
   if (content !== undefined && content.length > CONTENT_MAX)
     throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
 
