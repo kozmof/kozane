@@ -1,4 +1,4 @@
-import { spawn, exec } from "node:child_process";
+import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
@@ -16,13 +16,13 @@ type OpenOptions = {
 };
 
 function openBrowser(url: string): void {
-  const cmd =
-    process.platform === "darwin"
-      ? `open ${url}`
-      : process.platform === "win32"
-        ? `start ${url}`
-        : `xdg-open ${url}`;
-  exec(cmd);
+  if (process.platform === "darwin") {
+    execFile("open", [url]);
+  } else if (process.platform === "win32") {
+    execFile("cmd.exe", ["/c", "start", "", url]);
+  } else {
+    execFile("xdg-open", [url]);
+  }
 }
 
 export async function open(options: OpenOptions): Promise<void> {

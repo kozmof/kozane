@@ -45,15 +45,15 @@ export function createProjectActions(state: ProjectState) {
     state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId } : c));
   }
 
-  async function handleUnglueOne(cardId: string) {
-    const res = await api.unglueCards(state.fetcher, state.projectId, [cardId]);
+  async function unglue(cardIds: string[], errorMsg: string) {
+    const res = await api.unglueCards(state.fetcher, state.projectId, cardIds);
     if (!res.ok) {
-      state.setError("Failed to unglue card");
+      state.setError(errorMsg);
       return;
     }
     const parsed = await res.json().catch(() => null);
     if (!parsed) {
-      state.setError("Failed to unglue card");
+      state.setError(errorMsg);
       return;
     }
     const clearedSet = new Set<string>(parsed.clearedCardIds);
@@ -61,20 +61,12 @@ export function createProjectActions(state: ProjectState) {
     state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
   }
 
+  async function handleUnglueOne(cardId: string) {
+    await unglue([cardId], "Failed to unglue card");
+  }
+
   async function handleUnglueSelected(cardIds: string[]) {
-    const res = await api.unglueCards(state.fetcher, state.projectId, cardIds);
-    if (!res.ok) {
-      state.setError("Failed to unglue cards");
-      return;
-    }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
-      state.setError("Failed to unglue cards");
-      return;
-    }
-    const clearedSet = new Set<string>(parsed.clearedCardIds);
-    state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
-    state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
+    await unglue(cardIds, "Failed to unglue cards");
   }
 
   async function handleDeleteSelected(cardIds: string[]) {
