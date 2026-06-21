@@ -12,6 +12,7 @@ import {
   updateCard,
   getCardBundleNames,
   reassignCardsToBundle,
+  cardsInProject,
 } from "./card.js";
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
@@ -338,6 +339,13 @@ describe("getCardBundleNames", () => {
     const result = await getCardBundleNames({ db, cardIds: [c1] });
     expect(result).toHaveLength(1);
     expect(result[0].cardId).toBe(c1);
+  });
+});
+
+describe("cardsInProject", () => {
+  it("returns empty array for empty cardIds", async () => {
+    const { db, projectId } = await setup();
+    expect(await cardsInProject(db, projectId, [])).toEqual([]);
   });
 });
 

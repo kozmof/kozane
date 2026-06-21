@@ -170,4 +170,26 @@ describe("renderCardsMarkdown — custom template", () => {
     });
     expect(out).toContain("# fallback");
   });
+
+  it("renders nothing when #each key is a non-array value", () => {
+    writeTemplate("{{#each name}}x{{/each}}");
+    const out = renderCardsMarkdown({ name: "wc", scopeId: "s1", cards: [], projectRoot: root });
+    expect(out).toBe("");
+  });
+
+  it("renders block content when #each block is unterminated", () => {
+    writeTemplate("start:{{#each cards}}{{content}}");
+    const cards = [baseCard({ content: "alpha" })];
+    const out = renderCardsMarkdown({ name: "wc", scopeId: "s1", cards, projectRoot: root });
+    expect(out).toContain("start:");
+    expect(out).toContain("alpha");
+  });
+
+  it("does not throw when a nested #each tag is malformed (missing closing }})", () => {
+    writeTemplate("{{#each cards}}{{#each noclose");
+    const cards = [baseCard({ content: "x" })];
+    expect(() =>
+      renderCardsMarkdown({ name: "wc", scopeId: "s1", cards, projectRoot: root }),
+    ).not.toThrow();
+  });
 });

@@ -102,6 +102,12 @@ describe("glueGroupIds", () => {
       "card-3",
     ]);
   });
+
+  it("falls back to [cardId] when glueId exists in cardToGlue but not in groupMap", () => {
+    const cardToGlue = new Map([["card-1", "orphan-glue-id"]]);
+    const emptyGroupMap = new Map<string, string[]>();
+    expect(glueGroupIds(emptyGroupMap, cardToGlue, "card-1")).toEqual(["card-1"]);
+  });
 });
 
 describe("dragGroupIds", () => {

@@ -41,6 +41,13 @@ describe("glueCards", () => {
     );
   });
 
+  it("throws when cardIds contains duplicates", async () => {
+    const { db, cardA } = await setup();
+    await expect(glueCards({ db, cardIds: [cardA, cardA] })).rejects.toThrow(
+      "glueCards: cardIds must be unique",
+    );
+  });
+
   it("creates one glue group containing all provided cards", async () => {
     const { db, cardA, cardB } = await setup();
     const glueId = await glueCards({ db, cardIds: [cardA, cardB] });

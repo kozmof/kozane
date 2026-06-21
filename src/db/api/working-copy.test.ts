@@ -53,6 +53,14 @@ describe("addWorkingCopy", () => {
     expect(wc?.pathKind).toBe("project_relative");
   });
 
+  it("stores lastSeenAt when provided", async () => {
+    const { db, projectId, scopeId } = await setup();
+    const now = new Date(Math.floor(Date.now() / 1000) * 1000);
+    const id = await addWorkingCopy({ db, projectId, scopeId, lastSeenAt: now });
+    const wc = await getWorkingCopy({ db, workingCopyId: id });
+    expect(wc?.lastSeenAt?.getTime()).toBe(now.getTime());
+  });
+
   it("stores absolute pathKind when specified", async () => {
     const { db, projectId, scopeId } = await setup();
     const id = await addWorkingCopy({ db, projectId, scopeId, pathKind: "absolute" });
