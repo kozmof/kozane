@@ -27,6 +27,7 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
 // beforeEach. After the first resolution the value is cached for the lifetime
 // of the process (production never changes the workspace mid-run).
 let _workspaceRoot: string | null | undefined = undefined;
+let _uiConfig: UiConfig | undefined = undefined;
 
 function resolveWorkspaceRoot(): string | null {
   if (_workspaceRoot !== undefined) return _workspaceRoot;
@@ -39,6 +40,7 @@ function resolveWorkspaceRoot(): string | null {
 // For tests only — resets the cache so a fresh KOZANE_WORKSPACE_ROOT is picked up.
 export function _resetWorkspaceRootForTest(): void {
   _workspaceRoot = undefined;
+  _uiConfig = undefined;
 }
 
 function workspaceDbUrl(): string | null {
@@ -71,13 +73,14 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
 }
 
 export function getWorkspaceUiConfig(): UiConfig {
+  if (_uiConfig) return _uiConfig;
   const root = resolveWorkspaceRoot();
-  if (!root) return { ...DEFAULT_UI_CONFIG };
+  if (!root) return (_uiConfig = { ...DEFAULT_UI_CONFIG });
   try {
     const raw = readFileSync(join(root, ".kozane", "config.json"), "utf-8");
-    return { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(JSON.parse(raw)) };
+    return (_uiConfig = { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(JSON.parse(raw)) });
   } catch {
-    return { ...DEFAULT_UI_CONFIG };
+    return (_uiConfig = { ...DEFAULT_UI_CONFIG });
   }
 }
 
