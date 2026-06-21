@@ -117,7 +117,7 @@
   );
 </script>
 
-<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", padding: "10px 16px 14px", flexShrink: "0" })}>
+<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", border: "1px solid token(colors.warm.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + mode hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <BundleDropdown
@@ -210,7 +210,7 @@
           </svg>
         </button>
         {#if showProjectPicker}
-          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.10)", zIndex: "60", overflow: "hidden" })}>
+          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
             {#each otherProjects as project (project.id)}
               <button
                 class={css({ width: "100%", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", textAlign: "left", display: "block", "&:hover": { background: "ink.lighter" } })}

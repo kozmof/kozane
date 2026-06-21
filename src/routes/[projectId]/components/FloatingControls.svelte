@@ -34,7 +34,7 @@
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
   })}
   title={showFooters ? "Hide footers" : "Show footers"}
   onclick={onToggleFooters}
@@ -62,7 +62,7 @@
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
+    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
   })}
   title={sidebarsVisible ? "Hide panels" : "Show panels"}
   onclick={onToggleSidebars}
@@ -89,7 +89,7 @@
     backgroundColor: "ink.light",
     borderRadius: "7px",
     border: "1px solid token(colors.warm.dim)",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
     zIndex: "51",
     overflow: "hidden",
   })}

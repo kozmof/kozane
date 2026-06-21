@@ -46,9 +46,9 @@
 
   let border = $derived(
     isComposing
-      ? `1.5px solid ${color.dot}`
+      ? `1px solid ${color.dot}`
       : isSelected || isPrimaryUnglue
-        ? "1.5px solid var(--colors-select-accent)"
+        ? "1px solid var(--colors-select-accent)"
         : "1px solid var(--colors-warm-card)",
   );
 </script>
@@ -75,8 +75,8 @@
   style:border-radius="2px"
   style:border={border}
   style:box-shadow={isDragging
-    ? "0 3px 8px rgba(0,0,0,0.2)"
-    : "0 1px 2px rgba(0,0,0,0.01), 0 1px 2px rgba(0,0,0,0.02)"}
+    ? "0 2px 4px rgba(0,0,0,0.07)"
+    : "0 1px 2px rgba(0,0,0,0.01)"}
   style:cursor={isDragging ? "grabbing" : "grab"}
   style:user-select="none"
   style:opacity={dimmed ? 0.3 : 1}

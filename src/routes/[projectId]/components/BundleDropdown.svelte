@@ -60,7 +60,7 @@
         background: "ink.white",
         border: "1px solid token(colors.warm.border)",
         borderRadius: "7px",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.1)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
         padding: "4px",
         minWidth: "160px",
         zIndex: "100",
