@@ -4,7 +4,7 @@ import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } f
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";
 import { unglueCardsInTx } from "./glue.js";
-import { NotFoundError } from "./utils.js";
+import { NotFoundError, DefaultBundleError } from "./utils.js";
 import { inArray } from "drizzle-orm";
 import { cardTable } from "../schema.js";
 
@@ -139,7 +139,7 @@ export async function deleteBundleWithReassign({
   return withTx(db, async (tx) => {
     const bundle = await getBundle({ db: tx, projectId, bundleId });
     if (!bundle) throw new NotFoundError(`Bundle projectId=${projectId} bundleId=${bundleId}`);
-    if (bundle.isDefault) throw new Error("Cannot delete the default bundle");
+    if (bundle.isDefault) throw new DefaultBundleError();
 
     const defaultBundle = await getDefaultBundle({ db: tx, projectId });
     if (!defaultBundle) throw new Error("No default bundle found for this project");

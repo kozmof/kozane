@@ -48,10 +48,6 @@ export type MigrationStatus =
       error: string;
     };
 
-export async function openDb(dbUrl: string): Promise<DB> {
-  return createDb(dbUrl);
-}
-
 export function resolveMigrationsFolder(): string {
   // Migrations are bundled relative to this file at build time.
   // At runtime (tsx or compiled): resolve from package root.

@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
+import { createRequire } from "node:module";
 import { Command } from "commander";
+
+const _require = createRequire(import.meta.url);
+const { version: _version } = _require("../../package.json") as { version: string };
 import { init } from "./commands/init.js";
 import { open } from "./commands/open.js";
 import { doctor } from "./commands/doctor.js";
@@ -11,7 +15,7 @@ import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/d
 
 const program = new Command();
 
-program.name("kozane").description("Local card-based thinking workspace").version("0.1.2");
+program.name("kozane").description("Local card-based thinking workspace").version(_version);
 
 program
   .command("init")

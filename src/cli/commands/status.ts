@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { count } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
-import { openDb } from "../lib/db.js";
+import { createDb } from "../../db/client.js";
 import {
   projectTable,
   bundleTable,
@@ -13,7 +13,7 @@ import {
 
 export async function status(): Promise<void> {
   const { root, config } = requireWorkspace();
-  const db = await openDb(dbUrl(resolve(root)));
+  const db = await createDb(dbUrl(resolve(root)));
 
   const [[projects], [bundles], [cards], [scopes], [workingCopies]] = await Promise.all([
     db.select({ count: count() }).from(projectTable),

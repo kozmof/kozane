@@ -44,9 +44,8 @@ export default defineConfig({
         // SvelteKit wiring — no logic to assert
         "src/hooks.server.ts",
         "src/lib/index.ts",
-        // Route handlers and page files need integration/e2e testing
-        // SvelteKit names these +server.ts and +page.svelte (leading +, not *.server.ts)
-        "src/routes/**/*server.ts",
+        // Page load functions and Svelte components require integration/e2e testing
+        "src/routes/**/*page.server.ts",
         "src/routes/**/*.svelte",
       ],
       reporter: ["text", "html", "lcov"],

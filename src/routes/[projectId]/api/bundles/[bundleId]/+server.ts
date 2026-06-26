@@ -2,7 +2,7 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { updateBundleName } from "../../../../../db/api/bundle";
 import { deleteBundleWithReassign } from "../../../../../db/api/composite";
-import { NotFoundError, isUniqueConstraintError } from "../../../../../db/api/utils";
+import { NotFoundError, DefaultBundleError, isUniqueConstraintError } from "../../../../../db/api/utils";
 import { readJsonObject, requireTrimmedString } from "../../../lib/request";
 import { NAME_MAX } from "$lib/constants";
 
@@ -33,8 +33,7 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
     return json({ ok: true, defaultBundleId });
   } catch (e) {
     if (e instanceof NotFoundError) throw error(404, e.message);
-    if (e instanceof Error && e.message === "Cannot delete the default bundle")
-      throw error(400, e.message);
+    if (e instanceof DefaultBundleError) throw error(400, e.message);
     throw e;
   }
 };

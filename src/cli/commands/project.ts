@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
-import { openDb, runMigrations } from "../lib/db.js";
+import { runMigrations } from "../lib/db.js";
+import { createDb } from "../../db/client.js";
 import { addProject, deleteProject, getAllProjects } from "../../db/api/project.js";
 import { addBundle } from "../../db/api/bundle.js";
 
@@ -9,7 +10,7 @@ export async function projectCreate(name: string): Promise<void> {
   const { root } = requireWorkspace();
   const url = dbUrl(resolve(root));
   await runMigrations(url);
-  const db = await openDb(url);
+  const db = await createDb(url);
   const projectId = await addProject({ db, name });
   await addBundle({ db, projectId, name: "General", isDefault: true });
   console.log(`Project created.`);
@@ -20,7 +21,7 @@ export async function projectCreate(name: string): Promise<void> {
 export async function projectList(): Promise<void> {
   const { root } = requireWorkspace();
   const url = dbUrl(resolve(root));
-  const db = await openDb(url);
+  const db = await createDb(url);
   const projects = await getAllProjects({ db });
   if (projects.length === 0) {
     console.log("No projects found.");
@@ -34,7 +35,7 @@ export async function projectList(): Promise<void> {
 export async function projectDelete(projectId: string): Promise<void> {
   const { root } = requireWorkspace();
   const url = dbUrl(resolve(root));
-  const db = await openDb(url);
+  const db = await createDb(url);
   await deleteProject({ db, projectId });
   console.log(`Project deleted.`);
   console.log(`  id: ${projectId}`);

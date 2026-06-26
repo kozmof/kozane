@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { addBundle } from "../../../../db/api/bundle.js";
-import { addCard, getCard } from "../../../../db/api/card.js";
+import { addCard, getCard, getAllCards } from "../../../../db/api/card.js";
 import { addProject } from "../../../../db/api/project.js";
 import type { DB } from "../../../../db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
-import { PATCH, POST } from "./+server.js";
+import { DELETE, PATCH, POST } from "./+server.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/cards", {
@@ -141,5 +141,40 @@ describe("PATCH /[projectId]/api/cards", () => {
       posX: 0,
       posY: 0,
     });
+  });
+});
+
+describe("DELETE /[projectId]/api/cards", () => {
+  it("deletes cards belonging to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Gone" });
+
+    const response = await DELETE(event(db, projectId, jsonRequest({ cardIds: [cardId] })));
+
+    expect(response.status).toBe(200);
+    await expect(getAllCards({ db, bundleId })).resolves.toHaveLength(0);
+  });
+
+  it("rejects cards outside the project", async () => {
+    const { db, projectId } = await setup();
+    const otherId = await addProject({ db, name: "Other" });
+    const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
+    const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Not mine" });
+
+    await expectHttpRejection(
+      DELETE(event(db, projectId, jsonRequest({ cardIds: [foreignCard] }))),
+      400,
+      "Some cards do not belong to this project",
+    );
+  });
+
+  it("rejects an empty cardIds array", async () => {
+    const { db, projectId } = await setup();
+
+    await expectHttpRejection(
+      DELETE(event(db, projectId, jsonRequest({ cardIds: [] }))),
+      400,
+      "cardIds must have at least 1 item",
+    );
   });
 });
