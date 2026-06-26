@@ -86,7 +86,12 @@ export async function removeScopeMembers({
     .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
 }
 
-type RemoveScopeMembersFromProject = { db: DB; scopeId: string; cardIds: string[]; projectId: string };
+type RemoveScopeMembersFromProject = {
+  db: DB;
+  scopeId: string;
+  cardIds: string[];
+  projectId: string;
+};
 /** Bulk-removes cards from a scope. Returns false if scope not found or any cardId doesn't belong to projectId. */
 export async function removeScopeMembersFromProject({
   db,
