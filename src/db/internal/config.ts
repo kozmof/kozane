@@ -74,9 +74,10 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   if (typeof ui !== "object" || ui === null || Array.isArray(ui)) return {};
   const u = ui as Record<string, unknown>;
   const out: Partial<UiConfig> = {};
-  for (const f of Object.keys(UI_NUM_RANGES)) {
-    if (typeof u[f] === "number" && Number.isFinite(u[f]))
-      (out as Record<string, unknown>)[f] = u[f];
+  for (const [f, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
+    const v = u[f];
+    if (typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi)
+      (out as Record<string, unknown>)[f] = v;
   }
   for (const f of UI_BOOL_FIELDS) {
     if (typeof u[f] === "boolean") (out as Record<string, unknown>)[f] = u[f];

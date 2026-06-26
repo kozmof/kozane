@@ -86,7 +86,7 @@ export async function removeScopeMembers({
     .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
 }
 
-type RemoveScopeMembersFromProject = RemoveScopeMembers & { projectId: string };
+type RemoveScopeMembersFromProject = { db: DB; scopeId: string; cardIds: string[]; projectId: string };
 /** Bulk-removes cards from a scope. Returns false if scope not found or any cardId doesn't belong to projectId. */
 export async function removeScopeMembersFromProject({
   db,
@@ -94,26 +94,28 @@ export async function removeScopeMembersFromProject({
   projectId,
   cardIds,
 }: RemoveScopeMembersFromProject): Promise<boolean> {
-  const scope = await db
-    .select({ id: scopeTable.id })
-    .from(scopeTable)
-    .where(eq(scopeTable.id, scopeId))
-    .get();
-  if (!scope) return false;
+  return withTx(db, async (tx) => {
+    const scope = await tx
+      .select({ id: scopeTable.id })
+      .from(scopeTable)
+      .where(eq(scopeTable.id, scopeId))
+      .get();
+    if (!scope) return false;
 
-  const found = await db
-    .select({ id: cardTable.id })
-    .from(cardTable)
-    .innerJoin(
-      bundleTable,
-      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-    )
-    .where(inArray(cardTable.id, cardIds));
+    const found = await tx
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .innerJoin(
+        bundleTable,
+        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+      )
+      .where(inArray(cardTable.id, cardIds));
 
-  if (found.length !== cardIds.length) return false;
+    if (found.length !== cardIds.length) return false;
 
-  await removeScopeMembers({ db, scopeId, cardIds });
-  return true;
+    await removeScopeMembers({ db: tx, scopeId, cardIds });
+    return true;
+  });
 }
 
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
