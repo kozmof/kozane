@@ -80,12 +80,12 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleDeleteSelected(cardIds: string[]) {
-    const res = await api.deleteCards(state.fetcher, state.projectId, cardIds);
-    if (!res.ok) {
-      state.setError("Failed to delete cards");
-      return;
-    }
     const cardIdSet = new Set(cardIds);
+    const prevCards = state.cards;
+    const prevGlueRels = state.glueRels;
+    const prevSelectedCards = state.selection.selectedCards;
+    const prevPrimarySelectedId = state.selection.primarySelectedId;
+
     state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
     state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
     state.selection.selectedCards = new Set(
@@ -93,9 +93,32 @@ export function createProjectActions(state: ProjectState) {
     );
     const pid = state.selection.primarySelectedId;
     if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
+
+    const res = await api.deleteCards(state.fetcher, state.projectId, cardIds);
+    if (!res.ok) {
+      state.cards = prevCards;
+      state.glueRels = prevGlueRels;
+      state.selection.selectedCards = prevSelectedCards;
+      state.selection.primarySelectedId = prevPrimarySelectedId;
+      state.setError("Failed to delete cards");
+    }
   }
 
   async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
+    const cardIdSet = new Set(cardIds);
+    const prevCards = state.cards;
+    const prevGlueRels = state.glueRels;
+    const prevSelectedCards = state.selection.selectedCards;
+    const prevPrimarySelectedId = state.selection.primarySelectedId;
+
+    state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
+    state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
+    state.selection.selectedCards = new Set(
+      [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
+    );
+    const pid = state.selection.primarySelectedId;
+    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
+
     const res = await api.moveCardsToProject(
       state.fetcher,
       state.projectId,
@@ -103,17 +126,12 @@ export function createProjectActions(state: ProjectState) {
       targetProjectId,
     );
     if (!res.ok) {
+      state.cards = prevCards;
+      state.glueRels = prevGlueRels;
+      state.selection.selectedCards = prevSelectedCards;
+      state.selection.primarySelectedId = prevPrimarySelectedId;
       state.setError("Failed to move cards to project");
-      return;
     }
-    const cardIdSet = new Set(cardIds);
-    state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
-    state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
-    state.selection.selectedCards = new Set(
-      [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
-    );
-    const pid = state.selection.primarySelectedId;
-    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
   }
 
   async function handleCreateBundle() {

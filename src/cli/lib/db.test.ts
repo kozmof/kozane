@@ -1,5 +1,5 @@
 import { createClient } from "@libsql/client";
-import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -96,14 +96,18 @@ describe("getMigrationStatus", () => {
 });
 
 describe("backupDb", () => {
-  it("backs up the workspace database without overwriting existing backups", () => {
+  it("backs up the workspace database without overwriting existing backups", async () => {
     const root = tempRoot();
     const kozaneDir = join(root, ".kozane");
     mkdirSync(kozaneDir, { recursive: true });
-    writeFileSync(join(kozaneDir, "kozane.db"), "db contents", "utf-8");
 
-    const first = backupDb(root);
-    const second = backupDb(root);
+    const dbPath = join(kozaneDir, "kozane.db");
+    const client = createClient({ url: `file:${dbPath}` });
+    await client.execute("CREATE TABLE test (id INTEGER PRIMARY KEY)");
+    client.close();
+
+    const first = await backupDb(root);
+    const second = await backupDb(root);
 
     expect(first).not.toBe(second);
     expect(existsSync(first)).toBe(true);

@@ -80,7 +80,7 @@ export async function dbMigrate(): Promise<void> {
 
   let backupPath: string;
   try {
-    backupPath = backupDb(projectRoot);
+    backupPath = await backupDb(projectRoot);
   } catch (e) {
     console.error("Failed to create database backup.");
     console.error(e instanceof Error ? e.message : String(e));
@@ -160,7 +160,7 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
 
   let backupPath: string;
   try {
-    backupPath = backupDb(projectRoot);
+    backupPath = await backupDb(projectRoot);
   } catch (e) {
     console.error("Failed to create database backup.");
     console.error(e instanceof Error ? e.message : String(e));
@@ -182,7 +182,7 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
   }
 }
 
-export function dbRestore(file?: string): void {
+export async function dbRestore(file?: string): Promise<void> {
   const { root } = requireWorkspace();
   const projectRoot = resolve(root);
 
@@ -213,7 +213,7 @@ export function dbRestore(file?: string): void {
   const current = dbPath(projectRoot);
   if (existsSync(current)) {
     try {
-      const safety = backupDb(projectRoot);
+      const safety = await backupDb(projectRoot);
       console.log(`Current database backed up: ${safety}`);
     } catch {
       // current db may be corrupted; proceed anyway

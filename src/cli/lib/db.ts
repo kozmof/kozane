@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { createClient } from "@libsql/client";
-import { existsSync, mkdirSync, copyFileSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
@@ -190,7 +190,7 @@ function timestamp(date = new Date()): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-export function backupDb(projectRoot: string): string {
+export async function backupDb(projectRoot: string): Promise<string> {
   const source = dbPath(projectRoot);
   const backupDir = join(projectRoot, ".kozane", "backups");
   mkdirSync(backupDir, { recursive: true });
@@ -203,7 +203,13 @@ export function backupDb(projectRoot: string): string {
     suffix += 1;
   }
 
-  copyFileSync(source, target);
+  // VACUUM INTO produces a consistent copy even under concurrent writes, unlike copyFileSync.
+  const client = createClient({ url: `file:${source}` });
+  try {
+    await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  } finally {
+    client.close();
+  }
   return target;
 }
 

@@ -5,6 +5,8 @@ import { isUniqueConstraintError } from "../../../../db/api/utils";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
 import { NAME_MAX } from "$lib/constants";
 
+// params.projectId is intentionally unused: scopes are cross-project by design.
+// The projectId in the URL is present for API consistency, not access control.
 export const POST: RequestHandler = async ({ locals, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
