@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve, relative, isAbsolute } from "node:path";
+import { basename, join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
@@ -102,8 +102,8 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
       const storedPath = pathKind === "project_relative" ? relative(root, wc.path) : wc.path;
       await db.insert(workingCopyTable).values({
         id: wc.workingCopyId,
-        projectId: wc.projectId,
-        name: wc.workingCopyId,
+        projectId: wc.projectId || undefined,
+        name: basename(wc.path),
         path: storedPath,
         pathKind,
         lastSeenAt: new Date(),

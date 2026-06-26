@@ -215,14 +215,21 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleDeleteScope(scopeId: string) {
-    const res = await api.deleteScope(state.fetcher, state.projectId, scopeId);
-    if (!res.ok) {
-      state.setError("Failed to delete scope");
-      return;
-    }
+    const prevScopes = state.scopes;
+    const prevScopeRels = state.scopeRels;
+    const prevActiveScope = state.sidebar.activeScope;
+
     state.scopes = state.scopes.filter((s) => s.id !== scopeId);
     state.scopeRels = state.scopeRels.filter((r) => r.scopeId !== scopeId);
     if (state.sidebar.activeScope === scopeId) state.sidebar.activeScope = null;
+
+    const res = await api.deleteScope(state.fetcher, state.projectId, scopeId);
+    if (!res.ok) {
+      state.scopes = prevScopes;
+      state.scopeRels = prevScopeRels;
+      state.sidebar.activeScope = prevActiveScope;
+      state.setError("Failed to delete scope");
+    }
   }
 
   async function handleAddToScope(scopeId: string) {
