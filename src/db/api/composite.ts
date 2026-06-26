@@ -3,6 +3,7 @@ import { addCard, reassignBundleCards, cardsInProject, getCardBundleNames } from
 import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getWorkingCopy } from "./working-copy.js";
+import { unglueCardsInTx } from "./glue.js";
 import { NotFoundError } from "./utils.js";
 import { inArray } from "drizzle-orm";
 import { cardTable } from "../schema.js";
@@ -115,6 +116,10 @@ export async function moveCardsToProject({
         .set({ bundleId: targetBundleId })
         .where(inArray(cardTable.id, ids));
     }
+
+    // Cards moved cross-project must leave their glue groups: a glue group
+    // spanning two projects is never visible in the UI and leaves stale rows.
+    await unglueCardsInTx(tx, cardIds);
 
     return true;
   });

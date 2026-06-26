@@ -37,6 +37,14 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
   const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, CANVAS_H);
 
+  if (
+    content === undefined &&
+    newBundleId === undefined &&
+    posX === undefined &&
+    posY === undefined
+  )
+    throw error(400, "No fields to update");
+
   await updateCard({ db, cardId, bundleId, newBundleId, content, posX, posY });
 
   return json({ ok: true });

@@ -84,3 +84,9 @@ export async function unglueCards({ db, cardIds }: UnglueCards): Promise<string[
   if (cardIds.length === 0) return [];
   return withTx(db, (tx) => unglueCardsCore(tx, cardIds));
 }
+
+/** Dissolves all glue groups containing any of the given cards. Runs inside an existing transaction. */
+export async function unglueCardsInTx(db: Tx, cardIds: string[]): Promise<void> {
+  if (cardIds.length === 0) return;
+  await unglueCardsCore(db, cardIds);
+}

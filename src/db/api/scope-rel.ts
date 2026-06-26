@@ -1,7 +1,8 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, glueRelTable, scopeRelTable } from "../schema.js";
+import { bundleTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
 import type { NeedsDB, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound } from "./utils.js";
+import { withTx, type DB } from "../tx.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
 
@@ -45,7 +46,7 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
   assertFound(deleted, `ScopeRel scopeId=${scopeId} cardId=${cardId}`);
 }
 
-type AddScopeMembers = NeedsScope & { projectId: string; cardIds: string[] };
+type AddScopeMembers = { db: DB; scopeId: string; projectId: string; cardIds: string[] };
 /** Bulk-adds cards to a scope. Returns false if any cardId doesn't belong to projectId. */
 export async function addScopeMembers({
   db,
@@ -53,23 +54,25 @@ export async function addScopeMembers({
   projectId,
   cardIds,
 }: AddScopeMembers): Promise<boolean> {
-  const found = await db
-    .select({ id: cardTable.id })
-    .from(cardTable)
-    .innerJoin(
-      bundleTable,
-      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-    )
-    .where(inArray(cardTable.id, cardIds));
+  return withTx(db, async (tx) => {
+    const found = await tx
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .innerJoin(
+        bundleTable,
+        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+      )
+      .where(inArray(cardTable.id, cardIds));
 
-  if (found.length !== cardIds.length) return false;
+    if (found.length !== cardIds.length) return false;
 
-  await db
-    .insert(scopeRelTable)
-    .values(found.map(({ id: cardId }) => ({ scopeId, cardId })))
-    .onConflictDoNothing();
+    await tx
+      .insert(scopeRelTable)
+      .values(found.map(({ id: cardId }) => ({ scopeId, cardId })))
+      .onConflictDoNothing();
 
-  return true;
+    return true;
+  });
 }
 
 type RemoveScopeMembers = NeedsScope & { cardIds: string[] };
@@ -84,13 +87,20 @@ export async function removeScopeMembers({
 }
 
 type RemoveScopeMembersFromProject = RemoveScopeMembers & { projectId: string };
-/** Bulk-removes cards from a scope. Returns false if any cardId doesn't belong to projectId. */
+/** Bulk-removes cards from a scope. Returns false if scope not found or any cardId doesn't belong to projectId. */
 export async function removeScopeMembersFromProject({
   db,
   scopeId,
   projectId,
   cardIds,
 }: RemoveScopeMembersFromProject): Promise<boolean> {
+  const scope = await db
+    .select({ id: scopeTable.id })
+    .from(scopeTable)
+    .where(eq(scopeTable.id, scopeId))
+    .get();
+  if (!scope) return false;
+
   const found = await db
     .select({ id: cardTable.id })
     .from(cardTable)

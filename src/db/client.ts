@@ -13,14 +13,18 @@ export async function createDb(url: string): Promise<DB> {
   return drizzle(client, { schema }) as unknown as DB;
 }
 
-let _db: DB | null = null;
+let _dbPromise: Promise<DB> | null = null;
 
 export async function getDb(): Promise<DB> {
-  if (_db) return _db;
-  _db = await createDb(getDBURL());
-  return _db;
+  if (!_dbPromise) {
+    _dbPromise = createDb(getDBURL()).catch((e) => {
+      _dbPromise = null;
+      throw e;
+    });
+  }
+  return _dbPromise;
 }
 
 export function resetDb(): void {
-  _db = null;
+  _dbPromise = null;
 }
