@@ -5,8 +5,6 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
-import type { DB } from "../../db/tx.js";
-import { createDb } from "../../db/client.js";
 import { dbPath } from "./config.js";
 
 type MigrationJournal = {

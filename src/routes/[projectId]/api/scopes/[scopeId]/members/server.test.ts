@@ -37,9 +37,7 @@ describe("POST /[projectId]/api/scopes/[scopeId]/members", () => {
   it("adds cards from the project to the scope", async () => {
     const { db, projectId, scopeId, cardId } = await setup();
 
-    const response = await POST(
-      event(db, projectId, scopeId, jsonRequest({ cardIds: [cardId] })),
-    );
+    const response = await POST(event(db, projectId, scopeId, jsonRequest({ cardIds: [cardId] })));
 
     expect(response.status).toBe(200);
     const rels = await getScopeRelsByCards({ db, cardIds: [cardId] });

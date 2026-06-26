@@ -2,7 +2,11 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { updateBundleName } from "../../../../../db/api/bundle";
 import { deleteBundleWithReassign } from "../../../../../db/api/composite";
-import { NotFoundError, DefaultBundleError, isUniqueConstraintError } from "../../../../../db/api/utils";
+import {
+  NotFoundError,
+  DefaultBundleError,
+  isUniqueConstraintError,
+} from "../../../../../db/api/utils";
 import { readJsonObject, requireTrimmedString } from "../../../lib/request";
 import { NAME_MAX } from "$lib/constants";
 

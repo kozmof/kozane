@@ -112,9 +112,7 @@ describe("DELETE /[projectId]/api/cards/[cardId]", () => {
   it("deletes a card in the project", async () => {
     const { db, projectId, bundleId, cardId } = await setup();
 
-    const response = await DELETE(
-      event(db, projectId, cardId, new Request("http://localhost/")),
-    );
+    const response = await DELETE(event(db, projectId, cardId, new Request("http://localhost/")));
 
     expect(response.status).toBe(200);
     await expect(getCard({ db, bundleId, cardId })).resolves.toBeUndefined();

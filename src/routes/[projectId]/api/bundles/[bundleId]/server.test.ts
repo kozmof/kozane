@@ -82,9 +82,7 @@ describe("DELETE /[projectId]/api/bundles/[bundleId]", () => {
     const { db, projectId, defaultBundleId, bundleId } = await setup();
     await addCard({ db, bundleId, content: "Orphan" });
 
-    const response = await DELETE(
-      event(db, projectId, bundleId, new Request("http://localhost/")),
-    );
+    const response = await DELETE(event(db, projectId, bundleId, new Request("http://localhost/")));
 
     expect(response.status).toBe(200);
     const { defaultBundleId: returned } = await response.json();

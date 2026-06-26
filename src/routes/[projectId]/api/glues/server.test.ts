@@ -37,9 +37,7 @@ describe("POST /[projectId]/api/glues", () => {
   it("glues cards in the project and returns a glueId", async () => {
     const { db, projectId, cardId1, cardId2 } = await setup();
 
-    const response = await POST(
-      event(db, projectId, jsonRequest({ cardIds: [cardId1, cardId2] })),
-    );
+    const response = await POST(event(db, projectId, jsonRequest({ cardIds: [cardId1, cardId2] })));
 
     expect(response.status).toBe(200);
     const { glueId } = await response.json();
