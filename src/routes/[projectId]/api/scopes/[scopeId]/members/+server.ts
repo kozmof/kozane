@@ -10,7 +10,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const cardIds = requireStringArray(body, "cardIds");
 
   const ok = await addScopeMembers({ db, scopeId, projectId, cardIds });
-  if (!ok) throw error(400, "Some cards not found in project");
+  if (!ok) throw error(400, "Scope or cards not found in project");
 
   return json({ ok: true });
 };

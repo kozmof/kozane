@@ -54,7 +54,17 @@ describe("POST /[projectId]/api/scopes/[scopeId]/members", () => {
     await expectHttpRejection(
       POST(event(db, projectId, scopeId, jsonRequest({ cardIds: [foreignCard] }))),
       400,
-      "Some cards not found in project",
+      "Scope or cards not found in project",
+    );
+  });
+
+  it("rejects a nonexistent scope", async () => {
+    const { db, projectId, cardId } = await setup();
+
+    await expectHttpRejection(
+      POST(event(db, projectId, "nonexistent-scope", jsonRequest({ cardIds: [cardId] }))),
+      400,
+      "Scope or cards not found in project",
     );
   });
 

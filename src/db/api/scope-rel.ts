@@ -47,7 +47,7 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
 }
 
 type AddScopeMembers = { db: DB; scopeId: string; projectId: string; cardIds: string[] };
-/** Bulk-adds cards to a scope. Returns false if any cardId doesn't belong to projectId. */
+/** Bulk-adds cards to a scope. Returns false if the scope doesn't exist or any cardId doesn't belong to projectId. */
 export async function addScopeMembers({
   db,
   scopeId,
@@ -55,6 +55,13 @@ export async function addScopeMembers({
   cardIds,
 }: AddScopeMembers): Promise<boolean> {
   return withTx(db, async (tx) => {
+    const scope = await tx
+      .select({ id: scopeTable.id })
+      .from(scopeTable)
+      .where(eq(scopeTable.id, scopeId))
+      .get();
+    if (!scope) return false;
+
     const found = await tx
       .select({ id: cardTable.id })
       .from(cardTable)

@@ -2,6 +2,7 @@ import { glueTable, glueRelTable } from "../schema.js";
 import { count, inArray, lte } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
+import { cardsInProject } from "./card.js";
 
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -89,4 +90,33 @@ export async function unglueCards({ db, cardIds }: UnglueCards): Promise<string[
 export async function unglueCardsInTx(db: Tx, cardIds: string[]): Promise<void> {
   if (cardIds.length === 0) return;
   await unglueCardsCore(db, cardIds);
+}
+
+type GlueProjectCards = { db: DB; projectId: string; cardIds: string[] };
+/** Glues cards together after verifying all belong to projectId. Returns null on ownership failure. */
+export async function glueProjectCards({
+  db,
+  projectId,
+  cardIds,
+}: GlueProjectCards): Promise<string | null> {
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, cardIds);
+    if (owned.length !== cardIds.length) return null;
+    return glueCardsCore(tx, cardIds);
+  });
+}
+
+type UnglueProjectCards = { db: DB; projectId: string; cardIds: string[] };
+/** Unglues cards after verifying all belong to projectId. Returns null on ownership failure. */
+export async function unglueProjectCards({
+  db,
+  projectId,
+  cardIds,
+}: UnglueProjectCards): Promise<string[] | null> {
+  if (cardIds.length === 0) return [];
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, cardIds);
+    if (owned.length !== cardIds.length) return null;
+    return unglueCardsCore(tx, cardIds);
+  });
 }
