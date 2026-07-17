@@ -540,6 +540,8 @@ Working copy created.
     "rightPanelWidth": 232,
     "defaultShowFooter": false,
     "defaultShowSidePanel": false,
+    "toggleFootersShortcut": "f",
+    "togglePanelsShortcut": "b",
     "canvasWidth": 2800,
     "canvasHeight": 2000
   }

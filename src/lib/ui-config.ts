@@ -9,6 +9,8 @@ export type UiConfig = {
   rightPanelWidth: number;
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
+  toggleFootersShortcut: string;
+  togglePanelsShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
 };
@@ -22,6 +24,8 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   rightPanelWidth: 232,
   defaultShowFooter: false,
   defaultShowSidePanel: false,
+  toggleFootersShortcut: "f",
+  togglePanelsShortcut: "b",
   canvasWidth: CANVAS_W,
   canvasHeight: CANVAS_H,
 };
@@ -37,4 +41,4 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
 };
 
 export const UI_BOOL_FIELDS = ["defaultShowFooter", "defaultShowSidePanel"] as const;
-export const UI_STR_FIELDS = ["defaultFontFamily"] as const;
+export const UI_STR_FIELDS = ["defaultFontFamily", "toggleFootersShortcut", "togglePanelsShortcut"] as const;

@@ -97,8 +97,8 @@
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-    if (e.key === "f") showFooters = !showFooters;
-    if (e.key === "b") sidebarsVisible = !sidebarsVisible;
+    if (e.key === data.uiConfig.toggleFootersShortcut) showFooters = !showFooters;
+    if (e.key === data.uiConfig.togglePanelsShortcut) sidebarsVisible = !sidebarsVisible;
   }
 </script>
 

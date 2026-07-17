@@ -42,6 +42,8 @@ const data = {
     rightPanelWidth: 232,
     defaultShowFooter: true,
     defaultShowSidePanel: true,
+    toggleFootersShortcut: "x",
+    togglePanelsShortcut: "y",
     canvasWidth: 2800,
     canvasHeight: 2000,
   },
@@ -52,6 +54,29 @@ afterEach(() => {
 });
 
 describe("Project page", () => {
+  it("uses the configured shortcuts to toggle footers and panels", async () => {
+    const { container } = render(ProjectPage, {
+      props: {
+        data,
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
+
+    const footer = container.querySelector<HTMLElement>("[style*=\x27visibility\x27]");
+    const panels = container.querySelectorAll<HTMLElement>("aside");
+    expect(footer).toHaveStyle({ visibility: "visible" });
+
+    await fireEvent.keyDown(window, { key: "f" });
+    expect(footer).toHaveStyle({ visibility: "visible" });
+
+    await fireEvent.keyDown(window, { key: "x" });
+    expect(footer).toHaveStyle({ visibility: "hidden" });
+
+    await fireEvent.keyDown(window, { key: "y" });
+    expect([...panels].every((panel) => panel.style.width === "0px")).toBe(true);
+  });
+
   it("glues selected cards through the composed board UI", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
