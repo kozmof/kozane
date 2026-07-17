@@ -336,7 +336,7 @@
 </script>
 
 <div
-  class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.lighter" })}
+  class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.canvas" })}
   role="presentation"
   bind:this={canvasEl}
   onmousedown={handleCanvasMouseDown}
@@ -358,21 +358,6 @@
       style:transform="scale({zoom})"
       style:transform-origin="0 0"
     >
-      <svg
-        style:position="absolute"
-        style:inset="0"
-        style:width="100%"
-        style:height="100%"
-        style:pointer-events="none"
-      >
-        <defs>
-          <pattern id="dotgrid" width={GRID} height={GRID} patternUnits="userSpaceOnUse">
-            <circle cx={GRID / 2} cy={GRID / 2} r="0.9" fill="var(--colors-warm-grid)" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#dotgrid)" />
-      </svg>
-
       {#each visibleCards as card (card.id)}
         {@const color = bundleColorById.get(card.bundleId) ?? {
           id: "",

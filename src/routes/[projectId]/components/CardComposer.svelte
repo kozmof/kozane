@@ -239,7 +239,7 @@
   {:else}
     <!-- Input row (create / edit) -->
     <div
-      class={css({ display: "flex", alignItems: "flex-end", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
+      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
       style:border-color={borderColor}
     >
       <textarea

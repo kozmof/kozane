@@ -72,7 +72,7 @@
   style:top="{card.posY}px"
   style:width="{cardWidth}px"
   style:background={background}
-  style:border-radius="2px"
+  style:border-radius="0px"
   style:border={border}
   style:box-shadow={isDragging
     ? "0 2px 4px rgba(0,0,0,0.07)"
@@ -85,7 +85,7 @@
 >
   <!-- Content -->
   <div
-    class={css({ padding: "10px 10px 6px", lineHeight: "1.65", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+    class={css({ padding: "8px 10px", lineHeight: "1.65", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
     style:font-size="{fontSize}px"
     style:font-family={fontFamily}
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-warm-placeholder)"}
