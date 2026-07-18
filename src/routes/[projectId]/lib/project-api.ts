@@ -26,7 +26,7 @@ export function patchCardPositions(
 export function createCard(
   fetcher: typeof fetch,
   projectId: string,
-  card: { bundleId: string; content: string; posX: number; posY: number },
+  card: { bundleId: string; content: string; posX: number; posY: number; scopeId?: string },
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/cards`, "POST", card);
 }

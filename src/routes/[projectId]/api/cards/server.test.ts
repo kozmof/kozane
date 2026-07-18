@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { addBundle } from "../../../../db/api/bundle.js";
 import { addCard, getCard, getAllCards } from "../../../../db/api/card.js";
 import { addProject } from "../../../../db/api/project.js";
+import { addScope } from "../../../../db/api/scope.js";
+import { getScopeRelsByCards } from "../../../../db/api/scope-rel.js";
 import type { DB } from "../../../../db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { DELETE, PATCH, POST } from "./+server.js";
@@ -48,6 +50,37 @@ describe("POST /[projectId]/api/cards", () => {
       posX: 24,
       posY: 48,
     });
+  });
+
+  it("adds a new card to the requested scope", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const scopeId = await addScope({ db, name: "Current" });
+
+    const response = await POST(
+      event(db, projectId, jsonRequest({ bundleId, content: "Scoped card", scopeId })),
+    );
+
+    const { id } = await response.json();
+    await expect(getScopeRelsByCards({ db, cardIds: [id] })).resolves.toEqual([
+      { scopeId, cardId: id },
+    ]);
+  });
+
+  it("rejects a missing scope without creating the card", async () => {
+    const { db, projectId, bundleId } = await setup();
+
+    await expectHttpRejection(
+      POST(
+        event(
+          db,
+          projectId,
+          jsonRequest({ bundleId, content: "Scoped card", scopeId: "missing" }),
+        ),
+      ),
+      400,
+      "Scope not found",
+    );
+    await expect(getAllCards({ db, bundleId })).resolves.toHaveLength(0);
   });
 
   it("rejects blank card content", async () => {

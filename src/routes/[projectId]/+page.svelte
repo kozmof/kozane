@@ -81,11 +81,19 @@
       s.selection.composerCard = null;
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
-      const res = await createCard(s.fetcher, data.project.id, { bundleId, content, posX, posY });
+      const scopeId = s.sidebar.activeScope;
+      const res = await createCard(s.fetcher, data.project.id, {
+        bundleId,
+        content,
+        posX,
+        posY,
+        ...(scopeId && { scopeId }),
+      });
       if (!res.ok) { s.setError("Failed to create card"); return; }
       const parsed = await res.json().catch(() => null);
       if (!parsed) { s.setError("Failed to create card"); return; }
       s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
+      if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: parsed.id }];
     }
   }
 

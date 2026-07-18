@@ -1,6 +1,9 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../db/api/bundle";
+import { getScope } from "../../../../db/api/scope";
+import { addScopeRel } from "../../../../db/api/scope-rel";
+import { withTx } from "../../../../db/tx";
 import {
   addCard,
   deleteCards,
@@ -10,6 +13,7 @@ import {
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
 import {
   optionalNumber,
+  optionalString,
   readJsonObject,
   requireString,
   requireStringArray,
@@ -55,19 +59,25 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const content = requireTrimmedString(body, "content");
   const posX = optionalNumber(body, "posX") ?? 0;
   const posY = optionalNumber(body, "posY") ?? 0;
+  const scopeId = optionalString(body, "scopeId");
 
   if (content.length > CONTENT_MAX)
     throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
 
   const bundle = await getBundle({ db, projectId, bundleId });
   if (!bundle) throw error(400, "Bundle not found in project");
+  if (scopeId && !(await getScope({ db, scopeId }))) throw error(400, "Scope not found");
 
-  const id = await addCard({
-    db,
-    bundleId,
-    content,
-    posX: clamp(posX, 0, CANVAS_W),
-    posY: clamp(posY, 0, CANVAS_H),
+  const id = await withTx(db, async (tx) => {
+    const cardId = await addCard({
+      db: tx,
+      bundleId,
+      content,
+      posX: clamp(posX, 0, CANVAS_W),
+      posY: clamp(posY, 0, CANVAS_H),
+    });
+    if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
+    return cardId;
   });
 
   return json({ id });
