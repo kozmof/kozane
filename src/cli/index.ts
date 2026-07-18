@@ -12,6 +12,7 @@ import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
+import { cardAdd, cardList } from "./commands/card.js";
 
 const program = new Command();
 
@@ -100,5 +101,21 @@ wc.command("create <name>")
   )
   .option("--dir <path>", "Target directory (default: <projectRoot>/<name>)")
   .action((name, opts) => wcCreate(name, opts));
+
+const card = program.command("card").description("Card management");
+
+card
+  .command("add <content>")
+  .description("Add a card to a project")
+  .option("--project <projectId>", "Project to add the card to")
+  .option("--bundle <bundleId>", "Bundle to add the card to (defaults to General)")
+  .action((content, opts) => cardAdd(content, opts));
+
+card
+  .command("list")
+  .description("List cards in a project")
+  .option("--project <projectId>", "Project whose cards to list")
+  .option("--bundle <bundleId>", "Only list cards in this bundle")
+  .action((opts) => cardList(opts));
 
 program.parse();
