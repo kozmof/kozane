@@ -6,22 +6,20 @@ import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable } from "../../db/schema.js";
 import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
+import { resolveShortId, shortId } from "../lib/short-id.js";
 import type { DB } from "../../db/tx.js";
 
 type CardOptions = { project?: string; bundle?: string };
 type CardAddOptions = CardOptions & { x?: number; y?: number };
 
 async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
-  if (requestedId) {
-    const project = await db
-      .select({ id: projectTable.id })
-      .from(projectTable)
-      .where(eq(projectTable.id, requestedId))
-      .get();
-    if (!project) throw new Error(`Project not found: ${requestedId}`);
-    return project.id;
-  }
   const projects = await db.select({ id: projectTable.id }).from(projectTable);
+  if (requestedId)
+    return resolveShortId(
+      requestedId,
+      projects.map(({ id }) => id),
+      "Project",
+    );
   if (projects.length === 0)
     throw new Error('No projects found. Run "kozane project create <name>" first.');
   if (projects.length > 1)
@@ -31,13 +29,15 @@ async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
 
 async function resolveBundleId(db: DB, projectId: string, requestedId?: string): Promise<string> {
   if (requestedId) {
-    const bundle = await db
+    const bundles = await db
       .select({ id: bundleTable.id })
       .from(bundleTable)
-      .where(and(eq(bundleTable.id, requestedId), eq(bundleTable.projectId, projectId)))
-      .get();
-    if (!bundle) throw new Error(`Bundle not found in project ${projectId}: ${requestedId}`);
-    return bundle.id;
+      .where(eq(bundleTable.projectId, projectId));
+    return resolveShortId(
+      requestedId,
+      bundles.map(({ id }) => id),
+      "Bundle",
+    );
   }
   const bundle = await getDefaultBundle({ db, projectId });
   if (!bundle) throw new Error(`Project has no default bundle: ${projectId}`);
@@ -56,10 +56,30 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const id = await addCard({ db, bundleId, content, posX: options.x, posY: options.y });
+    const [projects, bundles, cards] = await Promise.all([
+      db.select({ id: projectTable.id }).from(projectTable),
+      db.select({ id: bundleTable.id }).from(bundleTable),
+      db.select({ id: cardTable.id }).from(cardTable),
+    ]);
     console.log("Card added.");
-    console.log(`  id      : ${id}`);
-    console.log(`  project : ${projectId}`);
-    console.log(`  bundle  : ${bundleId}`);
+    console.log(
+      `  id      : ${shortId(
+        id,
+        cards.map(({ id }) => id),
+      )}`,
+    );
+    console.log(
+      `  project : ${shortId(
+        projectId,
+        projects.map(({ id }) => id),
+      )}`,
+    );
+    console.log(
+      `  bundle  : ${shortId(
+        bundleId,
+        bundles.map(({ id }) => id),
+      )}`,
+    );
   } catch (error) {
     fail(error);
   }
@@ -72,27 +92,31 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
     const projectId = await resolveProjectId(db, options.project);
     const conditions = [eq(bundleTable.projectId, projectId)];
     if (options.bundle) {
-      await resolveBundleId(db, projectId, options.bundle);
-      conditions.push(eq(bundleTable.id, options.bundle));
+      const bundleId = await resolveBundleId(db, projectId, options.bundle);
+      conditions.push(eq(bundleTable.id, bundleId));
     }
-    const cards = await db
-      .select({
-        id: cardTable.id,
-        bundle: bundleTable.name,
-        content: cardTable.content,
-        posX: cardTable.posX,
-        posY: cardTable.posY,
-      })
-      .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-      .where(and(...conditions));
+    const [cards, allCards] = await Promise.all([
+      db
+        .select({
+          id: cardTable.id,
+          bundle: bundleTable.name,
+          content: cardTable.content,
+          posX: cardTable.posX,
+          posY: cardTable.posY,
+        })
+        .from(cardTable)
+        .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+        .where(and(...conditions)),
+      db.select({ id: cardTable.id }).from(cardTable),
+    ]);
     if (cards.length === 0) {
       console.log("No cards found.");
       return;
     }
+    const cardIds = allCards.map(({ id }) => id);
     for (const card of cards) {
       console.log(
-        `${card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
+        `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
       );
     }
   } catch (error) {

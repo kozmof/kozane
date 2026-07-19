@@ -61,7 +61,7 @@ project
 
 project
   .command("delete <id>")
-  .description("Delete a project by ID")
+  .description("Delete a project by ID or short ID")
   .action((id) => projectDelete(id));
 
 const db = program.command("db").description("Database management");
@@ -99,11 +99,14 @@ wc.command("scan")
 
 wc.command("create <name>")
   .description("Create a new working copy")
-  .option("--scope <scopeId>", "Attach to a scope (required unless --no-scope is given)")
+  .option(
+    "--scope <scopeId>",
+    "Attach to a scope ID or short ID (required unless --no-scope is given)",
+  )
   .option("--no-scope", "Create without a scope")
   .option(
     "--project <projectId>",
-    "Project to associate with (required when workspace has multiple projects)",
+    "Project ID or short ID (required when workspace has multiple projects)",
   )
   .option("--dir <path>", "Target directory (default: <projectRoot>/<name>)")
   .action((name, opts) => wcCreate(name, opts));
@@ -113,8 +116,8 @@ const card = program.command("card").description("Card management");
 card
   .command("add <content>")
   .description("Add a card to a project")
-  .option("--project <projectId>", "Project to add the card to")
-  .option("--bundle <bundleId>", "Bundle to add the card to (defaults to General)")
+  .option("--project <projectId>", "Project ID or short ID to add the card to")
+  .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--x <number>", "Horizontal card position", integer)
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
@@ -122,8 +125,8 @@ card
 card
   .command("list")
   .description("List cards in a project")
-  .option("--project <projectId>", "Project whose cards to list")
-  .option("--bundle <bundleId>", "Only list cards in this bundle")
+  .option("--project <projectId>", "Project ID or short ID whose cards to list")
+  .option("--bundle <bundleId>", "Only list cards in this bundle ID or short ID")
   .action((opts) => cardList(opts));
 
 program.parse();

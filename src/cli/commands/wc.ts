@@ -12,7 +12,8 @@ import {
   WC_MARKER_KIND,
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
-import { workingCopyTable, projectTable } from "../../db/schema.js";
+import { workingCopyTable, projectTable, scopeTable } from "../../db/schema.js";
+import { resolveShortId, shortId } from "../lib/short-id.js";
 import { addWorkingCopy, deleteWorkingCopy } from "../../db/api/working-copy.js";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
@@ -48,6 +49,12 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
   const found = scanWorkingCopies(searchRoots);
   const dbRecords = await db.select().from(workingCopyTable);
+  const workingCopyIds = [
+    ...new Set([
+      ...dbRecords.map(({ id }) => id),
+      ...found.map(({ workingCopyId }) => workingCopyId),
+    ]),
+  ];
   const diff = diffWorkingCopies(found, dbRecords, root);
 
   let updated = 0;
@@ -63,7 +70,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
     const seenSuffix = record?.lastSeenAt
       ? `  (last seen ${formatAge(now - record.lastSeenAt.getTime())} ago)`
       : "  (never seen)";
-    console.log(`  ok      ${wc.workingCopyId}  ${wc.path}${seenSuffix}`);
+    console.log(`  ok      ${shortId(wc.workingCopyId, workingCopyIds)}  ${wc.path}${seenSuffix}`);
     if (options.apply) {
       await db
         .update(workingCopyTable)
@@ -73,7 +80,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   }
 
   for (const { record, scanned } of diff.moved) {
-    console.log(`  moved   ${record.id}`);
+    console.log(`  moved   ${shortId(record.id, workingCopyIds)}`);
     const oldAbsolute = record.path
       ? resolveWorkingCopyPath(record.path, record.pathKind, root)
       : "(none)";
@@ -94,7 +101,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   }
 
   for (const wc of diff.orphans) {
-    console.log(`  orphan  ${wc.workingCopyId}  ${wc.path}`);
+    console.log(`  orphan  ${shortId(wc.workingCopyId, workingCopyIds)}  ${wc.path}`);
     if (options.apply && options.reattach) {
       const pathKind = wc.path.startsWith(root)
         ? ("project_relative" as const)
@@ -117,7 +124,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
     const absolutePath = record.path
       ? resolveWorkingCopyPath(record.path, record.pathKind, root)
       : "(no path)";
-    console.log(`  missing ${record.id}  ${absolutePath}`);
+    console.log(`  missing ${shortId(record.id, workingCopyIds)}  ${absolutePath}`);
     if (options.apply && options.cleanup) {
       await db.delete(workingCopyTable).where(eq(workingCopyTable.id, record.id));
       console.log(`    → deleted`);
@@ -148,15 +155,30 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
 // ─── wc create ──────────────────────────────────────────────────────────────
 
-type CreateOptions = { scope?: string; noScope?: boolean; project?: string; dir?: string };
+type CreateOptions = { scope?: string | false; project?: string; dir?: string };
 
 export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
-  if (!options.scope && !options.noScope) {
+  if (options.scope === undefined) {
     console.error("Error: --scope <scopeId> is required. Use --no-scope to create without one.");
     process.exit(1);
   }
   const { root, config } = requireWorkspace();
   const db = await createDb(dbUrl(resolve(root)));
+
+  let scopeId: string | undefined;
+  if (typeof options.scope === "string") {
+    const scopes = await db.select({ id: scopeTable.id }).from(scopeTable);
+    try {
+      scopeId = resolveShortId(
+        options.scope,
+        scopes.map(({ id }) => id),
+        "Scope",
+      );
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      process.exit(1);
+    }
+  }
 
   const targetDir = options.dir
     ? resolve(options.dir)
@@ -177,19 +199,19 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
 
   let projectId: string | undefined;
+  const projects = await db.select({ id: projectTable.id }).from(projectTable);
   if (options.project) {
-    const found = await db
-      .select({ id: projectTable.id })
-      .from(projectTable)
-      .where(eq(projectTable.id, options.project))
-      .get();
-    if (!found) {
-      console.error(`Error: project not found: ${options.project}`);
+    try {
+      projectId = resolveShortId(
+        options.project,
+        projects.map(({ id }) => id),
+        "Project",
+      );
+    } catch (error) {
+      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
       process.exit(1);
     }
-    projectId = found.id;
   } else {
-    const projects = await db.select({ id: projectTable.id }).from(projectTable);
     if (projects.length === 1) {
       projectId = projects[0].id;
     } else if (projects.length > 1) {
@@ -203,7 +225,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
   const id = await addWorkingCopy({
     db,
     projectId,
-    scopeId: options.scope,
+    scopeId,
     name,
     path: storedPath,
     pathKind,
@@ -229,7 +251,10 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
   }
 
   console.log(`Working copy created.`);
-  console.log(`  id   : ${id}`);
+  const workingCopyIds = (await db.select({ id: workingCopyTable.id }).from(workingCopyTable)).map(
+    ({ id }) => id,
+  );
+  console.log(`  id   : ${shortId(id, workingCopyIds)}`);
   console.log(`  name : ${name}`);
   console.log(`  path : ${targetDir}`);
 }
