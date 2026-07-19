@@ -13,7 +13,13 @@ type OpenOptions = {
   host?: string;
   port?: string;
   open?: boolean;
+  allowRemote?: boolean;
 };
+
+export function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
+}
 
 function openBrowser(url: string): void {
   if (process.platform === "darwin") {
@@ -31,6 +37,14 @@ export async function open(options: OpenOptions): Promise<void> {
   const host = options.host ?? config.server.host;
   const port = options.port ?? String(config.server.port);
   const shouldOpen = options.open ?? true;
+
+  if (!isLoopbackHost(host) && !options.allowRemote) {
+    console.error("Refusing to bind Kozane to non-loopback host " + host + ".");
+    console.error("The web UI has no authentication and grants access to the workspace database.");
+    console.error("Use --allow-remote only on a trusted network with an access-controlled proxy.");
+    process.exitCode = 1;
+    return;
+  }
 
   const dbURL = dbUrl(resolve(root));
   const migrationStatus = await getMigrationStatus(dbURL);

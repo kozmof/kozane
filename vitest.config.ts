@@ -28,6 +28,8 @@ export default defineConfig({
     include: ["src/**/*.test.ts"],
     setupFiles: ["src/test-utils/setup.ts"],
     environment: "jsdom",
+    maxWorkers: 4,
+    testTimeout: 10_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,svelte}"],

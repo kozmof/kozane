@@ -13,7 +13,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "drizzle-kit generate && vite build && tsc --project tsconfig.cli.json",
+    "build": "node scripts/clean.mjs && drizzle-kit generate && vite build && tsc --project tsconfig.cli.json",
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",
@@ -26,7 +26,10 @@
     "fmt:check": "oxfmt --check",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "clean": "node scripts/clean.mjs",
+    "verify": "pnpm check && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
+    "prepack": "pnpm build"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
@@ -57,6 +60,7 @@
     "vitest": "^4.1.8"
   },
   "engines": {
-    "node": ">=21"
-  }
+    "node": ">=22 <25"
+  },
+  "packageManager": "pnpm@10.12.1"
 }
