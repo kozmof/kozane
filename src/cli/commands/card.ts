@@ -3,17 +3,21 @@ import { and, eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
-import { bundleTable, cardTable, projectTable } from "../../db/schema.js";
+import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
-import { getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
+import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
 import { getWorkingCopy } from "../../db/api/working-copy.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { readWorkingCopyMarker } from "../lib/working-copy-marker.js";
-import type { DB } from "../../db/tx.js";
+import { withTx, type DB } from "../../db/tx.js";
 
 type CardOptions = { project?: string; bundle?: string; workingCopy?: string };
-type CardAddOptions = Omit<CardOptions, "workingCopy"> & { x?: number; y?: number };
+type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
+  scope?: string;
+  x?: number;
+  y?: number;
+};
 type ListedCard = {
   id: string;
   bundle: string;
@@ -54,6 +58,15 @@ async function resolveBundleId(db: DB, projectId: string, requestedId?: string):
   return bundle.id;
 }
 
+async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
+  const scopes = await db.select({ id: scopeTable.id }).from(scopeTable);
+  return resolveShortId(
+    requestedId,
+    scopes.map(({ id }) => id),
+    "Scope",
+  );
+}
+
 function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
@@ -79,11 +92,23 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const db = await createDb(dbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
-    const id = await addCard({ db, bundleId, content, posX: options.x, posY: options.y });
-    const [projects, bundles, cards] = await Promise.all([
+    const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
+    const id = await withTx(db, async (tx) => {
+      const cardId = await addCard({
+        db: tx,
+        bundleId,
+        content,
+        posX: options.x,
+        posY: options.y,
+      });
+      if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
+      return cardId;
+    });
+    const [projects, bundles, cards, scopes] = await Promise.all([
       db.select({ id: projectTable.id }).from(projectTable),
       db.select({ id: bundleTable.id }).from(bundleTable),
       db.select({ id: cardTable.id }).from(cardTable),
+      scopeId ? db.select({ id: scopeTable.id }).from(scopeTable) : Promise.resolve([]),
     ]);
     console.log("Card added.");
     console.log(
@@ -104,6 +129,13 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
         bundles.map(({ id }) => id),
       )}`,
     );
+    if (scopeId)
+      console.log(
+        `  scope   : ${shortId(
+          scopeId,
+          scopes.map(({ id }) => id),
+        )}`,
+      );
   } catch (error) {
     fail(error);
   }

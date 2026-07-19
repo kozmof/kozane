@@ -118,6 +118,7 @@ card
   .description("Add a card to a project")
   .option("--project <projectId>", "Project ID or short ID to add the card to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
+  .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
   .option("--x <number>", "Horizontal card position", integer)
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));

@@ -290,6 +290,27 @@ Project deleted.
 
 ---
 
+### `kozane card add <content>`
+
+Adds a card to a project and optionally associates it with a scope.
+
+```bash
+kozane card add <content> [--project <projectId>] [--bundle <bundleId>]
+                          [--scope <scopeId>] [--x <number>] [--y <number>]
+```
+
+Project, bundle, and scope options accept full or short IDs. Without `--bundle`, the
+project default bundle is used. When `--scope` is provided, card creation and scope
+membership are committed in one transaction.
+
+Example:
+
+```bash
+kozane card add "Investigate caching" --project eb15 --scope e3ee --x 48 --y 72
+```
+
+---
+
 ### `kozane card list`
 
 Lists project cards or dynamically lists cards associated with a working copy.
