@@ -6,11 +6,21 @@ import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable } from "../../db/schema.js";
 import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
+import { getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
+import { getWorkingCopy } from "../../db/api/working-copy.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
+import { readWorkingCopyMarker } from "../lib/working-copy-marker.js";
 import type { DB } from "../../db/tx.js";
 
-type CardOptions = { project?: string; bundle?: string };
-type CardAddOptions = CardOptions & { x?: number; y?: number };
+type CardOptions = { project?: string; bundle?: string; workingCopy?: string };
+type CardAddOptions = Omit<CardOptions, "workingCopy"> & { x?: number; y?: number };
+type ListedCard = {
+  id: string;
+  bundle: string;
+  content: string;
+  posX: number;
+  posY: number;
+};
 
 async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
   const projects = await db.select({ id: projectTable.id }).from(projectTable);
@@ -47,6 +57,20 @@ async function resolveBundleId(db: DB, projectId: string, requestedId?: string):
 function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
+}
+
+async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
+  if (cards.length === 0) {
+    console.log("No cards found.");
+    return;
+  }
+  const allCards = await db.select({ id: cardTable.id }).from(cardTable);
+  const cardIds = allCards.map(({ id }) => id);
+  for (const card of cards) {
+    console.log(
+      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
+    );
+  }
 }
 
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
@@ -87,38 +111,70 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
   try {
+    if (options.workingCopy && (options.project || options.bundle))
+      throw new Error("--working-copy cannot be combined with --project or --bundle.");
+
     const { root } = requireWorkspace();
     const db = await createDb(dbUrl(resolve(root)));
+    const locatedMarker =
+      options.workingCopy || (!options.project && !options.bundle)
+        ? readWorkingCopyMarker(options.workingCopy)
+        : null;
+
+    if (locatedMarker) {
+      const workingCopy = await getWorkingCopy({
+        db,
+        workingCopyId: locatedMarker.marker.workingCopyId,
+      });
+      if (!workingCopy)
+        throw new Error(`Working copy is not registered in this workspace: ${locatedMarker.path}`);
+      if (workingCopy.scopeId) {
+        const scopedCards = await getCardsByScopeWithBundleName({
+          db,
+          scopeId: workingCopy.scopeId,
+        });
+        await printCards(
+          db,
+          scopedCards.map((card) => ({ ...card, bundle: card.bundleName })),
+        );
+      } else {
+        console.warn(
+          "Notice: Working copy is not attached to a scope. The scope may have been deleted.",
+        );
+        const workingCopyCards = await db
+          .select({
+            id: cardTable.id,
+            bundle: bundleTable.name,
+            content: cardTable.content,
+            posX: cardTable.posX,
+            posY: cardTable.posY,
+          })
+          .from(cardTable)
+          .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+          .where(eq(cardTable.workingCopyId, workingCopy.id));
+        await printCards(db, workingCopyCards);
+      }
+      return;
+    }
+
     const projectId = await resolveProjectId(db, options.project);
     const conditions = [eq(bundleTable.projectId, projectId)];
     if (options.bundle) {
       const bundleId = await resolveBundleId(db, projectId, options.bundle);
       conditions.push(eq(bundleTable.id, bundleId));
     }
-    const [cards, allCards] = await Promise.all([
-      db
-        .select({
-          id: cardTable.id,
-          bundle: bundleTable.name,
-          content: cardTable.content,
-          posX: cardTable.posX,
-          posY: cardTable.posY,
-        })
-        .from(cardTable)
-        .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-        .where(and(...conditions)),
-      db.select({ id: cardTable.id }).from(cardTable),
-    ]);
-    if (cards.length === 0) {
-      console.log("No cards found.");
-      return;
-    }
-    const cardIds = allCards.map(({ id }) => id);
-    for (const card of cards) {
-      console.log(
-        `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
-      );
-    }
+    const cards = await db
+      .select({
+        id: cardTable.id,
+        bundle: bundleTable.name,
+        content: cardTable.content,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+      })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .where(and(...conditions));
+    await printCards(db, cards);
   } catch (error) {
     fail(error);
   }

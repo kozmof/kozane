@@ -42,9 +42,9 @@ scope "Q3 planning"
   └── card from project "frontend"  (bundle: Roadmap)
 ```
 
-Scopes are the bridge between the card canvas and the filesystem. When you create a
-**working copy** for a scope, Kozane writes a `cards.md` file containing all cards
-currently in that scope, regardless of which project they belong to.
+Scopes are the bridge between the card canvas and the filesystem. A **working copy** for a scope stores an identity marker. Run `kozane card list` from
+that directory to read the scope's current cards directly from the database, regardless of
+which project they belong to.
 
 Cards are added to a scope explicitly (via the UI's scope panel or `wc create --scope`).
 Deleting a scope from the UI removes that project's cards from it; the scope itself
@@ -55,7 +55,7 @@ is only deleted when it has no member cards left across any project.
 A working copy is a filesystem directory tied to a scope. It holds:
 
 - `.working-copy.json` — identity anchor (stable UUID, survives rename/move)
-- `cards.md` — the scope's cards rendered as Markdown
+- `kozane card list` — dynamically lists scope cards. If the scope was deleted or the working copy was created without one, the CLI reports that status and lists directly associated cards
 
 Working copies are discovered by `kozane wc scan`, which walks the directories listed
 in `config.workingCopy.searchRoots` and reconciles what is on disk with the database.
@@ -287,6 +287,39 @@ Output:
 Project deleted.
   id: 019dddef-87e3-7000-0000-000000000000
 ```
+
+---
+
+### `kozane card list`
+
+Lists project cards or dynamically lists cards associated with a working copy.
+
+```bash
+kozane card list [--project <projectId>] [--bundle <bundleId>]
+kozane card list --working-copy <path>
+```
+
+When the current directory contains `.working-copy.json`, running `kozane card list`
+without project or bundle options automatically uses that marker. The marker must be
+in the current directory; parent directories are not searched.
+
+`--working-copy <path>` accepts either a working-copy directory or the
+`.working-copy.json` file itself. Scoped working copies list the current scope members
+directly from the database. If the working copy has no scope, including when its scope
+was deleted, the command prints a notice and lists cards associated directly with the
+working copy.
+
+Examples:
+
+```bash
+cd my-working-copy
+kozane card list
+
+kozane card list --working-copy ./my-working-copy
+kozane card list --working-copy ./my-working-copy/.working-copy.json
+```
+
+The working-copy form cannot be combined with `--project` or `--bundle`.
 
 ---
 

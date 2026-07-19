@@ -122,11 +122,31 @@ card
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
 
-card
+const cardListCommand = card
   .command("list")
-  .description("List cards in a project")
+  .description("List cards in a project or working-copy scope")
   .option("--project <projectId>", "Project ID or short ID whose cards to list")
   .option("--bundle <bundleId>", "Only list cards in this bundle ID or short ID")
+  .option("--working-copy <path>", "Working-copy directory or .working-copy.json path")
   .action((opts) => cardList(opts));
+
+cardListCommand.addHelpText(
+  "after",
+  `
+Working-copy behavior:
+  If the current directory contains .working-copy.json, this command automatically
+  lists cards for that working copy when --project and --bundle are omitted.
+
+  Use --working-copy <path> from elsewhere. <path> may be either the working-copy
+  directory or its .working-copy.json file. A scoped working copy lists current
+  scope members. A no-scope or deleted-scope working copy lists cards associated
+  directly with that working copy and prints a status notice.
+
+Examples:
+  kozane card list
+  kozane card list --working-copy ./draft
+  kozane card list --working-copy ./draft/.working-copy.json
+`,
+);
 
 program.parse();
