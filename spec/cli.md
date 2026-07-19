@@ -290,6 +290,38 @@ Project deleted.
 
 ---
 
+### `kozane scope add <name>`
+
+Adds a cross-project card scope.
+
+```bash
+kozane scope add <name>
+```
+
+Output includes the new short scope ID and name. Scope names must be non-empty and
+unique within the workspace.
+
+### `kozane scope list`
+
+Lists all scopes using collision-safe short IDs.
+
+```bash
+kozane scope list
+```
+
+If no scopes exist, the command prints `No scopes found.`
+
+### `kozane scope delete <id>`
+
+Deletes a scope workspace-wide using its full or short ID. Scope membership rows are
+deleted, and attached working copies become unscoped. Cards themselves are retained.
+
+```bash
+kozane scope delete <id>
+```
+
+---
+
 ### `kozane card add <content>`
 
 Adds a card to a project and optionally associates it with a scope.
@@ -723,6 +755,6 @@ Filesystem:
 kozane export <scope-id>         # export scope cards to markdown
 kozane wc repair <id> --path ... # rewrite missing marker after confirmation
 kozane wc fork <dir>             # assign new id to a duplicate
-kozane scope list / inspect
+kozane scope inspect
 kozane card add / list / search
 ```

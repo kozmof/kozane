@@ -13,6 +13,7 @@ import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import { cardAdd, cardList } from "./commands/card.js";
+import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 
 const program = new Command();
 
@@ -63,6 +64,23 @@ project
   .command("delete <id>")
   .description("Delete a project by ID or short ID")
   .action((id) => projectDelete(id));
+
+const scope = program.command("scope").description("Scope management");
+
+scope
+  .command("list")
+  .description("List all scopes in the current workspace")
+  .action(() => scopeList());
+
+scope
+  .command("add <name>")
+  .description("Add a cross-project card scope")
+  .action((name) => scopeAdd(name));
+
+scope
+  .command("delete <id>")
+  .description("Delete a scope by ID or short ID")
+  .action((id) => scopeDelete(id));
 
 const db = program.command("db").description("Database management");
 
