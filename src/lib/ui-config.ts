@@ -12,6 +12,14 @@ export type UiConfig = {
   toggleFootersShortcut: string;
   togglePanelsShortcut: string;
   focusCardInputShortcut: string;
+  clearSelectionShortcut: string;
+  copyCardIdShortcut: string;
+  bringCardToFrontShortcut: string;
+  sendCardToBackShortcut: string;
+  glueCardsShortcut: string;
+  unglueCardShortcut: string;
+  moveCardsShortcut: string;
+  deleteCardsShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
 };
@@ -28,6 +36,14 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
   focusCardInputShortcut: "i",
+  clearSelectionShortcut: "Escape",
+  copyCardIdShortcut: "c",
+  bringCardToFrontShortcut: "]",
+  sendCardToBackShortcut: "[",
+  glueCardsShortcut: "g",
+  unglueCardShortcut: "u",
+  moveCardsShortcut: "m",
+  deleteCardsShortcut: "Delete",
   canvasWidth: CANVAS_W,
   canvasHeight: CANVAS_H,
 };
@@ -48,4 +64,12 @@ export const UI_STR_FIELDS = [
   "toggleFootersShortcut",
   "togglePanelsShortcut",
   "focusCardInputShortcut",
+  "clearSelectionShortcut",
+  "copyCardIdShortcut",
+  "bringCardToFrontShortcut",
+  "sendCardToBackShortcut",
+  "glueCardsShortcut",
+  "unglueCardShortcut",
+  "moveCardsShortcut",
+  "deleteCardsShortcut",
 ] as const;

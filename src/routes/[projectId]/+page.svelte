@@ -132,6 +132,7 @@
       tick().then(() => composerComponent.focusInput());
       return;
     }
+    if (s.selection.selectedCards.size > 0) return;
     if (e.key === data.uiConfig.toggleFootersShortcut) showFooters = !showFooters;
     if (e.key === data.uiConfig.togglePanelsShortcut) sidebarsVisible = !sidebarsVisible;
   }
@@ -205,6 +206,7 @@
       otherProjects={data.otherProjects}
       onMoveToProject={actions.handleMoveSelectionToProject}
       onLayerChange={handleLayerChange}
+      shortcuts={data.uiConfig}
     />
   </div>
 

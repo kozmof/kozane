@@ -2,6 +2,7 @@
   import { css } from "styled-system/css";
   import CardComposer from "./CardComposer.svelte";
   import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
+  import type { UiConfig } from "$lib/ui-config";
 
   interface Props {
     editingCard: CardWithGlue | null;
@@ -21,6 +22,7 @@
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
     onLayerChange?: (cardId: string, direction: "front" | "back") => void;
+    shortcuts: UiConfig;
   }
 
   let {
@@ -41,6 +43,7 @@
     onDeleteSelected,
     onMoveToProject,
     onLayerChange,
+    shortcuts,
   }: Props = $props();
 
   let composerComponent: { focusInput: () => void } = $state()!;
@@ -81,5 +84,6 @@
     {onDeleteSelected}
     {onMoveToProject}
     {onLayerChange}
+    {shortcuts}
   />
 </div>

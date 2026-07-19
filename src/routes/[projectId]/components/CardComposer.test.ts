@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import CardComposer from "./CardComposer.svelte";
+import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 
 const bundles = [
   { id: "b1", name: "General", bg: "#fff7ed", dot: "#f59e0b", isDefault: true },
@@ -173,7 +174,7 @@ describe("CardComposer — selection mode", () => {
     render(CardComposer, { props: makeProps({ selectedCards, onCancel }) });
 
     expect(screen.getByText("2 cards")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "×" }));
+    await user.click(screen.getByRole("button", { name: "Clear selection (Escape)" }));
 
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -242,6 +243,69 @@ describe("CardComposer — selection mode", () => {
     await user.click(screen.getByRole("option", { name: /Research/ }));
 
     expect(onSelectionBundleChange).toHaveBeenCalledWith(["card-1", "card-2"], "b2");
+  });
+  it("runs customized single-card shortcuts", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const onCancel = vi.fn();
+    const onLayerChange = vi.fn();
+    const onDeleteSelected = vi.fn();
+    const shortcuts = {
+      ...DEFAULT_UI_CONFIG,
+      clearSelectionShortcut: "q",
+      copyCardIdShortcut: "v",
+      bringCardToFrontShortcut: "Home",
+      sendCardToBackShortcut: "End",
+      deleteCardsShortcut: "Backspace",
+    };
+    render(CardComposer, {
+      props: makeProps({
+        selectedCards: [selectedCards[0]],
+        onCancel,
+        onLayerChange,
+        onDeleteSelected,
+        shortcuts,
+      }),
+    });
+
+    expect(screen.getByRole("button", { name: "Copy card ID (v)" })).toBeInTheDocument();
+    await user.keyboard("v{Home}{End}{Backspace}q");
+
+    expect(writeText).toHaveBeenCalledWith("card-1");
+    expect(onLayerChange).toHaveBeenNthCalledWith(1, "card-1", "front");
+    expect(onLayerChange).toHaveBeenNthCalledWith(2, "card-1", "back");
+    expect(onDeleteSelected).toHaveBeenCalledWith(["card-1"]);
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it("runs customized multi-card shortcuts", async () => {
+    const user = userEvent.setup();
+    const primaryCard = { ...selectedCards[0], glueId: "glue-1" };
+    const onGlueSelected = vi.fn();
+    const onUnglueOne = vi.fn();
+    const shortcuts = {
+      ...DEFAULT_UI_CONFIG,
+      glueCardsShortcut: "j",
+      unglueCardShortcut: "n",
+      moveCardsShortcut: "p",
+    };
+    render(CardComposer, {
+      props: makeProps({
+        selectedCards: [primaryCard, selectedCards[1]],
+        primaryCard,
+        otherProjects,
+        onGlueSelected,
+        onUnglueOne,
+        shortcuts,
+      }),
+    });
+
+    await user.keyboard("jnp");
+
+    expect(onGlueSelected).toHaveBeenCalledWith(["card-1", "card-2"]);
+    expect(onUnglueOne).toHaveBeenCalledWith("card-1");
+    expect(screen.getByRole("button", { name: "Project Beta" })).toBeInTheDocument();
   });
 });
 
@@ -330,7 +394,7 @@ describe("CardComposer — copy card ID", () => {
 
   it("shows the copy action for a single selected card", () => {
     render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
-    expect(screen.getByRole("button", { name: "Copy card ID" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy card ID (c)" })).toBeInTheDocument();
   });
 
   it("copies the full card ID and shows success feedback", async () => {
@@ -342,7 +406,7 @@ describe("CardComposer — copy card ID", () => {
     });
     render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
 
-    await user.click(screen.getByRole("button", { name: "Copy card ID" }));
+    await user.click(screen.getByRole("button", { name: "Copy card ID (c)" }));
 
     expect(writeText).toHaveBeenCalledWith(selectedCard.id);
     expect(screen.getByText("Copied ID")).toBeInTheDocument();
@@ -352,7 +416,7 @@ describe("CardComposer — copy card ID", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "card-2" }] }),
     });
-    expect(screen.queryByRole("button", { name: "Copy card ID" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy card ID (c)" })).not.toBeInTheDocument();
   });
 });
 
@@ -371,8 +435,8 @@ describe("CardComposer — card layers", () => {
     const user = userEvent.setup();
     const onLayerChange = vi.fn();
     render(CardComposer, { props: makeProps({ selectedCards: [selectedCard], onLayerChange }) });
-    await user.click(screen.getByRole("button", { name: "Bring to front" }));
-    await user.click(screen.getByRole("button", { name: "Send to back" }));
+    await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
+    await user.click(screen.getByRole("button", { name: "Send to back ([)" }));
     expect(onLayerChange).toHaveBeenNthCalledWith(1, "card-layer", "front");
     expect(onLayerChange).toHaveBeenNthCalledWith(2, "card-layer", "back");
   });
@@ -381,7 +445,7 @@ describe("CardComposer — card layers", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "other" }] }),
     });
-    expect(screen.queryByRole("button", { name: "Bring to front" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Send to back" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bring to front (])" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send to back ([)" })).not.toBeInTheDocument();
   });
 });

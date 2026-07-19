@@ -3,6 +3,7 @@
   import BundleDropdown from "./BundleDropdown.svelte";
   import { css } from "styled-system/css";
   import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
+  import { DEFAULT_UI_CONFIG, type UiConfig } from "$lib/ui-config";
 
   interface Props {
     editingCard: CardWithGlue | null;
@@ -22,6 +23,7 @@
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
     onLayerChange?: (cardId: string, direction: "front" | "back") => void;
+    shortcuts?: UiConfig;
   }
 
   let {
@@ -42,6 +44,7 @@
     onDeleteSelected,
     onMoveToProject,
     onLayerChange,
+    shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
   let showProjectPicker = $state(false);
@@ -113,6 +116,30 @@
     }
   }
 
+  function handleSelectionShortcut(e: KeyboardEvent) {
+    if (mode !== "selection") return;
+    const target = e.target as HTMLElement;
+    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+
+    const ids = selectedCards.map((card) => card.id);
+    let handled = true;
+    if (e.key === shortcuts.clearSelectionShortcut) onCancel();
+    else if (e.key === shortcuts.copyCardIdShortcut && selectedCards.length === 1) copySelectedCardId();
+    else if (e.key === shortcuts.bringCardToFrontShortcut && selectedCards.length === 1) onLayerChange?.(selectedCards[0].id, "front");
+    else if (e.key === shortcuts.sendCardToBackShortcut && selectedCards.length === 1) onLayerChange?.(selectedCards[0].id, "back");
+    else if (e.key === shortcuts.glueCardsShortcut && selectedCards.length >= 2) {
+      if (allGlued) onUnglueSelected?.(ids);
+      else onGlueSelected?.(ids);
+    } else if (e.key === shortcuts.unglueCardShortcut && selectedCards.length >= 2 && primaryCard?.glueId) {
+      onUnglueOne?.(primaryCard.id);
+    } else if (e.key === shortcuts.moveCardsShortcut && otherProjects.length > 0) {
+      showProjectPicker = !showProjectPicker;
+    } else if (e.key === shortcuts.deleteCardsShortcut) onDeleteSelected?.(ids);
+    else handled = false;
+
+    if (handled) e.preventDefault();
+  }
+
   function handleSubmit() {
     if (!content.trim()) return;
     onSubmit(editingCard?.id ?? null, content.trim(), bundleId);
@@ -140,6 +167,8 @@
   );
 </script>
 
+<svelte:window onkeydown={handleSelectionShortcut} />
+
 <div class={css({ backgroundColor: "ink.light", borderRadius: "2px", border: "1px solid token(colors.warm.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + mode hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
@@ -165,7 +194,7 @@
         class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "warm.muted", fontFamily: "inherit", padding: "0", lineHeight: "1", "&:hover": { color: "ink.black" } })}
         title="Clear selection"
         onclick={onCancel}
-      >×</button>
+      >Clear selection ({shortcuts.clearSelectionShortcut})</button>
     {/if}
   </div>
 
@@ -174,7 +203,7 @@
     {#if selectedCards.length === 1}
       <button
         class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
-        aria-label="Copy card ID"
+        aria-label={"Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
         title={selectedCards[0].id}
         onclick={copySelectedCardId}
       >
@@ -182,13 +211,13 @@
           <rect x="4" y="1" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2" />
           <path d="M8 8v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h2" stroke="currentColor" stroke-width="1.2" />
         </svg>
-        {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID"}
+        {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
       </button>
     {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back</button>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
@@ -204,7 +233,7 @@
               <circle cx="10" cy="6" r="2" stroke="currentColor" stroke-width="1.3" />
               <line x1="4" y1="6" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1.5" />
             </svg>
-            Unglue all
+            Unglue all ({shortcuts.glueCardsShortcut})
           </button>
         {:else}
           <button
@@ -216,7 +245,7 @@
               <circle cx="10" cy="6" r="2" fill="currentColor" />
               <line x1="4" y1="6" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" />
             </svg>
-            Glue
+            Glue ({shortcuts.glueCardsShortcut})
           </button>
         {/if}
         {#if primaryCard?.glueId}
@@ -231,7 +260,7 @@
               <line x1="8" y1="4" x2="11" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
               <line x1="11" y1="4" x2="8" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
             </svg>
-            Unglue this
+            Unglue this ({shortcuts.unglueCardShortcut})
           </button>
         {/if}
       </div>
@@ -248,7 +277,7 @@
             <rect x="4" y="6" width="4" height="3" rx="0.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M9 6h2M11 6v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
           </svg>
-          Move to project
+          Move to project ({shortcuts.moveCardsShortcut})
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style:transform={showProjectPicker ? "rotate(180deg)" : "none"} style:transition="transform 0.15s">
             <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
@@ -279,7 +308,7 @@
         <path d="M1.5 4h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         <path d="M2.5 4l.7 6h5.6l.7-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      Delete {selectedCards.length === 1 ? "card" : `${selectedCards.length} cards`}
+      Delete {selectedCards.length === 1 ? "card" : selectedCards.length + " cards"} ({shortcuts.deleteCardsShortcut})
     </button>
     </div>
   {:else}

@@ -629,6 +629,14 @@ Working copy created.
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",
     "focusCardInputShortcut": "i",
+    "clearSelectionShortcut": "Escape",
+    "copyCardIdShortcut": "c",
+    "bringCardToFrontShortcut": "]",
+    "sendCardToBackShortcut": "[",
+    "glueCardsShortcut": "g",
+    "unglueCardShortcut": "u",
+    "moveCardsShortcut": "m",
+    "deleteCardsShortcut": "Delete",
     "canvasWidth": 2800,
     "canvasHeight": 2000
   }
