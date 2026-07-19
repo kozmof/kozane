@@ -9,6 +9,7 @@ import { getDefaultBundle } from "../../db/api/bundle.js";
 import type { DB } from "../../db/tx.js";
 
 type CardOptions = { project?: string; bundle?: string };
+type CardAddOptions = CardOptions & { x?: number; y?: number };
 
 async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
   if (requestedId) {
@@ -48,13 +49,13 @@ function fail(error: unknown): never {
   process.exit(1);
 }
 
-export async function cardAdd(content: string, options: CardOptions = {}): Promise<void> {
+export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
   try {
     const { root } = requireWorkspace();
     const db = await createDb(dbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
-    const id = await addCard({ db, bundleId, content });
+    const id = await addCard({ db, bundleId, content, posX: options.x, posY: options.y });
     console.log("Card added.");
     console.log(`  id      : ${id}`);
     console.log(`  project : ${projectId}`);
@@ -75,7 +76,13 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       conditions.push(eq(bundleTable.id, options.bundle));
     }
     const cards = await db
-      .select({ id: cardTable.id, bundle: bundleTable.name, content: cardTable.content })
+      .select({
+        id: cardTable.id,
+        bundle: bundleTable.name,
+        content: cardTable.content,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+      })
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(and(...conditions));
@@ -84,7 +91,9 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       return;
     }
     for (const card of cards) {
-      console.log(`${card.id}  ${card.bundle}  ${card.content.replace(/\r?\n/g, " ")}`);
+      console.log(
+        `${card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
+      );
     }
   } catch (error) {
     fail(error);

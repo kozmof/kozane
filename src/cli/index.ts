@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createRequire } from "node:module";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 
 const _require = createRequire(import.meta.url);
 const { version: _version } = _require("../../package.json") as { version: string };
@@ -15,6 +15,12 @@ import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/d
 import { cardAdd, cardList } from "./commands/card.js";
 
 const program = new Command();
+
+function integer(value: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) throw new InvalidArgumentError("Must be an integer.");
+  return parsed;
+}
 
 program.name("kozane").description("Local card-based thinking workspace").version(_version);
 
@@ -109,6 +115,8 @@ card
   .description("Add a card to a project")
   .option("--project <projectId>", "Project to add the card to")
   .option("--bundle <bundleId>", "Bundle to add the card to (defaults to General)")
+  .option("--x <number>", "Horizontal card position", integer)
+  .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
 
 card
