@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack, tick } from "svelte";
+  import { onDestroy, untrack, tick } from "svelte";
   import BundleDropdown from "./BundleDropdown.svelte";
   import { css } from "styled-system/css";
   import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
@@ -43,6 +43,23 @@
   }: Props = $props();
 
   let showProjectPicker = $state(false);
+  let copyStatus: "idle" | "copied" | "error" = $state("idle");
+  let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function copySelectedCardId() {
+    const card = selectedCards.length === 1 ? selectedCards[0] : null;
+    if (!card) return;
+    try {
+      await navigator.clipboard.writeText(card.id);
+      copyStatus = "copied";
+    } catch {
+      copyStatus = "error";
+    }
+    clearTimeout(copyResetTimer);
+    copyResetTimer = setTimeout(() => (copyStatus = "idle"), 1500);
+  }
+
+  onDestroy(() => clearTimeout(copyResetTimer));
 
   const MAX_TEXTAREA_LINES = 12;
 
@@ -147,6 +164,20 @@
   </div>
 
   {#if mode === "selection"}
+    {#if selectedCards.length === 1}
+      <button
+        class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginBottom: "6px", "&:hover": { borderColor: "warm.icon" } })}
+        aria-label="Copy card ID"
+        title={selectedCards[0].id}
+        onclick={copySelectedCardId}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <rect x="4" y="1" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2" />
+          <path d="M8 8v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h2" stroke="currentColor" stroke-width="1.2" />
+        </svg>
+        {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID"}
+      </button>
+    {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
     {#if selectedCards.length >= 2}
       <div class={css({ display: "flex", gap: "6px", marginBottom: "6px" })}>

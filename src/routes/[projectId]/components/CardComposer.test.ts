@@ -316,3 +316,42 @@ describe("CardComposer — Move to project", () => {
     expect(screen.queryByRole("button", { name: "Project Beta" })).not.toBeInTheDocument();
   });
 });
+
+describe("CardComposer — copy card ID", () => {
+  const selectedCard = {
+    id: "019f71f2-a749-7539-9342-17b86d2a0000",
+    content: "Selected card",
+    bundleId: "b1",
+    posX: 0,
+    posY: 0,
+    glueId: null,
+    workingCopyId: null,
+  };
+
+  it("shows the copy action for a single selected card", () => {
+    render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
+    expect(screen.getByRole("button", { name: "Copy card ID" })).toBeInTheDocument();
+  });
+
+  it("copies the full card ID and shows success feedback", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
+
+    await user.click(screen.getByRole("button", { name: "Copy card ID" }));
+
+    expect(writeText).toHaveBeenCalledWith(selectedCard.id);
+    expect(screen.getByText("Copied ID")).toBeInTheDocument();
+  });
+
+  it("hides the copy action when multiple cards are selected", () => {
+    render(CardComposer, {
+      props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "card-2" }] }),
+    });
+    expect(screen.queryByRole("button", { name: "Copy card ID" })).not.toBeInTheDocument();
+  });
+});
