@@ -628,6 +628,7 @@ Working copy created.
     "defaultShowSidePanel": false,
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",
+    "focusCardInputShortcut": "i",
     "canvasWidth": 2800,
     "canvasHeight": 2000
   }

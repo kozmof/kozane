@@ -44,6 +44,7 @@ const data = {
     defaultShowSidePanel: true,
     toggleFootersShortcut: "x",
     togglePanelsShortcut: "y",
+    focusCardInputShortcut: "z",
     canvasWidth: 2800,
     canvasHeight: 2000,
   },
@@ -75,6 +76,25 @@ describe("Project page", () => {
 
     await fireEvent.keyDown(window, { key: "y" });
     expect([...panels].every((panel) => panel.style.width === "0px")).toBe(true);
+  });
+
+  it("uses the configured shortcut to focus the create-card input", async () => {
+    render(ProjectPage, {
+      props: {
+        data,
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(window, { key: "i" });
+    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(window, { key: "z" });
+    await waitFor(() => expect(screen.getByPlaceholderText("Write a card")).toHaveFocus());
   });
 
   it("glues selected cards through the composed board UI", async () => {

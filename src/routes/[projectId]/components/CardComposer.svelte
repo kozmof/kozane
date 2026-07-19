@@ -72,6 +72,10 @@
   let bundleId = $state(untrack(composerBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
 
+  export function focusInput() {
+    textareaEl?.focus();
+  }
+
   $effect(() => {
     content = editingCard?.content ?? "";
     bundleId = composerBundleId();

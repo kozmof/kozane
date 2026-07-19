@@ -42,6 +42,12 @@
     onMoveToProject,
     onLayerChange,
   }: Props = $props();
+
+  let composerComponent: { focusInput: () => void } = $state()!;
+
+  export function focusInput() {
+    composerComponent?.focusInput();
+  }
 </script>
 
 <div
@@ -57,6 +63,7 @@
   })}
 >
   <CardComposer
+    bind:this={composerComponent}
     {editingCard}
     {selectedCards}
     {selectionGlueRels}

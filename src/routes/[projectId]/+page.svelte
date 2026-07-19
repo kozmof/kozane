@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
@@ -35,6 +35,7 @@
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: { getNewCardPosition: (seq: number) => { posX: number; posY: number } } = $state()!;
+  let composerComponent: { focusInput: () => void } = $state()!;
 
   // ── Derived values ────────────────────────────────────────────
   let bundlesWithColors = $derived(applyPalette(s.bundles));
@@ -123,6 +124,14 @@
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+    if (e.key === data.uiConfig.focusCardInputShortcut) {
+      e.preventDefault();
+      s.selection.composerCard = null;
+      s.selection.selectedCards = new Set();
+      s.selection.primarySelectedId = null;
+      tick().then(() => composerComponent.focusInput());
+      return;
+    }
     if (e.key === data.uiConfig.toggleFootersShortcut) showFooters = !showFooters;
     if (e.key === data.uiConfig.togglePanelsShortcut) sidebarsVisible = !sidebarsVisible;
   }
@@ -178,6 +187,7 @@
     />
 
     <FloatingComposer
+      bind:this={composerComponent}
       editingCard={s.selection.composerCard}
       selectedCards={selectedCardObjects}
       {selectionGlueRels}
