@@ -336,7 +336,7 @@
 </script>
 
 <div
-  class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.canvas" })}
+  class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.canvas", isolation: "isolate", zIndex: "0" })}
   role="presentation"
   bind:this={canvasEl}
   onmousedown={handleCanvasMouseDown}
@@ -375,6 +375,7 @@
           isComposing={composerCard?.id === card.id}
           dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
           isDragging={draggingId === card.id}
+          zIndex={card.zIndex ?? 0}
           {showFooters}
           {cardWidth}
           {fontSize}

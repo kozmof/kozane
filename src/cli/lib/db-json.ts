@@ -36,7 +36,7 @@ const TABLES = [
   },
   {
     name: "card",
-    columns: ["id", "bundle_id", "working_copy_id", "content", "pos_x", "pos_y"],
+    columns: ["id", "bundle_id", "working_copy_id", "content", "pos_x", "pos_y", "z_index"],
     orderBy: ["id"],
   },
   {

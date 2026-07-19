@@ -25,6 +25,7 @@ const cards: Card[] = [
     content: "One",
     posX: 24,
     posY: 48,
+    zIndex: 0,
   },
   {
     id: "card-2",
@@ -33,6 +34,7 @@ const cards: Card[] = [
     content: "Two",
     posX: 72,
     posY: 96,
+    zIndex: 0,
   },
   {
     id: "card-3",
@@ -41,6 +43,7 @@ const cards: Card[] = [
     content: "Three",
     posX: 120,
     posY: 144,
+    zIndex: 0,
   },
 ];
 

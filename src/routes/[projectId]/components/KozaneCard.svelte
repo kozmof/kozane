@@ -10,6 +10,7 @@
     isComposing: boolean;
     dimmed: boolean;
     isDragging: boolean;
+    zIndex?: number;
     showFooters: boolean;
     cardWidth: number;
     fontSize: number;
@@ -27,6 +28,7 @@
     isComposing,
     dimmed,
     isDragging,
+    zIndex = 0,
     showFooters,
     cardWidth,
     fontSize,
@@ -81,7 +83,7 @@
   style:user-select="none"
   style:opacity={dimmed ? 0.3 : 1}
   style:transition="opacity 0.18s, box-shadow 0.1s, background 0.1s"
-  style:z-index={isDragging ? 200 : isSelected ? 10 : 1}
+  style:z-index={isDragging ? 2147483647 : zIndex}
 >
   <!-- Content -->
   <div

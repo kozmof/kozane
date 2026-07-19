@@ -1,10 +1,10 @@
-export type { Bundle, Scope, ScopeRel, GlueRel } from "../db/api/types.js";
 import type { Card, WorkingCopy } from "../db/api/types.js";
 
 export type CardData = Pick<
   Card,
   "id" | "content" | "bundleId" | "posX" | "posY" | "workingCopyId"
->;
+> &
+  Partial<Pick<Card, "zIndex">>;
 
 export interface CardWithGlue extends CardData {
   glueId: string | null;
@@ -19,3 +19,5 @@ export interface BundleWithColor {
 }
 
 export type WorkingCopySummary = Pick<WorkingCopy, "id" | "name" | "scopeId" | "path" | "pathKind">;
+
+export type { Bundle, Scope, ScopeRel, GlueRel } from "../db/api/types.js";

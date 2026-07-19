@@ -21,6 +21,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
+    onLayerChange?: (cardId: string, direction: "front" | "back") => void;
   }
 
   let {
@@ -40,6 +41,7 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
+    onLayerChange,
   }: Props = $props();
 
   let showProjectPicker = $state(false);
@@ -177,6 +179,12 @@
         </svg>
         {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID"}
       </button>
+    {/if}
+    {#if selectedCards.length === 1}
+      <div class={css({ display: "flex", gap: "6px", marginBottom: "6px" })}>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back</button>
+      </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
     {#if selectedCards.length >= 2}

@@ -1,0 +1,1 @@
+ALTER TABLE `card` ADD `z_index` integer DEFAULT 0 NOT NULL;

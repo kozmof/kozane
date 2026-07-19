@@ -20,6 +20,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
+    onLayerChange?: (cardId: string, direction: "front" | "back") => void;
   }
 
   let {
@@ -39,6 +40,7 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
+    onLayerChange,
   }: Props = $props();
 </script>
 
@@ -71,5 +73,6 @@
     {onUnglueOne}
     {onDeleteSelected}
     {onMoveToProject}
+    {onLayerChange}
   />
 </div>

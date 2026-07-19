@@ -59,6 +59,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const content = requireTrimmedString(body, "content");
   const posX = optionalNumber(body, "posX") ?? 0;
   const posY = optionalNumber(body, "posY") ?? 0;
+  const zIndex = optionalNumber(body, "zIndex") ?? 0;
+  if (!Number.isInteger(zIndex)) throw error(400, "zIndex must be an integer");
   const scopeId = optionalString(body, "scopeId");
 
   if (content.length > CONTENT_MAX)
@@ -75,6 +77,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       content,
       posX: clamp(posX, 0, CANVAS_W),
       posY: clamp(posY, 0, CANVAS_H),
+      zIndex,
     });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
     return cardId;

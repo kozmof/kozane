@@ -355,3 +355,33 @@ describe("CardComposer — copy card ID", () => {
     expect(screen.queryByRole("button", { name: "Copy card ID" })).not.toBeInTheDocument();
   });
 });
+
+describe("CardComposer — card layers", () => {
+  const selectedCard = {
+    id: "card-layer",
+    content: "Layered card",
+    bundleId: "b1",
+    posX: 0,
+    posY: 0,
+    glueId: null,
+    workingCopyId: null,
+  };
+
+  it("moves a single selected card to the front or back", async () => {
+    const user = userEvent.setup();
+    const onLayerChange = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards: [selectedCard], onLayerChange }) });
+    await user.click(screen.getByRole("button", { name: "Bring to front" }));
+    await user.click(screen.getByRole("button", { name: "Send to back" }));
+    expect(onLayerChange).toHaveBeenNthCalledWith(1, "card-layer", "front");
+    expect(onLayerChange).toHaveBeenNthCalledWith(2, "card-layer", "back");
+  });
+
+  it("hides layer actions for multiple selected cards", () => {
+    render(CardComposer, {
+      props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "other" }] }),
+    });
+    expect(screen.queryByRole("button", { name: "Bring to front" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send to back" })).not.toBeInTheDocument();
+  });
+});

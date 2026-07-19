@@ -15,6 +15,13 @@
       "when": 1782044156615,
       "tag": "0001_hot_shatterstar",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784427963942,
+      "tag": "0002_good_doorman",
+      "breakpoints": true
     }
   ]
 }

@@ -36,16 +36,20 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const rawPosY = optionalNumber(body, "posY");
   const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
   const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, CANVAS_H);
+  const zIndex = optionalNumber(body, "zIndex");
+  if (zIndex !== undefined && !Number.isInteger(zIndex))
+    throw error(400, "zIndex must be an integer");
 
   if (
     content === undefined &&
     newBundleId === undefined &&
     posX === undefined &&
-    posY === undefined
+    posY === undefined &&
+    zIndex === undefined
   )
     throw error(400, "No fields to update");
 
-  await updateCard({ db, cardId, bundleId, newBundleId, content, posX, posY });
+  await updateCard({ db, cardId, bundleId, newBundleId, content, posX, posY, zIndex });
 
   return json({ ok: true });
 };

@@ -52,6 +52,21 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
     await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ posX: 48, posY: 72 });
   });
 
+  it("updates card layer", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    await PATCH(event(db, projectId, cardId, jsonRequest({ zIndex: 42 })));
+    await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ zIndex: 42 });
+  });
+
+  it("rejects a non-integer card layer", async () => {
+    const { db, projectId, cardId } = await setup();
+    await expectHttpRejection(
+      PATCH(event(db, projectId, cardId, jsonRequest({ zIndex: 1.5 }))),
+      400,
+      "zIndex must be an integer",
+    );
+  });
+
   it("moves card to another bundle in the same project", async () => {
     const { db, projectId, cardId } = await setup();
     const otherBundleId = await addBundle({ db, projectId, name: "Other" });

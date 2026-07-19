@@ -49,6 +49,7 @@ type AddCard = NeedsBundle & {
   workingCopyId?: string;
   posX?: number;
   posY?: number;
+  zIndex?: number;
 };
 export async function addCard({
   db,
@@ -57,6 +58,7 @@ export async function addCard({
   workingCopyId,
   posX,
   posY,
+  zIndex,
 }: AddCard): Promise<string> {
   const [row] = await db
     .insert(cardTable)
@@ -66,6 +68,7 @@ export async function addCard({
       workingCopyId,
       ...(posX !== undefined && { posX }),
       ...(posY !== undefined && { posY }),
+      ...(zIndex !== undefined && { zIndex }),
     })
     .returning({ id: cardTable.id });
   return row.id;
@@ -131,9 +134,10 @@ type UpdateCard = NeedsDB & {
   content?: string;
   posX?: number;
   posY?: number;
+  zIndex?: number;
 };
 type CardUpdate = Partial<
-  Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "bundleId">
+  Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "zIndex" | "bundleId">
 >;
 
 export async function updateCard({
@@ -144,11 +148,13 @@ export async function updateCard({
   content,
   posX,
   posY,
+  zIndex,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
   if (content !== undefined) fields.content = content;
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;
+  if (zIndex !== undefined) fields.zIndex = zIndex;
   if (newBundleId !== undefined) fields.bundleId = newBundleId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
   const updated = await db

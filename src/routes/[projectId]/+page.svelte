@@ -82,17 +82,19 @@
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const scopeId = s.sidebar.activeScope;
+      const zIndex = Math.max(0, ...s.cards.map((card) => card.zIndex ?? 0)) + 1;
       const res = await createCard(s.fetcher, data.project.id, {
         bundleId,
         content,
         posX,
         posY,
+        zIndex,
         ...(scopeId && { scopeId }),
       });
       if (!res.ok) { s.setError("Failed to create card"); return; }
       const parsed = await res.json().catch(() => null);
       if (!parsed) { s.setError("Failed to create card"); return; }
-      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, glueId: null, workingCopyId: null }];
+      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, zIndex, glueId: null, workingCopyId: null }];
       if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: parsed.id }];
     }
   }
@@ -100,6 +102,22 @@
   async function handlePersistPositions(positions: CardPositionPatch[]): Promise<boolean> {
     const res = await patchCardPositions(s.fetcher, data.project.id, positions);
     return res.ok;
+  }
+
+  async function handleLayerChange(cardId: string, direction: "front" | "back") {
+    const card = s.cards.find((item) => item.id === cardId);
+    if (!card) return;
+    const previous = card.zIndex ?? 0;
+    const layers = s.cards.map((item) => item.zIndex ?? 0);
+    const zIndex = direction === "front" ? Math.max(...layers) + 1 : Math.min(...layers) - 1;
+    s.cards = s.cards.map((item) => (item.id === cardId ? { ...item, zIndex } : item));
+    const res = await updateCard(s.fetcher, data.project.id, cardId, { zIndex });
+    if (!res.ok) {
+      s.cards = s.cards.map((item) =>
+        item.id === cardId && item.zIndex === zIndex ? { ...item, zIndex: previous } : item,
+      );
+      s.setError("Failed to change card layer");
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -176,6 +194,7 @@
       onDeleteSelected={actions.handleDeleteSelected}
       otherProjects={data.otherProjects}
       onMoveToProject={actions.handleMoveSelectionToProject}
+      onLayerChange={handleLayerChange}
     />
   </div>
 

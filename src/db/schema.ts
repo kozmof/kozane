@@ -98,6 +98,7 @@ export const cardTable = sqliteTable("card", {
   content: text().notNull(),
   posX: integer("pos_x").notNull().default(0),
   posY: integer("pos_y").notNull().default(0),
+  zIndex: integer("z_index").notNull().default(0),
 });
 
 export const glueTable = sqliteTable("glue", {
