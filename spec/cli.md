@@ -343,6 +343,17 @@ kozane card add "Investigate caching" --project eb15 --scope e3ee --x 48 --y 72
 
 ---
 
+### `kozane card show <cardId>`
+
+Prints a card content by full or short ID. Line breaks are preserved.
+
+```bash
+kozane card show <cardId>
+kozane card show 17b8
+```
+
+---
+
 ### `kozane card list`
 
 Lists project cards or dynamically lists cards associated with a working copy.

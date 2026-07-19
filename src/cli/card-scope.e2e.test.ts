@@ -63,4 +63,15 @@ describe("scoped card working-copy CLI flow", () => {
     expect(listed).toContain("Second scoped card");
     expect(listed).not.toContain("Unscoped card");
   }, 30_000);
+
+  it("shows card content by its listed short ID", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const projectId = outputId(cli(root, "project", "create", "Show project"));
+    const content = "A small observation\nkeeps its line break.";
+    const cardId = outputId(cli(root, "card", "add", content, "--project", projectId));
+
+    expect(cli(root, "card", "show", cardId)).toBe(content + "\n");
+    expect(() => cli(root, "card", "show", "ffff")).toThrow("Card not found: ffff");
+  }, 30_000);
 });

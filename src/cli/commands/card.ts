@@ -141,6 +141,23 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
   }
 }
 
+export async function cardShow(requestedId: string): Promise<void> {
+  try {
+    const { root } = requireWorkspace();
+    const db = await createDb(dbUrl(resolve(root)));
+    const cards = await db.select({ id: cardTable.id, content: cardTable.content }).from(cardTable);
+    const cardId = resolveShortId(
+      requestedId,
+      cards.map(({ id }) => id),
+      "Card",
+    );
+    const card = cards.find(({ id }) => id === cardId)!;
+    console.log(card.content);
+  } catch (error) {
+    fail(error);
+  }
+}
+
 export async function cardList(options: CardOptions = {}): Promise<void> {
   try {
     if (options.workingCopy && (options.project || options.bundle))
