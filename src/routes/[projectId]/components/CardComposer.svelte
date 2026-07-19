@@ -74,6 +74,7 @@
   let content = $state(untrack(() => editingCard?.content ?? ""));
   let bundleId = $state(untrack(composerBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
+  let suppressNextAutoFocus = false;
 
   export function focusInput() {
     textareaEl?.focus();
@@ -82,8 +83,10 @@
   $effect(() => {
     content = editingCard?.content ?? "";
     bundleId = composerBundleId();
+    const shouldFocus = !suppressNextAutoFocus;
+    suppressNextAutoFocus = false;
     tick().then(() => {
-      textareaEl?.focus();
+      if (shouldFocus) textareaEl?.focus();
       if (textareaEl) autoResize(textareaEl);
     });
   });
@@ -111,8 +114,14 @@
       if (content.trim()) handleSubmit();
     }
     if (e.key === "Escape") {
+      e.preventDefault();
+      suppressNextAutoFocus = true;
       onCancel();
       textareaEl?.blur();
+      tick().then(() => {
+        suppressNextAutoFocus = false;
+        textareaEl?.blur();
+      });
     }
   }
 
@@ -348,7 +357,7 @@
     </div>
 
     <div class={css({ marginTop: "5px", fontSize: "10px", color: "warm.muted" })}>
-      Enter to {mode === "edit" ? "save" : "create"} · Shift+Enter for newline
+      Enter to {mode === "edit" ? "save" : "create"} · Shift+Enter for newline · Esc to unfocus
     </div>
   {/if}
 </div>

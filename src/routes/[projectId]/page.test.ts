@@ -102,7 +102,11 @@ describe("Project page", () => {
     expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
 
     await fireEvent.keyDown(window, { key: "z" });
-    await waitFor(() => expect(screen.getByPlaceholderText("Write a card")).toHaveFocus());
+    const input = screen.getByPlaceholderText("Write a card");
+    await waitFor(() => expect(input).toHaveFocus());
+
+    await fireEvent.keyDown(input, { key: "Escape" });
+    await waitFor(() => expect(input).not.toHaveFocus());
   });
 
   it("glues selected cards through the composed board UI", async () => {

@@ -89,6 +89,7 @@ describe("CardComposer — create mode", () => {
     await user.type(screen.getByRole("textbox"), "Hi");
     await user.keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledOnce();
+    expect(screen.getByRole("textbox")).not.toHaveFocus();
   });
 
   it("submits new cards with the selected bundle", async () => {
