@@ -14,6 +14,7 @@ import { projectCreate, projectDelete, projectList } from "./commands/project.js
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import { cardAdd, cardList, cardShow } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
+import { apiGenerate, apiRefresh } from "./commands/api.js";
 
 const program = new Command();
 
@@ -48,6 +49,12 @@ program
   .command("status")
   .description("Show current workspace state")
   .action(() => status());
+
+const api = program.command("api").description("API management");
+const apiKey = api.command("key").description("API key lifecycle");
+
+apiKey.command("generate").description("Generate an API key for this workspace").action(apiGenerate);
+apiKey.command("refresh").description("Replace the current API key").action(apiRefresh);
 
 const project = program.command("project").description("Project management");
 

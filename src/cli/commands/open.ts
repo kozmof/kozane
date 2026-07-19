@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
+import { readApiKey } from "../../lib/server/api-key.js";
 import { getMigrationStatus } from "../lib/db.js";
 import { migrationStatusMessage } from "./db.js";
 
@@ -37,11 +38,18 @@ export async function open(options: OpenOptions): Promise<void> {
   const host = options.host ?? config.server.host;
   const port = options.port ?? String(config.server.port);
   const shouldOpen = options.open ?? true;
+  const apiKey = readApiKey(root);
+
+  if (options.allowRemote && !apiKey) {
+    console.error("--allow-remote requires an API key.");
+    console.error('Run "kozane api key generate" first.');
+    process.exitCode = 1;
+    return;
+  }
 
   if (!isLoopbackHost(host) && !options.allowRemote) {
     console.error("Refusing to bind Kozane to non-loopback host " + host + ".");
-    console.error("The web UI has no authentication and grants access to the workspace database.");
-    console.error("Use --allow-remote only on a trusted network with an access-controlled proxy.");
+    console.error("Use --allow-remote to bind remotely (an API key is required).");
     process.exitCode = 1;
     return;
   }
@@ -62,6 +70,7 @@ export async function open(options: OpenOptions): Promise<void> {
 
   const serverEntry = join(packageRoot, "build", "index.js");
   const url = `http://${host}:${port}`;
+  const browserUrl = apiKey ? url + "/?api_key=" + encodeURIComponent(apiKey.apiKey) : url;
 
   console.log(`Kozane workspace: ${config.name}`);
   console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
@@ -80,7 +89,7 @@ export async function open(options: OpenOptions): Promise<void> {
   });
 
   if (shouldOpen) {
-    setTimeout(() => openBrowser(url), 1000);
+    setTimeout(() => openBrowser(browserUrl), 1000);
   }
 
   child.on("error", (err) => {
