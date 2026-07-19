@@ -166,9 +166,10 @@
   </div>
 
   {#if mode === "selection"}
+    <div class={css({ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px" })}>
     {#if selectedCards.length === 1}
       <button
-        class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginBottom: "6px", "&:hover": { borderColor: "warm.icon" } })}
+        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
         aria-label="Copy card ID"
         title={selectedCards[0].id}
         onclick={copySelectedCardId}
@@ -181,14 +182,14 @@
       </button>
     {/if}
     {#if selectedCards.length === 1}
-      <div class={css({ display: "flex", gap: "6px", marginBottom: "6px" })}>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front</button>
+      <div class={css({ display: "contents" })}>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front</button>
         <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
     {#if selectedCards.length >= 2}
-      <div class={css({ display: "flex", gap: "6px", marginBottom: "6px" })}>
+      <div class={css({ display: "contents" })}>
         {#if allGlued}
           <button
             class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
@@ -233,9 +234,9 @@
     {/if}
     <!-- Move to project -->
     {#if otherProjects.length > 0}
-      <div class={css({ position: "relative" })}>
+      <div class={css({ position: "relative" })} style:grid-column={selectedCards.length === 1 ? "span 2" : "auto"}>
         <button
-          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", marginBottom: "6px", "&:hover": { borderColor: "warm.icon" } })}
+          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
           onclick={() => (showProjectPicker = !showProjectPicker)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -265,6 +266,7 @@
     {/if}
     <!-- Delete: always visible in selection mode -->
     <button
+      style:grid-column={otherProjects.length === 0 ? "1 / -1" : "auto"}
       class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
       onclick={() => onDeleteSelected?.(selectedCards.map((c) => c.id))}
     >
@@ -275,6 +277,7 @@
       </svg>
       Delete {selectedCards.length === 1 ? "card" : `${selectedCards.length} cards`}
     </button>
+    </div>
   {:else}
     <!-- Input row (create / edit) -->
     <div
