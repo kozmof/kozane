@@ -52,7 +52,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
     clearAuthFailures(event.getClientAddress());
     if (queryKey) {
-      event.cookies.set(API_KEY_COOKIE, configuredKey.apiKey, {
+      const cookie = event.cookies.serialize(API_KEY_COOKIE, configuredKey.apiKey, {
         httpOnly: true,
         sameSite: "strict",
         secure: event.url.protocol === "https:",
@@ -63,7 +63,10 @@ export const handle: Handle = async ({ event, resolve }) => {
       return applySecurityHeaders(
         new Response(null, {
           status: 303,
-          headers: { location: cleanUrl.pathname + cleanUrl.search },
+          headers: {
+            location: cleanUrl.pathname + cleanUrl.search,
+            "set-cookie": cookie,
+          },
         }),
       );
     }

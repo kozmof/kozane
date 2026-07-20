@@ -31,6 +31,8 @@ function event(url = "http://localhost/", headers?: HeadersInit) {
     cookies: {
       get: (name: string) => cookies.get(name),
       set: (name: string, value: string) => cookies.set(name, value),
+      serialize: (name: string, value: string) =>
+        `${name}=${value}; Path=/; HttpOnly; SameSite=Strict`,
     },
     getClientAddress: () => "127.0.0.1",
   };
@@ -79,5 +81,8 @@ describe("production request hook", () => {
     });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe("/project?view=all");
+    expect(response.headers.get("set-cookie")).toBe(
+      "kozane_api_key=secret; Path=/; HttpOnly; SameSite=Strict",
+    );
   });
 });
