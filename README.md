@@ -6,7 +6,7 @@ It builds on the kozane method (こざね法), a way of organizing ideas on smal
 
 ## Requirements
 
-- Node.js 22 LTS or newer
+- Node.js 22 or 24 LTS
 - pnpm 10.12.1 for source builds
 
 ## Quick start

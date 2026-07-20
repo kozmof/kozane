@@ -1,7 +1,18 @@
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { createClient } from "@libsql/client";
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import {
+  closeSync,
+  copyFileSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+} from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import * as schema from "../../db/schema.js";
@@ -224,5 +235,44 @@ export async function runMigrations(dbUrl: string): Promise<void> {
     await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
   } finally {
     client.close();
+  }
+}
+
+async function validateRestoreCandidate(path: string): Promise<void> {
+  const client = createClient({ url: `file:${path}` });
+  try {
+    const result = await client.execute("PRAGMA integrity_check");
+    if (result.rows.length !== 1 || result.rows[0]?.integrity_check !== "ok") {
+      throw new Error("SQLite integrity check failed");
+    }
+  } finally {
+    client.close();
+  }
+
+  const status = await getMigrationStatus(`file:${path}`);
+  if (status.state === "missing" ||
+    status.state === "unknown" ||
+    (status.state === "pending" && status.applied === null)) {
+    const detail = status.state === "unknown" ? `: ${status.error}` : "";
+    throw new Error(`Backup is not a recognized Kozane database${detail}`);
+  }
+}
+
+/** Validate a backup, flush it, then atomically replace the workspace database. */
+export async function restoreDb(backupPath: string, targetPath: string): Promise<void> {
+  const stagedPath = `${targetPath}.restore-${process.pid}-${Date.now()}`;
+  try {
+    copyFileSync(backupPath, stagedPath);
+    await validateRestoreCandidate(stagedPath);
+
+    const fd = openSync(stagedPath, "r");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(stagedPath, targetPath);
+  } finally {
+    rmSync(stagedPath, { force: true });
   }
 }

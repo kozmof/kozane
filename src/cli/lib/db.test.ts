@@ -1,9 +1,9 @@
 import { createClient } from "@libsql/client";
-import { existsSync, mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { backupDb, getMigrationStatus, runMigrations } from "./db";
+import { backupDb, getMigrationStatus, restoreDb, runMigrations } from "./db";
 
 const tempRoots: string[] = [];
 
@@ -112,5 +112,43 @@ describe("backupDb", () => {
     expect(first).not.toBe(second);
     expect(existsSync(first)).toBe(true);
     expect(existsSync(second)).toBe(true);
+  });
+});
+
+describe("restoreDb", () => {
+  it("atomically replaces the target with a valid Kozane database", async () => {
+    const root = tempRoot();
+    const source = join(root, "backup.db");
+    const target = join(root, "current.db");
+    await runMigrations(tempDbUrl(source));
+    writeFileSync(target, "old database");
+
+    await restoreDb(source, target);
+
+    expect((await getMigrationStatus(tempDbUrl(target))).state).toBe("current");
+  });
+
+  it("rejects a SQLite database without Kozane migration metadata", async () => {
+    const root = tempRoot();
+    const source = join(root, "other.db");
+    const target = join(root, "current.db");
+    const client = createClient({ url: tempDbUrl(source) });
+    await client.execute("CREATE TABLE unrelated (id INTEGER PRIMARY KEY)");
+    client.close();
+    writeFileSync(target, "original");
+
+    await expect(restoreDb(source, target)).rejects.toThrow("recognized Kozane database");
+    expect(readFileSync(target, "utf8")).toBe("original");
+  });
+
+  it("rejects an invalid backup without changing the target", async () => {
+    const root = tempRoot();
+    const source = join(root, "invalid.db");
+    const target = join(root, "current.db");
+    writeFileSync(source, "not sqlite");
+    writeFileSync(target, "original");
+
+    await expect(restoreDb(source, target)).rejects.toThrow();
+    expect(readFileSync(target, "utf8")).toBe("original");
   });
 });

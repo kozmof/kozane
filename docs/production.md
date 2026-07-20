@@ -28,6 +28,9 @@ Node adapter for the exact proxy chain (for a single trusted proxy, typically
 `ADDRESS_HEADER=x-forwarded-for`, `XFF_DEPTH=1`, and `PROTOCOL_HEADER=x-forwarded-proto`). Never
 accept these headers directly from untrusted clients.
 
+The built-in authentication throttle is intentionally process-local. Configure rate limiting at
+the reverse proxy or ingress so limits survive restarts and cover every instance.
+
 Rotate the key with `kozane api key refresh`. Rotation immediately invalidates the previous
 key. Treat `.kozane/api.json` as a secret and never copy it into logs or source control.
 
@@ -54,7 +57,8 @@ kozane doctor
 Migrations create a database backup automatically. Keep backups on a different device, define
 a retention policy, and rehearse `kozane db restore` at least once before relying on them.
 Restore refuses to run while a recorded Kozane server process is active; stop the service before
-restoring.
+restoring. Restore validates SQLite integrity and migration metadata before atomically replacing
+the current database.
 
 ## Release gate
 

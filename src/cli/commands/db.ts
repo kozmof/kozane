@@ -1,12 +1,13 @@
 import { resolve } from "node:path";
 import { basename } from "node:path";
-import { existsSync, readFileSync, writeFileSync, copyFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { requireWorkspace } from "../lib/project.js";
 import { dbPath, dbUrl } from "../lib/config.js";
 import {
   backupDb,
   getMigrationStatus,
   listBackups,
+  restoreDb,
   runMigrations,
   type MigrationStatus,
 } from "../lib/db.js";
@@ -227,6 +228,12 @@ export async function dbRestore(file?: string): Promise<void> {
     }
   }
 
-  copyFileSync(backupPath, current);
+  try {
+    await restoreDb(backupPath, current);
+  } catch (e) {
+    console.error("Restore failed; the current database was left unchanged.");
+    console.error(e instanceof Error ? e.message : String(e));
+    process.exit(1);
+  }
   console.log(`Restored: ${backupPath}`);
 }
