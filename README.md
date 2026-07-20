@@ -64,7 +64,7 @@ Migrations create a backup first. Back up the entire `.kozane` directory and tes
 ```sh
 pnpm install --frozen-lockfile
 pnpm verify
-pnpm pack --dry-run
+pnpm pack --pack-destination "$(mktemp -d)"
 ```
 
 `pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. CI verifies Node 22, 24, and the latest release. Package builds clean `build/` and `dist/` first to prevent stale artifacts.

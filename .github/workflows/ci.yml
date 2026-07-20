@@ -27,4 +27,4 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
-      - run: pnpm pack --dry-run
+      - run: pnpm pack --pack-destination "$(mktemp -d)"
