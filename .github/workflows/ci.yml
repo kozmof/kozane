@@ -26,5 +26,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
-      - run: pnpm pack --pack-destination "$(mktemp -d)"
-      - run: pnpm smoke:production
+      - run: pnpm audit:production
+      - run: pnpm smoke:package

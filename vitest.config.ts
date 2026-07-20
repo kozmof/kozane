@@ -37,8 +37,13 @@ export default defineConfig({
         // Test infrastructure
         "src/test-utils/**",
         "src/app.d.ts",
-        // CLI — separate process, not unit-testable here
-        "src/cli/**",
+        // CLI entry/commands are exercised through subprocess and installed-package smoke tests.
+        "src/cli/index.ts",
+        "src/cli/commands/**",
+        // Filesystem discovery/configuration require isolated CLI integration coverage.
+        "src/cli/lib/config.ts",
+        "src/cli/lib/project.ts",
+        "src/cli/lib/wc-scan.ts",
         // DB plumbing — no logic to assert
         "src/db/internal/**",
         "src/db/client.ts",

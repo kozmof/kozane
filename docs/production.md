@@ -23,7 +23,10 @@ kozane open --host 0.0.0.0 --allow-remote --no-open
 
 The server independently fails closed when `HOST` is non-loopback and no key exists, even
 if it is launched without the CLI. Put it behind a TLS reverse proxy, restrict ingress with a
-firewall, and do not log URLs containing the one-time `api_key` query parameter.
+firewall, and do not log URLs containing the one-time `api_key` query parameter. Configure the
+Node adapter for the exact proxy chain (for a single trusted proxy, typically
+`ADDRESS_HEADER=x-forwarded-for`, `XFF_DEPTH=1`, and `PROTOCOL_HEADER=x-forwarded-proto`). Never
+accept these headers directly from untrusted clients.
 
 Rotate the key with `kozane api key refresh`. Rotation immediately invalidates the previous
 key. Treat `.kozane/api.json` as a secret and never copy it into logs or source control.
@@ -50,16 +53,19 @@ kozane doctor
 
 Migrations create a database backup automatically. Keep backups on a different device, define
 a retention policy, and rehearse `kozane db restore` at least once before relying on them.
+Restore refuses to run while a recorded Kozane server process is active; stop the service before
+restoring.
 
 ## Release gate
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm verify
-pnpm pack --pack-destination "$(mktemp -d)"
-pnpm smoke:production
+pnpm audit:production
+pnpm smoke:package
 ```
 
-The smoke test exercises the built CLI, initializes a real workspace, starts the packaged
-server, checks authenticated readiness and security headers, rejects an unauthenticated request,
+The smoke test packs and installs the tarball, then exercises its CLI, initializes a real
+workspace, starts the packaged server, checks authenticated readiness and security headers,
+rejects an unauthenticated request,
 and exports the database.

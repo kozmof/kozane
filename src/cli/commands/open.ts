@@ -7,6 +7,7 @@ import { readApiKey } from "../../lib/server/api-key.js";
 import { getMigrationStatus } from "../lib/db.js";
 import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost } from "../../lib/server/security.js";
+import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -84,6 +85,8 @@ export async function open(options: OpenOptions): Promise<void> {
     stdio: "inherit",
   });
 
+  if (child.pid) writeServerState(root, child.pid);
+
   if (shouldOpen) {
     setTimeout(() => openBrowser(browserUrl), 1000);
   }
@@ -94,6 +97,7 @@ export async function open(options: OpenOptions): Promise<void> {
   });
 
   child.on("exit", (code) => {
+    if (child.pid) removeServerState(root, child.pid);
     process.exit(code ?? 0);
   });
 }

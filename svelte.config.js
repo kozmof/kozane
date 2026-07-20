@@ -8,6 +8,19 @@ const config = {
   },
   kit: {
     adapter: adapter(),
+    csp: {
+      mode: "auto",
+      directives: {
+        "default-src": ["self"],
+        "base-uri": ["none"],
+        "frame-ancestors": ["none"],
+        "object-src": ["none"],
+        "connect-src": ["self"],
+        "script-src": ["self"],
+        // Dynamic canvas positioning uses style attributes. Scripts remain nonce-protected.
+        "style-src": ["self", "unsafe-inline"],
+      },
+    },
     alias: {
       "styled-system": "./styled-system",
     },

@@ -3,7 +3,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-const packageRoot = resolve(import.meta.dirname, "..");
+const packageRoot = process.env.KOZANE_PACKAGE_ROOT
+  ? resolve(process.env.KOZANE_PACKAGE_ROOT)
+  : resolve(import.meta.dirname, "..");
 const workspace = mkdtempSync(join(tmpdir(), "kozane-production-smoke-"));
 
 function cli(...args) {
@@ -70,6 +72,10 @@ try {
   });
   if (!page.ok || !(await page.text()).includes("<!doctype html>")) {
     throw new Error(`authenticated application page returned ${page.status}`);
+  }
+  const csp = page.headers.get("content-security-policy") ?? "";
+  if (!csp.includes("script-src 'self'") || csp.includes("script-src 'self' 'unsafe-inline'")) {
+    throw new Error("script CSP was not nonce-protected");
   }
 
   const unauthorized = await fetch(`${baseUrl}/health`);

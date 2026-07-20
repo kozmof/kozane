@@ -2,9 +2,21 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
 
 export const AUTH_FAILURE_LIMIT = 10;
 export const AUTH_FAILURE_WINDOW_MS = 5 * 60_000;
+export const AUTH_FAILURE_MAX_CLIENTS = 10_000;
 
 type FailureWindow = { count: number; resetAt: number };
 const authFailures = new Map<string, FailureWindow>();
+
+function pruneAuthFailures(now: number): void {
+  for (const [client, window] of authFailures) {
+    if (window.resetAt <= now) authFailures.delete(client);
+  }
+  while (authFailures.size >= AUTH_FAILURE_MAX_CLIENTS) {
+    const oldest = authFailures.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    authFailures.delete(oldest);
+  }
+}
 
 export function normalizeHost(host: string): string {
   const value = host.trim().toLowerCase();
@@ -22,6 +34,7 @@ export function remoteBindingRequiresApiKey(host = process.env.HOST ?? "127.0.0.
 
 export function recordAuthFailure(client: string, now = Date.now()): number | null {
   const current = authFailures.get(client);
+  if (!current || current.resetAt <= now) pruneAuthFailures(now);
   const window =
     !current || current.resetAt <= now
       ? { count: 0, resetAt: now + AUTH_FAILURE_WINDOW_MS }
@@ -43,10 +56,6 @@ export function _resetAuthFailuresForTest(): void {
 
 export function applySecurityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
-  headers.set(
-    "content-security-policy",
-    "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'",
-  );
   headers.set("referrer-policy", "no-referrer");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");

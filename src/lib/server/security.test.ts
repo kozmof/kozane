@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   AUTH_FAILURE_LIMIT,
+  AUTH_FAILURE_MAX_CLIENTS,
   _resetAuthFailuresForTest,
   applySecurityHeaders,
   clearAuthFailures,
@@ -29,11 +30,17 @@ describe("server security", () => {
     expect(recordAuthFailure("client", 1_000)).toBeNull();
   });
 
+  it("bounds authentication failure tracking", () => {
+    for (let i = 0; i < AUTH_FAILURE_MAX_CLIENTS + 10; i += 1) {
+      recordAuthFailure(`client-${i}`, 1_000);
+    }
+    expect(recordAuthFailure("client-0", 1_000)).toBeNull();
+  });
+
   it("adds browser hardening headers without losing the response", async () => {
     const response = applySecurityHeaders(new Response("ok", { status: 201 }));
     expect(response.status).toBe(201);
     expect(await response.text()).toBe("ok");
-    expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 });

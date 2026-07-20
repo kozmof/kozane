@@ -32,6 +32,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "smoke:production": "node scripts/smoke-production.mjs",
+    "smoke:package": "node scripts/smoke-package.mjs",
+    "audit:production": "pnpm audit --prod --audit-level high",
     "clean": "node scripts/clean.mjs",
     "verify": "pnpm check && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build"

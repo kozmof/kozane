@@ -11,6 +11,7 @@ import {
   type MigrationStatus,
 } from "../lib/db.js";
 import { exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "../lib/db-json.js";
+import { activeServerProcess } from "../../lib/server/runtime-state.js";
 
 type DbExportOptions = {
   pretty?: boolean;
@@ -185,6 +186,12 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
 export async function dbRestore(file?: string): Promise<void> {
   const { root } = requireWorkspace();
   const projectRoot = resolve(root);
+  const server = activeServerProcess(projectRoot);
+  if (server) {
+    console.error(`Refusing to restore while Kozane server process ${server.pid} is running.`);
+    console.error("Stop the server, then run the restore again.");
+    process.exit(1);
+  }
 
   let backupPath: string;
 

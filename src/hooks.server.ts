@@ -3,6 +3,7 @@ import { error } from "@sveltejs/kit";
 import { getDb } from "./db/client";
 import { getWorkspaceRoot } from "./db/internal/config";
 import { API_KEY_COOKIE, apiKeysEqual, readApiKey, requestApiKey } from "./lib/server/api-key";
+import { removeServerState, writeServerState } from "./lib/server/runtime-state";
 import {
   applySecurityHeaders,
   clearAuthFailures,
@@ -15,8 +16,17 @@ import {
 // The CLI (kozane open) always sets HOST explicitly, so this is a no-op there.
 process.env.HOST ??= "127.0.0.1";
 
+let registeredRoot: string | null = null;
+function registerRuntimeState(root: string | null): void {
+  if (!root || registeredRoot === root) return;
+  writeServerState(root);
+  registeredRoot = root;
+  process.once("exit", () => removeServerState(root));
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
+  registerRuntimeState(root);
   const configuredKey = root ? readApiKey(root) : null;
   if (!configuredKey && remoteBindingRequiresApiKey()) {
     return applySecurityHeaders(
