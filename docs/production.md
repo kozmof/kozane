@@ -67,9 +67,15 @@ pnpm install --frozen-lockfile
 pnpm verify
 pnpm audit:production
 pnpm smoke:package
+pnpm test:e2e
 ```
 
 The smoke test packs and installs the tarball, then exercises its CLI, initializes a real
 workspace, starts the packaged server, checks authenticated readiness and security headers,
 rejects an unauthenticated request,
 and exports the database.
+
+The browser test starts the built server against a temporary real workspace, verifies the
+one-time API-key exchange, hydrates the project UI in Chromium, creates and reloads a card,
+and confirms that an unauthenticated browser remains locked out. Run `pnpm verify:production`
+to execute the complete release gate locally.

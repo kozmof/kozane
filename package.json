@@ -36,7 +36,9 @@
     "audit:production": "pnpm audit --prod --audit-level high",
     "clean": "node scripts/clean.mjs",
     "verify": "pnpm check && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
-    "prepack": "pnpm build"
+    "prepack": "pnpm build",
+    "test:e2e": "playwright test",
+    "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e"
   },
   "dependencies": {
     "@libsql/client": "^0.17.3",
@@ -47,6 +49,7 @@
   },
   "devDependencies": {
     "@pandacss/dev": "^1.11.3",
+    "@playwright/test": "^1.61.1",
     "@sveltejs/adapter-auto": "^7.0.1",
     "@sveltejs/kit": "^2.65.1",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",

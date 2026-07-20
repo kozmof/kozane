@@ -66,9 +66,10 @@ pnpm install --frozen-lockfile
 pnpm verify
 pnpm audit:production
 pnpm smoke:package
+pnpm test:e2e
 ```
 
-`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. CI verifies the supported Node 22 and 24 LTS release lines, packages the result, and runs a deployed-workflow smoke test. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
+`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. `pnpm verify:production` runs the complete local release gate, including the dependency audit, installed-package smoke test, and real-browser workflow test. CI verifies the supported Node 22 and 24 LTS release lines, packages the result, runs a deployed-workflow smoke test, and exercises the built application in Chromium. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
 
 For TLS, process supervision, monitoring, backup, restore, and release-gate guidance, see
 [Production operations](./docs/production.md).
