@@ -2,6 +2,8 @@
 
 Kozane is a local-first, card-based thinking workspace with a browser UI, CLI, and a per-workspace SQLite-compatible database.
 
+It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
+
 ## Requirements
 
 - Node.js 22 LTS or newer
@@ -9,8 +11,19 @@ Kozane is a local-first, card-based thinking workspace with a browser UI, CLI, a
 
 ## Quick start
 
+Kozane is not published to npm yet. Clone the repository, then build and link it:
+
 ```sh
-npm install --global kozane
+git clone https://github.com/kozmof/kozane.git
+cd kozane
+pnpm install --frozen-lockfile
+pnpm build
+pnpm link --global
+```
+
+Then create a workspace and open it:
+
+```sh
 mkdir my-workspace && cd my-workspace
 kozane init
 kozane project create "My project"
@@ -30,9 +43,9 @@ kozane open --host 0.0.0.0 --allow-remote
 
 The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients can send `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`. `kozane api key refresh` immediately replaces the old key.
 
-The browser opened by `kozane open` is authenticated automatically. For a browser on another device, open `http://host:port/?api_key=<key>` once; Kozane exchanges the query parameter for an HttpOnly cookie and removes it from the URL.
+The browser opened by `kozane open` is authenticated automatically. For a browser on another device, open `http://host:port/?api_key=<key>` once. Kozane then exchanges the query parameter for an HttpOnly cookie and removes it from the URL.
 
-`--allow-remote` always requires a generated key. Never expose plain HTTP directly to the public internet; use TLS, firewall restrictions, and an unprivileged runtime user.
+`--allow-remote` always requires a generated key. Never expose plain HTTP directly to the public internet. Use TLS, firewall restrictions, and an unprivileged runtime user.
 
 ## Upgrades and recovery
 

@@ -1,6 +1,10 @@
 {
   "name": "kozane",
   "version": "0.1.2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kozmof/kozane.git"
+  },
   "bin": {
     "kozane": "./bin/kozane.js"
   },
