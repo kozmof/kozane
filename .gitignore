@@ -42,6 +42,7 @@ lerna-debug.log*
 Thumbs.db
 
 .pnpm-store
+.pnpm-data
 .devcontainer
 .npm-cache
 dist
