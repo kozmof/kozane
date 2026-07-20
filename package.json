@@ -21,7 +21,7 @@
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",
-    "prepare": "panda codegen --silent && (svelte-kit sync || echo '')",
+    "prepare": "(svelte-kit sync || echo '') && panda codegen --silent",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "oxlint",
