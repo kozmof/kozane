@@ -44,7 +44,6 @@ export default defineConfig({
         "src/db/client.ts",
         "src/db/schema.ts",
         // SvelteKit wiring — no logic to assert
-        "src/hooks.server.ts",
         "src/lib/index.ts",
         // Page load functions and Svelte components require integration/e2e testing
         "src/routes/**/*page.server.ts",

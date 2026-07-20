@@ -11,10 +11,9 @@ jobs:
   verify:
     strategy:
       matrix:
-        # 'latest' tracks the newest Node release to match the devcontainer's
-        # node:latest-dev base image. Non-deterministic by design: a passing run
-        # can later fail when Node ships a new version, with no code change.
-        node: [22, 24, latest]
+        # Test only supported LTS release lines. Production deployments should
+        # pin one of these versions rather than tracking a moving "latest" tag.
+        node: [22, 24]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,3 +27,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
       - run: pnpm pack --pack-destination "$(mktemp -d)"
+      - run: pnpm smoke:production

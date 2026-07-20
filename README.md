@@ -67,7 +67,10 @@ pnpm verify
 pnpm pack --pack-destination "$(mktemp -d)"
 ```
 
-`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. CI verifies Node 22, 24, and the latest release. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
+`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. CI verifies the supported Node 22 and 24 LTS release lines, packages the result, and runs a deployed-workflow smoke test. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
+
+For TLS, process supervision, monitoring, backup, restore, and release-gate guidance, see
+[Production operations](./docs/production.md).
 
 ## License
 

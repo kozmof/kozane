@@ -3,6 +3,12 @@ import { error } from "@sveltejs/kit";
 import { getDb } from "./db/client";
 import { getWorkspaceRoot } from "./db/internal/config";
 import { API_KEY_COOKIE, apiKeysEqual, readApiKey, requestApiKey } from "./lib/server/api-key";
+import {
+  applySecurityHeaders,
+  clearAuthFailures,
+  recordAuthFailure,
+  remoteBindingRequiresApiKey,
+} from "./lib/server/security";
 
 // Default to localhost so that running `node build/index.js` directly without
 // the CLI never accidentally exposes the server on all interfaces.
@@ -12,15 +18,29 @@ process.env.HOST ??= "127.0.0.1";
 export const handle: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
   const configuredKey = root ? readApiKey(root) : null;
+  if (!configuredKey && remoteBindingRequiresApiKey()) {
+    return applySecurityHeaders(
+      new Response("Remote binding requires a Kozane API key. Run 'kozane api key generate'.", {
+        status: 503,
+      }),
+    );
+  }
   if (configuredKey) {
     const queryKey = event.url.searchParams.get("api_key") ?? undefined;
     const suppliedKey = queryKey ?? requestApiKey(event.request, event.cookies.get(API_KEY_COOKIE));
     if (!apiKeysEqual(suppliedKey, configuredKey.apiKey)) {
-      return new Response("Unauthorized", {
-        status: 401,
-        headers: { "www-authenticate": 'Bearer realm="Kozane"' },
-      });
+      const client = event.getClientAddress();
+      const retryAfter = recordAuthFailure(client);
+      return applySecurityHeaders(
+        new Response(retryAfter ? "Too Many Requests" : "Unauthorized", {
+          status: retryAfter ? 429 : 401,
+          headers: retryAfter
+            ? { "retry-after": String(retryAfter) }
+            : { "www-authenticate": 'Bearer realm="Kozane"' },
+        }),
+      );
     }
+    clearAuthFailures(event.getClientAddress());
     if (queryKey) {
       event.cookies.set(API_KEY_COOKIE, configuredKey.apiKey, {
         httpOnly: true,
@@ -30,10 +50,12 @@ export const handle: Handle = async ({ event, resolve }) => {
       });
       const cleanUrl = new URL(event.url);
       cleanUrl.searchParams.delete("api_key");
-      return new Response(null, {
-        status: 303,
-        headers: { location: cleanUrl.pathname + cleanUrl.search },
-      });
+      return applySecurityHeaders(
+        new Response(null, {
+          status: 303,
+          headers: { location: cleanUrl.pathname + cleanUrl.search },
+        }),
+      );
     }
   }
   try {
@@ -42,5 +64,5 @@ export const handle: Handle = async ({ event, resolve }) => {
     console.error("[kozane] Failed to open database:", e);
     throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
   }
-  return resolve(event);
+  return applySecurityHeaders(await resolve(event));
 };

@@ -6,6 +6,7 @@ import { dbUrl } from "../lib/config.js";
 import { readApiKey } from "../../lib/server/api-key.js";
 import { getMigrationStatus } from "../lib/db.js";
 import { migrationStatusMessage } from "./db.js";
+import { isLoopbackHost } from "../../lib/server/security.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -16,11 +17,6 @@ type OpenOptions = {
   open?: boolean;
   allowRemote?: boolean;
 };
-
-export function isLoopbackHost(host: string): boolean {
-  const normalized = host.trim().toLowerCase();
-  return normalized === "127.0.0.1" || normalized === "localhost" || normalized === "::1";
-}
 
 function openBrowser(url: string): void {
   if (process.platform === "darwin") {
