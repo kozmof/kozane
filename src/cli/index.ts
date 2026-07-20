@@ -53,7 +53,10 @@ program
 const api = program.command("api").description("API management");
 const apiKey = api.command("key").description("API key lifecycle");
 
-apiKey.command("generate").description("Generate an API key for this workspace").action(apiGenerate);
+apiKey
+  .command("generate")
+  .description("Generate an API key for this workspace")
+  .action(apiGenerate);
 apiKey.command("refresh").description("Replace the current API key").action(apiRefresh);
 
 const project = program.command("project").description("Project management");

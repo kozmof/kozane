@@ -26,8 +26,12 @@ describe("API key", () => {
   });
 
   it("accepts bearer and X-API-Key credentials", () => {
-    expect(requestApiKey(new Request("http://localhost", { headers: { authorization: "Bearer one" } }))).toBe("one");
-    expect(requestApiKey(new Request("http://localhost", { headers: { "x-api-key": "two" } }))).toBe("two");
+    expect(
+      requestApiKey(new Request("http://localhost", { headers: { authorization: "Bearer one" } })),
+    ).toBe("one");
+    expect(
+      requestApiKey(new Request("http://localhost", { headers: { "x-api-key": "two" } })),
+    ).toBe("two");
     expect(requestApiKey(new Request("http://localhost"), "three")).toBe("three");
   });
 });

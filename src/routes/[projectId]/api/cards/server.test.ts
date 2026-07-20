@@ -71,11 +71,7 @@ describe("POST /[projectId]/api/cards", () => {
 
     await expectHttpRejection(
       POST(
-        event(
-          db,
-          projectId,
-          jsonRequest({ bundleId, content: "Scoped card", scopeId: "missing" }),
-        ),
+        event(db, projectId, jsonRequest({ bundleId, content: "Scoped card", scopeId: "missing" })),
       ),
       400,
       "Scope not found",
