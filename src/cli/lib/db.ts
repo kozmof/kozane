@@ -250,9 +250,11 @@ async function validateRestoreCandidate(path: string): Promise<void> {
   }
 
   const status = await getMigrationStatus(`file:${path}`);
-  if (status.state === "missing" ||
+  if (
+    status.state === "missing" ||
     status.state === "unknown" ||
-    (status.state === "pending" && status.applied === null)) {
+    (status.state === "pending" && status.applied === null)
+  ) {
     const detail = status.state === "unknown" ? `: ${status.error}` : "";
     throw new Error(`Backup is not a recognized Kozane database${detail}`);
   }
