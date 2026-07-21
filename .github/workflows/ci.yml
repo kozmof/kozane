@@ -11,9 +11,9 @@ jobs:
   verify:
     strategy:
       matrix:
-        # Test only supported LTS release lines. Production deployments should
-        # pin one of these versions rather than tracking a moving "latest" tag.
-        node: [22, 24]
+        # Keep the current LTS release as the production baseline and exercise
+        # the newest Node.js release so compatibility regressions are visible.
+        node: [24, node]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

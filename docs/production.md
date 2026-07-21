@@ -6,7 +6,7 @@ multi-tenant service and does not provide user accounts or role-based access con
 
 ## Supported runtime
 
-- Pin Node.js 22 or 24 LTS; do not deploy a moving `latest` image.
+- Pin Node.js 24 LTS for production; do not deploy a moving `latest` image.
 - Install with `pnpm install --frozen-lockfile`, run `pnpm verify`, and build with
   `pnpm build`.
 - Run the service as an unprivileged operating-system user with write access only to its
