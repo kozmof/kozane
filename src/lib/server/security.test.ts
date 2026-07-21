@@ -8,6 +8,7 @@ import {
   isLoopbackHost,
   recordAuthFailure,
   remoteBindingRequiresApiKey,
+  remoteBindingRequiresTls,
 } from "./security";
 
 describe("server security", () => {
@@ -19,6 +20,9 @@ describe("server security", () => {
     expect(isLoopbackHost("[::1]:5173")).toBe(true);
     expect(isLoopbackHost("0.0.0.0")).toBe(false);
     expect(remoteBindingRequiresApiKey("example.test")).toBe(true);
+    expect(remoteBindingRequiresTls("http:", "0.0.0.0")).toBe(true);
+    expect(remoteBindingRequiresTls("https:", "0.0.0.0")).toBe(false);
+    expect(remoteBindingRequiresTls("http:", "127.0.0.1")).toBe(false);
   });
 
   it("throttles repeated authentication failures and permits reset", () => {

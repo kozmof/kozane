@@ -38,14 +38,14 @@ Generate a per-workspace API key before allowing remote access:
 
 ```sh
 kozane api key generate
-kozane open --host 0.0.0.0 --allow-remote
+kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
 The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients can send `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`. `kozane api key refresh` immediately replaces the old key.
 
-The browser opened by `kozane open` is authenticated automatically. For a browser on another device, open `http://host:port/?api_key=<key>` once. Kozane then exchanges the query parameter for an HttpOnly cookie and removes it from the URL.
+For a browser on another device, open `https://your-proxy/?api_key=<key>` once. Kozane then exchanges the query parameter for an HttpOnly cookie and removes it from the URL.
 
-`--allow-remote` always requires a generated key. Never expose plain HTTP directly to the public internet. Use TLS, firewall restrictions, and an unprivileged runtime user.
+`--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described below, and use firewall restrictions and an unprivileged runtime user.
 
 ## Upgrades and recovery
 

@@ -32,6 +32,13 @@ export function remoteBindingRequiresApiKey(host = process.env.HOST ?? "127.0.0.
   return !isLoopbackHost(host);
 }
 
+export function remoteBindingRequiresTls(
+  protocol: string,
+  host = process.env.HOST ?? "127.0.0.1",
+): boolean {
+  return !isLoopbackHost(host) && protocol !== "https:";
+}
+
 export function recordAuthFailure(client: string, now = Date.now()): number | null {
   const current = authFailures.get(client);
   if (!current || current.resetAt <= now) pruneAuthFailures(now);

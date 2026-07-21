@@ -36,6 +36,7 @@ export async function open(options: OpenOptions): Promise<void> {
   const port = options.port ?? String(config.server.port);
   const shouldOpen = options.open ?? true;
   const apiKey = readApiKey(root);
+  const remoteBinding = !isLoopbackHost(host);
 
   if (options.allowRemote && !apiKey) {
     console.error("--allow-remote requires an API key.");
@@ -44,9 +45,16 @@ export async function open(options: OpenOptions): Promise<void> {
     return;
   }
 
-  if (!isLoopbackHost(host) && !options.allowRemote) {
+  if (remoteBinding && !options.allowRemote) {
     console.error("Refusing to bind Kozane to non-loopback host " + host + ".");
     console.error("Use --allow-remote to bind remotely (an API key is required).");
+    process.exitCode = 1;
+    return;
+  }
+
+  if (remoteBinding && shouldOpen) {
+    console.error("Remote access requires TLS through a reverse proxy.");
+    console.error("Run with --no-open, then use the HTTPS URL exposed by your proxy.");
     process.exitCode = 1;
     return;
   }
@@ -71,7 +79,11 @@ export async function open(options: OpenOptions): Promise<void> {
 
   console.log(`Kozane workspace: ${config.name}`);
   console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
-  console.log(`\nLocal UI:\n${url}\n`);
+  if (remoteBinding) {
+    console.log("\nRemote access: HTTPS is required; use the URL exposed by your TLS proxy.\n");
+  } else {
+    console.log("\nLocal UI:\n" + url + "\n");
+  }
 
   const child = spawn(process.execPath, [serverEntry], {
     cwd: packageRoot,

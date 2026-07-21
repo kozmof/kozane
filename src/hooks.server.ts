@@ -9,6 +9,7 @@ import {
   clearAuthFailures,
   recordAuthFailure,
   remoteBindingRequiresApiKey,
+  remoteBindingRequiresTls,
 } from "./lib/server/security";
 
 // Default to localhost so that running `node build/index.js` directly without
@@ -33,6 +34,14 @@ export const handle: Handle = async ({ event, resolve }) => {
       new Response("Remote binding requires a Kozane API key. Run 'kozane api key generate'.", {
         status: 503,
       }),
+    );
+  }
+  if (remoteBindingRequiresTls(event.url.protocol)) {
+    return applySecurityHeaders(
+      new Response(
+        "Remote access requires HTTPS. Configure a TLS reverse proxy and trusted protocol headers.",
+        { status: 426, headers: { upgrade: "TLS/1.2" } },
+      ),
     );
   }
   if (configuredKey) {

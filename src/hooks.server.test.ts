@@ -55,6 +55,29 @@ describe("production request hook", () => {
     expect(await response.text()).toContain("requires a Kozane API key");
   });
 
+  it("fails closed over HTTP when remotely bound", async () => {
+    process.env.HOST = "0.0.0.0";
+    state.root = workspace("secret");
+    const response = await handle({
+      event: event("http://example.test/", { authorization: "Bearer secret" }) as never,
+      resolve: vi.fn() as never,
+    });
+    expect(response.status).toBe(426);
+    expect(await response.text()).toContain("requires HTTPS");
+  });
+
+  it("accepts authenticated HTTPS when remotely bound", async () => {
+    process.env.HOST = "0.0.0.0";
+    state.root = workspace("secret");
+    const resolve = vi.fn(async () => new Response("ok"));
+    const response = await handle({
+      event: event("https://example.test/", { authorization: "Bearer secret" }) as never,
+      resolve: resolve as never,
+    });
+    expect(response.status).toBe(200);
+    expect(resolve).toHaveBeenCalledOnce();
+  });
+
   it("rejects invalid credentials and authenticates a valid bearer key", async () => {
     state.root = workspace("secret");
     const unauthorized = await handle({

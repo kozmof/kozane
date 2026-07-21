@@ -22,11 +22,15 @@ kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
 The server independently fails closed when `HOST` is non-loopback and no key exists, even
-if it is launched without the CLI. Put it behind a TLS reverse proxy, restrict ingress with a
+if it is launched without the CLI. It also rejects remotely bound requests unless SvelteKit sees
+an HTTPS URL. Put it behind a TLS reverse proxy, restrict ingress with a
 firewall, and do not log URLs containing the one-time `api_key` query parameter. Configure the
 Node adapter for the exact proxy chain (for a single trusted proxy, typically
 `ADDRESS_HEADER=x-forwarded-for`, `XFF_DEPTH=1`, and `PROTOCOL_HEADER=x-forwarded-proto`). Never
 accept these headers directly from untrusted clients.
+
+The Node listener itself remains HTTP and should only be reachable by the proxy. A missing or
+incorrect `PROTOCOL_HEADER` configuration causes requests to fail closed with HTTP 426.
 
 The built-in authentication throttle is intentionally process-local. Configure rate limiting at
 the reverse proxy or ingress so limits survive restarts and cover every instance.
