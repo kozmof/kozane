@@ -132,7 +132,7 @@ Next: run "kozane project create <name>" to create your first project.
 Starts the local Kozane web UI and (by default) opens the browser.
 
 ```bash
-kozane open [--host <host>] [--port <port>] [--no-open]
+kozane open [--host <host>] [--port <port>] [--memory] [--no-open]
 ```
 
 Options:
@@ -141,12 +141,15 @@ Options:
 | ----------- | ----------- | ---------------------------------------- |
 | `--host`    | `127.0.0.1` | Bind host (from config if unset)         |
 | `--port`    | `5173`      | Port number (from config if unset)       |
+| `--memory`  | false       | Use a fresh database for this server run |
 | `--no-open` | false       | Start server without opening the browser |
 
 Behavior:
 
 1. Walks up from CWD to find `.kozane/config.json` → project root.
-2. Checks DB migration status; exits with an error if migrations are not current.
+2. Checks DB migration status; exits with an error if migrations are not current. With
+   `--memory`, creates and migrates a fresh in-memory database with one project named
+   `:memory:` instead.
 3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
 4. Spawns the built server at `build/index.js`.
 5. Prints the local URL, then (unless `--no-open`) opens the browser after 1 s.

@@ -36,6 +36,7 @@ program
   .description("Start the local Kozane UI and open browser")
   .option("--host <host>", "Bind host")
   .option("--port <port>", "Port number")
+  .option("--memory", "Use a temporary in-memory database for this server run")
   .option("--allow-remote", "Bind for access through an HTTPS reverse proxy (requires --no-open)")
   .option("--no-open", "Start server without opening browser")
   .action((opts) => open(opts));

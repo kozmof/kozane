@@ -30,6 +30,10 @@ kozane project create "My project"
 kozane open
 ```
 
+To start with an empty database that exists only for the lifetime of the server,
+use `kozane open --memory`. It creates a project named `:memory:`, and all
+changes are discarded when the server stops.
+
 The server defaults to `127.0.0.1:5173`. The `/health` endpoint checks server and database readiness.
 
 ## Security and remote access

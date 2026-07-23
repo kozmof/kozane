@@ -17,6 +17,7 @@ type OpenOptions = {
   port?: string;
   open?: boolean;
   allowRemote?: boolean;
+  memory?: boolean;
 };
 
 function openBrowser(url: string): void {
@@ -59,9 +60,9 @@ export async function open(options: OpenOptions): Promise<void> {
     return;
   }
 
-  const dbURL = dbUrl(resolve(root));
-  const migrationStatus = await getMigrationStatus(dbURL);
-  if (migrationStatus.state !== "current") {
+  const dbURL = options.memory ? "file::memory:?cache=shared" : dbUrl(resolve(root));
+  const migrationStatus = options.memory ? null : await getMigrationStatus(dbURL);
+  if (migrationStatus && migrationStatus.state !== "current") {
     console.error("Kozane database needs attention before the UI can start.");
     console.error(migrationStatusMessage(migrationStatus));
     if (migrationStatus.state === "pending") {
@@ -78,7 +79,10 @@ export async function open(options: OpenOptions): Promise<void> {
   const browserUrl = apiKey ? url + "/?api_key=" + encodeURIComponent(apiKey.apiKey) : url;
 
   console.log(`Kozane workspace: ${config.name}`);
-  console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
+  const databaseLabel = options.memory
+    ? ":memory: (discarded when the server stops)"
+    : join(root, ".kozane", "kozane.db");
+  console.log("Database: " + databaseLabel);
   if (remoteBinding) {
     console.log("\nRemote access: HTTPS is required; use the URL exposed by your TLS proxy.\n");
   } else {
@@ -91,6 +95,7 @@ export async function open(options: OpenOptions): Promise<void> {
       ...process.env,
       DATABASE_URL: dbURL,
       KOZANE_WORKSPACE_ROOT: resolve(root),
+      ...(options.memory ? { KOZANE_MEMORY_PROJECT_NAME: ":memory:" } : {}),
       HOST: host,
       PORT: port,
     },
