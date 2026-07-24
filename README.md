@@ -49,7 +49,6 @@ To turn sentences into separate cards, use `card squash`. It splits on both `.` 
 `。`, trims whitespace, and ignores empty segments:
 
 ```sh
-kozane card squash "First thought. 第二の考え。 Third thought."
 cat foo.txt | kozane card squash
 ```
 
