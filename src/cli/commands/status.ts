@@ -1,7 +1,8 @@
 import { resolve } from "node:path";
 import { count } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
-import { dbUrl } from "../lib/config.js";
+import { commandDbUrl } from "../lib/config.js";
+import { openingStatus } from "../lib/opening-status.js";
 import { createDb } from "../../db/client.js";
 import {
   projectTable,
@@ -13,7 +14,8 @@ import {
 
 export async function status(): Promise<void> {
   const { root, config } = requireWorkspace();
-  const db = await createDb(dbUrl(resolve(root)));
+  const resolvedRoot = resolve(root);
+  const db = await createDb(commandDbUrl(resolvedRoot));
 
   const [[projects], [bundles], [cards], [scopes], [workingCopies]] = await Promise.all([
     db.select({ count: count() }).from(projectTable),
@@ -24,6 +26,7 @@ export async function status(): Promise<void> {
   ]);
 
   console.log(`Workspace    : ${config.name}`);
+  console.log(`Opening      : ${openingStatus(resolvedRoot)}`);
   console.log(`Projects     : ${projects.count}`);
   console.log(`Bundles      : ${bundles.count}`);
   console.log(`Cards        : ${cards.count}`);

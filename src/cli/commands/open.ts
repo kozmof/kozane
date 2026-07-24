@@ -1,10 +1,14 @@
 import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 import { readApiKey } from "../../lib/server/api-key.js";
-import { getMigrationStatus } from "../lib/db.js";
+import { getMigrationStatus, runMigrations } from "../lib/db.js";
+import { createDb } from "../../db/client.js";
+import { projectTable, bundleTable } from "../../db/schema.js";
 import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost } from "../../lib/server/security.js";
 import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
@@ -60,7 +64,31 @@ export async function open(options: OpenOptions): Promise<void> {
     return;
   }
 
-  const dbURL = options.memory ? "file::memory:?cache=shared" : dbUrl(resolve(root));
+  let memoryDir: string | undefined;
+  let dbURL = dbUrl(resolve(root));
+  if (options.memory) {
+    memoryDir = mkdtempSync(join(tmpdir(), "kozane-memory-"));
+    dbURL = `file:${join(memoryDir, "kozane.db")}`;
+    try {
+      await runMigrations(dbURL);
+      const db = await createDb(dbURL);
+      const [project] = await db
+        .insert(projectTable)
+        .values({ name: ":memory:" })
+        .returning({ id: projectTable.id });
+      await db
+        .insert(bundleTable)
+        .values({ projectId: project.id, name: "General", isDefault: true });
+    } catch (error) {
+      rmSync(memoryDir, { recursive: true, force: true });
+      throw error;
+    }
+  }
+  const cleanupMemory = () => {
+    if (!memoryDir) return;
+    rmSync(memoryDir, { recursive: true, force: true });
+    memoryDir = undefined;
+  };
   const migrationStatus = options.memory ? null : await getMigrationStatus(dbURL);
   if (migrationStatus && migrationStatus.state !== "current") {
     console.error("Kozane database needs attention before the UI can start.");
@@ -95,26 +123,32 @@ export async function open(options: OpenOptions): Promise<void> {
       ...process.env,
       DATABASE_URL: dbURL,
       KOZANE_WORKSPACE_ROOT: resolve(root),
-      ...(options.memory ? { KOZANE_MEMORY_PROJECT_NAME: ":memory:" } : {}),
+      ...(options.memory ? { KOZANE_MEMORY_MODE: "1", KOZANE_RUNTIME_DATABASE_URL: dbURL } : {}),
       HOST: host,
       PORT: port,
     },
     stdio: "inherit",
   });
 
-  if (child.pid) writeServerState(root, child.pid);
+  if (child.pid)
+    writeServerState(root, child.pid, {
+      memory: options.memory === true,
+      databaseUrl: options.memory ? dbURL : undefined,
+    });
 
   if (shouldOpen) {
     setTimeout(() => openBrowser(browserUrl), 1000);
   }
 
   child.on("error", (err) => {
+    cleanupMemory();
     console.error("Failed to start server:", err.message);
     process.exit(1);
   });
 
   child.on("exit", (code) => {
     if (child.pid) removeServerState(root, child.pid);
+    cleanupMemory();
     process.exit(code ?? 0);
   });
 }

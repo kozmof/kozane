@@ -3,7 +3,12 @@ import { join } from "node:path";
 
 export const SERVER_STATE_FILE = "server.json";
 
-type ServerState = { pid: number; startedAt: string };
+export type ServerState = {
+  pid: number;
+  startedAt: string;
+  memory?: boolean;
+  databaseUrl?: string;
+};
 
 export function serverStatePath(root: string): string {
   return join(root, ".kozane", SERVER_STATE_FILE);
@@ -26,7 +31,9 @@ export function activeServerProcess(root: string): ServerState | null {
     if (
       !Number.isInteger(value.pid) ||
       (value.pid ?? 0) <= 0 ||
-      typeof value.startedAt !== "string"
+      typeof value.startedAt !== "string" ||
+      (value.memory !== undefined && typeof value.memory !== "boolean") ||
+      (value.databaseUrl !== undefined && typeof value.databaseUrl !== "string")
     ) {
       return null;
     }
@@ -42,11 +49,17 @@ export function activeServerProcess(root: string): ServerState | null {
   return null;
 }
 
-export function writeServerState(root: string, pid = process.pid): void {
+export function writeServerState(
+  root: string,
+  pid = process.pid,
+  details: Pick<ServerState, "memory" | "databaseUrl"> = {},
+): void {
   const path = serverStatePath(root);
-  writeFileSync(path, JSON.stringify({ pid, startedAt: new Date().toISOString() }) + "\n", {
-    mode: 0o600,
-  });
+  writeFileSync(
+    path,
+    JSON.stringify({ pid, startedAt: new Date().toISOString(), ...details }) + "\n",
+    { mode: 0o600 },
+  );
   chmodSync(path, 0o600);
 }
 

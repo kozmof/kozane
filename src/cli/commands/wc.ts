@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
-import { dbUrl } from "../lib/config.js";
+import { commandDbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
 import {
   scanWorkingCopies,
@@ -41,7 +41,7 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   }
 
   const { root, config } = requireWorkspace();
-  const db = await createDb(dbUrl(resolve(root)));
+  const db = await createDb(commandDbUrl(resolve(root)));
 
   const searchRoots = config.workingCopy.searchRoots.map((r) =>
     isAbsolute(r) ? r : join(root, r),
@@ -163,7 +163,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     process.exit(1);
   }
   const { root, config } = requireWorkspace();
-  const db = await createDb(dbUrl(resolve(root)));
+  const db = await createDb(commandDbUrl(resolve(root)));
 
   let scopeId: string | undefined;
   if (typeof options.scope === "string") {

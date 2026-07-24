@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import {
   type UiConfig,
   DEFAULT_UI_CONFIG,
@@ -126,4 +127,11 @@ export function dbPath(projectRoot: string): string {
 
 export function dbUrl(projectRoot: string): string {
   return `file:${dbPath(projectRoot)}`;
+}
+
+/** Database used by interactive CLI commands for the active workspace session. */
+export function commandDbUrl(projectRoot: string): string {
+  const state = activeServerProcess(projectRoot);
+  if (state?.memory && state.databaseUrl) return state.databaseUrl;
+  return dbUrl(projectRoot);
 }

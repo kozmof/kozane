@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
-import { dbUrl } from "../lib/config.js";
+import { commandDbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard } from "../../db/api/card.js";
@@ -114,7 +114,7 @@ async function printCardsWithDistance(db: DB, cards: DistanceListedCard[]): Prom
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
   try {
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
@@ -175,7 +175,7 @@ export async function cardSquash(
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
 
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
@@ -201,7 +201,7 @@ export async function cardSquash(
 export async function cardShow(requestedId: string): Promise<void> {
   try {
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const cards = await db.select({ id: cardTable.id, content: cardTable.content }).from(cardTable);
     const cardId = resolveShortId(
       requestedId,
@@ -218,7 +218,7 @@ export async function cardShow(requestedId: string): Promise<void> {
 export async function cardNearest(requestedId: string): Promise<void> {
   try {
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const cards = await db
       .select({
         id: cardTable.id,
@@ -255,7 +255,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       throw new Error("--working-copy cannot be combined with --project or --bundle.");
 
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const locatedMarker =
       options.workingCopy || (!options.project && !options.bundle)
         ? readWorkingCopyMarker(options.workingCopy)

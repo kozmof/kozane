@@ -148,8 +148,9 @@ Behavior:
 
 1. Walks up from CWD to find `.kozane/config.json` → project root.
 2. Checks DB migration status; exits with an error if migrations are not current. With
-   `--memory`, creates and migrates a fresh in-memory database with one project named
-   `:memory:` instead.
+   `--memory`, creates and migrates a fresh temporary session database with one project named
+   `:memory:` instead. While the server is running, project-dependent CLI commands use this
+   database and select its sole project automatically, so `--project` can be omitted.
 3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
 4. Spawns the built server at `build/index.js`.
 5. Prints the local URL, then (unless `--no-open`) opens the browser after 1 s.
@@ -210,7 +211,9 @@ Output:
 
 ### `kozane status`
 
-Shows the current project state from the database.
+Shows whether the server is stopped or running in persistent/`:memory:` mode, plus the
+current project state. While a memory server is running, counts come from its temporary
+session database.
 
 ```bash
 kozane status
@@ -220,6 +223,7 @@ Output:
 
 ```
 Workspace    : my-project
+Opening      : running (:memory:)
 Projects     : 1
 Bundles      : 6
 Cards        : 128

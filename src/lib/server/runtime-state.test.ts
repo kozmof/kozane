@@ -8,6 +8,7 @@ import {
   serverStatePath,
   writeServerState,
 } from "./runtime-state";
+import { commandDbUrl, dbUrl } from "../../cli/lib/config";
 
 const roots: string[] = [];
 function workspace(): string {
@@ -26,6 +27,22 @@ describe("server runtime state", () => {
     expect(readFileSync(serverStatePath(root), "utf8")).toContain(String(process.pid));
     removeServerState(root);
     expect(activeServerProcess(root)).toBeNull();
+  });
+
+  it("exposes the active memory database to CLI commands", () => {
+    const root = workspace();
+    const memoryUrl = "file:/tmp/kozane-memory-test/kozane.db";
+    writeServerState(root, process.pid, { memory: true, databaseUrl: memoryUrl });
+
+    expect(activeServerProcess(root)).toMatchObject({
+      pid: process.pid,
+      memory: true,
+      databaseUrl: memoryUrl,
+    });
+    expect(commandDbUrl(root)).toBe(memoryUrl);
+
+    removeServerState(root);
+    expect(commandDbUrl(root)).toBe(dbUrl(root));
   });
 
   it("removes stale process state", () => {

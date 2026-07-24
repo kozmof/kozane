@@ -20,7 +20,10 @@ process.env.HOST ??= "127.0.0.1";
 let registeredRoot: string | null = null;
 function registerRuntimeState(root: string | null): void {
   if (!root || registeredRoot === root) return;
-  writeServerState(root);
+  writeServerState(root, process.pid, {
+    memory: process.env.KOZANE_MEMORY_MODE === "1",
+    databaseUrl: process.env.KOZANE_RUNTIME_DATABASE_URL,
+  });
   registeredRoot = root;
   process.once("exit", () => removeServerState(root));
 }
