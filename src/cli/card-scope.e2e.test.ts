@@ -74,4 +74,26 @@ describe("scoped card working-copy CLI flow", () => {
     expect(cli(root, "card", "show", cardId)).toBe(content + "\n");
     expect(() => cli(root, "card", "show", "ffff")).toThrow("Card not found: ffff");
   }, 30_000);
+
+  it("lists cards by distance from a specified card", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const projectId = outputId(cli(root, "project", "create", "Distance project"));
+    const originId = outputId(
+      cli(root, "card", "add", "Origin", "--project", projectId, "--x", "10", "--y", "10"),
+    );
+    cli(root, "card", "add", "Far", "--project", projectId, "--x", "16", "--y", "18");
+    cli(root, "card", "add", "Near", "--project", projectId, "--x", "13", "--y", "14");
+
+    const lines = cli(root, "card", "nearest", originId).trim().split("\n");
+    expect(lines.map((line) => line.match(/(Origin|Near|Far)$/)?.[1])).toEqual([
+      "Origin",
+      "Near",
+      "Far",
+    ]);
+    expect(lines[0]).toContain("0.00");
+    expect(lines[1]).toContain("5.00");
+    expect(lines[2]).toContain("10.00");
+    expect(() => cli(root, "card", "nearest", "ffff")).toThrow("Card not found: ffff");
+  }, 30_000);
 });

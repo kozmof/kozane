@@ -12,7 +12,7 @@ import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
-import { cardAdd, cardList, cardShow } from "./commands/card.js";
+import { cardAdd, cardList, cardNearest, cardShow } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
 
@@ -157,6 +157,11 @@ card
   .command("show <cardId>")
   .description("Show a card content by full or short ID")
   .action((cardId) => cardShow(cardId));
+
+card
+  .command("nearest <cardId>")
+  .description("List cards in the same project, nearest to the specified card first")
+  .action((cardId) => cardNearest(cardId));
 
 const cardListCommand = card
   .command("list")

@@ -25,6 +25,7 @@ type ListedCard = {
   posX: number;
   posY: number;
 };
+type DistanceListedCard = ListedCard & { distance: number };
 
 async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
   const projects = await db.select({ id: projectTable.id }).from(projectTable);
@@ -82,6 +83,20 @@ async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
   for (const card of cards) {
     console.log(
       `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
+    );
+  }
+}
+
+async function printCardsWithDistance(db: DB, cards: DistanceListedCard[]): Promise<void> {
+  if (cards.length === 0) {
+    console.log("No cards found.");
+    return;
+  }
+  const allCards = await db.select({ id: cardTable.id }).from(cardTable);
+  const cardIds = allCards.map(({ id }) => id);
+  for (const card of cards) {
+    console.log(
+      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.distance.toFixed(2)}  ${card.content.replace(/\r?\n/g, " ")}`,
     );
   }
 }
@@ -153,6 +168,40 @@ export async function cardShow(requestedId: string): Promise<void> {
     );
     const card = cards.find(({ id }) => id === cardId)!;
     console.log(card.content);
+  } catch (error) {
+    fail(error);
+  }
+}
+
+export async function cardNearest(requestedId: string): Promise<void> {
+  try {
+    const { root } = requireWorkspace();
+    const db = await createDb(dbUrl(resolve(root)));
+    const cards = await db
+      .select({
+        id: cardTable.id,
+        projectId: bundleTable.projectId,
+        bundle: bundleTable.name,
+        content: cardTable.content,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+      })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+    const cardId = resolveShortId(
+      requestedId,
+      cards.map(({ id }) => id),
+      "Card",
+    );
+    const origin = cards.find(({ id }) => id === cardId)!;
+    const sorted = cards
+      .filter(({ projectId }) => projectId === origin.projectId)
+      .map((card) => ({
+        ...card,
+        distance: Math.hypot(card.posX - origin.posX, card.posY - origin.posY),
+      }))
+      .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
+    await printCardsWithDistance(db, sorted);
   } catch (error) {
     fail(error);
   }

@@ -390,6 +390,21 @@ The working-copy form cannot be combined with `--project` or `--bundle`.
 
 ---
 
+### `kozane card nearest <cardId>`
+
+Lists all cards in the specified card's project, sorted by Euclidean distance from
+that card's canvas position. The specified card appears first with distance `0.00`.
+Cards at the same distance are ordered by ID. Full and short card IDs are accepted.
+
+```bash
+kozane card nearest <cardId>
+kozane card nearest 17b8
+```
+
+Each row includes the card's short ID, bundle, position, distance, and content.
+
+---
+
 ### `kozane db status`
 
 Shows the current database migration status.
