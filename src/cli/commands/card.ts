@@ -12,6 +12,7 @@ import { getWorkingCopy } from "../../db/api/working-copy.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { readWorkingCopyMarker } from "../lib/working-copy-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
+import { CANVAS_W } from "../../lib/constants.js";
 
 type CardOptions = { project?: string; bundle?: string; workingCopy?: string };
 type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
@@ -78,9 +79,31 @@ function fail(error: unknown): never {
 
 export function splitCardContent(content: string): string[] {
   return content
-    .split(/[.。]/)
+    .split(/[.。]|\r?\n[ \t]*\r?\n/)
     .map((part) => part.trim())
     .filter(Boolean);
+}
+
+const SQUASH_COLUMN_SPACING = 280;
+const SQUASH_ROW_SPACING = 160;
+const SQUASH_COLUMNS = Math.floor(CANVAS_W / SQUASH_COLUMN_SPACING);
+
+type CardPosition = { posX: number; posY: number };
+
+export function squashCardPositions(occupied: CardPosition[], count: number): CardPosition[] {
+  const occupiedKeys = new Set(occupied.map(({ posX, posY }) => `${posX},${posY}`));
+  const positions: CardPosition[] = [];
+  for (let slot = 0; positions.length < count; slot++) {
+    const position = {
+      posX: (slot % SQUASH_COLUMNS) * SQUASH_COLUMN_SPACING,
+      posY: Math.floor(slot / SQUASH_COLUMNS) * SQUASH_ROW_SPACING,
+    };
+    const key = `${position.posX},${position.posY}`;
+    if (occupiedKeys.has(key)) continue;
+    occupiedKeys.add(key);
+    positions.push(position);
+  }
+  return positions;
 }
 
 async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
@@ -179,10 +202,21 @@ export async function cardSquash(
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
+    const occupied = await db
+      .select({ posX: cardTable.posX, posY: cardTable.posY })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .where(eq(bundleTable.projectId, projectId));
+    const positions = squashCardPositions(occupied, contents.length);
     const ids = await withTx(db, async (tx) => {
       const cardIds: string[] = [];
-      for (const cardContent of contents) {
-        const cardId = await addCard({ db: tx, bundleId, content: cardContent });
+      for (const [index, cardContent] of contents.entries()) {
+        const cardId = await addCard({
+          db: tx,
+          bundleId,
+          content: cardContent,
+          ...positions[index],
+        });
         if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
         cardIds.push(cardId);
       }

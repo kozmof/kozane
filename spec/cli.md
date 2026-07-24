@@ -352,8 +352,9 @@ kozane card add "Investigate caching" --project eb15 --scope e3ee --x 48 --y 72
 
 ### `kozane card squash [content]`
 
-Splits text on English (`.`) or Japanese (`。`) full stops, trims each segment, and
-adds every non-empty segment as a separate card. Pass the text as an argument or pipe
+Splits text on English (`.`) or Japanese (`。`) full stops and on empty lines, trims
+each segment, and adds every non-empty segment as a separate card. Generated cards are
+placed on unoccupied grid positions instead of being stacked at the same coordinates. Pass the text as an argument or pipe
 it through standard input:
 
 ```bash
