@@ -31,6 +31,23 @@ function cli(cwd: string, ...args: string[]): string {
   return result.stdout;
 }
 
+function cliWithInput(cwd: string, input: string, ...args: string[]): string {
+  const result = spawnSync(process.execPath, ["--import", tsxLoader, cliEntry, ...args], {
+    cwd,
+    encoding: "utf-8",
+    input,
+    env: { ...process.env, TMPDIR: tmpdir() },
+  });
+  if (result.status !== 0) {
+    throw new Error(
+      [`kozane ${args.join(" ")} failed (${result.status})`, result.stdout, result.stderr]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  return result.stdout;
+}
+
 function outputId(output: string): string {
   const match = output.match(/^\s*id\s*:\s*(\S+)/m);
   if (!match) throw new Error(`Command output did not contain an ID:\n${output}`);
@@ -42,6 +59,56 @@ afterEach(() => {
 });
 
 describe("scoped card working-copy CLI flow", () => {
+  it("reads squash content from standard input", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const projectId = outputId(cli(root, "project", "create", "Piped project"));
+
+    const output = cliWithInput(
+      root,
+      "Piped first. パイプ二番目。",
+      "card",
+      "squash",
+      "--project",
+      projectId,
+    );
+
+    expect(output).toContain("2 cards added.");
+    const listed = cli(root, "card", "list", "--project", projectId);
+    expect(listed).toContain("Piped first");
+    expect(listed).toContain("パイプ二番目");
+  }, 30_000);
+
+  it("squashes English and Japanese sentences into individual cards", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const projectId = outputId(cli(root, "project", "create", "Squash project"));
+    const scopeId = outputId(cli(root, "scope", "add", "Squash scope"));
+
+    const output = cli(
+      root,
+      "card",
+      "squash",
+      "First thought. 第二の考え。  Third thought..",
+      "--project",
+      projectId,
+      "--scope",
+      scopeId,
+    );
+
+    expect(output).toContain("3 cards added.");
+    const listed = cli(root, "card", "list", "--project", projectId);
+    expect(listed).toContain("First thought");
+    expect(listed).toContain("第二の考え");
+    expect(listed).toContain("Third thought");
+
+    cli(root, "wc", "create", "squashed", "--scope", scopeId, "--project", projectId);
+    const scoped = cli(join(root, "squashed"), "card", "list");
+    expect(scoped).toContain("First thought");
+    expect(scoped).toContain("第二の考え");
+    expect(scoped).toContain("Third thought");
+  }, 30_000);
+
   it("creates a scope, adds scoped cards, and lists them from the working-copy directory", () => {
     const root = tempWorkspace();
     cli(root, "init");

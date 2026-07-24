@@ -37,6 +37,28 @@ changes are discarded when the server stops.
 The server defaults to `127.0.0.1:5173`. The `/health` endpoint checks server and database
 readiness and reports process CPU capacity and system memory usage as percentages on a 0–100 scale.
 
+## Adding cards from text
+
+Create one card from a quoted argument:
+
+```sh
+kozane card add "Investigate caching"
+```
+
+To turn sentences into separate cards, use `card squash`. It splits on both `.` and
+`。`, trims whitespace, and ignores empty segments:
+
+```sh
+kozane card squash "First thought. 第二の考え。 Third thought."
+cat foo.txt | kozane card squash
+```
+
+Project, bundle, and scope options also work with piped files:
+
+```sh
+cat foo.txt | kozane card squash --project eb15 --bundle 72ac --scope e3ee
+```
+
 ## Security and remote access
 
 Generate a per-workspace API key before allowing remote access:

@@ -12,7 +12,7 @@ import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
 import { projectCreate, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
-import { cardAdd, cardList, cardNearest, cardShow } from "./commands/card.js";
+import { cardAdd, cardList, cardNearest, cardShow, cardSquash } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
 
@@ -152,6 +152,14 @@ card
   .option("--x <number>", "Horizontal card position", integer)
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
+
+card
+  .command("squash [content]")
+  .description("Split an argument or stdin on . or 。 and add each part as a card")
+  .option("--project <projectId>", "Project ID or short ID to add the cards to")
+  .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
+  .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
+  .action((content, opts) => cardSquash(content, opts));
 
 card
   .command("show <cardId>")

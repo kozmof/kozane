@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { requireWorkspace } from "../lib/project.js";
@@ -18,6 +19,8 @@ type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
   x?: number;
   y?: number;
 };
+type CardSquashOptions = Omit<CardAddOptions, "x" | "y">;
+
 type ListedCard = {
   id: string;
   bundle: string;
@@ -71,6 +74,13 @@ async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
 function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
+}
+
+export function splitCardContent(content: string): string[] {
+  return content
+    .split(/[.。]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
 }
 
 async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
@@ -151,6 +161,38 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
           scopes.map(({ id }) => id),
         )}`,
       );
+  } catch (error) {
+    fail(error);
+  }
+}
+
+export async function cardSquash(
+  content: string | undefined,
+  options: CardSquashOptions = {},
+): Promise<void> {
+  try {
+    const contents = splitCardContent(content ?? readFileSync(0, "utf8"));
+    if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
+
+    const { root } = requireWorkspace();
+    const db = await createDb(dbUrl(resolve(root)));
+    const projectId = await resolveProjectId(db, options.project);
+    const bundleId = await resolveBundleId(db, projectId, options.bundle);
+    const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
+    const ids = await withTx(db, async (tx) => {
+      const cardIds: string[] = [];
+      for (const cardContent of contents) {
+        const cardId = await addCard({ db: tx, bundleId, content: cardContent });
+        if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
+        cardIds.push(cardId);
+      }
+      return cardIds;
+    });
+
+    const allCards = await db.select({ id: cardTable.id }).from(cardTable);
+    const allCardIds = allCards.map(({ id }) => id);
+    console.log(`${ids.length} ${ids.length === 1 ? "card" : "cards"} added.`);
+    for (const id of ids) console.log(`  ${shortId(id, allCardIds)}`);
   } catch (error) {
     fail(error);
   }
