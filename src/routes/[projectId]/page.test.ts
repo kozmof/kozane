@@ -36,7 +36,7 @@ const data = {
   uiConfig: {
     defaultFontSize: 11.5,
     defaultFontFamily: "monospace",
-    defaultCardWidth: 240,
+    defaultCardWidth: 210,
     defaultZoom: 1,
     leftPanelWidth: 216,
     rightPanelWidth: 232,
