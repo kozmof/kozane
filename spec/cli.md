@@ -650,7 +650,7 @@ Options:
 | ------------------- | ---------------------------------------------------------- |
 | `--scope <scopeId>` | Attach working copy to an existing scope                   |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
-| `--project <id>`    | Override the workspace default project                    |
+| `--project <id>`    | Override the workspace default project                     |
 | `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
 
 Either `--scope` or `--no-scope` is required.
