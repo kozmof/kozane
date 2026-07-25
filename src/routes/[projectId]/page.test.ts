@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
 
 const data = {
-  project: { id: "project-1", name: "Project" },
+  project: { id: "project-1", name: "Project", isDefault: true },
   bundles: [
     { id: "b1", projectId: "project-1", name: "General", isDefault: true },
     { id: "b2", projectId: "project-1", name: "Research", isDefault: false },
