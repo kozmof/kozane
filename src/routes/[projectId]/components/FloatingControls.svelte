@@ -102,13 +102,25 @@
         border: "none",
         background: "transparent",
         cursor: "pointer",
-        fontSize: "16px",
         color: "ink.secondary",
-        lineHeight: "1",
-        fontFamily: "inherit",
+        padding: "0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
       })}
+      aria-label={label === "−" ? "Zoom out" : "Zoom in"}
       onclick={() => onZoom(delta as number)}
-    >{label}</button>
+    >
+      <span
+        aria-hidden="true"
+        class={css({ position: "relative", display: "block", width: "10px", height: "10px" })}
+      >
+        <span class={css({ position: "absolute", top: "4.5px", left: "0", width: "10px", height: "1px", backgroundColor: "currentColor" })}></span>
+        {#if label === "+"}
+          <span class={css({ position: "absolute", top: "0", left: "4.5px", width: "1px", height: "10px", backgroundColor: "currentColor" })}></span>
+        {/if}
+      </span>
+    </button>
   {/each}
   <div class={css({
     padding: "0 8px",
