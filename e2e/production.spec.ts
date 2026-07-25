@@ -69,7 +69,7 @@ test("authenticates, hydrates, creates, and persists a card", async ({ page }) =
   await expect(page).toHaveURL(`${baseUrl}/`);
   await page.getByRole("link", { name: "Browser project" }).click();
 
-  const composer = page.getByPlaceholder("Write a card");
+  const composer = page.getByLabel("Write a card");
   await expect(composer).toBeFocused();
   await composer.fill("Created in a real browser");
   await page.getByRole("button", { name: "Create card" }).click();

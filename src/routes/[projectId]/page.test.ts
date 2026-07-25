@@ -97,13 +97,13 @@ describe("Project page", () => {
     });
 
     await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
-    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Write a card")).not.toBeInTheDocument();
 
     await fireEvent.keyDown(window, { key: "i" });
-    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Write a card")).not.toBeInTheDocument();
 
     await fireEvent.keyDown(window, { key: "z" });
-    const input = screen.getByPlaceholderText("Write a card");
+    const input = screen.getByLabelText("Write a card");
     await waitFor(() => expect(input).toHaveFocus());
 
     await fireEvent.keyDown(input, { key: "Escape" });
@@ -125,11 +125,11 @@ describe("Project page", () => {
     // The composer, the create-bundle/scope inputs, and the working-copy input
     // are all gone, so there is no text entry anywhere on the page.
     expect(container.querySelectorAll("input")).toHaveLength(0);
-    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Write a card")).not.toBeInTheDocument();
 
     // The focus-composer shortcut is disabled and must not resurrect the composer.
     await fireEvent.keyDown(window, { key: "z" });
-    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Write a card")).not.toBeInTheDocument();
   });
 
   it("glues selected cards through the composed board UI", async () => {

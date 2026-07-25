@@ -30,9 +30,9 @@ function makeProps(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CardComposer — create mode", () => {
-  it("shows create-mode placeholder", () => {
+  it("shows create-mode label", () => {
     render(CardComposer, { props: makeProps() });
-    expect(screen.getByPlaceholderText(/Write a card/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Write a card/)).toBeInTheDocument();
   });
 
   it("preserves a draft when background refresh replaces its props", async () => {
@@ -120,9 +120,9 @@ describe("CardComposer — create mode", () => {
 describe("CardComposer — edit mode", () => {
   const editingCard = { id: "card-1", content: "Existing content", bundleId: "b1" };
 
-  it("shows edit-mode placeholder", () => {
+  it("shows edit-mode label", () => {
     render(CardComposer, { props: makeProps({ editingCard }) });
-    expect(screen.getByPlaceholderText(/Edit card/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Edit card/)).toBeInTheDocument();
   });
 
   it("shows 'Esc to cancel' button in edit mode", () => {
