@@ -166,7 +166,7 @@
 
   let activeBundleColor = $derived(bundles.find((b) => b.id === bundleId));
   let borderColor = $derived(
-    mode === "edit" ? (activeBundleColor?.dot ?? "var(--colors-warm-border)") : "var(--colors-warm-border)",
+    mode === "edit" ? (activeBundleColor?.dot ?? "var(--colors-neutral-border)") : "var(--colors-neutral-border)",
   );
 
   // Selection mode: all selected cards share the same glue group
@@ -178,7 +178,7 @@
 
 <svelte:window onkeydown={handleSelectionShortcut} />
 
-<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", border: "1px solid token(colors.warm.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
+<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", border: "1px solid token(colors.neutral.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + mode hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <BundleDropdown
@@ -192,15 +192,15 @@
     />
     {#if mode === "edit"}
       <button
-        class={css({ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "warm.muted", fontFamily: "inherit", padding: "0" })}
+        class={css({ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "neutral.muted", fontFamily: "inherit", padding: "0" })}
         onclick={onCancel}
       >Esc to cancel</button>
     {:else if mode === "selection"}
-      <span class={css({ marginLeft: "auto", fontSize: "11px", color: "warm.muted" })}>
+      <span class={css({ marginLeft: "auto", fontSize: "11px", color: "neutral.muted" })}>
         {selectedCards.length} cards
       </span>
       <button
-        class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "warm.muted", fontFamily: "inherit", padding: "0", lineHeight: "1", "&:hover": { color: "ink.black" } })}
+        class={css({ background: "none", border: "none", cursor: "pointer", fontSize: "13px", color: "neutral.muted", fontFamily: "inherit", padding: "0", lineHeight: "1", "&:hover": { color: "ink.black" } })}
         title="Clear selection"
         onclick={onCancel}
       >Clear selection ({shortcuts.clearSelectionShortcut})</button>
@@ -211,7 +211,7 @@
     <div class={css({ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px" })}>
     {#if selectedCards.length === 1}
       <button
-        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
+        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
         aria-label={"Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
         title={selectedCards[0].id}
         onclick={copySelectedCardId}
@@ -225,8 +225,8 @@
     {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
@@ -234,7 +234,7 @@
       <div class={css({ display: "contents" })}>
         {#if allGlued}
           <button
-            class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
+            class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
             onclick={() => onUnglueSelected?.(selectedCards.map((c) => c.id))}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -278,7 +278,7 @@
     {#if otherProjects.length > 0}
       <div class={css({ position: "relative" })} style:grid-column={selectedCards.length === 1 ? "span 2" : "auto"}>
         <button
-          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "warm.icon" } })}
+          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
           onclick={() => (showProjectPicker = !showProjectPicker)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -292,7 +292,7 @@
           </svg>
         </button>
         {#if showProjectPicker}
-          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
+          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
             {#each otherProjects as project (project.id)}
               <button
                 class={css({ width: "100%", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", textAlign: "left", display: "block", "&:hover": { background: "ink.lighter" } })}
@@ -309,7 +309,7 @@
     <!-- Delete: always visible in selection mode -->
     <button
       style:grid-column={otherProjects.length === 0 ? "1 / -1" : "auto"}
-      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.warm.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
+      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
       onclick={() => onDeleteSelected?.(selectedCards.map((c) => c.id))}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -339,7 +339,7 @@
       <button
         class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "6px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
         aria-label={mode === "edit" ? "Save" : "Create card"}
-        style:background={content.trim() ? "var(--colors-ink-black)" : "var(--colors-warm-disabled)"}
+        style:background={content.trim() ? "var(--colors-ink-black)" : "var(--colors-neutral-disabled)"}
         style:cursor={content.trim() ? "pointer" : "default"}
         onclick={handleSubmit}
         disabled={!content.trim()}
@@ -347,7 +347,7 @@
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path
             d="M7 12V2M3 6l4-4 4 4"
-            stroke={content.trim() ? "var(--colors-ink-white)" : "var(--colors-warm-faded)"}
+            stroke={content.trim() ? "var(--colors-ink-white)" : "var(--colors-neutral-faded)"}
             stroke-width="1.5"
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -356,7 +356,7 @@
       </button>
     </div>
 
-    <div class={css({ marginTop: "5px", fontSize: "10px", color: "warm.muted" })}>
+    <div class={css({ marginTop: "5px", fontSize: "10px", color: "neutral.muted" })}>
       Enter to {mode === "edit" ? "save" : "create"} · Shift+Enter for newline · Esc to unfocus
     </div>
   {/if}

@@ -29,7 +29,7 @@
     height: "28px",
     borderRadius: "6px",
     backgroundColor: "ink.light",
-    border: "1px solid token(colors.warm.border)",
+    border: "1px solid token(colors.neutral.border)",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -41,9 +41,9 @@
 >
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
     <rect x="0" y="0" width="12" height="8" rx="1.5"
-      fill={showFooters ? "var(--colors-warm-icon)" : "var(--colors-warm-subtle)"} />
+      fill={showFooters ? "var(--colors-neutral-icon)" : "var(--colors-neutral-subtle)"} />
     <rect x="0" y="9" width="12" height="3" rx="1"
-      fill={showFooters ? "var(--colors-warm-subtle)" : "var(--colors-warm-icon)"} />
+      fill={showFooters ? "var(--colors-neutral-subtle)" : "var(--colors-neutral-icon)"} />
   </svg>
 </button>
 
@@ -57,7 +57,7 @@
     height: "28px",
     borderRadius: "6px",
     backgroundColor: "ink.light",
-    border: "1px solid token(colors.warm.border)",
+    border: "1px solid token(colors.neutral.border)",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
@@ -69,11 +69,11 @@
 >
   <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
     {#if sidebarsVisible}
-      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-warm-subtle)" />
-      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-warm-icon)" />
+      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-neutral-subtle)" />
+      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-neutral-icon)" />
     {:else}
-      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-warm-icon)" />
-      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-warm-subtle)" />
+      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-neutral-icon)" />
+      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-neutral-subtle)" />
     {/if}
   </svg>
 </button>
@@ -88,7 +88,7 @@
     gap: "1px",
     backgroundColor: "ink.light",
     borderRadius: "7px",
-    border: "1px solid token(colors.warm.dim)",
+    border: "1px solid token(colors.neutral.dim)",
     boxShadow: "0 1px 6px rgba(0,0,0,0.018)",
     zIndex: "51",
     overflow: "hidden",
@@ -113,8 +113,8 @@
   <div class={css({
     padding: "0 8px",
     fontSize: "11px",
-    color: "warm.secondary",
-    borderLeft: "1px solid token(colors.warm.dim)",
+    color: "neutral.secondary",
+    borderLeft: "1px solid token(colors.neutral.dim)",
     height: "28px",
     display: "flex",
     alignItems: "center",

@@ -51,7 +51,7 @@
       ? `1px solid ${color.dot}`
       : isSelected || isPrimaryUnglue
         ? "1px solid var(--colors-select-accent)"
-        : "1px solid var(--colors-warm-card)",
+        : "1px solid var(--colors-neutral-card)",
   );
 </script>
 
@@ -90,19 +90,19 @@
     class={css({ padding: "8px 10px", lineHeight: "1.65", minHeight: "44px", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
     style:font-size="{fontSize}px"
     style:font-family={fontFamily}
-    style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-warm-placeholder)"}
+    style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
   >
     {card.content || "Empty card…"}
   </div>
 
   <!-- Footer -->
-  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "warm.muted", gap: "6px" })} style:visibility={showFooters ? "visible" : "hidden"}>
+  <div class={css({ display: "flex", alignItems: "center", padding: "4px 9px 7px", fontSize: "10px", color: "neutral.muted", gap: "6px" })} style:visibility={showFooters ? "visible" : "hidden"}>
     {#if card.glueId}
       <span class={css({ display: "flex", alignItems: "center", gap: "3px" })}>
         <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-          <circle cx="1.5" cy="4.5" r="1.5" fill="var(--colors-warm-muted)" />
-          <circle cx="7.5" cy="4.5" r="1.5" fill="var(--colors-warm-muted)" />
-          <line x1="3" y1="4.5" x2="6" y2="4.5" stroke="var(--colors-warm-muted)" stroke-width="1" />
+          <circle cx="1.5" cy="4.5" r="1.5" fill="var(--colors-neutral-muted)" />
+          <circle cx="7.5" cy="4.5" r="1.5" fill="var(--colors-neutral-muted)" />
+          <line x1="3" y1="4.5" x2="6" y2="4.5" stroke="var(--colors-neutral-muted)" stroke-width="1" />
         </svg>
       </span>
     {/if}
@@ -118,7 +118,7 @@
         class={css({ width: "6px", height: "6px", borderRadius: "50%", flexShrink: "0" })}
         style:background={color.dot}
       ></span>
-      <span class={css({ fontSize: "9.5px", color: "warm.subtle", fontWeight: "500", letterSpacing: "0.03em", maxWidth: "90px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
+      <span class={css({ fontSize: "9.5px", color: "neutral.subtle", fontWeight: "500", letterSpacing: "0.03em", maxWidth: "90px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
         {color.name}
       </span>
     </span>

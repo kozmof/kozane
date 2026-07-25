@@ -17,7 +17,7 @@ export default defineConfig({
             secondary: { value: "#575757" },
             white: { value: "#ffffff" },
           },
-          warm: {
+          neutral: {
             border: { value: "#e6e6e6" },
             dim: { value: "#cccccc" },
             muted: { value: "#adadad" },

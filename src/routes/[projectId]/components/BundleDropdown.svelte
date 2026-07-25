@@ -33,7 +33,7 @@
     aria-label="Select bundle"
     aria-expanded={open}
     aria-haspopup="listbox"
-    style:border-color={open ? active?.dot : "var(--colors-warm-border)"}
+    style:border-color={open ? active?.dot : "var(--colors-neutral-border)"}
     style:background={open ? active?.bg : "transparent"}
     onmousedown={(e) => {
       e.preventDefault();
@@ -58,7 +58,7 @@
         bottom: "calc(100% + 6px)",
         left: "0",
         background: "ink.white",
-        border: "1px solid token(colors.warm.border)",
+        border: "1px solid token(colors.neutral.border)",
         borderRadius: "7px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
         padding: "4px",

@@ -35,7 +35,7 @@
   } = $props();
 
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
-  const countClass = css({ fontSize: "10.5px", color: "warm.subtle", flexShrink: "0" });
+  const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" });
 
   const sideBtnBase = css({
     display: "flex",
@@ -54,7 +54,7 @@
     whiteSpace: "nowrap",
     overflow: "hidden",
   });
-  const sideBtnActiveClass = css({ backgroundColor: "warm.bg" });
+  const sideBtnActiveClass = css({ backgroundColor: "neutral.bg" });
 
   function sideBtn(active: boolean) {
     return cx(sideBtnBase, active && sideBtnActiveClass);
@@ -69,7 +69,7 @@
     flexDirection: "column",
     overflow: "hidden",
     transition: "width 0.22s ease",
-    borderLeft: "1px solid token(colors.warm.dim)",
+    borderLeft: "1px solid token(colors.neutral.dim)",
   })}
   style:width={visible ? `${panelWidth}px` : "0"}
 >
@@ -78,7 +78,7 @@
       {@const active = activeScope === scope.id}
       <div class={cx(
         css({ borderRadius: "6px", overflow: "hidden", border: "1px solid transparent" }),
-        active && css({ borderColor: "warm.scroll" }),
+        active && css({ borderColor: "neutral.scroll" }),
       )}>
         <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .scope-delete": { opacity: "1" } })}>
           <button
@@ -86,8 +86,8 @@
             onclick={() => (activeScope = active ? null : scope.id)}
           >
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
-              <path d="M3 5h4M3 3.5h2" stroke="var(--colors-warm-icon-dim)" stroke-width="1" stroke-linecap="round" />
+              <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
+              <path d="M3 5h4M3 3.5h2" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" stroke-linecap="round" />
             </svg>
             <span class={flex1Class}>{scope.name}</span>
             <span class={countClass}>
@@ -110,7 +110,7 @@
               cursor: "pointer",
               borderRadius: "3px",
               fontSize: "13px",
-              color: "warm.subtle",
+              color: "neutral.subtle",
               opacity: "0",
               transition: "opacity 0.12s, color 0.12s",
               "&:hover": { color: "state.error" },
@@ -126,10 +126,10 @@
             class={css({
               width: "100%",
               padding: "6px 10px",
-              backgroundColor: allInScope ? "warm.faded" : "ink.black",
+              backgroundColor: allInScope ? "neutral.faded" : "ink.black",
               color: allInScope ? "ink.secondary" : "ink.light",
               border: "none",
-              borderTop: "1px solid token(colors.warm.dim)",
+              borderTop: "1px solid token(colors.neutral.dim)",
               cursor: "pointer",
               fontSize: "11px",
               fontFamily: "inherit",
@@ -148,7 +148,7 @@
         {#if active}
           {@const scopeWcs = workingCopies.filter((wc) => wc.scopeId === scope.id && wc.path !== null)}
           {#if scopeWcs.length > 0}
-            <div class={css({ borderTop: "1px solid token(colors.warm.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
+            <div class={css({ borderTop: "1px solid token(colors.neutral.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
               {#each scopeWcs as wc (wc.id)}
                 <div class={css({
                   display: "flex",
@@ -160,18 +160,18 @@
                   color: "ink.secondary",
                 })}>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-                    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-warm-icon-dim)" stroke-width="1.2" />
-                    <path d="M1 4.5h8" stroke="var(--colors-warm-icon-dim)" stroke-width="1" />
-                    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-warm-icon-dim)" />
+                    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
+                    <path d="M1 4.5h8" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
+                    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-neutral-icon-dim)" />
                   </svg>
                   <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>{wc.name}</span>
                 </div>
               {/each}
             </div>
           {/if}
-          <div class={css({ padding: "8px", borderTop: "1px solid token(colors.warm.dim)", display: "flex", gap: "5px" })}>
+          <div class={css({ padding: "8px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
             <input
-              class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+              class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
               placeholder="working copy name"
               bind:value={newWcName}
               onkeydown={(e) => e.key === "Enter" && onCreateWorkingCopy()}
@@ -186,9 +186,9 @@
     {/each}
   </div>
 
-  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.warm.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
+  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
     <input
-      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
       bind:value={newScopeName}
       onkeydown={(e) => e.key === "Enter" && onCreateScope()}
     />

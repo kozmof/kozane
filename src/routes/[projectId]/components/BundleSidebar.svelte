@@ -24,7 +24,7 @@
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
-  const countClass = css({ fontSize: "10.5px", color: "warm.subtle", flexShrink: "0" });
+  const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" });
 
   const sideBtnBase = css({
     display: "flex",
@@ -43,7 +43,7 @@
     whiteSpace: "nowrap",
     overflow: "hidden",
   });
-  const sideBtnActiveClass = css({ backgroundColor: "warm.bg" });
+  const sideBtnActiveClass = css({ backgroundColor: "neutral.bg" });
 
   function sideBtn(active: boolean) {
     return cx(sideBtnBase, active && sideBtnActiveClass);
@@ -58,11 +58,11 @@
     flexDirection: "column",
     overflow: "hidden",
     transition: "width 0.22s ease",
-    borderRight: "1px solid token(colors.warm.dim)",
+    borderRight: "1px solid token(colors.neutral.dim)",
   })}
   style:width={visible ? `${panelWidth}px` : "0"}
 >
-  <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.warm.dim)" })}>
+  <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.neutral.dim)" })}>
     <a
       title="to projects"
       href="/"
@@ -75,7 +75,7 @@
         textDecoration: "none",
         color: "ink.secondary",
         fontSize: "12.5px",
-        "&:hover": { backgroundColor: "warm.bg", color: "ink.black" },
+        "&:hover": { backgroundColor: "neutral.bg", color: "ink.black" },
       })}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -87,7 +87,7 @@
   <div class={css({ flex: "1", overflowY: "auto", padding: "14px 0 8px" })}>
     <div class={css({ padding: "0 8px", display: "flex", flexDirection: "column", gap: "1px" })}>
       <button class={sideBtn(activeBundle === null)} onclick={() => (activeBundle = null)}>
-        <span class={dotClass} style:background="var(--colors-warm-faded)"></span>
+        <span class={dotClass} style:background="var(--colors-neutral-faded)"></span>
         <span class={flex1Class}>All cards</span>
         <span class={countClass}>{cards.length}</span>
       </button>
@@ -121,7 +121,7 @@
                 cursor: "pointer",
                 borderRadius: "3px",
                 fontSize: "13px",
-                color: "warm.subtle",
+                color: "neutral.subtle",
                 opacity: "0",
                 transition: "opacity 0.12s, color 0.12s",
                 "&:hover": { color: "state.error" },
@@ -135,9 +135,9 @@
     </div>
   </div>
 
-  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.warm.dim)", display: "flex", gap: "5px" })}>
+  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
     <input
-      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.warm.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
       bind:value={newBundleName}
       onkeydown={(e) => e.key === "Enter" && onCreateBundle()}
     />

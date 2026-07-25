@@ -6,14 +6,14 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "warm.muted", marginBottom: "24px" })}>
+  <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "neutral.muted", marginBottom: "24px" })}>
     {data.workspaceRoot}
   </h1>
 
   {#if data.projects.length === 0}
-    <p class={css({ color: "warm.subtle", fontSize: "13px" })}>
+    <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>
       No projects yet. Run
-      <code class={css({ fontFamily: "mono", fontSize: "12px", backgroundColor: "warm.bg", padding: "2px 6px", borderRadius: "3px" })}>
+      <code class={css({ fontFamily: "mono", fontSize: "12px", backgroundColor: "neutral.bg", padding: "2px 6px", borderRadius: "3px" })}>
         kozane project create &lt;name&gt;
       </code>
       to create one.
@@ -30,11 +30,11 @@
               fontSize: "14px",
               padding: "10px 14px",
               background: "ink.white",
-              border: "1px solid token(colors.warm.border)",
+              border: "1px solid token(colors.neutral.border)",
               borderRadius: "7px",
               display: "block",
               transition: "border-color 0.1s",
-              _hover: { borderColor: "warm.muted" },
+              _hover: { borderColor: "neutral.muted" },
             })}
           >
             {project.name}
