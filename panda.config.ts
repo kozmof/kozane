@@ -9,7 +9,7 @@ export default defineConfig({
       tokens: {
         colors: {
           ink: {
-            black: { value: "#1c1a17" },
+            black: { value: "#1c1c1c" },
             light: { value: "#f1f1f1" },
             lighter: { value: "#f2f2f2" },
             canvas: { value: "#ececec" },
@@ -23,12 +23,12 @@ export default defineConfig({
             muted: { value: "#adadad" },
             subtle: { value: "#979797" },
             bg: { value: "#e2e2e2" },
-            faded: { value: "#b8b2a8" },
+            faded: { value: "#b4b4b4" },
             placeholder: { value: "#b4b4b4" },
             icon: { value: "#c9c9c9" },
             iconDim: { value: "#8d8d8d" },
             card: { value: "#e2e2e2" },
-            grid: { value: "#dedad4" },
+            grid: { value: "#dcdcdc" },
             scroll: { value: "#a8a8a8" },
             disabled: { value: "#dfdfdf" },
             secondary: { value: "#8f8f8f" },
