@@ -35,6 +35,17 @@ describe("CardComposer — create mode", () => {
     expect(screen.getByPlaceholderText(/Write a card/)).toBeInTheDocument();
   });
 
+  it("preserves a draft when background refresh replaces its props", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(CardComposer, { props: makeProps() });
+    const textarea = screen.getByRole("textbox");
+    await user.type(textarea, "aa");
+
+    await rerender(makeProps({ bundles: bundles.map((bundle) => ({ ...bundle })) }));
+
+    expect(textarea).toHaveValue("aa");
+  });
+
   it("does not show 'Esc to cancel' hint in create mode", () => {
     render(CardComposer, { props: makeProps() });
     expect(screen.queryByText(/Esc to cancel/)).not.toBeInTheDocument();

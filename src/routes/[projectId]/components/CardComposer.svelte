@@ -75,12 +75,20 @@
   let bundleId = $state(untrack(composerBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
   let suppressNextAutoFocus = false;
+  let loadedComposerContext: string | null = null;
 
   export function focusInput() {
     textareaEl?.focus();
   }
 
   $effect(() => {
+    const context = editingCard
+      ? `edit:${editingCard.id}`
+      : selectedCards.length > 0
+        ? `selection:${selectedCards.map(({ id }) => id).join(",")}`
+        : "create";
+    if (context === loadedComposerContext) return;
+    loadedComposerContext = context;
     content = editingCard?.content ?? "";
     bundleId = composerBundleId();
     const shouldFocus = !suppressNextAutoFocus;
