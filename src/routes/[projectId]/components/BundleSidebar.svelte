@@ -1,5 +1,6 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
+  import { base } from "$app/paths";
   import type { CardWithGlue, BundleWithColor } from "$lib/types";
 
   let {
@@ -11,6 +12,7 @@
     newBundleName = $bindable(),
     onCreateBundle,
     onDeleteBundle,
+    readonly = false,
   }: {
     visible: boolean;
     panelWidth: number;
@@ -20,6 +22,8 @@
     newBundleName: string;
     onCreateBundle: () => void;
     onDeleteBundle: (bundleId: string) => void;
+    // Read-only export: keep bundle filtering, hide create/delete controls.
+    readonly?: boolean;
   } = $props();
 
   const dotClass = css({ width: "7px", height: "7px", borderRadius: "50%", flexShrink: "0" });
@@ -65,7 +69,7 @@
   <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.neutral.dim)" })}>
     <a
       title="to projects"
-      href="/"
+      href="{base}/"
       class={css({
         display: "flex",
         alignItems: "center",
@@ -104,7 +108,7 @@
             <span class={flex1Class}>{b.name}</span>
             <span class={countClass}>{cards.filter((c) => c.bundleId === b.id).length}</span>
           </button>
-          {#if !b.isDefault}
+          {#if !b.isDefault && !readonly}
             <button
               class={cx("bundle-delete", css({
                 position: "absolute",
@@ -135,15 +139,17 @@
     </div>
   </div>
 
-  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
-    <input
-      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
-      bind:value={newBundleName}
-      onkeydown={(e) => e.key === "Enter" && onCreateBundle()}
-    />
-    <button
-      class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
-      onclick={onCreateBundle}
-    >+</button>
-  </div>
+  {#if !readonly}
+    <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
+      <input
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+        bind:value={newBundleName}
+        onkeydown={(e) => e.key === "Enter" && onCreateBundle()}
+      />
+      <button
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        onclick={onCreateBundle}
+      >+</button>
+    </div>
+  {/if}
 </aside>

@@ -24,7 +24,7 @@ type OpenOptions = {
   memory?: boolean;
 };
 
-function openBrowser(url: string): void {
+export function openBrowser(url: string): void {
   if (process.platform === "darwin") {
     execFile("open", [url]);
   } else if (process.platform === "win32") {

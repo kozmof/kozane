@@ -74,6 +74,50 @@ For a browser on another device, open `https://your-proxy/?api_key=<key>` once. 
 
 `--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described below, and use firewall restrictions and an unprivileged runtime user.
 
+## Publishing a read-only static site
+
+Export the current workspace as a static site — plain HTML, CSS, and JS with no
+server — suitable for GitHub Pages or any static host:
+
+```sh
+kozane ssg --out ./site
+```
+
+The export is a snapshot of the database at build time. Cards, bundles, scopes,
+and glues render and you can pan, zoom, and filter, but everything that writes
+(composing, dragging, deleting, working copies) and the live-sync poll are
+disabled — there is no server to talk to. Re-run `kozane ssg` to refresh the
+snapshot.
+
+When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass
+the base path:
+
+```sh
+kozane ssg --out ./site --base /kozane
+```
+
+The output directory includes a `.nojekyll` file so GitHub Pages serves
+SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages
+for it. Static export requires the source build toolchain, so run it from a
+cloned repository after `pnpm install`.
+
+Preview it over HTTP, not by opening the files directly — `file://` shows a
+directory listing instead of the page and blocks the scripts the app needs to
+become interactive:
+
+```sh
+kozane ssg preview          # serves ./site at http://127.0.0.1:4173
+```
+
+`kozane ssg preview` resolves URLs the same way GitHub Pages does, so it matches
+what you get once deployed. Use `--out <dir>` to serve a different directory,
+`--port` and `--host` to change the address, and `--no-open` to skip launching a
+browser. If the site was built with `--base`, preview it with the same base:
+
+```sh
+kozane ssg preview --base /kozane
+```
+
 ## Upgrades and recovery
 
 ```sh

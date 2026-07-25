@@ -7,6 +7,7 @@ const _require = createRequire(import.meta.url);
 const { version: _version } = _require("../../package.json") as { version: string };
 import { init } from "./commands/init.js";
 import { open } from "./commands/open.js";
+import { ssg, ssgPreview } from "./commands/ssg.js";
 import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
@@ -40,6 +41,23 @@ program
   .option("--allow-remote", "Bind for access through an HTTPS reverse proxy (requires --no-open)")
   .option("--no-open", "Start server without opening browser")
   .action((opts) => open(opts));
+
+const ssgCommand = program
+  .command("ssg")
+  .description("Export the workspace as a static, read-only site (for GitHub Pages, etc.)")
+  .option("--out <dir>", "Output directory (default: ./site)")
+  .option("--base <path>", "Base path when hosted under a subdirectory, e.g. /kozane")
+  .action((opts) => ssg(opts));
+
+ssgCommand
+  .command("preview")
+  .description("Serve a previously exported static site over HTTP")
+  .option("--out <dir>", "Directory to serve (default: ./site)")
+  .option("--base <path>", "Base path the site was built with, e.g. /kozane")
+  .option("--host <host>", "Bind host (default: 127.0.0.1)")
+  .option("--port <port>", "Port number (default: 4173)")
+  .option("--no-open", "Start the server without opening the browser")
+  .action((opts) => ssgPreview(opts));
 
 program
   .command("doctor")

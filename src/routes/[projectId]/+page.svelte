@@ -16,6 +16,10 @@
 
   let { data }: PageProps = $props();
 
+  // Static exports (kozane ssg) are read-only: no mutation endpoints exist, so all
+  // editing affordances and the live-sync poll are disabled. Build-wide and constant.
+  const readonly = untrack(() => data.readonly);
+
   // ── Reactive project state ────────────────────────────────────
   const s = new ProjectState();
   s.projectId = untrack(() => data.project.id);
@@ -80,6 +84,8 @@
   // The snapshot endpoint returns the current database state; refreshFromData applies it
   // without resetting the user's current filters or selection.
   onMount(() => {
+    // A static export has no /api/snapshot endpoint and no writers to sync with.
+    if (readonly) return;
     let refreshing = false;
     const refresh = async () => {
       if (refreshing || document.visibilityState === "hidden") return;
@@ -160,7 +166,7 @@
   function handleKeydown(e: KeyboardEvent) {
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-    if (e.key === data.uiConfig.focusCardInputShortcut) {
+    if (!readonly && e.key === data.uiConfig.focusCardInputShortcut) {
       e.preventDefault();
       s.selection.composerCard = null;
       s.selection.selectedCards = new Set();
@@ -186,6 +192,7 @@
     bind:newBundleName={s.sidebar.newBundleName}
     onCreateBundle={actions.handleCreateBundle}
     onDeleteBundle={actions.handleDeleteBundle}
+    {readonly}
   />
 
   <div class={css({ flex: "1", display: "flex", flexDirection: "column", overflow: "hidden", position: "relative" })}>
@@ -208,6 +215,7 @@
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
       onError={(msg) => (s.lastError = msg)}
+      {readonly}
     />
 
     {#if s.lastError}
@@ -223,6 +231,7 @@
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />
 
+    {#if !readonly}
     <FloatingComposer
       bind:this={composerComponent}
       editingCard={s.selection.composerCard}
@@ -244,6 +253,7 @@
       onLayerChange={handleLayerChange}
       shortcuts={data.uiConfig}
     />
+    {/if}
   </div>
 
   <ScopeSidebar
@@ -261,5 +271,6 @@
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
     onCreateWorkingCopy={actions.handleCreateWorkingCopy}
+    {readonly}
   />
 </div>

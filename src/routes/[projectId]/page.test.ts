@@ -56,6 +56,7 @@ const data = {
     canvasWidth: 2800,
     canvasHeight: 2000,
   },
+  readonly: false,
 };
 
 afterEach(() => {
@@ -107,6 +108,28 @@ describe("Project page", () => {
 
     await fireEvent.keyDown(input, { key: "Escape" });
     await waitFor(() => expect(input).not.toHaveFocus());
+  });
+
+  it("hides all editing affordances in read-only mode", async () => {
+    const { container } = render(ProjectPage, {
+      props: {
+        data: { ...data, readonly: true },
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
+
+    // Bundle filtering still works — the read-only export is for browsing.
+    expect(screen.getByText("All cards")).toBeInTheDocument();
+
+    // The composer, the create-bundle/scope inputs, and the working-copy input
+    // are all gone, so there is no text entry anywhere on the page.
+    expect(container.querySelectorAll("input")).toHaveLength(0);
+    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
+
+    // The focus-composer shortcut is disabled and must not resurrect the composer.
+    await fireEvent.keyDown(window, { key: "z" });
+    expect(screen.queryByPlaceholderText("Write a card")).not.toBeInTheDocument();
   });
 
   it("glues selected cards through the composed board UI", async () => {

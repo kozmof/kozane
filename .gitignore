@@ -18,6 +18,7 @@ node_modules/
 .wrangler
 /.svelte-kit
 /build
+/build-ssg
 
 
 # Vite

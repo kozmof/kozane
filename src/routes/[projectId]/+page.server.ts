@@ -1,6 +1,7 @@
-import type { PageServerLoad } from "./$types";
+import type { EntryGenerator, PageServerLoad } from "./$types";
 import type { WorkingCopySummary } from "$lib/types";
 import { error } from "@sveltejs/kit";
+import { getDb } from "../../db/client";
 import { getProject, getAllProjects } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getAllScopes } from "../../db/api/scope";
@@ -10,6 +11,21 @@ import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
 import { getAllWorkingCopies } from "../../db/api/working-copy";
+
+// Static export (kozane ssg): prerender one page per project. `entries` tells
+// SvelteKit which [projectId] values to bake out, and `readonly` flows to the UI
+// so it hides all editing affordances and the live-sync poll.
+export const prerender = process.env.KOZANE_SSG === "1";
+const readonly = process.env.KOZANE_READONLY === "1";
+
+export const entries: EntryGenerator = async () => {
+  // Only touch the database when actually building the static export. A normal
+  // (adapter-node) build still evaluates this generator but has no workspace.
+  if (!prerender) return [];
+  const db = await getDb();
+  const projects = await getAllProjects({ db });
+  return projects.map((p) => ({ projectId: p.id }));
+};
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
@@ -53,5 +69,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
         }) satisfies WorkingCopySummary,
     ),
     uiConfig: getWorkspaceUiConfig(),
+    readonly,
   };
 };

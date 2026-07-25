@@ -17,6 +17,7 @@
     onAddToScope,
     onRemoveFromScope,
     onCreateWorkingCopy,
+    readonly = false,
   }: {
     visible: boolean;
     panelWidth: number;
@@ -32,6 +33,8 @@
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
     onCreateWorkingCopy: () => void;
+    // Read-only export: keep scope filtering, hide create/delete/membership controls.
+    readonly?: boolean;
   } = $props();
 
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
@@ -94,6 +97,7 @@
               {scopeRels.filter((r) => r.scopeId === scope.id).length}
             </span>
           </button>
+          {#if !readonly}
           <button
             class={cx("scope-delete", css({
               position: "absolute",
@@ -118,9 +122,10 @@
             title="Delete scope"
             onclick={(e) => { e.stopPropagation(); onDeleteScope(scope.id); }}
           >×</button>
+          {/if}
         </div>
 
-        {#if selectedCards.size > 0}
+        {#if !readonly && selectedCards.size > 0}
           {@const allInScope = [...selectedCards].every((cid) => scopeRels.some((r) => r.scopeId === scope.id && r.cardId === cid))}
           <button
             class={css({
@@ -169,6 +174,7 @@
               {/each}
             </div>
           {/if}
+          {#if !readonly}
           <div class={css({ padding: "8px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
             <input
               class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
@@ -181,20 +187,23 @@
               onclick={onCreateWorkingCopy}
             >+</button>
           </div>
+          {/if}
         {/if}
       </div>
     {/each}
   </div>
 
-  <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
-    <input
-      class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
-      bind:value={newScopeName}
-      onkeydown={(e) => e.key === "Enter" && onCreateScope()}
-    />
-    <button
-      class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
-      onclick={onCreateScope}
-    >+</button>
-  </div>
+  {#if !readonly}
+    <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
+      <input
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+        bind:value={newScopeName}
+        onkeydown={(e) => e.key === "Enter" && onCreateScope()}
+      />
+      <button
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        onclick={onCreateScope}
+      >+</button>
+    </div>
+  {/if}
 </aside>

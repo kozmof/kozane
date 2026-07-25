@@ -39,6 +39,7 @@
     fontFamily,
     onPersistPositions,
     onError,
+    readonly = false,
   }: {
     cards: CardWithGlue[];
     visibleCards: CardWithGlue[];
@@ -57,6 +58,8 @@
     fontFamily: string;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
     onError: (message: string) => void;
+    // Read-only export: keep pan/zoom, disable card drag, selection, and compose.
+    readonly?: boolean;
   } = $props();
 
   const glueGroupMap = $derived(buildGlueGroupMap(glueRels));
@@ -139,7 +142,7 @@
   }
 
   export function handleCardMouseDown(e: MouseEvent, cardId: string) {
-    if (e.button !== 0) return;
+    if (readonly || e.button !== 0) return;
     e.stopPropagation();
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
@@ -164,7 +167,7 @@
   }
 
   export function handleCardClick(e: MouseEvent, cardId: string) {
-    if (dragState?.moved) return;
+    if (readonly || dragState?.moved) return;
     if (composerCard && composerCard.id !== cardId) composerCard = null;
     const groupIds = glueGroupIds(glueGroupMap, cardToGlue, cardId);
     if (e.shiftKey) {
@@ -187,13 +190,13 @@
   }
 
   export function handleCardDblClick(cardId: string) {
-    if (dragState?.moved) return;
+    if (readonly || dragState?.moved) return;
     const card = cards.find((c) => c.id === cardId);
     if (card) composerCard = card;
   }
 
   function handleCanvasMouseDown(e: MouseEvent) {
-    if (e.button === 0 && e.shiftKey) {
+    if (!readonly && e.button === 0 && e.shiftKey) {
       e.preventDefault();
       composerCard = null;
       dragState = null;

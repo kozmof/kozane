@@ -30,6 +30,16 @@ function registerRuntimeState(root: string | null): void {
 
 export const handle: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
+
+  // Static export build (kozane ssg): prerendering issues synthetic requests
+  // against the local workspace DB. Skip the API-key/TLS gating entirely — the
+  // export is inherently public and read-only, and enforcing auth here would make
+  // prerendering fail with 401s on any workspace that has an API key configured.
+  if (process.env.KOZANE_SSG === "1") {
+    event.locals.db = await getDb();
+    return resolve(event);
+  }
+
   registerRuntimeState(root);
   const configuredKey = root ? readApiKey(root) : null;
   if (!configuredKey && remoteBindingRequiresApiKey()) {
