@@ -10,7 +10,7 @@ import { open } from "./commands/open.js";
 import { doctor } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { wcScan, wcCreate } from "./commands/wc.js";
-import { projectCreate, projectDelete, projectList } from "./commands/project.js";
+import { projectCreate, projectDefault, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import { cardAdd, cardList, cardNearest, cardShow, cardSquash } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
@@ -76,6 +76,12 @@ project
   .command("delete <id>")
   .description("Delete a project by ID or short ID")
   .action((id) => projectDelete(id));
+
+project
+  .command("default <id>")
+  .alias("set-default")
+  .description("Set the default project used when --project is omitted")
+  .action((id) => projectDefault(id));
 
 const scope = program.command("scope").description("Scope management");
 

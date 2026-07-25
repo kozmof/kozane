@@ -110,6 +110,7 @@ Behavior:
 2. Creates `.kozane/`.
 3. Writes `.kozane/config.json` with defaults (workspace name = current directory name).
 4. Runs Drizzle migrations to create `.kozane/kozane.db`.
+5. Creates a project named `main`, marks it as the workspace default, and creates its default `General` bundle.
 
 Output:
 
@@ -122,7 +123,7 @@ Kozane initialized.
   Config   : .kozane/config.json
   Database : .kozane/kozane.db
 
-Next: run "kozane project create <name>" to create your first project.
+Default project: main
 ```
 
 ---
@@ -244,7 +245,7 @@ kozane project list
 Output (one line per project):
 
 ```
-019dddef-87e3-7000-0000-000000000000  my-project
+019dddef-87e3-7000-0000-000000000000  main  (default)
 ```
 
 If no projects exist:
@@ -280,9 +281,21 @@ Project created.
 
 ---
 
+### `kozane project default <id>`
+
+Marks a project as the workspace default. The alias `project set-default <id>` is also
+accepted. Commands use this project whenever `--project` is omitted. Project IDs may
+be full or short.
+
+```bash
+kozane project default <id>
+```
+
+---
+
 ### `kozane project delete <id>`
 
-Deletes a project by ID (cascade-deletes its bundles and cards).
+Deletes a project by ID (cascade-deletes its bundles and cards). If it was the default, another remaining project is promoted automatically.
 
 ```bash
 kozane project delete <id>
@@ -338,8 +351,8 @@ kozane card add <content> [--project <projectId>] [--bundle <bundleId>]
                           [--scope <scopeId>] [--x <number>] [--y <number>]
 ```
 
-Project, bundle, and scope options accept full or short IDs. Without `--bundle`, the
-project default bundle is used. When `--scope` is provided, card creation and scope
+Project, bundle, and scope options accept full or short IDs. Without `--project`, the
+workspace default project is used. Without `--bundle`, that project’s default bundle is used. When `--scope` is provided, card creation and scope
 membership are committed in one transaction.
 
 Example:
@@ -637,6 +650,7 @@ Options:
 | ------------------- | ---------------------------------------------------------- |
 | `--scope <scopeId>` | Attach working copy to an existing scope                   |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
+| `--project <id>`    | Override the workspace default project                    |
 | `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
 
 Either `--scope` or `--no-scope` is required.

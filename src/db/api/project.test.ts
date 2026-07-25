@@ -6,6 +6,7 @@ import {
   getAllProjects,
   deleteProject,
   updateProjectName,
+  setDefaultProject,
 } from "./project.js";
 import { NotFoundError } from "./utils.js";
 
@@ -28,12 +29,30 @@ describe("addProject", () => {
   });
 });
 
+describe("setDefaultProject", () => {
+  it("changes the only default project", async () => {
+    const d = await db();
+    const first = await addProject({ db: d, name: "First", isDefault: true });
+    const second = await addProject({ db: d, name: "Second" });
+    await setDefaultProject({ db: d, projectId: second });
+    expect(await getProject({ db: d, projectId: first })).toMatchObject({ isDefault: false });
+    expect(await getProject({ db: d, projectId: second })).toMatchObject({ isDefault: true });
+  });
+
+  it("throws when the project does not exist without clearing the current default", async () => {
+    const d = await db();
+    const first = await addProject({ db: d, name: "First", isDefault: true });
+    await expect(setDefaultProject({ db: d, projectId: "ghost" })).rejects.toThrow(NotFoundError);
+    expect(await getProject({ db: d, projectId: first })).toMatchObject({ isDefault: true });
+  });
+});
+
 describe("getProject", () => {
   it("returns the project with matching id", async () => {
     const d = await db();
     const id = await addProject({ db: d, name: "Test" });
     const project = await getProject({ db: d, projectId: id });
-    expect(project).toEqual({ id, name: "Test" });
+    expect(project).toEqual({ id, name: "Test", isDefault: false });
   });
 
   it("returns undefined for a missing id", async () => {
@@ -64,6 +83,14 @@ describe("deleteProject", () => {
     const id = await addProject({ db: d, name: "ToDelete" });
     await deleteProject({ db: d, projectId: id });
     expect(await getProject({ db: d, projectId: id })).toBeUndefined();
+  });
+
+  it("promotes another project when the default is deleted", async () => {
+    const d = await db();
+    const first = await addProject({ db: d, name: "First", isDefault: true });
+    const second = await addProject({ db: d, name: "Second" });
+    await deleteProject({ db: d, projectId: first });
+    expect(await getProject({ db: d, projectId: second })).toMatchObject({ isDefault: true });
   });
 
   it("throws NotFoundError when project does not exist", async () => {

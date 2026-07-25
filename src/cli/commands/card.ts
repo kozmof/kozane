@@ -13,6 +13,7 @@ import { resolveShortId, shortId } from "../lib/short-id.js";
 import { readWorkingCopyMarker } from "../lib/working-copy-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { CANVAS_W } from "../../lib/constants.js";
+import { resolveProjectId } from "../lib/project-selection.js";
 
 type CardOptions = { project?: string; bundle?: string; workingCopy?: string };
 type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
@@ -30,21 +31,6 @@ type ListedCard = {
   posY: number;
 };
 type DistanceListedCard = ListedCard & { distance: number };
-
-async function resolveProjectId(db: DB, requestedId?: string): Promise<string> {
-  const projects = await db.select({ id: projectTable.id }).from(projectTable);
-  if (requestedId)
-    return resolveShortId(
-      requestedId,
-      projects.map(({ id }) => id),
-      "Project",
-    );
-  if (projects.length === 0)
-    throw new Error('No projects found. Run "kozane project create <name>" first.');
-  if (projects.length > 1)
-    throw new Error("Workspace has multiple projects. Use --project <projectId> to specify one.");
-  return projects[0].id;
-}
 
 async function resolveBundleId(db: DB, projectId: string, requestedId?: string): Promise<string> {
   if (requestedId) {

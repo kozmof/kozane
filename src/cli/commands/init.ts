@@ -2,6 +2,9 @@ import { existsSync, mkdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
+import { createDb } from "../../db/client.js";
+import { addProject } from "../../db/api/project.js";
+import { addBundle } from "../../db/api/bundle.js";
 
 export async function init(): Promise<void> {
   const projectRoot = process.cwd();
@@ -22,6 +25,9 @@ export async function init(): Promise<void> {
   console.log(`Initializing Kozane workspace "${workspaceName}"...`);
 
   await runMigrations(dbUrl(projectRoot));
+  const db = await createDb(dbUrl(projectRoot));
+  const projectId = await addProject({ db, name: "main", isDefault: true });
+  await addBundle({ db, projectId, name: "General", isDefault: true });
 
   console.log(`
 Kozane initialized.
@@ -30,6 +36,6 @@ Kozane initialized.
   Config   : ${KOZANE_DIR}/config.json
   Database : ${KOZANE_DIR}/kozane.db
 
-Next: run "kozane project create <name>" to create your first project.
+Default project: main
 `);
 }

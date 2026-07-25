@@ -12,8 +12,9 @@ import {
   WC_MARKER_KIND,
   WC_MARKER_VERSION,
 } from "../lib/wc-scan.js";
-import { workingCopyTable, projectTable, scopeTable } from "../../db/schema.js";
+import { workingCopyTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
+import { resolveProjectId } from "../lib/project-selection.js";
 import { addWorkingCopy, deleteWorkingCopy } from "../../db/api/working-copy.js";
 
 // ─── wc scan ────────────────────────────────────────────────────────────────
@@ -199,27 +200,11 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
 
   let projectId: string | undefined;
-  const projects = await db.select({ id: projectTable.id }).from(projectTable);
-  if (options.project) {
-    try {
-      projectId = resolveShortId(
-        options.project,
-        projects.map(({ id }) => id),
-        "Project",
-      );
-    } catch (error) {
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-      process.exit(1);
-    }
-  } else {
-    if (projects.length === 1) {
-      projectId = projects[0].id;
-    } else if (projects.length > 1) {
-      console.error(
-        "Error: workspace has multiple projects. Use --project <projectId> to specify one.",
-      );
-      process.exit(1);
-    }
+  try {
+    projectId = await resolveProjectId(db, options.project);
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
   }
 
   const id = await addWorkingCopy({

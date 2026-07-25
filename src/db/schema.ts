@@ -9,12 +9,21 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
 
-export const projectTable = sqliteTable("project", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  name: text().notNull(),
-});
+export const projectTable = sqliteTable(
+  "project",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    name: text().notNull(),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex("project_one_default")
+      .on(t.isDefault)
+      .where(sql`is_default = 1`),
+  ],
+);
 
 export const bundleTable = sqliteTable(
   "bundle",

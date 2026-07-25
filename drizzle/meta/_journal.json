@@ -22,6 +22,13 @@
       "when": 1784427963942,
       "tag": "0002_good_doorman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1784943409337,
+      "tag": "0003_fine_starfox",
+      "breakpoints": true
     }
   ]
 }

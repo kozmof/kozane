@@ -25,7 +25,7 @@ export async function createDb(url: string, options: CreateDbOptions = {}): Prom
     if (options.initialProjectName) {
       const [project] = await db
         .insert(schema.projectTable)
-        .values({ name: options.initialProjectName })
+        .values({ name: options.initialProjectName, isDefault: true })
         .returning({ id: schema.projectTable.id });
       await db.insert(schema.bundleTable).values({
         projectId: project.id,

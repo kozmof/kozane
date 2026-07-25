@@ -26,13 +26,14 @@ Then create a workspace and open it:
 ```sh
 mkdir my-workspace && cd my-workspace
 kozane init
-kozane project create "My project"
 kozane open
 ```
 
 To start with an empty database that exists only for the lifetime of the server,
 use `kozane open --memory`. It creates a project named `:memory:`, and all
-changes are discarded when the server stops.
+changes are discarded when the server stops. `kozane init` creates a default project named
+`main`; use `kozane project default <id>` to change which project commands use when
+`--project` is omitted.
 
 The server defaults to `127.0.0.1:5173`. The `/health` endpoint checks server and database
 readiness and reports process CPU capacity and system memory usage as percentages on a 0–100 scale.
