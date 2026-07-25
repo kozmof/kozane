@@ -38,7 +38,7 @@
     width: "100%",
     background: "transparent",
     border: "none",
-    borderRadius: "6px",
+    borderRadius: "3px",
     cursor: "pointer",
     textAlign: "left",
     fontSize: "12.5px",
@@ -75,7 +75,7 @@
         alignItems: "center",
         gap: "6px",
         padding: "6px 8px",
-        borderRadius: "6px",
+        borderRadius: "3px",
         textDecoration: "none",
         color: "ink.secondary",
         fontSize: "12.5px",
@@ -123,7 +123,7 @@
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                borderRadius: "3px",
+                borderRadius: "2px",
                 fontSize: "13px",
                 color: "neutral.subtle",
                 opacity: "0",
@@ -142,12 +142,12 @@
   {#if !readonly}
     <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
       <input
-        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "3px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
         bind:value={newBundleName}
         onkeydown={(e) => e.key === "Enter" && onCreateBundle()}
       />
       <button
-        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "3px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
         onclick={onCreateBundle}
       >+</button>
     </div>

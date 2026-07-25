@@ -14,7 +14,7 @@
   {#if data.projects.length === 0}
     <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>
       No projects yet. Run
-      <code class={css({ fontFamily: "mono", fontSize: "12px", backgroundColor: "neutral.bg", padding: "2px 6px", borderRadius: "3px" })}>
+      <code class={css({ fontFamily: "mono", fontSize: "12px", backgroundColor: "neutral.bg", padding: "2px 6px", borderRadius: "2px" })}>
         kozane project create &lt;name&gt;
       </code>
       to create one.
@@ -32,7 +32,7 @@
               padding: "10px 14px",
               background: "ink.white",
               border: "1px solid token(colors.neutral.border)",
-              borderRadius: "7px",
+              borderRadius: "3px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",

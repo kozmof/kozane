@@ -29,7 +29,7 @@
 
 <div bind:this={dropdownEl} class={css({ position: "relative", flexShrink: "0" })}>
   <button
-    class={css({ display: "flex", alignItems: "center", gap: "5px", padding: "3px 8px 3px 6px", border: "1px solid", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px", color: "ink.black", transition: "all 0.1s" })}
+    class={css({ display: "flex", alignItems: "center", gap: "5px", padding: "3px 8px 3px 6px", border: "1px solid", borderRadius: "2px", cursor: "pointer", fontFamily: "inherit", fontSize: "11px", color: "ink.black", transition: "all 0.1s" })}
     aria-label="Select bundle"
     aria-expanded={open}
     aria-haspopup="listbox"
@@ -59,7 +59,7 @@
         left: "0",
         background: "ink.white",
         border: "1px solid token(colors.neutral.border)",
-        borderRadius: "7px",
+        borderRadius: "3px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
         padding: "4px",
         minWidth: "160px",
@@ -69,7 +69,7 @@
       {#each bundles as b (b.id)}
         {@const isActive = b.id === bundleId}
         <button
-          class={css({ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 10px", border: "none", borderRadius: "5px", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", color: "ink.black", textAlign: "left" })}
+          class={css({ display: "flex", alignItems: "center", gap: "8px", width: "100%", padding: "6px 10px", border: "none", borderRadius: "2px", cursor: "pointer", fontFamily: "inherit", fontSize: "12px", color: "ink.black", textAlign: "left" })}
           role="option"
           aria-selected={isActive}
           style:background={isActive ? b.bg : "transparent"}

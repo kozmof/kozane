@@ -108,7 +108,7 @@
     {/if}
 
     {#if card.workingCopyId}
-      <span class={css({ padding: "1px 5px", borderRadius: "3px", background: "wc.bg", color: "wc.text", fontSize: "9px", fontWeight: "500", letterSpacing: "0.05em" })}>
+      <span class={css({ padding: "1px 5px", borderRadius: "2px", background: "wc.bg", color: "wc.text", fontSize: "9px", fontWeight: "500", letterSpacing: "0.05em" })}>
         wc
       </span>
     {/if}

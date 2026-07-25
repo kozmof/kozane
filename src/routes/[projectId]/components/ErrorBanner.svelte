@@ -23,7 +23,7 @@
     padding: "8px 14px",
     background: "state.error",
     color: "#fff",
-    borderRadius: "7px",
+    borderRadius: "3px",
     fontSize: "12.5px",
     boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
     whiteSpace: "nowrap",

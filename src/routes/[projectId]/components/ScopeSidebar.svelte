@@ -48,7 +48,7 @@
     width: "100%",
     background: "transparent",
     border: "none",
-    borderRadius: "6px",
+    borderRadius: "3px",
     cursor: "pointer",
     textAlign: "left",
     fontSize: "12.5px",
@@ -80,7 +80,7 @@
     {#each scopes as scope (scope.id)}
       {@const active = activeScope === scope.id}
       <div class={cx(
-        css({ borderRadius: "6px", overflow: "hidden", border: "1px solid transparent" }),
+        css({ borderRadius: "3px", overflow: "hidden", border: "1px solid transparent" }),
         active && css({ borderColor: "neutral.scroll" }),
       )}>
         <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .scope-delete": { opacity: "1" } })}>
@@ -112,7 +112,7 @@
               background: "none",
               border: "none",
               cursor: "pointer",
-              borderRadius: "3px",
+              borderRadius: "2px",
               fontSize: "13px",
               color: "neutral.subtle",
               opacity: "0",
@@ -160,7 +160,7 @@
                   alignItems: "center",
                   gap: "6px",
                   padding: "4px 6px",
-                  borderRadius: "4px",
+                  borderRadius: "2px",
                   fontSize: "11.5px",
                   color: "ink.secondary",
                 })}>
@@ -177,13 +177,13 @@
           {#if !readonly}
           <div class={css({ padding: "8px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
             <input
-              class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+              class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "3px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
               placeholder="working copy name"
               bind:value={newWcName}
               onkeydown={(e) => e.key === "Enter" && onCreateWorkingCopy()}
             />
             <button
-              class={css({ padding: "6px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+              class={css({ padding: "6px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "3px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
               onclick={onCreateWorkingCopy}
             >+</button>
           </div>
@@ -196,12 +196,12 @@
   {#if !readonly}
     <div class={css({ padding: "10px", borderTop: "1px solid token(colors.neutral.dim)", marginTop: "8px", display: "flex", gap: "5px" })}>
       <input
-        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "6px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
+        class={css({ flex: "1", padding: "7px 10px", border: "1px solid token(colors.neutral.dim)", borderRadius: "3px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
         bind:value={newScopeName}
         onkeydown={(e) => e.key === "Enter" && onCreateScope()}
       />
       <button
-        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
+        class={css({ padding: "7px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "3px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
         onclick={onCreateScope}
       >+</button>
     </div>

@@ -186,7 +186,7 @@
 
 <svelte:window onkeydown={handleSelectionShortcut} />
 
-<div class={css({ backgroundColor: "ink.light", borderRadius: "2px", border: "1px solid token(colors.neutral.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
+<div class={css({ backgroundColor: "ink.light", borderRadius: "0px", border: "1px solid token(colors.neutral.border)", padding: "10px 16px 14px", flexShrink: "0" })}>
   <!-- Top row: bundle selector + mode hint -->
   <div class={css({ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" })}>
     <BundleDropdown
@@ -219,7 +219,7 @@
     <div class={css({ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px" })}>
     {#if selectedCards.length === 1}
       <button
-        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
         aria-label={"Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
         title={selectedCards[0].id}
         onclick={copySelectedCardId}
@@ -233,8 +233,8 @@
     {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
@@ -242,7 +242,7 @@
       <div class={css({ display: "contents" })}>
         {#if allGlued}
           <button
-            class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+            class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
             onclick={() => onUnglueSelected?.(selectedCards.map((c) => c.id))}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -254,7 +254,7 @@
           </button>
         {:else}
           <button
-            class={css({ flex: "1", padding: "8px 12px", background: "ink.black", border: "1px solid transparent", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.light", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
+            class={css({ flex: "1", padding: "8px 12px", background: "ink.black", border: "1px solid transparent", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.light", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
             onclick={() => onGlueSelected?.(selectedCards.map((c) => c.id))}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -267,7 +267,7 @@
         {/if}
         {#if primaryCard?.glueId}
           <button
-            class={css({ padding: "8px 12px", background: "select.bg", border: "1px solid token(colors.select.accent)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "select.text", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px", "&:hover": { background: "select.accent", color: "ink.white" } })}
+            class={css({ padding: "8px 12px", background: "select.bg", border: "1px solid token(colors.select.accent)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "select.text", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px", "&:hover": { background: "select.accent", color: "ink.white" } })}
             title="Remove this card from its glue group"
             onclick={() => onUnglueOne?.(primaryCard!.id)}
           >
@@ -286,7 +286,7 @@
     {#if otherProjects.length > 0}
       <div class={css({ position: "relative" })} style:grid-column={selectedCards.length === 1 ? "span 2" : "auto"}>
         <button
-          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
           onclick={() => (showProjectPicker = !showProjectPicker)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -300,7 +300,7 @@
           </svg>
         </button>
         {#if showProjectPicker}
-          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
+          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
             {#each otherProjects as project (project.id)}
               <button
                 class={css({ width: "100%", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", textAlign: "left", display: "block", "&:hover": { background: "ink.lighter" } })}
@@ -317,7 +317,7 @@
     <!-- Delete: always visible in selection mode -->
     <button
       style:grid-column={otherProjects.length === 0 ? "1 / -1" : "auto"}
-      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "8px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
+      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
       onclick={() => onDeleteSelected?.(selectedCards.map((c) => c.id))}
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -331,7 +331,7 @@
   {:else}
     <!-- Input row (create / edit) -->
     <div
-      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "8px", padding: "8px 10px", transition: "border-color 0.15s" })}
+      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "0px", padding: "8px 10px", transition: "border-color 0.15s" })}
       style:border-color={borderColor}
     >
       <textarea
@@ -345,7 +345,7 @@
       ></textarea>
 
       <button
-        class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "6px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
+        class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "3px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
         aria-label={mode === "edit" ? "Save" : "Create card"}
         style:background={content.trim() ? "var(--colors-ink-black)" : "var(--colors-neutral-disabled)"}
         style:cursor={content.trim() ? "pointer" : "default"}
