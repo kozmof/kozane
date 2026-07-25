@@ -61,7 +61,7 @@
     transform: "translateX(-50%)",
     width: "540px",
     maxWidth: "calc(100% - 40px)",
-    boxShadow: "0 2px 14px rgba(0,0,0,0.03)",
+    boxShadow: "0 1px 10px rgba(0,0,0,0.018)",
     zIndex: "50",
   })}
 >
