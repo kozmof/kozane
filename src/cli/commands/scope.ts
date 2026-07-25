@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { requireWorkspace } from "../lib/project.js";
-import { dbUrl } from "../lib/config.js";
+import { commandDbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import { addScope, deleteScope, getAllScopes } from "../../db/api/scope.js";
@@ -16,7 +16,7 @@ export async function scopeAdd(name: string): Promise<void> {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Scope name cannot be empty.");
     const { root } = requireWorkspace();
-    const url = dbUrl(resolve(root));
+    const url = commandDbUrl(resolve(root));
     await runMigrations(url);
     const db = await createDb(url);
     const scopeId = await addScope({ db, name: trimmedName });
@@ -32,7 +32,7 @@ export async function scopeAdd(name: string): Promise<void> {
 export async function scopeList(): Promise<void> {
   try {
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const scopes = await getAllScopes({ db });
     if (scopes.length === 0) {
       console.log("No scopes found.");
@@ -50,7 +50,7 @@ export async function scopeList(): Promise<void> {
 export async function scopeDelete(scopeId: string): Promise<void> {
   try {
     const { root } = requireWorkspace();
-    const db = await createDb(dbUrl(resolve(root)));
+    const db = await createDb(commandDbUrl(resolve(root)));
     const scopes = await getAllScopes({ db });
     const scopeIds = scopes.map((scope) => scope.id);
     const resolvedId = resolveShortId(scopeId, scopeIds, "Scope");

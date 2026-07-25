@@ -1,9 +1,10 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
+import { removeServerState, writeServerState } from "../lib/server/runtime-state.js";
 
 const cliEntry = resolve("src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -59,6 +60,25 @@ afterEach(() => {
 });
 
 describe("scoped card working-copy CLI flow", () => {
+  it("routes scope commands to the active memory server database", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const sessionDb = join(root, ".kozane", "session.db");
+    copyFileSync(join(root, ".kozane", "kozane.db"), sessionDb);
+    const session = { memory: true, databaseUrl: `file:${sessionDb}` };
+    writeServerState(root, process.pid, session);
+
+    const scopeId = outputId(cli(root, "scope", "add", "Session scope"));
+    expect(cli(root, "scope", "list")).toContain("Session scope");
+
+    removeServerState(root);
+    expect(cli(root, "scope", "list")).not.toContain("Session scope");
+
+    writeServerState(root, process.pid, session);
+    cli(root, "scope", "delete", scopeId);
+    expect(cli(root, "scope", "list")).not.toContain("Session scope");
+  }, 30_000);
+
   it("reads squash content from standard input", () => {
     const root = tempWorkspace();
     cli(root, "init");
