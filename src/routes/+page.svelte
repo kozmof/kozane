@@ -32,12 +32,33 @@
               background: "ink.white",
               border: "1px solid token(colors.neutral.border)",
               borderRadius: "7px",
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "12px",
               transition: "border-color 0.1s",
               _hover: { borderColor: "neutral.muted" },
             })}
           >
-            {project.name}
+            <span>{project.name}</span>
+            {#if project.isDefault}
+              <span
+                class={css({
+                  color: "neutral.muted",
+                  backgroundColor: "neutral.bg",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  minHeight: "20px",
+                  borderRadius: "999px",
+                  padding: "2px 8px",
+                  fontFamily: "mono",
+                  fontSize: "11px",
+                  lineHeight: "1",
+                })}
+              >
+                Default
+              </span>
+            {/if}
           </a>
         </li>
       {/each}
