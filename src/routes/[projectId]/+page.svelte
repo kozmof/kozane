@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick, untrack } from "svelte";
+  import { onMount, tick, untrack } from "svelte";
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
@@ -59,15 +59,51 @@
 
   // ── Reset on project navigation ───────────────────────────────
   let loadedProjectId = $state(untrack(() => data.project.id));
+  let loadedData = $state.raw(untrack(() => data));
 
   $effect(() => {
-    if (data.project.id === loadedProjectId) return;
-    loadedProjectId = data.project.id;
-    s.resetFromData(data);
-    newCardSeq = 0;
-    sidebarsVisible = data.uiConfig.defaultShowSidePanel;
-    showFooters = data.uiConfig.defaultShowFooter;
-    zoom = data.uiConfig.defaultZoom;
+    if (data === loadedData) return;
+    loadedData = data;
+    if (data.project.id !== loadedProjectId) {
+      loadedProjectId = data.project.id;
+      s.resetFromData(data);
+      newCardSeq = 0;
+      sidebarsVisible = data.uiConfig.defaultShowSidePanel;
+      showFooters = data.uiConfig.defaultShowFooter;
+      zoom = data.uiConfig.defaultZoom;
+    } else {
+      s.refreshFromData(data);
+    }
+  });
+
+  // Keep this long-lived page in sync with writes made by the CLI or another tab.
+  // The snapshot endpoint returns the current database state; refreshFromData applies it
+  // without resetting the user's current filters or selection.
+  onMount(() => {
+    let refreshing = false;
+    const refresh = async () => {
+      if (refreshing || document.visibilityState === "hidden") return;
+      refreshing = true;
+      try {
+        const response = await s.fetcher(`/${s.projectId}/api/snapshot`);
+        if (response.ok) s.refreshFromData(await response.json());
+      } catch {
+        // A later poll retries transient navigation or database failures.
+      } finally {
+        refreshing = false;
+      }
+    };
+    const interval = window.setInterval(refresh, 1_000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", refresh);
+    };
   });
 
   // ── Domain action handlers ────────────────────────────────────

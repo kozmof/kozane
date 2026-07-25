@@ -77,4 +77,40 @@ export class ProjectState {
     this.sidebar.reset();
     this.lastError = null;
   }
+
+  refreshFromData(data: ProjectDataSnapshot) {
+    this.cards = data.cards;
+    this.bundles = data.bundles;
+    this.scopes = data.scopes;
+    this.scopeRels = data.scopeRels;
+    this.glueRels = data.glueRels;
+    this.workingCopies = data.workingCopies;
+
+    const cardIds = new Set(data.cards.map(({ id }) => id));
+    this.selection.selectedCards = new Set(
+      [...this.selection.selectedCards].filter((id) => cardIds.has(id)),
+    );
+    if (this.selection.primarySelectedId && !cardIds.has(this.selection.primarySelectedId)) {
+      this.selection.primarySelectedId = null;
+    }
+    if (this.selection.composerCard && !cardIds.has(this.selection.composerCard.id)) {
+      this.selection.composerCard = null;
+    } else if (this.selection.composerCard) {
+      this.selection.composerCard =
+        data.cards.find(({ id }) => id === this.selection.composerCard?.id) ?? null;
+    }
+
+    if (
+      this.sidebar.activeBundle &&
+      !data.bundles.some(({ id }) => id === this.sidebar.activeBundle)
+    ) {
+      this.sidebar.activeBundle = null;
+    }
+    if (
+      this.sidebar.activeScope &&
+      !data.scopes.some(({ id }) => id === this.sidebar.activeScope)
+    ) {
+      this.sidebar.activeScope = null;
+    }
+  }
 }
