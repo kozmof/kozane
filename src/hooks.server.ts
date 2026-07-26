@@ -2,15 +2,23 @@ import type { Handle } from "@sveltejs/kit";
 import { error } from "@sveltejs/kit";
 import { getDb } from "./db/client";
 import { getWorkspaceRoot } from "./db/internal/config";
-import { API_KEY_COOKIE, apiKeysEqual, readApiKey, requestApiKey } from "./lib/server/api-key";
+import {
+  API_KEY_COOKIE,
+  apiKeyCookieOptions,
+  apiKeysEqual,
+  readApiKey,
+  requestApiKey,
+} from "./lib/server/api-key";
 import { removeServerState, writeServerState } from "./lib/server/runtime-state";
 import {
   applySecurityHeaders,
   clearAuthFailures,
+  isBrowserNavigation,
   recordAuthFailure,
   remoteBindingRequiresApiKey,
   remoteBindingRequiresTls,
 } from "./lib/server/security";
+import { LOGIN_PATH } from "./lib/server/login";
 
 // Default to localhost so that running `node build/index.js` directly without
 // the CLI never accidentally exposes the server on all interfaces.
@@ -57,29 +65,53 @@ export const handle: Handle = async ({ event, resolve }) => {
       ),
     );
   }
+  // The login page must render and accept its form POST without a valid key,
+  // otherwise redirecting unauthenticated browsers to it would loop. It runs
+  // after the no-key (503) and TLS (426) gates above so those still apply.
+  if (configuredKey && event.url.pathname === LOGIN_PATH) {
+    return applySecurityHeaders(await resolve(event));
+  }
   if (configuredKey) {
     const queryKey = event.url.searchParams.get("api_key") ?? undefined;
     const suppliedKey = queryKey ?? requestApiKey(event.request, event.cookies.get(API_KEY_COOKIE));
     if (!apiKeysEqual(suppliedKey, configuredKey.apiKey)) {
       const client = event.getClientAddress();
       const retryAfter = recordAuthFailure(client);
+      // A rate-limited request is never redirected into the login page — that
+      // would let a brute-force loop bypass the limiter — so 429 wins for every
+      // client type. Otherwise send browser navigations to the login page and
+      // keep the machine-readable 401 for API/fetch clients.
+      if (retryAfter) {
+        return applySecurityHeaders(
+          new Response("Too Many Requests", {
+            status: 429,
+            headers: { "retry-after": String(retryAfter) },
+          }),
+        );
+      }
+      if (isBrowserNavigation(event.request)) {
+        const next = event.url.pathname + event.url.search;
+        return applySecurityHeaders(
+          new Response(null, {
+            status: 303,
+            headers: { location: `${LOGIN_PATH}?next=${encodeURIComponent(next)}` },
+          }),
+        );
+      }
       return applySecurityHeaders(
-        new Response(retryAfter ? "Too Many Requests" : "Unauthorized", {
-          status: retryAfter ? 429 : 401,
-          headers: retryAfter
-            ? { "retry-after": String(retryAfter) }
-            : { "www-authenticate": 'Bearer realm="Kozane"' },
+        new Response("Unauthorized", {
+          status: 401,
+          headers: { "www-authenticate": 'Bearer realm="Kozane"' },
         }),
       );
     }
     clearAuthFailures(event.getClientAddress());
     if (queryKey) {
-      const cookie = event.cookies.serialize(API_KEY_COOKIE, configuredKey.apiKey, {
-        httpOnly: true,
-        sameSite: "strict",
-        secure: event.url.protocol === "https:",
-        path: "/",
-      });
+      const cookie = event.cookies.serialize(
+        API_KEY_COOKIE,
+        configuredKey.apiKey,
+        apiKeyCookieOptions(event.url.protocol === "https:"),
+      );
       const cleanUrl = new URL(event.url);
       cleanUrl.searchParams.delete("api_key");
       return applySecurityHeaders(

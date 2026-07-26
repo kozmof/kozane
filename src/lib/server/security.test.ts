@@ -5,6 +5,7 @@ import {
   _resetAuthFailuresForTest,
   applySecurityHeaders,
   clearAuthFailures,
+  isBrowserNavigation,
   isLoopbackHost,
   recordAuthFailure,
   remoteBindingRequiresApiKey,
@@ -23,6 +24,18 @@ describe("server security", () => {
     expect(remoteBindingRequiresTls("http:", "0.0.0.0")).toBe(true);
     expect(remoteBindingRequiresTls("https:", "0.0.0.0")).toBe(false);
     expect(remoteBindingRequiresTls("http:", "127.0.0.1")).toBe(false);
+  });
+
+  it("treats document loads as browser navigations but not API/fetch requests", () => {
+    const req = (method: string, headers: HeadersInit) =>
+      new Request("http://localhost/", { method, headers });
+    expect(isBrowserNavigation(req("GET", { "sec-fetch-mode": "navigate" }))).toBe(true);
+    expect(isBrowserNavigation(req("GET", { accept: "text/html,application/xhtml+xml" }))).toBe(
+      true,
+    );
+    expect(isBrowserNavigation(req("GET", { accept: "application/json" }))).toBe(false);
+    expect(isBrowserNavigation(req("POST", { "sec-fetch-mode": "cors" }))).toBe(false);
+    expect(isBrowserNavigation(req("GET", {}))).toBe(false);
   });
 
   it("throttles repeated authentication failures and permits reset", () => {

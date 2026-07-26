@@ -72,7 +72,7 @@ kozane open --host 0.0.0.0 --allow-remote --no-open
 
 The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients can send `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`. `kozane api key refresh` immediately replaces the old key.
 
-For a browser on another device, open `https://your-proxy/?api_key=<key>` once. Kozane then exchanges the query parameter for an HttpOnly cookie and removes it from the URL.
+For a browser on another device, just open `https://your-proxy/`. Any unauthenticated page load is redirected to a login page where you paste the key once; Kozane stores it as an HttpOnly cookie and sends you back to where you were headed. You can still open `https://your-proxy/?api_key=<key>` to skip the form — Kozane exchanges the query parameter for the same cookie and removes it from the URL. API and `fetch` clients are unaffected: an unauthenticated request without a valid `Authorization: Bearer` (or `X-API-Key`) still receives a `401`, not the login page.
 
 `--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described below, and use firewall restrictions and an unprivileged runtime user.
 

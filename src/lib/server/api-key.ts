@@ -44,3 +44,17 @@ export function requestApiKey(request: Request, cookieValue?: string): string | 
   if (authorization?.startsWith("Bearer ")) return authorization.slice(7);
   return request.headers.get("x-api-key") ?? cookieValue ?? undefined;
 }
+
+export type ApiKeyCookieOptions = {
+  httpOnly: true;
+  sameSite: "strict";
+  secure: boolean;
+  path: "/";
+};
+
+// Shared cookie attributes so the query-key exchange (hooks.server) and the
+// login form action set the API-key cookie identically. `secure` is derived
+// from the request protocol so the cookie works over plain HTTP on loopback.
+export function apiKeyCookieOptions(secure: boolean): ApiKeyCookieOptions {
+  return { httpOnly: true, sameSite: "strict", secure, path: "/" };
+}

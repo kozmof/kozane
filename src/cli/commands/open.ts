@@ -42,7 +42,8 @@ export async function open(options: OpenOptions): Promise<void> {
   const port = options.port ?? String(config.server.port);
   const shouldOpen = options.open ?? true;
   const apiKey = readApiKey(root);
-  const remoteBinding = !isLoopbackHost(host);
+  const localBinding = isLoopbackHost(host);
+  const remoteBinding = !localBinding;
 
   if (options.allowRemote && !apiKey) {
     console.error("--allow-remote requires an API key.");
@@ -127,6 +128,12 @@ export async function open(options: OpenOptions): Promise<void> {
       ...(options.memory ? { KOZANE_MEMORY_MODE: "1", KOZANE_RUNTIME_DATABASE_URL: dbURL } : {}),
       HOST: host,
       PORT: port,
+      // A local (loopback) server is served over plain http, but the Node adapter
+      // assumes https, so SvelteKit's CSRF origin check rejects the login form (a
+      // POST) with 403. Give the adapter the exact loopback origin so the check
+      // matches the browser. Remote bindings configure ORIGIN / PROTOCOL_HEADER
+      // through the reverse proxy instead (see docs), so this only fires locally.
+      ...(localBinding ? { ORIGIN: url } : {}),
     },
     stdio: "inherit",
   });

@@ -53,6 +53,9 @@ test.beforeAll(async () => {
       KOZANE_WORKSPACE_ROOT: workspace,
       HOST: "127.0.0.1",
       PORT: port,
+      // Matches what `kozane open` sets for a loopback binding so SvelteKit's
+      // CSRF origin check accepts the login form POST over http.
+      ORIGIN: baseUrl,
     },
     stdio: "pipe",
   });
@@ -79,11 +82,31 @@ test("authenticates, hydrates, creates, and persists a card", async ({ page }) =
   await expect(page.getByRole("button", { name: "Card: Created in a real browser" })).toBeVisible();
 });
 
-test("rejects an unauthenticated browser context", async ({ browser }) => {
+test("redirects an unauthenticated browser to the login page and signs in", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
-  const response = await page.goto(`${baseUrl}/health`);
-  expect(response?.status()).toBe(401);
-  await expect(page.locator("body")).toContainText("Unauthorized");
+
+  // A browser navigation to a protected page lands on the login form.
+  await page.goto(`${baseUrl}/`);
+  await expect(page).toHaveURL(`${baseUrl}/login?next=${encodeURIComponent("/")}`);
+  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+
+  // A machine-readable request is still rejected with 401, not redirected.
+  const apiResponse = await context.request.get(`${baseUrl}/health`, {
+    headers: { accept: "application/json" },
+  });
+  expect(apiResponse.status()).toBe(401);
+
+  // A wrong key surfaces an inline error instead of authenticating.
+  await page.getByLabel("API key").fill("wrong-key");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page.getByRole("alert")).toContainText("Invalid API key");
+
+  // Entering the correct key authenticates and returns to the target page.
+  await page.getByLabel("API key").fill(apiKey);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(`${baseUrl}/`);
+  await expect(page.getByRole("link", { name: "Browser project" })).toBeVisible();
+
   await context.close();
 });

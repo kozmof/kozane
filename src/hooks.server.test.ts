@@ -8,7 +8,7 @@ vi.mock("./db/internal/config", () => ({ getWorkspaceRoot: () => state.root }));
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
 import { handle } from "./hooks.server";
-import { _resetAuthFailuresForTest } from "./lib/server/security";
+import { AUTH_FAILURE_LIMIT, _resetAuthFailuresForTest } from "./lib/server/security";
 
 function workspace(apiKey?: string): string {
   const root = mkdtempSync(join(tmpdir(), "kozane-hook-"));
@@ -78,13 +78,14 @@ describe("production request hook", () => {
     expect(resolve).toHaveBeenCalledOnce();
   });
 
-  it("rejects invalid credentials and authenticates a valid bearer key", async () => {
+  it("returns 401 to unauthenticated API clients and authenticates a valid bearer key", async () => {
     state.root = workspace("secret");
     const unauthorized = await handle({
-      event: event() as never,
+      event: event("http://localhost/", { accept: "application/json" }) as never,
       resolve: vi.fn() as never,
     });
     expect(unauthorized.status).toBe(401);
+    expect(unauthorized.headers.get("www-authenticate")).toBe('Bearer realm="Kozane"');
 
     const resolve = vi.fn(async () => new Response("ok"));
     const authenticated = await handle({
@@ -94,6 +95,42 @@ describe("production request hook", () => {
     expect(authenticated.status).toBe(200);
     expect(authenticated.headers.get("x-frame-options")).toBe("DENY");
     expect(resolve).toHaveBeenCalledOnce();
+  });
+
+  it("redirects an unauthenticated browser navigation to the login page", async () => {
+    state.root = workspace("secret");
+    const response = await handle({
+      event: event("http://localhost/project?view=all", { accept: "text/html" }) as never,
+      resolve: vi.fn() as never,
+    });
+    expect(response.status).toBe(303);
+    expect(response.headers.get("location")).toBe(
+      "/login?next=" + encodeURIComponent("/project?view=all"),
+    );
+  });
+
+  it("lets the login page through without a valid key", async () => {
+    state.root = workspace("secret");
+    const resolve = vi.fn(async () => new Response("login"));
+    const response = await handle({
+      event: event("http://localhost/login?next=%2F", { accept: "text/html" }) as never,
+      resolve: resolve as never,
+    });
+    expect(response.status).toBe(200);
+    expect(resolve).toHaveBeenCalledOnce();
+  });
+
+  it("returns 429 rather than redirecting once the failure limit trips", async () => {
+    state.root = workspace("secret");
+    let last: Response | undefined;
+    for (let i = 0; i <= AUTH_FAILURE_LIMIT; i++) {
+      last = await handle({
+        event: event("http://localhost/", { accept: "text/html" }) as never,
+        resolve: vi.fn() as never,
+      });
+    }
+    expect(last?.status).toBe(429);
+    expect(last?.headers.get("retry-after")).toBeTruthy();
   });
 
   it("exchanges a query key for a protected cookie and clean redirect", async () => {

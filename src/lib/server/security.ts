@@ -61,6 +61,16 @@ export function _resetAuthFailuresForTest(): void {
   authFailures.clear();
 }
 
+// A top-level browser navigation, as opposed to an API call or a fetch/XHR
+// from page code. Browsers set `Sec-Fetch-Mode: navigate` on document loads;
+// for clients that omit it we fall back to a GET that accepts HTML. Only these
+// get redirected to the login page — everything else keeps a 401.
+export function isBrowserNavigation(request: Request): boolean {
+  if (request.headers.get("sec-fetch-mode") === "navigate") return true;
+  if (request.method !== "GET") return false;
+  return (request.headers.get("accept") ?? "").includes("text/html");
+}
+
 export function applySecurityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("referrer-policy", "no-referrer");
