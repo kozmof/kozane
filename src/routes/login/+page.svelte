@@ -13,7 +13,7 @@
 </script>
 
 <svelte:head>
-  <title>Sign in — Kozane</title>
+  <title>Log in — Kozane</title>
 </svelte:head>
 
 <main
@@ -47,18 +47,6 @@
       padding: "28px",
     })}
   >
-    <h1
-      class={css({
-        fontSize: "14px",
-        fontWeight: "400",
-        fontFamily: "mono",
-        color: "neutral.muted",
-        margin: "0",
-      })}
-    >
-      Kozane
-    </h1>
-
     <label
       class={css({ display: "flex", flexDirection: "column", gap: "6px", fontSize: "13px", color: "ink.black" })}
     >
@@ -105,7 +93,7 @@
         _disabled: { cursor: "default", opacity: "0.6" },
       })}
     >
-      {submitting ? "Signing in…" : "Sign in"}
+      {submitting ? "Logging in…" : "Log in"}
     </button>
   </form>
 </main>

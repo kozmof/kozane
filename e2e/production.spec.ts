@@ -82,14 +82,14 @@ test("authenticates, hydrates, creates, and persists a card", async ({ page }) =
   await expect(page.getByRole("button", { name: "Card: Created in a real browser" })).toBeVisible();
 });
 
-test("redirects an unauthenticated browser to the login page and signs in", async ({ browser }) => {
+test("redirects an unauthenticated browser to the login page and logs in", async ({ browser }) => {
   const context = await browser.newContext();
   const page = await context.newPage();
 
   // A browser navigation to a protected page lands on the login form.
   await page.goto(`${baseUrl}/`);
   await expect(page).toHaveURL(`${baseUrl}/login?next=${encodeURIComponent("/")}`);
-  await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
 
   // A machine-readable request is still rejected with 401, not redirected.
   const apiResponse = await context.request.get(`${baseUrl}/health`, {
@@ -99,12 +99,12 @@ test("redirects an unauthenticated browser to the login page and signs in", asyn
 
   // A wrong key surfaces an inline error instead of authenticating.
   await page.getByLabel("API key").fill("wrong-key");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Log in" }).click();
   await expect(page.getByRole("alert")).toContainText("Invalid API key");
 
   // Entering the correct key authenticates and returns to the target page.
   await page.getByLabel("API key").fill(apiKey);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Log in" }).click();
   await expect(page).toHaveURL(`${baseUrl}/`);
   await expect(page.getByRole("link", { name: "Browser project" })).toBeVisible();
 
