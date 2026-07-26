@@ -1,5 +1,7 @@
 # Kozane
 
+> ⚠️ Status: Beta — Kozane is under active development and not yet production-ready. Expect breaking changes to commands and data formats, and avoid using it for irreplaceable data.
+
 Kozane is a local-first, card-based thinking workspace with a browser UI, CLI, and a per-workspace SQLite-compatible database.
 
 It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
