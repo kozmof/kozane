@@ -345,7 +345,7 @@
       ></textarea>
 
       <button
-        class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "3px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
+        class={css({ flexShrink: "0", width: "32px", height: "32px", borderRadius: "2px", border: "none", display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s" })}
         aria-label={mode === "edit" ? "Save" : "Create card"}
         style:background={content.trim() ? "var(--colors-ink-black)" : "var(--colors-neutral-disabled)"}
         style:cursor={content.trim() ? "pointer" : "default"}

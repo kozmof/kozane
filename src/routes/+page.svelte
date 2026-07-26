@@ -32,7 +32,7 @@
               padding: "10px 14px",
               background: "ink.white",
               border: "1px solid token(colors.neutral.border)",
-              borderRadius: "3px",
+              borderRadius: "2px",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",

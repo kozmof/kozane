@@ -43,7 +43,7 @@
       gap: "16px",
       background: "ink.white",
       border: "1px solid token(colors.neutral.border)",
-      borderRadius: "3px",
+      borderRadius: "2px",
       padding: "28px",
     })}
   >
@@ -74,7 +74,7 @@
           fontSize: "13px",
           padding: "9px 10px",
           border: "1px solid token(colors.neutral.border)",
-          borderRadius: "3px",
+          borderRadius: "2px",
           background: "ink.white",
           color: "ink.black",
           _focusVisible: { outline: "2px solid token(colors.neutral.muted)", outlineOffset: "1px" },
@@ -95,7 +95,7 @@
         fontSize: "13px",
         fontFamily: "mono",
         padding: "9px 14px",
-        borderRadius: "3px",
+        borderRadius: "2px",
         border: "1px solid token(colors.neutral.border)",
         background: "ink.black",
         color: "ink.white",

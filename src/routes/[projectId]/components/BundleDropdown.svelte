@@ -59,7 +59,7 @@
         left: "0",
         background: "ink.white",
         border: "1px solid token(colors.neutral.border)",
-        borderRadius: "3px",
+        borderRadius: "2px",
         boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
         padding: "4px",
         minWidth: "160px",
