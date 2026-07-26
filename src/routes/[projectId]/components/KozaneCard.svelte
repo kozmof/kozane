@@ -1,6 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import type { CardWithGlue, BundleWithColor } from "$lib/types";
+  import { linkify } from "$lib/linkify";
 
   interface Props {
     card: CardWithGlue;
@@ -92,7 +93,21 @@
     style:font-family={fontFamily}
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
   >
-    {card.content || "Empty card…"}
+    {#if card.content}
+      {#each linkify(card.content) as part}
+        {#if part.href}
+          <!-- Stop propagation so following a link doesn't start a card drag or selection. -->
+          <a
+            href={part.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            onmousedown={(e) => e.stopPropagation()}
+            onclick={(e) => e.stopPropagation()}
+            class={css({ color: "select.accent", textDecoration: "underline" })}
+          >{part.text}</a>
+        {:else}{part.text}{/if}
+      {/each}
+    {:else}Empty card…{/if}
   </div>
 
   <!-- Footer -->

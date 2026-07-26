@@ -12,6 +12,7 @@ import { projectTable, bundleTable } from "../../db/schema.js";
 import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost } from "../../lib/server/security.js";
 import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
+import { hyperlink } from "../lib/hyperlink.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -114,7 +115,7 @@ export async function open(options: OpenOptions): Promise<void> {
   if (remoteBinding) {
     console.log("\nRemote access: HTTPS is required; use the URL exposed by your TLS proxy.\n");
   } else {
-    console.log("\nLocal UI:\n" + url + "\n");
+    console.log("\nLocal UI:\n" + hyperlink(url) + "\n");
   }
 
   const child = spawn(process.execPath, [serverEntry], {

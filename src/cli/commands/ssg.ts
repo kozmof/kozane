@@ -8,6 +8,7 @@ import { getMigrationStatus } from "../lib/db.js";
 import { createStaticServer } from "../lib/static-server.js";
 import { migrationStatusMessage } from "./db.js";
 import { openBrowser } from "./open.js";
+import { hyperlink } from "../lib/hyperlink.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -132,7 +133,7 @@ export async function ssgPreview(options: SsgPreviewOptions): Promise<void> {
   server.listen(port, host, () => {
     const url = `http://${host}:${port}${base ? base.replace(/\/$/, "") + "/" : "/"}`;
     console.log(`Previewing ${outDir}`);
-    console.log(`\nStatic preview: ${url}\n`);
+    console.log(`\nStatic preview: ${hyperlink(url)}\n`);
     console.log("Press Ctrl+C to stop.");
     if (options.open !== false) setTimeout(() => openBrowser(url), 300);
   });
