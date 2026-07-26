@@ -10,7 +10,7 @@ import { getMigrationStatus, runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import { projectTable, bundleTable } from "../../db/schema.js";
 import { migrationStatusMessage } from "./db.js";
-import { isLoopbackHost } from "../../lib/server/security.js";
+import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
 
@@ -105,7 +105,9 @@ export async function open(options: OpenOptions): Promise<void> {
   }
 
   const serverEntry = join(packageRoot, "build", "index.js");
-  const url = `http://${host}:${port}`;
+  const normalizedHost = normalizeHost(host);
+  const urlHost = normalizedHost.includes(":") ? `[${normalizedHost}]` : normalizedHost;
+  const url = `http://${urlHost}:${port}`;
   const browserUrl = apiKey ? url + "/?api_key=" + encodeURIComponent(apiKey.apiKey) : url;
 
   console.log(`Kozane workspace: ${config.name}`);

@@ -1,4 +1,4 @@
-const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 export const AUTH_FAILURE_LIMIT = 10;
 export const AUTH_FAILURE_WINDOW_MS = 5 * 60_000;
@@ -20,7 +20,14 @@ function pruneAuthFailures(now: number): void {
 
 export function normalizeHost(host: string): string {
   const value = host.trim().toLowerCase();
-  if (value.startsWith("[")) return value.split("]", 1)[0] + "]";
+  if (value.startsWith("[")) {
+    const closingBracket = value.indexOf("]");
+    return closingBracket === -1 ? value : value.slice(1, closingBracket);
+  }
+  // An unbracketed value containing multiple colons is an IPv6 address, not a
+  // hostname followed by a port. In particular, splitting "::1" on the first
+  // colon would turn the IPv6 loopback address into an empty string.
+  if (value.indexOf(":") !== value.lastIndexOf(":")) return value;
   return value.split(":", 1)[0];
 }
 

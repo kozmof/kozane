@@ -18,8 +18,13 @@ describe("server security", () => {
   it("recognizes loopback hosts, including hosts with ports", () => {
     expect(isLoopbackHost("localhost:5173")).toBe(true);
     expect(isLoopbackHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("::1")).toBe(true);
+    expect(isLoopbackHost("[::1]")).toBe(true);
     expect(isLoopbackHost("[::1]:5173")).toBe(true);
+    expect(remoteBindingRequiresApiKey("::1")).toBe(false);
+    expect(remoteBindingRequiresTls("http:", "::1")).toBe(false);
     expect(isLoopbackHost("0.0.0.0")).toBe(false);
+    expect(isLoopbackHost("2001:db8::1")).toBe(false);
     expect(remoteBindingRequiresApiKey("example.test")).toBe(true);
     expect(remoteBindingRequiresTls("http:", "0.0.0.0")).toBe(true);
     expect(remoteBindingRequiresTls("https:", "0.0.0.0")).toBe(false);
