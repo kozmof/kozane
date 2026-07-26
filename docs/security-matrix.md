@@ -13,12 +13,12 @@ When a workspace has an API key, two rules hold in every server mode.
 
 ## At a glance
 
-| Mode | Network reach | API key | Transport | Auth enforced | Writes |
-| --- | --- | --- | --- | --- | --- |
-| Local | Loopback only | Optional | HTTP | Only when a key exists | Yes |
-| Local with `--allow-remote` | Loopback only | Required | HTTP | Yes | Yes |
-| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | Yes | Yes |
-| Static export (SSG) | Wherever hosted | None | Host-defined | No server | No |
+| Mode                                    | Network reach   | API key  | Transport       | Auth enforced          | Writes |
+| --------------------------------------- | --------------- | -------- | --------------- | ---------------------- | ------ |
+| Local                                   | Loopback only   | Optional | HTTP            | Only when a key exists | Yes    |
+| Local with `--allow-remote`             | Loopback only   | Required | HTTP            | Yes                    | Yes    |
+| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | Yes                    | Yes    |
+| Static export (SSG)                     | Wherever hosted | None     | Host-defined    | No server              | No     |
 
 ## Local
 

@@ -6,9 +6,7 @@ const ESC = "";
 describe("hyperlink", () => {
   it("wraps the URL in an OSC 8 sequence on a TTY", () => {
     const result = hyperlink("http://localhost:5173", "Open", { isTTY: true, noColor: false });
-    expect(result).toBe(
-      `${ESC}]8;;http://localhost:5173${ESC}\\Open${ESC}]8;;${ESC}\\`,
-    );
+    expect(result).toBe(`${ESC}]8;;http://localhost:5173${ESC}\\Open${ESC}]8;;${ESC}\\`);
   });
 
   it("defaults the label to the URL", () => {
