@@ -44,6 +44,12 @@ Use a process supervisor such as systemd, Docker, or your platform's service man
 automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
 with the API key; it verifies that the database accepts queries.
 
+Run only one Kozane server per workspace. Startup uses an exclusive runtime reservation and
+refuses a second instance. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server so
+the adapter can drain connections before exit.
+
+Each HTTP response includes `X-Request-Id`; request completion and errors are emitted as JSON.
+
 Capture stdout/stderr in structured platform logs, set retention limits, and alert on repeated
 restarts, HTTP 5xx responses, failed health checks, disk exhaustion, and backup failures.
 

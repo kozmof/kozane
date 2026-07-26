@@ -138,6 +138,7 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
 
   const client = createClient({ url: dbUrl });
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     const table = await client.execute({
       sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
       args: ["__drizzle_migrations"],
@@ -211,6 +212,7 @@ export async function backupDb(projectRoot: string): Promise<string> {
   // VACUUM INTO produces a consistent copy even under concurrent writes, unlike copyFileSync.
   const client = createClient({ url: `file:${source}` });
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
   } finally {
     client.close();
@@ -232,6 +234,7 @@ export async function runMigrations(dbUrl: string): Promise<void> {
   const db = drizzle(client, { schema });
 
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
   } finally {
     client.close();
@@ -241,6 +244,7 @@ export async function runMigrations(dbUrl: string): Promise<void> {
 async function validateRestoreCandidate(path: string): Promise<void> {
   const client = createClient({ url: `file:${path}` });
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     const result = await client.execute("PRAGMA integrity_check");
     if (result.rows.length !== 1 || result.rows[0]?.integrity_check !== "ok") {
       throw new Error("SQLite integrity check failed");
@@ -274,6 +278,12 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
       closeSync(fd);
     }
     renameSync(stagedPath, targetPath);
+    const directoryFd = openSync(dirname(targetPath), "r");
+    try {
+      fsyncSync(directoryFd);
+    } finally {
+      closeSync(directoryFd);
+    }
   } finally {
     rmSync(stagedPath, { force: true });
   }

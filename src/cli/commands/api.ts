@@ -1,14 +1,17 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, writeFileSync } from "node:fs";
-import { API_KEY_FILE, apiKeyPath, type ApiKeyFile } from "../../lib/server/api-key.js";
+import { existsSync } from "node:fs";
+import {
+  API_KEY_FILE,
+  apiKeyPath,
+  writeApiKey,
+  type ApiKeyFile,
+} from "../../lib/server/api-key.js";
 import { requireWorkspace } from "../lib/project.js";
 
 function writeNewApiKey(root: string): string {
   const apiKey = randomBytes(32).toString("base64url");
   const contents: ApiKeyFile = { apiKey, createdAt: new Date().toISOString() };
-  const path = apiKeyPath(root);
-  writeFileSync(path, JSON.stringify(contents, null, 2) + "\n", { mode: 0o600 });
-  chmodSync(path, 0o600);
+  writeApiKey(root, contents);
   return apiKey;
 }
 

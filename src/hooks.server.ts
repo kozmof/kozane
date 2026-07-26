@@ -1,5 +1,6 @@
 import type { Handle } from "@sveltejs/kit";
 import { error } from "@sveltejs/kit";
+import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
 import { getWorkspaceRoot } from "./db/internal/config";
 import {
@@ -9,7 +10,7 @@ import {
   readApiKey,
   requestApiKey,
 } from "./lib/server/api-key";
-import { removeServerState, writeServerState } from "./lib/server/runtime-state";
+import { claimServerState, removeServerState } from "./lib/server/runtime-state";
 import {
   applySecurityHeaders,
   clearAuthFailures,
@@ -28,15 +29,16 @@ process.env.HOST ??= "127.0.0.1";
 let registeredRoot: string | null = null;
 function registerRuntimeState(root: string | null): void {
   if (!root || registeredRoot === root) return;
-  writeServerState(root, process.pid, {
+  const active = claimServerState(root, process.pid, {
     memory: process.env.KOZANE_MEMORY_MODE === "1",
     databaseUrl: process.env.KOZANE_RUNTIME_DATABASE_URL,
   });
+  if (active) throw new Error(`Kozane workspace is already served by process ${active.pid}`);
   registeredRoot = root;
   process.once("exit", () => removeServerState(root));
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
+const handleRequest: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
 
   // Static export build (kozane net ssg generate): prerendering issues synthetic requests
@@ -132,4 +134,45 @@ export const handle: Handle = async ({ event, resolve }) => {
     throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
   }
   return applySecurityHeaders(await resolve(event));
+};
+
+export const handle: Handle = async ({ event, resolve }) => {
+  const requestId = randomUUID();
+  const startedAt = performance.now();
+  event.locals.requestId = requestId;
+
+  try {
+    const response = await handleRequest({ event, resolve });
+    const headers = new Headers(response.headers);
+    headers.set("x-request-id", requestId);
+    console.log(
+      JSON.stringify({
+        level: "info",
+        event: "http_request",
+        requestId,
+        method: event.request.method,
+        path: event.url.pathname,
+        status: response.status,
+        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+      }),
+    );
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  } catch (requestError) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "http_request_error",
+        requestId,
+        method: event.request.method,
+        path: event.url.pathname,
+        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        error: requestError instanceof Error ? requestError.message : String(requestError),
+      }),
+    );
+    throw requestError;
+  }
 };

@@ -1,5 +1,15 @@
 import { timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 export const API_KEY_FILE = "api.json";
@@ -8,6 +18,31 @@ export type ApiKeyFile = { apiKey: string; createdAt: string };
 
 export function apiKeyPath(workspaceRoot: string): string {
   return join(workspaceRoot, ".kozane", API_KEY_FILE);
+}
+
+/** Writes a key file without exposing partial contents after a crash or disk-full error. */
+export function writeApiKey(workspaceRoot: string, value: ApiKeyFile): void {
+  const target = apiKeyPath(workspaceRoot);
+  const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
+  let fd: number | undefined;
+  try {
+    fd = openSync(temporary, "wx", 0o600);
+    writeFileSync(fd, JSON.stringify(value, null, 2) + "\n");
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    renameSync(temporary, target);
+    chmodSync(target, 0o600);
+    const directoryFd = openSync(join(workspaceRoot, ".kozane"), "r");
+    try {
+      fsyncSync(directoryFd);
+    } finally {
+      closeSync(directoryFd);
+    }
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    rmSync(temporary, { force: true });
+  }
 }
 
 export function readApiKey(workspaceRoot: string): ApiKeyFile | null {

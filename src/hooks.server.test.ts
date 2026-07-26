@@ -75,6 +75,7 @@ describe("production request hook", () => {
       resolve: resolve as never,
     });
     expect(response.status).toBe(200);
+    expect(response.headers.get("x-request-id")).toBeTruthy();
     expect(resolve).toHaveBeenCalledOnce();
   });
 

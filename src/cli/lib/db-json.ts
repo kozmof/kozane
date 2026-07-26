@@ -202,6 +202,7 @@ export async function exportDbJson(
 ): Promise<DbJsonDump> {
   const client = createClient({ url: dbUrl });
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     const tables = emptyTables();
     for (const table of TABLES) {
       const result = await client.execute(selectSql(table));
@@ -223,6 +224,7 @@ export async function exportDbJson(
 export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
   const client = createClient({ url: dbUrl });
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     for (const table of TABLES) {
       const result = await client.execute(countSql(table));
       const rawCount = result.rows[0]?.count;
@@ -279,6 +281,7 @@ export async function importDbJson(
   const client = createClient({ url: dbUrl });
 
   try {
+    await client.execute("PRAGMA busy_timeout = 5000");
     await client.execute("PRAGMA foreign_keys = ON");
     await client.execute("BEGIN");
     try {

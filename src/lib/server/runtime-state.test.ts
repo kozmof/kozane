@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   activeServerProcess,
   removeServerState,
+  claimServerState,
   serverStatePath,
   writeServerState,
 } from "./runtime-state";
@@ -27,6 +28,27 @@ describe("server runtime state", () => {
     expect(readFileSync(serverStatePath(root), "utf8")).toContain(String(process.pid));
     removeServerState(root);
     expect(activeServerProcess(root)).toBeNull();
+  });
+
+  it("atomically rejects a second server process", () => {
+    const root = workspace();
+    expect(claimServerState(root, process.pid)).toBeNull();
+    expect(claimServerState(root, process.pid)).toBeNull();
+
+    const otherRoot = workspace();
+    writeFileSync(
+      serverStatePath(otherRoot),
+      JSON.stringify({ pid: 1, startedAt: new Date().toISOString() }),
+    );
+    expect(claimServerState(otherRoot, process.pid)?.pid).toBe(1);
+  });
+
+  it("recovers a partial stale reservation", () => {
+    const root = workspace();
+    writeFileSync(serverStatePath(root), "{");
+
+    expect(claimServerState(root)).toBeNull();
+    expect(activeServerProcess(root)?.pid).toBe(process.pid);
   });
 
   it("exposes the active memory database to CLI commands", () => {

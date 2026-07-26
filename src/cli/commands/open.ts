@@ -11,7 +11,11 @@ import { createDb } from "../../db/client.js";
 import { projectTable, bundleTable } from "../../db/schema.js";
 import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
-import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
+import {
+  activeServerProcess,
+  claimServerState,
+  removeServerState,
+} from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
@@ -40,6 +44,12 @@ export async function open(options: OpenOptions): Promise<void> {
 
   const host = options.host ?? config.server.host;
   const port = options.port ?? String(config.server.port);
+  const existingServer = activeServerProcess(root);
+  if (existingServer) {
+    console.error(`Kozane is already running for this workspace (process ${existingServer.pid}).`);
+    process.exitCode = 1;
+    return;
+  }
   const shouldOpen = options.open ?? true;
   const apiKey = readApiKey(root);
   const localBinding = isLoopbackHost(host);
@@ -140,11 +150,30 @@ export async function open(options: OpenOptions): Promise<void> {
     stdio: "inherit",
   });
 
-  if (child.pid)
-    writeServerState(root, child.pid, {
+  if (child.pid) {
+    const conflictingServer = claimServerState(root, child.pid, {
       memory: options.memory === true,
       databaseUrl: options.memory ? dbURL : undefined,
     });
+    if (conflictingServer) {
+      child.kill("SIGTERM");
+      cleanupMemory();
+      console.error(
+        `Kozane is already running for this workspace (process ${conflictingServer.pid}).`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  let stopping = false;
+  const forwardSignal = (signal: NodeJS.Signals) => {
+    if (stopping) return;
+    stopping = true;
+    if (!child.killed) child.kill(signal);
+  };
+  process.once("SIGTERM", () => forwardSignal("SIGTERM"));
+  process.once("SIGINT", () => forwardSignal("SIGINT"));
 
   if (shouldOpen) {
     setTimeout(() => openBrowser(browserUrl), 1000);

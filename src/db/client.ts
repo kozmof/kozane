@@ -13,6 +13,7 @@ type CreateDbOptions = { initialProjectName?: string };
 
 export async function createDb(url: string, options: CreateDbOptions = {}): Promise<DB> {
   const client = createClient({ url });
+  await client.execute("PRAGMA busy_timeout = 5000");
   await client.execute("PRAGMA foreign_keys = ON");
   const db = drizzle(client, { schema });
 

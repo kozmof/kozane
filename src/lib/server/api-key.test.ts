@@ -1,8 +1,8 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { apiKeysEqual, readApiKey, requestApiKey } from "./api-key";
+import { apiKeysEqual, readApiKey, requestApiKey, writeApiKey } from "./api-key";
 
 function workspace(): string {
   const root = mkdtempSync(join(tmpdir(), "kozane-api-key-"));
@@ -23,6 +23,17 @@ describe("API key", () => {
     expect(apiKeysEqual("secret", value.apiKey)).toBe(true);
     expect(apiKeysEqual("wrong", value.apiKey)).toBe(false);
     expect(apiKeysEqual(undefined, value.apiKey)).toBe(false);
+  });
+
+  it("atomically writes a private key file", () => {
+    const root = workspace();
+    const value = { apiKey: "new-secret", createdAt: "2026-07-19T00:00:00.000Z" };
+
+    writeApiKey(root, value);
+
+    expect(readApiKey(root)).toEqual(value);
+    expect(statSync(join(root, ".kozane", "api.json")).mode & 0o777).toBe(0o600);
+    expect(readdirSync(join(root, ".kozane"))).toEqual(["api.json"]);
   });
 
   it("accepts bearer and X-API-Key credentials", () => {

@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  existsSync,
+  fsyncSync,
+  openSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 export const SERVER_STATE_FILE = "server.json";
@@ -61,6 +70,51 @@ export function writeServerState(
     { mode: 0o600 },
   );
   chmodSync(path, 0o600);
+}
+
+/** Atomically reserves a workspace for one server process. */
+export function claimServerState(
+  root: string,
+  pid = process.pid,
+  details: Pick<ServerState, "memory" | "databaseUrl"> = {},
+): ServerState | null {
+  const path = serverStatePath(root);
+  const value: ServerState = { pid, startedAt: new Date().toISOString(), ...details };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let previousContents: string | null = null;
+    try {
+      const fd = openSync(path, "wx", 0o600);
+      try {
+        writeFileSync(fd, JSON.stringify(value) + "\n");
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+      return null;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      try {
+        previousContents = readFileSync(path, "utf8");
+      } catch {
+        continue;
+      }
+      const active = activeServerProcess(root);
+      if (active) {
+        if (active.pid === pid) return null;
+        return active;
+      }
+      // activeServerProcess removes a well-formed stale file itself. Remove a
+      // malformed/partial file only if nobody replaced it while we inspected it.
+      try {
+        if (existsSync(path) && readFileSync(path, "utf8") === previousContents) unlinkSync(path);
+      } catch {
+        // Another process changed the reservation; retry the exclusive create.
+      }
+    }
+  }
+
+  throw new Error(`Unable to reserve Kozane server state at ${path}`);
 }
 
 export function removeServerState(root: string, pid = process.pid): void {
