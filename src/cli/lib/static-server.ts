@@ -2,7 +2,7 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 
-// Serves a `kozane ssg` export the way a static host (e.g. GitHub Pages) does:
+// Serves a `kozane net ssg generate` export the way a static host (e.g. GitHub Pages) does:
 // directory requests resolve to index.html, extensionless directory paths get a
 // trailing-slash redirect, and unknown paths fall back to 404.html.
 

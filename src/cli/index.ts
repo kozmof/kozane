@@ -42,8 +42,14 @@ program
   .option("--no-open", "Start server without opening browser")
   .action((opts) => open(opts));
 
-const ssgCommand = program
+const net = program.command("net").description("Networking and publishing");
+
+const ssgCommand = net
   .command("ssg")
+  .description("Export the workspace as a static, read-only site (for GitHub Pages, etc.)");
+
+ssgCommand
+  .command("generate")
   .description("Export the workspace as a static, read-only site (for GitHub Pages, etc.)")
   .option("--out <dir>", "Output directory (default: ./site)")
   .option("--base <path>", "Base path when hosted under a subdirectory, e.g. /kozane")

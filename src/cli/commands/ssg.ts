@@ -86,7 +86,7 @@ export async function ssg(options: SsgOptions): Promise<void> {
   writeFileSync(join(outDir, ".nojekyll"), "");
 
   console.log(`\nStatic site written to ${outDir}`);
-  console.log(`\nPreview it locally with: kozane ssg preview${base ? ` --base ${base}` : ""}`);
+  console.log(`\nPreview it locally with: kozane net ssg preview${base ? ` --base ${base}` : ""}`);
   console.log("\nTo publish on GitHub Pages:");
   console.log(`  1. Commit the contents of ${options.out ?? "site"}/ to a branch (or gh-pages).`);
   console.log("  2. In the repository settings, enable Pages for that branch.");
@@ -107,7 +107,7 @@ export async function ssgPreview(options: SsgPreviewOptions): Promise<void> {
   const outDir = resolve(process.cwd(), options.out ?? "site");
   if (!existsSync(join(outDir, "index.html"))) {
     console.error(`No exported site found at ${outDir}.`);
-    console.error("Run 'kozane ssg' first, or pass --out <dir>.");
+    console.error("Run 'kozane net ssg generate' first, or pass --out <dir>.");
     process.exit(1);
   }
 

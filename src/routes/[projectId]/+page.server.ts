@@ -12,7 +12,7 @@ import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
 import { getAllWorkingCopies } from "../../db/api/working-copy";
 
-// Static export (kozane ssg): prerender one page per project. `entries` tells
+// Static export (kozane net ssg generate): prerender one page per project. `entries` tells
 // SvelteKit which [projectId] values to bake out, and `readonly` flows to the UI
 // so it hides all editing affordances and the live-sync poll.
 export const prerender = process.env.KOZANE_SSG === "1";

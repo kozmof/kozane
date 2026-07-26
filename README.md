@@ -80,20 +80,20 @@ Export the current workspace as a static site — plain HTML, CSS, and JS with n
 server — suitable for GitHub Pages or any static host:
 
 ```sh
-kozane ssg --out ./site
+kozane net ssg generate --out ./site
 ```
 
 The export is a snapshot of the database at build time. Cards, bundles, scopes,
 and glues render and you can pan, zoom, and filter, but everything that writes
 (composing, dragging, deleting, working copies) and the live-sync poll are
-disabled — there is no server to talk to. Re-run `kozane ssg` to refresh the
-snapshot.
+disabled — there is no server to talk to. Re-run `kozane net ssg generate` to
+refresh the snapshot.
 
 When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass
 the base path:
 
 ```sh
-kozane ssg --out ./site --base /kozane
+kozane net ssg generate --out ./site --base /kozane
 ```
 
 The output directory includes a `.nojekyll` file so GitHub Pages serves
@@ -106,16 +106,16 @@ directory listing instead of the page and blocks the scripts the app needs to
 become interactive:
 
 ```sh
-kozane ssg preview          # serves ./site at http://127.0.0.1:4173
+kozane net ssg preview      # serves ./site at http://127.0.0.1:4173
 ```
 
-`kozane ssg preview` resolves URLs the same way GitHub Pages does, so it matches
+`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches
 what you get once deployed. Use `--out <dir>` to serve a different directory,
 `--port` and `--host` to change the address, and `--no-open` to skip launching a
 browser. If the site was built with `--base`, preview it with the same base:
 
 ```sh
-kozane ssg preview --base /kozane
+kozane net ssg preview --base /kozane
 ```
 
 ## Upgrades and recovery

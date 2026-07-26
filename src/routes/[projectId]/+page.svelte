@@ -16,7 +16,7 @@
 
   let { data }: PageProps = $props();
 
-  // Static exports (kozane ssg) are read-only: no mutation endpoints exist, so all
+  // Static exports (kozane net ssg generate) are read-only: no mutation endpoints exist, so all
   // editing affordances and the live-sync poll are disabled. Build-wide and constant.
   const readonly = untrack(() => data.readonly);
 
