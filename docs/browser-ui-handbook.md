@@ -87,17 +87,17 @@ The first card in a selection is the primary card, which some actions such as
 Whenever one or more cards are selected, the composer becomes an action bar
 showing the selection count. The actions and their keyboard shortcuts:
 
-| Action            | Key      | Availability                    |
-| ----------------- | -------- | ------------------------------- |
-| Change bundle     | none     | Any selection (bundle dropdown) |
-| Copy card ID      | `c`      | Exactly one card selected       |
-| Bring to front    | `]`      | Exactly one card selected       |
-| Send to back      | `[`      | Exactly one card selected       |
-| Glue or Unglue all| `g`      | Two or more cards selected      |
-| Unglue this       | `u`      | Primary card is in a glue group |
-| Move to project   | `m`      | Another project exists          |
-| Delete            | `Delete` | Any selection                   |
-| Clear selection   | `Esc`    | Any selection                   |
+| Action             | Key      | Availability                    |
+| ------------------ | -------- | ------------------------------- |
+| Change bundle      | none     | Any selection (bundle dropdown) |
+| Copy card ID       | `c`      | Exactly one card selected       |
+| Bring to front     | `]`      | Exactly one card selected       |
+| Send to back       | `[`      | Exactly one card selected       |
+| Glue or Unglue all | `g`      | Two or more cards selected      |
+| Unglue this        | `u`      | Primary card is in a glue group |
+| Move to project    | `m`      | Another project exists          |
+| Delete             | `Delete` | Any selection                   |
+| Clear selection    | `Esc`    | Any selection                   |
 
 Shortcuts fire only when you are not typing in a text field. "Move to project"
 opens a picker of the workspace's other projects, and choosing one moves every
