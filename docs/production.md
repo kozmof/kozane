@@ -6,7 +6,7 @@ multi-tenant service and does not provide user accounts or role-based access con
 
 ## Supported runtime
 
-- Pin Node.js 24 LTS for production; do not deploy a moving `latest` image.
+- Pin Node.js 24 LTS for production. Do not deploy a moving `latest` image.
 - Install with `pnpm install --frozen-lockfile`, run `pnpm verify`, and build with
   `pnpm build`.
 - Run the service as an unprivileged operating-system user with write access only to its
@@ -42,13 +42,13 @@ key. Treat `.kozane/api.json` as a secret and never copy it into logs or source 
 
 Use a process supervisor such as systemd, Docker, or your platform's service manager. Configure
 automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
-with the API key; it verifies that the database accepts queries.
+with the API key. It verifies that the database accepts queries.
 
 Run only one Kozane server per workspace. Startup uses an exclusive runtime reservation and
 refuses a second instance. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server so
 the adapter can drain connections before exit.
 
-Each HTTP response includes `X-Request-Id`; request completion and errors are emitted as JSON.
+Each HTTP response includes `X-Request-Id`. Request completion and errors are emitted as JSON.
 
 Capture stdout/stderr in structured platform logs, set retention limits, and alert on repeated
 restarts, HTTP 5xx responses, failed health checks, disk exhaustion, and backup failures.
@@ -66,7 +66,7 @@ kozane doctor
 
 Migrations create a database backup automatically. Keep backups on a different device, define
 a retention policy, and rehearse `kozane db restore` at least once before relying on them.
-Restore refuses to run while a recorded Kozane server process is active; stop the service before
+Restore refuses to run while a recorded Kozane server process is active. Stop the service before
 restoring. Restore validates SQLite integrity and migration metadata before atomically replacing
 the current database.
 

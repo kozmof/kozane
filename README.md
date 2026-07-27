@@ -31,6 +31,9 @@ kozane init
 kozane open
 ```
 
+For working in the browser UI — the canvas, cards, bundles, and scopes — see the
+[Browser UI handbook](./docs/browser-ui-handbook.md).
+
 To start with an empty database that exists only for the lifetime of the server,
 use `kozane open --memory`. It creates a project named `:memory:`, and all
 changes are discarded when the server stops. `kozane init` creates a default project named
