@@ -2,9 +2,7 @@
 
 > ⚠️ Status: Beta — Kozane is under active development and not yet production-ready. Expect breaking changes to commands and data formats, and avoid using it for irreplaceable data.
 
-Kozane is a local-first, card-based thinking workspace with a browser UI, CLI, and a per-workspace SQLite-compatible database.
-
-It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
+Kozane is a local-first, short text alignment workspace. It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
 
 ## Requirements
 
@@ -31,7 +29,7 @@ kozane init
 kozane open
 ```
 
-For working in the browser UI — the canvas, cards, bundles, and scopes — see the
+For working in the browser UI, see the
 [Browser UI handbook](./docs/browser-ui-handbook.md).
 
 To start with an empty database that exists only for the lifetime of the server,
@@ -83,18 +81,11 @@ For a full breakdown of what each run mode exposes, see the [Security matrix](./
 
 ## Publishing a read-only static site
 
-Export the current workspace as a static site — plain HTML, CSS, and JS with no
-server — suitable for GitHub Pages or any static host:
+Export the current workspace as a static site: 
 
 ```sh
 kozane net ssg generate --out ./site
 ```
-
-The export is a snapshot of the database at build time. Cards, bundles, scopes,
-and glues render and you can pan, zoom, and filter, but everything that writes
-(composing, dragging, deleting, working copies) and the live-sync poll are
-disabled — there is no server to talk to. Re-run `kozane net ssg generate` to
-refresh the snapshot.
 
 When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass
 the base path:
@@ -108,9 +99,7 @@ SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages
 for it. Static export requires the source build toolchain, so run it from a
 cloned repository after `pnpm install`.
 
-Preview it over HTTP, not by opening the files directly — `file://` shows a
-directory listing instead of the page and blocks the scripts the app needs to
-become interactive:
+Preview it over HTTP, not by opening the files directly.
 
 ```sh
 kozane net ssg preview      # serves ./site at http://127.0.0.1:4173
