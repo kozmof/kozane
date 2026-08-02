@@ -7,21 +7,37 @@ Kozane is a local-first, short text alignment workspace. It builds on the kozane
 ## Requirements
 
 - Node.js 24 LTS
-- pnpm 10.12.1 for source builds
+
+## Install
+
+Install Kozane globally to make the `kozane` command available everywhere with npm or pnpm:
+
+```sh
+npm install --global kozane
+# or
+pnpm add --global kozane
+```
+
+Or install it as a development dependency when you want to pin the Kozane version for a
+particular project:
+
+```sh
+npm install --save-dev kozane
+npx kozane init
+npx kozane open
+```
+
+With pnpm:
+
+```sh
+pnpm add --save-dev kozane
+pnpm exec kozane init
+pnpm exec kozane open
+```
 
 ## Quick start
 
-Kozane is not published to npm yet. Clone the repository, then build and link it:
-
-```sh
-git clone https://github.com/kozmof/kozane.git
-cd kozane
-pnpm install --frozen-lockfile
-pnpm build
-pnpm link --global
-```
-
-Then create a workspace and open it:
+After a global install, create a workspace and open it:
 
 ```sh
 mkdir my-workspace && cd my-workspace
@@ -134,6 +150,8 @@ kozane doctor
 Migrations create a backup first. Back up the entire `.kozane` directory and test restores regularly.
 
 ## Development and releases
+
+Building Kozane itself from source requires pnpm 10.12.1:
 
 ```sh
 pnpm install --frozen-lockfile

@@ -24,34 +24,48 @@ function run(command, args, options = {}) {
   }
 }
 
-const pnpmArgs = (...args) =>
-  process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1"
-    ? ["--config.engine-strict=false", ...args]
-    : args;
-
 try {
-  run(
-    "pnpm",
-    pnpmArgs(
-      ...(process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1"
-        ? ["--config.ignore-scripts=true"]
-        : []),
-      "pack",
-      "--pack-destination",
-      staging,
-    ),
-  );
+  run("pnpm", [
+    ...(process.env.KOZANE_ALLOW_UNSUPPORTED_NODE === "1" ? ["--config.ignore-scripts=true"] : []),
+    "pack",
+    "--pack-destination",
+    staging,
+  ]);
   const archive = readdirSync(staging).find((file) => file.endsWith(".tgz"));
   if (!archive) throw new Error("pnpm pack did not produce an archive");
+  const archivePath = join(staging, archive);
   writeFileSync(join(staging, "package.json"), '{"private":true}\n');
-  run("pnpm", pnpmArgs("add", "--ignore-scripts", join(staging, archive)), {
-    cwd: staging,
-  });
+  run(
+    "npm",
+    ["install", "--save-dev", "--ignore-scripts", "--no-audit", "--no-fund", archivePath],
+    { cwd: staging },
+  );
+  run("npm", ["exec", "--", "kozane", "--version"], { cwd: staging });
   const installedRoot = join(staging, "node_modules", "kozane");
   run(process.execPath, [join(sourceRoot, "scripts", "smoke-production.mjs")], {
     env: { ...process.env, KOZANE_PACKAGE_ROOT: installedRoot },
   });
-  console.log("Installed package smoke test passed.");
+  const globalPrefix = join(staging, "global");
+  run(
+    "npm",
+    [
+      "install",
+      "--global",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      "--prefix",
+      globalPrefix,
+      archivePath,
+    ],
+    { cwd: staging },
+  );
+  const globalBin =
+    process.platform === "win32"
+      ? join(globalPrefix, "kozane.cmd")
+      : join(globalPrefix, "bin", "kozane");
+  run(globalBin, ["--version"], { cwd: staging });
+  console.log("Local and global npm package smoke tests passed.");
 } finally {
   rmSync(staging, { recursive: true, force: true });
 }
