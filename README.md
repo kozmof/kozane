@@ -81,7 +81,7 @@ For a full breakdown of what each run mode exposes, see the [Security matrix](./
 
 ## Publishing a read-only static site
 
-Export the current workspace as a static site: 
+Export the current workspace as a static site:
 
 ```sh
 kozane net ssg generate --out ./site
