@@ -365,17 +365,20 @@ kozane card add "Investigate caching" --project eb15 --scope e3ee --x 48 --y 72
 
 ### `kozane card squash [content]`
 
-Splits text on English (`.`) or Japanese (`。`) full stops and on empty lines, trims
-each segment, and adds every non-empty segment as a separate card. Generated cards are
+Splits text using a configurable JavaScript regular expression, trims each segment,
+and adds every non-empty segment as a separate card. The default pattern splits on
+`. ` (a period followed by a space), `。`, or a blank line, preserving dots inside
+values such as `example.com`. Generated cards are
 placed on unoccupied grid positions instead of being stacked at the same coordinates. Pass the text as an argument or pipe
 it through standard input:
 
 ```bash
 kozane card squash "First thought. 第二の考え。 Third thought."
 cat foo.txt | kozane card squash
+kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-The command accepts `--project`, `--bundle`, and `--scope`, using full or short IDs.
+The command accepts `--pattern`, `--project`, `--bundle`, and `--scope`, using full or short IDs.
 These options work with piped input as well:
 
 ```bash

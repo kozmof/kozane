@@ -185,10 +185,14 @@ card
 
 card
   .command("squash [content]")
-  .description("Split an argument or stdin on . or 。 and add each part as a card")
+  .description("Split an argument or stdin with a regex and add each part as a card")
   .option("--project <projectId>", "Project ID or short ID to add the cards to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
+  .option(
+    "--pattern <regex>",
+    "JavaScript regex used to split cards (default: period-space, 。, or blank line)",
+  )
   .action((content, opts) => cardSquash(content, opts));
 
 card

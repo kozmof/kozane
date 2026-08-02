@@ -21,7 +21,7 @@ type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
   x?: number;
   y?: number;
 };
-type CardSquashOptions = Omit<CardAddOptions, "x" | "y">;
+type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
 
 type ListedCard = {
   id: string;
@@ -63,9 +63,11 @@ function fail(error: unknown): never {
   process.exit(1);
 }
 
-export function splitCardContent(content: string): string[] {
+export const DEFAULT_SQUASH_PATTERN = String.raw`\. |。|\r?\n[ \t]*\r?\n`;
+
+export function splitCardContent(content: string, pattern = DEFAULT_SQUASH_PATTERN): string[] {
   return content
-    .split(/[.。]|\r?\n[ \t]*\r?\n/)
+    .split(new RegExp(pattern))
     .map((part) => part.trim())
     .filter(Boolean);
 }
@@ -180,7 +182,7 @@ export async function cardSquash(
   options: CardSquashOptions = {},
 ): Promise<void> {
   try {
-    const contents = splitCardContent(content ?? readFileSync(0, "utf8"));
+    const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
 
     const { root } = requireWorkspace();

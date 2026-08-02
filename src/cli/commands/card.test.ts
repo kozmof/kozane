@@ -2,10 +2,21 @@ import { describe, expect, it } from "vitest";
 import { splitCardContent, squashCardPositions } from "./card";
 
 describe("card squash", () => {
-  it("splits on full stops and empty lines", () => {
-    expect(
-      splitCardContent("First paragraph\ncontinues here.\n\nSecond paragraph\n\n\n第三。"),
-    ).toEqual(["First paragraph\ncontinues here", "Second paragraph", "第三"]);
+  it("splits on period-space, Japanese full stops, and blank lines by default", () => {
+    expect(splitCardContent("Visit example.com. Then read this。最後\n\nNew paragraph")).toEqual([
+      "Visit example.com",
+      "Then read this",
+      "最後",
+      "New paragraph",
+    ]);
+  });
+
+  it("accepts a custom separator regex", () => {
+    expect(splitCardContent("first | second,third", String.raw`\s*[|,]\s*`)).toEqual([
+      "first",
+      "second",
+      "third",
+    ]);
   });
 
   it("places cards on distinct grid positions", () => {

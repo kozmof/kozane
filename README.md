@@ -49,11 +49,18 @@ Create one card from a quoted argument:
 kozane card add "Investigate caching"
 ```
 
-To turn sentences into separate cards, use `card squash`. It splits on both `.` and
-`。`, trims whitespace, and ignores empty segments:
+To turn sentences into separate cards, use `card squash`. By default it splits on
+`. ` (a period followed by a space), `。`, and blank lines, so dots inside URLs
+such as `example.com` are preserved. It trims whitespace and ignores empty segments:
 
 ```sh
 cat foo.txt | kozane card squash
+```
+
+Pass a JavaScript regular expression source to customize the separator:
+
+```sh
+kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
 Project, bundle, and scope options also work with piped files:
