@@ -1,6 +1,8 @@
 {
   "name": "kozane",
   "version": "0.1.2",
+  "license": "MIT",
+  "author": "Kozo Oeda",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kozmof/kozane.git"
@@ -14,8 +16,6 @@
     "build",
     "drizzle"
   ],
-  "license": "MIT",
-  "author": "Kozo Oeda",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -28,8 +28,8 @@
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "fmt": "oxfmt",
-    "fmt:check": "oxfmt --check",
+    "fmt": "oxfmt --threads=1",
+    "fmt:check": "oxfmt --check --threads=1",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
