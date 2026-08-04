@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { css } from "styled-system/css";
   import KozaneCard from "./KozaneCard.svelte";
   import SelectionRect from "./SelectionRect.svelte";
@@ -8,6 +9,7 @@
     PALETTE,
     ZOOM_STEP,
     buildGlueGroupMap,
+    centeredScrollOffset,
     clampZoom,
     clientToWorld as toWorldPoint,
     dragGroupIds,
@@ -99,6 +101,11 @@
     startWorldY: number;
     moved: boolean;
   } | null = null;
+
+  onMount(() => {
+    canvasEl.scrollLeft = centeredScrollOffset(canvasEl.scrollWidth, canvasEl.clientWidth);
+    canvasEl.scrollTop = centeredScrollOffset(canvasEl.scrollHeight, canvasEl.clientHeight);
+  });
 
   export function getNewCardPosition(seq: number): { posX: number; posY: number } {
     const col = seq % 4;

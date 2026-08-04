@@ -4,6 +4,7 @@ import {
   buildGlueGroupMap,
   cardPositionPatches,
   cardsWithGlueIds,
+  centeredScrollOffset,
   clampZoom,
   clientToWorld,
   dragGroupIds,
@@ -155,6 +156,12 @@ describe("cardPositionPatches", () => {
 });
 
 describe("canvas geometry", () => {
+  it("centers scrollable canvas content in the viewport", () => {
+    expect(centeredScrollOffset(2800, 1200)).toBe(800);
+    expect(centeredScrollOffset(2000, 800)).toBe(600);
+    expect(centeredScrollOffset(800, 1200)).toBe(0);
+  });
+
   it("converts client coordinates to world coordinates", () => {
     expect(clientToWorld(150, 220, { left: 50, top: 20 }, { x: 100, y: 40 }, 2)).toEqual({
       x: 100,

@@ -25,6 +25,10 @@ export type ScreenRect = { left: number; top: number; right: number; bottom: num
 export type RectLike = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 export type CardPosition = { x: number; y: number };
 
+export function centeredScrollOffset(contentSize: number, viewportSize: number): number {
+  return Math.max(0, (contentSize - viewportSize) / 2);
+}
+
 // Colors repeat intentionally when bundles exceed PALETTE.length (8).
 export function applyPalette<T extends { id: string }>(bundles: T[]) {
   return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
