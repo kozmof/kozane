@@ -40,6 +40,8 @@
     fontSize,
     fontFamily,
     onPersistPositions,
+    onPositionActivityStart,
+    onPositionActivityEnd,
     onError,
     readonly = false,
   }: {
@@ -59,6 +61,8 @@
     fontSize: number;
     fontFamily: string;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
+    onPositionActivityStart: () => void;
+    onPositionActivityEnd: () => void;
     onError: (message: string) => void;
     // Read-only export: keep pan/zoom, disable card drag, selection, and compose.
     readonly?: boolean;
@@ -149,7 +153,7 @@
   }
 
   export function handleCardMouseDown(e: MouseEvent, cardId: string) {
-    if (readonly || e.button !== 0) return;
+    if (readonly || e.button !== 0 || dragState) return;
     e.stopPropagation();
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
@@ -171,6 +175,7 @@
       moved: false,
     };
     draggingId = cardId;
+    onPositionActivityStart();
   }
 
   export function handleCardClick(e: MouseEvent, cardId: string) {
@@ -291,7 +296,12 @@
           const allIds = [cardId, ...groupIds];
           const positions = cardPositionPatches(cards, allIds);
           const sentByCardId = new Map(positions.map((p) => [p.cardId, p]));
-          const ok = await onPersistPositions(positions);
+          let ok = false;
+          try {
+            ok = await onPersistPositions(positions);
+          } finally {
+            onPositionActivityEnd();
+          }
           if (!ok) {
             cards = cards.map((c) => {
               const sent = sentByCardId.get(c.id);
@@ -305,6 +315,8 @@
             });
             onError("Failed to save card position");
           }
+        } else {
+          onPositionActivityEnd();
         }
       }
       if (panState) {

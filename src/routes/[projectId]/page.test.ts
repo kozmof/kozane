@@ -87,6 +87,42 @@ describe("Project page", () => {
     expect([...panels].every((panel) => panel.style.width === "0px")).toBe(true);
   });
 
+  it("keeps a dragged card in place when an older snapshot finishes", async () => {
+    let resolveSnapshot!: (response: { ok: boolean; json: () => Promise<typeof data> }) => void;
+    const snapshotResponse = new Promise<{ ok: boolean; json: () => Promise<typeof data> }>(
+      (resolve) => (resolveSnapshot = resolve),
+    );
+    const snapshotJson = vi.fn(async () => data);
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(() => snapshotResponse)
+      .mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", fetch);
+
+    render(ProjectPage, {
+      props: {
+        data,
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
+
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    await fireEvent.mouseDown(card, { button: 0, clientX: 30, clientY: 60 });
+    await fireEvent.mouseMove(window, { clientX: 222, clientY: 180 });
+    expect(card).toHaveStyle({ left: "216px", top: "168px" });
+
+    resolveSnapshot({ ok: true, json: snapshotJson });
+    await waitFor(() => expect(snapshotJson).toHaveBeenCalledOnce());
+    expect(card).toHaveStyle({ left: "216px", top: "168px" });
+
+    await fireEvent.mouseUp(window);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  });
+
   it("uses the configured shortcut to focus the create-card input", async () => {
     render(ProjectPage, {
       props: {

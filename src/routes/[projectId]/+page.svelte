@@ -36,6 +36,18 @@
   let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let newCardSeq = 0;
+  let positionActivityCount = 0;
+  let positionActivityVersion = 0;
+
+  function startPositionActivity() {
+    positionActivityCount += 1;
+    positionActivityVersion += 1;
+  }
+
+  function endPositionActivity() {
+    positionActivityCount = Math.max(0, positionActivityCount - 1);
+    positionActivityVersion += 1;
+  }
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: { getNewCardPosition: (seq: number) => { posX: number; posY: number } } = $state()!;
@@ -88,11 +100,17 @@
     if (readonly) return;
     let refreshing = false;
     const refresh = async () => {
-      if (refreshing || document.visibilityState === "hidden") return;
+      if (refreshing || positionActivityCount > 0 || document.visibilityState === "hidden") return;
       refreshing = true;
+      const activityVersion = positionActivityVersion;
       try {
         const response = await s.fetcher(`/${s.projectId}/api/snapshot`);
-        if (response.ok) s.refreshFromData(await response.json());
+        if (response.ok) {
+          const snapshot = await response.json();
+          if (positionActivityCount === 0 && positionActivityVersion === activityVersion) {
+            s.refreshFromData(snapshot);
+          }
+        }
       } catch {
         // A later poll retries transient navigation or database failures.
       } finally {
@@ -214,6 +232,8 @@
       fontSize={data.uiConfig.defaultFontSize}
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
+      onPositionActivityStart={startPositionActivity}
+      onPositionActivityEnd={endPositionActivity}
       onError={(msg) => (s.lastError = msg)}
       {readonly}
     />
