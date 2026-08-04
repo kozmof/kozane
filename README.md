@@ -18,8 +18,8 @@ npm install --global kozane
 pnpm add --global kozane
 ```
 
-Or install it as a development dependency when you want to pin the Kozane version for a
-particular project:
+Or install it as a development dependency to keep the `kozane` command scoped to the
+project:
 
 ```sh
 npm install --save-dev kozane
@@ -37,7 +37,7 @@ pnpm exec kozane open
 
 ## Quick start
 
-After a global install, create a workspace and open it:
+Create a workspace and open it:
 
 ```sh
 mkdir my-workspace && cd my-workspace
