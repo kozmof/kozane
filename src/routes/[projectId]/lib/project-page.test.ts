@@ -206,9 +206,9 @@ describe("canvas geometry", () => {
 });
 
 describe("clampZoom", () => {
-  it("rounds to one decimal and keeps zoom in range", () => {
-    expect(clampZoom(1.04)).toBe(1);
-    expect(clampZoom(1.06)).toBe(1.1);
+  it("rounds to two decimals and keeps zoom in range", () => {
+    expect(clampZoom(1.024)).toBe(1.02);
+    expect(clampZoom(1.026)).toBe(1.03);
     expect(clampZoom(0)).toBe(0.25);
     expect(clampZoom(3)).toBe(2);
   });

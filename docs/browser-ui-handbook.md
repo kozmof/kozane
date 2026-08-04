@@ -42,7 +42,8 @@ the `ui` section of `.kozane/config.json`.
 - Pan — click and drag any empty part of the canvas. The cursor is a grab hand.
 - Zoom — hold `Ctrl` or `Cmd` and scroll to zoom toward the pointer, or use the
   `−` and `+` control in the bottom-right corner. Zoom ranges from 25% to 200%
-  in 10% steps, and the current level shows next to the buttons.
+  using the configured `ui.zoomStep` (5% by default), and the current level
+  shows next to the buttons.
 
 Cards snap to a 24-pixel grid, so positions stay aligned as you work.
 

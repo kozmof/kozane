@@ -5,6 +5,7 @@ export type UiConfig = {
   defaultFontFamily: string;
   defaultCardWidth: number;
   defaultZoom: number;
+  zoomStep: number;
   leftPanelWidth: number;
   rightPanelWidth: number;
   defaultShowFooter: boolean;
@@ -29,6 +30,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultFontFamily: "monospace",
   defaultCardWidth: 210,
   defaultZoom: 1,
+  zoomStep: 0.05,
   leftPanelWidth: 216,
   rightPanelWidth: 232,
   defaultShowFooter: false,
@@ -52,6 +54,7 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   defaultFontSize: [4, 128],
   defaultCardWidth: [40, 1200],
   defaultZoom: [0.1, 10],
+  zoomStep: [0.01, 1],
   leftPanelWidth: [80, 800],
   rightPanelWidth: [80, 800],
   canvasWidth: [400, 20000],

@@ -6,7 +6,6 @@ export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/ca
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
-export const ZOOM_STEP = 0.1;
 
 export const PALETTE = [
   { bg: "oklch(93% 0.055 52)", dot: "oklch(62% 0.15 52)" },
@@ -147,5 +146,5 @@ export function rectsIntersect(a: RectLike, b: RectLike): boolean {
 }
 
 export function clampZoom(value: number): number {
-  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 10) / 10));
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
 }

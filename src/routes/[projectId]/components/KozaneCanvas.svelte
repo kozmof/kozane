@@ -7,7 +7,6 @@
   import {
     GRID,
     PALETTE,
-    ZOOM_STEP,
     buildGlueGroupMap,
     centeredScrollOffset,
     clampZoom,
@@ -34,6 +33,7 @@
     scopeCardIds,
     showFooters,
     zoom = $bindable(),
+    zoomStep,
     canvasWidth,
     canvasHeight,
     cardWidth,
@@ -55,6 +55,7 @@
     scopeCardIds: Set<string> | null;
     showFooters: boolean;
     zoom: number;
+    zoomStep: number;
     canvasWidth: number;
     canvasHeight: number;
     cardWidth: number;
@@ -338,7 +339,7 @@
     function onWheel(e: WheelEvent) {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      const delta = e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP;
+      const delta = e.deltaY < 0 ? zoomStep : -zoomStep;
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;

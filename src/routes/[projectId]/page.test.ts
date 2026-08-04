@@ -38,6 +38,7 @@ const data = {
     defaultFontFamily: "monospace",
     defaultCardWidth: 210,
     defaultZoom: 1,
+    zoomStep: 0.05,
     leftPanelWidth: 216,
     rightPanelWidth: 232,
     defaultShowFooter: true,
@@ -64,6 +65,26 @@ afterEach(() => {
 });
 
 describe("Project page", () => {
+  it("uses the configured zoom step", async () => {
+    const { container } = render(ProjectPage, {
+      props: {
+        data: { ...data, uiConfig: { ...data.uiConfig, zoomStep: 0.05 } },
+        params: { projectId: "project-1" },
+        form: null,
+      },
+    });
+
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    expect(screen.getByText("105%")).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Zoom out" }));
+    expect(screen.getByText("100%")).toBeInTheDocument();
+
+    const canvas = container.querySelector<HTMLElement>('[role="presentation"]')!;
+    await fireEvent.wheel(canvas, { ctrlKey: true, deltaY: -1 });
+    expect(screen.getByText("105%")).toBeInTheDocument();
+  });
+
   it("uses the configured shortcuts to toggle footers and panels", async () => {
     const { container } = render(ProjectPage, {
       props: {

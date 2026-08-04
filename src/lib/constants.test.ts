@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { clamp, CANVAS_W, CANVAS_H, CONTENT_MAX } from "./constants.js";
+import { DEFAULT_UI_CONFIG, UI_NUM_RANGES } from "./ui-config.js";
 
 describe("clamp", () => {
   it("returns value when within range", () => {
@@ -32,6 +33,13 @@ describe("clamp", () => {
     expect(clamp(-50, 0, CANVAS_H)).toBe(0);
     expect(clamp(CANVAS_H + 100, 0, CANVAS_H)).toBe(CANVAS_H);
     expect(clamp(1000, 0, CANVAS_H)).toBe(1000);
+  });
+});
+
+describe("UI config", () => {
+  it("uses a 5% zoom step by default and defines its override range", () => {
+    expect(DEFAULT_UI_CONFIG.zoomStep).toBe(0.05);
+    expect(UI_NUM_RANGES.zoomStep).toEqual([0.01, 1]);
   });
 });
 

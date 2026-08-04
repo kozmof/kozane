@@ -226,6 +226,7 @@
       {scopeCardIds}
       {showFooters}
       bind:zoom
+      zoomStep={data.uiConfig.zoomStep}
       canvasWidth={data.uiConfig.canvasWidth}
       canvasHeight={data.uiConfig.canvasHeight}
       cardWidth={data.uiConfig.defaultCardWidth}
@@ -244,6 +245,7 @@
 
     <FloatingControls
       {zoom}
+      zoomStep={data.uiConfig.zoomStep}
       {showFooters}
       {sidebarsVisible}
       onToggleFooters={() => (showFooters = !showFooters)}

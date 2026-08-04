@@ -1,9 +1,9 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import { ZOOM_STEP } from "../lib/project-page";
 
   let {
     zoom,
+    zoomStep,
     showFooters,
     sidebarsVisible,
     onToggleFooters,
@@ -11,6 +11,7 @@
     onZoom,
   }: {
     zoom: number;
+    zoomStep: number;
     showFooters: boolean;
     sidebarsVisible: boolean;
     onToggleFooters: () => void;
@@ -94,7 +95,7 @@
     overflow: "hidden",
   })}
 >
-  {#each [["−", -ZOOM_STEP], ["+", ZOOM_STEP]] as [label, delta] (label)}
+  {#each [["−", -zoomStep], ["+", zoomStep]] as [label, delta] (label)}
     <button
       class={css({
         width: "30px",
