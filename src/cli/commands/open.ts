@@ -27,6 +27,7 @@ type OpenOptions = {
   open?: boolean;
   allowRemote?: boolean;
   memory?: boolean;
+  logRequests?: boolean;
 };
 
 export function openBrowser(url: string): void {
@@ -140,6 +141,7 @@ export async function open(options: OpenOptions): Promise<void> {
       ...(options.memory ? { KOZANE_MEMORY_MODE: "1", KOZANE_RUNTIME_DATABASE_URL: dbURL } : {}),
       HOST: host,
       PORT: port,
+      KOZANE_LOG_REQUESTS: options.logRequests ? "1" : "0",
       // A local (loopback) server is served over plain http, but the Node adapter
       // assumes https, so SvelteKit's CSRF origin check rejects the login form (a
       // POST) with 403. Give the adapter the exact loopback origin so the check

@@ -133,17 +133,18 @@ Default project: main
 Starts the local Kozane web UI and (by default) opens the browser.
 
 ```bash
-kozane open [--host <host>] [--port <port>] [--memory] [--no-open]
+kozane open [--host <host>] [--port <port>] [--memory] [--log-requests] [--no-open]
 ```
 
 Options:
 
-| Flag        | Default     | Description                              |
-| ----------- | ----------- | ---------------------------------------- |
-| `--host`    | `127.0.0.1` | Bind host (from config if unset)         |
-| `--port`    | `5173`      | Port number (from config if unset)       |
-| `--memory`  | false       | Use a fresh database for this server run |
-| `--no-open` | false       | Start server without opening the browser |
+| Flag             | Default     | Description                              |
+| ---------------- | ----------- | ---------------------------------------- |
+| `--host`         | `127.0.0.1` | Bind host (from config if unset)         |
+| `--port`         | `5173`      | Port number (from config if unset)       |
+| `--memory`       | false       | Use a fresh database for this server run |
+| `--log-requests` | false       | Log each HTTP request as structured JSON |
+| `--no-open`      | false       | Start server without opening the browser |
 
 Behavior:
 

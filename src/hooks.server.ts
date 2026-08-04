@@ -145,17 +145,19 @@ export const handle: Handle = async ({ event, resolve }) => {
     const response = await handleRequest({ event, resolve });
     const headers = new Headers(response.headers);
     headers.set("x-request-id", requestId);
-    console.log(
-      JSON.stringify({
-        level: "info",
-        event: "http_request",
-        requestId,
-        method: event.request.method,
-        path: event.url.pathname,
-        status: response.status,
-        durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-      }),
-    );
+    if (process.env.KOZANE_LOG_REQUESTS === "1") {
+      console.log(
+        JSON.stringify({
+          level: "info",
+          event: "http_request",
+          requestId,
+          method: event.request.method,
+          path: event.url.pathname,
+          status: response.status,
+          durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
+        }),
+      );
+    }
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,

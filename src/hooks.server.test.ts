@@ -40,9 +40,37 @@ function event(url = "http://localhost/", headers?: HeadersInit) {
 
 describe("production request hook", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     process.env.HOST = "127.0.0.1";
+    delete process.env.KOZANE_LOG_REQUESTS;
     state.root = workspace();
     _resetAuthFailuresForTest();
+  });
+
+  it("does not log successful requests by default", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await handle({
+      event: event() as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("logs successful requests when request logging is enabled", async () => {
+    process.env.KOZANE_LOG_REQUESTS = "1";
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    await handle({
+      event: event("http://localhost/project") as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(log).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      level: "info",
+      event: "http_request",
+      method: "GET",
+      path: "/project",
+      status: 200,
+    });
   });
 
   it("fails closed when a remotely bound server has no API key", async () => {

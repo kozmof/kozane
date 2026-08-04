@@ -35,6 +35,10 @@ describe("CLI parser and workspace errors", () => {
     expect(help.stdout).toContain("Local card-based thinking workspace");
     expect(help.stdout).toContain("Database management");
 
+    const openHelp = runCli(root, "open", "--help");
+    expect(openHelp.status).toBe(0);
+    expect(openHelp.stdout).toContain("--log-requests");
+
     const version = runCli(root, "--version");
     expect(version.status).toBe(0);
     expect(version.stdout).toMatch(/^\d+\.\d+\.\d+\n$/);
