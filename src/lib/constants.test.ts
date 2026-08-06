@@ -44,12 +44,12 @@ describe("UI config", () => {
 });
 
 describe("constants", () => {
-  it("CANVAS_W is 2800", () => {
-    expect(CANVAS_W).toBe(2800);
+  it("CANVAS_W is 5600", () => {
+    expect(CANVAS_W).toBe(5600);
   });
 
-  it("CANVAS_H is 2000", () => {
-    expect(CANVAS_H).toBe(2000);
+  it("CANVAS_H is 4000", () => {
+    expect(CANVAS_H).toBe(4000);
   });
 
   it("CONTENT_MAX is 10000", () => {

@@ -714,8 +714,8 @@ Working copy created.
     "unglueCardShortcut": "u",
     "moveCardsShortcut": "m",
     "deleteCardsShortcut": "Delete",
-    "canvasWidth": 2800,
-    "canvasHeight": 2000
+    "canvasWidth": 5600,
+    "canvasHeight": 4000
   }
 }
 ```
