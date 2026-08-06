@@ -73,6 +73,7 @@
 
   let content = $state(untrack(() => editingCard?.content ?? ""));
   let bundleId = $state(untrack(composerBundleId));
+  let createBundleId = $state(untrack(() => defaultBundleId));
   let textareaEl: HTMLTextAreaElement = $state()!;
   let suppressNextAutoFocus = false;
   let loadedComposerContext: string | null = null;
@@ -90,7 +91,7 @@
     if (context === loadedComposerContext) return;
     loadedComposerContext = context;
     content = editingCard?.content ?? "";
-    bundleId = composerBundleId();
+    bundleId = context === "create" ? createBundleId : composerBundleId();
     const shouldFocus = !suppressNextAutoFocus;
     suppressNextAutoFocus = false;
     tick().then(() => {
@@ -194,6 +195,7 @@
       {bundleId}
       onChange={(id) => {
         bundleId = id;
+        if (mode === "create") createBundleId = id;
         if (mode === "edit") onBundleChange?.(id);
         if (mode === "selection") onSelectionBundleChange?.(selectedCards.map((c) => c.id), id);
       }}

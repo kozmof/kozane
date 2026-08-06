@@ -115,6 +115,24 @@ describe("CardComposer — create mode", () => {
 
     expect(onSubmit).toHaveBeenCalledWith(null, "Bundled", "b2");
   });
+
+  it("restores the last create bundle after selecting a card", async () => {
+    const user = userEvent.setup();
+    const selectedCard = {
+      id: "card-1", content: "General card", bundleId: "b1", posX: 0, posY: 0,
+      glueId: null, workingCopyId: null,
+    };
+    const { rerender } = render(CardComposer, { props: makeProps() });
+
+    await user.click(screen.getByRole("button", { name: "Select bundle" }));
+    await user.click(screen.getByRole("option", { name: /Research/ }));
+    await rerender(makeProps({ selectedCards: [selectedCard], primaryCard: selectedCard }));
+    expect(screen.getByText("General")).toBeInTheDocument();
+
+    await rerender(makeProps());
+
+    expect(screen.getByText("Research")).toBeInTheDocument();
+  });
 });
 
 describe("CardComposer — edit mode", () => {
