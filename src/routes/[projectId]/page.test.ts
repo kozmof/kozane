@@ -37,6 +37,7 @@ const data = {
     defaultFontSize: 11.5,
     defaultFontFamily: "monospace",
     defaultCardWidth: 210,
+    newCardPlacement: "grid" as const,
     defaultZoom: 1,
     zoomStep: 0.05,
     leftPanelWidth: 216,

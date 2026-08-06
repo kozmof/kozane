@@ -7,6 +7,7 @@ import {
   UI_NUM_RANGES,
   UI_BOOL_FIELDS,
   UI_STR_FIELDS,
+  NEW_CARD_PLACEMENTS,
 } from "../../lib/ui-config.js";
 
 export type { UiConfig };
@@ -102,6 +103,14 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
       if (typeof u[f] !== "string")
         throw new Error(`Invalid Kozane config: ui.${f} must be a string`);
       parsedUi[f] = u[f] as string;
+    }
+    if (u.newCardPlacement !== undefined) {
+      if (!NEW_CARD_PLACEMENTS.includes(u.newCardPlacement as never)) {
+        throw new Error(
+          `Invalid Kozane config: ui.newCardPlacement must be "grid" or "vertical-list"`,
+        );
+      }
+      parsedUi.newCardPlacement = u.newCardPlacement as UiConfig["newCardPlacement"];
     }
   }
 

@@ -23,9 +23,24 @@ export type WorldRect = Point & { w: number; h: number };
 export type ScreenRect = { left: number; top: number; right: number; bottom: number };
 export type RectLike = Pick<DOMRect, "left" | "top" | "right" | "bottom">;
 export type CardPosition = { x: number; y: number };
+export type PositionedCardSize = { posX: number; posY: number; width: number; height: number };
 
 export function centeredScrollOffset(contentSize: number, viewportSize: number): number {
   return Math.max(0, (contentSize - viewportSize) / 2);
+}
+
+export function verticalListPosition(
+  cards: PositionedCardSize[],
+  posX: number,
+  startY: number,
+  cardWidth: number,
+  gap = GRID,
+): CardPosition {
+  const nextY = cards.reduce((bottom, card) => {
+    const intersectsColumn = card.posX < posX + cardWidth && card.posX + card.width > posX;
+    return intersectsColumn ? Math.max(bottom, card.posY + card.height + gap) : bottom;
+  }, startY);
+  return { x: posX, y: Math.ceil(nextY / GRID) * GRID };
 }
 
 // Colors repeat intentionally when bundles exceed PALETTE.length (8).

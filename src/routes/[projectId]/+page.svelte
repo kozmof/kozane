@@ -230,6 +230,7 @@
       canvasWidth={data.uiConfig.canvasWidth}
       canvasHeight={data.uiConfig.canvasHeight}
       cardWidth={data.uiConfig.defaultCardWidth}
+      newCardPlacement={data.uiConfig.newCardPlacement}
       fontSize={data.uiConfig.defaultFontSize}
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}

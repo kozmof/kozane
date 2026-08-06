@@ -16,11 +16,13 @@
     glueIdByCardId,
     cardPositionPatches,
     previousPositions,
+    verticalListPosition,
     rectsIntersect,
     selectionRectFromPoints,
     worldRectToScreenRect,
   } from "../lib/project-page";
   import type { CardPositionPatch } from "../lib/project-page";
+  import type { NewCardPlacement } from "$lib/ui-config";
 
   let {
     cards = $bindable(),
@@ -37,6 +39,7 @@
     canvasWidth,
     canvasHeight,
     cardWidth,
+    newCardPlacement,
     fontSize,
     fontFamily,
     onPersistPositions,
@@ -59,6 +62,7 @@
     canvasWidth: number;
     canvasHeight: number;
     cardWidth: number;
+    newCardPlacement: NewCardPlacement;
     fontSize: number;
     fontFamily: string;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
@@ -73,6 +77,9 @@
   const cardToGlue = $derived(glueIdByCardId(glueRels));
 
   let canvasEl: HTMLDivElement = $state()!;
+  let placementSeq = 0;
+  let lastPlacementScroll: { left: number; top: number } | null = null;
+  let lastListPosition: { posX: number; posY: number } | null = null;
   let draggingId = $state<string | null>(null);
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
@@ -113,14 +120,48 @@
   });
 
   export function getNewCardPosition(seq: number): { posX: number; posY: number } {
-    const col = seq % 4;
-    const row = Math.floor(seq / 4);
-    const centerX = Math.round((canvasEl.scrollLeft + canvasEl.clientWidth / 2) / zoom / GRID) * GRID;
-    const centerY = Math.round((canvasEl.scrollTop + canvasEl.clientHeight / 2) / zoom / GRID) * GRID;
-    return {
-      posX: Math.max(0, centerX - 3 * GRID + col * 2 * GRID),
-      posY: Math.max(0, centerY - 3 * GRID + row * 2 * GRID),
-    };
+    const scroll = { left: canvasEl.scrollLeft, top: canvasEl.scrollTop };
+    const viewportMoved =
+      lastPlacementScroll !== null &&
+      (Math.abs(scroll.left - lastPlacementScroll.left) > 1 ||
+        Math.abs(scroll.top - lastPlacementScroll.top) > 1);
+    if (seq === 0 || viewportMoved) {
+      placementSeq = 0;
+      lastListPosition = null;
+    }
+    const layoutSeq = placementSeq++;
+    lastPlacementScroll = scroll;
+
+    const centerX = Math.round((scroll.left + canvasEl.clientWidth / 2) / zoom / GRID) * GRID;
+    const centerY = Math.round((scroll.top + canvasEl.clientHeight / 2) / zoom / GRID) * GRID;
+    const startX = Math.max(0, Math.round((centerX - cardWidth / 2) / GRID) * GRID);
+    const startY = Math.max(0, centerY - 2 * GRID);
+    if (newCardPlacement === "grid") {
+      const col = layoutSeq % 4;
+      const row = Math.floor(layoutSeq / 4);
+      return {
+        posX: startX + col * 6 * GRID,
+        posY: startY + row * 4 * GRID,
+      };
+    }
+
+    const previous = lastListPosition;
+    const sizes = previous
+      ? [...canvasEl.querySelectorAll<HTMLElement>("[data-card-id]")].flatMap((el) => {
+          const card = visibleCards.find(({ id }) => id === el.dataset.cardId);
+          return card?.posX === previous.posX && card.posY === previous.posY
+            ? [{
+                posX: card.posX,
+                posY: card.posY,
+                width: el.offsetWidth || cardWidth,
+                height: el.offsetHeight,
+              }]
+            : [];
+        })
+      : [];
+    const position = verticalListPosition(sizes, startX, previous?.posY ?? startY, cardWidth, 0);
+    lastListPosition = { posX: position.x, posY: position.y };
+    return { posX: position.x, posY: position.y };
   }
 
   function clientToWorld(clientX: number, clientY: number) {

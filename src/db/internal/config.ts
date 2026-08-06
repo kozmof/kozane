@@ -6,6 +6,7 @@ import {
   UI_NUM_RANGES,
   UI_BOOL_FIELDS,
   UI_STR_FIELDS,
+  NEW_CARD_PLACEMENTS,
 } from "../../lib/ui-config.js";
 
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
@@ -84,6 +85,9 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   }
   for (const f of UI_STR_FIELDS) {
     if (typeof u[f] === "string") (out as Record<string, unknown>)[f] = u[f];
+  }
+  if (NEW_CARD_PLACEMENTS.includes(u.newCardPlacement as never)) {
+    out.newCardPlacement = u.newCardPlacement as UiConfig["newCardPlacement"];
   }
   return out;
 }

@@ -1,9 +1,12 @@
 import { CANVAS_W, CANVAS_H } from "./constants.js";
 
+export type NewCardPlacement = "grid" | "vertical-list";
+
 export type UiConfig = {
   defaultFontSize: number;
   defaultFontFamily: string;
   defaultCardWidth: number;
+  newCardPlacement: NewCardPlacement;
   defaultZoom: number;
   zoomStep: number;
   leftPanelWidth: number;
@@ -29,6 +32,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultFontSize: 11.5,
   defaultFontFamily: "monospace",
   defaultCardWidth: 210,
+  newCardPlacement: "vertical-list",
   defaultZoom: 1,
   zoomStep: 0.05,
   leftPanelWidth: 216,
@@ -62,6 +66,8 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
 };
 
 export const UI_BOOL_FIELDS = ["defaultShowFooter", "defaultShowSidePanel"] as const;
+
+export const NEW_CARD_PLACEMENTS = ["grid", "vertical-list"] as const;
 export const UI_STR_FIELDS = [
   "defaultFontFamily",
   "toggleFootersShortcut",

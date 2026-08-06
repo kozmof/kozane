@@ -696,6 +696,7 @@ Working copy created.
     "defaultFontSize": 11.5,
     "defaultFontFamily": "monospace",
     "defaultCardWidth": 240,
+    "newCardPlacement": "vertical-list",
     "defaultZoom": 1,
     "zoomStep": 0.05,
     "leftPanelWidth": 216,
@@ -718,6 +719,10 @@ Working copy created.
   }
 }
 ```
+
+The default `"vertical-list"` stacks newly created cards downward in one non-overlapping
+column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping layout
+with light overlap between cards.
 
 ---
 

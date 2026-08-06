@@ -12,6 +12,7 @@ import {
   glueIdByCardId,
   PALETTE,
   previousPositions,
+  verticalListPosition,
   rectsIntersect,
   selectionRectFromPoints,
   worldRectToScreenRect,
@@ -152,6 +153,34 @@ describe("cardPositionPatches", () => {
       { cardId: "card-2", posX: 72, posY: 96 },
       { cardId: "card-1", posX: 24, posY: 48 },
     ]);
+  });
+});
+
+describe("verticalListPosition", () => {
+  it("places a new card below variable-height cards in the same column", () => {
+    expect(
+      verticalListPosition(
+        [
+          { posX: 96, posY: 120, width: 210, height: 60 },
+          { posX: 96, posY: 216, width: 210, height: 103 },
+        ],
+        96,
+        72,
+        210,
+      ),
+    ).toEqual({ x: 96, y: 360 });
+  });
+
+  it("supports compact grid-aligned spacing", () => {
+    expect(
+      verticalListPosition([{ posX: 96, posY: 216, width: 210, height: 103 }], 96, 72, 210, 0),
+    ).toEqual({ x: 96, y: 336 });
+  });
+
+  it("ignores cards outside the list column", () => {
+    expect(
+      verticalListPosition([{ posX: 400, posY: 500, width: 210, height: 100 }], 96, 72, 210),
+    ).toEqual({ x: 96, y: 72 });
   });
 });
 
