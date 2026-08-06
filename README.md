@@ -151,7 +151,7 @@ Migrations create a backup first. Back up the entire `.kozane` directory and tes
 
 ## Development and releases
 
-Building Kozane itself from source requires pnpm 10.12.1:
+Building Kozane itself from source requires pnpm 10.17.0:
 
 ```sh
 pnpm install --frozen-lockfile
