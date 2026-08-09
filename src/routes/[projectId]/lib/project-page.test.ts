@@ -8,6 +8,7 @@ import {
   clampZoom,
   clientToWorld,
   dragGroupIds,
+  edgeScrollVelocity,
   glueGroupIds,
   glueIdByCardId,
   PALETTE,
@@ -240,5 +241,18 @@ describe("clampZoom", () => {
     expect(clampZoom(1.026)).toBe(1.03);
     expect(clampZoom(0)).toBe(0.25);
     expect(clampZoom(3)).toBe(2);
+  });
+});
+
+describe("edgeScrollVelocity", () => {
+  it("is zero away from the edges", () => {
+    expect(edgeScrollVelocity(150, 0, 300)).toBe(0);
+  });
+
+  it("accelerates toward either edge and caps beyond it", () => {
+    expect(edgeScrollVelocity(40, 0, 300)).toBe(-9);
+    expect(edgeScrollVelocity(260, 0, 300)).toBe(9);
+    expect(edgeScrollVelocity(-20, 0, 300)).toBe(-18);
+    expect(edgeScrollVelocity(320, 0, 300)).toBe(18);
   });
 });

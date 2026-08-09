@@ -163,3 +163,19 @@ export function rectsIntersect(a: RectLike, b: RectLike): boolean {
 export function clampZoom(value: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
 }
+
+export function edgeScrollVelocity(
+  pointer: number,
+  start: number,
+  end: number,
+  threshold = 80,
+  maxSpeed = 18,
+): number {
+  if (pointer < start + threshold) {
+    return -maxSpeed * Math.min(1, (start + threshold - pointer) / threshold);
+  }
+  if (pointer > end - threshold) {
+    return maxSpeed * Math.min(1, (pointer - (end - threshold)) / threshold);
+  }
+  return 0;
+}

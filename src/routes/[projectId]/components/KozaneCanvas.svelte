@@ -10,6 +10,7 @@
     buildGlueGroupMap,
     centeredScrollOffset,
     clampZoom,
+    edgeScrollVelocity,
     clientToWorld as toWorldPoint,
     dragGroupIds,
     glueGroupIds,
@@ -83,6 +84,7 @@
   let draggingId = $state<string | null>(null);
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
+  let dragPointer: { x: number; y: number } | null = null;
 
   let dragState: {
     cardId: string;
@@ -217,7 +219,28 @@
       moved: false,
     };
     draggingId = cardId;
+    dragPointer = { x: e.clientX, y: e.clientY };
     onPositionActivityStart();
+  }
+
+  function updateDraggedCard(clientX: number, clientY: number, snapToGrid = false) {
+    if (!dragState) return;
+    const { cardId, offsetX, offsetY, groupIds } = dragState;
+    const rect = canvasEl.getBoundingClientRect();
+    const rawX = (clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
+    const rawY = (clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
+    const x = Math.max(0, snapToGrid ? Math.round(rawX / GRID) * GRID : rawX);
+    const y = Math.max(0, snapToGrid ? Math.round(rawY / GRID) * GRID : rawY);
+    const dx = x - dragState.lastX;
+    const dy = y - dragState.lastY;
+    dragState.lastX = x;
+    dragState.lastY = y;
+    cards = cards.map((c) => {
+      if (c.id === cardId) return { ...c, posX: x, posY: y };
+      if (groupIds.includes(c.id))
+        return { ...c, posX: Math.max(0, c.posX + dx), posY: Math.max(0, c.posY + dy) };
+      return c;
+    });
   }
 
   export function handleCardClick(e: MouseEvent, cardId: string) {
@@ -295,25 +318,12 @@
         selectionRect = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
       }
       if (dragState) {
-        const { cardId, offsetX, offsetY, startX, startY, groupIds } = dragState;
+        const { startX, startY } = dragState;
+        dragPointer = { x: e.clientX, y: e.clientY };
         if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
           dragState.moved = true;
         }
-        const rect = canvasEl.getBoundingClientRect();
-        const rawX = (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
-        const rawY = (e.clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
-        const x = Math.max(0, Math.round(rawX / GRID) * GRID);
-        const y = Math.max(0, Math.round(rawY / GRID) * GRID);
-        const dx = x - dragState.lastX;
-        const dy = y - dragState.lastY;
-        dragState.lastX = x;
-        dragState.lastY = y;
-        cards = cards.map((c) => {
-          if (c.id === cardId) return { ...c, posX: x, posY: y };
-          if (groupIds.includes(c.id))
-            return { ...c, posX: Math.max(0, c.posX + dx), posY: Math.max(0, c.posY + dy) };
-          return c;
-        });
+        updateDraggedCard(e.clientX, e.clientY);
       }
       if (panState) {
         const { startX, startY, scrollLeft, scrollTop } = panState;
@@ -331,9 +341,13 @@
         selectionRect = null;
       }
       if (dragState) {
+        if (dragState.moved && dragPointer) {
+          updateDraggedCard(dragPointer.x, dragPointer.y, true);
+        }
         const { cardId, moved, prevX, prevY, groupIds, groupPrevPositions } = dragState;
         dragState = null;
         draggingId = null;
+        dragPointer = null;
         if (moved) {
           const allIds = [cardId, ...groupIds];
           const positions = cardPositionPatches(cards, allIds);
@@ -373,6 +387,29 @@
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
+  });
+
+  $effect(() => {
+    let frame: number;
+    function autoScroll() {
+      if (dragState && dragPointer) {
+        const rect = canvasEl.getBoundingClientRect();
+        const dx = edgeScrollVelocity(dragPointer.x, rect.left, rect.right);
+        const dy = edgeScrollVelocity(dragPointer.y, rect.top, rect.bottom);
+        if (dx !== 0 || dy !== 0) {
+          const beforeX = canvasEl.scrollLeft;
+          const beforeY = canvasEl.scrollTop;
+          canvasEl.scrollBy(dx, dy);
+          if (canvasEl.scrollLeft !== beforeX || canvasEl.scrollTop !== beforeY) {
+            dragState.moved = true;
+            updateDraggedCard(dragPointer.x, dragPointer.y);
+          }
+        }
+      }
+      frame = requestAnimationFrame(autoScroll);
+    }
+    frame = requestAnimationFrame(autoScroll);
+    return () => cancelAnimationFrame(frame);
   });
 
   $effect(() => {
