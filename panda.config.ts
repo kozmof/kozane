@@ -40,7 +40,7 @@ export default defineConfig({
             text: { value: "oklch(38% 0.15 272)" },
             dim: { value: "oklch(55% 0.15 272)" },
           },
-          wc: {
+          taskspace: {
             bg: { value: "oklch(93% 0.055 158)" },
             text: { value: "oklch(48% 0.15 158)" },
           },

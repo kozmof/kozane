@@ -2,62 +2,62 @@ import { withTx, type DB, type AnyDB } from "../tx.js";
 import { addCard, reassignBundleCards, cardsInProject, getCardBundleNames } from "./card.js";
 import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
 import { addScopeRel } from "./scope-rel.js";
-import { getWorkingCopy } from "./working-copy.js";
+import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
 import { NotFoundError, DefaultBundleError } from "./utils.js";
 import { inArray } from "drizzle-orm";
 import { cardTable } from "../schema.js";
 
-type CreateCardFromWorkingCopy = {
+type CreateCardFromTaskspace = {
   db: DB;
-  workingCopyId: string;
+  taskspaceId: string;
   bundleId: string;
   content: string;
 };
 
-type CreateCardInWorkingCopyContext = {
+type CreateCardInTaskspaceContext = {
   db: AnyDB;
-  workingCopyId: string;
+  taskspaceId: string;
   bundleId: string;
   content: string;
 };
 
 /**
- * Core logic for creating a card within a working-copy context.
+ * Core logic for creating a card within a taskspace context.
  * Exported separately so it can be tested without a transaction.
- * Production callers should use `createCardFromWorkingCopy`, which wraps
+ * Production callers should use `createCardFromTaskspace`, which wraps
  * this in a transaction to keep the card insert and scope_rel insert atomic.
  */
-export async function createCardInWorkingCopyContext({
+export async function createCardInTaskspaceContext({
   db,
-  workingCopyId,
+  taskspaceId,
   bundleId,
   content,
-}: CreateCardInWorkingCopyContext): Promise<string> {
-  const wc = await getWorkingCopy({ db, workingCopyId });
-  if (!wc) throw new NotFoundError(`WorkingCopy workingCopyId=${workingCopyId}`);
-  const cardId = await addCard({ db, bundleId, content, workingCopyId });
-  if (wc.scopeId) {
-    await addScopeRel({ db, scopeId: wc.scopeId, cardId });
+}: CreateCardInTaskspaceContext): Promise<string> {
+  const taskspace = await getTaskspace({ db, taskspaceId });
+  if (!taskspace) throw new NotFoundError(`Taskspace taskspaceId=${taskspaceId}`);
+  const cardId = await addCard({ db, bundleId, content, taskspaceId });
+  if (taskspace.scopeId) {
+    await addScopeRel({ db, scopeId: taskspace.scopeId, cardId });
   }
   return cardId;
 }
 
 /**
- * Creates a card in the given bundle within a working-copy context.
- * If the working copy is still attached to a scope, the new card is
+ * Creates a card in the given bundle within a taskspace context.
+ * If the taskspace is still attached to a scope, the new card is
  * simultaneously registered in scope_rel (auto-add, 7-1), making the
  * "originated" and "gathered" relationships consistent from creation time.
- * Throws NotFoundError when workingCopyId does not exist.
+ * Throws NotFoundError when taskspaceId does not exist.
  */
-export async function createCardFromWorkingCopy({
+export async function createCardFromTaskspace({
   db,
-  workingCopyId,
+  taskspaceId,
   bundleId,
   content,
-}: CreateCardFromWorkingCopy): Promise<string> {
+}: CreateCardFromTaskspace): Promise<string> {
   return withTx(db, (tx) =>
-    createCardInWorkingCopyContext({ db: tx, workingCopyId, bundleId, content }),
+    createCardInTaskspaceContext({ db: tx, taskspaceId, bundleId, content }),
   );
 }
 

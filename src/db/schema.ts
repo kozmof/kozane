@@ -64,11 +64,11 @@ export const scopeTable = sqliteTable(
 export const PATH_KINDS = ["project_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
-export const workingCopyTable = sqliteTable("working_copy", {
+export const taskspaceTable = sqliteTable("taskspace", {
   id: text("id")
     .primaryKey()
     .$defaultFn(() => uuidv7()),
-  // nullable: the CLI creates a WC without a project_id when the workspace has
+  // nullable: the CLI creates a taskspace without a project_id when the workspace has
   // 0 projects or multiple projects and --project is not supplied. Cascade delete
   // removes the record if the linked project is later deleted.
   projectId: text("project_id").references(() => projectTable.id, {
@@ -76,7 +76,7 @@ export const workingCopyTable = sqliteTable("working_copy", {
     onUpdate: "cascade",
   }),
   scopeId: text("scope_id").references(() => scopeTable.id, {
-    // When scopeId is deleted, workingCopy is retained but set to null.
+    // When scopeId is deleted, taskspace is retained but set to null.
     onDelete: "set null",
     onUpdate: "cascade",
   }),
@@ -99,8 +99,8 @@ export const cardTable = sqliteTable("card", {
   bundleId: text("bundle_id")
     .notNull()
     .references(() => bundleTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  workingCopyId: text("working_copy_id").references(() => workingCopyTable.id, {
-    // When workingCopyId is deleted, card is retained but set to null.
+  taskspaceId: text("taskspace_id").references(() => taskspaceTable.id, {
+    // When taskspaceId is deleted, card is retained but set to null.
     onDelete: "set null",
     onUpdate: "cascade",
   }),
@@ -150,10 +150,10 @@ export const bundleRelations = relations(bundleTable, ({ one, many }) => ({
 
 export const cardRelations = relations(cardTable, ({ one, many }) => ({
   bundle: one(bundleTable, { fields: [cardTable.bundleId], references: [bundleTable.id] }),
-  // nullable: card retains its row when its working copy is deleted (onDelete: "set null")
-  workingCopy: one(workingCopyTable, {
-    fields: [cardTable.workingCopyId],
-    references: [workingCopyTable.id],
+  // nullable: card retains its row when its taskspace is deleted (onDelete: "set null")
+  taskspace: one(taskspaceTable, {
+    fields: [cardTable.taskspaceId],
+    references: [taskspaceTable.id],
   }),
   scopeRels: many(scopeRelTable),
   glueRels: many(glueRelTable),
@@ -169,13 +169,13 @@ export const glueRelRelations = relations(glueRelTable, ({ one }) => ({
 }));
 
 export const scopeRelations = relations(scopeTable, ({ many }) => ({
-  workingCopies: many(workingCopyTable),
+  taskspaces: many(taskspaceTable),
   scopeRels: many(scopeRelTable),
 }));
 
-export const workingCopyRelations = relations(workingCopyTable, ({ one, many }) => ({
-  // nullable: working copy is retained as an orphan when its scope is deleted (onDelete: "set null")
-  scope: one(scopeTable, { fields: [workingCopyTable.scopeId], references: [scopeTable.id] }),
+export const taskspaceRelations = relations(taskspaceTable, ({ one, many }) => ({
+  // nullable: taskspace is retained as an orphan when its scope is deleted (onDelete: "set null")
+  scope: one(scopeTable, { fields: [taskspaceTable.scopeId], references: [scopeTable.id] }),
   cards: many(cardTable),
 }));
 

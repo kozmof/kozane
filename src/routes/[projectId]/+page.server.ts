@@ -1,5 +1,5 @@
 import type { EntryGenerator, PageServerLoad } from "./$types";
-import type { WorkingCopySummary } from "$lib/types";
+import type { TaskspaceSummary } from "$lib/types";
 import { error } from "@sveltejs/kit";
 import { getDb } from "../../db/client";
 import { getProject, getAllProjects } from "../../db/api/project";
@@ -10,7 +10,7 @@ import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
-import { getAllWorkingCopies } from "../../db/api/working-copy";
+import { getAllTaskspaces } from "../../db/api/taskspace";
 
 // Static export (kozane net ssg generate): prerender one page per project. `entries` tells
 // SvelteKit which [projectId] values to bake out, and `readonly` flows to the UI
@@ -44,10 +44,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const cards = await getCardsByBundles({ db, bundleIds });
   const cardIds = cards.map((c) => c.id);
 
-  const [glueRels, scopeRels, workingCopies] = await Promise.all([
+  const [glueRels, scopeRels, taskspaces] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
-    getAllWorkingCopies({ db }), // intentionally unscoped — see working-copy.ts
+    getAllTaskspaces({ db }), // intentionally unscoped — see taskspace.ts
   ]);
 
   return {
@@ -58,15 +58,15 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     glueRels,
     scopes,
     scopeRels,
-    workingCopies: workingCopies.map(
-      (wc) =>
+    taskspaces: taskspaces.map(
+      (taskspace) =>
         ({
-          id: wc.id,
-          name: wc.name,
-          scopeId: wc.scopeId,
-          path: wc.path,
-          pathKind: wc.pathKind,
-        }) satisfies WorkingCopySummary,
+          id: taskspace.id,
+          name: taskspace.name,
+          scopeId: taskspace.scopeId,
+          path: taskspace.path,
+          pathKind: taskspace.pathKind,
+        }) satisfies TaskspaceSummary,
     ),
     uiConfig: getWorkspaceUiConfig(),
     readonly,

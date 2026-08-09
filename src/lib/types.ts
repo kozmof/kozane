@@ -1,9 +1,6 @@
-import type { Card, WorkingCopy } from "../db/api/types.js";
+import type { Card, Taskspace } from "../db/api/types.js";
 
-export type CardData = Pick<
-  Card,
-  "id" | "content" | "bundleId" | "posX" | "posY" | "workingCopyId"
-> &
+export type CardData = Pick<Card, "id" | "content" | "bundleId" | "posX" | "posY" | "taskspaceId"> &
   Partial<Pick<Card, "zIndex">>;
 
 export interface CardWithGlue extends CardData {
@@ -18,6 +15,6 @@ export interface BundleWithColor {
   isDefault: boolean;
 }
 
-export type WorkingCopySummary = Pick<WorkingCopy, "id" | "name" | "scopeId" | "path" | "pathKind">;
+export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
 export type { Bundle, Scope, ScopeRel, GlueRel } from "../db/api/types.js";

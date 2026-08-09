@@ -5,19 +5,19 @@ import { requireWorkspace } from "../lib/project.js";
 import { commandDbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
 import {
-  scanWorkingCopies,
-  diffWorkingCopies,
-  resolveWorkingCopyPath,
-  WC_MARKER_FILE,
-  WC_MARKER_KIND,
-  WC_MARKER_VERSION,
-} from "../lib/wc-scan.js";
-import { workingCopyTable, scopeTable } from "../../db/schema.js";
+  scanTaskspaces,
+  diffTaskspaces,
+  resolveTaskspacePath,
+  TASKSPACE_MARKER_FILE,
+  TASKSPACE_MARKER_KIND,
+  TASKSPACE_MARKER_VERSION,
+} from "../lib/taskspace-scan.js";
+import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { resolveProjectId } from "../lib/project-selection.js";
-import { addWorkingCopy, deleteWorkingCopy } from "../../db/api/working-copy.js";
+import { addTaskspace, deleteTaskspace } from "../../db/api/taskspace.js";
 
-// ─── wc scan ────────────────────────────────────────────────────────────────
+// ─── taskspace scan ────────────────────────────────────────────────────────────────
 
 function formatAge(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -31,7 +31,7 @@ function formatAge(ms: number): string {
 
 type ScanOptions = { apply?: boolean; reattach?: boolean; cleanup?: boolean };
 
-export async function wcScan(options: ScanOptions = {}): Promise<void> {
+export async function taskspaceScan(options: ScanOptions = {}): Promise<void> {
   if (options.reattach && !options.apply) {
     console.error("Error: --reattach requires --apply");
     process.exit(1);
@@ -44,46 +44,43 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   const { root, config } = requireWorkspace();
   const db = await createDb(commandDbUrl(resolve(root)));
 
-  const searchRoots = config.workingCopy.searchRoots.map((r) =>
-    isAbsolute(r) ? r : join(root, r),
-  );
+  const searchRoots = config.taskspace.searchRoots.map((r) => (isAbsolute(r) ? r : join(root, r)));
 
-  const found = scanWorkingCopies(searchRoots);
-  const dbRecords = await db.select().from(workingCopyTable);
-  const workingCopyIds = [
-    ...new Set([
-      ...dbRecords.map(({ id }) => id),
-      ...found.map(({ workingCopyId }) => workingCopyId),
-    ]),
+  const found = scanTaskspaces(searchRoots);
+  const dbRecords = await db.select().from(taskspaceTable);
+  const taskspaceIds = [
+    ...new Set([...dbRecords.map(({ id }) => id), ...found.map(({ taskspaceId }) => taskspaceId)]),
   ];
-  const diff = diffWorkingCopies(found, dbRecords, root);
+  const diff = diffTaskspaces(found, dbRecords, root);
 
   let updated = 0;
   let deleted = 0;
 
   const movedIds = new Set(diff.moved.map(({ record }) => record.id));
-  const orphanIds = new Set(diff.orphans.map((wc) => wc.workingCopyId));
+  const orphanIds = new Set(diff.orphans.map((taskspace) => taskspace.taskspaceId));
   const recordById = new Map(dbRecords.map((r) => [r.id, r]));
   const now = Date.now();
-  for (const wc of found) {
-    if (movedIds.has(wc.workingCopyId) || orphanIds.has(wc.workingCopyId)) continue;
-    const record = recordById.get(wc.workingCopyId);
+  for (const taskspace of found) {
+    if (movedIds.has(taskspace.taskspaceId) || orphanIds.has(taskspace.taskspaceId)) continue;
+    const record = recordById.get(taskspace.taskspaceId);
     const seenSuffix = record?.lastSeenAt
       ? `  (last seen ${formatAge(now - record.lastSeenAt.getTime())} ago)`
       : "  (never seen)";
-    console.log(`  ok      ${shortId(wc.workingCopyId, workingCopyIds)}  ${wc.path}${seenSuffix}`);
+    console.log(
+      `  ok      ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}${seenSuffix}`,
+    );
     if (options.apply) {
       await db
-        .update(workingCopyTable)
+        .update(taskspaceTable)
         .set({ lastSeenAt: new Date() })
-        .where(eq(workingCopyTable.id, wc.workingCopyId));
+        .where(eq(taskspaceTable.id, taskspace.taskspaceId));
     }
   }
 
   for (const { record, scanned } of diff.moved) {
-    console.log(`  moved   ${shortId(record.id, workingCopyIds)}`);
+    console.log(`  moved   ${shortId(record.id, taskspaceIds)}`);
     const oldAbsolute = record.path
-      ? resolveWorkingCopyPath(record.path, record.pathKind, root)
+      ? resolveTaskspacePath(record.path, record.pathKind, root)
       : "(none)";
     console.log(`    old: ${oldAbsolute}`);
     console.log(`    new: ${scanned.path}`);
@@ -94,24 +91,25 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
       const storedPath =
         pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
       await db
-        .update(workingCopyTable)
+        .update(taskspaceTable)
         .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
-        .where(eq(workingCopyTable.id, record.id));
+        .where(eq(taskspaceTable.id, record.id));
       updated++;
     }
   }
 
-  for (const wc of diff.orphans) {
-    console.log(`  orphan  ${shortId(wc.workingCopyId, workingCopyIds)}  ${wc.path}`);
+  for (const taskspace of diff.orphans) {
+    console.log(`  orphan  ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}`);
     if (options.apply && options.reattach) {
-      const pathKind = wc.path.startsWith(root)
+      const pathKind = taskspace.path.startsWith(root)
         ? ("project_relative" as const)
         : ("absolute" as const);
-      const storedPath = pathKind === "project_relative" ? relative(root, wc.path) : wc.path;
-      await db.insert(workingCopyTable).values({
-        id: wc.workingCopyId,
-        projectId: wc.projectId || undefined,
-        name: basename(wc.path),
+      const storedPath =
+        pathKind === "project_relative" ? relative(root, taskspace.path) : taskspace.path;
+      await db.insert(taskspaceTable).values({
+        id: taskspace.taskspaceId,
+        projectId: taskspace.projectId || undefined,
+        name: basename(taskspace.path),
         path: storedPath,
         pathKind,
         lastSeenAt: new Date(),
@@ -123,11 +121,11 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
 
   for (const record of diff.missing) {
     const absolutePath = record.path
-      ? resolveWorkingCopyPath(record.path, record.pathKind, root)
+      ? resolveTaskspacePath(record.path, record.pathKind, root)
       : "(no path)";
-    console.log(`  missing ${shortId(record.id, workingCopyIds)}  ${absolutePath}`);
+    console.log(`  missing ${shortId(record.id, taskspaceIds)}  ${absolutePath}`);
     if (options.apply && options.cleanup) {
-      await db.delete(workingCopyTable).where(eq(workingCopyTable.id, record.id));
+      await db.delete(taskspaceTable).where(eq(taskspaceTable.id, record.id));
       console.log(`    → deleted`);
       deleted++;
     }
@@ -136,11 +134,13 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   if (!options.apply) {
     const hints: string[] = [];
     if (diff.moved.length > 0)
-      hints.push(`  wc scan --apply             update ${diff.moved.length} moved path(s)`);
+      hints.push(`  taskspace scan --apply             update ${diff.moved.length} moved path(s)`);
     if (diff.orphans.length > 0)
-      hints.push(`  wc scan --apply --reattach  reattach ${diff.orphans.length} orphan(s)`);
+      hints.push(`  taskspace scan --apply --reattach  reattach ${diff.orphans.length} orphan(s)`);
     if (diff.missing.length > 0)
-      hints.push(`  wc scan --apply --cleanup   delete ${diff.missing.length} missing record(s)`);
+      hints.push(
+        `  taskspace scan --apply --cleanup   delete ${diff.missing.length} missing record(s)`,
+      );
     if (hints.length > 0) {
       console.log(`\nTo apply changes, run:`);
       hints.forEach((h) => console.log(h));
@@ -154,11 +154,11 @@ export async function wcScan(options: ScanOptions = {}): Promise<void> {
   }
 }
 
-// ─── wc create ──────────────────────────────────────────────────────────────
+// ─── taskspace create ──────────────────────────────────────────────────────────────
 
 type CreateOptions = { scope?: string | false; project?: string; dir?: string };
 
-export async function wcCreate(name: string, options: CreateOptions = {}): Promise<void> {
+export async function taskspaceCreate(name: string, options: CreateOptions = {}): Promise<void> {
   if (options.scope === undefined) {
     console.error("Error: --scope <scopeId> is required. Use --no-scope to create without one.");
     process.exit(1);
@@ -183,12 +183,12 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
 
   const targetDir = options.dir
     ? resolve(options.dir)
-    : resolve(root, config.workingCopy.defaultDir, name);
+    : resolve(root, config.taskspace.defaultDir, name);
 
   if (existsSync(targetDir)) {
-    const existingMarker = join(targetDir, WC_MARKER_FILE);
+    const existingMarker = join(targetDir, TASKSPACE_MARKER_FILE);
     if (existsSync(existingMarker)) {
-      console.error(`Directory already contains a Kozane working copy: ${targetDir}`);
+      console.error(`Directory already contains a Kozane taskspace: ${targetDir}`);
       process.exit(1);
     }
   }
@@ -207,7 +207,7 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
     process.exit(1);
   }
 
-  const id = await addWorkingCopy({
+  const id = await addTaskspace({
     db,
     projectId,
     scopeId,
@@ -221,25 +221,25 @@ export async function wcCreate(name: string, options: CreateOptions = {}): Promi
   try {
     mkdirSync(targetDir, { recursive: true });
     const marker = {
-      kind: WC_MARKER_KIND,
-      version: WC_MARKER_VERSION,
-      workingCopyId: id,
+      kind: TASKSPACE_MARKER_KIND,
+      version: TASKSPACE_MARKER_VERSION,
+      taskspaceId: id,
       projectId: projectId ?? "",
     };
-    writeFileSync(join(targetDir, WC_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
+    writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
   } catch (e) {
-    await deleteWorkingCopy({ db, workingCopyId: id });
+    await deleteTaskspace({ db, taskspaceId: id });
     if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
-    console.error("Failed to initialize working copy directory.");
+    console.error("Failed to initialize taskspace directory.");
     console.error(e instanceof Error ? e.message : String(e));
     process.exit(1);
   }
 
-  console.log(`Working copy created.`);
-  const workingCopyIds = (await db.select({ id: workingCopyTable.id }).from(workingCopyTable)).map(
+  console.log(`Taskspace created.`);
+  const taskspaceIds = (await db.select({ id: taskspaceTable.id }).from(taskspaceTable)).map(
     ({ id }) => id,
   );
-  console.log(`  id   : ${shortId(id, workingCopyIds)}`);
+  console.log(`  id   : ${shortId(id, taskspaceIds)}`);
   console.log(`  name : ${name}`);
   console.log(`  path : ${targetDir}`);
 }

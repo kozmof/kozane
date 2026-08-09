@@ -100,7 +100,16 @@ describe("project, status, and doctor CLI flow", () => {
     const projectId = outputId(cli(root, "project", "create", "Counted"));
     const scopeId = outputId(cli(root, "scope", "add", "Counted scope"));
     cli(root, "card", "add", "Counted card", "--project", projectId);
-    cli(root, "wc", "create", "counted-wc", "--scope", scopeId, "--project", projectId);
+    cli(
+      root,
+      "taskspace",
+      "create",
+      "counted-taskspace",
+      "--scope",
+      scopeId,
+      "--project",
+      projectId,
+    );
 
     const status = cli(root, "status");
     expect(status).toContain("Opening      : stopped");
@@ -108,7 +117,7 @@ describe("project, status, and doctor CLI flow", () => {
     expect(status).toContain("Bundles      : 2");
     expect(status).toContain("Cards        : 1");
     expect(status).toContain("Scopes       : 1");
-    expect(status).toContain("Working copies: 1");
+    expect(status).toContain("Taskspaces: 1");
 
     const configPath = join(root, ".kozane", "config.json");
     const config = JSON.parse(readFileSync(configPath, "utf-8"));

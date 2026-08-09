@@ -1,13 +1,13 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { Scope, ScopeRel, WorkingCopySummary } from "$lib/types";
+  import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
 
   let {
     visible,
     panelWidth,
     scopes,
     scopeRels,
-    workingCopies,
+    taskspaces,
     selectedCards,
     activeScope = $bindable(),
     newScopeName = $bindable(),
@@ -16,14 +16,14 @@
     onDeleteScope,
     onAddToScope,
     onRemoveFromScope,
-    onCreateWorkingCopy,
+    onCreateTaskspace,
     readonly = false,
   }: {
     visible: boolean;
     panelWidth: number;
     scopes: Scope[];
     scopeRels: ScopeRel[];
-    workingCopies: WorkingCopySummary[];
+    taskspaces: TaskspaceSummary[];
     selectedCards: Set<string>;
     activeScope: string | null;
     newScopeName: string;
@@ -32,7 +32,7 @@
     onDeleteScope: (scopeId: string) => void;
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
-    onCreateWorkingCopy: () => void;
+    onCreateTaskspace: () => void;
     // Read-only export: keep scope filtering, hide create/delete/membership controls.
     readonly?: boolean;
   } = $props();
@@ -151,10 +151,10 @@
         {/if}
 
         {#if active}
-          {@const scopeWcs = workingCopies.filter((wc) => wc.scopeId === scope.id && wc.path !== null)}
-          {#if scopeWcs.length > 0}
+          {@const scopeTaskspaces = taskspaces.filter((taskspace) => taskspace.scopeId === scope.id && taskspace.path !== null)}
+          {#if scopeTaskspaces.length > 0}
             <div class={css({ borderTop: "1px solid token(colors.neutral.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
-              {#each scopeWcs as wc (wc.id)}
+              {#each scopeTaskspaces as taskspace (taskspace.id)}
                 <div class={css({
                   display: "flex",
                   alignItems: "center",
@@ -169,7 +169,7 @@
                     <path d="M1 4.5h8" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
                     <path d="M3 1.5h4v1.5H3z" fill="var(--colors-neutral-icon-dim)" />
                   </svg>
-                  <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>{wc.name}</span>
+                  <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>{taskspace.name}</span>
                 </div>
               {/each}
             </div>
@@ -178,13 +178,13 @@
           <div class={css({ padding: "8px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
             <input
               class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "2px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
-              placeholder="working copy name"
+              placeholder="taskspace name"
               bind:value={newWcName}
-              onkeydown={(e) => e.key === "Enter" && onCreateWorkingCopy()}
+              onkeydown={(e) => e.key === "Enter" && onCreateTaskspace()}
             />
             <button
               class={css({ padding: "6px 11px", backgroundColor: "ink.black", color: "ink.light", border: "none", borderRadius: "2px", cursor: "pointer", fontSize: "14px", fontFamily: "inherit", lineHeight: "1" })}
-              onclick={onCreateWorkingCopy}
+              onclick={onCreateTaskspace}
             >+</button>
           </div>
           {/if}

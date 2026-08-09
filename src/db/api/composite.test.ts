@@ -1,15 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
 import {
-  createCardInWorkingCopyContext,
-  createCardFromWorkingCopy,
+  createCardInTaskspaceContext,
+  createCardFromTaskspace,
   moveCardsToProject,
 } from "./composite.js";
 import { deleteBundleWithReassign } from "./composite.js";
 import { addProject } from "./project.js";
 import { addBundle, getAllBundles, getBundle } from "./bundle.js";
 import { addScope } from "./scope.js";
-import { addWorkingCopy } from "./working-copy.js";
+import { addTaskspace } from "./taskspace.js";
 import { addCard, getAllCards, getCard, getCardBundleNames } from "./card.js";
 import { getAllCardsByScope } from "./scope-rel.js";
 import { NotFoundError } from "./utils.js";
@@ -22,41 +22,41 @@ async function setup() {
   return { db, projectId, bundleId, scopeId };
 }
 
-// Tests use createCardInWorkingCopyContext directly to avoid the withTx in-memory
-// connection boundary — createCardFromWorkingCopy wraps this in a real transaction.
-describe("createCardInWorkingCopyContext", () => {
+// Tests use createCardInTaskspaceContext directly to avoid the withTx in-memory
+// connection boundary — createCardFromTaskspace wraps this in a real transaction.
+describe("createCardInTaskspaceContext", () => {
   it("creates a card and returns its id", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext({
+    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const cardId = await createCardInTaskspaceContext({
       db,
-      workingCopyId: wcId,
+      taskspaceId: wcId,
       bundleId,
       content: "Hi",
     });
     expect(cardId).toBeTruthy();
   });
 
-  it("card is stored in the correct bundle with the workingCopyId set", async () => {
+  it("card is stored in the correct bundle with the taskspaceId set", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext({
+    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const cardId = await createCardInTaskspaceContext({
       db,
-      workingCopyId: wcId,
+      taskspaceId: wcId,
       bundleId,
       content: "Content",
     });
     const card = await getCard({ db, bundleId, cardId });
     expect(card?.content).toBe("Content");
-    expect(card?.workingCopyId).toBe(wcId);
+    expect(card?.taskspaceId).toBe(wcId);
   });
 
-  it("auto-adds the card to the scope when working copy has a scope", async () => {
+  it("auto-adds the card to the scope when taskspace has a scope", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardInWorkingCopyContext({
+    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const cardId = await createCardInTaskspaceContext({
       db,
-      workingCopyId: wcId,
+      taskspaceId: wcId,
       bundleId,
       content: "Scoped",
     });
@@ -64,13 +64,13 @@ describe("createCardInWorkingCopyContext", () => {
     expect(scopeCards.map((c) => c.id)).toContain(cardId);
   });
 
-  it("does NOT add to scope when working copy has no scope", async () => {
+  it("does NOT add to scope when taskspace has no scope", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addWorkingCopy({ db, projectId });
+    const wcId = await addTaskspace({ db, projectId });
 
-    const cardId = await createCardInWorkingCopyContext({
+    const cardId = await createCardInTaskspaceContext({
       db,
-      workingCopyId: wcId,
+      taskspaceId: wcId,
       bundleId,
       content: "X",
     });
@@ -80,24 +80,24 @@ describe("createCardInWorkingCopyContext", () => {
     expect(scopeCards.map((c) => c.id)).not.toContain(cardId);
   });
 
-  it("throws NotFoundError for a missing workingCopyId", async () => {
+  it("throws NotFoundError for a missing taskspaceId", async () => {
     const { db, bundleId } = await setup();
     await expect(
-      createCardInWorkingCopyContext({ db, workingCopyId: "ghost", bundleId, content: "Hi" }),
+      createCardInTaskspaceContext({ db, taskspaceId: "ghost", bundleId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 });
 
-// createCardFromWorkingCopy wraps the inner logic in a transaction.
+// createCardFromTaskspace wraps the inner logic in a transaction.
 // We only verify it resolves (not what the transaction writes) because
 // libsql :memory: transactions use a fresh connection internally.
-describe("createCardFromWorkingCopy", () => {
+describe("createCardFromTaskspace", () => {
   it("returns a card id", async () => {
     const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addWorkingCopy({ db, projectId, scopeId });
-    const cardId = await createCardFromWorkingCopy({
+    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const cardId = await createCardFromTaskspace({
       db,
-      workingCopyId: wcId,
+      taskspaceId: wcId,
       bundleId,
       content: "Tx",
     });
@@ -105,10 +105,10 @@ describe("createCardFromWorkingCopy", () => {
     expect(cardId.length).toBeGreaterThan(0);
   });
 
-  it("throws NotFoundError for a missing workingCopyId", async () => {
+  it("throws NotFoundError for a missing taskspaceId", async () => {
     const { db, bundleId } = await setup();
     await expect(
-      createCardFromWorkingCopy({ db, workingCopyId: "ghost", bundleId, content: "Hi" }),
+      createCardFromTaskspace({ db, taskspaceId: "ghost", bundleId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 });

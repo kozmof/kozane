@@ -19,7 +19,7 @@ export type WorkspaceConfig = {
     host: string;
     port: number;
   };
-  workingCopy: {
+  taskspace: {
     defaultDir: string;
     searchRoots: string[];
   };
@@ -35,7 +35,7 @@ export function defaultConfig(name: string): WorkspaceConfig {
   return {
     name,
     server: { host: "127.0.0.1", port: 5173 },
-    workingCopy: {
+    taskspace: {
       defaultDir: ".",
       searchRoots: ["."],
     },
@@ -64,15 +64,15 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   if (typeof s.port !== "number")
     throw new Error(`Invalid Kozane config: server.port must be a number`);
 
-  const wc = p.workingCopy;
-  if (typeof wc !== "object" || wc === null || Array.isArray(wc)) {
-    throw new Error(`Invalid Kozane config: workingCopy must be an object`);
+  const taskspace = p.taskspace;
+  if (typeof taskspace !== "object" || taskspace === null || Array.isArray(taskspace)) {
+    throw new Error(`Invalid Kozane config: taskspace must be an object`);
   }
-  const w = wc as Record<string, unknown>;
+  const w = taskspace as Record<string, unknown>;
   if (typeof w.defaultDir !== "string")
-    throw new Error(`Invalid Kozane config: workingCopy.defaultDir must be a string`);
+    throw new Error(`Invalid Kozane config: taskspace.defaultDir must be a string`);
   if (!Array.isArray(w.searchRoots) || w.searchRoots.some((r) => typeof r !== "string")) {
-    throw new Error(`Invalid Kozane config: workingCopy.searchRoots must be an array of strings`);
+    throw new Error(`Invalid Kozane config: taskspace.searchRoots must be an array of strings`);
   }
 
   let parsedUi: Partial<UiConfig> | undefined;
@@ -117,7 +117,7 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   return {
     name: p.name as string,
     server: { host: s.host as string, port: s.port as number },
-    workingCopy: {
+    taskspace: {
       defaultDir: w.defaultDir as string,
       searchRoots: w.searchRoots as string[],
     },

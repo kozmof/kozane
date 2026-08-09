@@ -42,13 +42,13 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["bundle-1", "project-1", "General", 1],
         },
         {
-          sql: "INSERT INTO working_copy (id, project_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO taskspace (id, project_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
-            "wc-1",
+            "taskspace-1",
             "project-1",
             "scope-1",
             "Main",
-            ".kozane/working-copies/main",
+            ".kozane/taskspaces/main",
             "project_relative",
             1_800_000_000_000,
             1_700_000_000_000,
@@ -56,11 +56,11 @@ async function seedDb(dbUrl: string): Promise<void> {
           ],
         },
         {
-          sql: "INSERT INTO card (id, bundle_id, working_copy_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
-          args: ["card-1", "bundle-1", "wc-1", "First", 10, 20],
+          sql: "INSERT INTO card (id, bundle_id, taskspace_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
+          args: ["card-1", "bundle-1", "taskspace-1", "First", 10, 20],
         },
         {
-          sql: "INSERT INTO card (id, bundle_id, working_copy_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO card (id, bundle_id, taskspace_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
           args: ["card-2", "bundle-1", null, "Second", 30, 40],
         },
         {
@@ -111,7 +111,7 @@ describe("db JSON export/import", () => {
       project: 1,
       scope: 1,
       bundle: 1,
-      working_copy: 1,
+      taskspace: 1,
       card: 2,
       glue: 1,
       glue_rel: 2,

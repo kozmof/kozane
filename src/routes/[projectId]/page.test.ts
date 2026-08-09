@@ -16,7 +16,7 @@ const data = {
       posX: 24,
       posY: 48,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
     {
       id: "card-2",
@@ -25,13 +25,13 @@ const data = {
       posX: 96,
       posY: 48,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
   ],
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
   glueRels: [],
-  workingCopies: [],
+  taskspaces: [],
   otherProjects: [],
   uiConfig: {
     defaultFontSize: 11.5,
@@ -180,7 +180,7 @@ describe("Project page", () => {
     // Bundle filtering still works — the read-only export is for browsing.
     expect(screen.getByText("All cards")).toBeInTheDocument();
 
-    // The composer, the create-bundle/scope inputs, and the working-copy input
+    // The composer, the create-bundle/scope inputs, and the taskspace input
     // are all gone, so there is no text entry anywhere on the page.
     expect(container.querySelectorAll("input")).toHaveLength(0);
     expect(screen.queryByLabelText("Write a card")).not.toBeInTheDocument();

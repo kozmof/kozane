@@ -8,11 +8,11 @@ import { addProject } from "../../../../db/api/project.js";
 import { addScope } from "../../../../db/api/scope.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import type { DB } from "../../../../db/tx.js";
-import { WC_MARKER_FILE } from "../../../../lib/wc-marker.js";
+import { TASKSPACE_MARKER_FILE } from "../../../../lib/taskspace-marker.js";
 import { _resetWorkspaceRootForTest } from "../../../../db/internal/config.js";
 
 function jsonRequest(body: unknown): Request {
-  return new Request("http://localhost/project-1/api/working-copies", {
+  return new Request("http://localhost/project-1/api/taskspaces", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -27,7 +27,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
   await expect(Promise.resolve(value)).rejects.toMatchObject({ status, body: { message } });
 }
 
-describe("POST /[projectId]/api/working-copies", () => {
+describe("POST /[projectId]/api/taskspaces", () => {
   let db: DB;
   let projectId: string;
   let scopeId: string;
@@ -39,7 +39,7 @@ describe("POST /[projectId]/api/working-copies", () => {
     projectId = await addProject({ db, name: "Test Project" });
     scopeId = await addScope({ db, name: "My Scope" });
 
-    tmpRoot = join(tmpdir(), `kozane-wc-test-${randomUUID()}`);
+    tmpRoot = join(tmpdir(), `kozane-taskspace-test-${randomUUID()}`);
     mkdirSync(join(tmpRoot, ".kozane"), { recursive: true });
     writeFileSync(join(tmpRoot, ".kozane", "config.json"), JSON.stringify({ name: "test" }));
 
@@ -83,11 +83,11 @@ describe("POST /[projectId]/api/working-copies", () => {
     await expectHttpRejection(
       POST(event(db, projectId, jsonRequest({ name: "../../outside", scopeId }))),
       400,
-      "Working copy path must be inside the workspace root",
+      "Taskspace path must be inside the workspace root",
     );
   });
 
-  it("creates the working copy directory and marker file", async () => {
+  it("creates the taskspace directory and marker file", async () => {
     const res = await POST(event(db, projectId, jsonRequest({ name: "my-draft", scopeId })));
 
     expect(res.status).toBe(200);
@@ -96,10 +96,10 @@ describe("POST /[projectId]/api/working-copies", () => {
     expect(path).toBe("my-draft");
     expect(pathKind).toBe("project_relative");
 
-    const markerPath = join(tmpRoot, "my-draft", WC_MARKER_FILE);
+    const markerPath = join(tmpRoot, "my-draft", TASKSPACE_MARKER_FILE);
     expect(existsSync(markerPath)).toBe(true);
     const marker = JSON.parse(readFileSync(markerPath, "utf-8"));
-    expect(marker.workingCopyId).toBe(id);
+    expect(marker.taskspaceId).toBe(id);
     expect(marker.projectId).toBe(projectId);
   });
 
@@ -109,11 +109,11 @@ describe("POST /[projectId]/api/working-copies", () => {
 
     // "blocked/sub" is inside the workspace root but mkdirSync fails because
     // "blocked" is a file, not a directory. The handler should compensate by
-    // deleting the newly-inserted working_copy row and returning 500.
+    // deleting the newly-inserted taskspace row and returning 500.
     await expectHttpRejection(
       POST(event(db, projectId, jsonRequest({ name: "blocked/sub", scopeId }))),
       500,
-      "Failed to initialize working copy directory",
+      "Failed to initialize taskspace directory",
     );
   });
 });

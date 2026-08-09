@@ -1,16 +1,21 @@
 import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  WC_MARKER_FILE,
-  WC_MARKER_KIND,
-  WC_MARKER_VERSION,
-  type WcMarker,
-} from "../../lib/wc-marker.js";
+  TASKSPACE_MARKER_FILE,
+  TASKSPACE_MARKER_KIND,
+  TASKSPACE_MARKER_VERSION,
+  type TaskspaceMarker,
+} from "../../lib/taskspace-marker.js";
 
-export { WC_MARKER_FILE, WC_MARKER_KIND, WC_MARKER_VERSION, type WcMarker };
+export {
+  TASKSPACE_MARKER_FILE,
+  TASKSPACE_MARKER_KIND,
+  TASKSPACE_MARKER_VERSION,
+  type TaskspaceMarker,
+};
 
-export type FoundWorkingCopy = {
-  workingCopyId: string;
+export type FoundTaskspace = {
+  taskspaceId: string;
   projectId: string;
   path: string;
 };
@@ -45,21 +50,21 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
   }
 }
 
-function readMarker(dir: string): WcMarker | null {
-  const markerPath = join(dir, WC_MARKER_FILE);
+function readMarker(dir: string): TaskspaceMarker | null {
+  const markerPath = join(dir, TASKSPACE_MARKER_FILE);
   if (!existsSync(markerPath)) return null;
   try {
     const raw = readFileSync(markerPath, "utf-8");
-    const marker = JSON.parse(raw) as WcMarker;
-    if (marker.kind !== WC_MARKER_KIND) return null;
-    if (marker.version !== WC_MARKER_VERSION) return null;
+    const marker = JSON.parse(raw) as TaskspaceMarker;
+    if (marker.kind !== TASKSPACE_MARKER_KIND) return null;
+    if (marker.version !== TASKSPACE_MARKER_VERSION) return null;
     return marker;
   } catch {
     return null;
   }
 }
 
-export function resolveWorkingCopyPath(
+export function resolveTaskspacePath(
   storedPath: string,
   pathKind: "project_relative" | "absolute",
   projectRoot: string,
@@ -67,29 +72,29 @@ export function resolveWorkingCopyPath(
   return pathKind === "absolute" ? storedPath : join(projectRoot, storedPath);
 }
 
-export type WorkingCopyRecord = {
+export type TaskspaceRecord = {
   id: string;
   name: string | null;
   path: string | null;
   pathKind: "project_relative" | "absolute";
 };
 
-export type WorkingCopyDiff = {
-  missing: WorkingCopyRecord[];
-  moved: Array<{ record: WorkingCopyRecord; scanned: FoundWorkingCopy }>;
-  orphans: FoundWorkingCopy[];
+export type TaskspaceDiff = {
+  missing: TaskspaceRecord[];
+  moved: Array<{ record: TaskspaceRecord; scanned: FoundTaskspace }>;
+  orphans: FoundTaskspace[];
 };
 
-export function diffWorkingCopies(
-  found: FoundWorkingCopy[],
-  dbRecords: WorkingCopyRecord[],
+export function diffTaskspaces(
+  found: FoundTaskspace[],
+  dbRecords: TaskspaceRecord[],
   projectRoot: string,
-): WorkingCopyDiff {
-  const foundById = new Map(found.map((f) => [f.workingCopyId, f]));
+): TaskspaceDiff {
+  const foundById = new Map(found.map((f) => [f.taskspaceId, f]));
   const dbIds = new Set(dbRecords.map((r) => r.id));
-  const missing: WorkingCopyRecord[] = [];
-  const moved: Array<{ record: WorkingCopyRecord; scanned: FoundWorkingCopy }> = [];
-  const orphans: FoundWorkingCopy[] = [];
+  const missing: TaskspaceRecord[] = [];
+  const moved: Array<{ record: TaskspaceRecord; scanned: FoundTaskspace }> = [];
+  const orphans: FoundTaskspace[] = [];
 
   for (const record of dbRecords) {
     const scanned = foundById.get(record.id);
@@ -97,34 +102,34 @@ export function diffWorkingCopies(
       missing.push(record);
     } else {
       const resolvedStored = record.path
-        ? resolveWorkingCopyPath(record.path, record.pathKind, projectRoot)
+        ? resolveTaskspacePath(record.path, record.pathKind, projectRoot)
         : null;
       if (resolvedStored !== scanned.path) moved.push({ record, scanned });
     }
   }
 
-  for (const wc of found) {
-    if (!dbIds.has(wc.workingCopyId)) orphans.push(wc);
+  for (const taskspace of found) {
+    if (!dbIds.has(taskspace.taskspaceId)) orphans.push(taskspace);
   }
 
   return { missing, moved, orphans };
 }
 
-export function scanWorkingCopies(searchRoots: string[]): FoundWorkingCopy[] {
-  const found: FoundWorkingCopy[] = [];
-  const seen = new Set<string>(); // deduplicate by workingCopyId+path
+export function scanTaskspaces(searchRoots: string[]): FoundTaskspace[] {
+  const found: FoundTaskspace[] = [];
+  const seen = new Set<string>(); // deduplicate by taskspaceId+path
 
   for (const root of searchRoots) {
     for (const dir of walkDirectories(root)) {
       const marker = readMarker(dir);
       if (!marker) continue;
 
-      const key = `${marker.workingCopyId}::${dir}`;
+      const key = `${marker.taskspaceId}::${dir}`;
       if (seen.has(key)) continue;
       seen.add(key);
 
       found.push({
-        workingCopyId: marker.workingCopyId,
+        taskspaceId: marker.taskspaceId,
         projectId: marker.projectId,
         path: dir,
       });

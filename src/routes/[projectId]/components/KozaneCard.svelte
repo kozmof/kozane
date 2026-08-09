@@ -122,9 +122,9 @@
       </span>
     {/if}
 
-    {#if card.workingCopyId}
-      <span class={css({ padding: "1px 5px", borderRadius: "2px", background: "wc.bg", color: "wc.text", fontSize: "9px", fontWeight: "500", letterSpacing: "0.05em" })}>
-        wc
+    {#if card.taskspaceId}
+      <span class={css({ padding: "1px 5px", borderRadius: "2px", background: "taskspace.bg", color: "taskspace.text", fontSize: "9px", fontWeight: "500", letterSpacing: "0.05em" })}>
+        taskspace
       </span>
     {/if}
 

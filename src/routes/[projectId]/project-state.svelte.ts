@@ -1,11 +1,4 @@
-import type {
-  CardWithGlue,
-  Bundle,
-  Scope,
-  ScopeRel,
-  GlueRel,
-  WorkingCopySummary,
-} from "$lib/types";
+import type { CardWithGlue, Bundle, Scope, ScopeRel, GlueRel, TaskspaceSummary } from "$lib/types";
 
 export class SelectionState {
   selectedCards = $state(new Set<string>());
@@ -42,7 +35,7 @@ export interface ProjectDataSnapshot {
   scopes: Scope[];
   scopeRels: ScopeRel[];
   glueRels: GlueRel[];
-  workingCopies: WorkingCopySummary[];
+  taskspaces: TaskspaceSummary[];
 }
 
 export class ProjectState {
@@ -54,7 +47,7 @@ export class ProjectState {
   scopes = $state<Scope[]>([]);
   scopeRels = $state<ScopeRel[]>([]);
   glueRels = $state<GlueRel[]>([]);
-  workingCopies = $state<WorkingCopySummary[]>([]);
+  taskspaces = $state<TaskspaceSummary[]>([]);
 
   selection = new SelectionState();
   sidebar = new SidebarState();
@@ -72,7 +65,7 @@ export class ProjectState {
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;
-    this.workingCopies = data.workingCopies;
+    this.taskspaces = data.taskspaces;
     this.selection.reset();
     this.sidebar.reset();
     this.lastError = null;
@@ -84,7 +77,7 @@ export class ProjectState {
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;
-    this.workingCopies = data.workingCopies;
+    this.taskspaces = data.taskspaces;
 
     const cardIds = new Set(data.cards.map(({ id }) => id));
     this.selection.selectedCards = new Set(

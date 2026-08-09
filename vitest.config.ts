@@ -45,7 +45,7 @@ export default defineConfig({
         // Filesystem discovery/configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
         "src/cli/lib/project.ts",
-        "src/cli/lib/wc-scan.ts",
+        "src/cli/lib/taskspace-scan.ts",
         // DB plumbing — no logic to assert
         "src/db/internal/**",
         "src/db/client.ts",

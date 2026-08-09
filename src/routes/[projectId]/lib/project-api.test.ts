@@ -15,7 +15,7 @@ import {
   removeCardsFromScope,
   batchReassignBundle,
   moveCardsToProject,
-  createWorkingCopy,
+  createTaskspace,
 } from "./project-api.js";
 
 function makeFetcher() {
@@ -202,15 +202,15 @@ describe("moveCardsToProject", () => {
   });
 });
 
-describe("createWorkingCopy", () => {
-  it("POSTs working copy data to the working-copies endpoint", async () => {
+describe("createTaskspace", () => {
+  it("POSTs taskspace data to the taskspaces endpoint", async () => {
     const { fetcher, response } = makeFetcher();
-    const wc = { name: "my-wc", scopeId: "s-1" };
-    await expect(createWorkingCopy(fetcher, "p-1", wc)).resolves.toBe(response);
-    expect(fetcher).toHaveBeenCalledWith("/p-1/api/working-copies", {
+    const taskspace = { name: "my-taskspace", scopeId: "s-1" };
+    await expect(createTaskspace(fetcher, "p-1", taskspace)).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/taskspaces", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(wc),
+      body: JSON.stringify(taskspace),
     });
   });
 });

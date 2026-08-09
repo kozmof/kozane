@@ -41,7 +41,7 @@ export async function deleteScope({ db, scopeId }: DeleteScope): Promise<void> {
 /**
  * Removes this project's cards from a scope. If the scope has no remaining
  * members across any project, deletes it entirely (FK cascade nullifies
- * working_copy.scope_id). Returns false when the scope does not exist.
+ * taskspace.scope_id). Returns false when the scope does not exist.
  */
 export async function deleteScopeFromProject({
   db,

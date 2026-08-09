@@ -14,7 +14,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       posX: 100,
       posY: 200,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
     color,
     isSelected: false,
@@ -60,16 +60,16 @@ describe("KozaneCard", () => {
     expect(footerSvgs.length).toBe(0);
   });
 
-  it("shows wc badge when workingCopyId is set", () => {
+  it("shows taskspace badge when taskspaceId is set", () => {
     render(KozaneCard, {
-      props: makeProps({ card: { ...makeProps().card, workingCopyId: "wc-123" } }),
+      props: makeProps({ card: { ...makeProps().card, taskspaceId: "taskspace-123" } }),
     });
-    expect(screen.getByText("wc")).toBeInTheDocument();
+    expect(screen.getByText("taskspace")).toBeInTheDocument();
   });
 
-  it("does not show wc badge when workingCopyId is null", () => {
+  it("does not show taskspace badge when taskspaceId is null", () => {
     render(KozaneCard, { props: makeProps() });
-    expect(screen.queryByText("wc")).not.toBeInTheDocument();
+    expect(screen.queryByText("taskspace")).not.toBeInTheDocument();
   });
 
   it("renders bundle name", () => {

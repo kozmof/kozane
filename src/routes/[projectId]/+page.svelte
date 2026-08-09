@@ -29,7 +29,7 @@
   s.scopes = untrack(() => data.scopes);
   s.scopeRels = untrack(() => data.scopeRels);
   s.glueRels = untrack(() => data.glueRels);
-  s.workingCopies = untrack(() => data.workingCopies);
+  s.taskspaces = untrack(() => data.taskspaces);
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
@@ -155,7 +155,7 @@
       if (!res.ok) { s.setError("Failed to create card"); return; }
       const parsed = await res.json().catch(() => null);
       if (!parsed) { s.setError("Failed to create card"); return; }
-      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, zIndex, glueId: null, workingCopyId: null }];
+      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, zIndex, glueId: null, taskspaceId: null }];
       if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: parsed.id }];
     }
   }
@@ -284,7 +284,7 @@
     panelWidth={data.uiConfig.rightPanelWidth}
     scopes={s.scopes}
     scopeRels={s.scopeRels}
-    workingCopies={s.workingCopies}
+    taskspaces={s.taskspaces}
     selectedCards={s.selection.selectedCards}
     bind:activeScope={s.sidebar.activeScope}
     bind:newScopeName={s.sidebar.newScopeName}
@@ -293,7 +293,7 @@
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
-    onCreateWorkingCopy={actions.handleCreateWorkingCopy}
+    onCreateTaskspace={actions.handleCreateTaskspace}
     {readonly}
   />
 </div>

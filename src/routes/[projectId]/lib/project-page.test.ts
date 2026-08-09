@@ -24,7 +24,7 @@ const cards: Card[] = [
   {
     id: "card-1",
     bundleId: "bundle-1",
-    workingCopyId: null,
+    taskspaceId: null,
     content: "One",
     posX: 24,
     posY: 48,
@@ -33,7 +33,7 @@ const cards: Card[] = [
   {
     id: "card-2",
     bundleId: "bundle-1",
-    workingCopyId: null,
+    taskspaceId: null,
     content: "Two",
     posX: 72,
     posY: 96,
@@ -42,7 +42,7 @@ const cards: Card[] = [
   {
     id: "card-3",
     bundleId: "bundle-2",
-    workingCopyId: null,
+    taskspaceId: null,
     content: "Three",
     posX: 120,
     posY: 144,

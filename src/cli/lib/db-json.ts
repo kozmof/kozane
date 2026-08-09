@@ -1,7 +1,7 @@
 import { createClient, type InValue } from "@libsql/client";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 1;
+const EXPORT_VERSION = 2;
 
 const TABLES = [
   {
@@ -20,7 +20,7 @@ const TABLES = [
     orderBy: ["id"],
   },
   {
-    name: "working_copy",
+    name: "taskspace",
     columns: [
       "id",
       "project_id",
@@ -36,7 +36,7 @@ const TABLES = [
   },
   {
     name: "card",
-    columns: ["id", "bundle_id", "working_copy_id", "content", "pos_x", "pos_y", "z_index"],
+    columns: ["id", "bundle_id", "taskspace_id", "content", "pos_x", "pos_y", "z_index"],
     orderBy: ["id"],
   },
   {
@@ -106,7 +106,7 @@ function emptyTables(): TableRows {
     project: [],
     scope: [],
     bundle: [],
-    working_copy: [],
+    taskspace: [],
     card: [],
     glue: [],
     glue_rel: [],
@@ -256,9 +256,9 @@ function validateDumpRefs(tables: TableRows): void {
     if (!bundleIds.has(row.bundle_id as string))
       throw new Error(`card ${row.id}: references unknown bundle_id ${row.bundle_id}`);
   }
-  for (const row of tables.working_copy) {
+  for (const row of tables.taskspace) {
     if (row.project_id !== null && !projectIds.has(row.project_id as string))
-      throw new Error(`working_copy ${row.id}: references unknown project_id ${row.project_id}`);
+      throw new Error(`taskspace ${row.id}: references unknown project_id ${row.project_id}`);
   }
   for (const row of tables.glue_rel) {
     if (!glueIds.has(row.glue_id as string))

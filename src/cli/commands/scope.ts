@@ -57,7 +57,7 @@ export async function scopeDelete(scopeId: string): Promise<void> {
     await deleteScope({ db, scopeId: resolvedId });
     console.log("Scope deleted.");
     console.log(`  id: ${shortId(resolvedId, scopeIds)}`);
-    console.log("Working copies attached to this scope are now unscoped.");
+    console.log("Taskspaces attached to this scope are now unscoped.");
   } catch (error) {
     fail(error);
   }

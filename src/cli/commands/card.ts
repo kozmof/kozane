@@ -8,15 +8,15 @@ import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schem
 import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
 import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
-import { getWorkingCopy } from "../../db/api/working-copy.js";
+import { getTaskspace } from "../../db/api/taskspace.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
-import { readWorkingCopyMarker } from "../lib/working-copy-marker.js";
+import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { CANVAS_W } from "../../lib/constants.js";
 import { resolveProjectId } from "../lib/project-selection.js";
 
-type CardOptions = { project?: string; bundle?: string; workingCopy?: string };
-type CardAddOptions = Omit<CardOptions, "workingCopy"> & {
+type CardOptions = { project?: string; bundle?: string; taskspace?: string };
+type CardAddOptions = Omit<CardOptions, "taskspace"> & {
   scope?: string;
   x?: number;
   y?: number;
@@ -273,27 +273,27 @@ export async function cardNearest(requestedId: string): Promise<void> {
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
   try {
-    if (options.workingCopy && (options.project || options.bundle))
-      throw new Error("--working-copy cannot be combined with --project or --bundle.");
+    if (options.taskspace && (options.project || options.bundle))
+      throw new Error("--taskspace cannot be combined with --project or --bundle.");
 
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
     const locatedMarker =
-      options.workingCopy || (!options.project && !options.bundle)
-        ? readWorkingCopyMarker(options.workingCopy)
+      options.taskspace || (!options.project && !options.bundle)
+        ? readTaskspaceMarker(options.taskspace)
         : null;
 
     if (locatedMarker) {
-      const workingCopy = await getWorkingCopy({
+      const taskspace = await getTaskspace({
         db,
-        workingCopyId: locatedMarker.marker.workingCopyId,
+        taskspaceId: locatedMarker.marker.taskspaceId,
       });
-      if (!workingCopy)
-        throw new Error(`Working copy is not registered in this workspace: ${locatedMarker.path}`);
-      if (workingCopy.scopeId) {
+      if (!taskspace)
+        throw new Error(`Taskspace is not registered in this workspace: ${locatedMarker.path}`);
+      if (taskspace.scopeId) {
         const scopedCards = await getCardsByScopeWithBundleName({
           db,
-          scopeId: workingCopy.scopeId,
+          scopeId: taskspace.scopeId,
         });
         await printCards(
           db,
@@ -301,9 +301,9 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
         );
       } else {
         console.warn(
-          "Notice: Working copy is not attached to a scope. The scope may have been deleted.",
+          "Notice: Taskspace is not attached to a scope. The scope may have been deleted.",
         );
-        const workingCopyCards = await db
+        const taskspaceCards = await db
           .select({
             id: cardTable.id,
             bundle: bundleTable.name,
@@ -313,8 +313,8 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
           })
           .from(cardTable)
           .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-          .where(eq(cardTable.workingCopyId, workingCopy.id));
-        await printCards(db, workingCopyCards);
+          .where(eq(cardTable.taskspaceId, taskspace.id));
+        await printCards(db, taskspaceCards);
       }
       return;
     }

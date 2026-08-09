@@ -106,11 +106,11 @@ export function getDBURL(): string {
   return url;
 }
 
-export function getWorkingCopyDefaultDir(root: string): string {
+export function getTaskspaceDefaultDir(root: string): string {
   const parsed = readParsedConfig(root);
   if (!parsed) return ".";
-  const wc = parsed.workingCopy;
-  if (typeof wc !== "object" || wc === null) return ".";
-  const dir = (wc as Record<string, unknown>).defaultDir;
+  const taskspace = parsed.taskspace;
+  if (typeof taskspace !== "object" || taskspace === null) return ".";
+  const dir = (taskspace as Record<string, unknown>).defaultDir;
   return typeof dir === "string" && dir ? dir : ".";
 }

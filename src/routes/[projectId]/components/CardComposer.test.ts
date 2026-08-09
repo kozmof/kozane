@@ -119,8 +119,13 @@ describe("CardComposer — create mode", () => {
   it("restores the last create bundle after selecting a card", async () => {
     const user = userEvent.setup();
     const selectedCard = {
-      id: "card-1", content: "General card", bundleId: "b1", posX: 0, posY: 0,
-      glueId: null, workingCopyId: null,
+      id: "card-1",
+      content: "General card",
+      bundleId: "b1",
+      posX: 0,
+      posY: 0,
+      glueId: null,
+      taskspaceId: null,
     };
     const { rerender } = render(CardComposer, { props: makeProps() });
 
@@ -185,7 +190,7 @@ describe("CardComposer — selection mode", () => {
       posX: 0,
       posY: 0,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
     {
       id: "card-2",
@@ -194,7 +199,7 @@ describe("CardComposer — selection mode", () => {
       posX: 0,
       posY: 0,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
   ];
 
@@ -348,7 +353,7 @@ describe("CardComposer — Move to project", () => {
       posX: 0,
       posY: 0,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
     {
       id: "card-2",
@@ -357,7 +362,7 @@ describe("CardComposer — Move to project", () => {
       posX: 0,
       posY: 0,
       glueId: null,
-      workingCopyId: null,
+      taskspaceId: null,
     },
   ];
 
@@ -419,7 +424,7 @@ describe("CardComposer — copy card ID", () => {
     posX: 0,
     posY: 0,
     glueId: null,
-    workingCopyId: null,
+    taskspaceId: null,
   };
 
   it("shows the copy action for a single selected card", () => {
@@ -458,7 +463,7 @@ describe("CardComposer — card layers", () => {
     posX: 0,
     posY: 0,
     glueId: null,
-    workingCopyId: null,
+    taskspaceId: null,
   };
 
   it("moves a single selected card to the front or back", async () => {

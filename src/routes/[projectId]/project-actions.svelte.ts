@@ -189,26 +189,26 @@ export function createProjectActions(state: ProjectState) {
     state.sidebar.newScopeName = "";
   }
 
-  async function handleCreateWorkingCopy() {
+  async function handleCreateTaskspace() {
     const name = state.sidebar.newWcName.trim();
     if (!state.sidebar.activeScope) {
-      state.setError("Select a scope before creating a working copy");
+      state.setError("Select a scope before creating a taskspace");
       return;
     }
     if (!name) return;
     const scopeId = state.sidebar.activeScope;
-    const res = await api.createWorkingCopy(state.fetcher, state.projectId, { name, scopeId });
+    const res = await api.createTaskspace(state.fetcher, state.projectId, { name, scopeId });
     if (!res.ok) {
-      state.setError("Failed to create working copy");
+      state.setError("Failed to create taskspace");
       return;
     }
     const parsed = await res.json().catch(() => null);
     if (!parsed) {
-      state.setError("Failed to create working copy");
+      state.setError("Failed to create taskspace");
       return;
     }
-    state.workingCopies = [
-      ...state.workingCopies,
+    state.taskspaces = [
+      ...state.taskspaces,
       { id: parsed.id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind },
     ];
     state.sidebar.newWcName = "";
@@ -289,6 +289,6 @@ export function createProjectActions(state: ProjectState) {
     handleDeleteScope,
     handleAddToScope,
     handleRemoveFromScope,
-    handleCreateWorkingCopy,
+    handleCreateTaskspace,
   };
 }

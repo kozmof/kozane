@@ -4,14 +4,14 @@
 
 Kozane is a local-first CLI tool for card-based thinking and file-based writing.
 The CLI starts a local SvelteKit web server and manages project initialization,
-database bootstrapping, working-copy files, and workspace health.
+database bootstrapping, taskspace files, and workspace health.
 
 ```
 kozane
   = local-first CLI tool
   + SvelteKit web UI (served from build/)
   + SQLite metadata database
-  + working-copy file generator
+  + taskspace file generator
 ```
 
 ---
@@ -42,23 +42,23 @@ scope "Q3 planning"
   └── card from project "frontend"  (bundle: Roadmap)
 ```
 
-Scopes are the bridge between the card canvas and the filesystem. A **working copy** for a scope stores an identity marker. Run `kozane card list` from
+Scopes are the bridge between the card canvas and the filesystem. A **taskspace** for a scope stores an identity marker. Run `kozane card list` from
 that directory to read the scope's current cards directly from the database, regardless of
 which project they belong to.
 
-Cards are added to a scope explicitly (via the UI's scope panel or `wc create --scope`).
+Cards are added to a scope explicitly (via the UI's scope panel or `taskspace create --scope`).
 Deleting a scope from the UI removes that project's cards from it; the scope itself
 is only deleted when it has no member cards left across any project.
 
-### Working copies
+### Taskspaces
 
-A working copy is a filesystem directory tied to a scope. It holds:
+A taskspace is a filesystem directory tied to a scope. It holds:
 
-- `.working-copy.json` — identity anchor (stable UUID, survives rename/move)
-- `kozane card list` — dynamically lists scope cards. If the scope was deleted or the working copy was created without one, the CLI reports that status and lists directly associated cards
+- `.taskspace.json` — identity anchor (stable UUID, survives rename/move)
+- `kozane card list` — dynamically lists scope cards. If the scope was deleted or the taskspace was created without one, the CLI reports that status and lists directly associated cards
 
-Working copies are discovered by `kozane wc scan`, which walks the directories listed
-in `config.workingCopy.searchRoots` and reconciles what is on disk with the database.
+Taskspaces are discovered by `kozane taskspace scan`, which walks the directories listed
+in `config.taskspace.searchRoots` and reconciles what is on disk with the database.
 
 ---
 
@@ -83,12 +83,12 @@ pnpm build:cli            # compile to dist/
     backups/              # database backups created before migrations/imports
 ```
 
-Working copies live wherever the user chooses (default: project root).
-Each working copy directory carries its own identity marker:
+Taskspaces live wherever the user chooses (default: project root).
+Each taskspace directory carries its own identity marker:
 
 ```
-<working-copy-dir>/
-  .working-copy.json      # identity anchor
+<taskspace-dir>/
+  .taskspace.json      # identity anchor
   <exported files>
 ```
 
@@ -230,7 +230,7 @@ Projects     : 1
 Bundles      : 6
 Cards        : 128
 Scopes       : 4
-Working copies: 3
+Taskspaces: 3
 ```
 
 ---
@@ -335,7 +335,7 @@ If no scopes exist, the command prints `No scopes found.`
 ### `kozane scope delete <id>`
 
 Deletes a scope workspace-wide using its full or short ID. Scope membership rows are
-deleted, and attached working copies become unscoped. Cards themselves are retained.
+deleted, and attached taskspaces become unscoped. Cards themselves are retained.
 
 ```bash
 kozane scope delete <id>
@@ -404,34 +404,34 @@ kozane card show 17b8
 
 ### `kozane card list`
 
-Lists project cards or dynamically lists cards associated with a working copy.
+Lists project cards or dynamically lists cards associated with a taskspace.
 
 ```bash
 kozane card list [--project <projectId>] [--bundle <bundleId>]
-kozane card list --working-copy <path>
+kozane card list --taskspace <path>
 ```
 
-When the current directory contains `.working-copy.json`, running `kozane card list`
+When the current directory contains `.taskspace.json`, running `kozane card list`
 without project or bundle options automatically uses that marker. The marker must be
 in the current directory; parent directories are not searched.
 
-`--working-copy <path>` accepts either a working-copy directory or the
-`.working-copy.json` file itself. Scoped working copies list the current scope members
-directly from the database. If the working copy has no scope, including when its scope
+`--taskspace <path>` accepts either a taskspace directory or the
+`.taskspace.json` file itself. Scoped taskspaces list the current scope members
+directly from the database. If the taskspace has no scope, including when its scope
 was deleted, the command prints a notice and lists cards associated directly with the
-working copy.
+taskspace.
 
 Examples:
 
 ```bash
-cd my-working-copy
+cd my-taskspace
 kozane card list
 
-kozane card list --working-copy ./my-working-copy
-kozane card list --working-copy ./my-working-copy/.working-copy.json
+kozane card list --taskspace ./my-taskspace
+kozane card list --taskspace ./my-taskspace/.taskspace.json
 ```
 
-The working-copy form cannot be combined with `--project` or `--bundle`.
+The taskspace form cannot be combined with `--project` or `--bundle`.
 
 ---
 
@@ -585,13 +585,13 @@ Restored: .kozane/backups/kozane.20240101T120000.db
 
 ---
 
-### `kozane wc scan`
+### `kozane taskspace scan`
 
-Scans the filesystem for working copies and reports differences from the database.
+Scans the filesystem for taskspaces and reports differences from the database.
 **Dry-run by default** — pass `--apply` to write changes.
 
 ```bash
-kozane wc scan [--apply] [--reattach] [--cleanup]
+kozane taskspace scan [--apply] [--reattach] [--cleanup]
 ```
 
 Options:
@@ -599,13 +599,13 @@ Options:
 | Flag         | Description                                                                         |
 | ------------ | ----------------------------------------------------------------------------------- |
 | `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)            |
-| `--reattach` | Re-link orphan working copies found on disk but missing from DB (needs `--apply`)   |
-| `--cleanup`  | Delete DB records for working copies whose marker file is missing (needs `--apply`) |
+| `--reattach` | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
+| `--cleanup`  | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
 
 Behavior:
 
-1. Walks directories listed in `config.workingCopy.searchRoots`.
-2. For each `<dir>/.working-copy.json` found, reads the `workingCopyId`.
+1. Walks directories listed in `config.taskspace.searchRoots`.
+2. For each `<dir>/.taskspace.json` found, reads the `taskspaceId`.
 3. Compares with DB records:
    - **Path changed** → reports as `moved`; with `--apply`, updates `path` and `lastSeenAt`.
    - **DB record missing** → reports as `orphan`; with `--apply --reattach`, inserts the record.
@@ -622,8 +622,8 @@ Dry-run output (no `--apply`):
   orphan  <id>  /external/path/to/dir
 
 To apply changes, run:
-  wc scan --apply             update 1 moved path(s)
-  wc scan --apply --reattach  reattach 1 orphan(s)
+  taskspace scan --apply             update 1 moved path(s)
+  taskspace scan --apply --reattach  reattach 1 orphan(s)
 ```
 
 Applied output:
@@ -640,19 +640,19 @@ Scan complete. 1 updated, 1 deleted.
 
 ---
 
-### `kozane wc create <name>`
+### `kozane taskspace create <name>`
 
-Creates a new working copy.
+Creates a new taskspace.
 
 ```bash
-kozane wc create <name> [--scope <scopeId>] [--no-scope] [--dir <path>]
+kozane taskspace create <name> [--scope <scopeId>] [--no-scope] [--dir <path>]
 ```
 
 Options:
 
 | Flag                | Description                                                |
 | ------------------- | ---------------------------------------------------------- |
-| `--scope <scopeId>` | Attach working copy to an existing scope                   |
+| `--scope <scopeId>` | Attach taskspace to an existing scope                   |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
 | `--project <id>`    | Override the workspace default project                     |
 | `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
@@ -661,15 +661,15 @@ Either `--scope` or `--no-scope` is required.
 
 Behavior:
 
-1. Inserts a `working_copy` DB record → gets a stable UUID.
+1. Inserts a `taskspace` DB record → gets a stable UUID.
 2. Creates the target directory.
-3. Writes `<dir>/.working-copy.json` with the stable ID.
+3. Writes `<dir>/.taskspace.json` with the stable ID.
 4. Stores the path in the DB (`project_relative` if inside project root, `absolute` otherwise).
 
 Output:
 
 ```
-Working copy created.
+Taskspace created.
   id   : 019dddef-87e3-7127-b5c9-0d5878bbf826
   name : my-draft
   path : /path/to/my-draft
@@ -688,7 +688,7 @@ Working copy created.
     "host": "127.0.0.1",
     "port": 5173
   },
-  "workingCopy": {
+  "taskspace": {
     "defaultDir": ".",
     "searchRoots": ["."]
   },
@@ -726,26 +726,26 @@ with light overlap between cards.
 
 ---
 
-## Working copy marker
+## Taskspace marker
 
-Identity anchor written at the root of each working copy directory at creation time:
+Identity anchor written at the root of each taskspace directory at creation time:
 
 ```
-<working-copy-dir>/.working-copy.json
+<taskspace-dir>/.taskspace.json
 ```
 
 ```json
 {
-  "kind": "kozane.workingCopy",
+  "kind": "kozane.taskspace",
   "version": 1,
-  "workingCopyId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
+  "taskspaceId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
   "projectId": "019dddef-87e3-7000-0000-000000000000"
 }
 ```
 
 The marker is the **filesystem anchor**. The database stores only the last-known
-path. Renaming or moving the directory does not change the working copy's identity —
-`kozane wc scan --apply` recovers the new path automatically.
+path. Renaming or moving the directory does not change the taskspace's identity —
+`kozane taskspace scan --apply` recovers the new path automatically.
 
 ---
 
@@ -778,11 +778,11 @@ and exits with code `1`.
 | Outside project root              | `absolute`         | absolute filesystem path |
 
 This keeps repo-local paths portable across machines while still supporting
-working copies placed anywhere on the filesystem.
+taskspaces placed anywhere on the filesystem.
 
 ---
 
-## Database schema (working_copy)
+## Database schema (taskspace)
 
 | Column         | Type                | Notes                            |
 | -------------- | ------------------- | -------------------------------- |
@@ -792,19 +792,19 @@ working copies placed anywhere on the filesystem.
 | `name`         | text                | display name                     |
 | `path`         | text                | current known filesystem path    |
 | `path_kind`    | text enum           | `project_relative` \| `absolute` |
-| `last_seen_at` | integer (timestamp) | set by `wc scan`                 |
+| `last_seen_at` | integer (timestamp) | set by `taskspace scan`                 |
 | `created_at`   | integer (timestamp) | set on insert                    |
 | `updated_at`   | integer (timestamp) | set on every update              |
 
 ---
 
-## Collision handling (wc scan)
+## Collision handling (taskspace scan)
 
 | Situation                                    | Behavior                                           |
 | -------------------------------------------- | -------------------------------------------------- |
 | Marker found, DB record missing              | Reported as orphan; `--apply --reattach` re-links  |
 | DB record exists, marker missing             | Reported as "missing"; `--apply --cleanup` deletes |
-| Same `workingCopyId` in multiple directories | Reported as duplicate; use `kozane wc fork` (v0.2) |
+| Same `taskspaceId` in multiple directories | Reported as duplicate; use `kozane taskspace fork` (v0.2) |
 
 ---
 
@@ -824,27 +824,27 @@ CLI:
   kozane db export
   kozane db import
   kozane db restore
-  kozane wc scan
-  kozane wc create
+  kozane taskspace scan
+  kozane taskspace create
 
 UI (SvelteKit):
   project dashboard
   bundle list
   card creation / editing
   scope builder
-  working-copy creation
+  taskspace creation
 
 Filesystem:
-  .working-copy.json marker
-  working-copy directory creation
+  .taskspace.json marker
+  taskspace directory creation
 ```
 
 ## Planned (v0.2+)
 
 ```
 kozane export <scope-id>         # export scope cards to markdown
-kozane wc repair <id> --path ... # rewrite missing marker after confirmation
-kozane wc fork <dir>             # assign new id to a duplicate
+kozane taskspace repair <id> --path ... # rewrite missing marker after confirmation
+kozane taskspace fork <dir>             # assign new id to a duplicate
 kozane scope inspect
 kozane card add / list / search
 ```

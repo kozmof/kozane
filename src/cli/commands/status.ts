@@ -9,7 +9,7 @@ import {
   bundleTable,
   cardTable,
   scopeTable,
-  workingCopyTable,
+  taskspaceTable,
 } from "../../db/schema.js";
 
 export async function status(): Promise<void> {
@@ -17,12 +17,12 @@ export async function status(): Promise<void> {
   const resolvedRoot = resolve(root);
   const db = await createDb(commandDbUrl(resolvedRoot));
 
-  const [[projects], [bundles], [cards], [scopes], [workingCopies]] = await Promise.all([
+  const [[projects], [bundles], [cards], [scopes], [taskspaces]] = await Promise.all([
     db.select({ count: count() }).from(projectTable),
     db.select({ count: count() }).from(bundleTable),
     db.select({ count: count() }).from(cardTable),
     db.select({ count: count() }).from(scopeTable),
-    db.select({ count: count() }).from(workingCopyTable),
+    db.select({ count: count() }).from(taskspaceTable),
   ]);
 
   console.log(`Workspace    : ${config.name}`);
@@ -31,5 +31,5 @@ export async function status(): Promise<void> {
   console.log(`Bundles      : ${bundles.count}`);
   console.log(`Cards        : ${cards.count}`);
   console.log(`Scopes       : ${scopes.count}`);
-  console.log(`Working copies: ${workingCopies.count}`);
+  console.log(`Taskspaces: ${taskspaces.count}`);
 }

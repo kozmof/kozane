@@ -59,7 +59,7 @@ afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-describe("scoped card working-copy CLI flow", () => {
+describe("scoped card taskspace CLI flow", () => {
   it("routes scope commands to the active memory server database", () => {
     const root = tempWorkspace();
     cli(root, "init");
@@ -122,14 +122,14 @@ describe("scoped card working-copy CLI flow", () => {
     expect(listed).toContain("第二の考え");
     expect(listed).toContain("Third thought");
 
-    cli(root, "wc", "create", "squashed", "--scope", scopeId, "--project", projectId);
+    cli(root, "taskspace", "create", "squashed", "--scope", scopeId, "--project", projectId);
     const scoped = cli(join(root, "squashed"), "card", "list");
     expect(scoped).toContain("First thought");
     expect(scoped).toContain("第二の考え");
     expect(scoped).toContain("Third thought");
   }, 30_000);
 
-  it("creates a scope, adds scoped cards, and lists them from the working-copy directory", () => {
+  it("creates a scope, adds scoped cards, and lists them from the taskspace directory", () => {
     const root = tempWorkspace();
     cli(root, "init");
     const projectId = outputId(cli(root, "project", "create", "E2E project"));
@@ -139,13 +139,13 @@ describe("scoped card working-copy CLI flow", () => {
     cli(root, "card", "add", "Second scoped card", "--project", projectId, "--scope", scopeId);
     cli(root, "card", "add", "Unscoped card", "--project", projectId);
 
-    cli(root, "wc", "create", "scope-working-copy", "--scope", scopeId, "--project", projectId);
+    cli(root, "taskspace", "create", "scope-taskspace", "--scope", scopeId, "--project", projectId);
 
-    const workingCopyDir = join(root, "scope-working-copy");
-    expect(existsSync(join(workingCopyDir, ".working-copy.json"))).toBe(true);
-    expect(existsSync(join(workingCopyDir, "cards.md"))).toBe(false);
+    const taskspaceDir = join(root, "scope-taskspace");
+    expect(existsSync(join(taskspaceDir, ".taskspace.json"))).toBe(true);
+    expect(existsSync(join(taskspaceDir, "cards.md"))).toBe(false);
 
-    const listed = cli(workingCopyDir, "card", "list");
+    const listed = cli(taskspaceDir, "card", "list");
     expect(listed).toContain("First scoped card");
     expect(listed).toContain("Second scoped card");
     expect(listed).not.toContain("Unscoped card");

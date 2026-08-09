@@ -46,7 +46,7 @@ export async function getCard({ db, bundleId, cardId }: GetCard): Promise<Card |
 
 type AddCard = NeedsBundle & {
   content: string;
-  workingCopyId?: string;
+  taskspaceId?: string;
   posX?: number;
   posY?: number;
   zIndex?: number;
@@ -55,7 +55,7 @@ export async function addCard({
   db,
   bundleId,
   content,
-  workingCopyId,
+  taskspaceId,
   posX,
   posY,
   zIndex,
@@ -65,7 +65,7 @@ export async function addCard({
     .values({
       bundleId,
       content,
-      workingCopyId,
+      taskspaceId,
       ...(posX !== undefined && { posX }),
       ...(posY !== undefined && { posY }),
       ...(zIndex !== undefined && { zIndex }),

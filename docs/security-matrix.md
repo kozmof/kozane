@@ -91,7 +91,7 @@ any static host.
 The export is public and read-only. It carries a full snapshot of the database
 at build time, so anyone who can open the site reads every card, bundle, scope,
 and glue. There is no API key, no login page, and no way to authenticate,
-because there is no server. Composing, dragging, deleting, working copies, and
+because there is no server. Composing, dragging, deleting, taskspaces, and
 live sync are all disabled.
 
 Do not export a workspace that holds anything you would not publish. The

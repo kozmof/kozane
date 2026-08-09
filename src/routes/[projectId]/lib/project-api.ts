@@ -147,10 +147,10 @@ export function moveCardsToProject(
   return jsonRequest(fetcher, `/${projectId}/api/cards/move`, "POST", { cardIds, targetProjectId });
 }
 
-export function createWorkingCopy(
+export function createTaskspace(
   fetcher: typeof fetch,
   projectId: string,
-  workingCopy: { name: string; scopeId: string },
+  taskspace: { name: string; scopeId: string },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/working-copies`, "POST", workingCopy);
+  return jsonRequest(fetcher, `/${projectId}/api/taskspaces`, "POST", taskspace);
 }

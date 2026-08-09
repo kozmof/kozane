@@ -8,7 +8,7 @@ the server and remote access, see the [README](../README.md) and the
 Everything here applies to a live server started with `kozane open`. A static
 export made with `kozane net ssg generate` keeps pan, zoom, and filtering, but it
 disables every operation that writes, including creating, editing, dragging,
-deleting, gluing, scope membership, and working copies. It also stops the
+deleting, gluing, scope membership, and taskspaces. It also stops the
 live-sync poll, because there is no server to talk to.
 
 ## Opening a workspace
@@ -30,7 +30,7 @@ The project view has three parts.
 
 - Left panel — bundles, where you filter, create, and delete.
 - Canvas — the card workspace, with the composer and controls floating over it.
-- Right panel — scopes and working copies.
+- Right panel — scopes and taskspaces.
 
 Both side panels are hidden by default. Toggle them with the panels button in
 the top-right corner or the `b` key. Toggle card footers with the neighbouring
@@ -150,20 +150,20 @@ member count each.
   from the scope. The cards themselves are kept, and the scope disappears
   workspace-wide only once no cards reference it.
 
-## Working copies
+## Taskspaces
 
-A working copy is a filesystem directory tied to a scope, used to write scope
-cards to disk. Open a scope in the right panel to see its working copies. To
-create one, select the scope, type a name in the working-copy input, and press
+A taskspace is a filesystem directory tied to a scope, used to write scope
+cards to disk. Open a scope in the right panel to see its taskspaces. To
+create one, select the scope, type a name in the taskspace input, and press
 `Enter` or `+`. A scope must be active first. Cards that belong to a working
-copy show a `wc` badge in their footer. Manage working copies on disk with
-`kozane wc scan` and `kozane wc create`, described in the
+copy show a `taskspace` badge in their footer. Manage taskspaces on disk with
+`kozane taskspace scan` and `kozane taskspace create`, described in the
 [CLI specification](../spec/cli.md).
 
 ## Card footers
 
 Toggle footers with the footer button in the top-right corner or the `f` key. A
-footer shows, when relevant, the glue-group link icon, the `wc` badge, and the
+footer shows, when relevant, the glue-group link icon, the `taskspace` badge, and the
 card's bundle dot and name.
 
 ## Live sync

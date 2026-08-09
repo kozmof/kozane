@@ -6,17 +6,17 @@ import { getAllScopes } from "../../../../db/api/scope";
 import { getCardsByBundles } from "../../../../db/api/card";
 import { getGlueRelsByCards } from "../../../../db/api/glue";
 import { getScopeRelsByCards } from "../../../../db/api/scope-rel";
-import { getAllWorkingCopies } from "../../../../db/api/working-copy";
+import { getAllTaskspaces } from "../../../../db/api/taskspace";
 import { cardsWithGlueIds } from "../../lib/project-page";
 
 export const GET: RequestHandler = async ({ locals, params }) => {
   const project = await getProject({ db: locals.db, projectId: params.projectId });
   if (!project) throw error(404, "Project not found");
 
-  const [bundles, scopes, workingCopies] = await Promise.all([
+  const [bundles, scopes, taskspaces] = await Promise.all([
     getAllBundles({ db: locals.db, projectId: params.projectId }),
     getAllScopes({ db: locals.db }),
-    getAllWorkingCopies({ db: locals.db }),
+    getAllTaskspaces({ db: locals.db }),
   ]);
   const cards = await getCardsByBundles({
     db: locals.db,
@@ -35,6 +35,6 @@ export const GET: RequestHandler = async ({ locals, params }) => {
     scopes,
     scopeRels,
     glueRels,
-    workingCopies,
+    taskspaces,
   });
 };
