@@ -3,8 +3,9 @@
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
-  import { applyPalette, clampZoom } from "./lib/project-page";
+  import { applyPalette, clampZoom, maxZIndex, minZIndex } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
+  import type { CardWithGlue } from "$lib/types";
   import { ProjectState } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
   import BundleSidebar from "./components/BundleSidebar.svelte";
@@ -155,7 +156,7 @@
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const scopeId = s.sidebar.activeScope;
-      const zIndex = Math.max(0, ...s.cards.map((card) => card.zIndex ?? 0)) + 1;
+      const zIndex = maxZIndex(s.cards) + 1;
       const res = await createCard(s.mutationFetcher, data.project.id, {
         bundleId,
         content,
@@ -165,10 +166,12 @@
         ...(scopeId && { scopeId }),
       });
       if (!res.ok) { s.setError("Failed to create card"); return; }
-      const parsed = await res.json().catch(() => null);
-      if (!parsed) { s.setError("Failed to create card"); return; }
-      s.cards = [...s.cards, { id: parsed.id, bundleId, content, posX, posY, zIndex, glueId: null, taskspaceId: null }];
-      if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: parsed.id }];
+      const created: CardWithGlue | null = await res.json().catch(() => null);
+      if (!created) { s.setError("Failed to create card"); return; }
+      // The stored row, not a local reconstruction: the server clamps posX/posY to the
+      // canvas, so a card composed at the edge would otherwise jump on the next poll.
+      s.cards = [...s.cards, created];
+      if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
     }
   }
 
@@ -180,9 +183,8 @@
   async function handleLayerChange(cardId: string, direction: "front" | "back") {
     const card = s.cards.find((item) => item.id === cardId);
     if (!card) return;
-    const previous = card.zIndex ?? 0;
-    const layers = s.cards.map((item) => item.zIndex ?? 0);
-    const zIndex = direction === "front" ? Math.max(...layers) + 1 : Math.min(...layers) - 1;
+    const previous = card.zIndex;
+    const zIndex = direction === "front" ? maxZIndex(s.cards) + 1 : minZIndex(s.cards) - 1;
     s.cards = s.cards.map((item) => (item.id === cardId ? { ...item, zIndex } : item));
     const res = await updateCard(s.mutationFetcher, data.project.id, cardId, { zIndex });
     if (!res.ok) {

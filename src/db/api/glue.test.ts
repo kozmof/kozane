@@ -91,6 +91,18 @@ describe("unglueCards", () => {
     expect(remaining.every((rel) => rel.glueId === glueId)).toBe(true);
   });
 
+  it("removes the group row when every member is unglued at once", async () => {
+    const { db, cardA, cardB } = await setup();
+    const glueId = await glueCards({ db, cardIds: [cardA, cardB] });
+
+    await unglueCards({ db, cardIds: [cardA, cardB] });
+
+    // A group emptied in one call produces no GROUP BY row, so this is the case a
+    // `HAVING count() <= 1` filter silently skips, leaking the `glue` row.
+    expect(await getGlueRelsByCards({ db, cardIds: [cardA, cardB] })).toEqual([]);
+    expect(await db.select().from(glueTable).where(eq(glueTable.id, glueId))).toEqual([]);
+  });
+
   it("dissolves groups left with one member", async () => {
     const { db, cardA, cardB } = await setup();
     const glueId = await glueCards({ db, cardIds: [cardA, cardB] });

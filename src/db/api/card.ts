@@ -74,28 +74,11 @@ export async function addCard({
   return row.id;
 }
 
-type DeleteCard = NeedsBundle & { cardId: string };
-export async function deleteCard({ db, bundleId, cardId }: DeleteCard): Promise<void> {
-  const deleted = await db
-    .delete(cardTable)
-    .where(and(eq(cardTable.bundleId, bundleId), eq(cardTable.id, cardId)))
-    .returning({ id: cardTable.id });
-  assertFound(deleted, `Card bundleId=${bundleId} cardId=${cardId}`);
-}
+// Card deletion lives in composite.ts: removing a card cascades its glue_rel rows
+// away, so the delete has to be paired with glue-group cleanup, and glue.ts cannot
+// be imported from here without a cycle. See `deleteProjectCards`.
 
 // ── Project-scoped transactional operations (verify ownership before mutating) ─
-
-type DeleteCards = { db: DB; projectId: string; cardIds: string[] };
-export async function deleteCards({ db, projectId, cardIds }: DeleteCards): Promise<boolean> {
-  if (cardIds.length === 0) return true;
-  const uniqueIds = [...new Set(cardIds)];
-  return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, projectId, uniqueIds);
-    if (owned.length !== uniqueIds.length) return false;
-    await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
-    return true;
-  });
-}
 
 type GetCardBundleNames = NeedsDB & { cardIds: string[] };
 export async function getCardBundleNames({
@@ -171,6 +154,10 @@ export type CardPositionUpdate = {
   posY: number;
 };
 
+// The CASE has no ELSE, so a row matched by the WHERE without a matching WHEN would
+// be assigned NULL in a NOT NULL column. That is prevented by construction — the
+// WHERE is built from exactly these `positions` — and the row-count assertion in
+// `updateProjectCardPositions` fails the transaction if the two ever diverge.
 function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; posY: SQL } {
   const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
   const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
@@ -180,26 +167,9 @@ function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; po
   };
 }
 
-type UpdateCardPositions = {
-  db: DB;
-  positions: CardPositionUpdate[];
-};
-
-export async function updateCardPositions({ db, positions }: UpdateCardPositions): Promise<void> {
-  if (positions.length === 0) return;
-
-  await withTx(db, async (tx) => {
-    const ids = positions.map((p) => p.cardId);
-    const updated = await tx
-      .update(cardTable)
-      .set(buildPositionCaseWhen(positions))
-      .where(inArray(cardTable.id, ids))
-      .returning({ id: cardTable.id });
-    if (updated.length !== positions.length)
-      throw new Error(
-        `updateCardPositions: expected ${positions.length} updates, got ${updated.length}`,
-      );
-  });
+/** Last write wins, so a repeated cardId resolves the same way it would in sequence. */
+function dedupePositions(positions: CardPositionUpdate[]): CardPositionUpdate[] {
+  return [...new Map(positions.map((p) => [p.cardId, p])).values()];
 }
 
 type UpdateProjectCardPositions = {
@@ -214,16 +184,22 @@ export async function updateProjectCardPositions({
   positions,
 }: UpdateProjectCardPositions): Promise<boolean> {
   if (positions.length === 0) return true;
+  const unique = dedupePositions(positions);
 
   return withTx(db, async (tx) => {
-    const cardIds = positions.map((p) => p.cardId);
+    const cardIds = unique.map((p) => p.cardId);
     const owned = await cardsInProject(tx, projectId, cardIds);
     if (owned.length !== cardIds.length) return false;
 
-    await tx
+    const updated = await tx
       .update(cardTable)
-      .set(buildPositionCaseWhen(positions))
-      .where(inArray(cardTable.id, cardIds));
+      .set(buildPositionCaseWhen(unique))
+      .where(inArray(cardTable.id, cardIds))
+      .returning({ id: cardTable.id });
+    if (updated.length !== unique.length)
+      throw new Error(
+        `updateProjectCardPositions: expected ${unique.length} updates, got ${updated.length}`,
+      );
 
     return true;
   });

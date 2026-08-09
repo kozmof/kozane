@@ -13,6 +13,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       content: "Hello world",
       posX: 100,
       posY: 200,
+      zIndex: 0,
       glueId: null,
       taskspaceId: null,
     },

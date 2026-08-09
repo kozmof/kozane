@@ -19,6 +19,39 @@ export function shortId(id: string, allIds: string[]): string {
   return compact(id);
 }
 
+/**
+ * Short IDs for a whole set at once.
+ *
+ * `shortId` rescans `allIds` at every prefix length, so calling it per row is
+ * quadratic; this builds one prefix-count table and resolves each id by lookup.
+ * Results are identical to calling `shortId(id, allIds)` for each id.
+ */
+export function shortIdMap(allIds: string[]): Map<string, string> {
+  const keyed = allIds.map((id) => [id, shortIdKey(id)] as const);
+
+  const prefixCounts = new Map<string, number>();
+  for (const [, key] of keyed) {
+    for (let length = Math.min(MIN_SHORT_ID_LENGTH, key.length); length <= key.length; length++) {
+      const prefix = key.slice(0, length);
+      prefixCounts.set(prefix, (prefixCounts.get(prefix) ?? 0) + 1);
+    }
+  }
+
+  const shortIds = new Map<string, string>();
+  for (const [id, key] of keyed) {
+    let resolved = compact(id);
+    for (let length = Math.min(MIN_SHORT_ID_LENGTH, key.length); length <= key.length; length++) {
+      const prefix = key.slice(0, length);
+      if (prefixCounts.get(prefix) === 1) {
+        resolved = prefix;
+        break;
+      }
+    }
+    shortIds.set(id, resolved);
+  }
+  return shortIds;
+}
+
 export function resolveShortId(input: string, allIds: string[], label: string): string {
   const normalized = compact(input);
   const exact = allIds.find((id) => compact(id) === normalized);

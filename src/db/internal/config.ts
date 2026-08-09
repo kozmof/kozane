@@ -1,13 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import {
-  DEFAULT_UI_CONFIG,
-  type UiConfig,
-  UI_NUM_RANGES,
-  UI_BOOL_FIELDS,
-  UI_STR_FIELDS,
-  NEW_CARD_PLACEMENTS,
-} from "../../lib/ui-config.js";
+import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
   if (!startDir) return null;
@@ -68,28 +61,11 @@ export function getWorkspaceRoot(): string | null {
   return resolveWorkspaceRoot();
 }
 
+// Lenient: a bad value in one UI setting falls back to its default rather than
+// failing the request. The CLI runs the same parser in strict mode (cli/lib/config.ts).
 function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
-  const p = raw as Record<string, unknown>;
-  const ui = p.ui;
-  if (typeof ui !== "object" || ui === null || Array.isArray(ui)) return {};
-  const u = ui as Record<string, unknown>;
-  const out: Partial<UiConfig> = {};
-  for (const [f, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
-    const v = u[f];
-    if (typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi)
-      (out as Record<string, unknown>)[f] = v;
-  }
-  for (const f of UI_BOOL_FIELDS) {
-    if (typeof u[f] === "boolean") (out as Record<string, unknown>)[f] = u[f];
-  }
-  for (const f of UI_STR_FIELDS) {
-    if (typeof u[f] === "string") (out as Record<string, unknown>)[f] = u[f];
-  }
-  if (NEW_CARD_PLACEMENTS.includes(u.newCardPlacement as never)) {
-    out.newCardPlacement = u.newCardPlacement as UiConfig["newCardPlacement"];
-  }
-  return out;
+  return parseUiOverrides((raw as Record<string, unknown>).ui, { strict: false });
 }
 
 export function getWorkspaceUiConfig(): UiConfig {

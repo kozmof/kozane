@@ -1,7 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../../db/api/bundle";
-import { updateCard, deleteCard } from "../../../../../db/api/card";
+import { updateCard } from "../../../../../db/api/card";
+import { deleteProjectCards } from "../../../../../db/api/composite";
 import { requireCardInProject } from "../../../lib/guards";
 import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
 import {
@@ -58,8 +59,9 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;
   const { projectId, cardId } = params;
 
-  const { bundleId } = await requireCardInProject(db, projectId, cardId);
-  await deleteCard({ db, bundleId, cardId });
+  // Kept for the 404: deleteProjectCards reports a missing card as a plain `false`.
+  await requireCardInProject(db, projectId, cardId);
+  await deleteProjectCards({ db, projectId, cardIds: [cardId] });
 
   return json({ ok: true });
 };

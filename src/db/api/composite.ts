@@ -61,6 +61,32 @@ export async function createCardFromTaskspace({
   );
 }
 
+type DeleteProjectCards = { db: DB; projectId: string; cardIds: string[] };
+
+/**
+ * Deletes cards after verifying every one belongs to projectId, dissolving any glue
+ * group the removal would leave degenerate. Returns false if any card is not owned.
+ *
+ * The unglue step is not optional: deleting a card cascades its glue_rel row away
+ * without going through glue.ts, which would strand the surviving partner of a
+ * two-card group in a group of one — a card the UI still offers to "unglue".
+ */
+export async function deleteProjectCards({
+  db,
+  projectId,
+  cardIds,
+}: DeleteProjectCards): Promise<boolean> {
+  if (cardIds.length === 0) return true;
+  const uniqueIds = [...new Set(cardIds)];
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, uniqueIds);
+    if (owned.length !== uniqueIds.length) return false;
+    await unglueCardsInTx(tx, uniqueIds);
+    await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
+    return true;
+  });
+}
+
 type MoveCardsToProject = {
   db: DB;
   sourceProjectId: string;

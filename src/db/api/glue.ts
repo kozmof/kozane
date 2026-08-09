@@ -1,5 +1,5 @@
 import { glueTable, glueRelTable } from "../schema.js";
-import { count, inArray, lte } from "drizzle-orm";
+import { count, inArray } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsInProject } from "./card.js";
@@ -12,17 +12,22 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
 async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<string[]> {
   if (affectedGlueIds.length === 0) return [];
 
-  // Find groups with ≤1 remaining member.
-  const orphanGroups = await db
-    .select({ glueId: glueRelTable.glueId })
+  // Survivors are counted and then subtracted, rather than selecting orphans with
+  // `HAVING count() <= 1`: a group whose members were *all* removed produces no
+  // GROUP BY row at all, so a HAVING filter can never see it and its `glue` row
+  // would leak. Anything not proven to still hold ≥2 members is an orphan.
+  const memberCounts = await db
+    .select({ glueId: glueRelTable.glueId, members: count() })
     .from(glueRelTable)
     .where(inArray(glueRelTable.glueId, affectedGlueIds))
-    .groupBy(glueRelTable.glueId)
-    .having(lte(count(), 1));
+    .groupBy(glueRelTable.glueId);
 
-  if (orphanGroups.length === 0) return [];
+  const survivors = new Set(
+    memberCounts.filter(({ members }) => members > 1).map(({ glueId }) => glueId),
+  );
+  const orphanGlueIds = affectedGlueIds.filter((glueId) => !survivors.has(glueId));
 
-  const orphanGlueIds = orphanGroups.map((r) => r.glueId);
+  if (orphanGlueIds.length === 0) return [];
 
   // Collect lone members before deleting so callers know which cards were cleared.
   const loneRels = await db

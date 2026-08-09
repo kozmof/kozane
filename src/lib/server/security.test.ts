@@ -59,6 +59,20 @@ describe("server security", () => {
     expect(recordAuthFailure("client-0", 1_000)).toBeNull();
   });
 
+  it("evicts idle clients rather than the busiest one", () => {
+    // Take the busy client to one failure short of the limit, then keep it active
+    // while the map is filled past capacity by one-off clients.
+    for (let i = 0; i < AUTH_FAILURE_LIMIT - 1; i += 1) {
+      expect(recordAuthFailure("busy", 1_000)).toBeNull();
+    }
+    for (let i = 0; i < AUTH_FAILURE_MAX_CLIENTS + 10; i += 1) {
+      recordAuthFailure(`filler-${i}`, 1_000);
+      if (i % 100 === 0) recordAuthFailure("busy", 1_000);
+    }
+    // Its counter must have survived, so it is still throttled.
+    expect(recordAuthFailure("busy", 1_000)).toBeGreaterThan(0);
+  });
+
   it("adds browser hardening headers without losing the response", async () => {
     const response = applySecurityHeaders(new Response("ok", { status: 201 }));
     expect(response.status).toBe(201);

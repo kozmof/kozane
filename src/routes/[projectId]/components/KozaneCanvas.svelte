@@ -476,7 +476,7 @@
           isComposing={composerCard?.id === card.id}
           dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
           isDragging={draggingId === card.id}
-          zIndex={card.zIndex ?? 0}
+          zIndex={card.zIndex}
           {showFooters}
           {cardWidth}
           {fontSize}

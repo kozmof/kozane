@@ -1,14 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
-import {
-  type UiConfig,
-  DEFAULT_UI_CONFIG,
-  UI_NUM_RANGES,
-  UI_BOOL_FIELDS,
-  UI_STR_FIELDS,
-  NEW_CARD_PLACEMENTS,
-} from "../../lib/ui-config.js";
+import { type UiConfig, DEFAULT_UI_CONFIG, parseUiOverrides } from "../../lib/ui-config.js";
 
 export type { UiConfig };
 export { DEFAULT_UI_CONFIG };
@@ -75,44 +68,11 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
     throw new Error(`Invalid Kozane config: taskspace.searchRoots must be an array of strings`);
   }
 
-  let parsedUi: Partial<UiConfig> | undefined;
-  const ui = p.ui;
-  if (ui !== undefined) {
-    if (typeof ui !== "object" || ui === null || Array.isArray(ui)) {
-      throw new Error(`Invalid Kozane config: ui must be an object`);
-    }
-    const u = ui as Record<string, unknown>;
-    parsedUi = {};
-
-    for (const [f, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
-      if (u[f] === undefined) continue;
-      if (typeof u[f] !== "number")
-        throw new Error(`Invalid Kozane config: ui.${f} must be a number`);
-      if ((u[f] as number) < lo || (u[f] as number) > hi)
-        throw new Error(`Invalid Kozane config: ui.${f} must be between ${lo} and ${hi}`);
-      (parsedUi as Record<string, unknown>)[f] = u[f];
-    }
-    for (const f of UI_BOOL_FIELDS) {
-      if (u[f] === undefined) continue;
-      if (typeof u[f] !== "boolean")
-        throw new Error(`Invalid Kozane config: ui.${f} must be a boolean`);
-      parsedUi[f] = u[f] as boolean;
-    }
-    for (const f of UI_STR_FIELDS) {
-      if (u[f] === undefined) continue;
-      if (typeof u[f] !== "string")
-        throw new Error(`Invalid Kozane config: ui.${f} must be a string`);
-      parsedUi[f] = u[f] as string;
-    }
-    if (u.newCardPlacement !== undefined) {
-      if (!NEW_CARD_PLACEMENTS.includes(u.newCardPlacement as never)) {
-        throw new Error(
-          `Invalid Kozane config: ui.newCardPlacement must be "grid" or "vertical-list"`,
-        );
-      }
-      parsedUi.newCardPlacement = u.newCardPlacement as UiConfig["newCardPlacement"];
-    }
-  }
+  // Strict: the CLI is reading a file the user just edited, so a bad `ui` value is
+  // reported rather than silently dropped. The server uses the lenient mode of the
+  // same parser (db/internal/config.ts) so the two can never disagree on validity.
+  const parsedUi: Partial<UiConfig> | undefined =
+    p.ui === undefined ? undefined : parseUiOverrides(p.ui, { strict: true });
 
   return {
     name: p.name as string,

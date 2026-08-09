@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDB } from "../../test-utils/db.js";
 import {
   createCardInTaskspaceContext,
   createCardFromTaskspace,
+  deleteProjectCards,
   moveCardsToProject,
 } from "./composite.js";
 import { deleteBundleWithReassign } from "./composite.js";
@@ -12,6 +14,8 @@ import { addScope } from "./scope.js";
 import { addTaskspace } from "./taskspace.js";
 import { addCard, getAllCards, getCard, getCardBundleNames } from "./card.js";
 import { getAllCardsByScope } from "./scope-rel.js";
+import { getGlueRelsByCards, glueCards } from "./glue.js";
+import { glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
 
 async function setup() {
@@ -21,6 +25,76 @@ async function setup() {
   const scopeId = await addScope({ db, name: "S" });
   return { db, projectId, bundleId, scopeId };
 }
+
+describe("deleteProjectCards", () => {
+  it("returns true for an empty cardIds array", async () => {
+    const { db, projectId } = await setup();
+    await expect(deleteProjectCards({ db, projectId, cardIds: [] })).resolves.toBe(true);
+  });
+
+  it("deletes all cards and returns true when all belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+
+    const ok = await deleteProjectCards({ db, projectId, cardIds: [c1, c2] });
+
+    expect(ok).toBe(true);
+    expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
+    expect(await getCard({ db, bundleId, cardId: c2 })).toBeUndefined();
+  });
+
+  it("returns false and does not delete when a card does not belong to the project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const ownCard = await addCard({ db, bundleId, content: "Mine" });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const ok = await deleteProjectCards({ db, projectId, cardIds: [ownCard, foreignCard] });
+
+    expect(ok).toBe(false);
+    expect(await getCard({ db, bundleId, cardId: ownCard })).toBeDefined();
+  });
+
+  it("dissolves the glue group when deleting one member of a pair", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const kept = await addCard({ db, bundleId, content: "Kept" });
+    const removed = await addCard({ db, bundleId, content: "Removed" });
+    const glueId = await glueCards({ db, cardIds: [kept, removed] });
+
+    await deleteProjectCards({ db, projectId, cardIds: [removed] });
+
+    // The survivor must not be left alone in a group the UI still offers to unglue.
+    expect(await getGlueRelsByCards({ db, cardIds: [kept] })).toEqual([]);
+    expect(await db.select().from(glueTable).where(eq(glueTable.id, glueId))).toEqual([]);
+  });
+
+  it("removes the glue group when deleting every member", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+    await glueCards({ db, cardIds: [c1, c2] });
+
+    await deleteProjectCards({ db, projectId, cardIds: [c1, c2] });
+
+    expect(await db.select().from(glueTable)).toEqual([]);
+  });
+
+  it("leaves a three-card group intact when only one member is deleted", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+    const c3 = await addCard({ db, bundleId, content: "C" });
+    const glueId = await glueCards({ db, cardIds: [c1, c2, c3] });
+
+    await deleteProjectCards({ db, projectId, cardIds: [c1] });
+
+    const remaining = await getGlueRelsByCards({ db, cardIds: [c2, c3] });
+    expect(remaining).toHaveLength(2);
+    expect(remaining.every((rel) => rel.glueId === glueId)).toBe(true);
+  });
+});
 
 // Tests use createCardInTaskspaceContext directly to avoid the withTx in-memory
 // connection boundary — createCardFromTaskspace wraps this in a real transaction.

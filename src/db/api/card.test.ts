@@ -5,9 +5,6 @@ import {
   getCard,
   getAllCards,
   getCardsByBundles,
-  deleteCard,
-  deleteCards,
-  updateCardPositions,
   updateProjectCardPositions,
   updateCard,
   getCardBundleNames,
@@ -120,20 +117,6 @@ describe("getCardsByBundles", () => {
   });
 });
 
-describe("deleteCard", () => {
-  it("removes the card", async () => {
-    const { db, bundleId } = await setup();
-    const cardId = await addCard({ db, bundleId, content: "Bye" });
-    await deleteCard({ db, bundleId, cardId });
-    expect(await getCard({ db, bundleId, cardId })).toBeUndefined();
-  });
-
-  it("throws NotFoundError for a missing card", async () => {
-    const { db, bundleId } = await setup();
-    await expect(deleteCard({ db, bundleId, cardId: "ghost" })).rejects.toThrow(NotFoundError);
-  });
-});
-
 describe("updateCard (content)", () => {
   it("changes the content", async () => {
     const { db, bundleId } = await setup();
@@ -166,53 +149,6 @@ describe("updateCard (position)", () => {
     await expect(updateCard({ db, cardId: "ghost", bundleId, posX: 0, posY: 0 })).rejects.toThrow(
       NotFoundError,
     );
-  });
-});
-
-describe("updateCardPositions", () => {
-  it("is a no-op for an empty positions array", async () => {
-    const { db } = await setup();
-    await expect(updateCardPositions({ db, positions: [] })).resolves.toBeUndefined();
-  });
-
-  it("updates multiple card positions in one transaction", async () => {
-    const { db, bundleId } = await setup();
-    const firstId = await addCard({ db, bundleId, content: "First", posX: 1, posY: 2 });
-    const secondId = await addCard({ db, bundleId, content: "Second", posX: 3, posY: 4 });
-
-    await updateCardPositions({
-      db,
-      positions: [
-        { cardId: firstId, posX: 30, posY: 40 },
-        { cardId: secondId, posX: 50, posY: 60 },
-      ],
-    });
-
-    expect(await getCard({ db, bundleId, cardId: firstId })).toMatchObject({
-      posX: 30,
-      posY: 40,
-    });
-    expect(await getCard({ db, bundleId, cardId: secondId })).toMatchObject({
-      posX: 50,
-      posY: 60,
-    });
-  });
-
-  it("rolls back all position updates when any card is missing", async () => {
-    const { db, bundleId } = await setup();
-    const cardId = await addCard({ db, bundleId, content: "Still here", posX: 1, posY: 2 });
-
-    await expect(
-      updateCardPositions({
-        db,
-        positions: [
-          { cardId, posX: 30, posY: 40 },
-          { cardId: "ghost", posX: 50, posY: 60 },
-        ],
-      }),
-    ).rejects.toThrow();
-
-    expect(await getCard({ db, bundleId, cardId })).toMatchObject({ posX: 1, posY: 2 });
   });
 });
 
@@ -306,6 +242,23 @@ describe("updateProjectCardPositions", () => {
     expect(ok).toBe(false);
     expect(await getCard({ db, bundleId, cardId: ownCard })).toMatchObject({ posX: 0, posY: 0 });
   });
+
+  it("applies the last entry when a cardId is repeated", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "A", posX: 0, posY: 0 });
+
+    const ok = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [
+        { cardId, posX: 10, posY: 20 },
+        { cardId, posX: 30, posY: 40 },
+      ],
+    });
+
+    expect(ok).toBe(true);
+    expect(await getCard({ db, bundleId, cardId })).toMatchObject({ posX: 30, posY: 40 });
+  });
 });
 
 describe("getCardBundleNames", () => {
@@ -346,38 +299,6 @@ describe("cardsInProject", () => {
   it("returns empty array for empty cardIds", async () => {
     const { db, projectId } = await setup();
     expect(await cardsInProject(db, projectId, [])).toEqual([]);
-  });
-});
-
-describe("deleteCards", () => {
-  it("returns true for an empty cardIds array", async () => {
-    const { db, projectId } = await setup();
-    await expect(deleteCards({ db, projectId, cardIds: [] })).resolves.toBe(true);
-  });
-
-  it("deletes all cards and returns true when all belong to the project", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const c1 = await addCard({ db, bundleId, content: "A" });
-    const c2 = await addCard({ db, bundleId, content: "B" });
-
-    const ok = await deleteCards({ db, projectId, cardIds: [c1, c2] });
-
-    expect(ok).toBe(true);
-    expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
-    expect(await getCard({ db, bundleId, cardId: c2 })).toBeUndefined();
-  });
-
-  it("returns false and does not delete when a card does not belong to the project", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const ownCard = await addCard({ db, bundleId, content: "Mine" });
-    const otherProjectId = await addProject({ db, name: "Other" });
-    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
-    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
-
-    const ok = await deleteCards({ db, projectId, cardIds: [ownCard, foreignCard] });
-
-    expect(ok).toBe(false);
-    expect(await getCard({ db, bundleId, cardId: ownCard })).toBeDefined();
   });
 });
 

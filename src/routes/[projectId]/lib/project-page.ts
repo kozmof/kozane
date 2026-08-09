@@ -120,6 +120,17 @@ export function cardPositionPatches<T extends { id: string; posX: number; posY: 
   });
 }
 
+// Folded rather than spread into Math.max/Math.min: `Math.max(...cards)` throws once
+// the workspace grows past the engine's argument limit. Both are seeded at 0, the
+// column default, so an empty canvas yields the same layer a first card would get.
+export function maxZIndex(cards: readonly { zIndex: number }[]): number {
+  return cards.reduce((highest, card) => (card.zIndex > highest ? card.zIndex : highest), 0);
+}
+
+export function minZIndex(cards: readonly { zIndex: number }[]): number {
+  return cards.reduce((lowest, card) => (card.zIndex < lowest ? card.zIndex : lowest), 0);
+}
+
 export function clientToWorld(
   clientX: number,
   clientY: number,

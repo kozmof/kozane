@@ -1,7 +1,11 @@
 import type { Card, Taskspace } from "../db/api/types.js";
 
-export type CardData = Pick<Card, "id" | "content" | "bundleId" | "posX" | "posY" | "taskspaceId"> &
-  Partial<Pick<Card, "zIndex">>;
+// zIndex is required: the column is NOT NULL DEFAULT 0, so every card the server
+// hands out has one, and making it optional here only spread `?? 0` through the UI.
+export type CardData = Pick<
+  Card,
+  "id" | "content" | "bundleId" | "posX" | "posY" | "taskspaceId" | "zIndex"
+>;
 
 export interface CardWithGlue extends CardData {
   glueId: string | null;

@@ -11,10 +11,12 @@ function pruneAuthFailures(now: number): void {
   for (const [client, window] of authFailures) {
     if (window.resetAt <= now) authFailures.delete(client);
   }
+  // Iteration order is least-recently-active first (see recordAuthFailure), so this
+  // evicts idle clients and leaves the active ones counted.
   while (authFailures.size >= AUTH_FAILURE_MAX_CLIENTS) {
-    const oldest = authFailures.keys().next().value as string | undefined;
-    if (oldest === undefined) break;
-    authFailures.delete(oldest);
+    const idlest = authFailures.keys().next().value as string | undefined;
+    if (idlest === undefined) break;
+    authFailures.delete(idlest);
   }
 }
 
@@ -48,13 +50,20 @@ export function remoteBindingRequiresTls(
 
 export function recordAuthFailure(client: string, now = Date.now()): number | null {
   const current = authFailures.get(client);
-  if (!current || current.resetAt <= now) pruneAuthFailures(now);
-  const window =
-    !current || current.resetAt <= now
-      ? { count: 0, resetAt: now + AUTH_FAILURE_WINDOW_MS }
-      : current;
+  const rolledOver = !current || current.resetAt <= now;
+  // Sweeping on roll-over alone lets a single client hammering one address keep the
+  // map from ever reclaiming expired entries, so sweep at capacity as well.
+  if (rolledOver || authFailures.size >= AUTH_FAILURE_MAX_CLIENTS) pruneAuthFailures(now);
+
+  const window: FailureWindow =
+    current && !rolledOver ? current : { count: 0, resetAt: now + AUTH_FAILURE_WINDOW_MS };
   window.count += 1;
+  // Re-insert rather than overwrite: `set` on an existing key keeps its original
+  // position, which would order the map by first-seen and make eviction discard the
+  // busiest clients instead of the idlest ones.
+  authFailures.delete(client);
   authFailures.set(client, window);
+
   return window.count > AUTH_FAILURE_LIMIT
     ? Math.max(1, Math.ceil((window.resetAt - now) / 1000))
     : null;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveShortId, shortId } from "./short-id.js";
+import { resolveShortId, shortId, shortIdMap } from "./short-id.js";
 
 const first = "019f71f2-a749-7539-9342-17b86d2a0000";
 const second = "019f71f2-a749-7539-9342-17b87abc0000";
@@ -18,6 +18,24 @@ describe("shortId", () => {
   it("falls back to the full compact UUID when the final groups collide", () => {
     const collision = "019f71f2-a749-7539-9343-17b86d2a0000";
     expect(shortId(first, [first, collision])).toBe(first.replaceAll("-", ""));
+  });
+});
+
+describe("shortIdMap", () => {
+  it("agrees with shortId for every id in the set", () => {
+    const collision = "019f71f2-a749-7539-9343-17b86d2a0000";
+    for (const ids of [
+      [first, third],
+      [first, second],
+      [first, second, third],
+      [first, collision],
+      [first],
+      [],
+    ]) {
+      const map = shortIdMap(ids);
+      expect(map.size).toBe(ids.length);
+      for (const id of ids) expect(map.get(id)).toBe(shortId(id, ids));
+    }
   });
 });
 

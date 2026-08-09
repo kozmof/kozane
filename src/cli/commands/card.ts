@@ -9,7 +9,7 @@ import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
 import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
-import { resolveShortId, shortId } from "../lib/short-id.js";
+import { resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { CANVAS_W } from "../../lib/constants.js";
@@ -101,11 +101,11 @@ async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): P
     return;
   }
   const allCards = await db.select({ id: cardTable.id }).from(cardTable);
-  const cardIds = allCards.map(({ id }) => id);
+  const shortIds = shortIdMap(allCards.map(({ id }) => id));
   for (const card of cards) {
     const distance = "distance" in card ? `${card.distance.toFixed(2)}  ` : "";
     console.log(
-      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${distance}${card.content.replace(/\r?\n/g, " ")}`,
+      `${shortIds.get(card.id) ?? card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${distance}${card.content.replace(/\r?\n/g, " ")}`,
     );
   }
 }
