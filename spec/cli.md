@@ -246,7 +246,7 @@ kozane project list
 Output (one line per project):
 
 ```
-019dddef-87e3-7000-0000-000000000000  main  (default)
+aa414b7  main  (default)
 ```
 
 If no projects exist:
@@ -276,7 +276,7 @@ Output:
 
 ```
 Project created.
-  id  : 019dddef-87e3-7000-0000-000000000000
+  id  : aa414b7
   name: my-project
 ```
 
@@ -306,7 +306,7 @@ Output:
 
 ```
 Project deleted.
-  id: 019dddef-87e3-7000-0000-000000000000
+  id: aa414b7
 ```
 
 ---
@@ -685,7 +685,7 @@ Output:
 
 ```
 Taskspace created.
-  id   : 019dddef-87e3-7127-b5c9-0d5878bbf826
+  id   : 0d5878b
   name : my-draft
   path : /path/to/my-draft
 ```
@@ -754,9 +754,12 @@ Identity anchor written at the root of each taskspace directory at creation time
   "kind": "kozane.taskspace",
   "version": 1,
   "taskspaceId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
-  "projectId": "019dddef-87e3-7000-0000-000000000000"
+  "projectId": "019dddef-87e3-7000-ac4d-aa414b7e75d7"
 }
 ```
+
+The marker stores full UUIDs. Commands print the short form of the same IDs —
+`0d5878b` and `aa414b7` above — and accept either.
 
 The marker is the **filesystem anchor**. The database stores only the last-known
 path. Renaming or moving the directory does not change the taskspace's identity —
