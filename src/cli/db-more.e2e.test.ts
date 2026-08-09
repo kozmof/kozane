@@ -64,11 +64,12 @@ describe("additional database CLI branches", () => {
     const dbPath = join(root, ".kozane", "kozane.db");
     const client = createClient({ url: `file:${dbPath}` });
     try {
+      // Roll back the newest migration (0004_taskspace) so one migration is pending.
       await client.batch(
         [
-          "DROP INDEX project_one_default",
-          "ALTER TABLE project DROP COLUMN is_default",
-          "DELETE FROM __drizzle_migrations WHERE created_at = 1784943409337",
+          "ALTER TABLE card RENAME COLUMN taskspace_id TO working_copy_id",
+          "ALTER TABLE taskspace RENAME TO working_copy",
+          "DELETE FROM __drizzle_migrations WHERE created_at = 1786275000000",
         ],
         "write",
       );
