@@ -82,7 +82,7 @@ kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 Project, bundle, and scope options also work with piped files:
 
 ```sh
-cat foo.txt | kozane card squash --project eb15 --bundle 72ac --scope e3ee
+cat foo.txt | kozane card squash --project eb155d6 --bundle 72ac1f8 --scope e3ee90b
 ```
 
 ## Security and remote access

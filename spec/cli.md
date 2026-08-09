@@ -359,7 +359,7 @@ membership are committed in one transaction.
 Example:
 
 ```bash
-kozane card add "Investigate caching" --project eb15 --scope e3ee --x 48 --y 72
+kozane card add "Investigate caching" --project eb155d6 --scope e3ee90b --x 48 --y 72
 ```
 
 ---
@@ -383,7 +383,7 @@ The command accepts `--pattern`, `--project`, `--bundle`, and `--scope`, using f
 These options work with piped input as well:
 
 ```bash
-cat foo.txt | kozane card squash --project eb15 --scope e3ee
+cat foo.txt | kozane card squash --project eb155d6 --scope e3ee90b
 ```
 
 All generated cards and their optional scope memberships are committed in one
@@ -397,7 +397,7 @@ Prints a card content by full or short ID. Line breaks are preserved.
 
 ```bash
 kozane card show <cardId>
-kozane card show 17b8
+kozane card show 17b86d2
 ```
 
 ---
@@ -443,7 +443,7 @@ Cards at the same distance are ordered by ID. Full and short card IDs are accept
 
 ```bash
 kozane card nearest <cardId>
-kozane card nearest 17b8
+kozane card nearest 17b86d2
 ```
 
 Each row includes the card's short ID, bundle, position, distance, and content.
