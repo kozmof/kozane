@@ -469,6 +469,19 @@ Latest  : 0001_init (1700000000000)
 
 Exit code `0` if current, `1` otherwise.
 
+States:
+
+| Status    | Meaning                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| `current` | Every migration in the journal has been applied                             |
+| `pending` | Newer migrations exist; run `kozane db migrate`                             |
+| `missing` | The database file does not exist                                            |
+| `gapped`  | A migration older than the newest applied one was never applied or was lost |
+| `unknown` | The migration metadata could not be read                                    |
+
+A `gapped` database cannot be repaired by `kozane db migrate`, which only applies
+migrations newer than the newest recorded one; restore a backup instead.
+
 ---
 
 ### `kozane db migrate`
@@ -482,7 +495,7 @@ kozane db migrate
 Behavior:
 
 1. Checks migration status; exits early if already current.
-2. Exits with an error if the database file is missing or status is unknown.
+2. Exits with an error if the database file is missing, or status is unknown or gapped.
 3. Creates a timestamped backup in `.kozane/backups/` before migrating.
 4. Runs Drizzle migrations.
 5. Reports the new status.
@@ -517,6 +530,8 @@ Behavior:
 
 - Requires migrations to be current.
 - Writes to `file` if given; otherwise prints to stdout.
+- Writes export format version 3. Version 2 files (exported before projects had a
+  default flag) can still be imported; their projects come back non-default.
 
 Output (to file):
 

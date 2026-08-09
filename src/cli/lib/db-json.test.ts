@@ -2,9 +2,12 @@ import { createClient } from "@libsql/client";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { is } from "drizzle-orm";
+import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, describe, expect, it } from "vitest";
+import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
-import { exportDbJson, hasDbJsonRows, importDbJson } from "./db-json";
+import { TABLES, exportDbJson, hasDbJsonRows, importDbJson } from "./db-json";
 
 const tempRoots: string[] = [];
 
@@ -128,11 +131,76 @@ describe("db JSON export/import", () => {
     await expect(hasDbJsonRows(dbUrl)).resolves.toBe(true);
   });
 
+  it("preserves the default project flag", async () => {
+    const sourceUrl = await migratedDbUrl("default-source.db");
+    const targetUrl = await migratedDbUrl("default-target.db");
+    await seedDb(sourceUrl);
+    const client = createClient({ url: sourceUrl });
+    try {
+      await client.execute("UPDATE project SET is_default = 1 WHERE id = 'project-1'");
+    } finally {
+      client.close();
+    }
+
+    await importDbJson(targetUrl, await exportDbJson(sourceUrl));
+
+    const dump = await exportDbJson(targetUrl);
+    expect(dump.tables.project[0].is_default).toBe(1);
+  });
+
+  it("imports a version 2 export without the default project column", async () => {
+    const sourceUrl = await migratedDbUrl("v2-source.db");
+    const targetUrl = await migratedDbUrl("v2-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const legacy = {
+      ...dump,
+      version: 2,
+      tables: {
+        ...dump.tables,
+        project: dump.tables.project.map(({ id, name }) => ({ id, name })),
+      },
+    };
+
+    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ project: 1 });
+    expect((await exportDbJson(targetUrl)).tables.project[0].is_default).toBe(0);
+  });
+
+  it("rejects an export version this build cannot read", async () => {
+    const dbUrl = await migratedDbUrl("future.db");
+    const dump = { ...(await exportDbJson(dbUrl)), version: 99 };
+
+    await expect(importDbJson(dbUrl, dump)).rejects.toThrow("Unsupported Kozane database export");
+  });
+
   it("rejects invalid export JSON", async () => {
     const dbUrl = await migratedDbUrl("invalid.db");
 
     await expect(importDbJson(dbUrl, { kind: "other" })).rejects.toThrow(
       "not a Kozane database export",
     );
+  });
+});
+
+describe("export table list", () => {
+  // Columns added to the schema without being added here are silently dropped by
+  // `kozane db export`, which is how `project.is_default` was lost after migration 0003.
+  it("covers every column of every table in the Drizzle schema", () => {
+    const schemaTables = Object.values(schema)
+      .filter((value) => is(value, SQLiteTable))
+      .map((table) => getTableConfig(table as SQLiteTable));
+
+    const exported = new Map<string, readonly string[]>(
+      TABLES.map((table) => [table.name, table.columns]),
+    );
+
+    expect([...exported.keys()].sort()).toEqual(schemaTables.map((t) => t.name).sort());
+    for (const table of schemaTables) {
+      expect({ table: table.name, columns: [...(exported.get(table.name) ?? [])].sort() }).toEqual({
+        table: table.name,
+        columns: table.columns.map((column) => column.name).sort(),
+      });
+    }
   });
 });

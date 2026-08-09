@@ -1,5 +1,5 @@
 import { mkdir, open, rmdir, unlink } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "../../../../db/api/taskspace";
@@ -31,13 +31,15 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const defaultDir = getTaskspaceDefaultDir(root);
   const targetDir = resolve(join(root, defaultDir, name));
 
-  if (!targetDir.startsWith(resolve(root) + "/"))
+  // Containment is checked through `relative` rather than a string prefix so the
+  // separator stays platform-correct and `name` cannot escape with "..".
+  const storedPath = relative(resolve(root), targetDir);
+  if (!storedPath || storedPath.startsWith("..") || isAbsolute(storedPath))
     throw error(400, "Taskspace path must be inside the workspace root");
 
   // The guard above ensures targetDir is always inside the workspace root,
   // so the path is always stored as project_relative. Absolute paths are
   // only produced by the CLI (kozane taskspace create --dir <outside-root>).
-  const storedPath = relative(resolve(root), targetDir);
 
   const id = await addTaskspace({
     db,

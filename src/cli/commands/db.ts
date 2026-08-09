@@ -14,6 +14,10 @@ import {
 import { exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "../lib/db-json.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 
+// Every command here targets the on-disk workspace database via `dbUrl`, never the
+// session database from `commandDbUrl`: migrations, backups, and restores belong to
+// the persistent file even while a `kozane open --memory` server is running.
+
 type DbExportOptions = {
   pretty?: boolean;
 };
@@ -39,6 +43,11 @@ export function migrationStatusMessage(status: MigrationStatus): string {
   if (status.state === "pending") {
     lines.push(`Pending : ${status.pendingCount}`);
     lines.push(`Run     : kozane db migrate`);
+  } else if (status.state === "gapped") {
+    lines.push(`Pending : ${status.pendingCount}`);
+    lines.push(`Skipped : ${status.skipped.map((entry) => entry.tag).join(", ")}`);
+    lines.push(`Detail  : migrations were applied out of order or a record was lost`);
+    lines.push(`Try     : kozane db restore  (kozane db migrate cannot repair this)`);
   } else if (status.state === "missing") {
     lines.push(`Detail  : database file is missing`);
   } else if (status.state === "unknown") {
@@ -76,6 +85,14 @@ export async function dbMigrate(): Promise<void> {
 
   if (status.state === "unknown") {
     console.error("Cannot determine database migration status.");
+    console.error(migrationStatusMessage(status));
+    process.exit(1);
+  }
+
+  // Migrating a gapped database would record the newest migration on top of a schema
+  // that never received the skipped ones, hiding the damage instead of repairing it.
+  if (status.state === "gapped") {
+    console.error("Database migration history has gaps; refusing to migrate.");
     console.error(migrationStatusMessage(status));
     process.exit(1);
   }

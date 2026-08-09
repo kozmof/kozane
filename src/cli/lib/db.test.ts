@@ -72,6 +72,24 @@ describe("getMigrationStatus", () => {
     expect(status.pendingCount).toBeGreaterThan(0);
   });
 
+  it("reports gapped when an interior migration record is missing", async () => {
+    const root = tempRoot();
+    const dbPath = join(root, "gapped.db");
+    await runMigrations(tempDbUrl(dbPath));
+    const client = createClient({ url: tempDbUrl(dbPath) });
+    await client.execute(
+      "DELETE FROM __drizzle_migrations WHERE created_at = (SELECT MIN(created_at) FROM __drizzle_migrations)",
+    );
+    client.close();
+
+    const status = await getMigrationStatus(tempDbUrl(dbPath));
+
+    expect(status.state).toBe("gapped");
+    if (status.state !== "gapped") return;
+    expect(status.skipped).toHaveLength(1);
+    expect(status.pendingCount).toBe(0);
+  });
+
   it("reports unknown for unreadable migration metadata in the database", async () => {
     const root = tempRoot();
     const dbPath = join(root, "unknown.db");

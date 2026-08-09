@@ -81,6 +81,8 @@ export async function doctor(): Promise<void> {
       migrationOk = status.state === "current";
       if (status.state === "pending") {
         detail = `${status.pendingCount} pending; run kozane db migrate`;
+      } else if (status.state === "gapped") {
+        detail = `skipped ${status.skipped.map((entry) => entry.tag).join(", ")}; run kozane db restore`;
       } else if (status.state === "unknown") {
         detail = status.error;
       } else if (status.state === "missing") {

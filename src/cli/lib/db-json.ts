@@ -1,12 +1,16 @@
 import { createClient, type InValue } from "@libsql/client";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 2;
+const EXPORT_VERSION = 3;
+// Version 2 predates `project.is_default` (migration 0003). Such a file is still
+// importable; every project comes back non-default, which is what version 2 recorded.
+const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
 
-const TABLES = [
+/** Exported so tests can assert this list stays in step with the Drizzle schema. */
+export const TABLES = [
   {
     name: "project",
-    columns: ["id", "name"],
+    columns: ["id", "name", "is_default"],
     orderBy: ["id"],
   },
   {
@@ -102,16 +106,7 @@ function countSql(table: (typeof TABLES)[number]): string {
 }
 
 function emptyTables(): TableRows {
-  return {
-    project: [],
-    scope: [],
-    bundle: [],
-    taskspace: [],
-    card: [],
-    glue: [],
-    glue_rel: [],
-    scope_rel: [],
-  };
+  return Object.fromEntries(TABLES.map((table) => [table.name, []])) as unknown as TableRows;
 }
 
 function rowToJson(row: Record<string, unknown>): JsonObject {
@@ -148,6 +143,14 @@ function isJsonScalar(value: unknown): value is JsonScalar {
   );
 }
 
+/** Fills in columns added after `version`, so older exports validate against TABLES. */
+function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
+  if (version >= 3) return;
+  for (const row of tables.project ?? []) {
+    if (typeof row === "object" && row !== null && !("is_default" in row)) row.is_default = 0;
+  }
+}
+
 function parseDump(input: unknown): DbJsonDump {
   if (typeof input !== "object" || input === null) {
     throw new Error("Import file must contain a JSON object");
@@ -155,7 +158,11 @@ function parseDump(input: unknown): DbJsonDump {
 
   const dump = input as Partial<DbJsonDump>;
   if (dump.kind !== EXPORT_KIND) throw new Error("Import file is not a Kozane database export");
-  if (dump.version !== EXPORT_VERSION) {
+  if (
+    typeof dump.version !== "number" ||
+    dump.version < OLDEST_SUPPORTED_IMPORT_VERSION ||
+    dump.version > EXPORT_VERSION
+  ) {
     throw new Error(`Unsupported Kozane database export version: ${String(dump.version)}`);
   }
   if (typeof dump.exportedAt !== "string") throw new Error("Import file is missing exportedAt");
@@ -173,6 +180,8 @@ function parseDump(input: unknown): DbJsonDump {
   if (typeof dump.tables !== "object" || dump.tables === null) {
     throw new Error("Import file is missing tables");
   }
+
+  upgradeDumpTables(dump.version, dump.tables as Partial<TableRows>);
 
   for (const table of TABLES) {
     const rows = (dump.tables as Partial<TableRows>)[table.name];
@@ -242,12 +251,21 @@ export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
   }
 }
 
+/**
+ * Reports broken references before the insert loop starts. SQLite enforces the same
+ * constraints during the import transaction, but names the offending row far less
+ * clearly, so every foreign key in the export is checked here.
+ */
 function validateDumpRefs(tables: TableRows): void {
   const projectIds = new Set(tables.project.map((r) => r.id as string));
   const bundleIds = new Set(tables.bundle.map((r) => r.id as string));
   const cardIds = new Set(tables.card.map((r) => r.id as string));
   const glueIds = new Set(tables.glue.map((r) => r.id as string));
+  const scopeIds = new Set(tables.scope.map((r) => r.id as string));
+  const taskspaceIds = new Set(tables.taskspace.map((r) => r.id as string));
 
+  if (tables.project.filter((row) => Number(row.is_default) === 1).length > 1)
+    throw new Error("project: more than one project is marked as the default");
   for (const row of tables.bundle) {
     if (!projectIds.has(row.project_id as string))
       throw new Error(`bundle ${row.id}: references unknown project_id ${row.project_id}`);
@@ -255,10 +273,14 @@ function validateDumpRefs(tables: TableRows): void {
   for (const row of tables.card) {
     if (!bundleIds.has(row.bundle_id as string))
       throw new Error(`card ${row.id}: references unknown bundle_id ${row.bundle_id}`);
+    if (row.taskspace_id !== null && !taskspaceIds.has(row.taskspace_id as string))
+      throw new Error(`card ${row.id}: references unknown taskspace_id ${row.taskspace_id}`);
   }
   for (const row of tables.taskspace) {
     if (row.project_id !== null && !projectIds.has(row.project_id as string))
       throw new Error(`taskspace ${row.id}: references unknown project_id ${row.project_id}`);
+    if (row.scope_id !== null && !scopeIds.has(row.scope_id as string))
+      throw new Error(`taskspace ${row.id}: references unknown scope_id ${row.scope_id}`);
   }
   for (const row of tables.glue_rel) {
     if (!glueIds.has(row.glue_id as string))
@@ -267,6 +289,8 @@ function validateDumpRefs(tables: TableRows): void {
       throw new Error(`glue_rel: references unknown card_id ${row.card_id}`);
   }
   for (const row of tables.scope_rel) {
+    if (!scopeIds.has(row.scope_id as string))
+      throw new Error(`scope_rel: references unknown scope_id ${row.scope_id}`);
     if (!cardIds.has(row.card_id as string))
       throw new Error(`scope_rel: references unknown card_id ${row.card_id}`);
   }

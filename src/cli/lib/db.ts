@@ -13,10 +13,12 @@ import {
   renameSync,
   rmSync,
 } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import * as schema from "../../db/schema.js";
+import { resolveMigrationsFolder } from "../../db/internal/migrations.js";
 import { dbPath } from "./config.js";
+
+export { resolveMigrationsFolder };
 
 type MigrationJournal = {
   entries: MigrationJournalEntry[];
@@ -50,21 +52,23 @@ export type MigrationStatus =
       applied: MigrationJournalEntry | null;
       pendingCount: number;
     }
+  // Migrations were applied out of order or a row was lost: the database records
+  // a migration newer than one it never applied. `kozane db migrate` cannot repair
+  // this, because drizzle only applies migrations newer than the newest recorded one.
+  | {
+      state: "gapped";
+      dbPath: string | null;
+      latest: MigrationJournalEntry | null;
+      applied: MigrationJournalEntry | null;
+      pendingCount: number;
+      skipped: MigrationJournalEntry[];
+    }
   | {
       state: "unknown";
       dbPath: string | null;
       latest: MigrationJournalEntry | null;
       error: string;
     };
-
-export function resolveMigrationsFolder(): string {
-  // Migrations are bundled relative to this file at build time.
-  // At runtime (tsx or compiled): resolve from package root.
-  const here = dirname(fileURLToPath(import.meta.url));
-  // src/cli/lib -> src/cli -> src -> project root
-  const packageRoot = resolve(here, "../../..");
-  return join(packageRoot, "drizzle");
-}
 
 function readMigrationJournal(): MigrationJournal {
   const journalPath = join(resolveMigrationsFolder(), "meta", "_journal.json");
@@ -103,6 +107,19 @@ function migrationByWhen(
 ): MigrationJournalEntry | null {
   if (createdAt === null) return null;
   return entries.find((entry) => entry.when === createdAt) ?? null;
+}
+
+/** SQLite returns `created_at` as a number, bigint, or string depending on the driver path. */
+function toTimestamp(value: unknown): number | null {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "bigint"
+        ? Number(value)
+        : typeof value === "string"
+          ? Number(value)
+          : null;
+  return parsed !== null && Number.isFinite(parsed) ? parsed : null;
 }
 
 function pathFromDbUrl(dbUrl: string): string | null {
@@ -144,31 +161,41 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
       args: ["__drizzle_migrations"],
     });
     const hasMigrationTable = table.rows.length > 0;
-    const appliedCreatedAt = hasMigrationTable
-      ? await client.execute(
-          "SELECT created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1",
-        )
+    // Every applied timestamp is read, not just the newest one: a database that is
+    // missing an interior migration still has a newest row, and reporting on that
+    // alone would call an incomplete schema "current".
+    const appliedRows = hasMigrationTable
+      ? await client.execute("SELECT created_at FROM __drizzle_migrations ORDER BY created_at ASC")
       : null;
-    const rawCreatedAt = appliedCreatedAt?.rows[0]?.created_at;
-    const createdAt =
-      typeof rawCreatedAt === "number"
-        ? rawCreatedAt
-        : typeof rawCreatedAt === "bigint"
-          ? Number(rawCreatedAt)
-          : typeof rawCreatedAt === "string"
-            ? Number(rawCreatedAt)
-            : null;
-    if (createdAt !== null && !Number.isFinite(createdAt)) {
-      throw new Error("Invalid latest applied migration timestamp");
+    const appliedWhens = new Set(
+      (appliedRows?.rows ?? []).map((row) => {
+        const value = toTimestamp(row.created_at);
+        if (value === null) throw new Error("Invalid latest applied migration timestamp");
+        return value;
+      }),
+    );
+    const newestApplied = appliedWhens.size > 0 ? Math.max(...appliedWhens) : null;
+
+    const applied = migrationByWhen(entries, newestApplied);
+    const notApplied = entries.filter((entry) => !appliedWhens.has(entry.when));
+    const skipped =
+      newestApplied === null ? [] : notApplied.filter((entry) => entry.when < newestApplied);
+    const pending = notApplied.filter(
+      (entry) => newestApplied === null || entry.when > newestApplied,
+    );
+
+    if (skipped.length > 0) {
+      return {
+        state: "gapped",
+        dbPath: filePath,
+        latest,
+        applied,
+        pendingCount: pending.length,
+        skipped,
+      };
     }
 
-    const applied = migrationByWhen(entries, createdAt);
-    const pending = entries.filter((entry) => createdAt === null || entry.when > createdAt);
-    if (pending.length === 0) {
-      return { state: "current", dbPath: filePath, latest, applied, pendingCount: 0 };
-    }
-
-    if (!latest) {
+    if (pending.length === 0 || !latest) {
       return { state: "current", dbPath: filePath, latest, applied, pendingCount: 0 };
     }
 
@@ -257,6 +284,7 @@ async function validateRestoreCandidate(path: string): Promise<void> {
   if (
     status.state === "missing" ||
     status.state === "unknown" ||
+    status.state === "gapped" ||
     (status.state === "pending" && status.applied === null)
   ) {
     const detail = status.state === "unknown" ? `: ${status.error}` : "";

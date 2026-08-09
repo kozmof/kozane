@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   TASKSPACE_MARKER_FILE,
@@ -6,6 +6,7 @@ import {
   TASKSPACE_MARKER_VERSION,
   type TaskspaceMarker,
 } from "../../lib/taskspace-marker.js";
+import { readTaskspaceMarker } from "./taskspace-marker.js";
 
 export {
   TASKSPACE_MARKER_FILE,
@@ -50,15 +51,14 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
   }
 }
 
+/**
+ * Scanning treats an unreadable or foreign marker as "no taskspace here" rather than
+ * an error, but validates it exactly as `kozane card list` does.
+ */
 function readMarker(dir: string): TaskspaceMarker | null {
-  const markerPath = join(dir, TASKSPACE_MARKER_FILE);
-  if (!existsSync(markerPath)) return null;
+  if (!existsSync(join(dir, TASKSPACE_MARKER_FILE))) return null;
   try {
-    const raw = readFileSync(markerPath, "utf-8");
-    const marker = JSON.parse(raw) as TaskspaceMarker;
-    if (marker.kind !== TASKSPACE_MARKER_KIND) return null;
-    if (marker.version !== TASKSPACE_MARKER_VERSION) return null;
-    return marker;
+    return readTaskspaceMarker(dir)?.marker ?? null;
   } catch {
     return null;
   }

@@ -1,5 +1,7 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
+import type { TaskspaceSummary } from "$lib/types";
+import type { ProjectDataSnapshot } from "../../project-state.svelte";
 import { getProject } from "../../../../db/api/project";
 import { getAllBundles } from "../../../../db/api/bundle";
 import { getAllScopes } from "../../../../db/api/scope";
@@ -28,6 +30,8 @@ export const GET: RequestHandler = async ({ locals, params }) => {
     getScopeRelsByCards({ db: locals.db, cardIds }),
   ]);
 
+  // Typed as the snapshot the client reloads into, so this poll and the page load
+  // (+page.server.ts) cannot drift into returning different shapes.
   return json({
     project: { id: project.id },
     cards: cardsWithGlueIds(cards, glueRels),
@@ -35,6 +39,9 @@ export const GET: RequestHandler = async ({ locals, params }) => {
     scopes,
     scopeRels,
     glueRels,
-    taskspaces,
-  });
+    taskspaces: taskspaces.map(
+      ({ id, name, scopeId, path, pathKind }) =>
+        ({ id, name, scopeId, path, pathKind }) satisfies TaskspaceSummary,
+    ),
+  } satisfies ProjectDataSnapshot);
 };

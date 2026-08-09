@@ -94,7 +94,8 @@ export function squashCardPositions(occupied: CardPosition[], count: number): Ca
   return positions;
 }
 
-async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
+/** Prints one line per card, adding a distance column when the cards carry one. */
+async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): Promise<void> {
   if (cards.length === 0) {
     console.log("No cards found.");
     return;
@@ -102,22 +103,9 @@ async function printCards(db: DB, cards: ListedCard[]): Promise<void> {
   const allCards = await db.select({ id: cardTable.id }).from(cardTable);
   const cardIds = allCards.map(({ id }) => id);
   for (const card of cards) {
+    const distance = "distance" in card ? `${card.distance.toFixed(2)}  ` : "";
     console.log(
-      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.content.replace(/\r?\n/g, " ")}`,
-    );
-  }
-}
-
-async function printCardsWithDistance(db: DB, cards: DistanceListedCard[]): Promise<void> {
-  if (cards.length === 0) {
-    console.log("No cards found.");
-    return;
-  }
-  const allCards = await db.select({ id: cardTable.id }).from(cardTable);
-  const cardIds = allCards.map(({ id }) => id);
-  for (const card of cards) {
-    console.log(
-      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${card.distance.toFixed(2)}  ${card.content.replace(/\r?\n/g, " ")}`,
+      `${shortId(card.id, cardIds)}  ${card.bundle}  (${card.posX}, ${card.posY})  ${distance}${card.content.replace(/\r?\n/g, " ")}`,
     );
   }
 }
@@ -265,7 +253,7 @@ export async function cardNearest(requestedId: string): Promise<void> {
         distance: Math.hypot(card.posX - origin.posX, card.posY - origin.posY),
       }))
       .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
-    await printCardsWithDistance(db, sorted);
+    await printCards(db, sorted);
   } catch (error) {
     fail(error);
   }

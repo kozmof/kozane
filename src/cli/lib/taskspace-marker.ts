@@ -41,7 +41,10 @@ export function readTaskspaceMarker(
     !("version" in parsed) ||
     parsed.version !== TASKSPACE_MARKER_VERSION ||
     !("taskspaceId" in parsed) ||
-    typeof parsed.taskspaceId !== "string"
+    typeof parsed.taskspaceId !== "string" ||
+    // Written as "" when the CLI creates a taskspace with no project attached.
+    !("projectId" in parsed) ||
+    typeof parsed.projectId !== "string"
   ) {
     throw new Error(`Invalid taskspace marker: ${markerPath}`);
   }

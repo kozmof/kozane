@@ -87,7 +87,7 @@ export async function open(options: OpenOptions): Promise<void> {
       const db = await createDb(dbURL);
       const [project] = await db
         .insert(projectTable)
-        .values({ name: ":memory:" })
+        .values({ name: ":memory:", isDefault: true })
         .returning({ id: projectTable.id });
       await db
         .insert(bundleTable)
