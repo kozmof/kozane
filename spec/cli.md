@@ -596,9 +596,9 @@ kozane taskspace scan [--apply] [--reattach] [--cleanup]
 
 Options:
 
-| Flag         | Description                                                                         |
-| ------------ | ----------------------------------------------------------------------------------- |
-| `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)            |
+| Flag         | Description                                                                     |
+| ------------ | ------------------------------------------------------------------------------- |
+| `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)        |
 | `--reattach` | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
 | `--cleanup`  | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
 
@@ -652,7 +652,7 @@ Options:
 
 | Flag                | Description                                                |
 | ------------------- | ---------------------------------------------------------- |
-| `--scope <scopeId>` | Attach taskspace to an existing scope                   |
+| `--scope <scopeId>` | Attach taskspace to an existing scope                      |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
 | `--project <id>`    | Override the workspace default project                     |
 | `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
@@ -792,7 +792,7 @@ taskspaces placed anywhere on the filesystem.
 | `name`         | text                | display name                     |
 | `path`         | text                | current known filesystem path    |
 | `path_kind`    | text enum           | `project_relative` \| `absolute` |
-| `last_seen_at` | integer (timestamp) | set by `taskspace scan`                 |
+| `last_seen_at` | integer (timestamp) | set by `taskspace scan`          |
 | `created_at`   | integer (timestamp) | set on insert                    |
 | `updated_at`   | integer (timestamp) | set on every update              |
 
@@ -800,10 +800,10 @@ taskspaces placed anywhere on the filesystem.
 
 ## Collision handling (taskspace scan)
 
-| Situation                                    | Behavior                                           |
-| -------------------------------------------- | -------------------------------------------------- |
-| Marker found, DB record missing              | Reported as orphan; `--apply --reattach` re-links  |
-| DB record exists, marker missing             | Reported as "missing"; `--apply --cleanup` deletes |
+| Situation                                  | Behavior                                                  |
+| ------------------------------------------ | --------------------------------------------------------- |
+| Marker found, DB record missing            | Reported as orphan; `--apply --reattach` re-links         |
+| DB record exists, marker missing           | Reported as "missing"; `--apply --cleanup` deletes        |
 | Same `taskspaceId` in multiple directories | Reported as duplicate; use `kozane taskspace fork` (v0.2) |
 
 ---

@@ -244,12 +244,7 @@ export function createProjectActions(state: ProjectState) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
     const prevScopeRels = state.scopeRels;
-    const res = await api.addCardsToScope(
-      state.mutationFetcher,
-      state.projectId,
-      scopeId,
-      cardIds,
-    );
+    const res = await api.addCardsToScope(state.mutationFetcher, state.projectId, scopeId, cardIds);
     if (!res.ok) {
       state.setError("Failed to add cards to scope");
       return;
