@@ -7,7 +7,7 @@ export function createProjectActions(state: ProjectState) {
     const cardId = state.selection.composerCard.id;
     const prevCards = state.cards;
     state.cards = state.cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
-    const res = await api.updateCard(state.fetcher, state.projectId, cardId, {
+    const res = await api.updateCard(state.mutationFetcher, state.projectId, cardId, {
       bundleId: newBundleId,
     });
     if (!res.ok) {
@@ -21,7 +21,12 @@ export function createProjectActions(state: ProjectState) {
     state.cards = state.cards.map((c) =>
       cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c,
     );
-    const res = await api.batchReassignBundle(state.fetcher, state.projectId, cardIds, newBundleId);
+    const res = await api.batchReassignBundle(
+      state.mutationFetcher,
+      state.projectId,
+      cardIds,
+      newBundleId,
+    );
     if (!res.ok) {
       state.cards = prevCards;
       state.setError("Failed to change bundle for selected cards");
@@ -31,7 +36,7 @@ export function createProjectActions(state: ProjectState) {
   async function handleGlueSelected(cardIds: string[]) {
     const prevGlueRels = state.glueRels;
     const prevCards = state.cards;
-    const res = await api.glueCards(state.fetcher, state.projectId, cardIds);
+    const res = await api.glueCards(state.mutationFetcher, state.projectId, cardIds);
     if (!res.ok) {
       state.setError("Failed to glue cards");
       return;
@@ -54,7 +59,7 @@ export function createProjectActions(state: ProjectState) {
   async function unglue(cardIds: string[], errorMsg: string) {
     const prevGlueRels = state.glueRels;
     const prevCards = state.cards;
-    const res = await api.unglueCards(state.fetcher, state.projectId, cardIds);
+    const res = await api.unglueCards(state.mutationFetcher, state.projectId, cardIds);
     if (!res.ok) {
       state.setError(errorMsg);
       return;
@@ -94,7 +99,7 @@ export function createProjectActions(state: ProjectState) {
     const pid = state.selection.primarySelectedId;
     if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
 
-    const res = await api.deleteCards(state.fetcher, state.projectId, cardIds);
+    const res = await api.deleteCards(state.mutationFetcher, state.projectId, cardIds);
     if (!res.ok) {
       state.cards = prevCards;
       state.glueRels = prevGlueRels;
@@ -120,7 +125,7 @@ export function createProjectActions(state: ProjectState) {
     if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
 
     const res = await api.moveCardsToProject(
-      state.fetcher,
+      state.mutationFetcher,
       state.projectId,
       cardIds,
       targetProjectId,
@@ -137,7 +142,7 @@ export function createProjectActions(state: ProjectState) {
   async function handleCreateBundle() {
     const name = state.sidebar.newBundleName.trim();
     if (!name) return;
-    const res = await api.createBundle(state.fetcher, state.projectId, name);
+    const res = await api.createBundle(state.mutationFetcher, state.projectId, name);
     if (!res.ok) {
       state.setError("Failed to create bundle");
       return;
@@ -155,7 +160,7 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleDeleteBundle(bundleId: string) {
-    const res = await api.deleteBundle(state.fetcher, state.projectId, bundleId);
+    const res = await api.deleteBundle(state.mutationFetcher, state.projectId, bundleId);
     if (!res.ok) {
       state.setError("Failed to delete bundle");
       return;
@@ -175,7 +180,7 @@ export function createProjectActions(state: ProjectState) {
   async function handleCreateScope() {
     const name = state.sidebar.newScopeName.trim();
     if (!name) return;
-    const res = await api.createScope(state.fetcher, state.projectId, name);
+    const res = await api.createScope(state.mutationFetcher, state.projectId, name);
     if (!res.ok) {
       state.setError("Failed to create scope");
       return;
@@ -197,7 +202,10 @@ export function createProjectActions(state: ProjectState) {
     }
     if (!name) return;
     const scopeId = state.sidebar.activeScope;
-    const res = await api.createTaskspace(state.fetcher, state.projectId, { name, scopeId });
+    const res = await api.createTaskspace(state.mutationFetcher, state.projectId, {
+      name,
+      scopeId,
+    });
     if (!res.ok) {
       state.setError("Failed to create taskspace");
       return;
@@ -223,7 +231,7 @@ export function createProjectActions(state: ProjectState) {
     state.scopeRels = state.scopeRels.filter((r) => r.scopeId !== scopeId);
     if (state.sidebar.activeScope === scopeId) state.sidebar.activeScope = null;
 
-    const res = await api.deleteScope(state.fetcher, state.projectId, scopeId);
+    const res = await api.deleteScope(state.mutationFetcher, state.projectId, scopeId);
     if (!res.ok) {
       state.scopes = prevScopes;
       state.scopeRels = prevScopeRels;
@@ -236,7 +244,12 @@ export function createProjectActions(state: ProjectState) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
     const prevScopeRels = state.scopeRels;
-    const res = await api.addCardsToScope(state.fetcher, state.projectId, scopeId, cardIds);
+    const res = await api.addCardsToScope(
+      state.mutationFetcher,
+      state.projectId,
+      scopeId,
+      cardIds,
+    );
     if (!res.ok) {
       state.setError("Failed to add cards to scope");
       return;
@@ -258,7 +271,12 @@ export function createProjectActions(state: ProjectState) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
     const prevScopeRels = state.scopeRels;
-    const res = await api.removeCardsFromScope(state.fetcher, state.projectId, scopeId, cardIds);
+    const res = await api.removeCardsFromScope(
+      state.mutationFetcher,
+      state.projectId,
+      scopeId,
+      cardIds,
+    );
     if (!res.ok) {
       state.setError("Failed to remove cards from scope");
       return;

@@ -1,8 +1,10 @@
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { mkdir, open, rmdir, unlink } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "../../../../db/api/taskspace";
+import { getProject } from "../../../../db/api/project";
+import { getScope } from "../../../../db/api/scope";
 import { readJsonObject, requireTrimmedString } from "../../lib/request";
 import { getWorkspaceRoot, getTaskspaceDefaultDir } from "../../../../db/internal/config";
 import {
@@ -18,6 +20,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const name = requireTrimmedString(body, "name");
   if (name.length > NAME_MAX) throw error(400, `name must be ${NAME_MAX} characters or fewer`);
   const scopeId = requireTrimmedString(body, "scopeId");
+
+  if (!(await getProject({ db, projectId: params.projectId })))
+    throw error(404, "Project not found");
+  if (!(await getScope({ db, scopeId }))) throw error(400, "Scope not found");
 
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
@@ -42,30 +48,40 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     pathKind: "project_relative",
   });
 
+  let targetCreated = false;
+  const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
   try {
-    mkdirSync(targetDir, { recursive: true });
-    writeFileSync(
-      join(targetDir, TASKSPACE_MARKER_FILE),
-      JSON.stringify(
-        {
-          kind: TASKSPACE_MARKER_KIND,
-          version: TASKSPACE_MARKER_VERSION,
-          taskspaceId: id,
-          projectId: params.projectId,
-        },
-        null,
-        2,
-      ) + "\n",
-    );
+    // Shared parents are safe to create, but claim the taskspace directory atomically.
+    await mkdir(dirname(targetDir), { recursive: true });
+    await mkdir(targetDir);
+    targetCreated = true;
+    const marker = await open(markerPath, "wx", 0o600);
+    try {
+      await marker.writeFile(
+        JSON.stringify(
+          {
+            kind: TASKSPACE_MARKER_KIND,
+            version: TASKSPACE_MARKER_VERSION,
+            taskspaceId: id,
+            projectId: params.projectId,
+          },
+          null,
+          2,
+        ) + "\n",
+      );
+    } finally {
+      await marker.close();
+    }
   } catch (e) {
     console.error("Failed to initialize taskspace directory:", e);
-    // Compensate: roll back the DB record and remove any partially-created directory.
     await deleteTaskspace({ db, taskspaceId: id });
-    try {
-      rmSync(targetDir, { recursive: true, force: true });
-    } catch {
-      /* best-effort */
+    // Remove only artifacts created by this request. Never recurse into the target.
+    if (targetCreated) {
+      await unlink(markerPath).catch(() => undefined);
+      await rmdir(targetDir).catch(() => undefined);
     }
+    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    if (code === "EEXIST") throw error(409, "Taskspace directory already exists");
     throw error(500, "Failed to initialize taskspace directory");
   }
 

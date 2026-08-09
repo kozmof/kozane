@@ -100,14 +100,26 @@
     if (readonly) return;
     let refreshing = false;
     const refresh = async () => {
-      if (refreshing || positionActivityCount > 0 || document.visibilityState === "hidden") return;
+      if (
+        refreshing ||
+        positionActivityCount > 0 ||
+        s.pendingMutations > 0 ||
+        document.visibilityState === "hidden"
+      )
+        return;
       refreshing = true;
       const activityVersion = positionActivityVersion;
+      const mutationVersion = s.mutationVersion;
       try {
         const response = await s.fetcher(`/${s.projectId}/api/snapshot`);
         if (response.ok) {
           const snapshot = await response.json();
-          if (positionActivityCount === 0 && positionActivityVersion === activityVersion) {
+          if (
+            positionActivityCount === 0 &&
+            positionActivityVersion === activityVersion &&
+            s.pendingMutations === 0 &&
+            s.mutationVersion === mutationVersion
+          ) {
             s.refreshFromData(snapshot);
           }
         }
@@ -136,7 +148,7 @@
   // ── Composer submit (needs canvas ref for new card position) ──
   async function handleComposerSubmit(id: string | null, content: string, bundleId: string) {
     if (id) {
-      const res = await updateCard(s.fetcher, data.project.id, id, { content, bundleId });
+      const res = await updateCard(s.mutationFetcher, data.project.id, id, { content, bundleId });
       if (!res.ok) { s.setError("Failed to save card"); return; }
       s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, bundleId } : c));
       s.selection.composerCard = null;
@@ -144,7 +156,7 @@
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const scopeId = s.sidebar.activeScope;
       const zIndex = Math.max(0, ...s.cards.map((card) => card.zIndex ?? 0)) + 1;
-      const res = await createCard(s.fetcher, data.project.id, {
+      const res = await createCard(s.mutationFetcher, data.project.id, {
         bundleId,
         content,
         posX,
@@ -161,7 +173,7 @@
   }
 
   async function handlePersistPositions(positions: CardPositionPatch[]): Promise<boolean> {
-    const res = await patchCardPositions(s.fetcher, data.project.id, positions);
+    const res = await patchCardPositions(s.mutationFetcher, data.project.id, positions);
     return res.ok;
   }
 
@@ -172,7 +184,7 @@
     const layers = s.cards.map((item) => item.zIndex ?? 0);
     const zIndex = direction === "front" ? Math.max(...layers) + 1 : Math.min(...layers) - 1;
     s.cards = s.cards.map((item) => (item.id === cardId ? { ...item, zIndex } : item));
-    const res = await updateCard(s.fetcher, data.project.id, cardId, { zIndex });
+    const res = await updateCard(s.mutationFetcher, data.project.id, cardId, { zIndex });
     if (!res.ok) {
       s.cards = s.cards.map((item) =>
         item.id === cardId && item.zIndex === zIndex ? { ...item, zIndex: previous } : item,

@@ -41,6 +41,19 @@ export interface ProjectDataSnapshot {
 export class ProjectState {
   projectId = $state("");
   fetcher: typeof fetch = fetch;
+  pendingMutations = $state(0);
+  mutationVersion = $state(0);
+
+  mutationFetcher: typeof fetch = async (input, init) => {
+    this.pendingMutations += 1;
+    this.mutationVersion += 1;
+    try {
+      return await this.fetcher(input, init);
+    } finally {
+      this.pendingMutations = Math.max(0, this.pendingMutations - 1);
+      this.mutationVersion += 1;
+    }
+  };
 
   cards = $state<CardWithGlue[]>([]);
   bundles = $state<Bundle[]>([]);

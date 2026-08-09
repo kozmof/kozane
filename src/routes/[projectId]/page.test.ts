@@ -216,6 +216,8 @@ describe("Project page", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIds: ["card-1", "card-2"] }),
     });
-    expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument(),
+    );
   });
 });

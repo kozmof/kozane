@@ -6,6 +6,7 @@ import { tmpdir } from "os";
 import { POST } from "./+server.js";
 import { addProject } from "../../../../db/api/project.js";
 import { addScope } from "../../../../db/api/scope.js";
+import { getAllTaskspaces } from "../../../../db/api/taskspace.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import type { DB } from "../../../../db/tx.js";
 import { TASKSPACE_MARKER_FILE } from "../../../../lib/taskspace-marker.js";
@@ -103,7 +104,42 @@ describe("POST /[projectId]/api/taskspaces", () => {
     expect(marker.projectId).toBe(projectId);
   });
 
-  it("rolls back the DB record when directory creation fails", async () => {
+  it("rejects an existing directory without changing its contents or creating a DB row", async () => {
+    const target = join(tmpRoot, "existing");
+    mkdirSync(target);
+    writeFileSync(join(target, "keep.txt"), "important");
+    writeFileSync(join(target, TASKSPACE_MARKER_FILE), "original marker");
+
+    await expectHttpRejection(
+      POST(event(db, projectId, jsonRequest({ name: "existing", scopeId }))),
+      409,
+      "Taskspace directory already exists",
+    );
+
+    expect(readFileSync(join(target, "keep.txt"), "utf-8")).toBe("important");
+    expect(readFileSync(join(target, TASKSPACE_MARKER_FILE), "utf-8")).toBe("original marker");
+    expect(await getAllTaskspaces({ db })).toHaveLength(0);
+  });
+
+  it("rejects an unknown project before touching the filesystem", async () => {
+    await expectHttpRejection(
+      POST(event(db, "missing-project", jsonRequest({ name: "missing", scopeId }))),
+      404,
+      "Project not found",
+    );
+    expect(existsSync(join(tmpRoot, "missing"))).toBe(false);
+  });
+
+  it("rejects an unknown scope before touching the filesystem", async () => {
+    await expectHttpRejection(
+      POST(event(db, projectId, jsonRequest({ name: "missing", scopeId: "missing-scope" }))),
+      400,
+      "Scope not found",
+    );
+    expect(existsSync(join(tmpRoot, "missing"))).toBe(false);
+  });
+
+  it("treats a file at the target path as a collision", async () => {
     // Create a regular file at the would-be target so mkdirSync throws ENOTDIR.
     writeFileSync(join(tmpRoot, "blocked"), "not a dir");
 
@@ -112,8 +148,10 @@ describe("POST /[projectId]/api/taskspaces", () => {
     // deleting the newly-inserted taskspace row and returning 500.
     await expectHttpRejection(
       POST(event(db, projectId, jsonRequest({ name: "blocked/sub", scopeId }))),
-      500,
-      "Failed to initialize taskspace directory",
+      409,
+      "Taskspace directory already exists",
     );
+    expect(readFileSync(join(tmpRoot, "blocked"), "utf-8")).toBe("not a dir");
+    expect(await getAllTaskspaces({ db })).toHaveLength(0);
   });
 });
