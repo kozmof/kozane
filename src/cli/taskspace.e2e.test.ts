@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
+import { MIN_SHORT_ID_LENGTH } from "./lib/short-id.js";
 
 const cliEntry = resolve("src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -110,7 +111,9 @@ describe("taskspace CLI flow", () => {
     expect(movedDryRun).toContain("moved");
     expect(movedDryRun).toContain("taskspace scan --apply");
     expect(cli(root, "taskspace", "scan", "--apply")).toContain("1 updated");
-    const shortId = marker.taskspaceId.split("-").at(-1).slice(0, 4);
+    // Only one taskspace exists, so its short ID is the minimum width with no
+    // collision lengthening. Derived from the constant so it tracks the CLI.
+    const shortId = marker.taskspaceId.split("-").at(-1).slice(0, MIN_SHORT_ID_LENGTH);
     expect(cli(root, "taskspace", "scan")).toContain(`ok      ${shortId}`);
 
     rmSync(moved, { recursive: true, force: true });
