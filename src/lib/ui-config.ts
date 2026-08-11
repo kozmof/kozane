@@ -46,7 +46,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowFooter: false,
   defaultShowSidePanel: false,
   defaultShowWarps: true,
-  warpMarkerSize: 14,
+  warpMarkerSize: 20,
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
   focusCardInputShortcut: "i",
