@@ -289,6 +289,7 @@
       warps={s.warps}
       focusedWarpId={s.focusedWarpId}
       {warpsVisible}
+      warpMarkerSize={data.uiConfig.warpMarkerSize}
       onFocusWarp={(warpId) => (s.focusedWarpId = warpId)}
       {showFooters}
       bind:zoom

@@ -14,6 +14,8 @@ export type UiConfig = {
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
   defaultShowWarps: boolean;
+  /** Diameter of a warp marker, in canvas pixels. */
+  warpMarkerSize: number;
   toggleFootersShortcut: string;
   togglePanelsShortcut: string;
   focusCardInputShortcut: string;
@@ -44,6 +46,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowFooter: false,
   defaultShowSidePanel: false,
   defaultShowWarps: true,
+  warpMarkerSize: 14,
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
   focusCardInputShortcut: "i",
@@ -70,6 +73,7 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   zoomStep: [0.01, 1],
   leftPanelWidth: [80, 800],
   rightPanelWidth: [80, 800],
+  warpMarkerSize: [8, 64],
   canvasWidth: [400, 20000],
   canvasHeight: [400, 20000],
 };

@@ -45,6 +45,7 @@
     warps,
     focusedWarpId,
     warpsVisible,
+    warpMarkerSize,
     onFocusWarp,
     showFooters,
     zoom = $bindable(),
@@ -75,6 +76,8 @@
     warps: Warp[];
     focusedWarpId: string | null;
     warpsVisible: boolean;
+    /** Diameter of a warp marker, in canvas pixels. */
+    warpMarkerSize: number;
     onFocusWarp: (warpId: string) => void;
     showFooters: boolean;
     zoom: number;
@@ -630,6 +633,7 @@
             {warp}
             label={index + 1}
             focused={warp.id === focusedWarpId}
+            size={warpMarkerSize}
             onFocus={() => onFocusWarp(warp.id)}
           />
         {/each}

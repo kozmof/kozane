@@ -6,16 +6,22 @@
     warp,
     label,
     focused,
+    size,
     onFocus,
   }: {
     warp: Warp;
     /** The warp's number, counting from 1 in creation order. */
     label: number;
     focused: boolean;
+    /** Diameter in canvas pixels, from `ui.warpMarkerSize`. */
+    size: number;
     onFocus: () => void;
   } = $props();
 
-  const SIZE = 22;
+  // The number rides along with the circle: half the diameter keeps a two-digit label
+  // inside a small marker, and the floor keeps it readable once the marker is tiny.
+  const fontSize = $derived(Math.max(7, Math.round(size * 0.5)));
+  const focusRing = $derived(Math.max(2, Math.round(size * 0.18)));
 </script>
 
 <!-- Centred on the warp's own coordinates: a warp marks a point, not a corner. -->
@@ -27,7 +33,6 @@
     justifyContent: "center",
     padding: "0",
     borderRadius: "50%",
-    fontSize: "11px",
     fontVariantNumeric: "tabular-nums",
     lineHeight: "1",
     cursor: "pointer",
@@ -36,10 +41,11 @@
   aria-label="Warp {label}"
   aria-pressed={focused}
   data-warp-id={warp.id}
-  style:left="{warp.posX - SIZE / 2}px"
-  style:top="{warp.posY - SIZE / 2}px"
-  style:width="{SIZE}px"
-  style:height="{SIZE}px"
+  style:left="{warp.posX - size / 2}px"
+  style:top="{warp.posY - size / 2}px"
+  style:width="{size}px"
+  style:height="{size}px"
+  style:font-size="{fontSize}px"
   style:z-index="250"
   style:pointer-events="auto"
   style:background={focused ? "var(--colors-select-accent)" : "var(--colors-ink-light)"}
@@ -47,7 +53,9 @@
   style:border="1px solid {focused
     ? 'var(--colors-select-accent)'
     : 'var(--colors-neutral-border)'}"
-  style:box-shadow={focused ? "0 0 0 4px color-mix(in oklch, var(--colors-select-accent) 22%, transparent)" : "0 1px 3px rgba(0,0,0,0.018)"}
+  style:box-shadow={focused
+    ? `0 0 0 ${focusRing}px color-mix(in oklch, var(--colors-select-accent) 22%, transparent)`
+    : "0 1px 3px rgba(0,0,0,0.018)"}
   onmousedown={(e) => {
     // The canvas below starts a pan on mousedown, and a shift-drag draws a selection
     // rectangle. Clicking a marker means neither.

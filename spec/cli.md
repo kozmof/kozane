@@ -879,6 +879,7 @@ Taskspace created.
     "rightPanelWidth": 232,
     "defaultShowFooter": false,
     "defaultShowSidePanel": false,
+    "warpMarkerSize": 14,
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",
     "focusCardInputShortcut": "i",

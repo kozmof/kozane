@@ -66,6 +66,8 @@ there after a reload and in another tab.
   marker to select it without moving. The remaining warps renumber.
 - Show or hide — press `Shift+A`. Setting a warp shows the markers again, so a
   warp you just made is never invisible.
+- Size — markers are 14 pixels across. Set `ui.warpMarkerSize` (8 to 64) to make
+  them bigger or smaller; the number inside scales with the circle.
 
 Warp keys work when no cards are selected: while a selection is live, the
 composer's action bar owns the keyboard. A static export keeps warping and the

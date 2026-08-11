@@ -60,6 +60,7 @@ const data = {
     defaultShowFooter: true,
     defaultShowSidePanel: true,
     defaultShowWarps: true,
+    warpMarkerSize: 14,
     toggleFootersShortcut: "x",
     togglePanelsShortcut: "y",
     focusCardInputShortcut: "z",
