@@ -327,8 +327,11 @@
       return;
     }
     // The other project's page decides where its own canvas opens, so the warp travels in
-    // the URL rather than in memory — which also makes the jump a link worth sharing.
-    void goto(`${base}/${entry.projectId}?warp=${entry.id}`);
+    // the URL rather than in memory — which also makes the jump a link worth sharing. The
+    // trailing slash follows this page's own: a static export is built with one, and a
+    // path missing it is redirected, which is a redirect the query would have to survive.
+    const slash = page.url.pathname.endsWith("/") ? "/" : "";
+    void goto(`${base}/${entry.projectId}${slash}?warp=${entry.id}`);
   }
 
   /**

@@ -1118,6 +1118,21 @@ describe("Warps", () => {
       expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-2");
     });
 
+    it("keeps the trailing slash a static export's pages are served under", async () => {
+      const previous = page.url;
+      page.url = new URL("http://localhost/project-1/") as typeof page.url;
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      renderPage({ readonly: true });
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("option", { name: /Umesao 1969/ }));
+
+      // Without it the export's static server redirects, and the redirect is where a
+      // query string is easiest to lose.
+      expect(goto).toHaveBeenCalledWith("/project-2/?warp=warp-9");
+      page.url = previous;
+    });
+
     it("does not open while cards are selected", async () => {
       vi.stubGlobal("fetch", vi.fn());
       renderPage();

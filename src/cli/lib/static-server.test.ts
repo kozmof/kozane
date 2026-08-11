@@ -33,6 +33,15 @@ describe("resolveRequest", () => {
     });
   });
 
+  it("keeps a query string across that redirect", async () => {
+    // The exported project page reads `?warp=` to decide where its board opens, so a link
+    // that arrives without the slash must not lose it on the way.
+    expect(await resolveRequest(root, "/project?warp=w1")).toEqual({
+      kind: "redirect",
+      location: "/project/?warp=w1",
+    });
+  });
+
   it("serves the directory index once the slash is present", async () => {
     const r = await resolveRequest(root, "/project/");
     expect(r).toMatchObject({ kind: "file", path: join(root, "project", "index.html") });
@@ -83,6 +92,16 @@ describe("createStaticServer", () => {
     expect(redirect.headers.get("location")).toBe("/project/");
 
     const followed = await fetch(origin + "/project/");
+    expect(followed.status).toBe(200);
+    expect(await followed.text()).toContain("project page");
+  });
+
+  it("carries a query string through the redirect and back to the page", async () => {
+    const redirect = await fetch(origin + "/project?warp=w1", { redirect: "manual" });
+    expect(redirect.status).toBe(301);
+    expect(redirect.headers.get("location")).toBe("/project/?warp=w1");
+
+    const followed = await fetch(origin + redirect.headers.get("location")!);
     expect(followed.status).toBe(200);
     expect(await followed.text()).toContain("project page");
   });

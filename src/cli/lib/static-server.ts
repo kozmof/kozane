@@ -36,6 +36,9 @@ export type Resolution =
 
 export async function resolveRequest(root: string, rawUrl: string): Promise<Resolution> {
   const pathname = rawUrl.split("?")[0].split("#")[0];
+  // Carried through the trailing-slash redirect below: a link into the site can hold a
+  // query the page reads for itself, and dropping it silently lands on the wrong place.
+  const query = rawUrl.slice(pathname.length).split("#")[0];
   let decoded: string;
   try {
     decoded = decodeURIComponent(pathname);
@@ -57,7 +60,7 @@ export async function resolveRequest(root: string, rawUrl: string): Promise<Reso
   }
 
   if (info.isDirectory()) {
-    if (!decoded.endsWith("/")) return { kind: "redirect", location: pathname + "/" };
+    if (!decoded.endsWith("/")) return { kind: "redirect", location: pathname + "/" + query };
     const index = join(target, "index.html");
     try {
       if ((await stat(index)).isFile()) {
