@@ -1,6 +1,24 @@
 import * as api from "./lib/project-api";
 import type { ProjectState } from "./project-state.svelte.js";
 
+/**
+ * The `stacking` a layer move answers with, as a lookup. Read defensively: an older
+ * server, or a static export replaying a canned response, simply reports nothing and the
+ * cards keep the zIndex they had.
+ */
+function readStacking(parsed: unknown): Map<string, number> {
+  const stacking = (parsed as { stacking?: unknown } | null)?.stacking;
+  if (!Array.isArray(stacking)) return new Map();
+  return new Map(
+    stacking.flatMap((entry: unknown) => {
+      const { cardId, zIndex } = (entry ?? {}) as { cardId?: unknown; zIndex?: unknown };
+      return typeof cardId === "string" && typeof zIndex === "number"
+        ? [[cardId, zIndex] as const]
+        : [];
+    }),
+  );
+}
+
 export function createProjectActions(state: ProjectState) {
   async function handleCardBundleChange(newBundleId: string) {
     if (!state.selection.composerCard) return;
@@ -259,6 +277,17 @@ export function createProjectActions(state: ProjectState) {
       state.cards = prevCards;
       state.setError("Failed to move cards to another layer");
       return;
+    }
+    // The server restacks arriving cards above the target layer's own, and says where they
+    // landed. Applying that keeps the canvas from drawing them in the order they had on the
+    // layer they came from until the next snapshot poll corrects it.
+    const parsed = await res.json().catch(() => null);
+    const zIndexByCardId = readStacking(parsed);
+    if (zIndexByCardId.size > 0) {
+      state.cards = state.cards.map((c) => {
+        const zIndex = zIndexByCardId.get(c.id);
+        return zIndex === undefined ? c : { ...c, zIndex };
+      });
     }
     // Moving cards is how you follow them: the layer they landed on becomes the one in front.
     state.activeLayerId = layerId;

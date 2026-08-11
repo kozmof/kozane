@@ -22,6 +22,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     primaryCard: null,
     bundles,
     defaultBundleId: "b1",
+    layers: [],
     otherProjects: [],
     onSubmit: vi.fn(),
     onCancel: vi.fn(),

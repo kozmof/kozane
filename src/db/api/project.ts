@@ -1,7 +1,7 @@
 import { projectTable } from "../schema.js";
 import { eq } from "drizzle-orm";
 import type { NeedsDB, Project } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 export async function getAllProjects({ db }: NeedsDB): Promise<Project[]> {
@@ -15,6 +15,7 @@ export async function getProject({ db, projectId }: GetProject): Promise<Project
 
 type AddProject = NeedsDB & { name: string; isDefault?: boolean };
 export async function addProject({ db, name, isDefault = false }: AddProject): Promise<string> {
+  assertNameWithinLimit(name, "Project name");
   const [row] = await db
     .insert(projectTable)
     .values({ name, isDefault })
@@ -69,6 +70,7 @@ export async function deleteProject({ db, projectId }: DeleteProject): Promise<v
 
 type UpdateProjectName = NeedsDB & { projectId: string; name: string };
 export async function updateProjectName({ db, projectId, name }: UpdateProjectName): Promise<void> {
+  assertNameWithinLimit(name, "Project name");
   const updated = await db
     .update(projectTable)
     .set({ name })

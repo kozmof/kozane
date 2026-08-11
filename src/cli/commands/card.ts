@@ -255,7 +255,7 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
     const layers = await getAllLayers({ db, projectId });
     const layerId = resolveLayerRef(layers, requestedLayer);
 
-    if (!(await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId })))
+    if (!(await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId })).ok)
       throw new Error("Card and layer do not belong to the same project.");
 
     const layer = layers.find(({ id }) => id === layerId)!;

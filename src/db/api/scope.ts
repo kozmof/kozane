@@ -1,7 +1,7 @@
 import { scopeTable, scopeRelTable, cardTable, bundleTable } from "../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
 import type { NeedsDB, NeedsScope, Scope } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
@@ -15,12 +15,14 @@ export async function getScope({ db, scopeId }: GetScope): Promise<Scope | undef
 
 type AddScope = NeedsDB & { name: string };
 export async function addScope({ db, name }: AddScope): Promise<string> {
+  assertNameWithinLimit(name, "Scope name");
   const [row] = await db.insert(scopeTable).values({ name }).returning({ id: scopeTable.id });
   return row.id;
 }
 
 type UpdateScopeName = NeedsScope & { name: string };
 export async function updateScopeName({ db, scopeId, name }: UpdateScopeName): Promise<void> {
+  assertNameWithinLimit(name, "Scope name");
   const updated = await db
     .update(scopeTable)
     .set({ name })

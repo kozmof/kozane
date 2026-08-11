@@ -263,33 +263,80 @@ type ReassignCardsToLayer = {
   layerId: string;
 };
 
+export type CardStacking = { cardId: string; zIndex: number };
+export type ReassignLayerResult = { ok: false } | { ok: true; stacking: CardStacking[] };
+
+// Same shape as buildPositionCaseWhen, and safe for the same reason: the WHERE is built
+// from exactly these rows, so no row the update matches is missing a WHEN.
+function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
+  const whens = stacking.map((s) => sql`WHEN ${s.cardId} THEN ${s.zIndex}`);
+  return sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} END`;
+}
+
 /**
- * Moves cards onto another layer of their own project. Returns false when a card is not
- * in the project or the layer is not either — a card must never end up on a layer its
- * project cannot see.
+ * Moves cards onto another layer of their own project. Refuses when a card is not in the
+ * project or the layer is not either — a card must never end up on a layer its project
+ * cannot see.
+ *
+ * A card arriving from elsewhere is restacked above what the target layer already holds.
+ * zIndex only ever orders cards within one layer, so a value chosen against a different
+ * set of neighbours means nothing here: carried over, a card that had been brought to the
+ * front of a crowded layer would land on top of a quiet one for no reason the user gave.
+ * Cards already on the target layer are left alone, so re-picking the layer they are on
+ * changes nothing. `stacking` reports what each moved card ended up with, so a caller
+ * holding its own copy of the cards can follow.
  */
 export async function reassignCardsToLayer({
   db,
   projectId,
   cardIds,
   layerId,
-}: ReassignCardsToLayer): Promise<boolean> {
-  if (cardIds.length === 0) return true;
+}: ReassignCardsToLayer): Promise<ReassignLayerResult> {
+  if (cardIds.length === 0) return { ok: true, stacking: [] };
 
   return withTx(db, async (tx) => {
     const owned = await cardsInProject(tx, projectId, cardIds);
-    if (owned.length !== cardIds.length) return false;
+    if (owned.length !== cardIds.length) return { ok: false };
 
     const layer = await tx
       .select({ id: layerTable.id })
       .from(layerTable)
       .where(and(eq(layerTable.id, layerId), eq(layerTable.projectId, projectId)))
       .get();
-    if (!layer) return false;
+    if (!layer) return { ok: false };
 
-    await tx.update(cardTable).set({ layerId }).where(inArray(cardTable.id, cardIds));
+    const requested = await tx
+      .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
+      .from(cardTable)
+      .where(inArray(cardTable.id, [...new Set(cardIds)]));
+    const arriving = requested.filter((card) => card.layerId !== layerId);
+    if (arriving.length === 0) return { ok: true, stacking: [] };
 
-    return true;
+    const resident = await tx
+      .select({ zIndex: cardTable.zIndex })
+      .from(cardTable)
+      .where(eq(cardTable.layerId, layerId));
+    // Folded rather than spread into Math.max, which throws on a large enough layer, and
+    // seeded at 0 so an empty layer starts where a first card would.
+    const top = resident.reduce((highest, { zIndex }) => (zIndex > highest ? zIndex : highest), 0);
+
+    // Their order relative to each other is what the user arranged, so it is kept; the id
+    // breaks ties the same way the rest of the app does.
+    const stacking = [...arriving]
+      .sort((a, b) => a.zIndex - b.zIndex || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
+
+    await tx
+      .update(cardTable)
+      .set({ layerId, zIndex: buildZIndexCaseWhen(stacking) })
+      .where(
+        inArray(
+          cardTable.id,
+          stacking.map(({ cardId }) => cardId),
+        ),
+      );
+
+    return { ok: true, stacking };
   });
 }
 

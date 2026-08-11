@@ -236,6 +236,20 @@ describe("Layers", () => {
     return container.querySelector<HTMLElement>(`[data-layer-id="${layerId}"]`)!;
   }
 
+  /**
+   * The button that selects a layer in the popover. Its accessible name is the layer name
+   * followed by its card count, so it is anchored at the start to keep "Delete Draft" and
+   * "Reorder Draft" — the row's other buttons — out of the match.
+   */
+  function layerOption(name: string): HTMLElement {
+    return screen.getByRole("button", { name: new RegExp(`^${name}`) });
+  }
+
+  /** The row itself, which is what carries the drag-and-drop reordering. */
+  function layerRow(container: HTMLElement, layerId: string): HTMLElement {
+    return container.querySelector<HTMLElement>(`[data-layer-row="${layerId}"]`)!;
+  }
+
   it("stacks the active layer on top and dims the others", () => {
     const { container } = render(ProjectPage, {
       props: { data, params: { projectId: "project-1" }, form: null },
@@ -252,7 +266,7 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
 
     expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" });
     expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.3", "z-index": "0" });
@@ -264,7 +278,7 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
 
     // The wrapper lets events through; the card itself still receives them.
     expect(layerGroup(container, "l1")).toHaveStyle({ "pointer-events": "none" });
@@ -272,6 +286,41 @@ describe("Layers", () => {
     expect(card).toHaveStyle({ "pointer-events": "auto" });
     await fireEvent.click(card);
     expect(card).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does not sweep cards on dimmed layers into a rectangle selection", async () => {
+    const spread = {
+      ...data,
+      // Alpha stays on Base, the active layer; Beta moves to the dimmed Draft.
+      cards: [data.cards[0], { ...data.cards[1], layerId: "l2" }],
+    };
+    const { container } = render(ProjectPage, {
+      props: { data: spread, params: { projectId: "project-1" }, form: null },
+    });
+
+    // jsdom lays nothing out, so the canvas and both cards are told where they are. Both
+    // cards sit inside the rectangle dragged below.
+    const canvas = container.querySelector<HTMLElement>('[role="presentation"]')!;
+    canvas.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 }) as DOMRect;
+    for (const el of container.querySelectorAll<HTMLElement>("[data-card-id]")) {
+      el.getBoundingClientRect = () =>
+        ({ left: 10, top: 10, right: 200, bottom: 60, width: 190, height: 50 }) as DOMRect;
+    }
+
+    // Shift-drag across the whole area is the rubber band.
+    await fireEvent.mouseDown(canvas, { button: 0, shiftKey: true, clientX: 0, clientY: 0 });
+    await fireEvent.mouseMove(window, { clientX: 400, clientY: 300 });
+    await fireEvent.mouseUp(window);
+
+    expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Card: Beta" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
   });
 
   it("creates a card on the selected layer", async () => {
@@ -295,7 +344,7 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
 
     const input = screen.getByLabelText("Write a card");
     await fireEvent.input(input, { target: { value: "Gamma" } });
@@ -315,7 +364,7 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    const row = screen.getByRole("option", { name: /Draft/ });
+    const row = layerOption("Draft");
     await fireEvent.dblClick(row);
 
     const input = screen.getByLabelText("Rename Draft");
@@ -328,9 +377,7 @@ describe("Layers", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: "Sketches" }),
     });
-    await waitFor(() =>
-      expect(screen.getByRole("option", { name: /Sketches/ })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(layerOption("Sketches")).toBeInTheDocument());
   });
 
   it("abandons a rename on Escape", async () => {
@@ -341,13 +388,13 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.dblClick(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.dblClick(layerOption("Draft"));
     const input = screen.getByLabelText("Rename Draft");
     await fireEvent.input(input, { target: { value: "Nope" } });
     await fireEvent.keyDown(input, { key: "Escape" });
 
     expect(fetch).not.toHaveBeenCalled();
-    expect(screen.getByRole("option", { name: /Draft/ })).toBeInTheDocument();
+    expect(layerOption("Draft")).toBeInTheDocument();
   });
 
   it("reorders layers by dragging a row and restacks the canvas", async () => {
@@ -359,9 +406,9 @@ describe("Layers", () => {
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
     // The popover lists top first: Draft, then Base. Dragging Base onto Draft's row
-    // puts Base on top.
-    const base = screen.getByRole("option", { name: /Base/ });
-    const draft = screen.getByRole("option", { name: /Draft/ });
+    // puts Base on top. The row is what is draggable, not the button inside it.
+    const base = layerRow(container, "l1");
+    const draft = layerRow(container, "l2");
     await fireEvent.dragStart(base);
     await fireEvent.dragOver(draft);
     await fireEvent.drop(draft);
@@ -416,7 +463,7 @@ describe("Layers", () => {
   }) {
     const control = screen.getByLabelText("Layers").parentElement!;
     await fireEvent.mouseEnter(control);
-    const panel = screen.getByRole("listbox", { name: "Layers" }).parentElement!;
+    const panel = screen.getByRole("list", { name: "Layers" }).parentElement!;
     panel.getBoundingClientRect = () => ({ ...panelRect, width: 0, height: 0 }) as DOMRect;
     return control;
   }
@@ -431,7 +478,7 @@ describe("Layers", () => {
     await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
     await fireEvent.mouseMove(document, { clientX: 60, clientY: 35 });
 
-    expect(screen.queryByRole("listbox", { name: "Layers" })).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Layers" })).toBeInTheDocument();
   });
 
   it("closes when the pointer leaves the corridor to the popover", async () => {
@@ -445,7 +492,7 @@ describe("Layers", () => {
     await fireEvent.mouseMove(document, { clientX: 300, clientY: 35 });
 
     await waitFor(() =>
-      expect(screen.queryByRole("listbox", { name: "Layers" })).not.toBeInTheDocument(),
+      expect(screen.queryByRole("list", { name: "Layers" })).not.toBeInTheDocument(),
     );
   });
 
@@ -459,11 +506,11 @@ describe("Layers", () => {
 
       await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
       await fireEvent.mouseMove(document, { clientX: 60, clientY: 35 });
-      expect(screen.queryByRole("listbox", { name: "Layers" })).toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Layers" })).toBeInTheDocument();
 
       await vi.advanceTimersByTimeAsync(SAFE_AREA_GRACE_MS);
 
-      expect(screen.queryByRole("listbox", { name: "Layers" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Layers" })).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -514,6 +561,28 @@ describe("Layers", () => {
     );
   });
 
+  it("restacks the moved cards where the server says they landed", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, stacking: [{ cardId: "card-1", zIndex: 7 }] }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    // zIndex orders cards within a layer, so arriving on Draft earns a new one.
+    expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ "z-index": "0" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.mouseDown(screen.getByLabelText("Move selection to layer"));
+    await fireEvent.mouseDown(screen.getByRole("option", { name: /Draft/ }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ "z-index": "7" }),
+    );
+  });
+
   it("keeps a dragged card at full strength even when its layer is dimmed", async () => {
     // The drop at the end of the drag saves positions; nothing here inspects that call.
     vi.stubGlobal(
@@ -526,7 +595,7 @@ describe("Layers", () => {
 
     // Select Draft, leaving card-1's layer (Base) dimmed, then start dragging that card.
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
     expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.3" });
 
     const card = screen.getByRole("button", { name: "Card: Alpha" });
@@ -556,7 +625,7 @@ describe("Layers", () => {
     expect(card).toHaveStyle({ opacity: "0.3" });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
 
     expect(card).toHaveStyle({ opacity: "1" });
   });
@@ -566,7 +635,7 @@ describe("Layers", () => {
       props: { data, params: { projectId: "project-1" }, form: null },
     });
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    await fireEvent.click(layerOption("Draft"));
     first.unmount();
 
     const { container } = render(ProjectPage, {

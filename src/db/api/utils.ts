@@ -22,9 +22,10 @@ export class DefaultLayerError extends Error {
 }
 
 /**
- * Guards a user-supplied name against the shared length limit. HTTP routes check this
- * themselves to answer with a 400, so this is what covers the callers that do not go
- * through a route at all — the CLI above all.
+ * Guards a user-supplied name against the shared length limit, for every named thing:
+ * projects, bundles, layers, scopes, taskspaces. HTTP routes check the limit themselves so
+ * they can answer with a 400 rather than a 500, which leaves this covering the callers that
+ * never go through a route — the CLI above all.
  */
 export function assertNameWithinLimit(name: string, label: string): void {
   if (name.length > NAME_MAX) throw new Error(`${label} must be ${NAME_MAX} characters or fewer`);

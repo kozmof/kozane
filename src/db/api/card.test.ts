@@ -371,27 +371,66 @@ describe("reassignCardsToBundle", () => {
 });
 
 describe("reassignCardsToLayer", () => {
-  it("returns true for an empty cardIds array", async () => {
+  it("accepts an empty cardIds array without stacking anything", async () => {
     const { db, projectId } = await setup();
     const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
-    await expect(reassignCardsToLayer({ db, projectId, cardIds: [], layerId })).resolves.toBe(true);
+    await expect(reassignCardsToLayer({ db, projectId, cardIds: [], layerId })).resolves.toEqual({
+      ok: true,
+      stacking: [],
+    });
   });
 
-  it("moves cards onto the target layer and returns true", async () => {
+  it("moves cards onto the target layer", async () => {
     const { db, projectId, bundleId } = await setup();
     const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
     const c1 = await addCard({ db, bundleId, content: "A" });
     const c2 = await addCard({ db, bundleId, content: "B" });
 
-    await expect(reassignCardsToLayer({ db, projectId, cardIds: [c1, c2], layerId })).resolves.toBe(
-      true,
-    );
+    const result = await reassignCardsToLayer({ db, projectId, cardIds: [c1, c2], layerId });
+    expect(result.ok).toBe(true);
 
     expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ layerId });
     expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ layerId });
   });
 
-  it("returns false when a card does not belong to the project", async () => {
+  it("restacks arriving cards above the target layer's own, keeping their order", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    // Already on Draft, and well above where the default layer's cards sit.
+    await addCard({ db, bundleId, content: "Resident", layerId, zIndex: 40 });
+    const lower = await addCard({ db, bundleId, content: "Lower", zIndex: 3 });
+    const higher = await addCard({ db, bundleId, content: "Higher", zIndex: 9 });
+
+    const result = await reassignCardsToLayer({
+      db,
+      projectId,
+      cardIds: [higher, lower],
+      layerId,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      stacking: [
+        { cardId: lower, zIndex: 41 },
+        { cardId: higher, zIndex: 42 },
+      ],
+    });
+    expect(await getCard({ db, bundleId, cardId: lower })).toMatchObject({ layerId, zIndex: 41 });
+    expect(await getCard({ db, bundleId, cardId: higher })).toMatchObject({ layerId, zIndex: 42 });
+  });
+
+  it("leaves cards already on the target layer where they are", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    const resident = await addCard({ db, bundleId, content: "Resident", layerId, zIndex: 5 });
+
+    await expect(
+      reassignCardsToLayer({ db, projectId, cardIds: [resident], layerId }),
+    ).resolves.toEqual({ ok: true, stacking: [] });
+    expect(await getCard({ db, bundleId, cardId: resident })).toMatchObject({ zIndex: 5 });
+  });
+
+  it("refuses when a card does not belong to the project", async () => {
     const { db, projectId } = await setup();
     const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
     const otherProjectId = await addProject({ db, name: "Other" });
@@ -401,10 +440,10 @@ describe("reassignCardsToLayer", () => {
 
     await expect(
       reassignCardsToLayer({ db, projectId, cardIds: [foreignCard], layerId }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ ok: false });
   });
 
-  it("returns false when the target layer belongs to another project", async () => {
+  it("refuses when the target layer belongs to another project", async () => {
     const { db, projectId, bundleId } = await setup();
     const card = await addCard({ db, bundleId, content: "A" });
     const before = await getCard({ db, bundleId, cardId: card });
@@ -418,7 +457,7 @@ describe("reassignCardsToLayer", () => {
 
     await expect(
       reassignCardsToLayer({ db, projectId, cardIds: [card], layerId: foreignLayer }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ ok: false });
     expect(await getCard({ db, bundleId, cardId: card })).toMatchObject({
       layerId: before!.layerId,
     });

@@ -2,7 +2,7 @@ import { taskspaceTable } from "../schema.js";
 import type { PathKind } from "../schema.js";
 import { eq } from "drizzle-orm";
 import type { NeedsDB, NeedsTaskspace, Taskspace } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 // Intentionally unscoped: taskspaces are tied to scopes, and scopes are
 // cross-project. The UI needs all taskspaces to show their scope associations
@@ -28,6 +28,7 @@ export async function addTaskspace({
   pathKind = "project_relative",
   lastSeenAt,
 }: AddTaskspace): Promise<string> {
+  assertNameWithinLimit(name, "Taskspace name");
   const [row] = await db
     .insert(taskspaceTable)
     .values({
@@ -56,6 +57,7 @@ export async function updateTaskspace({
   pathKind,
   lastSeenAt,
 }: UpdateTaskspace): Promise<void> {
+  if (name !== undefined) assertNameWithinLimit(name, "Taskspace name");
   const updated = await db
     .update(taskspaceTable)
     .set({

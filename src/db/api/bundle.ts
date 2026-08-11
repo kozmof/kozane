@@ -1,7 +1,7 @@
 import { bundleTable } from "../schema.js";
 import { and, eq } from "drizzle-orm";
 import type { NeedsProject, NeedsProjectBundle, Bundle } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 export async function getAllBundles({ db, projectId }: NeedsProject): Promise<Bundle[]> {
   return db.select().from(bundleTable).where(eq(bundleTable.projectId, projectId));
@@ -29,6 +29,7 @@ export async function addBundle({
   name,
   isDefault = false,
 }: AddBundle): Promise<string> {
+  assertNameWithinLimit(name, "Bundle name");
   const [row] = await db
     .insert(bundleTable)
     .values({ projectId, name, isDefault })
@@ -63,6 +64,7 @@ export async function updateBundleName({
   bundleId,
   name,
 }: UpdateBundleName): Promise<void> {
+  assertNameWithinLimit(name, "Bundle name");
   const updated = await db
     .update(bundleTable)
     .set({ name })

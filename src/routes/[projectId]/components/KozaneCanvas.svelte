@@ -119,6 +119,17 @@
     }));
   });
 
+  // A marquee only sweeps up what is drawn at full strength. Cards on dimmed layers stay
+  // individually clickable — aiming at one is deliberate — but a rectangle dragged across
+  // the canvas must not collect cards the user can barely see and then delete them.
+  const sweepableCardIds = $derived(
+    new Set(
+      layerGroups
+        .filter(({ active, floating }) => active || floating)
+        .flatMap(({ cards: layerCards }) => layerCards.map(({ id }) => id)),
+    ),
+  );
+
   let dragState: {
     cardId: string;
     offsetX: number;
@@ -221,8 +232,11 @@
     let primaryId: string | null = null;
     canvasEl.querySelectorAll<HTMLElement>("[data-card-id]").forEach((el) => {
       const cardId = el.dataset.cardId;
-      if (!cardId || !rectsIntersect(el.getBoundingClientRect(), screenRect)) return;
+      if (!cardId || !sweepableCardIds.has(cardId)) return;
+      if (!rectsIntersect(el.getBoundingClientRect(), screenRect)) return;
       primaryId ??= cardId;
+      // A glue group is dragged and deleted as a unit, so it is selected as one too, even
+      // where that reaches onto a dimmed layer.
       glueGroupIds(glueGroupMap, cardToGlue, cardId).forEach((id) => next.add(id));
     });
     selectedCards = next;

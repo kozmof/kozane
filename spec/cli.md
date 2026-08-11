@@ -29,6 +29,23 @@ A bundle is a named label attached to every card. Each project has one default b
 ("General") created automatically. Bundles give cards a colour in the UI and act as
 a coarse categorisation — not a folder hierarchy.
 
+### Layers
+
+A layer is a surface within a project that cards sit on. Every card belongs to exactly one
+layer, and every project has one default layer ("Base") created automatically. Layers are
+stacked: the UI draws the selected layer at full strength with the rest dimmed behind it,
+so one set of cards can be worked on without the others in the way.
+
+Layers are ordered by position, bottom to top. `kozane layer move` shifts a layer one step
+at a time; `layer list` prints them in the same bottom-to-top order.
+
+Unlike bundles and scopes, a layer can be named on the command line by its name as well as
+by its full or short ID — names are unique within a project. An exact name wins, then a
+case-insensitive one, then a short ID.
+
+Deleting a layer does not delete its cards: they move to the project's default layer. The
+default layer cannot be deleted.
+
 ### Scopes
 
 A scope is a **named cross-project grouping of cards**. Unlike projects and bundles,
@@ -343,17 +360,71 @@ kozane scope delete <id>
 
 ---
 
+### `kozane layer list`
+
+Lists a project's layers bottom to top, one per line, as short ID, position, card count,
+and name. The default layer is marked `(default)`.
+
+```bash
+kozane layer list [--project <projectId>]
+```
+
+If the project has no layers, the command prints `No layers found.`
+
+### `kozane layer add <name>`
+
+Adds a layer on top of the project's existing ones. Output includes the new short layer ID,
+name, and position.
+
+```bash
+kozane layer add <name> [--project <projectId>]
+```
+
+Layer names must be non-empty and unique within the project.
+
+### `kozane layer rename <layer> <name>`
+
+Renames a layer, identified by name, full ID, or short ID.
+
+```bash
+kozane layer rename <layer> <name> [--project <projectId>]
+kozane layer rename Draft Sketches
+```
+
+### `kozane layer move <layer> <direction>`
+
+Moves a layer one step up or down the stack. `<direction>` must be `up` or `down`; moving
+past either end is an error, as is any other direction.
+
+```bash
+kozane layer move <layer> up|down [--project <projectId>]
+kozane layer move Sketches down
+```
+
+### `kozane layer delete <layer>`
+
+Deletes a layer and moves its cards to the project's default layer. Deleting the default
+layer is refused.
+
+```bash
+kozane layer delete <layer> [--project <projectId>]
+```
+
+---
+
 ### `kozane card add <content>`
 
 Adds a card to a project and optionally associates it with a scope.
 
 ```bash
 kozane card add <content> [--project <projectId>] [--bundle <bundleId>]
-                          [--scope <scopeId>] [--x <number>] [--y <number>]
+                          [--scope <scopeId>] [--layer <layer>]
+                          [--x <number>] [--y <number>]
 ```
 
-Project, bundle, and scope options accept full or short IDs. Without `--project`, the
-workspace default project is used. Without `--bundle`, that project’s default bundle is used. When `--scope` is provided, card creation and scope
+Project, bundle, and scope options accept full or short IDs; `--layer` also accepts a layer
+name. Without `--project`, the workspace default project is used. Without `--bundle`, that
+project’s default bundle is used. Without `--layer`, that project's default layer is used. When `--scope` is provided, card creation and scope
 membership are committed in one transaction.
 
 Example:
@@ -379,7 +450,8 @@ cat foo.txt | kozane card squash
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-The command accepts `--pattern`, `--project`, `--bundle`, and `--scope`, using full or short IDs.
+The command accepts `--pattern`, `--project`, `--bundle`, `--scope`, and `--layer`, using
+full or short IDs — and, for `--layer`, a layer name.
 These options work with piped input as well:
 
 ```bash
@@ -399,6 +471,23 @@ Prints a card content by full or short ID. Line breaks are preserved.
 kozane card show <cardId>
 kozane card show 17b86d2
 ```
+
+---
+
+### `kozane card layer <cardId> <layer>`
+
+Moves an existing card to another layer of its own project. The card is found by full or
+short ID, and the project is taken from the card rather than from `--project`, so the layer
+is always resolved against the project that owns it. `<layer>` accepts a layer name, full
+ID, or short ID.
+
+```bash
+kozane card layer <cardId> <layer>
+kozane card layer 3f9a2c1 Draft
+```
+
+Moving a card to a layer of a different project is refused. A card arriving from another
+layer is stacked above the cards already there.
 
 ---
 

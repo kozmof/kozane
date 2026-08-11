@@ -145,23 +145,37 @@
     if (reordered) commitDisplayOrder(reordered);
   }
 
+  const listClass = css({ listStyle: "none", margin: "0", padding: "0" });
+
   const rowClass = css({
     display: "flex",
     alignItems: "center",
     gap: "8px",
     width: "100%",
     padding: "6px 10px",
-    border: "none",
     borderRadius: "2px",
+    background: "transparent",
+    // The handle and × stay out of the way until the row is under the pointer.
+    "&:hover .layer-delete, &:hover .layer-handle": { opacity: "1" },
+    "& .layer-delete:focus-visible, & .layer-handle:focus-visible": { opacity: "1" },
+  });
+
+  // Selecting the layer is a real button rather than the row itself, so that the reorder
+  // handle and the × are its siblings instead of its descendants. See the note on the list.
+  const selectClass = css({
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    flex: "1",
+    minWidth: "0",
+    padding: "0",
+    border: "none",
     cursor: "pointer",
     fontFamily: "inherit",
     fontSize: "12px",
     color: "ink.black",
     textAlign: "left",
     background: "transparent",
-    // The handle and × stay out of the way until the row is under the pointer.
-    "&:hover .layer-delete, &:hover .layer-handle": { opacity: "1" },
-    "& .layer-delete:focus-visible, & .layer-handle:focus-visible": { opacity: "1" },
   });
   const activeRowClass = css({ backgroundColor: "neutral.bg" });
   const draggingRowClass = css({ opacity: "0.4" });
@@ -256,35 +270,25 @@
         minWidth: "180px",
       })}
     >
-      <div role="listbox" aria-label="Layers">
+      <!-- A plain list rather than a listbox: every row carries its own reorder handle, ×,
+           and rename field, and ARIA forbids interactive descendants inside an option — a
+           screen reader would never reach them. Selecting the layer is the name button
+           below, which reports its own state with aria-pressed. -->
+      <ul class={listClass} aria-label="Layers">
         {#each ordered as layer (layer.id)}
           {@const isActive = layer.id === activeLayerId}
           {@const isRenaming = renamingId === layer.id}
-          <!-- The row itself is the option: a click selects, a double-click renames,
-               and dragging it reorders the stack. -->
-          <div
+          <!-- Dragging the row reorders the stack; a click on the name selects, and a
+               double-click on it renames. -->
+          <li
             class={cx(
               rowClass,
               isActive && activeRowClass,
               dropTargetId === layer.id && dropTargetClass,
               draggingId === layer.id && draggingRowClass,
             )}
-            role="option"
-            aria-selected={isActive}
-            tabindex="0"
             data-layer-row={layer.id}
             draggable={!readonly && !isRenaming}
-            onclick={() => (activeLayerId = layer.id)}
-            ondblclick={() => startRename(layer)}
-            onkeydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                activeLayerId = layer.id;
-              } else if (e.key === "F2") {
-                e.preventDefault();
-                startRename(layer);
-              }
-            }}
             ondragstart={(e) => {
               draggingId = layer.id;
               e.dataTransfer?.setData("text/plain", layer.id);
@@ -311,12 +315,9 @@
                 class={cx("layer-handle", handleClass)}
                 title="Drag to reorder, or use the arrow keys"
                 aria-label="Reorder {layer.name}"
-                onclick={(e) => e.stopPropagation()}
-                ondblclick={(e) => e.stopPropagation()}
                 onkeydown={(e) => {
                   if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
                   e.preventDefault();
-                  e.stopPropagation();
                   nudge(layer.id, e.key === "ArrowUp" ? -1 : 1);
                 }}
               >
@@ -335,40 +336,50 @@
                 aria-label="Rename {layer.name}"
                 bind:value={renameValue}
                 use:autofocus
-                onclick={(e) => e.stopPropagation()}
-                ondblclick={(e) => e.stopPropagation()}
                 onblur={commitRename}
                 onkeydown={(e) => {
-                  e.stopPropagation();
                   if (e.key === "Enter") commitRename();
                   else if (e.key === "Escape") renamingId = null;
                 }}
               />
             {:else}
-              <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
-                {layer.name}
-              </span>
-              <span class={css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" })}>
-                {cardCount.get(layer.id) ?? 0}
-              </span>
-              {#if isActive}
-                <svg width="10" height="8" viewBox="0 0 10 8" fill="none" class={css({ flexShrink: "0" })}>
-                  <path d="M1 4l3 3 5-6" stroke="var(--colors-ink-black)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              {/if}
+              <!-- A button, so Enter and Space select without a hand-written key handler,
+                   and the pressed state is announced. -->
+              <button
+                class={selectClass}
+                aria-pressed={isActive}
+                onclick={() => (activeLayerId = layer.id)}
+                ondblclick={() => startRename(layer)}
+                onkeydown={(e) => {
+                  if (e.key !== "F2") return;
+                  e.preventDefault();
+                  startRename(layer);
+                }}
+              >
+                <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
+                  {layer.name}
+                </span>
+                <span class={css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" })}>
+                  {cardCount.get(layer.id) ?? 0}
+                </span>
+                {#if isActive}
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none" class={css({ flexShrink: "0" })} aria-hidden="true">
+                    <path d="M1 4l3 3 5-6" stroke="var(--colors-ink-black)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                {/if}
+              </button>
               {#if !layer.isDefault && !readonly}
                 <button
                   class={cx("layer-delete", deleteClass)}
                   title="Delete layer"
                   aria-label="Delete {layer.name}"
-                  onclick={(e) => { e.stopPropagation(); onDeleteLayer(layer.id); }}
-                  ondblclick={(e) => e.stopPropagation()}
+                  onclick={() => onDeleteLayer(layer.id)}
                 >×</button>
               {/if}
             {/if}
-          </div>
+          </li>
         {/each}
-      </div>
+      </ul>
 
       {#if !readonly}
         <div class={css({ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "4px" })}>

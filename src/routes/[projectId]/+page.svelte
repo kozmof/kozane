@@ -6,7 +6,7 @@
   import { applyPalette, clampZoom, maxZIndex, minZIndex } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
   import type { CardWithGlue } from "$lib/types";
-  import { ProjectState, readStoredLayerId, resolveActiveLayerId, storeActiveLayerId } from "./project-state.svelte";
+  import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
   import BundleSidebar from "./components/BundleSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
@@ -24,18 +24,11 @@
 
   // ── Reactive project state ────────────────────────────────────
   const s = new ProjectState();
-  s.projectId = untrack(() => data.project.id);
   s.fetcher = fetch;
-  s.cards = untrack(() => data.cards);
-  s.bundles = untrack(() => data.bundles);
-  s.layers = untrack(() => data.layers);
-  s.activeLayerId = untrack(() =>
-    resolveActiveLayerId(data.layers, readStoredLayerId(data.project.id)),
-  );
-  s.scopes = untrack(() => data.scopes);
-  s.scopeRels = untrack(() => data.scopeRels);
-  s.glueRels = untrack(() => data.glueRels);
-  s.taskspaces = untrack(() => data.taskspaces);
+  // The same path project navigation takes below. Loading a project decides more than a
+  // list of fields now — which layer it was last worked on, among them — and that belongs
+  // in one place rather than being repeated here and kept in step by hand.
+  untrack(() => s.resetFromData(data));
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));

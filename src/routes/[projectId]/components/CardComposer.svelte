@@ -14,7 +14,7 @@
     primaryCard: CardWithGlue | null;
     bundles: BundleWithColor[];
     defaultBundleId: string;
-    layers?: Layer[];
+    layers: Layer[];
     otherProjects: { id: string; name: string }[];
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
@@ -37,7 +37,7 @@
     primaryCard,
     bundles,
     defaultBundleId,
-    layers = [],
+    layers,
     otherProjects,
     onSubmit,
     onCancel,
