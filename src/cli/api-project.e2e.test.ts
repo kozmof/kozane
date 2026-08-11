@@ -137,12 +137,14 @@ describe("project, status, and doctor CLI flow", () => {
       expect(result.stdout + result.stderr).toContain("Kozane workspace");
     }
 
+    // An unreadable config is the case doctor exists for, so it reports the failed check
+    // and points at `doctor config` rather than dying on the parse error.
     const root = tempWorkspace();
     cli(root, "init");
     writeFileSync(join(root, ".kozane", "config.json"), "{ invalid json");
     const doctor = runCli(root, "doctor");
     expect(doctor.status).not.toBe(0);
-    expect(doctor.stderr).toContain("SyntaxError");
+    expect(doctor.stdout).toContain("✗  config.json valid — run kozane doctor config");
   }, 30_000);
 });
 

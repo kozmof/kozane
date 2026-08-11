@@ -84,6 +84,98 @@ export const UI_STR_FIELDS = [
   "deleteCardsShortcut",
 ] as const;
 
+/** Every field name a `ui` block may carry. Anything else is an unknown key. */
+export const UI_KNOWN_KEYS = Object.keys(DEFAULT_UI_CONFIG) as (keyof UiConfig)[];
+
+export type ConfigIssue = {
+  /** Dotted path of the offending field, e.g. `ui.defaultZoom`. */
+  path: string;
+  severity: "error" | "warning";
+  /** Reason, without the `Invalid Kozane config:` prefix. */
+  message: string;
+  /** The rejected value, when there was one to show. */
+  found?: unknown;
+};
+
+export type ValidationResult<T> = {
+  value: T;
+  issues: ConfigIssue[];
+};
+
+/**
+ * Validates the `ui` block of a workspace config, collecting every problem instead of
+ * stopping at the first. `value` holds the fields that passed; the rest fall back to
+ * their defaults. {@link parseUiOverrides} reacts to the issues, `kozane doctor config`
+ * reports them.
+ */
+export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiConfig>> {
+  const issues: ConfigIssue[] = [];
+  const reject = (path: string, message: string, found: unknown): void => {
+    issues.push({ path, severity: "error", message, found });
+  };
+
+  if (ui === undefined) return { value: {}, issues };
+  if (typeof ui !== "object" || ui === null || Array.isArray(ui)) {
+    reject("ui", "ui must be an object", ui);
+    return { value: {}, issues };
+  }
+
+  const raw = ui as Record<string, unknown>;
+  const value: Partial<UiConfig> = {};
+  const accept = (field: keyof UiConfig, accepted: unknown): void => {
+    (value as Record<string, unknown>)[field] = accepted;
+  };
+
+  for (const [field, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
+    const candidate = raw[field];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "number" || !Number.isFinite(candidate)) {
+      reject(`ui.${field}`, `ui.${field} must be a number`, candidate);
+      continue;
+    }
+    if (candidate < lo || candidate > hi) {
+      reject(`ui.${field}`, `ui.${field} must be between ${lo} and ${hi}`, candidate);
+      continue;
+    }
+    accept(field as keyof UiConfig, candidate);
+  }
+
+  for (const field of UI_BOOL_FIELDS) {
+    const candidate = raw[field];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "boolean") {
+      reject(`ui.${field}`, `ui.${field} must be a boolean`, candidate);
+      continue;
+    }
+    accept(field, candidate);
+  }
+
+  for (const field of UI_STR_FIELDS) {
+    const candidate = raw[field];
+    if (candidate === undefined) continue;
+    if (typeof candidate !== "string") {
+      reject(`ui.${field}`, `ui.${field} must be a string`, candidate);
+      continue;
+    }
+    accept(field, candidate);
+  }
+
+  const placement = raw.newCardPlacement;
+  if (placement !== undefined) {
+    if (NEW_CARD_PLACEMENTS.includes(placement as never)) {
+      value.newCardPlacement = placement as NewCardPlacement;
+    } else {
+      reject(
+        "ui.newCardPlacement",
+        `ui.newCardPlacement must be "grid" or "vertical-list"`,
+        placement,
+      );
+    }
+  }
+
+  return { value, issues };
+}
+
 export type ParseUiOptions = {
   /**
    * `true` (the CLI reading a config the user just edited): reject an invalid field
@@ -99,64 +191,7 @@ export type ParseUiOptions = {
  * so the two can never disagree about which values are acceptable.
  */
 export function parseUiOverrides(ui: unknown, { strict }: ParseUiOptions): Partial<UiConfig> {
-  const reject = (message: string): void => {
-    if (strict) throw new Error(`Invalid Kozane config: ${message}`);
-  };
-
-  if (ui === undefined) return {};
-  if (typeof ui !== "object" || ui === null || Array.isArray(ui)) {
-    reject("ui must be an object");
-    return {};
-  }
-
-  const raw = ui as Record<string, unknown>;
-  const parsed: Partial<UiConfig> = {};
-  const accept = (field: keyof UiConfig, value: unknown): void => {
-    (parsed as Record<string, unknown>)[field] = value;
-  };
-
-  for (const [field, [lo, hi]] of Object.entries(UI_NUM_RANGES)) {
-    const value = raw[field];
-    if (value === undefined) continue;
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      reject(`ui.${field} must be a number`);
-      continue;
-    }
-    if (value < lo || value > hi) {
-      reject(`ui.${field} must be between ${lo} and ${hi}`);
-      continue;
-    }
-    accept(field as keyof UiConfig, value);
-  }
-
-  for (const field of UI_BOOL_FIELDS) {
-    const value = raw[field];
-    if (value === undefined) continue;
-    if (typeof value !== "boolean") {
-      reject(`ui.${field} must be a boolean`);
-      continue;
-    }
-    accept(field, value);
-  }
-
-  for (const field of UI_STR_FIELDS) {
-    const value = raw[field];
-    if (value === undefined) continue;
-    if (typeof value !== "string") {
-      reject(`ui.${field} must be a string`);
-      continue;
-    }
-    accept(field, value);
-  }
-
-  const placement = raw.newCardPlacement;
-  if (placement !== undefined) {
-    if (NEW_CARD_PLACEMENTS.includes(placement as never)) {
-      parsed.newCardPlacement = placement as NewCardPlacement;
-    } else {
-      reject(`ui.newCardPlacement must be "grid" or "vertical-list"`);
-    }
-  }
-
-  return parsed;
+  const { value, issues } = validateUiOverrides(ui);
+  if (strict && issues.length > 0) throw new Error(`Invalid Kozane config: ${issues[0].message}`);
+  return value;
 }

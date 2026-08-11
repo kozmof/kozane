@@ -1,9 +1,18 @@
 import { existsSync, accessSync, constants } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { createConnection } from "node:net";
-import { detectWorkspace } from "../lib/project.js";
-import { KOZANE_DIR, CONFIG_FILE, DB_FILE, readConfig, dbUrl } from "../lib/config.js";
+import { findWorkspaceRoot } from "../../db/internal/config.js";
+import {
+  KOZANE_DIR,
+  CONFIG_FILE,
+  DB_FILE,
+  type WorkspaceConfig,
+  defaultConfig,
+  readConfig,
+  dbUrl,
+} from "../lib/config.js";
 import { getMigrationStatus } from "../lib/db.js";
+import { diagnoseConfig } from "../lib/config-diagnostics.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
 
@@ -29,17 +38,16 @@ export async function doctor(): Promise<void> {
   const cwd = process.cwd();
   const checks: Check[] = [];
 
-  // 1. Workspace detected
-  const workspace = detectWorkspace(cwd);
-  checks.push(check("Kozane workspace found", !!workspace, workspace?.root ?? "run kozane init"));
+  // 1. Workspace detected. Found by path alone: an unreadable config is a check below,
+  // not a reason for the whole command to fail before it reports anything.
+  const root = findWorkspaceRoot(cwd);
+  checks.push(check("Kozane workspace found", !!root, root ?? "run kozane init"));
 
-  if (!workspace) {
+  if (!root) {
     printChecks(checks);
     process.exit(1);
     return; // satisfies TS control-flow narrowing
   }
-
-  const { root } = workspace;
 
   // 2. .kozane/ directory
   const kozaneDir = join(root, KOZANE_DIR);
@@ -47,7 +55,7 @@ export async function doctor(): Promise<void> {
 
   // 3. config.json readable
   const configPath = join(root, KOZANE_DIR, CONFIG_FILE);
-  let config = workspace.config;
+  let config: WorkspaceConfig = defaultConfig(basename(root));
   let configOk = existsSync(configPath);
   if (configOk) {
     try {
@@ -56,7 +64,9 @@ export async function doctor(): Promise<void> {
       configOk = false;
     }
   }
-  checks.push(check("config.json valid", configOk));
+  checks.push(
+    check("config.json valid", configOk, configOk ? undefined : "run kozane doctor config"),
+  );
 
   // 4. kozane.db readable/writable
   const dbFile = join(root, KOZANE_DIR, DB_FILE);
@@ -113,4 +123,52 @@ function printChecks(checks: Check[]): void {
     const line = detail ? `${label} — ${detail}` : label;
     console.log(`  ${icon}  ${line}`);
   }
+}
+
+export type DoctorConfigOptions = {
+  /** Fail on unknown keys too, not only on errors. */
+  strict?: boolean;
+};
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * The `config.json valid` check of {@link doctor} in full: every problem with the config
+ * at once, rather than the single pass/fail line.
+ */
+export function doctorConfig(opts: DoctorConfigOptions = {}): void {
+  const root = findWorkspaceRoot(process.cwd());
+  if (!root) {
+    console.error('No Kozane workspace found. Run "kozane init" first.');
+    process.exit(1);
+  }
+
+  const { path, issues, notes } = diagnoseConfig(root);
+  console.log(`Config: ${path}`);
+  console.log("");
+
+  const errors = issues.filter((issue) => issue.severity === "error").length;
+  const warnings = issues.length - errors;
+
+  if (issues.length === 0) console.log("  ✓  No problems found");
+  for (const { severity, message, found } of issues) {
+    const icon = severity === "error" ? "✗" : "⚠";
+    const detail = found === undefined ? "" : ` (found: ${JSON.stringify(found) ?? String(found)})`;
+    console.log(`  ${icon}  ${message}${detail}`);
+  }
+  for (const { message, details } of notes) {
+    console.log(`  ℹ  ${message}`);
+    for (const detail of details) console.log(`       ${detail}`);
+  }
+
+  if (issues.length > 0) {
+    console.log("");
+    console.log(`${plural(errors, "error")}, ${plural(warnings, "warning")}`);
+  }
+
+  // Unknown keys are usually a typo worth showing, but not a reason to fail a scripted
+  // run — `--strict` is there for setups that want them treated as errors.
+  if (errors > 0 || (opts.strict && warnings > 0)) process.exit(1);
 }

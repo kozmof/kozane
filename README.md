@@ -165,9 +165,12 @@ kozane db migrate
 kozane db export
 kozane db restore
 kozane doctor
+kozane doctor config
 ```
 
 Migrations create a backup first. Back up the entire `.kozane` directory and test restores regularly.
+After hand-editing `.kozane/config.json`, `kozane doctor config` lists every missing key,
+unknown key, and invalid value in one pass.
 
 ## Development and releases
 

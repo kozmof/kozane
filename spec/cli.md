@@ -239,6 +239,55 @@ Output:
   ✓  Port 17173 available
 ```
 
+A failed `config.json valid` check points at `kozane doctor config`, which reports what
+is actually wrong. `doctor` itself keeps running through a broken config.
+
+---
+
+### `kozane doctor config`
+
+Checks `.kozane/config.json` and reports **every** problem at once, unlike the commands
+that read the config for real and stop at the first one.
+
+```bash
+kozane doctor config
+kozane doctor config --strict
+```
+
+| Severity    | Reported for                                                                |
+| ----------- | --------------------------------------------------------------------------- |
+| `✗` error   | unreadable file, invalid JSON, missing required key, invalid value          |
+| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo |
+| `ℹ` note    | unset optional keys, each listed with the default standing in for it        |
+
+Required: `name`, `taskspace.defaultDir`, `taskspace.searchRoots`. Optional: everything
+under `server` and `ui` — each falls back to its built-in default.
+
+Exit code `1` when there is at least one error, `0` otherwise. `--strict` makes warnings
+fail too, for setups that want an unknown key to break the build.
+
+Output:
+
+```
+Config: /path/to/project/.kozane/config.json
+
+  ✗  name is missing
+  ✗  server.port must be between 0 and 65535 (found: 70000)
+  ⚠  server.protocol is not a known key
+  ⚠  ui.defaultFontSze is not a known key — did you mean "defaultFontSize"?
+  ℹ  server: 1 of 2 keys not set — using defaults
+       host: "127.0.0.1"
+  ℹ  ui: 22 of 23 keys not set — using defaults
+       defaultFontSize: 11.5
+       defaultFontFamily: "monospace"
+       …
+
+2 errors, 2 warnings
+```
+
+Each note names the keys behind the count, so the defaults a workspace is running on are
+visible without going to look them up.
+
 ---
 
 ### `kozane status`
@@ -837,6 +886,10 @@ Taskspace created.
 }
 ```
 
+Only `name` and the `taskspace` keys are required; `server` and `ui` fall back to their
+built-in defaults key by key. Run [`kozane doctor config`](#kozane-doctor-config) after
+editing this file by hand.
+
 The default `"vertical-list"` stacks newly created cards downward in one non-overlapping
 column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping layout
 with light overlap between cards.
@@ -935,6 +988,7 @@ CLI:
   kozane init
   kozane open
   kozane doctor
+  kozane doctor config
   kozane status
   kozane project list
   kozane project create

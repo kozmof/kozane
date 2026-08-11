@@ -2,23 +2,11 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
-import { type UiConfig, DEFAULT_UI_CONFIG, parseUiOverrides } from "../../lib/ui-config.js";
+import { type UiConfig, DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
+import { type WorkspaceConfig, validateWorkspaceConfig } from "./config-schema.js";
 
-export type { UiConfig };
+export type { UiConfig, WorkspaceConfig };
 export { DEFAULT_UI_CONFIG };
-
-export type WorkspaceConfig = {
-  name: string;
-  server: {
-    host: string;
-    port: number;
-  };
-  taskspace: {
-    defaultDir: string;
-    searchRoots: string[];
-  };
-  ui?: Partial<UiConfig>;
-};
 
 export const KOZANE_DIR = ".kozane";
 export const CONFIG_FILE = "config.json";
@@ -37,6 +25,13 @@ export function defaultConfig(name: string): WorkspaceConfig {
   };
 }
 
+/**
+ * Reads and validates the workspace config, rejecting the first problem found. Strict by
+ * design: the CLI is reading a file the user just edited, so a bad value is reported
+ * rather than silently dropped. The server validates the same config leniently through
+ * the same rules (db/internal/config.ts), so the two can never disagree on validity.
+ * `kozane doctor config` reports every problem instead of only the first.
+ */
 export function readConfig(projectRoot: string): WorkspaceConfig {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
@@ -44,54 +39,12 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   if (typeof parsed !== "object" || parsed === null) {
     throw new Error(`Invalid Kozane config at ${configPath}`);
   }
-  const p = parsed as Record<string, unknown>;
 
-  if (typeof p.name !== "string") throw new Error(`Invalid Kozane config: name must be a string`);
-
-  // `server` and its fields are optional: omitting one falls back to the built-in
-  // default, so a workspace can stay on whatever port Kozane ships with.
-  const server = p.server ?? {};
-  if (typeof server !== "object" || server === null || Array.isArray(server)) {
-    throw new Error(`Invalid Kozane config: server must be an object`);
-  }
-  const s = server as Record<string, unknown>;
-  if (s.host !== undefined && typeof s.host !== "string")
-    throw new Error(`Invalid Kozane config: server.host must be a string`);
-  if (s.port !== undefined && typeof s.port !== "number")
-    throw new Error(`Invalid Kozane config: server.port must be a number`);
-  if (typeof s.port === "number" && (!Number.isInteger(s.port) || s.port < 0 || s.port > 65535)) {
-    throw new Error(`Invalid Kozane config: server.port must be between 0 and 65535`);
-  }
-
-  const taskspace = p.taskspace;
-  if (typeof taskspace !== "object" || taskspace === null || Array.isArray(taskspace)) {
-    throw new Error(`Invalid Kozane config: taskspace must be an object`);
-  }
-  const w = taskspace as Record<string, unknown>;
-  if (typeof w.defaultDir !== "string")
-    throw new Error(`Invalid Kozane config: taskspace.defaultDir must be a string`);
-  if (!Array.isArray(w.searchRoots) || w.searchRoots.some((r) => typeof r !== "string")) {
-    throw new Error(`Invalid Kozane config: taskspace.searchRoots must be an array of strings`);
-  }
-
-  // Strict: the CLI is reading a file the user just edited, so a bad `ui` value is
-  // reported rather than silently dropped. The server uses the lenient mode of the
-  // same parser (db/internal/config.ts) so the two can never disagree on validity.
-  const parsedUi: Partial<UiConfig> | undefined =
-    p.ui === undefined ? undefined : parseUiOverrides(p.ui, { strict: true });
-
-  return {
-    name: p.name as string,
-    server: {
-      host: (s.host as string | undefined) ?? DEFAULT_SERVER_HOST,
-      port: (s.port as number | undefined) ?? DEFAULT_SERVER_PORT,
-    },
-    taskspace: {
-      defaultDir: w.defaultDir as string,
-      searchRoots: w.searchRoots as string[],
-    },
-    ...(parsedUi !== undefined && { ui: parsedUi }),
-  };
+  const { value, issues } = validateWorkspaceConfig(parsed);
+  // Warnings (unknown keys) are for the doctor to report, not a reason to refuse to run.
+  const firstError = issues.find((issue) => issue.severity === "error");
+  if (firstError) throw new Error(`Invalid Kozane config: ${firstError.message}`);
+  return value;
 }
 
 export function writeConfig(projectRoot: string, config: WorkspaceConfig): void {

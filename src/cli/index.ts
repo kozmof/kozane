@@ -8,7 +8,7 @@ const { version: _version } = _require("../../package.json") as { version: strin
 import { init } from "./commands/init.js";
 import { open } from "./commands/open.js";
 import { ssg, ssgPreview } from "./commands/ssg.js";
-import { doctor } from "./commands/doctor.js";
+import { doctor, doctorConfig } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { taskspaceScan, taskspaceCreate } from "./commands/taskspace.js";
 import { projectCreate, projectDefault, projectDelete, projectList } from "./commands/project.js";
@@ -79,10 +79,18 @@ ssgCommand
   .option("--no-open", "Start the server without opening the browser")
   .action((opts) => ssgPreview(opts));
 
-program
+// `doctor` runs the workspace health check on its own, and hosts the deeper per-area
+// checks as subcommands.
+const doctorCommand = program
   .command("doctor")
   .description("Check Kozane workspace health")
   .action(() => doctor());
+
+doctorCommand
+  .command("config")
+  .description("Check .kozane/config.json for missing keys, unknown keys, and invalid values")
+  .option("--strict", "Exit non-zero for unknown keys as well as errors")
+  .action((opts) => doctorConfig(opts));
 
 program
   .command("status")

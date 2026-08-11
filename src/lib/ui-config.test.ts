@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseUiOverrides } from "./ui-config.js";
+import {
+  DEFAULT_UI_CONFIG,
+  UI_KNOWN_KEYS,
+  parseUiOverrides,
+  validateUiOverrides,
+} from "./ui-config.js";
 
 describe("parseUiOverrides", () => {
   it("returns an empty object for a missing ui block", () => {
@@ -50,5 +55,48 @@ describe("parseUiOverrides", () => {
     expect(() => parseUiOverrides([], { strict: true })).toThrow("ui must be an object");
     expect(parseUiOverrides([], { strict: false })).toEqual({});
     expect(parseUiOverrides(null, { strict: false })).toEqual({});
+  });
+});
+
+describe("validateUiOverrides", () => {
+  it("collects every problem instead of stopping at the first", () => {
+    const { issues } = validateUiOverrides({
+      defaultFontSize: "big",
+      defaultShowFooter: "yes",
+      defaultFontFamily: 12,
+      newCardPlacement: "spiral",
+    });
+    expect(issues.map((issue) => issue.path)).toEqual([
+      "ui.defaultFontSize",
+      "ui.defaultShowFooter",
+      "ui.defaultFontFamily",
+      "ui.newCardPlacement",
+    ]);
+    expect(issues.every((issue) => issue.severity === "error")).toBe(true);
+  });
+
+  it("keeps the valid fields alongside the issues", () => {
+    const { value, issues } = validateUiOverrides({ defaultFontSize: 14, defaultZoom: 42 });
+    expect(value).toEqual({ defaultFontSize: 14 });
+    expect(issues).toEqual([
+      {
+        path: "ui.defaultZoom",
+        severity: "error",
+        message: "ui.defaultZoom must be between 0.1 and 10",
+        found: 42,
+      },
+    ]);
+  });
+
+  it("reports the rejected value so a doctor can show it", () => {
+    const [issue] = validateUiOverrides({ defaultFontFamily: 12 }).issues;
+    expect(issue.found).toBe(12);
+  });
+});
+
+describe("UI_KNOWN_KEYS", () => {
+  it("covers every default, so unknown-key checks stay in step with the type", () => {
+    expect(UI_KNOWN_KEYS).toEqual(Object.keys(DEFAULT_UI_CONFIG));
+    expect(UI_KNOWN_KEYS).toContain("newCardPlacement");
   });
 });
