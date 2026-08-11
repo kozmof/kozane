@@ -306,6 +306,106 @@ describe("Layers", () => {
     expect(JSON.parse(init.body)).toMatchObject({ layerId: "l2", content: "Gamma" });
   });
 
+  it("renames a layer from a double-click on its row", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    const row = screen.getByRole("option", { name: /Draft/ });
+    await fireEvent.dblClick(row);
+
+    const input = screen.getByLabelText("Rename Draft");
+    await fireEvent.input(input, { target: { value: "  Sketches  " } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/layers/l2", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Sketches" }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: /Sketches/ })).toBeInTheDocument(),
+    );
+  });
+
+  it("abandons a rename on Escape", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.dblClick(screen.getByRole("option", { name: /Draft/ }));
+    const input = screen.getByLabelText("Rename Draft");
+    await fireEvent.input(input, { target: { value: "Nope" } });
+    await fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByRole("option", { name: /Draft/ })).toBeInTheDocument();
+  });
+
+  it("reorders layers by dragging a row and restacks the canvas", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    // The popover lists top first: Draft, then Base. Dragging Base onto Draft's row
+    // puts Base on top.
+    const base = screen.getByRole("option", { name: /Base/ });
+    const draft = screen.getByRole("option", { name: /Draft/ });
+    await fireEvent.dragStart(base);
+    await fireEvent.dragOver(draft);
+    await fireEvent.drop(draft);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/layers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      // Bottom to top: Draft is now below Base.
+      body: JSON.stringify({ layerIds: ["l2", "l1"] }),
+    });
+    // Base is still the selected layer, so it keeps the top rank; Draft drops to 0.
+    expect(layerGroup(container, "l1")).toHaveStyle({ "z-index": "1", opacity: "1" });
+    expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0", opacity: "0.5" });
+  });
+
+  it("reorders layers from the keyboard on the drag handle", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.keyDown(screen.getByLabelText("Reorder Base"), { key: "ArrowUp" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ layerIds: ["l2", "l1"] });
+  });
+
+  it("rolls back and reports when a reorder fails", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.keyDown(screen.getByLabelText("Reorder Base"), { key: "ArrowUp" });
+
+    await waitFor(() => expect(screen.getByText("Failed to reorder layers")).toBeInTheDocument());
+    // Base is selected, so it is on top either way; Draft must be back underneath it.
+    expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0" });
+  });
+
   it("creates a layer from the popover and makes it active", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,

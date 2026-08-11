@@ -4,7 +4,7 @@ import { commandDbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import { cardTable } from "../../db/schema.js";
-import { addLayer, getAllLayers } from "../../db/api/layer.js";
+import { addLayer, getAllLayers, reorderLayers, updateLayerName } from "../../db/api/layer.js";
 import { deleteLayerWithReassign } from "../../db/api/composite.js";
 import { resolveProjectId } from "../lib/project-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
@@ -65,6 +65,78 @@ export async function layerList(options: LayerOptions = {}): Promise<void> {
   }
 }
 
+/** Accepts a layer name as well as an ID, since layer names are unique per project. */
+function resolveLayerId(layers: { id: string; name: string }[], requested: string): string {
+  const byName = layers.find(({ name }) => name === requested);
+  if (byName) return byName.id;
+  return resolveShortId(
+    requested,
+    layers.map(({ id }) => id),
+    "Layer",
+  );
+}
+
+export async function layerRename(
+  layerId: string,
+  name: string,
+  options: LayerOptions = {},
+): Promise<void> {
+  try {
+    const trimmedName = name.trim();
+    if (!trimmedName) throw new Error("Layer name cannot be empty.");
+    const { root } = requireWorkspace();
+    const db = await createDb(commandDbUrl(resolve(root)));
+    const projectId = await resolveProjectId(db, options.project);
+    const layers = await getAllLayers({ db, projectId });
+    const resolvedId = resolveLayerId(layers, layerId);
+    await updateLayerName({ db, projectId, layerId: resolvedId, name: trimmedName });
+    console.log("Layer renamed.");
+    console.log(
+      `  id  : ${shortId(
+        resolvedId,
+        layers.map((layer) => layer.id),
+      )}`,
+    );
+    console.log(`  name: ${trimmedName}`);
+  } catch (error) {
+    fail(error);
+  }
+}
+
+export async function layerMove(
+  layerId: string,
+  direction: string,
+  options: LayerOptions = {},
+): Promise<void> {
+  try {
+    if (direction !== "up" && direction !== "down") {
+      throw new Error(`Direction must be "up" or "down", not "${direction}".`);
+    }
+    const { root } = requireWorkspace();
+    const db = await createDb(commandDbUrl(resolve(root)));
+    const projectId = await resolveProjectId(db, options.project);
+    const layers = await getAllLayers({ db, projectId });
+    const resolvedId = resolveLayerId(layers, layerId);
+    // getAllLayers is bottom to top, so "up" is one step later in the list.
+    const ids = layers.map((layer) => layer.id);
+    const index = ids.indexOf(resolvedId);
+    const target = index + (direction === "up" ? 1 : -1);
+    if (target < 0 || target >= ids.length) {
+      throw new Error(`Layer is already at the ${direction === "up" ? "top" : "bottom"}.`);
+    }
+    const reordered = [...ids];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    if (!(await reorderLayers({ db, projectId, layerIds: reordered }))) {
+      throw new Error("Failed to reorder layers.");
+    }
+    console.log(`Layer moved ${direction}.`);
+    console.log(`  id      : ${shortId(resolvedId, ids)}`);
+    console.log(`  position: ${target}`);
+  } catch (error) {
+    fail(error);
+  }
+}
+
 export async function layerDelete(layerId: string, options: LayerOptions = {}): Promise<void> {
   try {
     const { root } = requireWorkspace();
@@ -72,7 +144,7 @@ export async function layerDelete(layerId: string, options: LayerOptions = {}): 
     const projectId = await resolveProjectId(db, options.project);
     const layers = await getAllLayers({ db, projectId });
     const layerIds = layers.map((layer) => layer.id);
-    const resolvedId = resolveShortId(layerId, layerIds, "Layer");
+    const resolvedId = resolveLayerId(layers, layerId);
     await deleteLayerWithReassign({ db, projectId, layerId: resolvedId });
     console.log("Layer deleted.");
     console.log(`  id: ${shortId(resolvedId, layerIds)}`);

@@ -2,6 +2,7 @@ import { layerTable } from "../schema.js";
 import { and, asc, eq, max } from "drizzle-orm";
 import type { NeedsProject, NeedsProjectLayer, Layer } from "./types.js";
 import { assertFound } from "./utils.js";
+import { withTx, type DB } from "../tx.js";
 
 /** Ordered the way the canvas stacks them: lowest position first, id as the tiebreak. */
 export async function getAllLayers({ db, projectId }: NeedsProject): Promise<Layer[]> {
@@ -60,6 +61,30 @@ export async function deleteLayer({ db, projectId, layerId }: DeleteLayer): Prom
     .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)))
     .returning({ id: layerTable.id });
   assertFound(deleted, `Layer projectId=${projectId} layerId=${layerId}`);
+}
+
+type ReorderLayers = { db: DB; projectId: string; layerIds: string[] };
+
+/**
+ * Renumbers a project's layers from `layerIds`, which must list every layer of the
+ * project exactly once, bottom to top. Returns false when the list does not match the
+ * project's layers — a stale client ordering renumbers nothing rather than half of it.
+ */
+export async function reorderLayers({ db, projectId, layerIds }: ReorderLayers): Promise<boolean> {
+  return withTx(db, async (tx) => {
+    const existing = await getAllLayers({ db: tx, projectId });
+    const requested = new Set(layerIds);
+    if (requested.size !== layerIds.length || requested.size !== existing.length) return false;
+    if (!existing.every(({ id }) => requested.has(id))) return false;
+
+    for (const [position, layerId] of layerIds.entries()) {
+      await tx
+        .update(layerTable)
+        .set({ position })
+        .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)));
+    }
+    return true;
+  });
 }
 
 type UpdateLayerName = NeedsProjectLayer & { name: string };

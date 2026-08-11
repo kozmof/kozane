@@ -15,7 +15,7 @@ import { projectCreate, projectDefault, projectDelete, projectList } from "./com
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import { cardAdd, cardList, cardNearest, cardShow, cardSquash } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
-import { layerAdd, layerDelete, layerList } from "./commands/layer.js";
+import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
 
 const program = new Command();
@@ -139,6 +139,18 @@ layer
   .description("Add a layer on top of a project's existing layers")
   .option("--project <projectId>", "Project ID or short ID to add the layer to")
   .action((name, opts) => layerAdd(name, opts));
+
+layer
+  .command("rename <id> <name>")
+  .description("Rename a layer by ID, short ID, or current name")
+  .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+  .action((id, name, opts) => layerRename(id, name, opts));
+
+layer
+  .command("move <id> <direction>")
+  .description("Move a layer one step up or down the stack")
+  .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+  .action((id, direction, opts) => layerMove(id, direction, opts));
 
 layer
   .command("delete <id>")

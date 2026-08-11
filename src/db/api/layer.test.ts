@@ -5,6 +5,7 @@ import {
   getLayer,
   getAllLayers,
   deleteLayer,
+  reorderLayers,
   updateLayerName,
   getDefaultLayer,
 } from "./layer.js";
@@ -117,6 +118,68 @@ describe("deleteLayer", () => {
     const { id } = await addLayer({ db, projectId: p2, name: "Theirs" });
 
     await expect(deleteLayer({ db, projectId: p1, layerId: id })).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("reorderLayers", () => {
+  async function threeLayers() {
+    const { db, projectId } = await setup();
+    const base = await addLayer({ db, projectId, name: "Base", isDefault: true });
+    const draft = await addLayer({ db, projectId, name: "Draft" });
+    const notes = await addLayer({ db, projectId, name: "Notes" });
+    return { db, projectId, base: base.id, draft: draft.id, notes: notes.id };
+  }
+
+  it("renumbers the layers from the given bottom-to-top ordering", async () => {
+    const { db, projectId, base, draft, notes } = await threeLayers();
+
+    await expect(reorderLayers({ db, projectId, layerIds: [notes, base, draft] })).resolves.toBe(
+      true,
+    );
+
+    expect(
+      (await getAllLayers({ db, projectId })).map(({ name, position }) => [name, position]),
+    ).toEqual([
+      ["Notes", 0],
+      ["Base", 1],
+      ["Draft", 2],
+    ]);
+  });
+
+  it("changes nothing when the ordering omits a layer", async () => {
+    const { db, projectId, base, draft } = await threeLayers();
+
+    await expect(reorderLayers({ db, projectId, layerIds: [draft, base] })).resolves.toBe(false);
+
+    expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
+      "Base",
+      "Draft",
+      "Notes",
+    ]);
+  });
+
+  it("changes nothing when the ordering repeats a layer", async () => {
+    const { db, projectId, base, draft } = await threeLayers();
+
+    await expect(reorderLayers({ db, projectId, layerIds: [base, draft, draft] })).resolves.toBe(
+      false,
+    );
+  });
+
+  it("changes nothing when the ordering names a layer from another project", async () => {
+    const { db, projectId, base, draft } = await threeLayers();
+    const otherId = await addProject({ db, name: "Other" });
+    const foreign = await addLayer({ db, projectId: otherId, name: "Theirs" });
+
+    await expect(
+      reorderLayers({ db, projectId, layerIds: [base, draft, foreign.id] }),
+    ).resolves.toBe(false);
+
+    expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
+      "Base",
+      "Draft",
+      "Notes",
+    ]);
   });
 });
 

@@ -216,6 +216,32 @@ export function createProjectActions(state: ProjectState) {
     if (state.activeLayerId === layerId) state.activeLayerId = parsed.defaultLayerId;
   }
 
+  async function handleRenameLayer(layerId: string, name: string) {
+    const trimmed = name.trim();
+    const layer = state.layers.find((l) => l.id === layerId);
+    if (!trimmed || !layer || layer.name === trimmed) return;
+    const prevLayers = state.layers;
+    state.layers = state.layers.map((l) => (l.id === layerId ? { ...l, name: trimmed } : l));
+    const res = await api.renameLayer(state.mutationFetcher, state.projectId, layerId, trimmed);
+    if (!res.ok) {
+      state.layers = prevLayers;
+      state.setError("Failed to rename layer");
+    }
+  }
+
+  /** `layerIds` is the project's full layer ordering, bottom to top. */
+  async function handleReorderLayers(layerIds: string[]) {
+    const prevLayers = state.layers;
+    const byId = new Map(prevLayers.map((l) => [l.id, l]));
+    if (layerIds.length !== prevLayers.length || layerIds.some((id) => !byId.has(id))) return;
+    state.layers = layerIds.map((id, position) => ({ ...byId.get(id)!, position }));
+    const res = await api.reorderLayers(state.mutationFetcher, state.projectId, layerIds);
+    if (!res.ok) {
+      state.layers = prevLayers;
+      state.setError("Failed to reorder layers");
+    }
+  }
+
   async function handleCreateScope() {
     const name = state.sidebar.newScopeName.trim();
     if (!name) return;
@@ -335,6 +361,8 @@ export function createProjectActions(state: ProjectState) {
     handleDeleteBundle,
     handleCreateLayer,
     handleDeleteLayer,
+    handleRenameLayer,
+    handleReorderLayers,
     handleCreateScope,
     handleDeleteScope,
     handleAddToScope,

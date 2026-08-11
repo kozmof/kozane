@@ -112,6 +112,24 @@ export function deleteLayer(
   return jsonRequest(fetcher, `/${projectId}/api/layers/${layerId}`, "DELETE");
 }
 
+export function renameLayer(
+  fetcher: typeof fetch,
+  projectId: string,
+  layerId: string,
+  name: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/layers/${layerId}`, "PATCH", { name });
+}
+
+/** `layerIds` is the project's full layer ordering, bottom to top. */
+export function reorderLayers(
+  fetcher: typeof fetch,
+  projectId: string,
+  layerIds: string[],
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/layers`, "PATCH", { layerIds });
+}
+
 export function createScope(
   fetcher: typeof fetch,
   projectId: string,

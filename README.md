@@ -92,6 +92,8 @@ rest of the board dimmed behind it. Every project starts with a `Base` layer:
 kozane layer list
 kozane layer add Draft
 kozane card add --layer Draft "Only on the draft layer"
+kozane layer rename Draft Sketches
+kozane layer move Sketches down
 ```
 
 ## Security and remote access

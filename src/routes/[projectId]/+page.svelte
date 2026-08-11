@@ -274,6 +274,8 @@
       bind:activeLayerId={s.activeLayerId}
       onCreateLayer={actions.handleCreateLayer}
       onDeleteLayer={actions.handleDeleteLayer}
+      onRenameLayer={actions.handleRenameLayer}
+      onReorderLayers={actions.handleReorderLayers}
       {readonly}
     />
 

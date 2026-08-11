@@ -88,6 +88,56 @@ describe("layer CLI flow", () => {
     expect(cli(root, "card", "list")).toContain("Survivor");
   }, 30_000);
 
+  it("renames a layer by name and keeps its cards", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "layer", "add", "Draft");
+    cli(root, "card", "add", "--layer", "Draft", "Stays put");
+
+    const renamed = cli(root, "layer", "rename", "Draft", "  Sketches  ");
+    expect(outputField(renamed, "name")).toBe("Sketches");
+
+    const list = cli(root, "layer", "list");
+    expect(list).not.toContain("Draft");
+    expect(list).toMatch(/^\S+\s+1\s+1\s+Sketches$/m);
+  }, 30_000);
+
+  it("moves a layer up and down the stack", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "layer", "add", "Draft");
+
+    // Positions are bottom to top, so moving Base up puts it above Draft.
+    cli(root, "layer", "move", "Base", "up");
+    expect(cli(root, "layer", "list")).toMatch(/^\S+\s+0\s+0\s+Draft$/m);
+    expect(cli(root, "layer", "list")).toMatch(/^\S+\s+1\s+0\s+Base \(default\)$/m);
+
+    cli(root, "layer", "move", "Base", "down");
+    expect(cli(root, "layer", "list")).toMatch(/^\S+\s+0\s+0\s+Base \(default\)$/m);
+    expect(cli(root, "layer", "list")).toMatch(/^\S+\s+1\s+0\s+Draft$/m);
+  }, 30_000);
+
+  it("refuses to move a layer past the end of the stack", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "layer", "add", "Draft");
+
+    const result = runCli(root, "layer", "move", "Draft", "up");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("already at the top");
+  }, 30_000);
+
+  it("rejects a move direction that is not up or down", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    const result = runCli(root, "layer", "move", "Base", "sideways");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('Direction must be "up" or "down"');
+  }, 30_000);
+
   it("refuses to delete the default layer", () => {
     const root = tempWorkspace();
     cli(root, "init");

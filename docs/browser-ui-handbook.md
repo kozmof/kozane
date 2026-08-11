@@ -154,12 +154,17 @@ toggle.
   itself to keep the popover open while you work in it.
 - Create — type a name in the popover input and press `Enter` or the `+` button.
   The new layer goes on top and becomes the selected one.
+- Rename — double-click a layer, type, and press `Enter`. `Escape` abandons the
+  edit. With the row focused, `F2` starts the same edit.
+- Reorder — drag a layer up or down the list, which is ordered top of the stack
+  first. The grip on the left of each row also moves the layer with `↑` and `↓`
+  when it has focus.
 - Delete — hover a layer and click the `×`. The default layer cannot be deleted,
   and cards on a deleted layer move to the project's default layer.
 
 New cards are created on the selected layer. From the terminal, `kozane layer
-list|add|delete` manages layers, and `kozane card add --layer <name>` chooses
-where a card lands.
+list|add|rename|move|delete` manages layers, and `kozane card add --layer <name>`
+chooses where a card lands.
 
 ## Scopes
 

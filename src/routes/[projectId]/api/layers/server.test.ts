@@ -3,7 +3,7 @@ import { addLayer, getAllLayers } from "../../../../db/api/layer.js";
 import { addProject } from "../../../../db/api/project.js";
 import type { DB } from "../../../../db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
-import { POST } from "./+server.js";
+import { PATCH, POST } from "./+server.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/layers", {
@@ -68,6 +68,56 @@ describe("POST /[projectId]/api/layers", () => {
       POST(event(db, "nonexistent-project-id", jsonRequest({ name: "Draft" }))),
       404,
       "Project not found",
+    );
+  });
+});
+
+describe("PATCH /[projectId]/api/layers", () => {
+  async function setupThree() {
+    const { db, projectId } = await setup();
+    const { id: draft } = await addLayer({ db, projectId, name: "Draft" });
+    const { id: notes } = await addLayer({ db, projectId, name: "Notes" });
+    const [base] = await getAllLayers({ db, projectId });
+    return { db, projectId, base: base.id, draft, notes };
+  }
+
+  it("renumbers the layers from a full bottom-to-top ordering", async () => {
+    const { db, projectId, base, draft, notes } = await setupThree();
+
+    const response = await PATCH(
+      event(db, projectId, jsonRequest({ layerIds: [notes, base, draft] })),
+    );
+
+    expect(response.status).toBe(200);
+    expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
+      "Notes",
+      "Base",
+      "Draft",
+    ]);
+  });
+
+  it("rejects a partial ordering without renumbering", async () => {
+    const { db, projectId, base, draft } = await setupThree();
+
+    await expectHttpRejection(
+      PATCH(event(db, projectId, jsonRequest({ layerIds: [draft, base] }))),
+      400,
+      "layerIds must list every layer of this project exactly once",
+    );
+    expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
+      "Base",
+      "Draft",
+      "Notes",
+    ]);
+  });
+
+  it("rejects an empty ordering", async () => {
+    const { db, projectId } = await setupThree();
+
+    await expectHttpRejection(
+      PATCH(event(db, projectId, jsonRequest({ layerIds: [] }))),
+      400,
+      "layerIds must have at least 1 item",
     );
   });
 });
