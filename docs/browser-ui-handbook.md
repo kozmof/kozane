@@ -33,9 +33,9 @@ The project view has three parts.
 - Right panel — scopes and taskspaces.
 
 Both side panels are hidden by default. Toggle them with the panels button in
-the top-right corner or the `b` key. Toggle card footers with the neighbouring
-footer button or the `f` key. These defaults, and the keys themselves, come from
-the `ui` section of `.kozane/config.json`.
+the top-right corner or the `b` key. Toggle card footers with the `f` key. These
+defaults, and the keys themselves, come from the `ui` section of
+`.kozane/config.json`.
 
 ## Moving around the canvas
 
@@ -162,9 +162,8 @@ copy show a `taskspace` badge in their footer. Manage taskspaces on disk with
 
 ## Card footers
 
-Toggle footers with the footer button in the top-right corner or the `f` key. A
-footer shows, when relevant, the glue-group link icon, the `taskspace` badge, and the
-card's bundle dot and name.
+Toggle footers with the `f` key. A footer shows, when relevant, the glue-group
+link icon, the `taskspace` badge, and the card's bundle dot and name.
 
 ## Live sync
 

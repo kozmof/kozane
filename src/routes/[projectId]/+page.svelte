@@ -261,9 +261,7 @@
     <FloatingControls
       {zoom}
       zoomStep={data.uiConfig.zoomStep}
-      {showFooters}
       {sidebarsVisible}
-      onToggleFooters={() => (showFooters = !showFooters)}
       onToggleSidebars={() => (sidebarsVisible = !sidebarsVisible)}
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />

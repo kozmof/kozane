@@ -4,49 +4,17 @@
   let {
     zoom,
     zoomStep,
-    showFooters,
     sidebarsVisible,
-    onToggleFooters,
     onToggleSidebars,
     onZoom,
   }: {
     zoom: number;
     zoomStep: number;
-    showFooters: boolean;
     sidebarsVisible: boolean;
-    onToggleFooters: () => void;
     onToggleSidebars: () => void;
     onZoom: (delta: number) => void;
   } = $props();
 </script>
-
-<button
-  class={css({
-    position: "absolute",
-    top: "12px",
-    right: "52px",
-    zIndex: "51",
-    width: "28px",
-    height: "28px",
-    borderRadius: "2px",
-    backgroundColor: "ink.light",
-    border: "1px solid token(colors.neutral.border)",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.018)",
-  })}
-  title={showFooters ? "Hide footers" : "Show footers"}
-  onclick={onToggleFooters}
->
-  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-    <rect x="0" y="0" width="12" height="8" rx="1.5"
-      fill={showFooters ? "var(--colors-neutral-icon)" : "var(--colors-neutral-subtle)"} />
-    <rect x="0" y="9" width="12" height="3" rx="1"
-      fill={showFooters ? "var(--colors-neutral-subtle)" : "var(--colors-neutral-icon)"} />
-  </svg>
-</button>
 
 <button
   class={css({
