@@ -9,6 +9,8 @@ import { createStaticServer } from "../lib/static-server.js";
 import { migrationStatusMessage } from "./db.js";
 import { openBrowser } from "./open.js";
 import { hyperlink } from "../lib/hyperlink.js";
+import { resolvePort } from "../lib/port.js";
+import { DEFAULT_PREVIEW_PORT, DEFAULT_SERVER_HOST } from "../../lib/constants.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -112,10 +114,18 @@ export async function ssgPreview(options: SsgPreviewOptions): Promise<void> {
     process.exit(1);
   }
 
-  const host = options.host ?? "127.0.0.1";
-  const port = Number(options.port ?? "4173");
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    console.error("Invalid --port. Use a number between 0 and 65535.");
+  const envHost = process.env.KOZANE_PREVIEW_HOST?.trim();
+  const host = options.host ?? (envHost ? envHost : DEFAULT_SERVER_HOST);
+  let port: number;
+  try {
+    port = resolvePort({
+      flag: options.port,
+      env: process.env.KOZANE_PREVIEW_PORT,
+      envName: "KOZANE_PREVIEW_PORT",
+      fallback: DEFAULT_PREVIEW_PORT,
+    });
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 

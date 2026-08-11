@@ -17,7 +17,8 @@ import {
   removeServerState,
 } from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
-import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
+import { resolvePort } from "../lib/port.js";
+import { DEFAULT_LAYER_NAME, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -44,8 +45,23 @@ export function openBrowser(url: string): void {
 export async function open(options: OpenOptions): Promise<void> {
   const { root, config } = requireWorkspace();
 
-  const host = options.host ?? config.server.host;
-  const port = options.port ?? String(config.server.port);
+  const envHost = process.env.KOZANE_HOST?.trim();
+  const host = options.host ?? (envHost ? envHost : config.server.host);
+  let port: string;
+  try {
+    port = String(
+      resolvePort({
+        flag: options.port,
+        env: process.env.KOZANE_PORT,
+        config: config.server.port,
+        fallback: DEFAULT_SERVER_PORT,
+      }),
+    );
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
   const existingServer = activeServerProcess(root);
   if (existingServer) {
     console.error(`Kozane is already running for this workspace (process ${existingServer.pid}).`);

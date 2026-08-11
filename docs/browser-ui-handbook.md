@@ -17,7 +17,7 @@ live-sync poll, because there is no server to talk to.
 kozane open
 ```
 
-This starts the server, which defaults to `http://127.0.0.1:5173`, and opens a
+This starts the server, which defaults to `http://127.0.0.1:17173`, and opens a
 browser. The landing page lists the workspace's projects, and the workspace
 default is tagged "Default". Click a project to open its canvas. If there are no
 projects yet, the page tells you to run `kozane project create <name>`.

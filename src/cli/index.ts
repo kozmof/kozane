@@ -24,6 +24,11 @@ import {
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
+import {
+  DEFAULT_PREVIEW_PORT,
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+} from "../lib/constants.js";
 
 const program = new Command();
 
@@ -43,8 +48,8 @@ program
 program
   .command("open")
   .description("Start the local Kozane UI and open browser")
-  .option("--host <host>", "Bind host")
-  .option("--port <port>", "Port number")
+  .option("--host <host>", "Bind host (or KOZANE_HOST; default: from config)")
+  .option("--port <port>", `Port number (or KOZANE_PORT; default: ${DEFAULT_SERVER_PORT})`)
   .option("--memory", "Use a temporary in-memory database for this server run")
   .option("--log-requests", "Log each HTTP request")
   .option("--allow-remote", "Bind for access through an HTTPS reverse proxy (requires --no-open)")
@@ -69,8 +74,8 @@ ssgCommand
   .description("Serve a previously exported static site over HTTP")
   .option("--out <dir>", "Directory to serve (default: ./site)")
   .option("--base <path>", "Base path the site was built with, e.g. /kozane")
-  .option("--host <host>", "Bind host (default: 127.0.0.1)")
-  .option("--port <port>", "Port number (default: 4173)")
+  .option("--host <host>", `Bind host (or KOZANE_PREVIEW_HOST; default: ${DEFAULT_SERVER_HOST})`)
+  .option("--port <port>", `Port number (or KOZANE_PREVIEW_PORT; default: ${DEFAULT_PREVIEW_PORT})`)
   .option("--no-open", "Start the server without opening the browser")
   .action((opts) => ssgPreview(opts));
 

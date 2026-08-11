@@ -54,8 +54,14 @@ changes are discarded when the server stops. `kozane init` creates a default pro
 `main`; use `kozane project default <id>` to change which project commands use when
 `--project` is omitted.
 
-The server defaults to `127.0.0.1:5173`. The `/health` endpoint checks server and database
-readiness and reports process CPU capacity and system memory usage as percentages on a 0–100 scale.
+The server defaults to `127.0.0.1:17173` — a port chosen to stay out of the way of the
+defaults other dev servers take (Vite's 5173, `3000`, `8080`, and so on). Change it with
+`--host` / `--port`, with the `KOZANE_HOST` / `KOZANE_PORT` environment variables, or by
+editing `server` in `.kozane/config.json`; the flag wins over the environment, which wins
+over the config file.
+
+The `/health` endpoint checks server and database readiness and reports process CPU
+capacity and system memory usage as percentages on a 0–100 scale.
 
 ## Adding cards from text
 
@@ -139,13 +145,13 @@ cloned repository after `pnpm install`.
 Preview it over HTTP, not by opening the files directly.
 
 ```sh
-kozane net ssg preview      # serves ./site at http://127.0.0.1:4173
+kozane net ssg preview      # serves ./site at http://127.0.0.1:17174
 ```
 
 `kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches
 what you get once deployed. Use `--out <dir>` to serve a different directory,
-`--port` and `--host` to change the address, and `--no-open` to skip launching a
-browser. If the site was built with `--base`, preview it with the same base:
+`--port` and `--host` (or `KOZANE_PREVIEW_PORT` / `KOZANE_PREVIEW_HOST`) to change
+the address, and `--no-open` to skip launching a browser. If the site was built with `--base`, preview it with the same base:
 
 ```sh
 kozane net ssg preview --base /kozane

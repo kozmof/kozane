@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
+import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
 import { type UiConfig, DEFAULT_UI_CONFIG, parseUiOverrides } from "../../lib/ui-config.js";
 
 export type { UiConfig };
@@ -27,7 +28,7 @@ export const MIGRATION_DIR = "drizzle";
 export function defaultConfig(name: string): WorkspaceConfig {
   return {
     name,
-    server: { host: "127.0.0.1", port: 5173 },
+    server: { host: DEFAULT_SERVER_HOST, port: DEFAULT_SERVER_PORT },
     taskspace: {
       defaultDir: ".",
       searchRoots: ["."],
@@ -47,15 +48,20 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
 
   if (typeof p.name !== "string") throw new Error(`Invalid Kozane config: name must be a string`);
 
-  const server = p.server;
+  // `server` and its fields are optional: omitting one falls back to the built-in
+  // default, so a workspace can stay on whatever port Kozane ships with.
+  const server = p.server ?? {};
   if (typeof server !== "object" || server === null || Array.isArray(server)) {
     throw new Error(`Invalid Kozane config: server must be an object`);
   }
   const s = server as Record<string, unknown>;
-  if (typeof s.host !== "string")
+  if (s.host !== undefined && typeof s.host !== "string")
     throw new Error(`Invalid Kozane config: server.host must be a string`);
-  if (typeof s.port !== "number")
+  if (s.port !== undefined && typeof s.port !== "number")
     throw new Error(`Invalid Kozane config: server.port must be a number`);
+  if (typeof s.port === "number" && (!Number.isInteger(s.port) || s.port < 0 || s.port > 65535)) {
+    throw new Error(`Invalid Kozane config: server.port must be between 0 and 65535`);
+  }
 
   const taskspace = p.taskspace;
   if (typeof taskspace !== "object" || taskspace === null || Array.isArray(taskspace)) {
@@ -76,7 +82,10 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
 
   return {
     name: p.name as string,
-    server: { host: s.host as string, port: s.port as number },
+    server: {
+      host: (s.host as string | undefined) ?? DEFAULT_SERVER_HOST,
+      port: (s.port as number | undefined) ?? DEFAULT_SERVER_PORT,
+    },
     taskspace: {
       defaultDir: w.defaultDir as string,
       searchRoots: w.searchRoots as string[],

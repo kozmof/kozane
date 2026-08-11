@@ -158,10 +158,23 @@ Options:
 | Flag             | Default     | Description                              |
 | ---------------- | ----------- | ---------------------------------------- |
 | `--host`         | `127.0.0.1` | Bind host (from config if unset)         |
-| `--port`         | `5173`      | Port number (from config if unset)       |
+| `--port`         | `17173`     | Port number (from config if unset)       |
 | `--memory`       | false       | Use a fresh database for this server run |
 | `--log-requests` | false       | Log each HTTP request as structured JSON |
 | `--no-open`      | false       | Start server without opening the browser |
+
+Host and port are resolved in this order, first match wins:
+
+1. `--host` / `--port`
+2. `KOZANE_HOST` / `KOZANE_PORT` (empty values are ignored)
+3. `server.host` / `server.port` in `.kozane/config.json`
+4. The built-in defaults `127.0.0.1` and `17173`
+
+`17173` avoids the ports popular dev servers claim by default (Vite `5173`, Vite preview
+`4173`, `3000`, `8080`, …) and sits below the Linux ephemeral range, so it is not handed
+out to outgoing connections. An explicit port that is not an integer between 0 and 65535
+is an error; the command does not fall through to the next source. Port `0` asks the OS
+for an ephemeral port.
 
 Behavior:
 
@@ -181,7 +194,7 @@ Kozane workspace: my-project
 Database: .kozane/kozane.db
 
 Local UI:
-http://127.0.0.1:5173
+http://127.0.0.1:17173
 ```
 
 If the database needs migration, the command exits before starting:
@@ -223,7 +236,7 @@ Output:
   ✓  config.json valid
   ✓  kozane.db readable/writable
   ✓  DB migrations current
-  ✓  Port 5173 available
+  ✓  Port 17173 available
 ```
 
 ---
@@ -790,7 +803,7 @@ Taskspace created.
   "name": "my-project",
   "server": {
     "host": "127.0.0.1",
-    "port": 5173
+    "port": 17173
   },
   "taskspace": {
     "defaultDir": ".",
