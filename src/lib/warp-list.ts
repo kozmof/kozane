@@ -18,14 +18,62 @@ export type WarpListEntry = {
 };
 
 /** Anything positioned on a board that can lend a warp its hint. */
-export type HintCard = { posX: number; posY: number; content: string };
+export type HintCard = { posX: number; posY: number; content: string; zIndex?: number };
+
+/** What every card on a board is drawn at, which is what turns a position into a box. */
+export type CardMetrics = { cardWidth: number; fontSize: number };
 
 /**
- * How far a card may sit from a warp and still describe it, in world pixels. Two card
- * widths: past that the nearest card is somewhere else on the board, and naming it would
- * point at the wrong place.
+ * How far a card's edge may sit from a warp and still describe it, in world pixels. Two
+ * card widths: past that the nearest card is somewhere else on the board, and naming it
+ * would point at the wrong place.
  */
 export const WARP_HINT_RADIUS = 480;
+
+// The card's own chrome, from KozaneCard.svelte: 8px above and below the text, a footer
+// that holds its space even when hidden, and a floor under the content block.
+const CARD_PADDING_X = 20;
+const CARD_PADDING_Y = 16;
+const CARD_FOOTER_HEIGHT = 24;
+const CARD_MIN_CONTENT_HEIGHT = 44;
+const CARD_LINE_HEIGHT_RATIO = 1.65;
+/** Width of one character relative to the font size, for the monospace the cards default to. */
+const CHAR_WIDTH_RATIO = 0.6;
+
+/**
+ * How tall a card with this content comes out, near enough. Cards store a position but no
+ * size — the width is the same for all of them and the height is whatever the text wraps
+ * to — so a warp that has to know what it is sitting on has to estimate it.
+ */
+export function estimateCardHeight(content: string, { cardWidth, fontSize }: CardMetrics): number {
+  const charsPerLine = Math.max(
+    1,
+    Math.floor((cardWidth - CARD_PADDING_X) / (fontSize * CHAR_WIDTH_RATIO)),
+  );
+  const lines = content
+    .split("\n")
+    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+  const textHeight = lines * fontSize * CARD_LINE_HEIGHT_RATIO + CARD_PADDING_Y;
+  return Math.max(CARD_MIN_CONTENT_HEIGHT, textHeight) + CARD_FOOTER_HEIGHT;
+}
+
+/**
+ * Squared distance from a point to a card's box, which is zero anywhere inside it. Squared
+ * throughout: the ordering is the same as the real distance, without the square root.
+ */
+function squaredDistanceToCard(
+  point: { posX: number; posY: number },
+  card: HintCard,
+  metrics: CardMetrics,
+): number {
+  const dx = Math.max(card.posX - point.posX, 0, point.posX - (card.posX + metrics.cardWidth));
+  const dy = Math.max(
+    card.posY - point.posY,
+    0,
+    point.posY - (card.posY + estimateCardHeight(card.content, metrics)),
+  );
+  return dx * dx + dy * dy;
+}
 
 /** Hints ride in a single narrow row, so a long card is cut rather than wrapped. */
 export const WARP_HINT_MAX_CHARS = 48;
@@ -38,25 +86,32 @@ function condense(content: string): string {
 }
 
 /**
- * The text of the card closest to `warp`, condensed to one short line. Compared by squared
- * distance: the ordering is the same as the real distance, without the square root.
+ * The text of the card describing where `warp` is, condensed to one short line. Measured
+ * to each card's box rather than to the corner it is positioned by: a warp dropped on a
+ * card is zero away from it, so the card under the marker always wins — which is the one
+ * the eye reads it as marking, even when some other card's corner happens to sit nearer.
  */
 export function nearestCardHint(
   warp: { posX: number; posY: number },
   cards: readonly HintCard[],
+  metrics: CardMetrics,
 ): string | null {
   const limit = WARP_HINT_RADIUS * WARP_HINT_RADIUS;
   let best: HintCard | null = null;
   let bestDistance = Infinity;
+  let bestZIndex = -Infinity;
   for (const card of cards) {
     if (card.content.trim() === "") continue;
-    const dx = card.posX - warp.posX;
-    const dy = card.posY - warp.posY;
-    const distance = dx * dx + dy * dy;
-    // Strictly nearer, so the first card wins a tie: `cards` arrives in a stable order.
-    if (distance > limit || distance >= bestDistance) continue;
+    const distance = squaredDistanceToCard(warp, card, metrics);
+    if (distance > limit) continue;
+    const zIndex = card.zIndex ?? 0;
+    // Nearer wins; between two cards the warp sits on, the one stacked on top does, since
+    // that is the one being looked at. Both comparisons are strict, so an outright tie
+    // falls to the first card — `cards` arrives in a stable order.
+    if (distance > bestDistance || (distance === bestDistance && zIndex <= bestZIndex)) continue;
     best = card;
     bestDistance = distance;
+    bestZIndex = zIndex;
   }
   return best ? condense(best.content) : null;
 }
@@ -66,6 +121,7 @@ type WarpEntriesForProject = {
   /** In the order `getAllWarps` returns them: creation order, which is what markers show. */
   warps: readonly Warp[];
   cards: readonly HintCard[];
+  metrics: CardMetrics;
   isCurrent: boolean;
 };
 
@@ -73,6 +129,7 @@ export function warpEntriesForProject({
   project,
   warps,
   cards,
+  metrics,
   isCurrent,
 }: WarpEntriesForProject): WarpListEntry[] {
   return warps.map((warp, index) => ({
@@ -82,7 +139,7 @@ export function warpEntriesForProject({
     label: index + 1,
     posX: warp.posX,
     posY: warp.posY,
-    hint: nearestCardHint(warp, cards),
+    hint: nearestCardHint(warp, cards, metrics),
     isCurrent,
   }));
 }
@@ -146,6 +203,8 @@ type BuildWarpDirectory = {
   /** Every warp in the workspace, each carrying the project it belongs to. */
   warps: readonly Warp[];
   cards: readonly (HintCard & { projectId: string })[];
+  /** What the boards draw their cards at, which decides what a warp is sitting on. */
+  metrics: CardMetrics;
   /** The project the page is already showing, whose entries the client derives live. */
   excludeProjectId: string;
 };
@@ -159,6 +218,7 @@ export function buildWarpDirectory({
   projects,
   warps,
   cards,
+  metrics,
   excludeProjectId,
 }: BuildWarpDirectory): WarpListEntry[] {
   return projects.flatMap((project) =>
@@ -168,6 +228,7 @@ export function buildWarpDirectory({
           project,
           warps: warps.filter((warp) => warp.projectId === project.id),
           cards: cards.filter((card) => card.projectId === project.id),
+          metrics,
           isCurrent: false,
         }),
   );

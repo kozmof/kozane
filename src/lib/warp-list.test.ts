@@ -3,6 +3,7 @@ import {
   buildWarpDirectory,
   groupWarpEntries,
   moveHighlight,
+  estimateCardHeight,
   nearestCardHint,
   warpEntriesForProject,
   withoutWarp,
@@ -15,54 +16,104 @@ function warp(id: string, posX: number, posY: number, projectId = "p1") {
   return { id, projectId, posX, posY };
 }
 
-function card(posX: number, posY: number, content: string) {
-  return { posX, posY, content };
+function card(posX: number, posY: number, content: string, zIndex = 0) {
+  return { posX, posY, content, zIndex };
 }
+
+// Round numbers to keep the boxes in these tests easy to follow: 30 characters to a line,
+// and a one-line card 200 wide by 68 tall.
+const METRICS = { cardWidth: 200, fontSize: 10 };
+const hintFor = (point: { posX: number; posY: number }, cards: ReturnType<typeof card>[]) =>
+  nearestCardHint(point, cards, METRICS);
+
+describe("estimateCardHeight", () => {
+  it("gives a short card the height of the empty content block", () => {
+    expect(estimateCardHeight("one line", METRICS)).toBe(44 + 24);
+  });
+
+  it("grows with the lines the text wraps to", () => {
+    const wrapped = estimateCardHeight("x".repeat(90), METRICS);
+
+    expect(wrapped).toBeGreaterThan(estimateCardHeight("x", METRICS));
+    // Three lines of text, its padding, and the footer.
+    expect(wrapped).toBe(3 * 10 * 1.65 + 16 + 24);
+  });
+
+  it("counts the lines the author typed as well as the ones that wrap", () => {
+    expect(estimateCardHeight("a\nb\nc\nd", METRICS)).toBe(4 * 10 * 1.65 + 16 + 24);
+  });
+});
 
 describe("nearestCardHint", () => {
   it("names the closest card", () => {
-    const hint = nearestCardHint(warp("w1", 100, 100), [
-      card(400, 100, "far"),
-      card(140, 120, "near"),
-    ]);
+    const hint = hintFor(warp("w1", 100, 100), [card(400, 100, "far"), card(140, 120, "near")]);
 
     expect(hint).toBe("near");
+  });
+
+  it("names the card the warp sits on, not the one with the nearest corner", () => {
+    // The warp is inside the first card; the second only has a corner closer to the
+    // position the first card is anchored by.
+    const hint = hintFor(warp("w1", 150, 30), [
+      card(0, 0, "under the marker"),
+      card(200, 30, "next door"),
+    ]);
+
+    expect(hint).toBe("under the marker");
+  });
+
+  it("takes the card stacked on top when the warp sits on two", () => {
+    const hint = hintFor(warp("w1", 100, 30), [
+      card(0, 0, "underneath", 0),
+      card(20, 10, "on top", 3),
+    ]);
+
+    expect(hint).toBe("on top");
+  });
+
+  it("measures a card by the text it holds, so a tall one reaches further", () => {
+    // (100, 100) is below where a one-line card ends, but well inside a card of five.
+    const tall = card(0, 0, "x".repeat(150));
+    const below = card(0, 120, "just below");
+
+    expect(hintFor(warp("w1", 100, 100), [tall, below])).toBe(`${"x".repeat(47)}…`);
+    // The same card with one line of text does not reach the warp, so its neighbour wins.
+    expect(hintFor(warp("w1", 100, 100), [card(0, 0, "short"), below])).toBe("just below");
   });
 
   it("ignores cards beyond the hint radius", () => {
     const justOutside = WARP_HINT_RADIUS + 1;
 
-    expect(nearestCardHint(warp("w1", 0, 0), [card(justOutside, 0, "over there")])).toBeNull();
-    expect(nearestCardHint(warp("w1", 0, 0), [card(WARP_HINT_RADIUS, 0, "on the edge")])).toBe(
+    expect(hintFor(warp("w1", 0, 0), [card(justOutside, 0, "over there")])).toBeNull();
+    expect(hintFor(warp("w1", 0, 0), [card(WARP_HINT_RADIUS, 0, "on the edge")])).toBe(
       "on the edge",
     );
   });
 
   it("has no hint when the project has no cards", () => {
-    expect(nearestCardHint(warp("w1", 0, 0), [])).toBeNull();
+    expect(hintFor(warp("w1", 0, 0), [])).toBeNull();
   });
 
   it("skips a card that is blank", () => {
-    expect(nearestCardHint(warp("w1", 0, 0), [card(10, 0, "   \n "), card(80, 0, "real")])).toBe(
-      "real",
-    );
+    expect(hintFor(warp("w1", 0, 0), [card(10, 0, "   \n "), card(80, 0, "real")])).toBe("real");
   });
 
   it("collapses the card down to one short line", () => {
-    const hint = nearestCardHint(warp("w1", 0, 0), [card(10, 0, "  first line\n\nsecond  line ")]);
+    const hint = hintFor(warp("w1", 0, 0), [card(10, 0, "  first line\n\nsecond  line ")]);
 
     expect(hint).toBe("first line second line");
   });
 
   it("truncates a long card with an ellipsis", () => {
-    const hint = nearestCardHint(warp("w1", 0, 0), [card(10, 0, "x".repeat(200))]);
+    const hint = hintFor(warp("w1", 0, 0), [card(10, 0, "x".repeat(200))]);
 
     expect(hint).toHaveLength(WARP_HINT_MAX_CHARS);
     expect(hint?.endsWith("…")).toBe(true);
   });
 
   it("keeps the first of two equally close cards", () => {
-    const hint = nearestCardHint(warp("w1", 0, 0), [card(50, 0, "first"), card(-50, 0, "second")]);
+    // 300 to the left edge of one, 300 to the right edge of the other.
+    const hint = hintFor(warp("w1", 0, 0), [card(300, 0, "first"), card(-500, 0, "second")]);
 
     expect(hint).toBe("first");
   });
@@ -74,6 +125,7 @@ describe("warpEntriesForProject", () => {
       project: { id: "p1", name: "Kozane" },
       warps: [warp("w1", 0, 0), warp("w2", 900, 0), warp("w3", 1800, 0)],
       cards: [card(40, 0, "notes")],
+      metrics: METRICS,
       isCurrent: true,
     });
 
@@ -90,6 +142,7 @@ describe("moveHighlight", () => {
     project: { id: "p1", name: "Kozane" },
     warps: [warp("w1", 0, 0), warp("w2", 900, 0), warp("w3", 1800, 0)],
     cards: [],
+    metrics: METRICS,
     isCurrent: true,
   });
 
@@ -179,7 +232,13 @@ describe("buildWarpDirectory", () => {
   ];
 
   it("leaves out the project being viewed and numbers the rest from one", () => {
-    const directory = buildWarpDirectory({ projects, warps, cards, excludeProjectId: "p1" });
+    const directory = buildWarpDirectory({
+      projects,
+      warps,
+      cards,
+      metrics: METRICS,
+      excludeProjectId: "p1",
+    });
 
     expect(directory).toMatchObject([
       {
@@ -200,6 +259,7 @@ describe("buildWarpDirectory", () => {
       projects,
       warps,
       cards: overlapping,
+      metrics: METRICS,
       excludeProjectId: "p1",
     });
 
@@ -212,6 +272,7 @@ describe("buildWarpDirectory", () => {
         projects: [projects[0]],
         warps,
         cards,
+        metrics: METRICS,
         excludeProjectId: "p1",
       }),
     ).toEqual([]);

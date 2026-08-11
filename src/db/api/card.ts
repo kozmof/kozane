@@ -35,7 +35,13 @@ export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): P
   return db.select().from(cardTable).where(inArray(cardTable.bundleId, bundleIds));
 }
 
-export type CardMarker = { projectId: string; posX: number; posY: number; content: string };
+export type CardMarker = {
+  projectId: string;
+  posX: number;
+  posY: number;
+  zIndex: number;
+  content: string;
+};
 type GetCardMarkers = NeedsDB & { projectIds: string[] };
 
 /**
@@ -53,6 +59,7 @@ export async function getCardMarkersByProjects({
       projectId: bundleTable.projectId,
       posX: cardTable.posX,
       posY: cardTable.posY,
+      zIndex: cardTable.zIndex,
       content: cardTable.content,
     })
     .from(cardTable)

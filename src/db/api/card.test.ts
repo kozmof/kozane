@@ -127,18 +127,18 @@ describe("getCardMarkersByProjects", () => {
     expect(await getCardMarkersByProjects({ db, projectIds: [] })).toEqual([]);
   });
 
-  it("returns the position and content of every card in the named projects", async () => {
+  it("returns the position, stacking and content of every card in the named projects", async () => {
     const { db, projectId, bundleId } = await setup();
     const b2 = await addBundle({ db, projectId, name: "Second" });
     await addCard({ db, bundleId, content: "In b1", posX: 24, posY: 48 });
-    await addCard({ db, bundleId: b2, content: "In b2", posX: 96, posY: 96 });
+    await addCard({ db, bundleId: b2, content: "In b2", posX: 96, posY: 96, zIndex: 3 });
 
     const markers = await getCardMarkersByProjects({ db, projectIds: [projectId] });
 
     expect(markers).toEqual(
       expect.arrayContaining([
-        { projectId, posX: 24, posY: 48, content: "In b1" },
-        { projectId, posX: 96, posY: 96, content: "In b2" },
+        { projectId, posX: 24, posY: 48, zIndex: 0, content: "In b1" },
+        { projectId, posX: 96, posY: 96, zIndex: 3, content: "In b2" },
       ]),
     );
     expect(markers).toHaveLength(2);

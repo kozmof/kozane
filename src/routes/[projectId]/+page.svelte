@@ -109,6 +109,10 @@
       project: { id: data.project.id, name: data.project.name },
       warps: s.warps,
       cards: s.cards,
+      metrics: {
+        cardWidth: data.uiConfig.defaultCardWidth,
+        fontSize: data.uiConfig.defaultFontSize,
+      },
       isCurrent: true,
     }),
     ...warpDirectory,

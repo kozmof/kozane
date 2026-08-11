@@ -64,7 +64,8 @@ there after a reload and in another tab.
   it is.
 - Warp to another project — press `Shift` with any arrow key. A list of every warp
   in the workspace opens, grouped by project, with this project's warps first and
-  each warp named after the card nearest to it. `↑` and `↓` move through the list,
+  each warp named after the card it sits on, or the nearest one when it sits on
+  the bare board. `↑` and `↓` move through the list,
   `Enter` or a click jumps, and `Esc` closes it. A warp in this project just moves
   the view; a warp in another project opens that project's board already centred on
   it. The direction pressed does not matter — all four open the same list. Each row
