@@ -5,6 +5,7 @@ import {
   moveHighlight,
   nearestCardHint,
   warpEntriesForProject,
+  withoutWarp,
   WARP_HINT_MAX_CHARS,
   WARP_HINT_RADIUS,
 } from "./warp-list.js";
@@ -110,6 +111,35 @@ describe("moveHighlight", () => {
 
   it("has nothing to move to in an empty list", () => {
     expect(moveHighlight([], null, 1)).toBeNull();
+  });
+});
+
+describe("withoutWarp", () => {
+  const entries = [
+    { id: "w1", projectId: "p1", label: 1 },
+    { id: "w2", projectId: "p1", label: 2 },
+    { id: "w3", projectId: "p1", label: 3 },
+    { id: "w4", projectId: "p2", label: 1 },
+  ] as WarpListEntry[];
+
+  it("renumbers what is left of the project the warp belonged to", () => {
+    expect(withoutWarp(entries, "w1")).toMatchObject([
+      { id: "w2", label: 1 },
+      { id: "w3", label: 2 },
+      { id: "w4", label: 1 },
+    ]);
+  });
+
+  it("leaves the other projects' numbers alone", () => {
+    expect(withoutWarp(entries, "w4")).toMatchObject([
+      { id: "w1", label: 1 },
+      { id: "w2", label: 2 },
+      { id: "w3", label: 3 },
+    ]);
+  });
+
+  it("changes nothing for a warp that is not in the list", () => {
+    expect(withoutWarp(entries, "gone")).toEqual(entries);
   });
 });
 

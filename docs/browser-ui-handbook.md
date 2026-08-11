@@ -67,7 +67,9 @@ there after a reload and in another tab.
   each warp named after the card nearest to it. `↑` and `↓` move through the list,
   `Enter` or a click jumps, and `Esc` closes it. A warp in this project just moves
   the view; a warp in another project opens that project's board already centred on
-  it. The direction pressed does not matter — all four open the same list.
+  it. The direction pressed does not matter — all four open the same list. Each row
+  has a remove button, which is the only way to remove another project's warps
+  without going there.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
 - Show or hide — press `Shift+A`. Setting a warp shows the markers again, so a

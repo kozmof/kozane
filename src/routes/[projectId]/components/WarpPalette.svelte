@@ -6,12 +6,17 @@
     entries,
     /** The warp the board is already sitting on, if any: where the highlight starts. */
     focusedWarpId = null,
+    readonly = false,
     onJump,
+    onDelete,
     onClose,
   }: {
     entries: WarpListEntry[];
     focusedWarpId?: string | null;
+    /** Read-only export: no endpoint to remove a warp with, so no remove buttons. */
+    readonly?: boolean;
     onJump: (entry: WarpListEntry) => void;
+    onDelete: (entry: WarpListEntry) => void;
     onClose: () => void;
   } = $props();
 
@@ -119,45 +124,64 @@
     {:else}
       {#each groups as group (group.projectId)}
         <p
-          class={css({ padding: "8px 10px 4px", fontSize: "11px", fontFamily: "mono", color: "neutral.muted" })}
+          class={css({ padding: "8px 10px 4px", fontSize: "11px", fontFamily: "mono", color: "ink.black" })}
         >
           {group.projectName}{group.isCurrent ? " (this project)" : ""}
         </p>
         <div role="listbox" aria-label={group.projectName}>
           {#each group.entries as entry (entry.id)}
             {@const isHighlighted = entry.id === highlighted}
-            <button
-              bind:this={rowEls[entry.id]}
-              role="option"
-              aria-selected={isHighlighted}
-              class={css({
-                display: "flex",
-                alignItems: "baseline",
-                gap: "8px",
-                width: "100%",
-                padding: "6px 10px",
-                border: "none",
-                borderRadius: "2px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "12px",
-                color: "ink.black",
-                textAlign: "left",
-              })}
+            <!-- The row is two buttons side by side rather than one inside the other:
+                 jumping and removing are separate targets, and a button cannot nest. -->
+            <div
+              role="presentation"
+              class={css({ display: "flex", alignItems: "center", borderRadius: "2px" })}
               style:background={isHighlighted ? "var(--colors-select-bg)" : "transparent"}
               onmouseenter={() => (highlightedId = entry.id)}
-              onclick={() => jump(entry)}
             >
-              <span class={css({ fontFamily: "mono", fontSize: "11px", color: "neutral.secondary", flexShrink: "0" })}>
-                Warp {entry.label}
-              </span>
-              <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
-                {entry.hint ?? ""}
-              </span>
-              <span class={css({ fontFamily: "mono", fontSize: "10px", color: "neutral.subtle", flexShrink: "0" })}>
-                {entry.posX}, {entry.posY}
-              </span>
-            </button>
+              <button
+                bind:this={rowEls[entry.id]}
+                role="option"
+                aria-selected={isHighlighted}
+                class={css({
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "8px",
+                  flex: "1",
+                  minWidth: "0",
+                  padding: "6px 10px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: "12px",
+                  color: "ink.black",
+                  textAlign: "left",
+                })}
+                onclick={() => jump(entry)}
+              >
+                <span class={css({ fontFamily: "mono", fontSize: "11px", color: "neutral.secondary", flexShrink: "0" })}>
+                  Warp {entry.label}
+                </span>
+                <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>
+                  {entry.hint ?? ""}
+                </span>
+              </button>
+              {#if !readonly}
+                <button
+                  class={css({ display: "flex", alignItems: "center", padding: "6px 10px", background: "transparent", border: "none", cursor: "pointer", color: "neutral.icon", _hover: { color: "ink.black" } })}
+                  aria-label="Remove warp {entry.label} in {entry.projectName}"
+                  title="Remove this warp"
+                  onclick={() => onDelete(entry)}
+                >
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                    <path d="M4.5 2h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    <path d="M1.5 4h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+                    <path d="M2.5 4l.7 6h5.6l.7-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              {/if}
+            </div>
           {/each}
         </div>
       {/each}

@@ -1025,6 +1025,56 @@ describe("Warps", () => {
       expect(goto).toHaveBeenCalledWith("/project-2?warp=warp-9");
     });
 
+    it("removes another project's warp and renumbers what is left of it", async () => {
+      const second = { ...data.warpDirectory[0], id: "warp-8", label: 2, hint: "second" };
+      const fetch = directoryResponse([data.warpDirectory[0], second]);
+      vi.stubGlobal("fetch", fetch);
+      renderPage({ warpDirectory: [data.warpDirectory[0], second] });
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("button", { name: "Remove warp 1 in Research" }));
+
+      expect(fetch).toHaveBeenCalledWith("/project-2/api/warps/warp-9", { method: "DELETE" });
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /Umesao 1969/ })).not.toBeInTheDocument(),
+      );
+      // What was warp 2 in that project is now its warp 1.
+      expect(screen.getByRole("option", { name: /second/ })).toHaveTextContent("Warp 1");
+    });
+
+    it("puts another project's warp back when removing it fails", async () => {
+      const fetch = vi
+        .fn()
+        .mockImplementation((url: string) =>
+          url.includes("warp-directory")
+            ? Promise.resolve({ ok: true, json: async () => data.warpDirectory })
+            : Promise.resolve({ ok: false, json: async () => ({ message: "gone wrong" }) }),
+        );
+      vi.stubGlobal("fetch", fetch);
+      renderPage();
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("button", { name: "Remove warp 1 in Research" }));
+
+      await waitFor(() => expect(screen.getByText("gone wrong")).toBeInTheDocument());
+      expect(screen.getByRole("option", { name: /Umesao 1969/ })).toBeInTheDocument();
+    });
+
+    it("removes one of this project's warps through the same path as the x key", async () => {
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      renderPage();
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("button", { name: "Remove warp 1 in Project" }));
+
+      await waitFor(() =>
+        expect(screen.queryByRole("option", { name: /^Warp 3/ })).not.toBeInTheDocument(),
+      );
+      // The marker on the board goes with it, and the rest renumber.
+      expect(screen.queryByLabelText("Warp 3")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-2");
+    });
+
     it("does not open while cards are selected", async () => {
       vi.stubGlobal("fetch", vi.fn());
       renderPage();

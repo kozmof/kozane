@@ -31,7 +31,7 @@ const entries = [
 ];
 
 function makeProps(overrides: Record<string, unknown> = {}) {
-  return { entries, onJump: vi.fn(), onClose: vi.fn(), ...overrides };
+  return { entries, onJump: vi.fn(), onDelete: vi.fn(), onClose: vi.fn(), ...overrides };
 }
 
 const dialog = () => screen.getByRole("dialog", { name: "Warps" });
@@ -47,13 +47,14 @@ describe("WarpPalette", () => {
     expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
-  it("shows each warp's number, hint and position", () => {
+  it("shows each warp's number and hint, and not its coordinates", () => {
     render(WarpPalette, { props: makeProps() });
 
     const row = screen.getAllByRole("option")[0];
     expect(row).toHaveTextContent("Warp 1");
     expect(row).toHaveTextContent("schema migration");
-    expect(row).toHaveTextContent("100, 200");
+    // A warp is recognised by what is near it, not by where the board puts it.
+    expect(row).not.toHaveTextContent("100, 200");
   });
 
   it("highlights the first row when no warp is focused", () => {
@@ -124,6 +125,26 @@ describe("WarpPalette", () => {
     await fireEvent.mouseDown(container.querySelector('[role="presentation"]')!);
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("removes the warp a remove button is clicked on", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    const onJump = vi.fn();
+    render(WarpPalette, { props: makeProps({ onDelete, onJump }) });
+
+    await user.click(screen.getByRole("button", { name: "Remove warp 1 in Research" }));
+
+    expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: "w3" }));
+    // Removing is not warping: the view stays where it is.
+    expect(onJump).not.toHaveBeenCalled();
+  });
+
+  it("has no remove buttons in a read-only export", () => {
+    render(WarpPalette, { props: makeProps({ readonly: true }) });
+
+    expect(screen.queryByRole("button", { name: /^Remove warp/ })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("option")).toHaveLength(3);
   });
 
   it("says so when the workspace has no warps", () => {

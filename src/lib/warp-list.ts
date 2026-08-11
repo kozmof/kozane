@@ -102,6 +102,20 @@ export function moveHighlight(
   return entries[(current + delta + entries.length) % entries.length];
 }
 
+/**
+ * The list without `warpId`, with the project it belonged to renumbered: a removed warp
+ * renumbers the markers on its board, and the list has to say the same thing. Entries of
+ * one project are contiguous, so one counter is enough.
+ */
+export function withoutWarp(entries: readonly WarpListEntry[], warpId: string): WarpListEntry[] {
+  const removed = entries.find((entry) => entry.id === warpId);
+  if (!removed) return [...entries];
+  let label = 0;
+  return entries
+    .filter((entry) => entry.id !== warpId)
+    .map((entry) => (entry.projectId === removed.projectId ? { ...entry, label: ++label } : entry));
+}
+
 /** The entries of one project, in list order, so a rendered list can print its heading once. */
 export type WarpListGroup = {
   projectId: string;

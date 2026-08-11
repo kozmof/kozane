@@ -6,7 +6,14 @@
   import { browser } from "$app/environment";
   import { goto, replaceState } from "$app/navigation";
   import { page } from "$app/state";
-  import { createCard, updateCard, patchCardPositions, fetchWarpDirectory } from "./lib/project-api";
+  import {
+    createCard,
+    updateCard,
+    patchCardPositions,
+    fetchWarpDirectory,
+    deleteWarp,
+    failureMessage,
+  } from "./lib/project-api";
   import {
     applyPalette,
     ARROW_DIRECTIONS,
@@ -16,7 +23,7 @@
     warpInDirection,
   } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
-  import { warpEntriesForProject, type WarpListEntry } from "$lib/warp-list";
+  import { warpEntriesForProject, withoutWarp, type WarpListEntry } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
   import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
@@ -309,6 +316,25 @@
     void goto(`${base}/${entry.projectId}?warp=${entry.id}`);
   }
 
+  /**
+   * Removing from the palette, which is the only way to reach another project's warps: the
+   * `x` key only ever acts on the marker this board has focused.
+   */
+  async function handleWarpDelete(entry: WarpListEntry) {
+    if (entry.projectId === s.projectId) {
+      // Same path the `x` key takes, so one warp cannot be removed two different ways.
+      await actions.handleRemoveWarp(entry.id);
+      return;
+    }
+    const previous = warpDirectory;
+    warpDirectory = withoutWarp(warpDirectory, entry.id);
+    const res = await deleteWarp(s.mutationFetcher, entry.projectId, entry.id);
+    if (!res.ok) {
+      warpDirectory = previous;
+      s.setError(await failureMessage(res, "Failed to remove warp"));
+    }
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     // The palette owns the keyboard while it is open, including the key that closes it.
     if (warpPaletteOpen) return;
@@ -416,7 +442,9 @@
       <WarpPalette
         entries={warpEntries}
         focusedWarpId={s.focusedWarpId}
+        {readonly}
         onJump={handleWarpJump}
+        onDelete={handleWarpDelete}
         onClose={() => (warpPaletteOpen = false)}
       />
     {/if}
