@@ -97,6 +97,15 @@
     textareaEl?.focus();
   }
 
+  // The bundles change under the composer when the page moves to another project — warping
+  // there does not remount this component — and when a bundle is deleted. Posting a bundle
+  // the board no longer has is refused by the server, so fall back to what it does have.
+  $effect(() => {
+    if (bundles.length === 0 || bundles.some(({ id }) => id === createBundleId)) return;
+    createBundleId = defaultBundleId;
+    if (!bundles.some(({ id }) => id === bundleId)) bundleId = defaultBundleId;
+  });
+
   $effect(() => {
     const context = editingCard
       ? `edit:${editingCard.id}`

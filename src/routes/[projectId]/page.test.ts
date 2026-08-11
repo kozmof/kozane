@@ -386,6 +386,49 @@ describe("Layers", () => {
     expect(JSON.parse(init.body)).toMatchObject({ layerId: "l2", content: "Gamma" });
   });
 
+  it("creates the card on the project navigated to, not the one left behind", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "card-9",
+        bundleId: "b3",
+        layerId: "l3",
+        content: "Gamma",
+        posX: 0,
+        posY: 0,
+        zIndex: 1,
+        glueId: null,
+        taskspaceId: null,
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { rerender } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    // Warping to another project keeps this component and swaps its data: the composer
+    // has to swap with it, or it goes on offering a bundle that board does not have.
+    const other = {
+      ...data,
+      project: { id: "project-2", name: "Research", isDefault: false },
+      bundles: [{ id: "b3", projectId: "project-2", name: "General", isDefault: true }],
+      layers: [{ id: "l3", projectId: "project-2", name: "Base", position: 0, isDefault: true }],
+      cards: [],
+      warps: [],
+      warpDirectory: [],
+    };
+    await rerender({ data: other, params: { projectId: "project-2" }, form: null });
+
+    const input = screen.getByLabelText("Write a card");
+    await fireEvent.input(input, { target: { value: "Gamma" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("/project-2/api/cards");
+    expect(JSON.parse(init.body)).toMatchObject({ bundleId: "b3", layerId: "l3" });
+  });
+
   it("renames a layer from a double-click on its row", async () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
     vi.stubGlobal("fetch", fetch);
