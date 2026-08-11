@@ -47,6 +47,30 @@ defaults, and the keys themselves, come from the `ui` section of
 
 Cards snap to a 24-pixel grid, so positions stay aligned as you work.
 
+## Warps
+
+A warp is a saved place on the canvas. Once a project has a few, the arrow keys
+move the view between them, which beats dragging across a board several screens
+wide. Warps belong to the project and are stored with it, so they are still
+there after a reload and in another tab.
+
+- Set — press `a`. A numbered marker appears under the mouse pointer, or at the
+  centre of the view if the pointer is off the canvas. Warps are numbered in the
+  order they were made.
+- Warp — press `←`, `→`, `↑`, or `↓`. The view moves to the nearest warp in that
+  direction and the marker highlights. Once there is none, the board wraps
+  round: `→` off the rightmost warp arrives at the leftmost, and `↓` off the
+  bottom one at the top, so a row of warps cycles under one key. Zoom is left as
+  it is.
+- Remove — the highlighted warp is the selected one, and `x` removes it. Click a
+  marker to select it without moving. The remaining warps renumber.
+- Show or hide — press `Shift+A`. Setting a warp shows the markers again, so a
+  warp you just made is never invisible.
+
+Warp keys work when no cards are selected: while a selection is live, the
+composer's action bar owns the keyboard. A static export keeps warping and the
+show/hide toggle, and drops setting and removing along with every other write.
+
 ## Creating cards
 
 The composer floats at the bottom-center of the canvas.

@@ -3,7 +3,8 @@
   import { css } from "styled-system/css";
   import KozaneCard from "./KozaneCard.svelte";
   import SelectionRect from "./SelectionRect.svelte";
-  import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
+  import WarpMarker from "./WarpMarker.svelte";
+  import type { CardWithGlue, BundleWithColor, GlueRel, Layer, Warp } from "$lib/types";
   import {
     GRID,
     PALETTE,
@@ -21,11 +22,14 @@
     previousPositions,
     verticalListPosition,
     rectsIntersect,
+    scrollForViewCenter,
     selectionRectFromPoints,
+    viewCenterWorld,
     worldRectToScreenRect,
   } from "../lib/project-page";
   import type { CardPositionPatch } from "../lib/project-page";
   import type { NewCardPlacement } from "$lib/ui-config";
+  import { clamp } from "$lib/constants";
 
   let {
     cards = $bindable(),
@@ -38,6 +42,10 @@
     primarySelectedId = $bindable(),
     composerCard = $bindable(),
     scopeCardIds,
+    warps,
+    focusedWarpId,
+    warpsVisible,
+    onFocusWarp,
     showFooters,
     zoom = $bindable(),
     zoomStep,
@@ -63,6 +71,11 @@
     primarySelectedId: string | null;
     composerCard: CardWithGlue | null;
     scopeCardIds: Set<string> | null;
+    /** In creation order: a warp's number is its place in this list. */
+    warps: Warp[];
+    focusedWarpId: string | null;
+    warpsVisible: boolean;
+    onFocusWarp: (warpId: string) => void;
     showFooters: boolean;
     zoom: number;
     zoomStep: number;
@@ -91,6 +104,9 @@
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
   let dragPointer: { x: number; y: number } | null = null;
+  // Where the mouse was last seen, so a warp can be dropped under it. Null until the
+  // pointer moves at all, which is the case a keyboard-only session stays in.
+  let lastPointer: { x: number; y: number } | null = null;
 
   // Each layer renders as one canvas-sized wrapper: the wrapper's z-index orders the layers
   // against each other, while card.zIndex keeps ordering cards inside their own layer.
@@ -208,6 +224,59 @@
     const position = verticalListPosition(sizes, startX, previous?.posY ?? startY, cardWidth, 0);
     lastListPosition = { posX: position.x, posY: position.y };
     return { posX: position.x, posY: position.y };
+  }
+
+  /** Where the viewport is looking, in world coordinates — where warping measures from. */
+  export function getViewCenter(): { posX: number; posY: number } {
+    return {
+      posX: clamp(
+        Math.round(viewCenterWorld(canvasEl.scrollLeft, canvasEl.clientWidth, zoom)),
+        0,
+        canvasWidth,
+      ),
+      posY: clamp(
+        Math.round(viewCenterWorld(canvasEl.scrollTop, canvasEl.clientHeight, zoom)),
+        0,
+        canvasHeight,
+      ),
+    };
+  }
+
+  /**
+   * Where a new warp goes: under the mouse pointer, which is where the user is already
+   * looking when they reach for the key. A pointer that has not moved yet, or that sits
+   * over a side panel rather than the board, falls back to the centre of the view.
+   */
+  export function getWarpPosition(): { posX: number; posY: number } {
+    if (!lastPointer) return getViewCenter();
+    const rect = canvasEl.getBoundingClientRect();
+    const outside =
+      lastPointer.x < rect.left ||
+      lastPointer.x > rect.right ||
+      lastPointer.y < rect.top ||
+      lastPointer.y > rect.bottom;
+    if (outside) return getViewCenter();
+    const { x, y } = clientToWorld(lastPointer.x, lastPointer.y);
+    return {
+      posX: clamp(Math.round(x), 0, canvasWidth),
+      posY: clamp(Math.round(y), 0, canvasHeight),
+    };
+  }
+
+  /** Moves the viewport so `posX`/`posY` sits in the middle of it. Zoom is left alone. */
+  export function centerOn(posX: number, posY: number): void {
+    canvasEl.scrollLeft = scrollForViewCenter(
+      posX,
+      canvasEl.clientWidth,
+      zoom,
+      canvasEl.scrollWidth - canvasEl.clientWidth,
+    );
+    canvasEl.scrollTop = scrollForViewCenter(
+      posY,
+      canvasEl.clientHeight,
+      zoom,
+      canvasEl.scrollHeight - canvasEl.clientHeight,
+    );
   }
 
   function clientToWorld(clientX: number, clientY: number) {
@@ -356,6 +425,7 @@
 
   $effect(() => {
     function onMove(e: MouseEvent) {
+      lastPointer = { x: e.clientX, y: e.clientY };
       if (rectangleSelectionState) {
         const { startClientX, startClientY, startWorldX, startWorldY } = rectangleSelectionState;
         if (Math.abs(e.clientX - startClientX) > 4 || Math.abs(e.clientY - startClientY) > 4) {
@@ -551,6 +621,19 @@
           {/each}
         </div>
       {/each}
+
+      <!-- Outside the layer wrappers: a warp marks a place on the board, not a place on
+           one of its layers, so it never dims with them. -->
+      {#if warpsVisible}
+        {#each warps as warp, index (warp.id)}
+          <WarpMarker
+            {warp}
+            label={index + 1}
+            focused={warp.id === focusedWarpId}
+            onFocus={() => onFocusWarp(warp.id)}
+          />
+        {/each}
+      {/if}
 
       {#if selectionRect}
         <SelectionRect rect={selectionRect} />

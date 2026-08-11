@@ -13,6 +13,7 @@ export type UiConfig = {
   rightPanelWidth: number;
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
+  defaultShowWarps: boolean;
   toggleFootersShortcut: string;
   togglePanelsShortcut: string;
   focusCardInputShortcut: string;
@@ -24,6 +25,9 @@ export type UiConfig = {
   unglueCardShortcut: string;
   moveCardsShortcut: string;
   deleteCardsShortcut: string;
+  setWarpShortcut: string;
+  toggleWarpsShortcut: string;
+  removeWarpShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
 };
@@ -39,6 +43,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   rightPanelWidth: 232,
   defaultShowFooter: false,
   defaultShowSidePanel: false,
+  defaultShowWarps: true,
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
   focusCardInputShortcut: "i",
@@ -50,6 +55,10 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   unglueCardShortcut: "u",
   moveCardsShortcut: "m",
   deleteCardsShortcut: "Delete",
+  setWarpShortcut: "a",
+  // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
+  toggleWarpsShortcut: "A",
+  removeWarpShortcut: "x",
   canvasWidth: CANVAS_W,
   canvasHeight: CANVAS_H,
 };
@@ -65,7 +74,11 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   canvasHeight: [400, 20000],
 };
 
-export const UI_BOOL_FIELDS = ["defaultShowFooter", "defaultShowSidePanel"] as const;
+export const UI_BOOL_FIELDS = [
+  "defaultShowFooter",
+  "defaultShowSidePanel",
+  "defaultShowWarps",
+] as const;
 
 export const NEW_CARD_PLACEMENTS = ["grid", "vertical-list"] as const;
 
@@ -82,6 +95,9 @@ export const UI_STR_FIELDS = [
   "unglueCardShortcut",
   "moveCardsShortcut",
   "deleteCardsShortcut",
+  "setWarpShortcut",
+  "toggleWarpsShortcut",
+  "removeWarpShortcut",
 ] as const;
 
 /** Every field name a `ui` block may carry. Anything else is an unknown key. */

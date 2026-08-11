@@ -46,6 +46,14 @@ case-insensitive one, then a short ID.
 Deleting a layer does not delete its cards: they move to the project's default layer. The
 default layer cannot be deleted.
 
+### Warps
+
+A warp is a saved place on a project's canvas: a point the browser UI moves the view to
+with the arrow keys. Warps have no name — they are numbered by creation order — and no
+CLI commands, since a viewport position means nothing in a terminal. They are listed here
+because they are project data: `kozane db export` carries them, and deleting a project
+deletes its warps. See the [Browser UI handbook](../docs/browser-ui-handbook.md).
+
 ### Scopes
 
 A scope is a **named cross-project grouping of cards**. Unlike projects and bundles,
@@ -681,8 +689,10 @@ Behavior:
 
 - Requires migrations to be current.
 - Writes to `file` if given; otherwise prints to stdout.
-- Writes export format version 3. Version 2 files (exported before projects had a
-  default flag) can still be imported; their projects come back non-default.
+- Writes export format version 5. Older files can still be imported: version 2
+  (exported before projects had a default flag) comes back with every project
+  non-default, version 3 (before layers) gets a rebuilt default layer per project,
+  and version 4 (before warps) comes back with no warps.
 
 Output (to file):
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
 import { SAFE_AREA_GRACE_MS } from "./lib/project-page";
@@ -37,6 +37,12 @@ const data = {
       taskspaceId: null,
     },
   ],
+  // Around the centre of the view the stubbed canvas metrics below produce: (1400, 1000).
+  warps: [
+    { id: "warp-1", projectId: "project-1", posX: 1800, posY: 1000 },
+    { id: "warp-2", projectId: "project-1", posX: 2400, posY: 1000 },
+    { id: "warp-3", projectId: "project-1", posX: 1400, posY: 1600 },
+  ],
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
   glueRels: [],
@@ -53,6 +59,7 @@ const data = {
     rightPanelWidth: 232,
     defaultShowFooter: true,
     defaultShowSidePanel: true,
+    defaultShowWarps: true,
     toggleFootersShortcut: "x",
     togglePanelsShortcut: "y",
     focusCardInputShortcut: "z",
@@ -64,6 +71,9 @@ const data = {
     unglueCardShortcut: "u",
     moveCardsShortcut: "m",
     deleteCardsShortcut: "Delete",
+    setWarpShortcut: "w",
+    toggleWarpsShortcut: "W",
+    removeWarpShortcut: "q",
     canvasWidth: 2800,
     canvasHeight: 2000,
   },
@@ -693,5 +703,220 @@ describe("Layers", () => {
     await waitFor(() =>
       expect(layerGroup(container, "l3")).toHaveStyle({ opacity: "1", "z-index": "2" }),
     );
+  });
+});
+
+describe("Warps", () => {
+  // jsdom does no layout, so the canvas would report a zero-sized viewport and every warp
+  // would land on the same scroll offset. These are the numbers a real 800×600 viewport on
+  // the fixture's 2800×2000 canvas would produce, which puts the initial view centre at
+  // (1400, 1000) — the point the fixture's warps are arranged around.
+  const metrics: Record<string, number> = {
+    clientWidth: 800,
+    clientHeight: 600,
+    scrollWidth: 2800,
+    scrollHeight: 2000,
+  };
+
+  // jsdom's getBoundingClientRect is all zeroes, which would put every pointer outside the
+  // canvas. This is the rect the metrics above describe.
+  const rect = { left: 0, top: 0, right: 800, bottom: 600, width: 800, height: 600 };
+
+  beforeEach(() => {
+    for (const [name, value] of Object.entries(metrics)) {
+      Object.defineProperty(HTMLDivElement.prototype, name, { configurable: true, value });
+    }
+    Object.defineProperty(HTMLDivElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value: () => ({ ...rect, x: rect.left, y: rect.top, toJSON: () => rect }),
+    });
+  });
+
+  afterEach(() => {
+    for (const name of [...Object.keys(metrics), "getBoundingClientRect"]) {
+      Reflect.deleteProperty(HTMLDivElement.prototype, name);
+    }
+  });
+
+  function renderPage(overrides: Partial<typeof data> = {}) {
+    return render(ProjectPage, {
+      props: { data: { ...data, ...overrides }, params: { projectId: "project-1" }, form: null },
+    });
+  }
+
+  function canvasOf(container: HTMLElement): HTMLElement {
+    return container.querySelector<HTMLElement>('[role="presentation"]')!;
+  }
+
+  it("sets a warp under the mouse pointer", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-new", projectId: "project-1", posX: 1200, posY: 850 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ warps: [] });
+
+    // Client (200, 150) over a canvas scrolled to (1000, 700) is world (1200, 850).
+    await fireEvent.mouseMove(window, { clientX: 200, clientY: 150 });
+    await fireEvent.keyDown(window, { key: "w" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/warps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ posX: 1200, posY: 850 }),
+    });
+    await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
+  });
+
+  it("falls back to the centre of the view when the pointer is off the canvas", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-new", projectId: "project-1", posX: 1400, posY: 1000 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ warps: [] });
+
+    // Past the right edge of the canvas rect: a side panel, or another window.
+    await fireEvent.mouseMove(window, { clientX: 1200, clientY: 150 });
+    await fireEvent.keyDown(window, { key: "w" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/warps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ posX: 1400, posY: 1000 }),
+    });
+    await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
+  });
+
+  it("numbers the markers in creation order", () => {
+    renderPage();
+
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-1");
+    expect(screen.getByLabelText("Warp 3")).toHaveAttribute("data-warp-id", "warp-3");
+  });
+
+  it("moves the view to the nearest warp in the direction pressed", async () => {
+    const { container } = renderPage();
+    const canvas = canvasOf(container);
+    expect(canvas.scrollLeft).toBe(1000);
+
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+
+    // Centred on warp 1 at x=1800: 1800 − half the 800px viewport.
+    expect(canvas.scrollLeft).toBe(1400);
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
+
+    // And on from there, rather than back to the same warp.
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(canvas.scrollLeft).toBe(2000);
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("wraps back round the board once there is nothing further that way", async () => {
+    const { container } = renderPage();
+    const canvas = canvasOf(container);
+
+    await fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(canvas.scrollTop).toBe(1300);
+    expect(screen.getByLabelText("Warp 3")).toHaveAttribute("aria-pressed", "true");
+
+    // Warp 3 is the bottom one, so pressing on returns to the topmost.
+    await fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(canvas.scrollTop).toBe(700);
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
+
+    // The same the other way: warp 2 is the rightmost, so → restarts at the leftmost.
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByLabelText("Warp 3")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("focuses a warp that is clicked", async () => {
+    renderPage();
+
+    await fireEvent.mouseDown(screen.getByLabelText("Warp 2"));
+
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("removes the focused warp", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    await fireEvent.keyDown(window, { key: "q" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/warps/warp-1", { method: "DELETE" });
+    // Two warps left, renumbered: what was warp 2 is now warp 1.
+    expect(screen.queryByLabelText("Warp 3")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-2");
+  });
+
+  it("removes nothing when no warp is focused", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+
+    await fireEvent.keyDown(window, { key: "q" });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Warp 1")).toBeInTheDocument();
+  });
+
+  it("hides and shows the markers with the toggle key", async () => {
+    renderPage();
+
+    await fireEvent.keyDown(window, { key: "W" });
+    expect(screen.queryByLabelText("Warp 1")).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(window, { key: "W" });
+    expect(screen.getByLabelText("Warp 1")).toBeInTheDocument();
+  });
+
+  it("reveals hidden markers when a warp is set", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-new", projectId: "project-1", posX: 1400, posY: 1000 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ uiConfig: { ...data.uiConfig, defaultShowWarps: false } });
+    expect(screen.queryByLabelText("Warp 1")).not.toBeInTheDocument();
+
+    await fireEvent.keyDown(window, { key: "w" });
+
+    await waitFor(() => expect(screen.getByLabelText("Warp 4")).toBeInTheDocument());
+  });
+
+  it("leaves the keyboard to the selection while cards are selected", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const { container } = renderPage();
+    const canvas = canvasOf(container);
+
+    await fireEvent.click(screen.getByLabelText("Card: Alpha"));
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    await fireEvent.keyDown(window, { key: "w" });
+
+    expect(canvas.scrollLeft).toBe(1000);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps warping in a read-only export but never writes", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const { container } = renderPage({ readonly: true });
+    const canvas = canvasOf(container);
+
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(canvas.scrollLeft).toBe(1400);
+
+    await fireEvent.keyDown(window, { key: "w" });
+    await fireEvent.keyDown(window, { key: "q" });
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

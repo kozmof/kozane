@@ -5,6 +5,7 @@ import type { ProjectDataSnapshot } from "../../project-state.svelte";
 import { getProject } from "../../../../db/api/project";
 import { getAllBundles } from "../../../../db/api/bundle";
 import { getAllLayers } from "../../../../db/api/layer";
+import { getAllWarps } from "../../../../db/api/warp";
 import { getAllScopes } from "../../../../db/api/scope";
 import { getCardsByBundles } from "../../../../db/api/card";
 import { getGlueRelsByCards } from "../../../../db/api/glue";
@@ -16,9 +17,10 @@ export const GET: RequestHandler = async ({ locals, params }) => {
   const project = await getProject({ db: locals.db, projectId: params.projectId });
   if (!project) throw error(404, "Project not found");
 
-  const [bundles, layers, scopes, taskspaces] = await Promise.all([
+  const [bundles, layers, warps, scopes, taskspaces] = await Promise.all([
     getAllBundles({ db: locals.db, projectId: params.projectId }),
     getAllLayers({ db: locals.db, projectId: params.projectId }),
+    getAllWarps({ db: locals.db, projectId: params.projectId }),
     getAllScopes({ db: locals.db }),
     getAllTaskspaces({ db: locals.db }),
   ]);
@@ -39,6 +41,7 @@ export const GET: RequestHandler = async ({ locals, params }) => {
     cards: cardsWithGlueIds(cards, glueRels),
     bundles,
     layers,
+    warps,
     scopes,
     scopeRels,
     glueRels,

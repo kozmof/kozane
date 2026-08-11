@@ -67,6 +67,23 @@ export const layerTable = sqliteTable(
   ],
 );
 
+/**
+ * A saved place on a project's canvas. A warp holds the world coordinates of a view
+ * centre, and the browser UI moves the viewport between them with the arrow keys. There
+ * is no name column: warps are numbered by creation order, and uuidv7 ids already sort
+ * that way.
+ */
+export const warpTable = sqliteTable("warp", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => uuidv7()),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  posX: integer("pos_x").notNull().default(0),
+  posY: integer("pos_y").notNull().default(0),
+});
+
 export const scopeTable = sqliteTable(
   "scope",
   {
@@ -169,6 +186,11 @@ export const scopeRelTable = sqliteTable(
 export const projectRelations = relations(projectTable, ({ many }) => ({
   bundles: many(bundleTable),
   layers: many(layerTable),
+  warps: many(warpTable),
+}));
+
+export const warpRelations = relations(warpTable, ({ one }) => ({
+  project: one(projectTable, { fields: [warpTable.projectId], references: [projectTable.id] }),
 }));
 
 export const layerRelations = relations(layerTable, ({ one, many }) => ({

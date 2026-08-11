@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyPalette,
+  ARROW_DIRECTIONS,
   buildGlueGroupMap,
   cardPositionPatches,
   cardsWithGlueIds,
@@ -13,8 +14,12 @@ import {
   glueIdByCardId,
   layerStack,
   moveWithin,
+  nearestWarpInDirection,
   orderLayers,
   PALETTE,
+  scrollForViewCenter,
+  viewCenterWorld,
+  warpInDirection,
   previousPositions,
   reorderByDrop,
   reorderByNudge,
@@ -415,5 +420,123 @@ describe("edgeScrollVelocity", () => {
     expect(edgeScrollVelocity(260, 0, 300)).toBe(9);
     expect(edgeScrollVelocity(-20, 0, 300)).toBe(-18);
     expect(edgeScrollVelocity(320, 0, 300)).toBe(18);
+  });
+});
+
+describe("viewCenterWorld", () => {
+  it("is the middle of the viewport in world coordinates", () => {
+    expect(viewCenterWorld(0, 800, 1)).toBe(400);
+    expect(viewCenterWorld(1000, 800, 1)).toBe(1400);
+    expect(viewCenterWorld(1000, 800, 2)).toBe(700);
+  });
+});
+
+describe("scrollForViewCenter", () => {
+  it("puts the given world point in the middle of the viewport", () => {
+    expect(scrollForViewCenter(1400, 800, 1, 5000)).toBe(1000);
+    expect(scrollForViewCenter(700, 800, 2, 5000)).toBe(1000);
+  });
+
+  it("clamps to the scrollable range rather than asking for an impossible offset", () => {
+    expect(scrollForViewCenter(0, 800, 1, 5000)).toBe(0);
+    expect(scrollForViewCenter(9000, 800, 1, 5000)).toBe(5000);
+    // A canvas smaller than its viewport has nowhere to scroll.
+    expect(scrollForViewCenter(9000, 800, 1, -200)).toBe(0);
+  });
+});
+
+describe("nearestWarpInDirection", () => {
+  const warps = [
+    { id: "w1", posX: 1000, posY: 500 },
+    { id: "w2", posX: 2000, posY: 500 },
+    { id: "w3", posX: 500, posY: 1500 },
+  ];
+
+  it("moves to the next warp along the direction travelled", () => {
+    expect(nearestWarpInDirection(warps, { x: 500, y: 500 }, "right")).toMatchObject({ id: "w1" });
+    expect(nearestWarpInDirection(warps, { x: 1000, y: 500 }, "right")).toMatchObject({ id: "w2" });
+    expect(nearestWarpInDirection(warps, { x: 2000, y: 500 }, "left")).toMatchObject({ id: "w1" });
+    expect(nearestWarpInDirection(warps, { x: 500, y: 500 }, "down")).toMatchObject({ id: "w3" });
+    expect(nearestWarpInDirection(warps, { x: 500, y: 1500 }, "up")).toMatchObject({ id: "w1" });
+  });
+
+  it("returns null when nothing lies that way", () => {
+    expect(nearestWarpInDirection(warps, { x: 2000, y: 500 }, "right")).toBeNull();
+    expect(nearestWarpInDirection([], { x: 0, y: 0 }, "down")).toBeNull();
+  });
+
+  it("ignores a warp the view is already centred on", () => {
+    const here = [{ id: "here", posX: 100, posY: 100 }];
+    expect(nearestWarpInDirection(here, { x: 100, y: 100 }, "right")).toBeNull();
+    expect(nearestWarpInDirection(here, { x: 99.5, y: 100 }, "right")).toBeNull();
+  });
+
+  it("prefers a nearly straight-ahead warp over a closer but sideways one", () => {
+    const candidates = [
+      { id: "sideways", posX: 600, posY: 3000 },
+      { id: "ahead", posX: 1400, posY: 520 },
+    ];
+    expect(nearestWarpInDirection(candidates, { x: 500, y: 500 }, "right")).toMatchObject({
+      id: "ahead",
+    });
+  });
+
+  it("breaks a tie in favour of the straighter warp", () => {
+    const candidates = [
+      { id: "angled", posX: 700, posY: 600 },
+      { id: "straight", posX: 900, posY: 500 },
+    ];
+    // Both score 400: 200 + 2×100 and 400 + 2×0.
+    expect(nearestWarpInDirection(candidates, { x: 500, y: 500 }, "right")).toMatchObject({
+      id: "straight",
+    });
+  });
+});
+
+describe("warpInDirection", () => {
+  const warps = [
+    { id: "w1", posX: 1000, posY: 500 },
+    { id: "w2", posX: 2000, posY: 500 },
+    { id: "w3", posX: 500, posY: 1500 },
+  ];
+
+  it("moves to the next warp along the direction travelled", () => {
+    expect(warpInDirection(warps, { x: 500, y: 500 }, "right")).toMatchObject({ id: "w1" });
+    expect(warpInDirection(warps, { x: 1000, y: 500 }, "right")).toMatchObject({ id: "w2" });
+  });
+
+  it("wraps from the far side back to the near one", () => {
+    // Nothing further right than w2, so → restarts at the leftmost warp.
+    expect(warpInDirection(warps, { x: 2000, y: 500 }, "right")).toMatchObject({ id: "w3" });
+    // And ← off w3 restarts at the rightmost.
+    expect(warpInDirection(warps, { x: 500, y: 1500 }, "left")).toMatchObject({ id: "w2" });
+  });
+
+  it("wraps top to bottom and bottom to top", () => {
+    expect(warpInDirection(warps, { x: 500, y: 1500 }, "down")).toMatchObject({ id: "w1" });
+    expect(warpInDirection(warps, { x: 500, y: 500 }, "up")).toMatchObject({ id: "w3" });
+  });
+
+  it("keeps creation order when several warps share the edge wrapped to", () => {
+    // w1 and w2 are both topmost, so wrapping downwards lands on the older one.
+    expect(warpInDirection(warps, { x: 500, y: 3000 }, "down")).toMatchObject({ id: "w1" });
+  });
+
+  it("returns null only when the project has no warps", () => {
+    expect(warpInDirection([], { x: 0, y: 0 }, "down")).toBeNull();
+    // A lone warp is its own wrap target, so pressing an arrow re-centres on it.
+    expect(warpInDirection([warps[0]], { x: 5000, y: 5000 }, "right")).toMatchObject({ id: "w1" });
+  });
+});
+
+describe("ARROW_DIRECTIONS", () => {
+  it("maps the four arrow keys and nothing else", () => {
+    expect(ARROW_DIRECTIONS).toEqual({
+      ArrowLeft: "left",
+      ArrowRight: "right",
+      ArrowUp: "up",
+      ArrowDown: "down",
+    });
+    expect(ARROW_DIRECTIONS.Enter).toBeUndefined();
   });
 });

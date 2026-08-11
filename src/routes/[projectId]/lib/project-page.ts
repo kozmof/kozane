@@ -1,5 +1,6 @@
 import type { Card, GlueRel } from "../../../db/api/types.js";
 import type { CardWithGlue } from "$lib/types.js";
+import { clamp } from "$lib/constants.js";
 import type { CardPositionUpdate } from "../../../db/api/card.js";
 export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/card.js";
 
@@ -273,6 +274,105 @@ function sideOfLine(point: Point, a: Point, b: Point): number {
 export function insideTriangle(point: Point, [a, b, c]: Triangle): boolean {
   const sides = [sideOfLine(point, a, b), sideOfLine(point, b, c), sideOfLine(point, c, a)];
   return !(sides.some((side) => side < 0) && sides.some((side) => side > 0));
+}
+
+/** The world coordinate the viewport is centred on, along one axis. */
+export function viewCenterWorld(scroll: number, viewportSize: number, zoom: number): number {
+  return (scroll + viewportSize / 2) / zoom;
+}
+
+/** The scroll offset that puts `center` in the middle of the viewport, along one axis. */
+export function scrollForViewCenter(
+  center: number,
+  viewportSize: number,
+  zoom: number,
+  maxScroll: number,
+): number {
+  return clamp(center * zoom - viewportSize / 2, 0, Math.max(0, maxScroll));
+}
+
+export type WarpDirection = "left" | "right" | "up" | "down";
+
+/** Arrow keys, as data, so the key-to-direction step is testable outside the component. */
+export const ARROW_DIRECTIONS: Record<string, WarpDirection> = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+};
+
+/** Below this many world pixels a warp counts as being where the view already is. */
+const WARP_EPSILON = 1;
+
+/**
+ * How far off the travelled axis a warp may sit before a nearer-but-sideways one loses.
+ * Pressing `→` should reach the warp just to the right rather than the one far right and
+ * far down, so distance across the direction costs double distance along it.
+ */
+const CROSS_AXIS_PENALTY = 2;
+
+/**
+ * The next warp in `direction` from `from`, wrapping round the board when there is none:
+ * travelling right off the rightmost warp arrives at the leftmost, and down off the
+ * bottom one at the top. `null` only when the project has no warps at all.
+ */
+export function warpInDirection<T extends { id: string; posX: number; posY: number }>(
+  warps: readonly T[],
+  from: Point,
+  direction: WarpDirection,
+): T | null {
+  return nearestWarpInDirection(warps, from, direction) ?? farthestWarpBehind(warps, direction);
+}
+
+/**
+ * The warp travelling `direction` wraps round to: the leftmost when going right, the
+ * topmost when going down, and so on. Ties keep creation order.
+ */
+function farthestWarpBehind<T extends { id: string; posX: number; posY: number }>(
+  warps: readonly T[],
+  direction: WarpDirection,
+): T | null {
+  const horizontal = direction === "left" || direction === "right";
+  // Going right restarts from the smallest x, going left from the largest.
+  const sign = direction === "right" || direction === "down" ? 1 : -1;
+  const along = (warp: T) => (horizontal ? warp.posX : warp.posY);
+  let best: T | null = null;
+  for (const warp of warps) {
+    if (best === null || sign * (along(warp) - along(best)) < 0) best = warp;
+  }
+  return best;
+}
+
+/**
+ * The closest warp that actually lies `direction` of `from`, weighted so an
+ * almost-straight-ahead warp beats a distant diagonal. `null` when nothing lies that way —
+ * {@link warpInDirection} is what turns that into a wrap.
+ */
+export function nearestWarpInDirection<T extends { id: string; posX: number; posY: number }>(
+  warps: readonly T[],
+  from: Point,
+  direction: WarpDirection,
+): T | null {
+  const horizontal = direction === "left" || direction === "right";
+  const sign = direction === "right" || direction === "down" ? 1 : -1;
+
+  let best: T | null = null;
+  let bestScore = Infinity;
+  let bestCross = Infinity;
+  for (const warp of warps) {
+    const along = sign * (horizontal ? warp.posX - from.x : warp.posY - from.y);
+    if (along <= WARP_EPSILON) continue;
+    const cross = Math.abs(horizontal ? warp.posY - from.y : warp.posX - from.x);
+    const score = along + CROSS_AXIS_PENALTY * cross;
+    // Ties fall to the straighter one, and then to the older warp: `warps` arrives in
+    // creation order, so a tie always resolves the same way twice running.
+    if (score < bestScore || (score === bestScore && cross < bestCross)) {
+      best = warp;
+      bestScore = score;
+      bestCross = cross;
+    }
+  }
+  return best;
 }
 
 export function clampZoom(value: number): number {

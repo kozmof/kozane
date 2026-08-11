@@ -236,6 +236,36 @@ export function createProjectActions(state: ProjectState) {
     if (state.activeLayerId === layerId) state.activeLayerId = parsed.defaultLayerId;
   }
 
+  async function handleSetWarp(position: { posX: number; posY: number }) {
+    const res = await api.createWarp(state.mutationFetcher, state.projectId, position);
+    if (!res.ok) {
+      state.setError(await api.failureMessage(res, "Failed to set warp"));
+      return;
+    }
+    // The stored row, not the position sent: the server clamps it to the canvas, so a
+    // warp set at the very edge would otherwise move on the next poll.
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.setError("Failed to set warp");
+      return;
+    }
+    state.warps = [...state.warps, parsed];
+    state.focusedWarpId = parsed.id;
+  }
+
+  async function handleRemoveWarp(warpId: string) {
+    const prevWarps = state.warps;
+    const prevFocused = state.focusedWarpId;
+    state.warps = state.warps.filter((w) => w.id !== warpId);
+    if (state.focusedWarpId === warpId) state.focusedWarpId = null;
+    const res = await api.deleteWarp(state.mutationFetcher, state.projectId, warpId);
+    if (!res.ok) {
+      state.warps = prevWarps;
+      state.focusedWarpId = prevFocused;
+      state.setError(await api.failureMessage(res, "Failed to remove warp"));
+    }
+  }
+
   async function handleRenameLayer(layerId: string, name: string) {
     const trimmed = name.trim();
     const layer = state.layers.find((l) => l.id === layerId);
@@ -415,6 +445,8 @@ export function createProjectActions(state: ProjectState) {
     handleRenameLayer,
     handleReorderLayers,
     handleSelectionLayerChange,
+    handleSetWarp,
+    handleRemoveWarp,
     handleCreateScope,
     handleDeleteScope,
     handleAddToScope,

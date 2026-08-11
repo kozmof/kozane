@@ -21,4 +21,4 @@ export interface BundleWithColor {
 
 export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
-export type { Bundle, Layer, Scope, ScopeRel, GlueRel } from "../db/api/types.js";
+export type { Bundle, Layer, Scope, ScopeRel, GlueRel, Warp } from "../db/api/types.js";

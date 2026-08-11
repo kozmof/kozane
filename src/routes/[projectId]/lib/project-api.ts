@@ -141,6 +141,23 @@ export function reorderLayers(
   return jsonRequest(fetcher, `/${projectId}/api/layers`, "PATCH", { layerIds });
 }
 
+/** `posX`/`posY` are the world coordinates of the view centre to come back to. */
+export function createWarp(
+  fetcher: typeof fetch,
+  projectId: string,
+  position: { posX: number; posY: number },
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/warps`, "POST", position);
+}
+
+export function deleteWarp(
+  fetcher: typeof fetch,
+  projectId: string,
+  warpId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/warps/${warpId}`, "DELETE");
+}
+
 export function createScope(
   fetcher: typeof fetch,
   projectId: string,

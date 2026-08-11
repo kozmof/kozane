@@ -5,6 +5,7 @@ import { getDb } from "../../db/client";
 import { getProject, getAllProjects } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getAllLayers } from "../../db/api/layer";
+import { getAllWarps } from "../../db/api/warp";
 import { getAllScopes } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
@@ -35,9 +36,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const project = await getProject({ db, projectId });
   if (!project) throw error(404, "Project not found");
 
-  const [bundles, layers, scopes, allProjects] = await Promise.all([
+  const [bundles, layers, warps, scopes, allProjects] = await Promise.all([
     getAllBundles({ db, projectId }),
     getAllLayers({ db, projectId }),
+    getAllWarps({ db, projectId }),
     getAllScopes({ db }),
     getAllProjects({ db }),
   ]);
@@ -56,6 +58,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     project,
     bundles,
     layers,
+    warps,
     otherProjects: allProjects.filter((p) => p.id !== projectId),
     cards: cardsWithGlueIds(cards, glueRels),
     glueRels,

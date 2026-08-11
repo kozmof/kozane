@@ -3,7 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 4;
+const EXPORT_VERSION = 5;
 // Version 2 predates `project.is_default` (migration 0003). Such a file is still
 // importable; every project comes back non-default, which is what version 2 recorded.
 const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
@@ -28,6 +28,11 @@ export const TABLES = [
   {
     name: "layer",
     columns: ["id", "project_id", "name", "position", "is_default"],
+    orderBy: ["id"],
+  },
+  {
+    name: "warp",
+    columns: ["id", "project_id", "pos_x", "pos_y"],
     orderBy: ["id"],
   },
   {
@@ -167,6 +172,9 @@ function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
     }
   }
   if (version < 4) upgradeLayers(tables);
+  // Versions before 5 predate warps (migration 0006). There is nothing to rebuild: a
+  // workspace exported then simply had none.
+  if (version < 5) tables.warp ??= [];
 }
 
 /**

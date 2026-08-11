@@ -64,8 +64,10 @@ describe("additional database CLI branches", () => {
     const dbPath = join(root, ".kozane", "kozane.db");
     const client = createClient({ url: `file:${dbPath}` });
     try {
-      // Roll back the newest migration (0005_layer) so one migration is pending: rebuild
-      // `card` without layer_id, then drop the layer table and its journal row.
+      // Roll back to the pre-layer schema (0004) so migrations are pending: rebuild `card`
+      // without layer_id, then drop the tables 0005 and 0006 added and their journal rows.
+      // Drizzle re-applies everything newer than the newest row left behind, so every
+      // migration from 0005 on has to go, not just the one being exercised.
       await client.batch(
         [
           `CREATE TABLE __old_card (
@@ -83,7 +85,8 @@ describe("additional database CLI branches", () => {
           "DROP TABLE card",
           "ALTER TABLE __old_card RENAME TO card",
           "DROP TABLE layer",
-          "DELETE FROM __drizzle_migrations WHERE created_at = 1786415069324",
+          "DROP TABLE warp",
+          "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
         ],
         "write",
       );
@@ -146,7 +149,8 @@ describe("additional database CLI branches", () => {
         "DROP TABLE card",
         "ALTER TABLE __old_card RENAME TO card",
         "DROP TABLE layer",
-        "DELETE FROM __drizzle_migrations WHERE created_at = 1786415069324",
+        "DROP TABLE warp",
+        "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
       ]) {
         await client.execute(sql);
       }

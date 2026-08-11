@@ -49,6 +49,10 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["layer-1", "project-1", "Base", 0, 1],
         },
         {
+          sql: "INSERT INTO warp (id, project_id, pos_x, pos_y) VALUES (?, ?, ?, ?)",
+          args: ["warp-1", "project-1", 240, 480],
+        },
+        {
           sql: "INSERT INTO taskspace (id, project_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
             "taskspace-1",
@@ -119,6 +123,7 @@ describe("db JSON export/import", () => {
       scope: 1,
       bundle: 1,
       layer: 1,
+      warp: 1,
       taskspace: 1,
       card: 2,
       glue: 1,
@@ -178,7 +183,7 @@ describe("db JSON export/import", () => {
     await seedDb(sourceUrl);
 
     const dump = await exportDbJson(sourceUrl);
-    const { layer: _layer, ...tablesWithoutLayer } = dump.tables;
+    const { layer: _layer, warp: _warp, ...tablesWithoutLayer } = dump.tables;
     const legacy = {
       ...dump,
       version: 3,
@@ -199,6 +204,19 @@ describe("db JSON export/import", () => {
       baseLayerId,
       baseLayerId,
     ]);
+  });
+
+  it("imports a version 4 export, which predates warps", async () => {
+    const sourceUrl = await migratedDbUrl("v4-source.db");
+    const targetUrl = await migratedDbUrl("v4-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const { warp: _warp, ...tablesWithoutWarp } = dump.tables;
+    const legacy = { ...dump, version: 4, tables: tablesWithoutWarp };
+
+    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ warp: 0, project: 1 });
+    expect((await exportDbJson(targetUrl)).tables.warp).toEqual([]);
   });
 
   it("rejects an export version this build cannot read", async () => {

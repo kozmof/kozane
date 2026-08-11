@@ -6,6 +6,7 @@ import type {
   ScopeRel,
   GlueRel,
   TaskspaceSummary,
+  Warp,
 } from "$lib/types";
 
 /** The layer new cards land on, falling back to the project's default layer. */
@@ -73,6 +74,7 @@ export interface ProjectDataSnapshot {
   cards: CardWithGlue[];
   bundles: Bundle[];
   layers: Layer[];
+  warps: Warp[];
   scopes: Scope[];
   scopeRels: ScopeRel[];
   glueRels: GlueRel[];
@@ -100,6 +102,9 @@ export class ProjectState {
   bundles = $state<Bundle[]>([]);
   layers = $state<Layer[]>([]);
   activeLayerId = $state<string | null>(null);
+  warps = $state<Warp[]>([]);
+  /** The warp last jumped to or clicked, which the remove shortcut acts on. */
+  focusedWarpId = $state<string | null>(null);
   scopes = $state<Scope[]>([]);
   scopeRels = $state<ScopeRel[]>([]);
   glueRels = $state<GlueRel[]>([]);
@@ -120,6 +125,8 @@ export class ProjectState {
     this.bundles = data.bundles;
     this.layers = data.layers;
     this.activeLayerId = resolveActiveLayerId(data.layers, readStoredLayerId(data.project.id));
+    this.warps = data.warps;
+    this.focusedWarpId = null;
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;
@@ -135,6 +142,12 @@ export class ProjectState {
     this.layers = data.layers;
     // A layer deleted by the CLI or another tab must not stay selected.
     this.activeLayerId = resolveActiveLayerId(data.layers, this.activeLayerId);
+    this.warps = data.warps;
+    // A warp deleted by another tab must not stay focused, or the remove shortcut would
+    // aim at a row that is no longer there.
+    if (this.focusedWarpId && !data.warps.some(({ id }) => id === this.focusedWarpId)) {
+      this.focusedWarpId = null;
+    }
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;

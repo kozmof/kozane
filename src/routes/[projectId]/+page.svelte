@@ -3,7 +3,14 @@
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
-  import { applyPalette, clampZoom, maxZIndex, minZIndex } from "./lib/project-page";
+  import {
+    applyPalette,
+    ARROW_DIRECTIONS,
+    clampZoom,
+    maxZIndex,
+    minZIndex,
+    warpInDirection,
+  } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
   import type { CardWithGlue } from "$lib/types";
   import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
@@ -33,6 +40,7 @@
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
   let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
+  let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let newCardSeq = 0;
   let positionActivityCount = 0;
@@ -49,7 +57,12 @@
   }
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
-  let canvasComponent: { getNewCardPosition: (seq: number) => { posX: number; posY: number } } = $state()!;
+  let canvasComponent: {
+    getNewCardPosition: (seq: number) => { posX: number; posY: number };
+    getViewCenter: () => { posX: number; posY: number };
+    getWarpPosition: () => { posX: number; posY: number };
+    centerOn: (posX: number, posY: number) => void;
+  } = $state()!;
   let composerComponent: { focusInput: () => void } = $state()!;
 
   // ── Derived values ────────────────────────────────────────────
@@ -85,6 +98,7 @@
       newCardSeq = 0;
       sidebarsVisible = data.uiConfig.defaultShowSidePanel;
       showFooters = data.uiConfig.defaultShowFooter;
+      warpsVisible = data.uiConfig.defaultShowWarps;
       zoom = data.uiConfig.defaultZoom;
     } else {
       s.refreshFromData(data);
@@ -212,9 +226,35 @@
       tick().then(() => composerComponent.focusInput());
       return;
     }
+    // Below this line the composer's action bar owns the keyboard whenever cards are
+    // selected, which is what keeps the warp keys from colliding with it.
     if (s.selection.selectedCards.size > 0) return;
     if (e.key === data.uiConfig.toggleFootersShortcut) showFooters = !showFooters;
     if (e.key === data.uiConfig.togglePanelsShortcut) sidebarsVisible = !sidebarsVisible;
+    if (e.key === data.uiConfig.toggleWarpsShortcut) warpsVisible = !warpsVisible;
+
+    const direction = ARROW_DIRECTIONS[e.key];
+    if (direction) {
+      // Measured from where the view is now, so warping works the same whether you
+      // arrived by arrow key or by dragging the canvas.
+      const { posX, posY } = canvasComponent.getViewCenter();
+      const target = warpInDirection(s.warps, { x: posX, y: posY }, direction);
+      if (target) {
+        e.preventDefault();
+        canvasComponent.centerOn(target.posX, target.posY);
+        s.focusedWarpId = target.id;
+      }
+      return;
+    }
+    if (readonly) return;
+    if (e.key === data.uiConfig.setWarpShortcut) {
+      // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
+      warpsVisible = true;
+      void actions.handleSetWarp(canvasComponent.getWarpPosition());
+    }
+    if (e.key === data.uiConfig.removeWarpShortcut && s.focusedWarpId) {
+      void actions.handleRemoveWarp(s.focusedWarpId);
+    }
   }
 </script>
 
@@ -246,6 +286,10 @@
       bind:primarySelectedId={s.selection.primarySelectedId}
       bind:composerCard={s.selection.composerCard}
       {scopeCardIds}
+      warps={s.warps}
+      focusedWarpId={s.focusedWarpId}
+      {warpsVisible}
+      onFocusWarp={(warpId) => (s.focusedWarpId = warpId)}
       {showFooters}
       bind:zoom
       zoomStep={data.uiConfig.zoomStep}
