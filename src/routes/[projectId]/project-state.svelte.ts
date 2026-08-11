@@ -1,4 +1,18 @@
-import type { CardWithGlue, Bundle, Scope, ScopeRel, GlueRel, TaskspaceSummary } from "$lib/types";
+import type {
+  CardWithGlue,
+  Bundle,
+  Layer,
+  Scope,
+  ScopeRel,
+  GlueRel,
+  TaskspaceSummary,
+} from "$lib/types";
+
+/** The layer new cards land on, falling back to the project's default layer. */
+export function resolveActiveLayerId(layers: Layer[], preferredId: string | null): string | null {
+  if (preferredId && layers.some(({ id }) => id === preferredId)) return preferredId;
+  return layers.find(({ isDefault }) => isDefault)?.id ?? layers[0]?.id ?? null;
+}
 
 export class SelectionState {
   selectedCards = $state(new Set<string>());
@@ -32,6 +46,7 @@ export interface ProjectDataSnapshot {
   project: { id: string };
   cards: CardWithGlue[];
   bundles: Bundle[];
+  layers: Layer[];
   scopes: Scope[];
   scopeRels: ScopeRel[];
   glueRels: GlueRel[];
@@ -57,6 +72,8 @@ export class ProjectState {
 
   cards = $state<CardWithGlue[]>([]);
   bundles = $state<Bundle[]>([]);
+  layers = $state<Layer[]>([]);
+  activeLayerId = $state<string | null>(null);
   scopes = $state<Scope[]>([]);
   scopeRels = $state<ScopeRel[]>([]);
   glueRels = $state<GlueRel[]>([]);
@@ -75,6 +92,8 @@ export class ProjectState {
     this.projectId = data.project.id;
     this.cards = data.cards;
     this.bundles = data.bundles;
+    this.layers = data.layers;
+    this.activeLayerId = resolveActiveLayerId(data.layers, null);
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;
@@ -87,6 +106,9 @@ export class ProjectState {
   refreshFromData(data: ProjectDataSnapshot) {
     this.cards = data.cards;
     this.bundles = data.bundles;
+    this.layers = data.layers;
+    // A layer deleted by the CLI or another tab must not stay selected.
+    this.activeLayerId = resolveActiveLayerId(data.layers, this.activeLayerId);
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;

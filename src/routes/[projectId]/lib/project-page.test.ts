@@ -11,6 +11,7 @@ import {
   edgeScrollVelocity,
   glueGroupIds,
   glueIdByCardId,
+  layerStack,
   PALETTE,
   previousPositions,
   verticalListPosition,
@@ -24,6 +25,7 @@ const cards: Card[] = [
   {
     id: "card-1",
     bundleId: "bundle-1",
+    layerId: "layer-1",
     taskspaceId: null,
     content: "One",
     posX: 24,
@@ -33,6 +35,7 @@ const cards: Card[] = [
   {
     id: "card-2",
     bundleId: "bundle-1",
+    layerId: "layer-1",
     taskspaceId: null,
     content: "Two",
     posX: 72,
@@ -42,6 +45,7 @@ const cards: Card[] = [
   {
     id: "card-3",
     bundleId: "bundle-2",
+    layerId: "layer-1",
     taskspaceId: null,
     content: "Three",
     posX: 120,
@@ -66,6 +70,54 @@ describe("applyPalette", () => {
 
     expect(result[0]).toEqual({ ...bundles[0], ...PALETTE[0] });
     expect(result[PALETTE.length]).toEqual({ ...bundles[PALETTE.length], ...PALETTE[0] });
+  });
+});
+
+describe("layerStack", () => {
+  const layers = [
+    { id: "base", position: 0 },
+    { id: "middle", position: 1 },
+    { id: "top", position: 2 },
+  ];
+
+  it("keeps index order when no layer is active", () => {
+    expect(
+      layerStack(layers, null).map(({ layer, rank, active }) => [layer.id, rank, active]),
+    ).toEqual([
+      ["base", 0, false],
+      ["middle", 1, false],
+      ["top", 2, false],
+    ]);
+  });
+
+  it("lifts the active layer above the others, which keep their index order", () => {
+    expect(layerStack(layers, "base").map(({ layer, rank }) => [layer.id, rank])).toEqual([
+      ["middle", 0],
+      ["top", 1],
+      ["base", 2],
+    ]);
+  });
+
+  it("floats the layer of a dragged card above even the active layer", () => {
+    expect(layerStack(layers, "base", "middle").map(({ layer, rank }) => [layer.id, rank])).toEqual(
+      [
+        ["top", 0],
+        ["base", 1],
+        ["middle", 2],
+      ],
+    );
+  });
+
+  it("marks only the active layer as active", () => {
+    expect(
+      layerStack(layers, "top")
+        .filter(({ active }) => active)
+        .map(({ layer }) => layer.id),
+    ).toEqual(["top"]);
+  });
+
+  it("returns an empty stack for a project without layers", () => {
+    expect(layerStack([], "base")).toEqual([]);
   });
 });
 

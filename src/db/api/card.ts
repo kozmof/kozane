@@ -1,4 +1,4 @@
-import { bundleTable, cardTable } from "../schema.js";
+import { bundleTable, cardTable, layerTable } from "../schema.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
@@ -44,8 +44,25 @@ export async function getCard({ db, bundleId, cardId }: GetCard): Promise<Card |
     .get();
 }
 
+/**
+ * The default layer of the project the bundle belongs to. Every project has one
+ * (created alongside its default bundle, and backfilled by migration 0005), so a
+ * caller that does not care about layers still writes a valid `card.layer_id`.
+ */
+export async function defaultLayerIdForBundle(db: AnyDB, bundleId: string): Promise<string> {
+  const row = await db
+    .select({ id: layerTable.id })
+    .from(layerTable)
+    .innerJoin(bundleTable, eq(bundleTable.projectId, layerTable.projectId))
+    .where(and(eq(bundleTable.id, bundleId), eq(layerTable.isDefault, true)))
+    .get();
+  if (!row) throw new Error(`No default layer found for bundle bundleId=${bundleId}`);
+  return row.id;
+}
+
 type AddCard = NeedsBundle & {
   content: string;
+  layerId?: string;
   taskspaceId?: string;
   posX?: number;
   posY?: number;
@@ -55,6 +72,7 @@ export async function addCard({
   db,
   bundleId,
   content,
+  layerId,
   taskspaceId,
   posX,
   posY,
@@ -64,6 +82,7 @@ export async function addCard({
     .insert(cardTable)
     .values({
       bundleId,
+      layerId: layerId ?? (await defaultLayerIdForBundle(db, bundleId)),
       content,
       taskspaceId,
       ...(posX !== undefined && { posX }),
@@ -98,6 +117,23 @@ export async function getCardBundleNames({
   return rows;
 }
 
+type GetCardLayerNames = NeedsDB & { cardIds: string[] };
+export async function getCardLayerNames({
+  db,
+  cardIds,
+}: GetCardLayerNames): Promise<{ cardId: string; layerId: string; layerName: string }[]> {
+  if (cardIds.length === 0) return [];
+  return db
+    .select({
+      cardId: cardTable.id,
+      layerId: layerTable.id,
+      layerName: layerTable.name,
+    })
+    .from(cardTable)
+    .innerJoin(layerTable, eq(cardTable.layerId, layerTable.id))
+    .where(inArray(cardTable.id, cardIds));
+}
+
 type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
 export async function reassignBundleCards({
   db,
@@ -110,17 +146,30 @@ export async function reassignBundleCards({
     .where(eq(cardTable.bundleId, fromBundleId));
 }
 
+type ReassignLayerCards = NeedsDB & { fromLayerId: string; toLayerId: string };
+export async function reassignLayerCards({
+  db,
+  fromLayerId,
+  toLayerId,
+}: ReassignLayerCards): Promise<void> {
+  await db.update(cardTable).set({ layerId: toLayerId }).where(eq(cardTable.layerId, fromLayerId));
+}
+
 type UpdateCard = NeedsDB & {
   cardId: string;
   bundleId: string;
   newBundleId?: string;
+  layerId?: string;
   content?: string;
   posX?: number;
   posY?: number;
   zIndex?: number;
 };
 type CardUpdate = Partial<
-  Pick<typeof cardTable.$inferInsert, "content" | "posX" | "posY" | "zIndex" | "bundleId">
+  Pick<
+    typeof cardTable.$inferInsert,
+    "content" | "posX" | "posY" | "zIndex" | "bundleId" | "layerId"
+  >
 >;
 
 export async function updateCard({
@@ -128,6 +177,7 @@ export async function updateCard({
   cardId,
   bundleId,
   newBundleId,
+  layerId,
   content,
   posX,
   posY,
@@ -139,6 +189,7 @@ export async function updateCard({
   if (posY !== undefined) fields.posY = posY;
   if (zIndex !== undefined) fields.zIndex = zIndex;
   if (newBundleId !== undefined) fields.bundleId = newBundleId;
+  if (layerId !== undefined) fields.layerId = layerId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
   const updated = await db
     .update(cardTable)

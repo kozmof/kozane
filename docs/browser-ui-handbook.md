@@ -109,11 +109,12 @@ selected card there.
 - Drag a card to move it, and it snaps to the grid on release. Dragging a glued
   card moves its entire glue group, and dragging a card that is part of the
   current selection moves the whole selection together.
-- Layering works on a single selected card. "Bring to front" (`]`) and "Send to
-  back" (`[`) change which cards overlap on top.
+- Stacking order works on a single selected card. "Bring to front" (`]`) and
+  "Send to back" (`[`) change which cards overlap on top, within the card's own
+  layer.
 
-Card positions and layer changes save automatically. If a save fails, an error
-banner appears and the affected cards revert to where they were.
+Card positions and stacking changes save automatically. If a save fails, an
+error banner appears and the affected cards revert to where they were.
 
 ## Gluing cards
 
@@ -133,6 +134,32 @@ folder. The left panel lists bundles with a card count each.
   or the `+` button.
 - Delete — hover a bundle and click the `×`. The default bundle cannot be
   deleted, and cards in a deleted bundle move to the project's default bundle.
+
+## Layers
+
+A layer is a surface a card sits on, so one set of cards can be worked on
+without the rest getting in the way. Every card belongs to exactly one layer of
+its project, and every project starts with a layer named `Base`.
+
+One layer is selected at a time. Its cards are drawn at full strength above all
+the others, and the remaining layers are drawn half transparent, in their own
+order. Cards on a dimmed layer stay live: you can still click, drag, and edit
+them, and a card you drag rises above the layers on top of it while it moves.
+"Bring to front" and "Send to back" reorder a card within its own layer.
+
+Layers live behind the button at the top right of the canvas, next to the panel
+toggle.
+
+- Select — hover the button and click a layer in the popover. Click the button
+  itself to keep the popover open while you work in it.
+- Create — type a name in the popover input and press `Enter` or the `+` button.
+  The new layer goes on top and becomes the selected one.
+- Delete — hover a layer and click the `×`. The default layer cannot be deleted,
+  and cards on a deleted layer move to the project's default layer.
+
+New cards are created on the selected layer. From the terminal, `kozane layer
+list|add|delete` manages layers, and `kozane card add --layer <name>` chooses
+where a card lands.
 
 ## Scopes
 

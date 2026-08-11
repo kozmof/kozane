@@ -7,6 +7,7 @@ import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
+import { getAllLayers } from "../../db/api/layer.js";
 import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
@@ -18,6 +19,7 @@ import { resolveProjectId } from "../lib/project-selection.js";
 type CardOptions = { project?: string; bundle?: string; taskspace?: string };
 type CardAddOptions = Omit<CardOptions, "taskspace"> & {
   scope?: string;
+  layer?: string;
   x?: number;
   y?: number;
 };
@@ -47,6 +49,23 @@ async function resolveBundleId(db: DB, projectId: string, requestedId?: string):
   const bundle = await getDefaultBundle({ db, projectId });
   if (!bundle) throw new Error(`Project has no default bundle: ${projectId}`);
   return bundle.id;
+}
+
+/** Accepts a layer name as well as an ID, since layer names are unique per project. */
+async function resolveLayerId(db: DB, projectId: string, requested?: string): Promise<string> {
+  const layers = await getAllLayers({ db, projectId });
+  if (!requested) {
+    const defaultLayer = layers.find(({ isDefault }) => isDefault);
+    if (!defaultLayer) throw new Error(`Project has no default layer: ${projectId}`);
+    return defaultLayer.id;
+  }
+  const byName = layers.find(({ name }) => name === requested);
+  if (byName) return byName.id;
+  return resolveShortId(
+    requested,
+    layers.map(({ id }) => id),
+    "Layer",
+  );
 }
 
 async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
@@ -116,11 +135,13 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
+    const layerId = await resolveLayerId(db, projectId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     const id = await withTx(db, async (tx) => {
       const cardId = await addCard({
         db: tx,
         bundleId,
+        layerId,
         content,
         posX: options.x,
         posY: options.y,
@@ -128,11 +149,12 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
       if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
       return cardId;
     });
-    const [projects, bundles, cards, scopes] = await Promise.all([
+    const [projects, bundles, cards, scopes, layers] = await Promise.all([
       db.select({ id: projectTable.id }).from(projectTable),
       db.select({ id: bundleTable.id }).from(bundleTable),
       db.select({ id: cardTable.id }).from(cardTable),
       scopeId ? db.select({ id: scopeTable.id }).from(scopeTable) : Promise.resolve([]),
+      getAllLayers({ db, projectId }),
     ]);
     console.log("Card added.");
     console.log(
@@ -151,6 +173,12 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
       `  bundle  : ${shortId(
         bundleId,
         bundles.map(({ id }) => id),
+      )}`,
+    );
+    console.log(
+      `  layer   : ${shortId(
+        layerId,
+        layers.map(({ id }) => id),
       )}`,
     );
     if (scopeId)
@@ -177,6 +205,7 @@ export async function cardSquash(
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
+    const layerId = await resolveLayerId(db, projectId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     const occupied = await db
       .select({ posX: cardTable.posX, posY: cardTable.posY })
@@ -190,6 +219,7 @@ export async function cardSquash(
         const cardId = await addCard({
           db: tx,
           bundleId,
+          layerId,
           content: cardContent,
           ...positions[index],
         });

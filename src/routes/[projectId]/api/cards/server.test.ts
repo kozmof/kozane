@@ -7,6 +7,7 @@ import { getScopeRelsByCards } from "../../../../db/api/scope-rel.js";
 import type { DB } from "../../../../db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { DELETE, PATCH, POST } from "./+server.js";
+import { addLayer, getDefaultLayer } from "../../../../db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/cards", {
@@ -31,6 +32,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "General", isDefault: true });
   return { db, projectId, bundleId };
 }
@@ -50,6 +52,41 @@ describe("POST /[projectId]/api/cards", () => {
       posX: 24,
       posY: 48,
     });
+  });
+
+  it("puts a card on the project's default layer when none is requested", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, projectId });
+
+    const response = await POST(
+      event(db, projectId, jsonRequest({ bundleId, content: "Unlayered" })),
+    );
+
+    expect(await response.json()).toMatchObject({ layerId: defaultLayer!.id });
+  });
+
+  it("puts a card on the requested layer", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+
+    const response = await POST(
+      event(db, projectId, jsonRequest({ bundleId, content: "Layered", layerId })),
+    );
+
+    const { id } = await response.json();
+    await expect(getCard({ db, bundleId, cardId: id })).resolves.toMatchObject({ layerId });
+  });
+
+  it("rejects a layer from another project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const otherId = await addProject({ db, name: "Other" });
+    const { id: foreignLayer } = await addLayer({ db, projectId: otherId, name: "Theirs" });
+
+    await expectHttpRejection(
+      POST(event(db, projectId, jsonRequest({ bundleId, content: "Nope", layerId: foreignLayer }))),
+      400,
+      "Layer not found in project",
+    );
   });
 
   it("adds a new card to the requested scope", async () => {
@@ -92,6 +129,7 @@ describe("POST /[projectId]/api/cards", () => {
   it("rejects bundles outside the project", async () => {
     const { db, projectId } = await setup();
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
 
     await expectHttpRejection(
@@ -146,6 +184,7 @@ describe("PATCH /[projectId]/api/cards", () => {
     const { db, projectId, bundleId } = await setup();
     const localCardId = await addCard({ db, bundleId, content: "Local", posX: 0, posY: 0 });
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "Other" });
 
@@ -187,6 +226,7 @@ describe("DELETE /[projectId]/api/cards", () => {
   it("rejects cards outside the project", async () => {
     const { db, projectId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Not mine" });
 

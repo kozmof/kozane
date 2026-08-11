@@ -6,12 +6,13 @@
   import { applyPalette, clampZoom, maxZIndex, minZIndex } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
   import type { CardWithGlue } from "$lib/types";
-  import { ProjectState } from "./project-state.svelte";
+  import { ProjectState, resolveActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
   import BundleSidebar from "./components/BundleSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
   import FloatingControls from "./components/FloatingControls.svelte";
+  import LayerControl from "./components/LayerControl.svelte";
   import FloatingComposer from "./components/FloatingComposer.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
 
@@ -27,6 +28,8 @@
   s.fetcher = fetch;
   s.cards = untrack(() => data.cards);
   s.bundles = untrack(() => data.bundles);
+  s.layers = untrack(() => data.layers);
+  s.activeLayerId = untrack(() => resolveActiveLayerId(data.layers, null));
   s.scopes = untrack(() => data.scopes);
   s.scopeRels = untrack(() => data.scopeRels);
   s.glueRels = untrack(() => data.glueRels);
@@ -156,7 +159,9 @@
     } else {
       const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
       const scopeId = s.sidebar.activeScope;
-      const zIndex = maxZIndex(s.cards) + 1;
+      const layerId = s.activeLayerId;
+      // Only cards on the same layer compete for stacking, so the new card starts above them.
+      const zIndex = maxZIndex(s.cards.filter((c) => c.layerId === layerId)) + 1;
       const res = await createCard(s.mutationFetcher, data.project.id, {
         bundleId,
         content,
@@ -164,6 +169,7 @@
         posY,
         zIndex,
         ...(scopeId && { scopeId }),
+        ...(layerId && { layerId }),
       });
       if (!res.ok) { s.setError("Failed to create card"); return; }
       const created: CardWithGlue | null = await res.json().catch(() => null);
@@ -180,18 +186,20 @@
     return res.ok;
   }
 
-  async function handleLayerChange(cardId: string, direction: "front" | "back") {
+  async function handleStackOrderChange(cardId: string, direction: "front" | "back") {
     const card = s.cards.find((item) => item.id === cardId);
     if (!card) return;
     const previous = card.zIndex;
-    const zIndex = direction === "front" ? maxZIndex(s.cards) + 1 : minZIndex(s.cards) - 1;
+    // Stacking is relative to the card's own layer: layer order decides the rest.
+    const layerCards = s.cards.filter((item) => item.layerId === card.layerId);
+    const zIndex = direction === "front" ? maxZIndex(layerCards) + 1 : minZIndex(layerCards) - 1;
     s.cards = s.cards.map((item) => (item.id === cardId ? { ...item, zIndex } : item));
     const res = await updateCard(s.mutationFetcher, data.project.id, cardId, { zIndex });
     if (!res.ok) {
       s.cards = s.cards.map((item) =>
         item.id === cardId && item.zIndex === zIndex ? { ...item, zIndex: previous } : item,
       );
-      s.setError("Failed to change card layer");
+      s.setError("Failed to change card stacking order");
     }
   }
 
@@ -233,6 +241,8 @@
       bind:cards={s.cards}
       {visibleCards}
       glueRels={s.glueRels}
+      layers={s.layers}
+      activeLayerId={s.activeLayerId}
       {bundleColorById}
       bind:selectedCards={s.selection.selectedCards}
       bind:primarySelectedId={s.selection.primarySelectedId}
@@ -257,6 +267,15 @@
     {#if s.lastError}
       <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />
     {/if}
+
+    <LayerControl
+      layers={s.layers}
+      cards={s.cards}
+      bind:activeLayerId={s.activeLayerId}
+      onCreateLayer={actions.handleCreateLayer}
+      onDeleteLayer={actions.handleDeleteLayer}
+      {readonly}
+    />
 
     <FloatingControls
       {zoom}
@@ -285,7 +304,7 @@
       onDeleteSelected={actions.handleDeleteSelected}
       otherProjects={data.otherProjects}
       onMoveToProject={actions.handleMoveSelectionToProject}
-      onLayerChange={handleLayerChange}
+      onStackOrderChange={handleStackOrderChange}
       shortcuts={data.uiConfig}
     />
     {/if}

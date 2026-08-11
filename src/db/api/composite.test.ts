@@ -7,7 +7,7 @@ import {
   deleteProjectCards,
   moveCardsToProject,
 } from "./composite.js";
-import { deleteBundleWithReassign } from "./composite.js";
+import { deleteBundleWithReassign, deleteLayerWithReassign } from "./composite.js";
 import { addProject } from "./project.js";
 import { addBundle, getAllBundles, getBundle } from "./bundle.js";
 import { addScope } from "./scope.js";
@@ -17,10 +17,12 @@ import { getAllCardsByScope } from "./scope-rel.js";
 import { getGlueRelsByCards, glueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
+import { addLayer, getAllLayers, getDefaultLayer, getLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "P" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "B" });
   const scopeId = await addScope({ db, name: "S" });
   return { db, projectId, bundleId, scopeId };
@@ -48,6 +50,7 @@ describe("deleteProjectCards", () => {
     const { db, projectId, bundleId } = await setup();
     const ownCard = await addCard({ db, bundleId, content: "Mine" });
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
 
@@ -237,11 +240,49 @@ describe("deleteBundleWithReassign", () => {
   });
 });
 
+describe("deleteLayerWithReassign", () => {
+  it("moves cards to the default layer before deleting the layer", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, projectId });
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    const cardId = await addCard({ db, bundleId, layerId, content: "Move me" });
+
+    await expect(deleteLayerWithReassign({ db, projectId, layerId })).resolves.toEqual({
+      defaultLayerId: defaultLayer!.id,
+    });
+
+    expect(await getLayer({ db, projectId, layerId })).toBeUndefined();
+    // Reassigned, not cascaded away with the layer.
+    expect(await getCard({ db, bundleId, cardId })).toMatchObject({
+      content: "Move me",
+      layerId: defaultLayer!.id,
+    });
+  });
+
+  it("throws NotFoundError for a missing layer", async () => {
+    const { db, projectId } = await setup();
+    await expect(deleteLayerWithReassign({ db, projectId, layerId: "ghost" })).rejects.toThrow(
+      NotFoundError,
+    );
+  });
+
+  it("rejects deleting the default layer", async () => {
+    const { db, projectId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, projectId });
+
+    await expect(
+      deleteLayerWithReassign({ db, projectId, layerId: defaultLayer!.id }),
+    ).rejects.toThrow("Cannot delete the default layer");
+  });
+});
+
 describe("moveCardsToProject", () => {
   async function setupMove() {
     const db = await createTestDB();
     const srcId = await addProject({ db, name: "Source" });
+    await addLayer({ db, projectId: srcId, name: "Base", isDefault: true });
     const dstId = await addProject({ db, name: "Destination" });
+    await addLayer({ db, projectId: dstId, name: "Base", isDefault: true });
     const srcBundle = await addBundle({ db, projectId: srcId, name: "General" });
     return { db, srcId, dstId, srcBundle };
   }
@@ -268,6 +309,53 @@ describe("moveCardsToProject", () => {
     expect(ok).toBe(true);
     expect(await getCard({ db, bundleId: dstBundle, cardId })).toMatchObject({ content: "Hello" });
     expect(await getCard({ db, bundleId: srcBundle, cardId })).toBeUndefined();
+  });
+
+  it("maps the card onto the same-named layer in the target project", async () => {
+    const { db, srcId, dstId, srcBundle } = await setupMove();
+    const { id: srcLayer } = await addLayer({ db, projectId: srcId, name: "Draft" });
+    const cardId = await addCard({
+      db,
+      bundleId: srcBundle,
+      layerId: srcLayer,
+      content: "Layered",
+    });
+
+    await moveCardsToProject({
+      db,
+      sourceProjectId: srcId,
+      targetProjectId: dstId,
+      cardIds: [cardId],
+    });
+
+    // The layer is per-project, so a matching one is created in the target.
+    const dstLayers = await getAllLayers({ db, projectId: dstId });
+    const dstDraft = dstLayers.find(({ name }) => name === "Draft");
+    expect(dstDraft).toBeDefined();
+    const dstBundles = await getAllBundles({ db, projectId: dstId });
+    expect(await getCard({ db, bundleId: dstBundles[0].id, cardId })).toMatchObject({
+      layerId: dstDraft!.id,
+    });
+  });
+
+  it("reuses an existing same-named layer in the target project", async () => {
+    const { db, srcId, dstId, srcBundle } = await setupMove();
+    const { id: srcLayer } = await addLayer({ db, projectId: srcId, name: "Draft" });
+    const { id: dstLayer } = await addLayer({ db, projectId: dstId, name: "Draft" });
+    const cardId = await addCard({ db, bundleId: srcBundle, layerId: srcLayer, content: "Reuse" });
+
+    await moveCardsToProject({
+      db,
+      sourceProjectId: srcId,
+      targetProjectId: dstId,
+      cardIds: [cardId],
+    });
+
+    expect(await getAllLayers({ db, projectId: dstId })).toHaveLength(2);
+    const dstBundles = await getAllBundles({ db, projectId: dstId });
+    expect(await getCard({ db, bundleId: dstBundles[0].id, cardId })).toMatchObject({
+      layerId: dstLayer,
+    });
   });
 
   it("creates a new bundle in the target project when no name match exists", async () => {
@@ -336,6 +424,7 @@ describe("moveCardsToProject", () => {
     const { db, srcId, dstId, srcBundle } = await setupMove();
     const ownCard = await addCard({ db, bundleId: srcBundle, content: "Mine" });
     const otherId = await addProject({ db, name: "Third" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Not mine" });
 

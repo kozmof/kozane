@@ -10,6 +10,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     card: {
       id: "card-1",
       bundleId: "bundle-1",
+      layerId: "layer-1",
       content: "Hello world",
       posX: 100,
       posY: 200,

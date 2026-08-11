@@ -5,6 +5,7 @@ import { addProject } from "../../../../../db/api/project.js";
 import type { DB } from "../../../../../db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE, PATCH } from "./+server.js";
+import { addLayer } from "../../../../../db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/cards/card-1", {
@@ -25,6 +26,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "General", isDefault: true });
   const cardId = await addCard({ db, bundleId, content: "Original" });
   return { db, projectId, bundleId, cardId };
@@ -52,13 +54,13 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
     await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ posX: 48, posY: 72 });
   });
 
-  it("updates card layer", async () => {
+  it("updates card stacking order", async () => {
     const { db, projectId, bundleId, cardId } = await setup();
     await PATCH(event(db, projectId, cardId, jsonRequest({ zIndex: 42 })));
     await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ zIndex: 42 });
   });
 
-  it("rejects a non-integer card layer", async () => {
+  it("rejects a non-integer card stacking order", async () => {
     const { db, projectId, cardId } = await setup();
     await expectHttpRejection(
       PATCH(event(db, projectId, cardId, jsonRequest({ zIndex: 1.5 }))),
@@ -90,6 +92,7 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
   it("rejects a bundle from another project", async () => {
     const { db, projectId, cardId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
 
     await expectHttpRejection(
@@ -102,6 +105,7 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
   it("rejects a card that does not belong to the project", async () => {
     const { db, projectId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Alien" });
 
@@ -136,6 +140,7 @@ describe("DELETE /[projectId]/api/cards/[cardId]", () => {
   it("rejects a card that does not belong to the project", async () => {
     const { db, projectId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Alien" });
 

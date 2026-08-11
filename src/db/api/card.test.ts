@@ -14,10 +14,12 @@ import {
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
 import { NotFoundError } from "./utils.js";
+import { addLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Test Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "General" });
   return { db, projectId, bundleId };
 }
@@ -227,6 +229,7 @@ describe("updateProjectCardPositions", () => {
     const { db, projectId, bundleId } = await setup();
     const ownCard = await addCard({ db, bundleId, content: "Mine", posX: 0, posY: 0 });
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
 
@@ -333,6 +336,7 @@ describe("reassignCardsToBundle", () => {
     const { db, projectId } = await setup();
     const targetBundle = await addBundle({ db, projectId, name: "Target" });
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
 
@@ -350,6 +354,7 @@ describe("reassignCardsToBundle", () => {
     const { db, projectId, bundleId } = await setup();
     const c1 = await addCard({ db, bundleId, content: "A" });
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const foreignBundle = await addBundle({ db, projectId: otherProjectId, name: "Foreign" });
 
     const ok = await reassignCardsToBundle({

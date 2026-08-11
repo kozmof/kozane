@@ -15,6 +15,7 @@ import { projectCreate, projectDefault, projectDelete, projectList } from "./com
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import { cardAdd, cardList, cardNearest, cardShow, cardSquash } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
+import { layerAdd, layerDelete, layerList } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
 
 const program = new Command();
@@ -125,6 +126,26 @@ scope
   .description("Delete a scope by ID or short ID")
   .action((id) => scopeDelete(id));
 
+const layer = program.command("layer").description("Layer management");
+
+layer
+  .command("list")
+  .description("List a project's layers, bottom to top")
+  .option("--project <projectId>", "Project ID or short ID whose layers to list")
+  .action((opts) => layerList(opts));
+
+layer
+  .command("add <name>")
+  .description("Add a layer on top of a project's existing layers")
+  .option("--project <projectId>", "Project ID or short ID to add the layer to")
+  .action((name, opts) => layerAdd(name, opts));
+
+layer
+  .command("delete <id>")
+  .description("Delete a layer by ID or short ID, moving its cards to the default layer")
+  .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+  .action((id, opts) => layerDelete(id, opts));
+
 const db = program.command("db").description("Database management");
 
 db.command("status")
@@ -182,6 +203,7 @@ card
   .option("--project <projectId>", "Project ID or short ID to add the card to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
+  .option("--layer <layerId>", "Layer ID, short ID, or name (defaults to the default layer)")
   .option("--x <number>", "Horizontal card position", integer)
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
@@ -192,6 +214,7 @@ card
   .option("--project <projectId>", "Project ID or short ID to add the cards to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
+  .option("--layer <layerId>", "Layer ID, short ID, or name (defaults to the default layer)")
   .option(
     "--pattern <regex>",
     "JavaScript regex used to split cards (default: period-space, 。, or blank line)",

@@ -33,6 +33,7 @@ export function createCard(
     posY: number;
     zIndex?: number;
     scopeId?: string;
+    layerId?: string;
   },
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/cards`, "POST", card);
@@ -93,6 +94,22 @@ export function deleteBundle(
   bundleId: string,
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/bundles/${bundleId}`, "DELETE");
+}
+
+export function createLayer(
+  fetcher: typeof fetch,
+  projectId: string,
+  name: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/layers`, "POST", { name });
+}
+
+export function deleteLayer(
+  fetcher: typeof fetch,
+  projectId: string,
+  layerId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/layers/${layerId}`, "DELETE");
 }
 
 export function createScope(

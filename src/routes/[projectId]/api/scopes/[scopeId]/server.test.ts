@@ -7,6 +7,7 @@ import { addProject } from "../../../../../db/api/project.js";
 import type { DB } from "../../../../../db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE } from "./+server.js";
+import { addLayer } from "../../../../../db/api/layer.js";
 
 function event(db: DB, projectId: string, scopeId: string) {
   return {
@@ -23,6 +24,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "General", isDefault: true });
   const scopeId = await addScope({ db, name: "My Scope" });
   const cardId = await addCard({ db, bundleId, content: "Card" });
@@ -46,6 +48,7 @@ describe("DELETE /[projectId]/api/scopes/[scopeId]", () => {
   it("keeps the scope when another project still has cards in it", async () => {
     const { db, projectId, scopeId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const otherCard = await addCard({ db, bundleId: otherBundle, content: "Stays" });
     await addScopeRel({ db, scopeId, cardId: otherCard });

@@ -4,10 +4,12 @@ import { createTestDB } from "../../../test-utils/db.js";
 import { addProject } from "../../../db/api/project.js";
 import { addBundle } from "../../../db/api/bundle.js";
 import { addCard } from "../../../db/api/card.js";
+import { addLayer } from "../../../db/api/layer.js";
 
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Test Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "General" });
   const cardId = await addCard({ db, bundleId, content: "hello" });
   return { db, projectId, bundleId, cardId };
@@ -23,6 +25,7 @@ describe("requireCardInProject", () => {
   it("throws 404 when card exists but belongs to a different project", async () => {
     const { db, cardId } = await setup();
     const otherId = await addProject({ db, name: "Other Project" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     await expect(requireCardInProject(db, otherId, cardId)).rejects.toMatchObject({
       status: 404,
     });
@@ -52,6 +55,7 @@ describe("allCardsBelongToProject", () => {
   it("returns false when any card belongs to another project", async () => {
     const { db, projectId, cardId } = await setup();
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
 

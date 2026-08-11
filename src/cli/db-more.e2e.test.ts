@@ -64,12 +64,26 @@ describe("additional database CLI branches", () => {
     const dbPath = join(root, ".kozane", "kozane.db");
     const client = createClient({ url: `file:${dbPath}` });
     try {
-      // Roll back the newest migration (0004_taskspace) so one migration is pending.
+      // Roll back the newest migration (0005_layer) so one migration is pending: rebuild
+      // `card` without layer_id, then drop the layer table and its journal row.
       await client.batch(
         [
-          "ALTER TABLE card RENAME COLUMN taskspace_id TO working_copy_id",
-          "ALTER TABLE taskspace RENAME TO working_copy",
-          "DELETE FROM __drizzle_migrations WHERE created_at = 1786275000000",
+          `CREATE TABLE __old_card (
+             id text PRIMARY KEY NOT NULL,
+             bundle_id text NOT NULL,
+             taskspace_id text,
+             content text NOT NULL,
+             pos_x integer DEFAULT 0 NOT NULL,
+             pos_y integer DEFAULT 0 NOT NULL,
+             z_index integer DEFAULT 0 NOT NULL,
+             FOREIGN KEY (bundle_id) REFERENCES bundle(id) ON UPDATE cascade ON DELETE cascade,
+             FOREIGN KEY (taskspace_id) REFERENCES taskspace(id) ON UPDATE cascade ON DELETE set null
+           )`,
+          "INSERT INTO __old_card SELECT id, bundle_id, taskspace_id, content, pos_x, pos_y, z_index FROM card",
+          "DROP TABLE card",
+          "ALTER TABLE __old_card RENAME TO card",
+          "DROP TABLE layer",
+          "DELETE FROM __drizzle_migrations WHERE created_at = 1786415069324",
         ],
         "write",
       );

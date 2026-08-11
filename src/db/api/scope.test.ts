@@ -13,6 +13,7 @@ import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { NotFoundError } from "./utils.js";
+import { addLayer } from "./layer.js";
 
 async function db() {
   return createTestDB();
@@ -98,6 +99,7 @@ describe("deleteScopeFromProject", () => {
   async function setup() {
     const d = await createTestDB();
     const projectId = await addProject({ db: d, name: "P" });
+    await addLayer({ db: d, projectId: projectId, name: "Base", isDefault: true });
     const bundleId = await addBundle({ db: d, projectId, name: "B" });
     const scopeId = await addScope({ db: d, name: "S" });
     return { d, projectId, bundleId, scopeId };
@@ -127,7 +129,9 @@ describe("deleteScopeFromProject", () => {
   it("preserves scope when another project's cards are still members", async () => {
     const d = await createTestDB();
     const p1 = await addProject({ db: d, name: "P1" });
+    await addLayer({ db: d, projectId: p1, name: "Base", isDefault: true });
     const p2 = await addProject({ db: d, name: "P2" });
+    await addLayer({ db: d, projectId: p2, name: "Base", isDefault: true });
     const b1 = await addBundle({ db: d, projectId: p1, name: "B1" });
     const b2 = await addBundle({ db: d, projectId: p2, name: "B2" });
     const scopeId = await addScope({ db: d, name: "Shared" });

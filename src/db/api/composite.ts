@@ -1,10 +1,18 @@
 import { withTx, type DB, type AnyDB } from "../tx.js";
-import { addCard, reassignBundleCards, cardsInProject, getCardBundleNames } from "./card.js";
+import {
+  addCard,
+  reassignBundleCards,
+  reassignLayerCards,
+  cardsInProject,
+  getCardBundleNames,
+  getCardLayerNames,
+} from "./card.js";
 import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
+import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "./layer.js";
 import { addScopeRel } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
-import { NotFoundError, DefaultBundleError } from "./utils.js";
+import { NotFoundError, DefaultBundleError, DefaultLayerError } from "./utils.js";
 import { inArray } from "drizzle-orm";
 import { cardTable } from "../schema.js";
 
@@ -143,6 +151,35 @@ export async function moveCardsToProject({
         .where(inArray(cardTable.id, ids));
     }
 
+    // Layers are per-project, so a moved card cannot keep its layer id. Preserve the
+    // layer name the same way bundle names are preserved above.
+    const cardLayers = await getCardLayerNames({ db: tx, cardIds });
+    const targetLayers = await getAllLayers({ db: tx, projectId: targetProjectId });
+
+    const layerNameToTargetId = new Map<string, string>();
+    for (const { layerName } of cardLayers) {
+      if (layerNameToTargetId.has(layerName)) continue;
+      const existing = targetLayers.find((l) => l.name === layerName);
+      if (existing) {
+        layerNameToTargetId.set(layerName, existing.id);
+      } else {
+        const created = await addLayer({ db: tx, projectId: targetProjectId, name: layerName });
+        layerNameToTargetId.set(layerName, created.id);
+      }
+    }
+
+    const layerGroupsByTarget = new Map<string, string[]>();
+    for (const { cardId, layerName } of cardLayers) {
+      const targetLayerId = layerNameToTargetId.get(layerName)!;
+      const group = layerGroupsByTarget.get(targetLayerId) ?? [];
+      group.push(cardId);
+      layerGroupsByTarget.set(targetLayerId, group);
+    }
+
+    for (const [targetLayerId, ids] of layerGroupsByTarget) {
+      await tx.update(cardTable).set({ layerId: targetLayerId }).where(inArray(cardTable.id, ids));
+    }
+
     // Cards moved cross-project must leave their glue groups: a glue group
     // spanning two projects is never visible in the UI and leaves stale rows.
     await unglueCardsInTx(tx, cardIds);
@@ -174,5 +211,32 @@ export async function deleteBundleWithReassign({
     await deleteBundle({ db: tx, projectId, bundleId });
 
     return { defaultBundleId: defaultBundle.id };
+  });
+}
+
+type DeleteLayerWithReassign = { db: DB; projectId: string; layerId: string };
+
+/**
+ * Deletes a non-default layer and moves its cards to the project's default layer,
+ * atomically. Without the reassign, deleting a layer would cascade its cards away.
+ * Throws NotFoundError if the layer doesn't exist, DefaultLayerError for the default one.
+ */
+export async function deleteLayerWithReassign({
+  db,
+  projectId,
+  layerId,
+}: DeleteLayerWithReassign): Promise<{ defaultLayerId: string }> {
+  return withTx(db, async (tx) => {
+    const layer = await getLayer({ db: tx, projectId, layerId });
+    if (!layer) throw new NotFoundError(`Layer projectId=${projectId} layerId=${layerId}`);
+    if (layer.isDefault) throw new DefaultLayerError();
+
+    const defaultLayer = await getDefaultLayer({ db: tx, projectId });
+    if (!defaultLayer) throw new Error("No default layer found for this project");
+
+    await reassignLayerCards({ db: tx, fromLayerId: layerId, toLayerId: defaultLayer.id });
+    await deleteLayer({ db: tx, projectId, layerId });
+
+    return { defaultLayerId: defaultLayer.id };
   });
 }

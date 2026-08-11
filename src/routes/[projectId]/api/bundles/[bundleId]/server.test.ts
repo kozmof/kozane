@@ -5,6 +5,7 @@ import { addProject } from "../../../../../db/api/project.js";
 import type { DB } from "../../../../../db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE, PATCH } from "./+server.js";
+import { addLayer } from "../../../../../db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/bundles/bundle-1", {
@@ -25,6 +26,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "Project" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const defaultBundleId = await addBundle({ db, projectId, name: "General", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "Extra" });
   return { db, projectId, defaultBundleId, bundleId };
@@ -67,6 +69,7 @@ describe("PATCH /[projectId]/api/bundles/[bundleId]", () => {
   it("returns 404 for a bundle not in the project", async () => {
     const { db, projectId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
 
     await expectHttpRejection(
@@ -108,6 +111,7 @@ describe("DELETE /[projectId]/api/bundles/[bundleId]", () => {
   it("returns 404 for a bundle not in the project", async () => {
     const { db, projectId } = await setup();
     const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X", isDefault: true });
 
     await expectHttpRejection(

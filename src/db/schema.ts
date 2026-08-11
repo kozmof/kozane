@@ -45,6 +45,28 @@ export const bundleTable = sqliteTable(
   ],
 );
 
+export const layerTable = sqliteTable(
+  "layer",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    name: text().notNull(),
+    // Index order of the layer on the canvas: a higher position stacks above a lower one.
+    position: integer().notNull().default(0),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+  },
+  (t) => [
+    uniqueIndex("layer_one_default_per_project")
+      .on(t.projectId)
+      .where(sql`is_default = 1`),
+    uniqueIndex("layer_name_per_project").on(t.projectId, t.name),
+  ],
+);
+
 export const scopeTable = sqliteTable(
   "scope",
   {
@@ -99,6 +121,11 @@ export const cardTable = sqliteTable("card", {
   bundleId: text("bundle_id")
     .notNull()
     .references(() => bundleTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  // Every card sits on exactly one layer of its project. Callers that omit it get the
+  // project's default layer (see addCard).
+  layerId: text("layer_id")
+    .notNull()
+    .references(() => layerTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
   taskspaceId: text("taskspace_id").references(() => taskspaceTable.id, {
     // When taskspaceId is deleted, card is retained but set to null.
     onDelete: "set null",
@@ -141,6 +168,12 @@ export const scopeRelTable = sqliteTable(
 
 export const projectRelations = relations(projectTable, ({ many }) => ({
   bundles: many(bundleTable),
+  layers: many(layerTable),
+}));
+
+export const layerRelations = relations(layerTable, ({ one, many }) => ({
+  project: one(projectTable, { fields: [layerTable.projectId], references: [projectTable.id] }),
+  cards: many(cardTable),
 }));
 
 export const bundleRelations = relations(bundleTable, ({ one, many }) => ({
@@ -150,6 +183,7 @@ export const bundleRelations = relations(bundleTable, ({ one, many }) => ({
 
 export const cardRelations = relations(cardTable, ({ one, many }) => ({
   bundle: one(bundleTable, { fields: [cardTable.bundleId], references: [bundleTable.id] }),
+  layer: one(layerTable, { fields: [cardTable.layerId], references: [layerTable.id] }),
   // nullable: card retains its row when its taskspace is deleted (onDelete: "set null")
   taskspace: one(taskspaceTable, {
     fields: [cardTable.taskspaceId],

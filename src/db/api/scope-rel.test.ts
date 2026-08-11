@@ -15,10 +15,12 @@ import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
+import { addLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "P" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "B" });
   const scopeId = await addScope({ db, name: "S" });
   const cardId = await addCard({ db, bundleId, content: "Card A" });
@@ -102,7 +104,9 @@ describe("addScopeMembers", () => {
   it("returns false when a cardId does not belong to the project", async () => {
     const db = await createTestDB();
     const p1 = await addProject({ db, name: "P1" });
+    await addLayer({ db, projectId: p1, name: "Base", isDefault: true });
     const p2 = await addProject({ db, name: "P2" });
+    await addLayer({ db, projectId: p2, name: "Base", isDefault: true });
     const b1 = await addBundle({ db, projectId: p1, name: "B1" });
     const b2 = await addBundle({ db, projectId: p2, name: "B2" });
     const scopeId = await addScope({ db, name: "S" });
@@ -172,6 +176,7 @@ describe("removeScopeMembersFromProject", () => {
   it("does not remove anything when a card belongs to another project", async () => {
     const { db, projectId, scopeId, cardId } = await setup();
     const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
     const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
     const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
     await addScopeRel({ db, scopeId, cardId });

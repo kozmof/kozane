@@ -22,7 +22,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
-    onLayerChange?: (cardId: string, direction: "front" | "back") => void;
+    onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     shortcuts?: UiConfig;
   }
 
@@ -43,7 +43,7 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
-    onLayerChange,
+    onStackOrderChange,
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
@@ -143,8 +143,8 @@
     let handled = true;
     if (e.key === shortcuts.clearSelectionShortcut) onCancel();
     else if (e.key === shortcuts.copyCardIdShortcut && selectedCards.length === 1) copySelectedCardId();
-    else if (e.key === shortcuts.bringCardToFrontShortcut && selectedCards.length === 1) onLayerChange?.(selectedCards[0].id, "front");
-    else if (e.key === shortcuts.sendCardToBackShortcut && selectedCards.length === 1) onLayerChange?.(selectedCards[0].id, "back");
+    else if (e.key === shortcuts.bringCardToFrontShortcut && selectedCards.length === 1) onStackOrderChange?.(selectedCards[0].id, "front");
+    else if (e.key === shortcuts.sendCardToBackShortcut && selectedCards.length === 1) onStackOrderChange?.(selectedCards[0].id, "back");
     else if (e.key === shortcuts.glueCardsShortcut && selectedCards.length >= 2) {
       if (allGlued) onUnglueSelected?.(ids);
       else onGlueSelected?.(ids);
@@ -235,8 +235,8 @@
     {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onLayerChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->

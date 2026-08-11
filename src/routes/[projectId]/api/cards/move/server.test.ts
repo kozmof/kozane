@@ -5,6 +5,7 @@ import { addProject } from "../../../../../db/api/project.js";
 import type { DB } from "../../../../../db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { POST } from "./+server.js";
+import { addLayer } from "../../../../../db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/src-project/api/cards/move", {
@@ -25,7 +26,9 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
 async function setup() {
   const db = await createTestDB();
   const srcId = await addProject({ db, name: "Source" });
+  await addLayer({ db, projectId: srcId, name: "Base", isDefault: true });
   const dstId = await addProject({ db, name: "Destination" });
+  await addLayer({ db, projectId: dstId, name: "Base", isDefault: true });
   const srcBundle = await addBundle({ db, projectId: srcId, name: "General", isDefault: true });
   return { db, srcId, dstId, srcBundle };
 }
@@ -59,6 +62,7 @@ describe("POST /[projectId]/api/cards/move", () => {
   it("rejects when cards do not belong to the source project", async () => {
     const { db, srcId, dstId } = await setup();
     const otherId = await addProject({ db, name: "Third" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
     const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
     const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Not mine" });
 

@@ -1,7 +1,9 @@
 import { createClient, type InValue } from "@libsql/client";
+import { v7 as uuidv7 } from "uuid";
+import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 3;
+const EXPORT_VERSION = 4;
 // Version 2 predates `project.is_default` (migration 0003). Such a file is still
 // importable; every project comes back non-default, which is what version 2 recorded.
 const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
@@ -24,6 +26,11 @@ export const TABLES = [
     orderBy: ["id"],
   },
   {
+    name: "layer",
+    columns: ["id", "project_id", "name", "position", "is_default"],
+    orderBy: ["id"],
+  },
+  {
     name: "taskspace",
     columns: [
       "id",
@@ -40,7 +47,16 @@ export const TABLES = [
   },
   {
     name: "card",
-    columns: ["id", "bundle_id", "taskspace_id", "content", "pos_x", "pos_y", "z_index"],
+    columns: [
+      "id",
+      "bundle_id",
+      "layer_id",
+      "taskspace_id",
+      "content",
+      "pos_x",
+      "pos_y",
+      "z_index",
+    ],
     orderBy: ["id"],
   },
   {
@@ -145,9 +161,57 @@ function isJsonScalar(value: unknown): value is JsonScalar {
 
 /** Fills in columns added after `version`, so older exports validate against TABLES. */
 function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
-  if (version >= 3) return;
-  for (const row of tables.project ?? []) {
-    if (typeof row === "object" && row !== null && !("is_default" in row)) row.is_default = 0;
+  if (version < 3) {
+    for (const row of tables.project ?? []) {
+      if (typeof row === "object" && row !== null && !("is_default" in row)) row.is_default = 0;
+    }
+  }
+  if (version < 4) upgradeLayers(tables);
+}
+
+/**
+ * Versions before 4 predate layers (migration 0005). Rebuild what that migration does:
+ * a default `Base` layer per project, with every card placed on its project's layer.
+ */
+function upgradeLayers(tables: Partial<TableRows>): void {
+  if (tables.layer === undefined) tables.layer = [];
+  const layerIdByProject = new Map<string, string>();
+  // A dump that already carries layers (an older version number on a newer export, say)
+  // keeps them: only projects without one get a rebuilt default layer.
+  for (const layer of tables.layer) {
+    if (typeof layer.project_id === "string" && typeof layer.id === "string" && layer.is_default) {
+      layerIdByProject.set(layer.project_id, layer.id);
+    }
+  }
+  for (const project of tables.project ?? []) {
+    const projectId = project.id;
+    if (typeof projectId !== "string" || layerIdByProject.has(projectId)) continue;
+    const layerId = uuidv7();
+    layerIdByProject.set(projectId, layerId);
+    tables.layer.push({
+      id: layerId,
+      project_id: projectId,
+      name: DEFAULT_LAYER_NAME,
+      position: 0,
+      is_default: 1,
+    });
+  }
+
+  const projectIdByBundle = new Map<string, string>();
+  for (const bundle of tables.bundle ?? []) {
+    if (typeof bundle.id === "string" && typeof bundle.project_id === "string") {
+      projectIdByBundle.set(bundle.id, bundle.project_id);
+    }
+  }
+
+  for (const card of tables.card ?? []) {
+    if ("layer_id" in card && card.layer_id !== null) continue;
+    const projectId =
+      typeof card.bundle_id === "string" ? projectIdByBundle.get(card.bundle_id) : undefined;
+    const layerId = projectId ? layerIdByProject.get(projectId) : undefined;
+    // A card whose bundle or project is missing from the dump would fail the NOT NULL
+    // insert anyway; leave it unset so parseDump reports the malformed row instead.
+    if (layerId) card.layer_id = layerId;
   }
 }
 

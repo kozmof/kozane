@@ -284,7 +284,7 @@ describe("CardComposer — selection mode", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const onCancel = vi.fn();
-    const onLayerChange = vi.fn();
+    const onStackOrderChange = vi.fn();
     const onDeleteSelected = vi.fn();
     const shortcuts = {
       ...DEFAULT_UI_CONFIG,
@@ -298,7 +298,7 @@ describe("CardComposer — selection mode", () => {
       props: makeProps({
         selectedCards: [selectedCards[0]],
         onCancel,
-        onLayerChange,
+        onStackOrderChange,
         onDeleteSelected,
         shortcuts,
       }),
@@ -308,8 +308,8 @@ describe("CardComposer — selection mode", () => {
     await user.keyboard("v{Home}{End}{Backspace}q");
 
     expect(writeText).toHaveBeenCalledWith("card-1");
-    expect(onLayerChange).toHaveBeenNthCalledWith(1, "card-1", "front");
-    expect(onLayerChange).toHaveBeenNthCalledWith(2, "card-1", "back");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, "card-1", "front");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, "card-1", "back");
     expect(onDeleteSelected).toHaveBeenCalledWith(["card-1"]);
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -455,7 +455,7 @@ describe("CardComposer — copy card ID", () => {
   });
 });
 
-describe("CardComposer — card layers", () => {
+describe("CardComposer — card stacking order", () => {
   const selectedCard = {
     id: "card-layer",
     content: "Layered card",
@@ -468,12 +468,14 @@ describe("CardComposer — card layers", () => {
 
   it("moves a single selected card to the front or back", async () => {
     const user = userEvent.setup();
-    const onLayerChange = vi.fn();
-    render(CardComposer, { props: makeProps({ selectedCards: [selectedCard], onLayerChange }) });
+    const onStackOrderChange = vi.fn();
+    render(CardComposer, {
+      props: makeProps({ selectedCards: [selectedCard], onStackOrderChange }),
+    });
     await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
     await user.click(screen.getByRole("button", { name: "Send to back ([)" }));
-    expect(onLayerChange).toHaveBeenNthCalledWith(1, "card-layer", "front");
-    expect(onLayerChange).toHaveBeenNthCalledWith(2, "card-layer", "back");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, "card-layer", "front");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, "card-layer", "back");
   });
 
   it("hides layer actions for multiple selected cards", () => {

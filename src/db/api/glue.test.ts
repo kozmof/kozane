@@ -6,10 +6,12 @@ import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
 import { getGlueRelsByCards, glueCards, unglueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
+import { addLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
   const projectId = await addProject({ db, name: "P" });
+  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
   const bundleId = await addBundle({ db, projectId, name: "B" });
   const cardA = await addCard({ db, bundleId, content: "A" });
   const cardB = await addCard({ db, bundleId, content: "B" });

@@ -21,7 +21,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
-    onLayerChange?: (cardId: string, direction: "front" | "back") => void;
+    onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     shortcuts: UiConfig;
   }
 
@@ -42,7 +42,7 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
-    onLayerChange,
+    onStackOrderChange,
     shortcuts,
   }: Props = $props();
 
@@ -83,7 +83,7 @@
     {onUnglueOne}
     {onDeleteSelected}
     {onMoveToProject}
-    {onLayerChange}
+    {onStackOrderChange}
     {shortcuts}
   />
 </div>

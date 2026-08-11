@@ -3,7 +3,7 @@
   import { css } from "styled-system/css";
   import KozaneCard from "./KozaneCard.svelte";
   import SelectionRect from "./SelectionRect.svelte";
-  import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
   import {
     GRID,
     PALETTE,
@@ -16,6 +16,7 @@
     glueGroupIds,
     glueIdByCardId,
     cardPositionPatches,
+    layerStack,
     previousPositions,
     verticalListPosition,
     rectsIntersect,
@@ -29,6 +30,8 @@
     cards = $bindable(),
     visibleCards,
     glueRels,
+    layers,
+    activeLayerId,
     bundleColorById,
     selectedCards = $bindable(),
     primarySelectedId = $bindable(),
@@ -52,6 +55,8 @@
     cards: CardWithGlue[];
     visibleCards: CardWithGlue[];
     glueRels: GlueRel[];
+    layers: Layer[];
+    activeLayerId: string | null;
     bundleColorById: Map<string, BundleWithColor>;
     selectedCards: Set<string>;
     primarySelectedId: string | null;
@@ -85,6 +90,32 @@
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
   let dragPointer: { x: number; y: number } | null = null;
+
+  // Each layer renders as one canvas-sized wrapper: the wrapper's z-index orders the layers
+  // against each other, while card.zIndex keeps ordering cards inside their own layer.
+  const draggingLayerId = $derived(
+    draggingId ? (cards.find(({ id }) => id === draggingId)?.layerId ?? null) : null,
+  );
+  const layerGroups = $derived.by(() => {
+    const stacked = layerStack(layers, activeLayerId, draggingLayerId);
+    if (stacked.length === 0) {
+      // No layers loaded (an older static export, say): one flat sheet, as before.
+      return [{ id: "", rank: 0, active: true, cards: visibleCards }];
+    }
+    const groups = new Map(stacked.map(({ layer }) => [layer.id, [] as CardWithGlue[]]));
+    // A card whose layer is missing from this project falls back to the topmost layer
+    // rather than disappearing from the canvas.
+    const fallbackId = stacked[stacked.length - 1].layer.id;
+    for (const card of visibleCards) {
+      (groups.get(card.layerId) ?? groups.get(fallbackId)!).push(card);
+    }
+    return stacked.map(({ layer, rank, active }) => ({
+      id: layer.id,
+      rank,
+      active,
+      cards: groups.get(layer.id)!,
+    }));
+  });
 
   let dragState: {
     cardId: string;
@@ -459,32 +490,46 @@
       style:transform="scale({zoom})"
       style:transform-origin="0 0"
     >
-      {#each visibleCards as card (card.id)}
-        {@const color = bundleColorById.get(card.bundleId) ?? {
-          id: "",
-          projectId: "",
-          isDefault: false,
-          bg: PALETTE[0].bg,
-          dot: PALETTE[0].dot,
-          name: "Unknown",
-        }}
-        <KozaneCard
-          {card}
-          {color}
-          isSelected={selectedCards.has(card.id)}
-          isPrimaryUnglue={card.id === primarySelectedId && !!card.glueId}
-          isComposing={composerCard?.id === card.id}
-          dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
-          isDragging={draggingId === card.id}
-          zIndex={card.zIndex}
-          {showFooters}
-          {cardWidth}
-          {fontSize}
-          {fontFamily}
-          onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
-          onCardClick={(e) => handleCardClick(e, card.id)}
-          onCardDblClick={() => handleCardDblClick(card.id)}
-        />
+      {#each layerGroups as group (group.id)}
+        <!-- pointer-events pass through the wrapper so cards on layers underneath stay
+             clickable and canvas panning still works between them. -->
+        <div
+          data-layer-id={group.id}
+          style:position="absolute"
+          style:inset="0"
+          style:z-index={group.rank}
+          style:opacity={group.active ? 1 : 0.5}
+          style:pointer-events="none"
+          style:transition="opacity 0.18s"
+        >
+          {#each group.cards as card (card.id)}
+            {@const color = bundleColorById.get(card.bundleId) ?? {
+              id: "",
+              projectId: "",
+              isDefault: false,
+              bg: PALETTE[0].bg,
+              dot: PALETTE[0].dot,
+              name: "Unknown",
+            }}
+            <KozaneCard
+              {card}
+              {color}
+              isSelected={selectedCards.has(card.id)}
+              isPrimaryUnglue={card.id === primarySelectedId && !!card.glueId}
+              isComposing={composerCard?.id === card.id}
+              dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
+              isDragging={draggingId === card.id}
+              zIndex={card.zIndex}
+              {showFooters}
+              {cardWidth}
+              {fontSize}
+              {fontFamily}
+              onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
+              onCardClick={(e) => handleCardClick(e, card.id)}
+              onCardDblClick={() => handleCardDblClick(card.id)}
+            />
+          {/each}
+        </div>
       {/each}
 
       {#if selectionRect}

@@ -48,6 +48,28 @@ export function applyPalette<T extends { id: string }>(bundles: T[]) {
   return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
 }
 
+export type StackedLayer<T> = { layer: T; rank: number; active: boolean };
+
+/**
+ * Stacking order of a project's layers: non-active layers keep their own index order at
+ * the bottom, the active layer sits above all of them, and `floatingLayerId` (the layer
+ * of a card being dragged) is lifted to the very top so a drag stays visible even when it
+ * starts on a dimmed layer.
+ */
+export function layerStack<T extends { id: string; position: number }>(
+  layers: T[],
+  activeLayerId: string | null,
+  floatingLayerId: string | null = null,
+): StackedLayer<T>[] {
+  const ordered = [...layers].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+  const priority = (layer: T) =>
+    layer.id === floatingLayerId ? 2 : layer.id === activeLayerId ? 1 : 0;
+  return ordered
+    .map((layer, index) => ({ layer, index }))
+    .sort((a, b) => priority(a.layer) - priority(b.layer) || a.index - b.index)
+    .map(({ layer }, rank) => ({ layer, rank, active: layer.id === activeLayerId }));
+}
+
 export function glueIdByCardId<T extends { cardId: string; glueId: string }>(glueRels: T[]) {
   return new Map(glueRels.map((rel) => [rel.cardId, rel.glueId]));
 }

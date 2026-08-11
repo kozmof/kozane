@@ -4,7 +4,7 @@ import type { Card, Taskspace } from "../db/api/types.js";
 // hands out has one, and making it optional here only spread `?? 0` through the UI.
 export type CardData = Pick<
   Card,
-  "id" | "content" | "bundleId" | "posX" | "posY" | "taskspaceId" | "zIndex"
+  "id" | "content" | "bundleId" | "layerId" | "posX" | "posY" | "taskspaceId" | "zIndex"
 >;
 
 export interface CardWithGlue extends CardData {
@@ -21,4 +21,4 @@ export interface BundleWithColor {
 
 export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
-export type { Bundle, Scope, ScopeRel, GlueRel } from "../db/api/types.js";
+export type { Bundle, Layer, Scope, ScopeRel, GlueRel } from "../db/api/types.js";

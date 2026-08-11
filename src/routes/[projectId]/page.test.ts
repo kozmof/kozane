@@ -8,10 +8,15 @@ const data = {
     { id: "b1", projectId: "project-1", name: "General", isDefault: true },
     { id: "b2", projectId: "project-1", name: "Research", isDefault: false },
   ],
+  layers: [
+    { id: "l1", projectId: "project-1", name: "Base", position: 0, isDefault: true },
+    { id: "l2", projectId: "project-1", name: "Draft", position: 1, isDefault: false },
+  ],
   cards: [
     {
       id: "card-1",
       bundleId: "b1",
+      layerId: "l1",
       content: "Alpha",
       posX: 24,
       posY: 48,
@@ -22,6 +27,7 @@ const data = {
     {
       id: "card-2",
       bundleId: "b1",
+      layerId: "l1",
       content: "Beta",
       posX: 96,
       posY: 48,
@@ -220,6 +226,109 @@ describe("Project page", () => {
     });
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument(),
+    );
+  });
+});
+
+describe("Layers", () => {
+  function layerGroup(container: HTMLElement, layerId: string): HTMLElement {
+    return container.querySelector<HTMLElement>(`[data-layer-id="${layerId}"]`)!;
+  }
+
+  it("stacks the active layer on top and dims the others", () => {
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    // "Base" is the default layer, so it starts active: full opacity and the top rank.
+    expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "1", "z-index": "1" });
+    expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "0.5", "z-index": "0" });
+  });
+
+  it("restacks when another layer is selected from the hover popover", async () => {
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+
+    expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" });
+    expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.5", "z-index": "0" });
+  });
+
+  it("keeps cards on dimmed layers clickable", async () => {
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+
+    // The wrapper lets events through; the card itself still receives them.
+    expect(layerGroup(container, "l1")).toHaveStyle({ "pointer-events": "none" });
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    expect(card).toHaveStyle({ "pointer-events": "auto" });
+    await fireEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("creates a card on the selected layer", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "card-3",
+        bundleId: "b1",
+        layerId: "l2",
+        content: "Gamma",
+        posX: 0,
+        posY: 0,
+        zIndex: 1,
+        glueId: null,
+        taskspaceId: null,
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+
+    const input = screen.getByLabelText("Write a card");
+    await fireEvent.input(input, { target: { value: "Gamma" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("/project-1/api/cards");
+    expect(JSON.parse(init.body)).toMatchObject({ layerId: "l2", content: "Gamma" });
+  });
+
+  it("creates a layer from the popover and makes it active", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "l3", name: "Notes", position: 2, isDefault: false }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    const input = screen.getByLabelText("New layer name");
+    await fireEvent.input(input, { target: { value: "Notes" } });
+    await fireEvent.click(screen.getByLabelText("Add layer"));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/layers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Notes" }),
+    });
+    await waitFor(() =>
+      expect(layerGroup(container, "l3")).toHaveStyle({ opacity: "1", "z-index": "2" }),
     );
   });
 });

@@ -2,6 +2,7 @@ import type { RequestHandler } from "./$types";
 import type { CardWithGlue } from "$lib/types";
 import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../db/api/bundle";
+import { getDefaultLayer, getLayer } from "../../../../db/api/layer";
 import { getScope } from "../../../../db/api/scope";
 import { addScopeRel } from "../../../../db/api/scope-rel";
 import { withTx } from "../../../../db/tx";
@@ -63,6 +64,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const zIndex = optionalNumber(body, "zIndex") ?? 0;
   if (!Number.isInteger(zIndex)) throw error(400, "zIndex must be an integer");
   const scopeId = optionalString(body, "scopeId");
+  const requestedLayerId = optionalString(body, "layerId");
 
   if (content.length > CONTENT_MAX)
     throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
@@ -71,8 +73,20 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (!bundle) throw error(400, "Bundle not found in project");
   if (scopeId && !(await getScope({ db, scopeId }))) throw error(400, "Scope not found");
 
+  // An unknown layer is rejected rather than silently redirected to the default one:
+  // a card that quietly lands on another layer is invisible to the client that asked.
+  const layer = requestedLayerId
+    ? await getLayer({ db, projectId, layerId: requestedLayerId })
+    : await getDefaultLayer({ db, projectId });
+  if (!layer)
+    throw error(
+      400,
+      requestedLayerId ? "Layer not found in project" : "Project has no default layer",
+    );
+
   const stored = {
     bundleId,
+    layerId: layer.id,
     content,
     posX: clamp(posX, 0, CANVAS_W),
     posY: clamp(posY, 0, CANVAS_H),

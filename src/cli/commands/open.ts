@@ -8,7 +8,7 @@ import { dbUrl } from "../lib/config.js";
 import { readApiKey } from "../../lib/server/api-key.js";
 import { getMigrationStatus, runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
-import { projectTable, bundleTable } from "../../db/schema.js";
+import { projectTable, bundleTable, layerTable } from "../../db/schema.js";
 import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import {
@@ -17,6 +17,7 @@ import {
   removeServerState,
 } from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
+import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -92,6 +93,9 @@ export async function open(options: OpenOptions): Promise<void> {
       await db
         .insert(bundleTable)
         .values({ projectId: project.id, name: "General", isDefault: true });
+      await db
+        .insert(layerTable)
+        .values({ projectId: project.id, name: DEFAULT_LAYER_NAME, isDefault: true });
     } catch (error) {
       rmSync(memoryDir, { recursive: true, force: true });
       throw error;

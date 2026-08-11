@@ -12,6 +12,13 @@ export class DefaultBundleError extends Error {
   }
 }
 
+export class DefaultLayerError extends Error {
+  constructor() {
+    super("Cannot delete the default layer");
+    this.name = "DefaultLayerError";
+  }
+}
+
 /** Throws if `rows` is empty — used to surface not-found errors from delete/update operations. */
 export function assertFound<T>(rows: T[], label: string): void {
   if (rows.length === 0) throw new NotFoundError(label);

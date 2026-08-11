@@ -171,6 +171,51 @@ export function createProjectActions(state: ProjectState) {
     if (state.sidebar.activeBundle === bundleId) state.sidebar.activeBundle = null;
   }
 
+  async function handleCreateLayer(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const res = await api.createLayer(state.mutationFetcher, state.projectId, trimmed);
+    if (!res.ok) {
+      state.setError("Failed to create layer");
+      return;
+    }
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.setError("Failed to create layer");
+      return;
+    }
+    state.layers = [
+      ...state.layers,
+      {
+        id: parsed.id,
+        projectId: state.projectId,
+        name: trimmed,
+        position: parsed.position,
+        isDefault: false,
+      },
+    ];
+    // A layer is created to be drawn on, so it becomes the one new cards land on.
+    state.activeLayerId = parsed.id;
+  }
+
+  async function handleDeleteLayer(layerId: string) {
+    const res = await api.deleteLayer(state.mutationFetcher, state.projectId, layerId);
+    if (!res.ok) {
+      state.setError("Failed to delete layer");
+      return;
+    }
+    const parsed = await res.json().catch(() => null);
+    if (!parsed) {
+      state.setError("Failed to delete layer");
+      return;
+    }
+    state.cards = state.cards.map((c) =>
+      c.layerId === layerId ? { ...c, layerId: parsed.defaultLayerId } : c,
+    );
+    state.layers = state.layers.filter((l) => l.id !== layerId);
+    if (state.activeLayerId === layerId) state.activeLayerId = parsed.defaultLayerId;
+  }
+
   async function handleCreateScope() {
     const name = state.sidebar.newScopeName.trim();
     if (!name) return;
@@ -288,6 +333,8 @@ export function createProjectActions(state: ProjectState) {
     handleMoveSelectionToProject,
     handleCreateBundle,
     handleDeleteBundle,
+    handleCreateLayer,
+    handleDeleteLayer,
     handleCreateScope,
     handleDeleteScope,
     handleAddToScope,

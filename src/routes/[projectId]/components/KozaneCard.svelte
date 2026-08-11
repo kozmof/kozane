@@ -82,6 +82,7 @@
     : "0 1px 2px rgba(0,0,0,0.01)"}
   style:cursor={isDragging ? "grabbing" : "grab"}
   style:user-select="none"
+  style:pointer-events="auto"
   style:opacity={dimmed ? 0.3 : 1}
   style:transition="opacity 0.18s, box-shadow 0.1s, background 0.1s"
   style:z-index={isDragging ? 2147483647 : zIndex}

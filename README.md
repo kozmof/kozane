@@ -79,10 +79,19 @@ Pass a JavaScript regular expression source to customize the separator:
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-Project, bundle, and scope options also work with piped files:
+Project, bundle, layer, and scope options also work with piped files:
 
 ```sh
 cat foo.txt | kozane card squash --project eb155d6 --bundle 72ac1f8 --scope e3ee90b
+```
+
+A layer is a surface cards sit on, so a set of cards can be worked on with the
+rest of the board dimmed behind it. Every project starts with a `Base` layer:
+
+```sh
+kozane layer list
+kozane layer add Draft
+kozane card add --layer Draft "Only on the draft layer"
 ```
 
 ## Security and remote access
