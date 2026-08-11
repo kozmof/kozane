@@ -242,6 +242,39 @@ export function rectsIntersect(a: RectLike, b: RectLike): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
+export type Triangle = [Point, Point, Point];
+
+/** How long a pointer may sit still inside the safe triangle before the popover gives up. */
+export const SAFE_AREA_GRACE_MS = 400;
+
+/**
+ * The corridor a pointer is allowed to travel through on its way from a trigger to the
+ * popover it opened: the point where the pointer left the trigger, plus the two corners of
+ * the popover edge facing it. A popover sitting below and to one side of its button is
+ * reached diagonally, and that diagonal crosses ground belonging to neither — closing on
+ * the way there is the bug this prevents.
+ */
+export function safeTriangle(exit: Point, rect: RectLike): Triangle {
+  if (exit.y <= rect.top)
+    return [exit, { x: rect.left, y: rect.top }, { x: rect.right, y: rect.top }];
+  if (exit.y >= rect.bottom)
+    return [exit, { x: rect.left, y: rect.bottom }, { x: rect.right, y: rect.bottom }];
+  if (exit.x <= rect.left)
+    return [exit, { x: rect.left, y: rect.top }, { x: rect.left, y: rect.bottom }];
+  return [exit, { x: rect.right, y: rect.top }, { x: rect.right, y: rect.bottom }];
+}
+
+/** Which side of the line through `a` and `b` the point falls on, by sign. */
+function sideOfLine(point: Point, a: Point, b: Point): number {
+  return (point.x - b.x) * (a.y - b.y) - (a.x - b.x) * (point.y - b.y);
+}
+
+/** Inside, or on an edge: a pointer on the boundary is still on its way in. */
+export function insideTriangle(point: Point, [a, b, c]: Triangle): boolean {
+  const sides = [sideOfLine(point, a, b), sideOfLine(point, b, c), sideOfLine(point, c, a)];
+  return !(sides.some((side) => side < 0) && sides.some((side) => side > 0));
+}
+
 export function clampZoom(value: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
 }

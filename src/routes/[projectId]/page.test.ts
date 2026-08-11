@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
+import { SAFE_AREA_GRACE_MS } from "./lib/project-page";
 
 const data = {
   project: { id: "project-1", name: "Project", isDefault: true },
@@ -404,6 +405,68 @@ describe("Layers", () => {
     await waitFor(() => expect(screen.getByText("Failed to reorder layers")).toBeInTheDocument());
     // Base is selected, so it is on top either way; Draft must be back underneath it.
     expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0" });
+  });
+
+  /** Opens the layer popover and gives its panel a real rect, which jsdom does not. */
+  async function openLayerPopover(panelRect: {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  }) {
+    const control = screen.getByLabelText("Layers").parentElement!;
+    await fireEvent.mouseEnter(control);
+    const panel = screen.getByRole("listbox", { name: "Layers" }).parentElement!;
+    panel.getBoundingClientRect = () => ({ ...panelRect, width: 0, height: 0 }) as DOMRect;
+    return control;
+  }
+
+  it("stays open while the pointer cuts the corner towards the popover", async () => {
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+    const control = await openLayerPopover({ left: 0, top: 40, right: 180, bottom: 200 });
+
+    // Leaving the button just above the panel, heading diagonally for a row inside it.
+    await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
+    await fireEvent.mouseMove(document, { clientX: 60, clientY: 35 });
+
+    expect(screen.queryByRole("listbox", { name: "Layers" })).toBeInTheDocument();
+  });
+
+  it("closes when the pointer leaves the corridor to the popover", async () => {
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+    const control = await openLayerPopover({ left: 0, top: 40, right: 180, bottom: 200 });
+
+    await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
+    // Off to the side: this pointer was never coming here.
+    await fireEvent.mouseMove(document, { clientX: 300, clientY: 35 });
+
+    await waitFor(() =>
+      expect(screen.queryByRole("listbox", { name: "Layers" })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("gives up on a pointer that stops inside the corridor", async () => {
+    vi.useFakeTimers();
+    try {
+      render(ProjectPage, {
+        props: { data, params: { projectId: "project-1" }, form: null },
+      });
+      const control = await openLayerPopover({ left: 0, top: 40, right: 180, bottom: 200 });
+
+      await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
+      await fireEvent.mouseMove(document, { clientX: 60, clientY: 35 });
+      expect(screen.queryByRole("listbox", { name: "Layers" })).toBeInTheDocument();
+
+      await vi.advanceTimersByTimeAsync(SAFE_AREA_GRACE_MS);
+
+      expect(screen.queryByRole("listbox", { name: "Layers" })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("moves the selected cards to another layer and follows them there", async () => {

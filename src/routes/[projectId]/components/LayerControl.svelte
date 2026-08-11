@@ -1,7 +1,15 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { CardWithGlue, Layer } from "$lib/types";
-  import { orderLayers, reorderByDrop, reorderByNudge } from "../lib/project-page";
+  import {
+    insideTriangle,
+    orderLayers,
+    reorderByDrop,
+    reorderByNudge,
+    safeTriangle,
+    SAFE_AREA_GRACE_MS,
+    type Triangle,
+  } from "../lib/project-page";
 
   let {
     layers,
@@ -29,6 +37,8 @@
   let pinned = $state(false);
   let newLayerName = $state("");
   let controlEl: HTMLDivElement = $state()!;
+  let panelEl: HTMLDivElement | null = $state(null);
+  let safeArea = $state<Triangle | null>(null);
   let draggingId = $state<string | null>(null);
   let dropTargetId = $state<string | null>(null);
   let renamingId = $state<string | null>(null);
@@ -56,6 +66,40 @@
     document.addEventListener("mousedown", handleDown);
     return () => document.removeEventListener("mousedown", handleDown);
   });
+
+  function close() {
+    hovering = false;
+    safeArea = null;
+  }
+
+  /**
+   * The pointer left the control while the popover was open. Rather than closing on the
+   * spot, watch where it goes: inside the corridor towards the popover it is still on its
+   * way in, and anywhere else it has left for good. The grace timer is the other half of
+   * that — a pointer parked in the corridor is not travelling anywhere.
+   */
+  $effect(() => {
+    if (!safeArea) return;
+    const corridor = safeArea;
+    function handleMove(e: MouseEvent) {
+      if (!insideTriangle({ x: e.clientX, y: e.clientY }, corridor)) close();
+    }
+    const giveUp = setTimeout(close, SAFE_AREA_GRACE_MS);
+    document.addEventListener("mousemove", handleMove);
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      clearTimeout(giveUp);
+    };
+  });
+
+  function leaveControl(e: MouseEvent) {
+    // Nothing to aim at with the popover shut, and a pinned one is not ours to close.
+    if (!open || pinned || !panelEl) {
+      close();
+      return;
+    }
+    safeArea = safeTriangle({ x: e.clientX, y: e.clientY }, panelEl.getBoundingClientRect());
+  }
 
   function create() {
     const name = newLayerName.trim();
@@ -157,8 +201,12 @@
   bind:this={controlEl}
   class={css({ position: "absolute", top: "12px", right: "52px", zIndex: "51" })}
   role="presentation"
-  onmouseenter={() => (hovering = true)}
-  onmouseleave={() => (hovering = false)}
+  onmouseenter={() => {
+    hovering = true;
+    // Arrived: whatever corridor was being watched has served its purpose.
+    safeArea = null;
+  }}
+  onmouseleave={leaveControl}
   onfocusin={() => (hovering = true)}
   onfocusout={(e) => {
     // Keyboard users open the popover by focusing it, so it has to close again when
@@ -193,10 +241,12 @@
   </button>
 
   {#if open}
-    <!-- The panel hangs off a wrapper that starts flush with the button, so moving the
-         pointer from the button into the popover never leaves the hover area. -->
+    <!-- The panel hangs off a wrapper that starts flush with the button, so a pointer
+         moving straight down never leaves the hover area. The diagonal is the safe
+         triangle's job, since the panel is wider than the button it hangs from. -->
     <div class={css({ position: "absolute", top: "100%", right: "0", paddingTop: "6px" })}>
     <div
+      bind:this={panelEl}
       class={css({
         background: "ink.white",
         border: "1px solid token(colors.neutral.border)",

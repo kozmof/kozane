@@ -18,6 +18,8 @@ import {
   previousPositions,
   reorderByDrop,
   reorderByNudge,
+  safeTriangle,
+  insideTriangle,
   verticalListPosition,
   rectsIntersect,
   selectionRectFromPoints,
@@ -173,6 +175,58 @@ describe("reorderByNudge", () => {
   it("returns null at the ends of the list, where there is nothing to commit", () => {
     expect(reorderByNudge(["a", "b"], "a", -1)).toBeNull();
     expect(reorderByNudge(["a", "b"], "b", 1)).toBeNull();
+  });
+});
+
+describe("safeTriangle", () => {
+  // A popover hanging below its button, the way the layer control's does.
+  const panel = { left: 0, top: 40, right: 180, bottom: 200 };
+
+  it("spans from the exit point to the popover edge facing it", () => {
+    expect(safeTriangle({ x: 100, y: 20 }, panel)).toEqual([
+      { x: 100, y: 20 },
+      { x: 0, y: 40 },
+      { x: 180, y: 40 },
+    ]);
+  });
+
+  it("uses the bottom edge for a popover that opens upwards", () => {
+    expect(safeTriangle({ x: 100, y: 260 }, panel)).toEqual([
+      { x: 100, y: 260 },
+      { x: 0, y: 200 },
+      { x: 180, y: 200 },
+    ]);
+  });
+
+  it("uses a side edge for a popover alongside the trigger", () => {
+    expect(safeTriangle({ x: -20, y: 100 }, panel)).toEqual([
+      { x: -20, y: 100 },
+      { x: 0, y: 40 },
+      { x: 0, y: 200 },
+    ]);
+    expect(safeTriangle({ x: 300, y: 100 }, panel)).toEqual([
+      { x: 300, y: 100 },
+      { x: 180, y: 40 },
+      { x: 180, y: 200 },
+    ]);
+  });
+});
+
+describe("insideTriangle", () => {
+  const corridor = safeTriangle({ x: 100, y: 20 }, { left: 0, top: 40, right: 180, bottom: 200 });
+
+  it("accepts a pointer heading diagonally towards the popover", () => {
+    expect(insideTriangle({ x: 60, y: 35 }, corridor)).toBe(true);
+  });
+
+  it("rejects a pointer that has veered off to one side", () => {
+    expect(insideTriangle({ x: 300, y: 35 }, corridor)).toBe(false);
+    expect(insideTriangle({ x: 60, y: 10 }, corridor)).toBe(false);
+  });
+
+  it("counts the edges as inside, since a pointer on one is still on its way in", () => {
+    expect(insideTriangle({ x: 100, y: 20 }, corridor)).toBe(true);
+    expect(insideTriangle({ x: 90, y: 40 }, corridor)).toBe(true);
   });
 });
 
