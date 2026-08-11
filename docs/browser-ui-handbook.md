@@ -142,8 +142,7 @@ without the rest getting in the way. Every card belongs to exactly one layer of
 its project, and every project starts with a layer named `Base`.
 
 One layer is selected at a time. Its cards are drawn at full strength above all
-the others, and the remaining layers are drawn half transparent, in their own
-order. Cards on a dimmed layer stay live: you can still click, drag, and edit
+the others, and the remaining layers fade well back, in their own order. Cards on a dimmed layer stay live: you can still click, drag, and edit
 them, and a card you drag rises above the layers on top of it while it moves.
 "Bring to front" and "Send to back" reorder a card within its own layer.
 

@@ -16,6 +16,7 @@
     glueGroupIds,
     glueIdByCardId,
     cardPositionPatches,
+    INACTIVE_LAYER_OPACITY,
     layerStack,
     previousPositions,
     verticalListPosition,
@@ -498,7 +499,7 @@
           style:position="absolute"
           style:inset="0"
           style:z-index={group.rank}
-          style:opacity={group.active ? 1 : 0.5}
+          style:opacity={group.active ? 1 : INACTIVE_LAYER_OPACITY}
           style:pointer-events="none"
           style:transition="opacity 0.18s"
         >

@@ -6,6 +6,8 @@ export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/ca
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
+/** Opacity of a layer that is not the selected one: present, but well out of the way. */
+export const INACTIVE_LAYER_OPACITY = 0.3;
 
 export const PALETTE = [
   { bg: "oklch(93% 0.055 52)", dot: "oklch(62% 0.15 52)" },

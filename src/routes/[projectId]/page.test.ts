@@ -242,7 +242,7 @@ describe("Layers", () => {
 
     // "Base" is the default layer, so it starts active: full opacity and the top rank.
     expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "1", "z-index": "1" });
-    expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "0.5", "z-index": "0" });
+    expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "0.3", "z-index": "0" });
   });
 
   it("restacks when another layer is selected from the hover popover", async () => {
@@ -254,7 +254,7 @@ describe("Layers", () => {
     await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
 
     expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" });
-    expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.5", "z-index": "0" });
+    expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.3", "z-index": "0" });
   });
 
   it("keeps cards on dimmed layers clickable", async () => {
@@ -374,7 +374,7 @@ describe("Layers", () => {
     });
     // Base is still the selected layer, so it keeps the top rank; Draft drops to 0.
     expect(layerGroup(container, "l1")).toHaveStyle({ "z-index": "1", opacity: "1" });
-    expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0", opacity: "0.5" });
+    expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0", opacity: "0.3" });
   });
 
   it("reorders layers from the keyboard on the drag handle", async () => {
