@@ -35,6 +35,31 @@ export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): P
   return db.select().from(cardTable).where(inArray(cardTable.bundleId, bundleIds));
 }
 
+export type CardMarker = { projectId: string; posX: number; posY: number; content: string };
+type GetCardMarkers = NeedsDB & { projectIds: string[] };
+
+/**
+ * Just enough of every card in `projectIds` to say what is near a point: the warp palette
+ * names a warp after the card closest to it, and pulling whole rows for several projects
+ * to read three columns is not worth it.
+ */
+export async function getCardMarkersByProjects({
+  db,
+  projectIds,
+}: GetCardMarkers): Promise<CardMarker[]> {
+  if (projectIds.length === 0) return [];
+  return db
+    .select({
+      projectId: bundleTable.projectId,
+      posX: cardTable.posX,
+      posY: cardTable.posY,
+      content: cardTable.content,
+    })
+    .from(cardTable)
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .where(inArray(bundleTable.projectId, projectIds));
+}
+
 type GetCard = NeedsBundle & { cardId: string };
 export async function getCard({ db, bundleId, cardId }: GetCard): Promise<Card | undefined> {
   return db

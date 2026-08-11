@@ -46,6 +46,7 @@
     focusedWarpId,
     warpsVisible,
     warpMarkerSize,
+    initialCenter = null,
     onFocusWarp,
     showFooters,
     zoom = $bindable(),
@@ -78,6 +79,11 @@
     warpsVisible: boolean;
     /** Diameter of a warp marker, in canvas pixels. */
     warpMarkerSize: number;
+    /**
+     * Where the view opens, when the page was reached by warping in from another project.
+     * Null is the ordinary case: the middle of the board.
+     */
+    initialCenter?: { posX: number; posY: number } | null;
     onFocusWarp: (warpId: string) => void;
     showFooters: boolean;
     zoom: number;
@@ -180,6 +186,12 @@
   } | null = null;
 
   onMount(() => {
+    // Landing on a warp is decided before the first paint rather than scrolled to
+    // afterwards, so arriving from another project does not flash the middle of the board.
+    if (initialCenter) {
+      centerOn(initialCenter.posX, initialCenter.posY);
+      return;
+    }
     canvasEl.scrollLeft = centeredScrollOffset(canvasEl.scrollWidth, canvasEl.clientWidth);
     canvasEl.scrollTop = centeredScrollOffset(canvasEl.scrollHeight, canvasEl.clientHeight);
   });

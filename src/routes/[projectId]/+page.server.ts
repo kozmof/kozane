@@ -13,6 +13,7 @@ import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
 import { getAllTaskspaces } from "../../db/api/taskspace";
+import { loadWarpDirectory } from "$lib/server/warp-directory";
 
 // Static export (kozane net ssg generate): prerender one page per project. `entries` tells
 // SvelteKit which [projectId] values to bake out, and `readonly` flows to the UI
@@ -48,10 +49,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const cards = await getCardsByBundles({ db, bundleIds });
   const cardIds = cards.map((c) => c.id);
 
-  const [glueRels, scopeRels, taskspaces] = await Promise.all([
+  const [glueRels, scopeRels, taskspaces, warpDirectory] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
     getAllTaskspaces({ db }), // intentionally unscoped — see taskspace.ts
+    // The other projects' warps, for the Shift+arrow palette. Baked into a static export
+    // too, which is why the palette works there without an endpoint to call.
+    loadWarpDirectory({ db, projectId }),
   ]);
 
   return {
@@ -59,6 +63,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     bundles,
     layers,
     warps,
+    warpDirectory,
     otherProjects: allProjects.filter((p) => p.id !== projectId),
     cards: cardsWithGlueIds(cards, glueRels),
     glueRels,

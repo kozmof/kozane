@@ -158,6 +158,11 @@ export function deleteWarp(
   return jsonRequest(fetcher, `/${projectId}/api/warps/${warpId}`, "DELETE");
 }
 
+/** The other projects' warps, as the palette lists them. */
+export function fetchWarpDirectory(fetcher: typeof fetch, projectId: string): Promise<Response> {
+  return fetcher(`/${projectId}/api/warp-directory`);
+}
+
 export function createScope(
   fetcher: typeof fetch,
   projectId: string,

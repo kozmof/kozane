@@ -22,8 +22,11 @@ export default defineConfig({
       $lib: path.resolve("./src/lib"),
       "styled-system": path.resolve("./styled-system"),
       "@libsql/client": libsqlNodeEntry,
-      // SvelteKit virtual module — only real in a Vite/SvelteKit build.
+      // SvelteKit virtual modules — only real in a Vite/SvelteKit build.
       "$app/paths": path.resolve("./src/test-utils/app-paths.ts"),
+      "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
+      "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
+      "$app/state": path.resolve("./src/test-utils/app-state.ts"),
     },
   },
   test: {

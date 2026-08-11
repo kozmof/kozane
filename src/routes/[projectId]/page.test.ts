@@ -2,6 +2,12 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
 import { SAFE_AREA_GRACE_MS } from "./lib/project-page";
+import { goto, replaceState } from "$app/navigation";
+import { page } from "$app/state";
+
+// The page navigates between projects and tidies its own URL; both are the router's job,
+// which does not exist outside a real SvelteKit app.
+vi.mock("$app/navigation", () => ({ goto: vi.fn(), replaceState: vi.fn() }));
 
 const data = {
   project: { id: "project-1", name: "Project", isDefault: true },
@@ -78,6 +84,19 @@ const data = {
     canvasWidth: 2800,
     canvasHeight: 2000,
   },
+  // What the other projects contribute to the warp palette.
+  warpDirectory: [
+    {
+      id: "warp-9",
+      projectId: "project-2",
+      projectName: "Research",
+      label: 1,
+      posX: 600,
+      posY: 400,
+      hint: "Umesao 1969",
+      isCurrent: false,
+    },
+  ],
   readonly: false,
 };
 
@@ -919,5 +938,146 @@ describe("Warps", () => {
     await fireEvent.keyDown(window, { key: "w" });
     await fireEvent.keyDown(window, { key: "q" });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  describe("palette", () => {
+    const directoryResponse = (entries: unknown[]) =>
+      vi.fn().mockResolvedValue({ ok: true, json: async () => entries });
+
+    function openPalette() {
+      return fireEvent.keyDown(window, { key: "ArrowRight", shiftKey: true });
+    }
+
+    it("lists every project's warps, this one's first", async () => {
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      renderPage();
+
+      await openPalette();
+
+      expect(screen.getByText("Project (this project)")).toBeInTheDocument();
+      // By role: "Research" is also the name of a bundle in the left panel.
+      expect(screen.getByRole("listbox", { name: "Research" })).toBeInTheDocument();
+      const rows = screen.getAllByRole("option");
+      expect(rows).toHaveLength(4);
+      expect(rows[0]).toHaveTextContent("Warp 1");
+      expect(rows[3]).toHaveTextContent("Umesao 1969");
+    });
+
+    it("re-reads the other projects' warps when it opens", async () => {
+      const fetch = directoryResponse([
+        { ...data.warpDirectory[0], id: "warp-10", hint: "set in another tab" },
+      ]);
+      vi.stubGlobal("fetch", fetch);
+      renderPage();
+
+      await openPalette();
+
+      expect(fetch).toHaveBeenCalledWith("/project-1/api/warp-directory");
+      await waitFor(() =>
+        expect(screen.getByRole("option", { name: /set in another tab/ })).toBeInTheDocument(),
+      );
+    });
+
+    it("keeps the warps it was given when the re-read fails", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+      renderPage();
+
+      await openPalette();
+
+      await waitFor(() =>
+        expect(screen.getByRole("option", { name: /Umesao 1969/ })).toBeInTheDocument(),
+      );
+    });
+
+    it("asks for nothing in a read-only export", async () => {
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      renderPage({ readonly: true });
+
+      await openPalette();
+
+      expect(screen.getByRole("dialog", { name: "Warps" })).toBeInTheDocument();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it("moves the view to a warp of this project without navigating", async () => {
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      const { container } = renderPage();
+      const canvas = canvasOf(container);
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("option", { name: /Warp 2/ }));
+
+      // Centred on warp 2 at x=2400: 2400 − half the 800px viewport.
+      expect(canvas.scrollLeft).toBe(2000);
+      expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+      expect(screen.queryByRole("dialog", { name: "Warps" })).not.toBeInTheDocument();
+      expect(goto).not.toHaveBeenCalled();
+    });
+
+    it("navigates to the other project, naming the warp it is headed for", async () => {
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      renderPage();
+
+      await openPalette();
+      await fireEvent.click(screen.getByRole("option", { name: /Umesao 1969/ }));
+
+      expect(goto).toHaveBeenCalledWith("/project-2?warp=warp-9");
+    });
+
+    it("does not open while cards are selected", async () => {
+      vi.stubGlobal("fetch", vi.fn());
+      renderPage();
+
+      await fireEvent.click(screen.getByLabelText("Card: Alpha"));
+      await openPalette();
+
+      expect(screen.queryByRole("dialog", { name: "Warps" })).not.toBeInTheDocument();
+    });
+
+    it("closes on the same key that opened it", async () => {
+      vi.stubGlobal("fetch", directoryResponse(data.warpDirectory));
+      renderPage();
+
+      await openPalette();
+      await fireEvent.keyDown(screen.getByRole("dialog", { name: "Warps" }), {
+        key: "ArrowUp",
+        shiftKey: true,
+      });
+
+      expect(screen.queryByRole("dialog", { name: "Warps" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("landing from another project", () => {
+    // The cast is for SvelteKit's typed-routes URL, which the test stub does not brand.
+    const visit = (url: string) => (page.url = new URL(url) as typeof page.url);
+
+    afterEach(() => {
+      visit("http://localhost/project-1");
+    });
+
+    it("opens on the warp the url names and highlights it", async () => {
+      visit("http://localhost/project-1?warp=warp-2");
+      vi.stubGlobal("fetch", vi.fn());
+
+      const { container } = renderPage();
+
+      // Warp 2 sits at x=2400, y=1000: half a viewport back from each.
+      expect(canvasOf(container).scrollLeft).toBe(2000);
+      expect(canvasOf(container).scrollTop).toBe(700);
+      expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+      // And the query is dropped, so panning away and reloading does not snap back.
+      await waitFor(() => expect(replaceState).toHaveBeenCalledWith("/project-1", {}));
+    });
+
+    it("opens in the middle of the board when the warp is gone", () => {
+      visit("http://localhost/project-1?warp=removed-elsewhere");
+      vi.stubGlobal("fetch", vi.fn());
+
+      const { container } = renderPage();
+
+      expect(canvasOf(container).scrollLeft).toBe(1000);
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { warpTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
-import type { NeedsProject, NeedsProjectWarp, Warp } from "./types.js";
+import type { NeedsDB, NeedsProject, NeedsProjectWarp, Warp } from "./types.js";
 import { assertFound } from "./utils.js";
 
 /**
@@ -13,6 +13,15 @@ export async function getAllWarps({ db, projectId }: NeedsProject): Promise<Warp
     .from(warpTable)
     .where(eq(warpTable.projectId, projectId))
     .orderBy(asc(warpTable.id));
+}
+
+/**
+ * Every warp in the workspace, for the cross-project warp palette. Ordered by project and
+ * then by id, so the warps of one project arrive in the same creation order
+ * {@link getAllWarps} gives them and keep the numbers their markers show.
+ */
+export async function getAllWorkspaceWarps({ db }: NeedsDB): Promise<Warp[]> {
+  return db.select().from(warpTable).orderBy(asc(warpTable.projectId), asc(warpTable.id));
 }
 
 type AddWarp = NeedsProject & { posX: number; posY: number };

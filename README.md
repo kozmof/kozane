@@ -48,7 +48,8 @@ kozane open
 For working in the browser UI, see the
 [Browser UI handbook](./docs/browser-ui-handbook.md). On a board wider than the
 screen, press `a` to drop a warp under the pointer and use the arrow keys to
-move between warps, wrapping round at the edges.
+move between warps, wrapping round at the edges. `Shift` with an arrow key lists
+every warp in the workspace, so one jump reaches another project's board.
 
 To start with an empty database that exists only for the lifetime of the server,
 use `kozane open --memory`. It creates a project named `:memory:`, and all

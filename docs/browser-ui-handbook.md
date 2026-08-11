@@ -62,6 +62,12 @@ there after a reload and in another tab.
   round: `→` off the rightmost warp arrives at the leftmost, and `↓` off the
   bottom one at the top, so a row of warps cycles under one key. Zoom is left as
   it is.
+- Warp to another project — press `Shift` with any arrow key. A list of every warp
+  in the workspace opens, grouped by project, with this project's warps first and
+  each warp named after the card nearest to it. `↑` and `↓` move through the list,
+  `Enter` or a click jumps, and `Esc` closes it. A warp in this project just moves
+  the view; a warp in another project opens that project's board already centred on
+  it. The direction pressed does not matter — all four open the same list.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
 - Show or hide — press `Shift+A`. Setting a warp shows the markers again, so a
@@ -70,8 +76,9 @@ there after a reload and in another tab.
   them bigger or smaller; the number inside scales with the circle.
 
 Warp keys work when no cards are selected: while a selection is live, the
-composer's action bar owns the keyboard. A static export keeps warping and the
-show/hide toggle, and drops setting and removing along with every other write.
+composer's action bar owns the keyboard. A static export keeps warping — the
+cross-project list included — and the show/hide toggle, and drops setting and
+removing along with every other write.
 
 ## Creating cards
 

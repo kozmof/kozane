@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
-import { addWarp, getAllWarps, deleteWarp } from "./warp.js";
+import { addWarp, getAllWarps, getAllWorkspaceWarps, deleteWarp } from "./warp.js";
 import { addProject, deleteProject } from "./project.js";
 import { NotFoundError } from "./utils.js";
 
@@ -54,6 +54,33 @@ describe("getAllWarps", () => {
     const { db, projectId } = await setup();
 
     expect(await getAllWarps({ db, projectId })).toEqual([]);
+  });
+});
+
+describe("getAllWorkspaceWarps", () => {
+  it("returns every project's warps, each project's oldest first", async () => {
+    const { db, projectId } = await setup();
+    const otherId = await addProject({ db, name: "Other" });
+    const mineFirst = await addWarp({ db, projectId, posX: 0, posY: 0 });
+    const theirs = await addWarp({ db, projectId: otherId, posX: 20, posY: 20 });
+    const mineSecond = await addWarp({ db, projectId, posX: 100, posY: 100 });
+
+    const warps = await getAllWorkspaceWarps({ db });
+
+    expect(warps).toHaveLength(3);
+    const byProject = (id: string) => warps.filter((w) => w.projectId === id).map(({ id }) => id);
+    expect(byProject(projectId)).toEqual([mineFirst.id, mineSecond.id]);
+    expect(byProject(otherId)).toEqual([theirs.id]);
+    // Grouped, so a consumer can walk one project's warps without re-sorting: each
+    // project's id starts exactly one run.
+    const ids = warps.map((w) => w.projectId);
+    expect(ids.filter((id, i) => id !== ids[i - 1])).toHaveLength(new Set(ids).size);
+  });
+
+  it("returns nothing for a workspace without warps", async () => {
+    const { db } = await setup();
+
+    expect(await getAllWorkspaceWarps({ db })).toEqual([]);
   });
 });
 

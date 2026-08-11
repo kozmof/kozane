@@ -2,7 +2,11 @@
   import { onMount, tick, untrack } from "svelte";
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
-  import { createCard, updateCard, patchCardPositions } from "./lib/project-api";
+  import { base } from "$app/paths";
+  import { browser } from "$app/environment";
+  import { goto, replaceState } from "$app/navigation";
+  import { page } from "$app/state";
+  import { createCard, updateCard, patchCardPositions, fetchWarpDirectory } from "./lib/project-api";
   import {
     applyPalette,
     ARROW_DIRECTIONS,
@@ -12,6 +16,7 @@
     warpInDirection,
   } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
+  import { warpEntriesForProject, type WarpListEntry } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
   import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
@@ -21,6 +26,7 @@
   import FloatingControls from "./components/FloatingControls.svelte";
   import LayerControl from "./components/LayerControl.svelte";
   import FloatingComposer from "./components/FloatingComposer.svelte";
+  import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
 
   let { data }: PageProps = $props();
@@ -42,6 +48,11 @@
   let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
   let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
+  let warpPaletteOpen = $state(false);
+  // Every other project's warps. Loaded with the page so the palette opens filled in, and
+  // re-fetched when it opens so a warp set elsewhere since then is not missing.
+  // `?? []`: a static export built before this feature has no directory in its page data.
+  let warpDirectory = $state.raw<WarpListEntry[]>(untrack(() => data.warpDirectory ?? []));
   let newCardSeq = 0;
   let positionActivityCount = 0;
   let positionActivityVersion = 0;
@@ -84,6 +95,17 @@
   let primaryCard = $derived(
     s.selection.primarySelectedId ? (s.cards.find((c) => c.id === s.selection.primarySelectedId) ?? null) : null,
   );
+  // This project's rows come from live state rather than the server, so a warp just set
+  // with the warp key is in the palette before any request comes back.
+  let warpEntries = $derived([
+    ...warpEntriesForProject({
+      project: { id: data.project.id, name: data.project.name },
+      warps: s.warps,
+      cards: s.cards,
+      isCurrent: true,
+    }),
+    ...warpDirectory,
+  ]);
 
   // ── Reset on project navigation ───────────────────────────────
   let loadedProjectId = $state(untrack(() => data.project.id));
@@ -92,6 +114,7 @@
   $effect(() => {
     if (data === loadedData) return;
     loadedData = data;
+    warpDirectory = data.warpDirectory;
     if (data.project.id !== loadedProjectId) {
       loadedProjectId = data.project.id;
       s.resetFromData(data);
@@ -100,13 +123,60 @@
       showFooters = data.uiConfig.defaultShowFooter;
       warpsVisible = data.uiConfig.defaultShowWarps;
       zoom = data.uiConfig.defaultZoom;
+      // Warping in from another project reuses this component, so the canvas never
+      // remounts and its `initialCenter` never runs again: the landing happens here.
+      landOnWarpFromUrl();
     } else {
       s.refreshFromData(data);
     }
   });
 
+  /**
+   * The warp named by `?warp=`, which is how a jump to another project says where it was
+   * headed. Null whenever the id is absent or belongs to a warp this project no longer has.
+   */
+  function warpFromUrl() {
+    // Only in the browser: prerendering a static export forbids reading the query, and a
+    // warp landing is a client-side scroll anyway.
+    if (!browser) return null;
+    const warpId = page.url.searchParams.get("warp");
+    return warpId ? (s.warps.find(({ id }) => id === warpId) ?? null) : null;
+  }
+
+  function landOnWarpFromUrl() {
+    const target = untrack(warpFromUrl);
+    if (!target) return;
+    s.focusedWarpId = target.id;
+    tick().then(() => {
+      canvasComponent.centerOn(target.posX, target.posY);
+      clearWarpQuery();
+    });
+  }
+
+  /**
+   * Drops the `?warp=` the jump arrived with, so panning away and reloading does not snap
+   * back to it. Best-effort: the URL is cosmetic here, and a router that is not ready yet
+   * is not worth an error banner.
+   */
+  function clearWarpQuery() {
+    try {
+      replaceState(page.url.pathname, {});
+    } catch {
+      // Ignored: see above.
+    }
+  }
+
   // Remember the layer being worked on, so a reload comes back to it instead of to Base.
   $effect(() => storeActiveLayerId(s.projectId, s.activeLayerId));
+
+  // Resolved before the canvas mounts, so a page loaded with `?warp=` opens on the warp
+  // instead of scrolling to it once the middle of the board has already been painted.
+  const initialWarp = untrack(warpFromUrl);
+  if (initialWarp) untrack(() => (s.focusedWarpId = initialWarp.id));
+
+  onMount(() => {
+    if (initialWarp) clearWarpQuery();
+  });
 
   // Keep this long-lived page in sync with writes made by the CLI or another tab.
   // The snapshot endpoint returns the current database state; refreshFromData applies it
@@ -215,7 +285,33 @@
     }
   }
 
+  /** Fills the palette in with warps another tab or the CLI has set since the page loaded. */
+  async function refreshWarpDirectory() {
+    // A static export has no endpoint to ask, and nothing can have changed under it.
+    if (readonly) return;
+    try {
+      const res = await fetchWarpDirectory(s.fetcher, s.projectId);
+      if (res.ok) warpDirectory = await res.json();
+    } catch {
+      // The copy that came with the page stays: a stale list beats an empty one.
+    }
+  }
+
+  function handleWarpJump(entry: WarpListEntry) {
+    warpPaletteOpen = false;
+    if (entry.projectId === s.projectId) {
+      canvasComponent.centerOn(entry.posX, entry.posY);
+      s.focusedWarpId = entry.id;
+      return;
+    }
+    // The other project's page decides where its own canvas opens, so the warp travels in
+    // the URL rather than in memory — which also makes the jump a link worth sharing.
+    void goto(`${base}/${entry.projectId}?warp=${entry.id}`);
+  }
+
   function handleKeydown(e: KeyboardEvent) {
+    // The palette owns the keyboard while it is open, including the key that closes it.
+    if (warpPaletteOpen) return;
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
     if (!readonly && e.key === data.uiConfig.focusCardInputShortcut) {
@@ -234,6 +330,14 @@
     if (e.key === data.uiConfig.toggleWarpsShortcut) warpsVisible = !warpsVisible;
 
     const direction = ARROW_DIRECTIONS[e.key];
+    if (direction && e.shiftKey) {
+      // Any of the four arrows opens the same list: the direction is how the hand already
+      // reaches for warping, not a choice of which warps to show.
+      e.preventDefault();
+      warpPaletteOpen = true;
+      void refreshWarpDirectory();
+      return;
+    }
     if (direction) {
       // Measured from where the view is now, so warping works the same whether you
       // arrived by arrow key or by dragging the canvas.
@@ -290,6 +394,7 @@
       focusedWarpId={s.focusedWarpId}
       {warpsVisible}
       warpMarkerSize={data.uiConfig.warpMarkerSize}
+      initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
       onFocusWarp={(warpId) => (s.focusedWarpId = warpId)}
       {showFooters}
       bind:zoom
@@ -306,6 +411,15 @@
       onError={(msg) => (s.lastError = msg)}
       {readonly}
     />
+
+    {#if warpPaletteOpen}
+      <WarpPalette
+        entries={warpEntries}
+        focusedWarpId={s.focusedWarpId}
+        onJump={handleWarpJump}
+        onClose={() => (warpPaletteOpen = false)}
+      />
+    {/if}
 
     {#if s.lastError}
       <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />

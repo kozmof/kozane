@@ -5,6 +5,7 @@ import {
   getCard,
   getAllCards,
   getCardsByBundles,
+  getCardMarkersByProjects,
   updateProjectCardPositions,
   updateCard,
   getCardBundleNames,
@@ -117,6 +118,43 @@ describe("getCardsByBundles", () => {
     await addCard({ db, bundleId: b2, content: "Not included" });
     const cards = await getCardsByBundles({ db, bundleIds: [bundleId] });
     expect(cards).toHaveLength(0);
+  });
+});
+
+describe("getCardMarkersByProjects", () => {
+  it("returns empty array for an empty projectIds list", async () => {
+    const { db } = await setup();
+    expect(await getCardMarkersByProjects({ db, projectIds: [] })).toEqual([]);
+  });
+
+  it("returns the position and content of every card in the named projects", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const b2 = await addBundle({ db, projectId, name: "Second" });
+    await addCard({ db, bundleId, content: "In b1", posX: 24, posY: 48 });
+    await addCard({ db, bundleId: b2, content: "In b2", posX: 96, posY: 96 });
+
+    const markers = await getCardMarkersByProjects({ db, projectIds: [projectId] });
+
+    expect(markers).toEqual(
+      expect.arrayContaining([
+        { projectId, posX: 24, posY: 48, content: "In b1" },
+        { projectId, posX: 96, posY: 96, content: "In b2" },
+      ]),
+    );
+    expect(markers).toHaveLength(2);
+  });
+
+  it("does not return cards from a project not in the list", async () => {
+    const { db, bundleId } = await setup();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "General" });
+    await addCard({ db, bundleId, content: "Mine" });
+    await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const markers = await getCardMarkersByProjects({ db, projectIds: [otherProjectId] });
+
+    expect(markers).toMatchObject([{ projectId: otherProjectId, content: "Theirs" }]);
   });
 });
 
