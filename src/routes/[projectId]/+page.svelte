@@ -80,6 +80,7 @@
     getViewCenter: () => { posX: number; posY: number };
     getWarpPosition: () => { posX: number; posY: number };
     centerOn: (posX: number, posY: number) => void;
+    recenter: () => void;
   } = $state()!;
   let composerComponent: { focusInput: () => void } = $state()!;
 
@@ -136,7 +137,7 @@
       zoom = data.uiConfig.defaultZoom;
       // Warping in from another project reuses this component, so the canvas never
       // remounts and its `initialCenter` never runs again: the landing happens here.
-      landOnWarpFromUrl();
+      openViewOnNewProject();
     } else {
       s.refreshFromData(data);
     }
@@ -154,9 +155,19 @@
     return warpId ? (s.warps.find(({ id }) => id === warpId) ?? null) : null;
   }
 
-  function landOnWarpFromUrl() {
+  /**
+   * Where the board a project navigation arrived at opens: on the warp the jump named, or
+   * in the middle, as a project opened from a link does. Landing on the scroll offset the
+   * project left behind — which is what reusing the canvas would otherwise do, after a
+   * jump to a removed warp or a press of the browser's Back button — shows nothing in
+   * particular.
+   */
+  function openViewOnNewProject() {
     const target = untrack(warpFromUrl);
-    if (!target) return;
+    if (!target) {
+      tick().then(() => canvasComponent.recenter());
+      return;
+    }
     s.focusedWarpId = target.id;
     tick().then(() => {
       canvasComponent.centerOn(target.posX, target.posY);

@@ -192,9 +192,18 @@
       centerOn(initialCenter.posX, initialCenter.posY);
       return;
     }
+    recenter();
+  });
+
+  /**
+   * Back to the middle of the board, where a freshly opened project starts. Navigating to
+   * another project reuses this component, so the view has to be put back by hand — a new
+   * board inheriting the last one's scroll offset opens on nothing in particular.
+   */
+  export function recenter(): void {
     canvasEl.scrollLeft = centeredScrollOffset(canvasEl.scrollWidth, canvasEl.clientWidth);
     canvasEl.scrollTop = centeredScrollOffset(canvasEl.scrollHeight, canvasEl.clientHeight);
-  });
+  }
 
   export function getNewCardPosition(seq: number): { posX: number; posY: number } {
     const scroll = { left: canvasEl.scrollLeft, top: canvasEl.scrollTop };

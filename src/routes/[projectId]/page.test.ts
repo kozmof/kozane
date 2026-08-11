@@ -1164,6 +1164,26 @@ describe("Warps", () => {
       await waitFor(() => expect(replaceState).toHaveBeenCalledWith("/project-1", {}));
     });
 
+    it("opens the next project in the middle rather than where the last one was left", async () => {
+      vi.stubGlobal("fetch", vi.fn());
+      const { container, rerender } = render(ProjectPage, {
+        props: { data, params: { projectId: "project-1" }, form: null },
+      });
+
+      await fireEvent.keyDown(window, { key: "ArrowRight" });
+      expect(canvasOf(container).scrollLeft).toBe(1400);
+
+      // Navigating with no warp to land on: the Back button, or a jump to a warp that has
+      // been removed since the palette listed it.
+      await rerender({
+        data: { ...data, project: { id: "project-2", name: "Research", isDefault: false } },
+        params: { projectId: "project-2" },
+        form: null,
+      });
+
+      await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1000));
+    });
+
     it("opens in the middle of the board when the warp is gone", () => {
       visit("http://localhost/project-1?warp=removed-elsewhere");
       vi.stubGlobal("fetch", vi.fn());
