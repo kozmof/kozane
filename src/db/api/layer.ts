@@ -1,7 +1,7 @@
 import { layerTable } from "../schema.js";
-import { and, asc, eq, max } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import type { NeedsProject, NeedsProjectLayer, Layer } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 /** Ordered the way the canvas stacks them: lowest position first, id as the tiebreak. */
@@ -41,20 +41,29 @@ export async function addLayer({
   name,
   isDefault = false,
 }: AddLayer): Promise<{ id: string; position: number }> {
-  const top = await db
-    .select({ position: max(layerTable.position) })
-    .from(layerTable)
-    .where(eq(layerTable.projectId, projectId))
-    .get();
-  const position = (top?.position ?? -1) + 1;
+  assertNameWithinLimit(name, "Layer name");
+  // The next position is computed inside the INSERT rather than read first: two concurrent
+  // creates would otherwise see the same max and both claim it. Nested transactions are not
+  // available here either — addLayer is itself called from inside one (moveCardsToProject).
   const [row] = await db
     .insert(layerTable)
-    .values({ projectId, name, position, isDefault })
-    .returning({ id: layerTable.id });
-  return { id: row.id, position };
+    .values({
+      projectId,
+      name,
+      isDefault,
+      position: sql`(SELECT COALESCE(MAX(${layerTable.position}), -1) + 1 FROM ${layerTable} WHERE ${layerTable.projectId} = ${projectId})`,
+    })
+    .returning({ id: layerTable.id, position: layerTable.position });
+  return { id: row.id, position: row.position };
 }
 
 type DeleteLayer = NeedsProjectLayer;
+
+/**
+ * Deletes the layer row itself, which cascades every card on it away with it. Callers
+ * that mean "remove this layer from the project" want `deleteLayerWithReassign` in
+ * composite.ts, which rehomes the cards on the default layer first.
+ */
 export async function deleteLayer({ db, projectId, layerId }: DeleteLayer): Promise<void> {
   const deleted = await db
     .delete(layerTable)
@@ -66,16 +75,29 @@ export async function deleteLayer({ db, projectId, layerId }: DeleteLayer): Prom
 type ReorderLayers = { db: DB; projectId: string; layerIds: string[] };
 
 /**
- * Renumbers a project's layers from `layerIds`, which must list every layer of the
- * project exactly once, bottom to top. Returns false when the list does not match the
- * project's layers — a stale client ordering renumbers nothing rather than half of it.
+ * Why a reorder was refused. `stale` means the project has a different number of layers
+ * than the caller listed — someone else added or deleted one — and is the only reason a
+ * reload fixes on its own.
  */
-export async function reorderLayers({ db, projectId, layerIds }: ReorderLayers): Promise<boolean> {
+export type ReorderRejection = "duplicate" | "stale" | "foreign";
+export type ReorderResult = { ok: true } | { ok: false; reason: ReorderRejection };
+
+/**
+ * Renumbers a project's layers from `layerIds`, which must list every layer of the
+ * project exactly once, bottom to top. A list that does not match the project's layers
+ * renumbers nothing rather than half of it, and says which way it failed to match.
+ */
+export async function reorderLayers({
+  db,
+  projectId,
+  layerIds,
+}: ReorderLayers): Promise<ReorderResult> {
   return withTx(db, async (tx) => {
     const existing = await getAllLayers({ db: tx, projectId });
     const requested = new Set(layerIds);
-    if (requested.size !== layerIds.length || requested.size !== existing.length) return false;
-    if (!existing.every(({ id }) => requested.has(id))) return false;
+    if (requested.size !== layerIds.length) return { ok: false, reason: "duplicate" };
+    if (requested.size !== existing.length) return { ok: false, reason: "stale" };
+    if (!existing.every(({ id }) => requested.has(id))) return { ok: false, reason: "foreign" };
 
     for (const [position, layerId] of layerIds.entries()) {
       await tx
@@ -83,7 +105,7 @@ export async function reorderLayers({ db, projectId, layerIds }: ReorderLayers):
         .set({ position })
         .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)));
     }
-    return true;
+    return { ok: true };
   });
 }
 
@@ -94,6 +116,7 @@ export async function updateLayerName({
   layerId,
   name,
 }: UpdateLayerName): Promise<void> {
+  assertNameWithinLimit(name, "Layer name");
   const updated = await db
     .update(layerTable)
     .set({ name })

@@ -101,7 +101,7 @@
     const stacked = layerStack(layers, activeLayerId, draggingLayerId);
     if (stacked.length === 0) {
       // No layers loaded (an older static export, say): one flat sheet, as before.
-      return [{ id: "", rank: 0, active: true, cards: visibleCards }];
+      return [{ id: "", rank: 0, active: true, floating: false, cards: visibleCards }];
     }
     const groups = new Map(stacked.map(({ layer }) => [layer.id, [] as CardWithGlue[]]));
     // A card whose layer is missing from this project falls back to the topmost layer
@@ -110,10 +110,11 @@
     for (const card of visibleCards) {
       (groups.get(card.layerId) ?? groups.get(fallbackId)!).push(card);
     }
-    return stacked.map(({ layer, rank, active }) => ({
+    return stacked.map(({ layer, rank, active, floating }) => ({
       id: layer.id,
       rank,
       active,
+      floating,
       cards: groups.get(layer.id)!,
     }));
   });
@@ -499,10 +500,12 @@
           style:position="absolute"
           style:inset="0"
           style:z-index={group.rank}
-          style:opacity={group.active ? 1 : INACTIVE_LAYER_OPACITY}
+          style:opacity={group.active || group.floating ? 1 : INACTIVE_LAYER_OPACITY}
           style:pointer-events="none"
           style:transition="opacity 0.18s"
         >
+          <!-- Scope dimming applies only where the layer is already at full strength: the
+               two opacities multiply, and 0.3 of 0.3 is a card nobody can see. -->
           {#each group.cards as card (card.id)}
             {@const color = bundleColorById.get(card.bundleId) ?? {
               id: "",
@@ -518,7 +521,9 @@
               isSelected={selectedCards.has(card.id)}
               isPrimaryUnglue={card.id === primarySelectedId && !!card.glueId}
               isComposing={composerCard?.id === card.id}
-              dimmed={scopeCardIds !== null && !scopeCardIds.has(card.id)}
+              dimmed={(group.active || group.floating) &&
+                scopeCardIds !== null &&
+                !scopeCardIds.has(card.id)}
               isDragging={draggingId === card.id}
               zIndex={card.zIndex}
               {showFooters}

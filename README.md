@@ -92,9 +92,12 @@ rest of the board dimmed behind it. Every project starts with a `Base` layer:
 kozane layer list
 kozane layer add Draft
 kozane card add --layer Draft "Only on the draft layer"
+kozane card layer 3f9a2c1 Draft   # move a card you already wrote
 kozane layer rename Draft Sketches
 kozane layer move Sketches down
 ```
+
+A layer can be named by its name, its ID, or a short ID; an exact name wins.
 
 ## Security and remote access
 

@@ -138,6 +138,35 @@ describe("layer CLI flow", () => {
     expect(result.stderr).toContain('Direction must be "up" or "down"');
   }, 30_000);
 
+  it("moves an existing card to another layer by name", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "layer", "add", "Draft");
+    const card = cli(root, "card", "add", "Written on Base");
+    const cardId = outputField(card, "id");
+
+    const moved = cli(root, "card", "layer", cardId, "Draft");
+    expect(moved).toContain("Card moved to another layer.");
+    expect(outputField(moved, "layer")).toBe("Draft");
+
+    const list = cli(root, "layer", "list");
+    expect(list).toMatch(/^\S+\s+0\s+0\s+Base \(default\)$/m);
+    expect(list).toMatch(/^\S+\s+1\s+1\s+Draft$/m);
+  }, 30_000);
+
+  it("refuses to move a card onto a layer of another project", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "project", "create", "Other");
+    cli(root, "layer", "add", "--project", projectIdOf(root, "Other"), "Theirs");
+    const cardId = outputField(cli(root, "card", "add", "Stays home"), "id");
+
+    const result = runCli(root, "card", "layer", cardId, "Theirs");
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("Layer not found");
+  }, 30_000);
+
   it("refuses to delete the default layer", () => {
     const root = tempWorkspace();
     cli(root, "init");
@@ -147,6 +176,14 @@ describe("layer CLI flow", () => {
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("Cannot delete the default layer");
   }, 30_000);
+
+  function projectIdOf(root: string, name: string): string {
+    const line = cli(root, "project", "list")
+      .split("\n")
+      .find((row) => row.includes(name));
+    if (!line) throw new Error(`No project named ${name} in:\n${cli(root, "project", "list")}`);
+    return line.trim().split(/\s+/)[0];
+  }
 
   function layerIdOf(root: string, name: string): string {
     const line = cli(root, "layer", "list")

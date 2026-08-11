@@ -102,9 +102,47 @@ type MoveCardsToProject = {
   cardIds: string[];
 };
 
+type RemapCardsByName = {
+  /** Each card paired with the name of the thing it currently belongs to. */
+  current: { cardId: string; name: string }[];
+  /** Candidates in the target project, matched against `current` by name. */
+  targets: { id: string; name: string }[];
+  create: (name: string) => Promise<string>;
+  assign: (targetId: string, cardIds: string[]) => Promise<void>;
+};
+
 /**
- * Moves cards from one project to another, preserving bundle names.
- * For each unique source bundle name, a matching bundle is found in the target
+ * Re-points cards at the same-named row in another project, creating it when the target
+ * has none. Both of a card's owners — its bundle and its layer — are per-project ids that
+ * cannot survive a move, and both are preserved this way.
+ */
+async function remapCardsByName({
+  current,
+  targets,
+  create,
+  assign,
+}: RemapCardsByName): Promise<void> {
+  const targetIdByName = new Map<string, string>();
+  for (const { name } of current) {
+    if (targetIdByName.has(name)) continue;
+    const existing = targets.find((target) => target.name === name);
+    targetIdByName.set(name, existing ? existing.id : await create(name));
+  }
+
+  const groups = new Map<string, string[]>();
+  for (const { cardId, name } of current) {
+    const targetId = targetIdByName.get(name)!;
+    const group = groups.get(targetId) ?? [];
+    group.push(cardId);
+    groups.set(targetId, group);
+  }
+
+  for (const [targetId, ids] of groups) await assign(targetId, ids);
+}
+
+/**
+ * Moves cards from one project to another, preserving bundle and layer names.
+ * For each unique source name, a matching bundle/layer is found in the target
  * project or created if absent. All updates are atomic.
  * Returns false if any card does not belong to sourceProjectId.
  */
@@ -120,65 +158,24 @@ export async function moveCardsToProject({
     if (owned.length !== cardIds.length) return false;
 
     const cardBundles = await getCardBundleNames({ db: tx, cardIds });
-    const targetBundles = await getAllBundles({ db: tx, projectId: targetProjectId });
+    await remapCardsByName({
+      current: cardBundles.map(({ cardId, bundleName }) => ({ cardId, name: bundleName })),
+      targets: await getAllBundles({ db: tx, projectId: targetProjectId }),
+      create: (name) => addBundle({ db: tx, projectId: targetProjectId, name }),
+      assign: async (bundleId, ids) => {
+        await tx.update(cardTable).set({ bundleId }).where(inArray(cardTable.id, ids));
+      },
+    });
 
-    // Build a map from source bundle name → target bundle id (find or create)
-    const bundleNameToTargetId = new Map<string, string>();
-    for (const { bundleName } of cardBundles) {
-      if (bundleNameToTargetId.has(bundleName)) continue;
-      const existing = targetBundles.find((b) => b.name === bundleName);
-      if (existing) {
-        bundleNameToTargetId.set(bundleName, existing.id);
-      } else {
-        const newId = await addBundle({ db: tx, projectId: targetProjectId, name: bundleName });
-        bundleNameToTargetId.set(bundleName, newId);
-      }
-    }
-
-    // Group card ids by their target bundle id and bulk-update each group
-    const groupsByTarget = new Map<string, string[]>();
-    for (const { cardId, bundleName } of cardBundles) {
-      const targetBundleId = bundleNameToTargetId.get(bundleName)!;
-      const group = groupsByTarget.get(targetBundleId) ?? [];
-      group.push(cardId);
-      groupsByTarget.set(targetBundleId, group);
-    }
-
-    for (const [targetBundleId, ids] of groupsByTarget) {
-      await tx
-        .update(cardTable)
-        .set({ bundleId: targetBundleId })
-        .where(inArray(cardTable.id, ids));
-    }
-
-    // Layers are per-project, so a moved card cannot keep its layer id. Preserve the
-    // layer name the same way bundle names are preserved above.
     const cardLayers = await getCardLayerNames({ db: tx, cardIds });
-    const targetLayers = await getAllLayers({ db: tx, projectId: targetProjectId });
-
-    const layerNameToTargetId = new Map<string, string>();
-    for (const { layerName } of cardLayers) {
-      if (layerNameToTargetId.has(layerName)) continue;
-      const existing = targetLayers.find((l) => l.name === layerName);
-      if (existing) {
-        layerNameToTargetId.set(layerName, existing.id);
-      } else {
-        const created = await addLayer({ db: tx, projectId: targetProjectId, name: layerName });
-        layerNameToTargetId.set(layerName, created.id);
-      }
-    }
-
-    const layerGroupsByTarget = new Map<string, string[]>();
-    for (const { cardId, layerName } of cardLayers) {
-      const targetLayerId = layerNameToTargetId.get(layerName)!;
-      const group = layerGroupsByTarget.get(targetLayerId) ?? [];
-      group.push(cardId);
-      layerGroupsByTarget.set(targetLayerId, group);
-    }
-
-    for (const [targetLayerId, ids] of layerGroupsByTarget) {
-      await tx.update(cardTable).set({ layerId: targetLayerId }).where(inArray(cardTable.id, ids));
-    }
+    await remapCardsByName({
+      current: cardLayers.map(({ cardId, layerName }) => ({ cardId, name: layerName })),
+      targets: await getAllLayers({ db: tx, projectId: targetProjectId }),
+      create: async (name) => (await addLayer({ db: tx, projectId: targetProjectId, name })).id,
+      assign: async (layerId, ids) => {
+        await tx.update(cardTable).set({ layerId }).where(inArray(cardTable.id, ids));
+      },
+    });
 
     // Cards moved cross-project must leave their glue groups: a glue group
     // spanning two projects is never visible in the UI and leaves stale rows.

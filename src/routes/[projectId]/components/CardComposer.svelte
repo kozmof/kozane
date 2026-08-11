@@ -1,9 +1,11 @@
 <script lang="ts">
   import { onDestroy, untrack, tick } from "svelte";
   import BundleDropdown from "./BundleDropdown.svelte";
+  import LayerDropdown from "./LayerDropdown.svelte";
   import { css } from "styled-system/css";
-  import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
   import { DEFAULT_UI_CONFIG, type UiConfig } from "$lib/ui-config";
+  import { orderLayers } from "../lib/project-page";
 
   interface Props {
     editingCard: CardWithGlue | null;
@@ -12,6 +14,7 @@
     primaryCard: CardWithGlue | null;
     bundles: BundleWithColor[];
     defaultBundleId: string;
+    layers?: Layer[];
     otherProjects: { id: string; name: string }[];
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
@@ -22,6 +25,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
+    onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     shortcuts?: UiConfig;
   }
@@ -33,6 +37,7 @@
     primaryCard,
     bundles,
     defaultBundleId,
+    layers = [],
     otherProjects,
     onSubmit,
     onCancel,
@@ -43,11 +48,21 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
+    onSelectionLayerChange,
     onStackOrderChange,
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
   let showProjectPicker = $state(false);
+  // Topmost first, to read the way the layer control and the canvas stack.
+  const layerChoices = $derived(orderLayers(layers).reverse());
+  // The layer the picker shows as current: only when the whole selection shares one, so a
+  // mixed selection cannot look like it all sits somewhere it does not.
+  const selectionLayerId = $derived(
+    selectedCards.length > 0 && selectedCards.every((c) => c.layerId === selectedCards[0].layerId)
+      ? selectedCards[0].layerId
+      : null,
+  );
   let copyStatus: "idle" | "copied" | "error" = $state("idle");
   let copyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -200,6 +215,15 @@
         if (mode === "selection") onSelectionBundleChange?.(selectedCards.map((c) => c.id), id);
       }}
     />
+    {#if mode === "selection" && layerChoices.length > 1 && onSelectionLayerChange}
+      <!-- Sits beside the bundle picker because it does the same kind of thing: both move
+           the selection to another home without touching what the cards say. -->
+      <LayerDropdown
+        layers={layerChoices}
+        layerId={selectionLayerId}
+        onChange={(id) => onSelectionLayerChange?.(selectedCards.map((c) => c.id), id)}
+      />
+    {/if}
     {#if mode === "edit"}
       <button
         class={css({ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: "11px", color: "neutral.muted", fontFamily: "inherit", padding: "0" })}

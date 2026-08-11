@@ -5,12 +5,13 @@ import { requireWorkspace } from "../lib/project.js";
 import { commandDbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
-import { addCard } from "../../db/api/card.js";
+import { addCard, reassignCardsToLayer } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
+import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { CANVAS_W } from "../../lib/constants.js";
@@ -51,7 +52,7 @@ async function resolveBundleId(db: DB, projectId: string, requestedId?: string):
   return bundle.id;
 }
 
-/** Accepts a layer name as well as an ID, since layer names are unique per project. */
+/** The requested layer, or the project's default one when nothing was asked for. */
 async function resolveLayerId(db: DB, projectId: string, requested?: string): Promise<string> {
   const layers = await getAllLayers({ db, projectId });
   if (!requested) {
@@ -59,13 +60,7 @@ async function resolveLayerId(db: DB, projectId: string, requested?: string): Pr
     if (!defaultLayer) throw new Error(`Project has no default layer: ${projectId}`);
     return defaultLayer.id;
   }
-  const byName = layers.find(({ name }) => name === requested);
-  if (byName) return byName.id;
-  return resolveShortId(
-    requested,
-    layers.map(({ id }) => id),
-    "Layer",
-  );
+  return resolveLayerRef(layers, requested);
 }
 
 async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
@@ -233,6 +228,45 @@ export async function cardSquash(
     const allCardIds = allCards.map(({ id }) => id);
     console.log(`${ids.length} ${ids.length === 1 ? "card" : "cards"} added.`);
     for (const id of ids) console.log(`  ${shortId(id, allCardIds)}`);
+  } catch (error) {
+    fail(error);
+  }
+}
+
+/**
+ * Moves an existing card to another layer of its own project. The project is taken from
+ * the card rather than from `--project`, so the layer is always resolved against the
+ * project that actually owns the card.
+ */
+export async function cardSetLayer(requestedCardId: string, requestedLayer: string): Promise<void> {
+  try {
+    const { root } = requireWorkspace();
+    const db = await createDb(commandDbUrl(resolve(root)));
+    const cards = await db
+      .select({ id: cardTable.id, projectId: bundleTable.projectId })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+    const cardId = resolveShortId(
+      requestedCardId,
+      cards.map(({ id }) => id),
+      "Card",
+    );
+    const { projectId } = cards.find(({ id }) => id === cardId)!;
+    const layers = await getAllLayers({ db, projectId });
+    const layerId = resolveLayerRef(layers, requestedLayer);
+
+    if (!(await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId })))
+      throw new Error("Card and layer do not belong to the same project.");
+
+    const layer = layers.find(({ id }) => id === layerId)!;
+    console.log("Card moved to another layer.");
+    console.log(
+      `  id   : ${shortId(
+        cardId,
+        cards.map(({ id }) => id),
+      )}`,
+    );
+    console.log(`  layer: ${layer.name}`);
   } catch (error) {
     fail(error);
   }

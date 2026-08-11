@@ -176,7 +176,9 @@ export function createProjectActions(state: ProjectState) {
     if (!trimmed) return;
     const res = await api.createLayer(state.mutationFetcher, state.projectId, trimmed);
     if (!res.ok) {
-      state.setError("Failed to create layer");
+      // The server's own wording carries the reason a name was refused ("A layer named
+      // 'Draft' already exists"), which a fixed banner would throw away.
+      state.setError(await api.failureMessage(res, "Failed to create layer"));
       return;
     }
     const parsed = await res.json().catch(() => null);
@@ -201,7 +203,7 @@ export function createProjectActions(state: ProjectState) {
   async function handleDeleteLayer(layerId: string) {
     const res = await api.deleteLayer(state.mutationFetcher, state.projectId, layerId);
     if (!res.ok) {
-      state.setError("Failed to delete layer");
+      state.setError(await api.failureMessage(res, "Failed to delete layer"));
       return;
     }
     const parsed = await res.json().catch(() => null);
@@ -225,7 +227,7 @@ export function createProjectActions(state: ProjectState) {
     const res = await api.renameLayer(state.mutationFetcher, state.projectId, layerId, trimmed);
     if (!res.ok) {
       state.layers = prevLayers;
-      state.setError("Failed to rename layer");
+      state.setError(await api.failureMessage(res, "Failed to rename layer"));
     }
   }
 
@@ -238,8 +240,28 @@ export function createProjectActions(state: ProjectState) {
     const res = await api.reorderLayers(state.mutationFetcher, state.projectId, layerIds);
     if (!res.ok) {
       state.layers = prevLayers;
-      state.setError("Failed to reorder layers");
+      // A reorder fails when someone else changed the layers, and the server says so —
+      // "reload to see the current order" is the part the user needs.
+      state.setError(await api.failureMessage(res, "Failed to reorder layers"));
     }
+  }
+
+  async function handleSelectionLayerChange(cardIds: string[], layerId: string) {
+    const prevCards = state.cards;
+    state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, layerId } : c));
+    const res = await api.batchReassignLayer(
+      state.mutationFetcher,
+      state.projectId,
+      cardIds,
+      layerId,
+    );
+    if (!res.ok) {
+      state.cards = prevCards;
+      state.setError("Failed to move cards to another layer");
+      return;
+    }
+    // Moving cards is how you follow them: the layer they landed on becomes the one in front.
+    state.activeLayerId = layerId;
   }
 
   async function handleCreateScope() {
@@ -363,6 +385,7 @@ export function createProjectActions(state: ProjectState) {
     handleDeleteLayer,
     handleRenameLayer,
     handleReorderLayers,
+    handleSelectionLayerChange,
     handleCreateScope,
     handleDeleteScope,
     handleAddToScope,

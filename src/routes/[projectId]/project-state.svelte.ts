@@ -14,6 +14,32 @@ export function resolveActiveLayerId(layers: Layer[], preferredId: string | null
   return layers.find(({ isDefault }) => isDefault)?.id ?? layers[0]?.id ?? null;
 }
 
+const ACTIVE_LAYER_STORAGE_PREFIX = "kozane:active-layer:";
+
+/**
+ * Which layer this project was last worked on, kept per tab. A reload that dropped the
+ * selection back to `Base` would undo the one thing the layer control is for. Storage is
+ * absent while prerendering and can throw when a browser has it disabled, so every access
+ * is treated as best-effort — a lost preference is not worth an error banner.
+ */
+export function readStoredLayerId(projectId: string): string | null {
+  try {
+    return globalThis.sessionStorage?.getItem(ACTIVE_LAYER_STORAGE_PREFIX + projectId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function storeActiveLayerId(projectId: string, layerId: string | null): void {
+  try {
+    const key = ACTIVE_LAYER_STORAGE_PREFIX + projectId;
+    if (layerId) globalThis.sessionStorage?.setItem(key, layerId);
+    else globalThis.sessionStorage?.removeItem(key);
+  } catch {
+    // Ignored: see readStoredLayerId.
+  }
+}
+
 export class SelectionState {
   selectedCards = $state(new Set<string>());
   primarySelectedId = $state<string | null>(null);
@@ -93,7 +119,7 @@ export class ProjectState {
     this.cards = data.cards;
     this.bundles = data.bundles;
     this.layers = data.layers;
-    this.activeLayerId = resolveActiveLayerId(data.layers, null);
+    this.activeLayerId = resolveActiveLayerId(data.layers, readStoredLayerId(data.project.id));
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;

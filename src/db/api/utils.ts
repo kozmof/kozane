@@ -1,3 +1,5 @@
+import { NAME_MAX } from "../../lib/constants.js";
+
 export class NotFoundError extends Error {
   constructor(label: string) {
     super(`${label} not found`);
@@ -17,6 +19,15 @@ export class DefaultLayerError extends Error {
     super("Cannot delete the default layer");
     this.name = "DefaultLayerError";
   }
+}
+
+/**
+ * Guards a user-supplied name against the shared length limit. HTTP routes check this
+ * themselves to answer with a 400, so this is what covers the callers that do not go
+ * through a route at all — the CLI above all.
+ */
+export function assertNameWithinLimit(name: string, label: string): void {
+  if (name.length > NAME_MAX) throw new Error(`${label} must be ${NAME_MAX} characters or fewer`);
 }
 
 /** Throws if `rows` is empty — used to surface not-found errors from delete/update operations. */

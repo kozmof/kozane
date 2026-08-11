@@ -12,8 +12,12 @@ import {
   glueGroupIds,
   glueIdByCardId,
   layerStack,
+  moveWithin,
+  orderLayers,
   PALETTE,
   previousPositions,
+  reorderByDrop,
+  reorderByNudge,
   verticalListPosition,
   rectsIntersect,
   selectionRectFromPoints,
@@ -118,6 +122,57 @@ describe("layerStack", () => {
 
   it("returns an empty stack for a project without layers", () => {
     expect(layerStack([], "base")).toEqual([]);
+  });
+
+  it("marks the floating layer, so the canvas can keep it at full strength", () => {
+    expect(
+      layerStack(layers, "base", "middle")
+        .filter(({ floating }) => floating)
+        .map(({ layer }) => layer.id),
+    ).toEqual(["middle"]);
+  });
+
+  it("orders by position with the id as a plain tiebreak, the way SQLite does", () => {
+    const tied = [
+      { id: "b", position: 0 },
+      { id: "a", position: 0 },
+    ];
+
+    expect(orderLayers(tied).map(({ id }) => id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("moveWithin", () => {
+  it("moves an id to the requested index, closing the gap behind it", () => {
+    expect(moveWithin(["a", "b", "c"], "a", 2)).toEqual(["b", "c", "a"]);
+    expect(moveWithin(["a", "b", "c"], "c", 0)).toEqual(["c", "a", "b"]);
+  });
+
+  it("leaves the list alone for an unknown id or an index outside it", () => {
+    expect(moveWithin(["a", "b"], "z", 0)).toEqual(["a", "b"]);
+    expect(moveWithin(["a", "b"], "a", 5)).toEqual(["a", "b"]);
+  });
+});
+
+describe("reorderByDrop", () => {
+  it("puts the dragged id where the drop target was", () => {
+    expect(reorderByDrop(["a", "b", "c"], "c", "a")).toEqual(["c", "a", "b"]);
+  });
+
+  it("changes nothing when a row is dropped on itself", () => {
+    expect(reorderByDrop(["a", "b", "c"], "b", "b")).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("reorderByNudge", () => {
+  it("swaps with the neighbour in the given direction", () => {
+    expect(reorderByNudge(["a", "b", "c"], "b", -1)).toEqual(["b", "a", "c"]);
+    expect(reorderByNudge(["a", "b", "c"], "b", 1)).toEqual(["a", "c", "b"]);
+  });
+
+  it("returns null at the ends of the list, where there is nothing to commit", () => {
+    expect(reorderByNudge(["a", "b"], "a", -1)).toBeNull();
+    expect(reorderByNudge(["a", "b"], "b", 1)).toBeNull();
   });
 });
 

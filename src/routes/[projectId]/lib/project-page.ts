@@ -50,26 +50,73 @@ export function applyPalette<T extends { id: string }>(bundles: T[]) {
   return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
 }
 
-export type StackedLayer<T> = { layer: T; rank: number; active: boolean };
+export type StackedLayer<T> = { layer: T; rank: number; active: boolean; floating: boolean };
+
+/**
+ * Bottom to top, the one ordering of a project's layers: by position, with the id as the
+ * tiebreak. Mirrors what `getAllLayers` asks SQLite for, and is what every other view of
+ * the layers is derived from, so nothing has to re-decide what "in order" means.
+ */
+export function orderLayers<T extends { id: string; position: number }>(layers: T[]): T[] {
+  // Plain comparison rather than localeCompare: the tiebreak has to land the same way as
+  // SQLite's binary `ORDER BY id`, whatever locale the browser happens to be in.
+  return [...layers].sort(
+    (a, b) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  );
+}
 
 /**
  * Stacking order of a project's layers: non-active layers keep their own index order at
  * the bottom, the active layer sits above all of them, and `floatingLayerId` (the layer
  * of a card being dragged) is lifted to the very top so a drag stays visible even when it
- * starts on a dimmed layer.
+ * starts on a dimmed layer. Both the active and the floating layer are drawn at full
+ * strength — a card is dragged to be looked at.
  */
 export function layerStack<T extends { id: string; position: number }>(
   layers: T[],
   activeLayerId: string | null,
   floatingLayerId: string | null = null,
 ): StackedLayer<T>[] {
-  const ordered = [...layers].sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
   const priority = (layer: T) =>
     layer.id === floatingLayerId ? 2 : layer.id === activeLayerId ? 1 : 0;
-  return ordered
+  return orderLayers(layers)
     .map((layer, index) => ({ layer, index }))
     .sort((a, b) => priority(a.layer) - priority(b.layer) || a.index - b.index)
-    .map(({ layer }, rank) => ({ layer, rank, active: layer.id === activeLayerId }));
+    .map(({ layer }, rank) => ({
+      layer,
+      rank,
+      active: layer.id === activeLayerId,
+      floating: layer.id === floatingLayerId,
+    }));
+}
+
+/** Moves one id to `toIndex` within a list, closing the gap it leaves behind. */
+export function moveWithin(ids: string[], id: string, toIndex: number): string[] {
+  const next = [...ids];
+  const from = next.indexOf(id);
+  if (from === -1 || toIndex < 0 || toIndex >= next.length) return next;
+  next.splice(from, 1);
+  next.splice(toIndex, 0, id);
+  return next;
+}
+
+/**
+ * The reordering a drop produces: `ids` and the result are both in display order (top of
+ * the stack first), which is the reverse of the bottom-to-top order the API takes.
+ */
+export function reorderByDrop(ids: string[], draggedId: string, targetId: string): string[] {
+  if (draggedId === targetId) return [...ids];
+  return moveWithin(ids, draggedId, ids.indexOf(targetId));
+}
+
+/**
+ * The reordering a keyboard nudge produces: `delta` is -1 for up the display list, 1 for
+ * down. Returns null at the ends of the list, where there is nothing to commit.
+ */
+export function reorderByNudge(ids: string[], id: string, delta: -1 | 1): string[] | null {
+  const target = ids.indexOf(id) + delta;
+  if (target < 0 || target >= ids.length) return null;
+  return moveWithin(ids, id, target);
 }
 
 export function glueIdByCardId<T extends { cardId: string; glueId: string }>(glueRels: T[]) {

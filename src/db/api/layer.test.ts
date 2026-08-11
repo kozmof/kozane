@@ -11,6 +11,7 @@ import {
 } from "./layer.js";
 import { addProject } from "./project.js";
 import { NotFoundError } from "./utils.js";
+import { NAME_MAX } from "../../lib/constants.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -44,6 +45,31 @@ describe("addLayer", () => {
     await expect(addLayer({ db, projectId, name: "Second", isDefault: true })).rejects.toThrow();
 
     expect(await getDefaultLayer({ db, projectId })).toMatchObject({ id, isDefault: true });
+  });
+
+  it("gives concurrent creates distinct positions", async () => {
+    const { db, projectId } = await setup();
+    await addLayer({ db, projectId, name: "Base", isDefault: true });
+
+    // Both reads of the current top happen inside their own INSERT, so neither can see a
+    // stale maximum and land on the position the other one took.
+    const created = await Promise.all([
+      addLayer({ db, projectId, name: "One" }),
+      addLayer({ db, projectId, name: "Two" }),
+    ]);
+
+    expect(new Set(created.map(({ position }) => position)).size).toBe(2);
+    expect((await getAllLayers({ db, projectId })).map(({ position }) => position)).toEqual([
+      0, 1, 2,
+    ]);
+  });
+
+  it("rejects a name longer than the shared limit", async () => {
+    const { db, projectId } = await setup();
+
+    await expect(addLayer({ db, projectId, name: "x".repeat(NAME_MAX + 1) })).rejects.toThrow(
+      `Layer name must be ${NAME_MAX} characters or fewer`,
+    );
   });
 
   it("allows different projects to each have a default layer of the same name", async () => {
@@ -133,8 +159,10 @@ describe("reorderLayers", () => {
   it("renumbers the layers from the given bottom-to-top ordering", async () => {
     const { db, projectId, base, draft, notes } = await threeLayers();
 
-    await expect(reorderLayers({ db, projectId, layerIds: [notes, base, draft] })).resolves.toBe(
-      true,
+    await expect(reorderLayers({ db, projectId, layerIds: [notes, base, draft] })).resolves.toEqual(
+      {
+        ok: true,
+      },
     );
 
     expect(
@@ -149,7 +177,10 @@ describe("reorderLayers", () => {
   it("changes nothing when the ordering omits a layer", async () => {
     const { db, projectId, base, draft } = await threeLayers();
 
-    await expect(reorderLayers({ db, projectId, layerIds: [draft, base] })).resolves.toBe(false);
+    await expect(reorderLayers({ db, projectId, layerIds: [draft, base] })).resolves.toEqual({
+      ok: false,
+      reason: "stale",
+    });
 
     expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
       "Base",
@@ -161,8 +192,11 @@ describe("reorderLayers", () => {
   it("changes nothing when the ordering repeats a layer", async () => {
     const { db, projectId, base, draft } = await threeLayers();
 
-    await expect(reorderLayers({ db, projectId, layerIds: [base, draft, draft] })).resolves.toBe(
-      false,
+    await expect(reorderLayers({ db, projectId, layerIds: [base, draft, draft] })).resolves.toEqual(
+      {
+        ok: false,
+        reason: "duplicate",
+      },
     );
   });
 
@@ -173,7 +207,7 @@ describe("reorderLayers", () => {
 
     await expect(
       reorderLayers({ db, projectId, layerIds: [base, draft, foreign.id] }),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ ok: false, reason: "foreign" });
 
     expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
       "Base",
@@ -199,5 +233,15 @@ describe("updateLayerName", () => {
     await expect(
       updateLayerName({ db, projectId, layerId: "missing", name: "Final" }),
     ).rejects.toThrow(NotFoundError);
+  });
+
+  it("rejects a name longer than the shared limit", async () => {
+    const { db, projectId } = await setup();
+    const { id } = await addLayer({ db, projectId, name: "Draft" });
+
+    await expect(
+      updateLayerName({ db, projectId, layerId: id, name: "x".repeat(NAME_MAX + 1) }),
+    ).rejects.toThrow(`Layer name must be ${NAME_MAX} characters or fewer`);
+    expect(await getLayer({ db, projectId, layerId: id })).toMatchObject({ name: "Draft" });
   });
 });

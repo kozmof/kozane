@@ -39,11 +39,22 @@ export function createCard(
   return jsonRequest(fetcher, `/${projectId}/api/cards`, "POST", card);
 }
 
+/**
+ * The message a failed request explains itself with. SvelteKit's `error()` answers with
+ * `{ message }`, and some of those are worth showing verbatim — "the layers changed
+ * elsewhere, reload" tells the user what to do in a way a generic banner cannot.
+ */
+export async function failureMessage(res: Response, fallback: string): Promise<string> {
+  const body = await res.json().catch(() => null);
+  const message = (body as { message?: unknown } | null)?.message;
+  return typeof message === "string" && message.length > 0 ? message : fallback;
+}
+
 export function updateCard(
   fetcher: typeof fetch,
   projectId: string,
   cardId: string,
-  card: { content?: string; bundleId?: string; zIndex?: number },
+  card: { content?: string; bundleId?: string; layerId?: string; zIndex?: number },
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "PATCH", card);
 }
@@ -171,6 +182,15 @@ export function batchReassignBundle(
   bundleId: string,
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/cards/bundle`, "PATCH", { cardIds, bundleId });
+}
+
+export function batchReassignLayer(
+  fetcher: typeof fetch,
+  projectId: string,
+  cardIds: string[],
+  layerId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/cards/layer`, "PATCH", { cardIds, layerId });
 }
 
 export function moveCardsToProject(

@@ -102,13 +102,25 @@ describe("PATCH /[projectId]/api/layers", () => {
     await expectHttpRejection(
       PATCH(event(db, projectId, jsonRequest({ layerIds: [draft, base] }))),
       400,
-      "layerIds must list every layer of this project exactly once",
+      "The project's layers changed elsewhere. Reload to see the current order.",
     );
     expect((await getAllLayers({ db, projectId })).map(({ name }) => name)).toEqual([
       "Base",
       "Draft",
       "Notes",
     ]);
+  });
+
+  it("rejects an ordering naming a layer from another project", async () => {
+    const { db, projectId, base, draft } = await setupThree();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const { id: foreign } = await addLayer({ db, projectId: otherProjectId, name: "Theirs" });
+
+    await expectHttpRejection(
+      PATCH(event(db, projectId, jsonRequest({ layerIds: [base, draft, foreign] }))),
+      400,
+      "layerIds must only name layers of this project",
+    );
   });
 
   it("rejects an empty ordering", async () => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import CardComposer from "./CardComposer.svelte";
-  import type { CardWithGlue, BundleWithColor, GlueRel } from "$lib/types";
+  import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
   import type { UiConfig } from "$lib/ui-config";
 
   interface Props {
@@ -11,6 +11,7 @@
     primaryCard: CardWithGlue | null;
     bundles: BundleWithColor[];
     defaultBundleId: string;
+    layers?: Layer[];
     otherProjects: { id: string; name: string }[];
     onSubmit: (id: string | null, content: string, bundleId: string) => void;
     onCancel: () => void;
@@ -21,6 +22,7 @@
     onUnglueOne?: (cardId: string) => void;
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
+    onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     shortcuts: UiConfig;
   }
@@ -32,6 +34,7 @@
     primaryCard,
     bundles,
     defaultBundleId,
+    layers,
     otherProjects,
     onSubmit,
     onCancel,
@@ -42,6 +45,7 @@
     onUnglueOne,
     onDeleteSelected,
     onMoveToProject,
+    onSelectionLayerChange,
     onStackOrderChange,
     shortcuts,
   }: Props = $props();
@@ -73,6 +77,7 @@
     {primaryCard}
     {bundles}
     {defaultBundleId}
+    {layers}
     {otherProjects}
     {onSubmit}
     {onCancel}
@@ -83,6 +88,7 @@
     {onUnglueOne}
     {onDeleteSelected}
     {onMoveToProject}
+    {onSelectionLayerChange}
     {onStackOrderChange}
     {shortcuts}
   />

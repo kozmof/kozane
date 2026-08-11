@@ -256,6 +256,43 @@ export async function updateProjectCardPositions({
   });
 }
 
+type ReassignCardsToLayer = {
+  db: DB;
+  projectId: string;
+  cardIds: string[];
+  layerId: string;
+};
+
+/**
+ * Moves cards onto another layer of their own project. Returns false when a card is not
+ * in the project or the layer is not either — a card must never end up on a layer its
+ * project cannot see.
+ */
+export async function reassignCardsToLayer({
+  db,
+  projectId,
+  cardIds,
+  layerId,
+}: ReassignCardsToLayer): Promise<boolean> {
+  if (cardIds.length === 0) return true;
+
+  return withTx(db, async (tx) => {
+    const owned = await cardsInProject(tx, projectId, cardIds);
+    if (owned.length !== cardIds.length) return false;
+
+    const layer = await tx
+      .select({ id: layerTable.id })
+      .from(layerTable)
+      .where(and(eq(layerTable.id, layerId), eq(layerTable.projectId, projectId)))
+      .get();
+    if (!layer) return false;
+
+    await tx.update(cardTable).set({ layerId }).where(inArray(cardTable.id, cardIds));
+
+    return true;
+  });
+}
+
 type ReassignCardsToBundle = {
   db: DB;
   projectId: string;

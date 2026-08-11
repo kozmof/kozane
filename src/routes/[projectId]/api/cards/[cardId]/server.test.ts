@@ -116,6 +116,37 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
     );
   });
 
+  it("moves the card to another layer of the project", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+
+    const response = await PATCH(event(db, projectId, cardId, jsonRequest({ layerId })));
+
+    expect(response.status).toBe(200);
+    await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ layerId });
+  });
+
+  it("rejects a layer from another project", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    const before = await getCard({ db, bundleId, cardId });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const { id: foreignLayer } = await addLayer({
+      db,
+      projectId: otherProjectId,
+      name: "Theirs",
+      isDefault: true,
+    });
+
+    await expectHttpRejection(
+      PATCH(event(db, projectId, cardId, jsonRequest({ layerId: foreignLayer }))),
+      400,
+      "New layer not found in project",
+    );
+    await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({
+      layerId: before!.layerId,
+    });
+  });
+
   it("rejects a request with no updatable fields", async () => {
     const { db, projectId, cardId } = await setup();
 

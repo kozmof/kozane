@@ -7,7 +7,8 @@ import { cardTable } from "../../db/schema.js";
 import { addLayer, getAllLayers, reorderLayers, updateLayerName } from "../../db/api/layer.js";
 import { deleteLayerWithReassign } from "../../db/api/composite.js";
 import { resolveProjectId } from "../lib/project-selection.js";
-import { resolveShortId, shortId } from "../lib/short-id.js";
+import { shortId } from "../lib/short-id.js";
+import { resolveLayerRef } from "../lib/layer-ref.js";
 import { inArray } from "drizzle-orm";
 
 type LayerOptions = { project?: string };
@@ -65,17 +66,6 @@ export async function layerList(options: LayerOptions = {}): Promise<void> {
   }
 }
 
-/** Accepts a layer name as well as an ID, since layer names are unique per project. */
-function resolveLayerId(layers: { id: string; name: string }[], requested: string): string {
-  const byName = layers.find(({ name }) => name === requested);
-  if (byName) return byName.id;
-  return resolveShortId(
-    requested,
-    layers.map(({ id }) => id),
-    "Layer",
-  );
-}
-
 export async function layerRename(
   layerId: string,
   name: string,
@@ -88,7 +78,7 @@ export async function layerRename(
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const layers = await getAllLayers({ db, projectId });
-    const resolvedId = resolveLayerId(layers, layerId);
+    const resolvedId = resolveLayerRef(layers, layerId);
     await updateLayerName({ db, projectId, layerId: resolvedId, name: trimmedName });
     console.log("Layer renamed.");
     console.log(
@@ -116,7 +106,7 @@ export async function layerMove(
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const layers = await getAllLayers({ db, projectId });
-    const resolvedId = resolveLayerId(layers, layerId);
+    const resolvedId = resolveLayerRef(layers, layerId);
     // getAllLayers is bottom to top, so "up" is one step later in the list.
     const ids = layers.map((layer) => layer.id);
     const index = ids.indexOf(resolvedId);
@@ -126,9 +116,8 @@ export async function layerMove(
     }
     const reordered = [...ids];
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    if (!(await reorderLayers({ db, projectId, layerIds: reordered }))) {
-      throw new Error("Failed to reorder layers.");
-    }
+    const result = await reorderLayers({ db, projectId, layerIds: reordered });
+    if (!result.ok) throw new Error(`Failed to reorder layers (${result.reason}).`);
     console.log(`Layer moved ${direction}.`);
     console.log(`  id      : ${shortId(resolvedId, ids)}`);
     console.log(`  position: ${target}`);
@@ -144,7 +133,7 @@ export async function layerDelete(layerId: string, options: LayerOptions = {}): 
     const projectId = await resolveProjectId(db, options.project);
     const layers = await getAllLayers({ db, projectId });
     const layerIds = layers.map((layer) => layer.id);
-    const resolvedId = resolveLayerId(layers, layerId);
+    const resolvedId = resolveLayerRef(layers, layerId);
     await deleteLayerWithReassign({ db, projectId, layerId: resolvedId });
     console.log("Layer deleted.");
     console.log(`  id: ${shortId(resolvedId, layerIds)}`);

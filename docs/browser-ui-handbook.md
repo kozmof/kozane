@@ -142,9 +142,11 @@ without the rest getting in the way. Every card belongs to exactly one layer of
 its project, and every project starts with a layer named `Base`.
 
 One layer is selected at a time. Its cards are drawn at full strength above all
-the others, and the remaining layers fade well back, in their own order. Cards on a dimmed layer stay live: you can still click, drag, and edit
-them, and a card you drag rises above the layers on top of it while it moves.
-"Bring to front" and "Send to back" reorder a card within its own layer.
+the others, and the remaining layers fade well back, in their own order. Cards
+on a dimmed layer stay live: you can still click, drag, and edit them, and a
+card you drag rises above the layers on top of it and comes back to full
+strength while it moves. "Bring to front" and "Send to back" reorder a card
+within its own layer.
 
 Layers live behind the button at the top right of the canvas, next to the panel
 toggle.
@@ -161,9 +163,17 @@ toggle.
 - Delete — hover a layer and click the `×`. The default layer cannot be deleted,
   and cards on a deleted layer move to the project's default layer.
 
-New cards are created on the selected layer. From the terminal, `kozane layer
-list|add|rename|move|delete` manages layers, and `kozane card add --layer <name>`
-chooses where a card lands.
+New cards are created on the selected layer, and the selection is remembered, so
+reopening the page comes back to the layer you were working on.
+
+To move cards you have already written, select them and pick a layer from the
+control beside the bundle picker in the composer. The selection moves with them,
+so the board follows the cards to their new layer.
+
+From the terminal, `kozane layer list|add|rename|move|delete` manages layers,
+`kozane card add --layer <name>` chooses where a card lands, and
+`kozane card layer <cardId> <layer>` moves an existing card. Everywhere a layer
+is named, its name, ID, or short ID all work, and an exact name wins.
 
 ## Scopes
 

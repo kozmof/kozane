@@ -101,6 +101,78 @@ describe("additional database CLI branches", () => {
     expect(output).toContain("Status  : current");
   }, 30_000);
 
+  it("keeps glue and scope rows when the layer migration rebuilds the card table", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const dbPath = join(root, ".kozane", "kozane.db");
+    const client = createClient({ url: `file:${dbPath}` });
+    try {
+      const bundleId = (await client.execute("SELECT id FROM bundle LIMIT 1")).rows[0].id as string;
+      await client.batch(
+        [
+          { sql: "INSERT INTO scope (id, name) VALUES ('s1', 'demo')" },
+          { sql: "INSERT INTO glue (id) VALUES ('g1')" },
+          {
+            sql: "INSERT INTO card (id, bundle_id, layer_id, content) SELECT 'c1', ?, id, 'one' FROM layer LIMIT 1",
+            args: [bundleId],
+          },
+          {
+            sql: "INSERT INTO card (id, bundle_id, layer_id, content) SELECT 'c2', ?, id, 'two' FROM layer LIMIT 1",
+            args: [bundleId],
+          },
+          { sql: "INSERT INTO glue_rel (glue_id, card_id) VALUES ('g1','c1'), ('g1','c2')" },
+          { sql: "INSERT INTO scope_rel (scope_id, card_id) VALUES ('s1','c1')" },
+        ],
+        "write",
+      );
+
+      // Roll back to the pre-layer schema. Foreign keys have to be off for this: with them
+      // on, this fixture's own DROP TABLE would cascade the rows away and the test would
+      // pass without the migration ever being the reason.
+      await client.execute("PRAGMA foreign_keys = OFF");
+      for (const sql of [
+        `CREATE TABLE __old_card (
+           id text PRIMARY KEY NOT NULL,
+           bundle_id text NOT NULL,
+           taskspace_id text,
+           content text NOT NULL,
+           pos_x integer DEFAULT 0 NOT NULL,
+           pos_y integer DEFAULT 0 NOT NULL,
+           z_index integer DEFAULT 0 NOT NULL,
+           FOREIGN KEY (bundle_id) REFERENCES bundle(id) ON UPDATE cascade ON DELETE cascade,
+           FOREIGN KEY (taskspace_id) REFERENCES taskspace(id) ON UPDATE cascade ON DELETE set null
+         )`,
+        "INSERT INTO __old_card SELECT id, bundle_id, taskspace_id, content, pos_x, pos_y, z_index FROM card",
+        "DROP TABLE card",
+        "ALTER TABLE __old_card RENAME TO card",
+        "DROP TABLE layer",
+        "DELETE FROM __drizzle_migrations WHERE created_at = 1786415069324",
+      ]) {
+        await client.execute(sql);
+      }
+      expect((await client.execute("SELECT count(*) AS n FROM glue_rel")).rows[0].n).toBe(2);
+    } finally {
+      client.close();
+    }
+
+    expect(cli(root, "db", "migrate")).toContain("Database migrated.");
+
+    const after = createClient({ url: `file:${dbPath}` });
+    try {
+      const counts: Record<string, unknown> = {};
+      for (const table of ["card", "glue_rel", "scope_rel", "layer"]) {
+        counts[table] = (await after.execute(`SELECT count(*) AS n FROM ${table}`)).rows[0].n;
+      }
+      // The rebuild runs with foreign keys disabled, so dropping the old card table does
+      // not take the rows that reference it along with it.
+      expect(counts).toEqual({ card: 2, glue_rel: 2, scope_rel: 1, layer: 1 });
+      const cards = await after.execute("SELECT layer_id FROM card");
+      expect(cards.rows.every(({ layer_id }) => typeof layer_id === "string")).toBe(true);
+    } finally {
+      after.close();
+    }
+  }, 30_000);
+
   it("restores the most recent automatic backup", () => {
     const root = tempWorkspace();
     cli(root, "init");

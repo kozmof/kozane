@@ -13,7 +13,14 @@ import { status } from "./commands/status.js";
 import { taskspaceScan, taskspaceCreate } from "./commands/taskspace.js";
 import { projectCreate, projectDefault, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
-import { cardAdd, cardList, cardNearest, cardShow, cardSquash } from "./commands/card.js";
+import {
+  cardAdd,
+  cardList,
+  cardNearest,
+  cardSetLayer,
+  cardShow,
+  cardSquash,
+} from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
@@ -141,20 +148,20 @@ layer
   .action((name, opts) => layerAdd(name, opts));
 
 layer
-  .command("rename <id> <name>")
-  .description("Rename a layer by ID, short ID, or current name")
+  .command("rename <layer> <name>")
+  .description("Rename a layer by name, ID, or short ID — an exact name wins")
   .option("--project <projectId>", "Project ID or short ID the layer belongs to")
   .action((id, name, opts) => layerRename(id, name, opts));
 
 layer
-  .command("move <id> <direction>")
-  .description("Move a layer one step up or down the stack")
+  .command("move <layer> <direction>")
+  .description("Move a layer one step up or down the stack, by name, ID, or short ID")
   .option("--project <projectId>", "Project ID or short ID the layer belongs to")
   .action((id, direction, opts) => layerMove(id, direction, opts));
 
 layer
-  .command("delete <id>")
-  .description("Delete a layer by ID or short ID, moving its cards to the default layer")
+  .command("delete <layer>")
+  .description("Delete a layer by name, ID, or short ID, moving its cards to the default layer")
   .option("--project <projectId>", "Project ID or short ID the layer belongs to")
   .action((id, opts) => layerDelete(id, opts));
 
@@ -215,7 +222,10 @@ card
   .option("--project <projectId>", "Project ID or short ID to add the card to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
-  .option("--layer <layerId>", "Layer ID, short ID, or name (defaults to the default layer)")
+  .option(
+    "--layer <layer>",
+    "Layer name, ID, or short ID — an exact name wins (defaults to the default layer)",
+  )
   .option("--x <number>", "Horizontal card position", integer)
   .option("--y <number>", "Vertical card position", integer)
   .action((content, opts) => cardAdd(content, opts));
@@ -226,7 +236,10 @@ card
   .option("--project <projectId>", "Project ID or short ID to add the cards to")
   .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
   .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
-  .option("--layer <layerId>", "Layer ID, short ID, or name (defaults to the default layer)")
+  .option(
+    "--layer <layer>",
+    "Layer name, ID, or short ID — an exact name wins (defaults to the default layer)",
+  )
   .option(
     "--pattern <regex>",
     "JavaScript regex used to split cards (default: period-space, 。, or blank line)",
@@ -237,6 +250,11 @@ card
   .command("show <cardId>")
   .description("Show a card content by full or short ID")
   .action((cardId) => cardShow(cardId));
+
+card
+  .command("layer <cardId> <layer>")
+  .description("Move a card to another layer of its project, by layer ID, short ID, or name")
+  .action((cardId, layer) => cardSetLayer(cardId, layer));
 
 card
   .command("nearest <cardId>")

@@ -9,6 +9,7 @@ import {
   updateCard,
   getCardBundleNames,
   reassignCardsToBundle,
+  reassignCardsToLayer,
   cardsInProject,
 } from "./card.js";
 import { addProject } from "./project.js";
@@ -366,5 +367,60 @@ describe("reassignCardsToBundle", () => {
 
     expect(ok).toBe(false);
     expect(await getCard({ db, bundleId, cardId: c1 })).toBeDefined();
+  });
+});
+
+describe("reassignCardsToLayer", () => {
+  it("returns true for an empty cardIds array", async () => {
+    const { db, projectId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    await expect(reassignCardsToLayer({ db, projectId, cardIds: [], layerId })).resolves.toBe(true);
+  });
+
+  it("moves cards onto the target layer and returns true", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    const c1 = await addCard({ db, bundleId, content: "A" });
+    const c2 = await addCard({ db, bundleId, content: "B" });
+
+    await expect(reassignCardsToLayer({ db, projectId, cardIds: [c1, c2], layerId })).resolves.toBe(
+      true,
+    );
+
+    expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ layerId });
+    expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ layerId });
+  });
+
+  it("returns false when a card does not belong to the project", async () => {
+    const { db, projectId } = await setup();
+    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    await expect(
+      reassignCardsToLayer({ db, projectId, cardIds: [foreignCard], layerId }),
+    ).resolves.toBe(false);
+  });
+
+  it("returns false when the target layer belongs to another project", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const card = await addCard({ db, bundleId, content: "A" });
+    const before = await getCard({ db, bundleId, cardId: card });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    const { id: foreignLayer } = await addLayer({
+      db,
+      projectId: otherProjectId,
+      name: "Theirs",
+      isDefault: true,
+    });
+
+    await expect(
+      reassignCardsToLayer({ db, projectId, cardIds: [card], layerId: foreignLayer }),
+    ).resolves.toBe(false);
+    expect(await getCard({ db, bundleId, cardId: card })).toMatchObject({
+      layerId: before!.layerId,
+    });
   });
 });

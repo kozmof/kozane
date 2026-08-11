@@ -6,7 +6,7 @@
   import { applyPalette, clampZoom, maxZIndex, minZIndex } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
   import type { CardWithGlue } from "$lib/types";
-  import { ProjectState, resolveActiveLayerId } from "./project-state.svelte";
+  import { ProjectState, readStoredLayerId, resolveActiveLayerId, storeActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
   import BundleSidebar from "./components/BundleSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
@@ -29,7 +29,9 @@
   s.cards = untrack(() => data.cards);
   s.bundles = untrack(() => data.bundles);
   s.layers = untrack(() => data.layers);
-  s.activeLayerId = untrack(() => resolveActiveLayerId(data.layers, null));
+  s.activeLayerId = untrack(() =>
+    resolveActiveLayerId(data.layers, readStoredLayerId(data.project.id)),
+  );
   s.scopes = untrack(() => data.scopes);
   s.scopeRels = untrack(() => data.scopeRels);
   s.glueRels = untrack(() => data.glueRels);
@@ -95,6 +97,9 @@
       s.refreshFromData(data);
     }
   });
+
+  // Remember the layer being worked on, so a reload comes back to it instead of to Base.
+  $effect(() => storeActiveLayerId(s.projectId, s.activeLayerId));
 
   // Keep this long-lived page in sync with writes made by the CLI or another tab.
   // The snapshot endpoint returns the current database state; refreshFromData applies it
@@ -296,6 +301,7 @@
       {primaryCard}
       bundles={bundlesWithColors}
       {defaultBundleId}
+      layers={s.layers}
       onSubmit={handleComposerSubmit}
       onCancel={() => { s.selection.composerCard = null; s.selection.selectedCards = new Set(); s.selection.primarySelectedId = null; }}
       onBundleChange={actions.handleCardBundleChange}
@@ -306,6 +312,7 @@
       onDeleteSelected={actions.handleDeleteSelected}
       otherProjects={data.otherProjects}
       onMoveToProject={actions.handleMoveSelectionToProject}
+      onSelectionLayerChange={actions.handleSelectionLayerChange}
       onStackOrderChange={handleStackOrderChange}
       shortcuts={data.uiConfig}
     />

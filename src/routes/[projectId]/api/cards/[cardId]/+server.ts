@@ -1,6 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getBundle } from "../../../../../db/api/bundle";
+import { getLayer } from "../../../../../db/api/layer";
 import { updateCard } from "../../../../../db/api/card";
 import { deleteProjectCards } from "../../../../../db/api/composite";
 import { requireCardInProject } from "../../../lib/guards";
@@ -33,6 +34,14 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     newBundleId = requestedBundleId;
   }
 
+  let newLayerId: string | undefined;
+  if (body.layerId !== undefined) {
+    const requestedLayerId = requireString(body, "layerId");
+    const newLayer = await getLayer({ db, projectId, layerId: requestedLayerId });
+    if (!newLayer) throw error(400, "New layer not found in project");
+    newLayerId = requestedLayerId;
+  }
+
   const rawPosX = optionalNumber(body, "posX");
   const rawPosY = optionalNumber(body, "posY");
   const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
@@ -44,13 +53,24 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (
     content === undefined &&
     newBundleId === undefined &&
+    newLayerId === undefined &&
     posX === undefined &&
     posY === undefined &&
     zIndex === undefined
   )
     throw error(400, "No fields to update");
 
-  await updateCard({ db, cardId, bundleId, newBundleId, content, posX, posY, zIndex });
+  await updateCard({
+    db,
+    cardId,
+    bundleId,
+    newBundleId,
+    layerId: newLayerId,
+    content,
+    posX,
+    posY,
+    zIndex,
+  });
 
   return json({ ok: true });
 };

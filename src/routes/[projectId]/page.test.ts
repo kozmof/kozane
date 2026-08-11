@@ -406,6 +406,137 @@ describe("Layers", () => {
     expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0" });
   });
 
+  it("moves the selected cards to another layer and follows them there", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.mouseDown(screen.getByLabelText("Move selection to layer"));
+    await fireEvent.mouseDown(screen.getByRole("option", { name: /Draft/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/cards/layer", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["card-1"], layerId: "l2" }),
+    });
+    // The card followed the move, and so did the selection: Draft is now in front.
+    await waitFor(() =>
+      expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" }),
+    );
+    expect(layerGroup(container, "l2")).toContainElement(
+      screen.getByRole("button", { name: "Card: Alpha" }),
+    );
+  });
+
+  it("puts the moved cards back when the server refuses", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.mouseDown(screen.getByLabelText("Move selection to layer"));
+    await fireEvent.mouseDown(screen.getByRole("option", { name: /Draft/ }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Failed to move cards to another layer")).toBeInTheDocument(),
+    );
+    expect(layerGroup(container, "l1")).toContainElement(
+      screen.getByRole("button", { name: "Card: Alpha" }),
+    );
+  });
+
+  it("keeps a dragged card at full strength even when its layer is dimmed", async () => {
+    // The drop at the end of the drag saves positions; nothing here inspects that call.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }),
+    );
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    // Select Draft, leaving card-1's layer (Base) dimmed, then start dragging that card.
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "0.3" });
+
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    await fireEvent.mouseDown(card, { clientX: 0, clientY: 0 });
+    await fireEvent.mouseMove(window, { clientX: 40, clientY: 40 });
+
+    // Floated to the top of the stack, and no longer faded: a drag is meant to be watched.
+    await waitFor(() =>
+      expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "1", "z-index": "1" }),
+    );
+    await fireEvent.mouseUp(window);
+  });
+
+  it("does not compound the scope dim with the layer dim", async () => {
+    const scoped = {
+      ...data,
+      scopeRels: [{ scopeId: "scope-1", cardId: "card-2" }],
+    };
+    render(ProjectPage, {
+      props: { data: scoped, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.click(screen.getByRole("button", { name: /Now/ }));
+    // card-1 is outside the scope. On the active layer it fades; on a dimmed layer the
+    // layer's own 0.3 is the whole story, and multiplying them would leave it invisible.
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    expect(card).toHaveStyle({ opacity: "0.3" });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+
+    expect(card).toHaveStyle({ opacity: "1" });
+  });
+
+  it("comes back to the layer that was being worked on", async () => {
+    const first = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("option", { name: /Draft/ }));
+    first.unmount();
+
+    const { container } = render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" });
+  });
+
+  it("shows the reason the server gives for a refused reorder", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        message: "The project's layers changed elsewhere. Reload to see the current order.",
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.keyDown(screen.getByLabelText("Reorder Base"), { key: "ArrowUp" });
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "The project's layers changed elsewhere. Reload to see the current order.",
+        ),
+      ).toBeInTheDocument(),
+    );
+  });
+
   it("creates a layer from the popover and makes it active", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,

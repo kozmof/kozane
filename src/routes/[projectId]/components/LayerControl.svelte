@@ -1,6 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { CardWithGlue, Layer } from "$lib/types";
+  import { orderLayers, reorderByDrop, reorderByNudge } from "../lib/project-page";
 
   let {
     layers,
@@ -35,9 +36,7 @@
 
   const open = $derived(hovering || pinned);
   // Topmost first, so the popover reads the way the canvas stacks.
-  const ordered = $derived(
-    [...layers].sort((a, b) => b.position - a.position || b.id.localeCompare(a.id)),
-  );
+  const ordered = $derived(orderLayers(layers).reverse());
   const cardCount = $derived.by(() => {
     const counts = new Map<string, number>();
     for (const card of cards) counts.set(card.layerId, (counts.get(card.layerId) ?? 0) + 1);
@@ -82,22 +81,15 @@
     renamingId = null;
   }
 
-  function moveWithin(ids: string[], layerId: string, toIndex: number): string[] {
-    const next = [...ids];
-    const [moved] = next.splice(next.indexOf(layerId), 1);
-    next.splice(toIndex, 0, moved);
-    return next;
-  }
-
   /** The popover lists layers top first; the callback wants them bottom to top. */
   function commitDisplayOrder(displayIds: string[]) {
     onReorderLayers([...displayIds].reverse());
   }
 
   function dropOn(targetId: string) {
-    const displayIds = ordered.map(({ id }) => id);
+    // A drop on the row being dragged changes nothing and is not worth a request.
     if (draggingId && draggingId !== targetId) {
-      commitDisplayOrder(moveWithin(displayIds, draggingId, displayIds.indexOf(targetId)));
+      commitDisplayOrder(reorderByDrop(ordered.map(({ id }) => id), draggingId, targetId));
     }
     draggingId = null;
     dropTargetId = null;
@@ -105,10 +97,8 @@
 
   /** Keyboard equivalent of a drag: `delta` is -1 for up the list, 1 for down. */
   function nudge(layerId: string, delta: -1 | 1) {
-    const displayIds = ordered.map(({ id }) => id);
-    const target = displayIds.indexOf(layerId) + delta;
-    if (target < 0 || target >= displayIds.length) return;
-    commitDisplayOrder(moveWithin(displayIds, layerId, target));
+    const reordered = reorderByNudge(ordered.map(({ id }) => id), layerId, delta);
+    if (reordered) commitDisplayOrder(reordered);
   }
 
   const rowClass = css({
