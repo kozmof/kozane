@@ -73,13 +73,15 @@ there after a reload and in another tab.
   without going there.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
-- Show or hide — press `Shift+A`. Setting a warp shows the markers again, so a
-  warp you just made is never invisible.
+- Show or hide — press `Shift+A`. Setting a warp, or warping to one, shows the
+  markers again, so the selected warp — the one `x` removes — is never invisible.
 - Size — markers are 20 pixels across. Set `ui.warpMarkerSize` (8 to 64) to make
   them bigger or smaller; the number inside scales with the circle.
 
 Warp keys work when no cards are selected: while a selection is live, the
-composer's action bar owns the keyboard. A static export keeps warping — the
+composer's action bar owns the keyboard. They are single keys, so a shortcut held
+with `Ctrl`, `Cmd`, or `Alt` does nothing — `Cmd+A` still selects text rather than
+dropping a warp. A static export keeps warping — the
 cross-project list included — and the show/hide toggle, and drops setting and
 removing along with every other write.
 

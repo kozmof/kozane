@@ -2,7 +2,7 @@ import type { AnyDB } from "../../db/client.js";
 import { getAllProjects } from "../../db/api/project.js";
 import { getAllWorkspaceWarps } from "../../db/api/warp.js";
 import { getCardMarkersByProjects } from "../../db/api/card.js";
-import { buildWarpDirectory, type WarpListEntry } from "../warp-list.js";
+import { buildWarpDirectory, cardMetrics, type WarpListEntry } from "../warp-list.js";
 import { getWorkspaceUiConfig } from "../../db/internal/config.js";
 
 type LoadWarpDirectory = { db: AnyDB; projectId: string };
@@ -29,12 +29,11 @@ export async function loadWarpDirectory({
   const cards = await getCardMarkersByProjects({ db, projectIds });
   // The same numbers the boards are drawn with, so "the card under this warp" means here
   // what it means on screen.
-  const { defaultCardWidth, defaultFontSize } = getWorkspaceUiConfig();
   return buildWarpDirectory({
     projects,
     warps,
     cards,
-    metrics: { cardWidth: defaultCardWidth, fontSize: defaultFontSize },
+    metrics: cardMetrics(getWorkspaceUiConfig()),
     excludeProjectId: projectId,
   });
 }

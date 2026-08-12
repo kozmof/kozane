@@ -244,7 +244,7 @@ export function createProjectActions(state: ProjectState) {
     }
     // The stored row, not the position sent: the server clamps it to the canvas, so a
     // warp set at the very edge would otherwise move on the next poll.
-    const parsed = await res.json().catch(() => null);
+    const parsed = api.parseWarp(await res.json().catch(() => null));
     if (!parsed) {
       state.setError("Failed to set warp");
       return;

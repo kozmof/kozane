@@ -1,9 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { getAllWarps } from "../../../../db/api/warp.js";
 import { addProject } from "../../../../db/api/project.js";
 import type { DB } from "../../../../db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { CANVAS_W, CANVAS_H } from "../../../../lib/constants.js";
+import { _resetWorkspaceRootForTest } from "../../../../db/internal/config.js";
 import { POST } from "./+server.js";
 
 function jsonRequest(body: unknown): Request {
@@ -28,7 +33,28 @@ async function setup() {
   return { db, projectId };
 }
 
+/** A workspace whose `ui` block is the one given, for the canvas the clamp reads. */
+function useWorkspaceConfig(ui: Record<string, unknown>): string {
+  const root = join(tmpdir(), `kozane-warp-test-${randomUUID()}`);
+  mkdirSync(join(root, ".kozane"), { recursive: true });
+  writeFileSync(join(root, ".kozane", "config.json"), JSON.stringify({ name: "test", ui }));
+  process.env.KOZANE_WORKSPACE_ROOT = root;
+  _resetWorkspaceRootForTest();
+  return root;
+}
+
 describe("POST /[projectId]/api/warps", () => {
+  let tmpRoot: string | null = null;
+  const prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
+
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env.KOZANE_WORKSPACE_ROOT;
+    else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
+    _resetWorkspaceRootForTest();
+    if (tmpRoot) rmSync(tmpRoot, { recursive: true, force: true });
+    tmpRoot = null;
+  });
+
   it("stores the warp and returns the whole row", async () => {
     const { db, projectId } = await setup();
 
@@ -49,6 +75,18 @@ describe("POST /[projectId]/api/warps", () => {
 
     const rounded = await POST(event(db, projectId, jsonRequest({ posX: -40.6, posY: 10.6 })));
     expect(await rounded.json()).toMatchObject({ posX: 0, posY: 11 });
+  });
+
+  it("clamps to the canvas the workspace is configured with, not the default one", async () => {
+    tmpRoot = useWorkspaceConfig({ canvasWidth: 12000, canvasHeight: 9000 });
+    const { db, projectId } = await setup();
+
+    // Past the built-in default, but well inside the board this workspace draws.
+    const inside = await POST(event(db, projectId, jsonRequest({ posX: 9000, posY: 7000 })));
+    expect(await inside.json()).toMatchObject({ posX: 9000, posY: 7000 });
+
+    const outside = await POST(event(db, projectId, jsonRequest({ posX: 20000, posY: 20000 })));
+    expect(await outside.json()).toMatchObject({ posX: 12000, posY: 9000 });
   });
 
   it("rejects a request without a position", async () => {

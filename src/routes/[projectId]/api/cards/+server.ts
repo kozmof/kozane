@@ -12,7 +12,8 @@ import {
   type CardPositionUpdate,
 } from "../../../../db/api/card";
 import { deleteProjectCards } from "../../../../db/api/composite";
-import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
+import { CONTENT_MAX } from "$lib/constants";
+import { clampToCanvas } from "$lib/server/canvas";
 import {
   optionalNumber,
   optionalString,
@@ -39,11 +40,7 @@ function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpda
     if (typeof row.posY !== "number" || !Number.isFinite(row.posY))
       throw error(400, "posY must be a number");
 
-    return {
-      cardId: row.cardId,
-      posX: clamp(row.posX, 0, CANVAS_W),
-      posY: clamp(row.posY, 0, CANVAS_H),
-    };
+    return { cardId: row.cardId, ...clampToCanvas(row.posX, row.posY) };
   });
 
   requireUniqueStrings(
@@ -88,8 +85,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     bundleId,
     layerId: layer.id,
     content,
-    posX: clamp(posX, 0, CANVAS_W),
-    posY: clamp(posY, 0, CANVAS_H),
+    ...clampToCanvas(posX, posY),
     zIndex,
   };
 

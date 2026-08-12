@@ -3,7 +3,7 @@ import { json, error } from "@sveltejs/kit";
 import { addWarp } from "../../../../db/api/warp";
 import { isForeignKeyError } from "../../../../db/api/utils";
 import { readJsonObject, optionalNumber } from "../../lib/request";
-import { CANVAS_W, CANVAS_H, clamp } from "$lib/constants";
+import { clampToCanvas } from "$lib/server/canvas";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -14,11 +14,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (posX === undefined || posY === undefined) throw error(400, "posX and posY are required");
 
   // Clamped and rounded here rather than trusted: the columns are integers, and a warp
-  // outside the canvas would scroll to a place the viewport can never reach.
-  const stored = {
-    posX: Math.round(clamp(posX, 0, CANVAS_W)),
-    posY: Math.round(clamp(posY, 0, CANVAS_H)),
-  };
+  // outside the canvas would scroll to a place the viewport can never reach. The bound is
+  // the workspace's own canvas size, which is what the browser draws.
+  const clamped = clampToCanvas(posX, posY);
+  const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
 
   try {
     // The whole stored row, so a client that echoed back what it sent cannot draw the

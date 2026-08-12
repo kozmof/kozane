@@ -527,6 +527,26 @@ describe("warpInDirection", () => {
     // A lone warp is its own wrap target, so pressing an arrow re-centres on it.
     expect(warpInDirection([warps[0]], { x: 5000, y: 5000 }, "right")).toMatchObject({ id: "w1" });
   });
+
+  it("wraps past the warp the view is already on", () => {
+    const column = [
+      { id: "top", posX: 500, posY: 500 },
+      { id: "bottom", posX: 500, posY: 1500 },
+    ];
+    // Both share the leftmost x, so ← off "top" would otherwise wrap straight back to it
+    // and the key would look broken.
+    expect(warpInDirection(column, { x: 500, y: 500 }, "left", "top")).toMatchObject({
+      id: "bottom",
+    });
+    // Without a current warp the wrap is unchanged: the older of the two.
+    expect(warpInDirection(column, { x: 500, y: 500 }, "left")).toMatchObject({ id: "top" });
+  });
+
+  it("still lands on the only warp there is, even when the view is on it", () => {
+    expect(warpInDirection([warps[0]], { x: 1000, y: 500 }, "right", "w1")).toMatchObject({
+      id: "w1",
+    });
+  });
 });
 
 describe("ARROW_DIRECTIONS", () => {

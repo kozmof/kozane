@@ -24,6 +24,18 @@ export type HintCard = { posX: number; posY: number; content: string; zIndex?: n
 export type CardMetrics = { cardWidth: number; fontSize: number };
 
 /**
+ * The metrics a workspace's UI settings imply. The two names differ — `defaultCardWidth`
+ * is a setting, `cardWidth` is what a card is drawn at — and doing the rename in one place
+ * is what keeps a caller from quietly passing the font size as the width.
+ */
+export function cardMetrics(ui: {
+  defaultCardWidth: number;
+  defaultFontSize: number;
+}): CardMetrics {
+  return { cardWidth: ui.defaultCardWidth, fontSize: ui.defaultFontSize };
+}
+
+/**
  * How far a card's edge may sit from a warp and still describe it, in world pixels. Two
  * card widths: past that the nearest card is somewhere else on the board, and naming it
  * would point at the wrong place.
@@ -37,8 +49,50 @@ const CARD_PADDING_Y = 16;
 const CARD_FOOTER_HEIGHT = 24;
 const CARD_MIN_CONTENT_HEIGHT = 44;
 const CARD_LINE_HEIGHT_RATIO = 1.65;
-/** Width of one character relative to the font size, for the monospace the cards default to. */
+/**
+ * Width of one narrow character cell relative to the font size, for the monospace the
+ * cards default to.
+ */
 const CHAR_WIDTH_RATIO = 0.6;
+
+/**
+ * Code point ranges a monospace font draws at double width: the CJK blocks, Hangul, the
+ * fullwidth forms, and the emoji. Kozane is a こざね法 tool, so a board of Japanese cards is
+ * the ordinary case rather than the exotic one — counting those characters as narrow
+ * would halve every estimate.
+ */
+const WIDE_RANGES: readonly (readonly [number, number])[] = [
+  [0x1100, 0x115f], // Hangul Jamo
+  [0x2e80, 0x303e], // CJK radicals, Kangxi, CJK symbols and punctuation
+  [0x3041, 0x33ff], // Hiragana, Katakana, Bopomofo, Hangul Compatibility Jamo, Kanbun
+  [0x3400, 0x4dbf], // CJK Unified Ideographs Extension A
+  [0x4e00, 0x9fff], // CJK Unified Ideographs
+  [0xa000, 0xa4cf], // Yi
+  [0xac00, 0xd7a3], // Hangul syllables
+  [0xf900, 0xfaff], // CJK Compatibility Ideographs
+  [0xfe10, 0xfe19], // Vertical forms
+  [0xfe30, 0xfe6f], // CJK Compatibility Forms, small form variants
+  [0xff00, 0xff60], // Fullwidth forms
+  [0xffe0, 0xffe6], // Fullwidth signs
+  [0x1f300, 0x1f64f], // Emoji
+  [0x1f900, 0x1f9ff], // Supplemental symbols and pictographs
+  [0x20000, 0x3fffd], // CJK Unified Ideographs Extension B and beyond
+];
+
+/** How wide one code point is drawn, in narrow cells. */
+function charCells(codePoint: number): number {
+  return WIDE_RANGES.some(([lo, hi]) => codePoint >= lo && codePoint <= hi) ? 2 : 1;
+}
+
+/**
+ * How many cells a line of text takes up. Counted by code point, so a character outside
+ * the basic plane counts once rather than once per surrogate half.
+ */
+export function textCells(text: string): number {
+  let cells = 0;
+  for (const char of text) cells += charCells(char.codePointAt(0)!);
+  return cells;
+}
 
 /**
  * How tall a card with this content comes out, near enough. Cards store a position but no
@@ -46,13 +100,13 @@ const CHAR_WIDTH_RATIO = 0.6;
  * to — so a warp that has to know what it is sitting on has to estimate it.
  */
 export function estimateCardHeight(content: string, { cardWidth, fontSize }: CardMetrics): number {
-  const charsPerLine = Math.max(
+  const cellsPerLine = Math.max(
     1,
     Math.floor((cardWidth - CARD_PADDING_X) / (fontSize * CHAR_WIDTH_RATIO)),
   );
   const lines = content
     .split("\n")
-    .reduce((total, line) => total + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+    .reduce((total, line) => total + Math.max(1, Math.ceil(textCells(line) / cellsPerLine)), 0);
   const textHeight = lines * fontSize * CARD_LINE_HEIGHT_RATIO + CARD_PADDING_Y;
   return Math.max(CARD_MIN_CONTENT_HEIGHT, textHeight) + CARD_FOOTER_HEIGHT;
 }

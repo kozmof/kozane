@@ -314,30 +314,43 @@ const CROSS_AXIS_PENALTY = 2;
 /**
  * The next warp in `direction` from `from`, wrapping round the board when there is none:
  * travelling right off the rightmost warp arrives at the leftmost, and down off the
- * bottom one at the top. `null` only when the project has no warps at all.
+ * bottom one at the top. `currentId` is the warp the view is already on, which the wrap
+ * avoids landing back on. `null` only when the project has no warps at all.
  */
 export function warpInDirection<T extends { id: string; posX: number; posY: number }>(
   warps: readonly T[],
   from: Point,
   direction: WarpDirection,
+  currentId: string | null = null,
 ): T | null {
-  return nearestWarpInDirection(warps, from, direction) ?? farthestWarpBehind(warps, direction);
+  return (
+    nearestWarpInDirection(warps, from, direction) ??
+    farthestWarpBehind(warps, direction, currentId)
+  );
 }
 
 /**
  * The warp travelling `direction` wraps round to: the leftmost when going right, the
  * topmost when going down, and so on. Ties keep creation order.
+ *
+ * The warp the view is already on is left out of the running: warps sharing the edge —
+ * two at the same x, say — would otherwise wrap the focus straight back onto itself and
+ * the key would look broken. It comes back in only when it is the last one standing,
+ * where staying put is all a single-warp board can do.
  */
 function farthestWarpBehind<T extends { id: string; posX: number; posY: number }>(
   warps: readonly T[],
   direction: WarpDirection,
+  currentId: string | null,
 ): T | null {
+  const others = currentId === null ? warps : warps.filter(({ id }) => id !== currentId);
+  const candidates = others.length > 0 ? others : warps;
   const horizontal = direction === "left" || direction === "right";
   // Going right restarts from the smallest x, going left from the largest.
   const sign = direction === "right" || direction === "down" ? 1 : -1;
   const along = (warp: T) => (horizontal ? warp.posX : warp.posY);
   let best: T | null = null;
-  for (const warp of warps) {
+  for (const warp of candidates) {
     if (best === null || sign * (along(warp) - along(best)) < 0) best = warp;
   }
   return best;

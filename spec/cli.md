@@ -905,6 +905,10 @@ The default `"vertical-list"` stacks newly created cards downward in one non-ove
 column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping layout
 with light overlap between cards.
 
+`ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
+inside them: a card or a warp written past the edge is clamped to it, and the response
+reports the position as stored rather than as sent.
+
 ---
 
 ## Taskspace marker

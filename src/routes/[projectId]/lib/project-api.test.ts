@@ -16,6 +16,7 @@ import {
   batchReassignBundle,
   moveCardsToProject,
   createTaskspace,
+  parseWarp,
 } from "./project-api.js";
 
 function makeFetcher() {
@@ -212,5 +213,31 @@ describe("createTaskspace", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(taskspace),
     });
+  });
+});
+
+describe("parseWarp", () => {
+  it("accepts the row a warp POST answers with", () => {
+    const row = { id: "w-1", projectId: "p-1", posX: 120, posY: 240 };
+    expect(parseWarp(row)).toEqual(row);
+  });
+
+  it("keeps only the fields a warp has", () => {
+    expect(parseWarp({ id: "w-1", projectId: "p-1", posX: 1, posY: 2, name: "nope" })).toEqual({
+      id: "w-1",
+      projectId: "p-1",
+      posX: 1,
+      posY: 2,
+    });
+  });
+
+  it("rejects a body that is not a warp", () => {
+    expect(parseWarp(null)).toBeNull();
+    expect(parseWarp("w-1")).toBeNull();
+    expect(parseWarp({ ok: true })).toBeNull();
+    expect(parseWarp({ id: "w-1", projectId: "p-1", posX: "120", posY: 240 })).toBeNull();
+    expect(parseWarp({ id: "w-1", projectId: "p-1", posX: 120 })).toBeNull();
+    expect(parseWarp({ id: 1, projectId: "p-1", posX: 120, posY: 240 })).toBeNull();
+    expect(parseWarp({ id: "w-1", projectId: "p-1", posX: NaN, posY: 240 })).toBeNull();
   });
 });

@@ -24,6 +24,13 @@
   let panelEl: HTMLDivElement = $state()!;
   let rowEls: Record<string, HTMLButtonElement> = {};
 
+  // Rows come and go while the palette is open — removing a warp is done from here. The
+  // bindings of rows that have gone are dropped rather than kept for the life of the panel.
+  $effect(() => {
+    const live = new Set(entries.map(({ id }) => id));
+    for (const id of Object.keys(rowEls)) if (!live.has(id)) delete rowEls[id];
+  });
+
   // The starting highlight, resolved against the list rather than trusted: a focused warp
   // that has since been removed would otherwise leave nothing highlighted at all.
   let highlighted = $derived(

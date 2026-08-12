@@ -1,4 +1,5 @@
 import type { CardPositionPatch } from "./project-page.js";
+import type { Warp } from "$lib/types.js";
 
 function jsonRequest(
   fetcher: typeof fetch,
@@ -148,6 +149,19 @@ export function createWarp(
   position: { posX: number; posY: number },
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/warps`, "POST", position);
+}
+
+/**
+ * The row a warp POST answers with, or null when the body is not one. Unlike the other
+ * mutations, which read a single field out of their response, a created warp is kept whole
+ * and drawn on the board — so an unexpected body would put a marker at `undefined`.
+ */
+export function parseWarp(value: unknown): Warp | null {
+  if (typeof value !== "object" || value === null) return null;
+  const { id, projectId, posX, posY } = value as Record<string, unknown>;
+  if (typeof id !== "string" || typeof projectId !== "string") return null;
+  if (!Number.isFinite(posX) || !Number.isFinite(posY)) return null;
+  return { id, projectId, posX: posX as number, posY: posY as number };
 }
 
 export function deleteWarp(

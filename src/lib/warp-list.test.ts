@@ -5,6 +5,8 @@ import {
   moveHighlight,
   estimateCardHeight,
   nearestCardHint,
+  cardMetrics,
+  textCells,
   warpEntriesForProject,
   withoutWarp,
   WARP_HINT_MAX_CHARS,
@@ -41,6 +43,41 @@ describe("estimateCardHeight", () => {
 
   it("counts the lines the author typed as well as the ones that wrap", () => {
     expect(estimateCardHeight("a\nb\nc\nd", METRICS)).toBe(4 * 10 * 1.65 + 16 + 24);
+  });
+
+  it("gives a fullwidth character the width of two", () => {
+    // 30 cells to a line, so 45 kana wrap to three lines where 45 Latin letters take two.
+    expect(estimateCardHeight("あ".repeat(45), METRICS)).toBe(3 * 10 * 1.65 + 16 + 24);
+    expect(estimateCardHeight("a".repeat(45), METRICS)).toBe(2 * 10 * 1.65 + 16 + 24);
+  });
+
+  it("counts an astral character once, not once per surrogate half", () => {
+    // 15 emoji are 30 cells: exactly one line, not the two a UTF-16 length would give.
+    expect(estimateCardHeight("🌱".repeat(15), METRICS)).toBe(44 + 24);
+  });
+});
+
+describe("textCells", () => {
+  it("counts a narrow character as one cell and a fullwidth one as two", () => {
+    expect(textCells("abc")).toBe(3);
+    expect(textCells("こざね")).toBe(6);
+    expect(textCells("梅棹忠夫")).toBe(8);
+    expect(textCells("ａｂｃ")).toBe(6);
+    // Mixed, which is what a real card looks like.
+    expect(textCells("kozane法")).toBe(8);
+  });
+
+  it("has no cells for an empty string", () => {
+    expect(textCells("")).toBe(0);
+  });
+});
+
+describe("cardMetrics", () => {
+  it("reads the card box out of a workspace's UI settings", () => {
+    expect(cardMetrics({ defaultCardWidth: 210, defaultFontSize: 11.5 })).toEqual({
+      cardWidth: 210,
+      fontSize: 11.5,
+    });
   });
 });
 

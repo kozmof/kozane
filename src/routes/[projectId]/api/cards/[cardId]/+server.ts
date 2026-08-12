@@ -5,7 +5,8 @@ import { getLayer } from "../../../../../db/api/layer";
 import { updateCard } from "../../../../../db/api/card";
 import { deleteProjectCards } from "../../../../../db/api/composite";
 import { requireCardInProject } from "../../../lib/guards";
-import { CANVAS_W, CANVAS_H, CONTENT_MAX, clamp } from "$lib/constants";
+import { CONTENT_MAX, clamp } from "$lib/constants";
+import { canvasBounds } from "$lib/server/canvas";
 import {
   optionalNumber,
   optionalString,
@@ -44,8 +45,9 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   const rawPosX = optionalNumber(body, "posX");
   const rawPosY = optionalNumber(body, "posY");
-  const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, CANVAS_W);
-  const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, CANVAS_H);
+  const { canvasWidth, canvasHeight } = canvasBounds();
+  const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, canvasWidth);
+  const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, canvasHeight);
   const zIndex = optionalNumber(body, "zIndex");
   if (zIndex !== undefined && !Number.isInteger(zIndex))
     throw error(400, "zIndex must be an integer");

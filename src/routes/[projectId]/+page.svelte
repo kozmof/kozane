@@ -23,7 +23,12 @@
     warpInDirection,
   } from "./lib/project-page";
   import type { CardPositionPatch } from "./lib/project-page";
-  import { warpEntriesForProject, withoutWarp, type WarpListEntry } from "$lib/warp-list";
+  import {
+    cardMetrics,
+    warpEntriesForProject,
+    withoutWarp,
+    type WarpListEntry,
+  } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
   import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
   import { createProjectActions } from "./project-actions.svelte";
@@ -110,10 +115,7 @@
       project: { id: data.project.id, name: data.project.name },
       warps: s.warps,
       cards: s.cards,
-      metrics: {
-        cardWidth: data.uiConfig.defaultCardWidth,
-        fontSize: data.uiConfig.defaultFontSize,
-      },
+      metrics: cardMetrics(data.uiConfig),
       isCurrent: true,
     }),
     ...warpDirectory,
@@ -126,7 +128,9 @@
   $effect(() => {
     if (data === loadedData) return;
     loadedData = data;
-    warpDirectory = data.warpDirectory;
+    // `?? []`: as on the initial read above — a static export built before this feature
+    // carries no directory, and spreading `undefined` into the palette's rows would throw.
+    warpDirectory = data.warpDirectory ?? [];
     if (data.project.id !== loadedProjectId) {
       loadedProjectId = data.project.id;
       s.resetFromData(data);
@@ -168,7 +172,7 @@
       tick().then(() => canvasComponent.recenter());
       return;
     }
-    s.focusedWarpId = target.id;
+    focusWarp(target.id);
     tick().then(() => {
       canvasComponent.centerOn(target.posX, target.posY);
       clearWarpQuery();
@@ -194,7 +198,7 @@
   // Resolved before the canvas mounts, so a page loaded with `?warp=` opens on the warp
   // instead of scrolling to it once the middle of the board has already been painted.
   const initialWarp = untrack(warpFromUrl);
-  if (initialWarp) untrack(() => (s.focusedWarpId = initialWarp.id));
+  if (initialWarp) untrack(() => focusWarp(initialWarp.id));
 
   onMount(() => {
     if (initialWarp) clearWarpQuery();
@@ -319,11 +323,21 @@
     }
   }
 
+  /**
+   * Focuses a warp, revealing the markers if they were hidden. The remove key acts on the
+   * focused warp, so a focus with nothing on screen to show for it is a warp that
+   * disappears by surprise — the same reason setting a warp reveals them.
+   */
+  function focusWarp(warpId: string) {
+    warpsVisible = true;
+    s.focusedWarpId = warpId;
+  }
+
   function handleWarpJump(entry: WarpListEntry) {
     warpPaletteOpen = false;
     if (entry.projectId === s.projectId) {
       canvasComponent.centerOn(entry.posX, entry.posY);
-      s.focusedWarpId = entry.id;
+      focusWarp(entry.id);
       return;
     }
     // The other project's page decides where its own canvas opens, so the warp travels in
@@ -358,6 +372,12 @@
     if (warpPaletteOpen) return;
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
+    // Shortcuts are single keys, and `event.key` carries no modifier but Shift: without
+    // this, Ctrl/Cmd+A — select-all — reads as the set-warp key and drops a warp, and the
+    // browser's own Ctrl/Cmd shortcuts each collide with whatever letter matches them.
+    // Shift is the exception: it is part of the palette's own chord, and a shortcut may be
+    // configured as a capital letter (`toggleWarpsShortcut` is Shift+A by default).
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (!readonly && e.key === data.uiConfig.focusCardInputShortcut) {
       e.preventDefault();
       s.selection.composerCard = null;
@@ -386,11 +406,11 @@
       // Measured from where the view is now, so warping works the same whether you
       // arrived by arrow key or by dragging the canvas.
       const { posX, posY } = canvasComponent.getViewCenter();
-      const target = warpInDirection(s.warps, { x: posX, y: posY }, direction);
+      const target = warpInDirection(s.warps, { x: posX, y: posY }, direction, s.focusedWarpId);
       if (target) {
         e.preventDefault();
         canvasComponent.centerOn(target.posX, target.posY);
-        s.focusedWarpId = target.id;
+        focusWarp(target.id);
       }
       return;
     }
@@ -439,7 +459,7 @@
       {warpsVisible}
       warpMarkerSize={data.uiConfig.warpMarkerSize}
       initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
-      onFocusWarp={(warpId) => (s.focusedWarpId = warpId)}
+      onFocusWarp={focusWarp}
       {showFooters}
       bind:zoom
       zoomStep={data.uiConfig.zoomStep}

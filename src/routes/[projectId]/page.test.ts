@@ -931,6 +931,36 @@ describe("Warps", () => {
     expect(screen.getByLabelText("Warp 1")).toBeInTheDocument();
   });
 
+  it("ignores a shortcut pressed with a modifier", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const { container } = renderPage();
+    const canvas = canvasOf(container);
+
+    // Cmd/Ctrl+A is select-all, and `event.key` is the bare "w"/"a" either way: without a
+    // modifier guard each of these reads as a warp shortcut.
+    await fireEvent.keyDown(window, { key: "w", metaKey: true });
+    await fireEvent.keyDown(window, { key: "w", ctrlKey: true });
+    await fireEvent.keyDown(window, { key: "q", metaKey: true });
+    await fireEvent.keyDown(window, { key: "W", ctrlKey: true });
+    await fireEvent.keyDown(window, { key: "ArrowRight", ctrlKey: true });
+
+    expect(fetch).not.toHaveBeenCalled();
+    // Nothing moved, nothing was hidden, nothing was focused.
+    expect(canvas.scrollLeft).toBe(1000);
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("shows the markers again when an arrow key focuses one", async () => {
+    renderPage({ uiConfig: { ...data.uiConfig, defaultShowWarps: false } });
+    expect(screen.queryByLabelText("Warp 1")).not.toBeInTheDocument();
+
+    // The remove key acts on the focused warp, so focusing one has to put it on screen.
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("hides and shows the markers with the toggle key", async () => {
     renderPage();
 
