@@ -2,6 +2,14 @@ export const CANVAS_W = 5600;
 export const CANVAS_H = 4000;
 export const CONTENT_MAX = 10_000;
 export const NAME_MAX = 255;
+/**
+ * How many ids one request may name. Every batch endpoint binds a parameter per id, and the
+ * position and stacking updates bind several — SQLite refuses a statement past its variable
+ * limit, and builds the whole thing in memory before finding out. This sits far enough
+ * under that to leave room for the widest of those statements, and far enough above any
+ * real selection that reaching it means something other than a user dragging cards.
+ */
+export const BATCH_MAX = 2_000;
 /** Name of the default layer every project is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
 export const DEFAULT_SERVER_HOST = "127.0.0.1";

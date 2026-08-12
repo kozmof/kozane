@@ -22,11 +22,15 @@ import {
   requireStringArray,
   requireTrimmedString,
   requireUniqueStrings,
+  requireWithinBatchLimit,
 } from "../../lib/request";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
   const value = body.positions;
   if (!Array.isArray(value) || value.length === 0) throw error(400, "positions is required");
+  // The widest statement any endpoint builds: each position contributes to both CASE
+  // expressions and to the WHERE, so the cap matters more here than anywhere else.
+  requireWithinBatchLimit(value.length, "positions");
 
   const positions = value.map((item) => {
     if (typeof item !== "object" || item === null || Array.isArray(item))

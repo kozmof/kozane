@@ -35,6 +35,12 @@ incorrect `PROTOCOL_HEADER` configuration causes requests to fail closed with HT
 The built-in authentication throttle is intentionally process-local. Configure rate limiting at
 the reverse proxy or ingress so limits survive restarts and cover every instance.
 
+`ADDRESS_HEADER` matters to that throttle as much as to your logs: it counts failures per
+client address, and without the header every request behind the proxy arrives from the proxy's
+own address. All remote clients then share one counter, so a single client failing to
+authenticate can throttle everyone else. Configure the proxy chain before allowing remote
+access, not after.
+
 Rotate the key with `kozane api key refresh`. Rotation immediately invalidates the previous
 key. Treat `.kozane/api.json` as a secret and never copy it into logs or source control.
 
@@ -44,9 +50,12 @@ Use a process supervisor such as systemd, Docker, or your platform's service man
 automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
 with the API key. It verifies that the database accepts queries.
 
-Run only one Kozane server per workspace. Startup uses an exclusive runtime reservation and
-refuses a second instance. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server so
-the adapter can drain connections before exit.
+Run only one Kozane server per workspace, enforced by an exclusive runtime reservation.
+`kozane open` checks the reservation before it starts anything and refuses outright. A server
+started directly (`node build/index.js`) against a workspace another process already holds
+answers every request with HTTP 503 naming the process that holds it, and logs the conflict
+once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server so the adapter can
+drain connections before exit.
 
 Each HTTP response includes `X-Request-Id`. Request completion and errors are emitted as JSON.
 

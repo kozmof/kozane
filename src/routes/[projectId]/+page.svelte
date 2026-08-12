@@ -219,6 +219,17 @@
     // A static export has no /api/snapshot endpoint and no writers to sync with.
     if (readonly) return;
     let refreshing = false;
+    /**
+     * The tag of the snapshot currently applied, and the project it describes. Sent back so
+     * the server can answer "nothing new" instead of the whole board: most polls find no
+     * change, and re-applying an identical snapshot rebuilds every reactive list on the page
+     * once a second for nothing.
+     *
+     * Kept with its project because the same poll serves whichever board is open, and a tag
+     * from the previous one would describe data this one never had.
+     */
+    let applied: { projectId: string; etag: string } | null = null;
+
     const refresh = async () => {
       if (
         refreshing ||
@@ -230,8 +241,17 @@
       refreshing = true;
       const activityVersion = positionActivityVersion;
       const mutationVersion = s.mutationVersion;
+      const projectId = s.projectId;
+      const known = applied?.projectId === projectId ? applied.etag : null;
       try {
-        const response = await s.fetcher(`/${s.projectId}/api/snapshot`);
+        const response = await s.fetcher(`/${projectId}/api/snapshot`, {
+          // Revalidation is done by hand with the tag below, so the browser's own cache is
+          // kept out of it — served from there, a 304 would arrive as a full 200 again.
+          cache: "no-store",
+          ...(known && { headers: { "if-none-match": known } }),
+        });
+        // 304: the board already matches the database, and there is nothing to apply.
+        if (response.status === 304) return;
         if (response.ok) {
           const snapshot = await response.json();
           if (
@@ -241,6 +261,14 @@
             s.mutationVersion === mutationVersion
           ) {
             s.refreshFromData(snapshot);
+            // Recorded only once the data is actually on the board. A snapshot dropped by
+            // the guards above was never applied, so claiming to hold it would leave the
+            // page waiting on a change the server has already sent.
+            //
+            // No tag means no conditional request to make: the poll simply goes on asking
+            // for the whole board, which is what it did before there was one to send.
+            const etag = response.headers?.get("etag") ?? null;
+            applied = etag ? { projectId, etag } : null;
           }
         }
       } catch {

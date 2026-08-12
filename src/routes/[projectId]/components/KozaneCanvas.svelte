@@ -167,6 +167,8 @@
     lastX: number;
     lastY: number;
     groupIds: string[];
+    /** The same ids as `groupIds`, for the membership test every pointer move makes. */
+    groupIdSet: Set<string>;
     groupPrevPositions: Map<string, { x: number; y: number }>;
     moved: boolean;
   } | null = null;
@@ -233,9 +235,14 @@
     }
 
     const previous = lastListPosition;
+    // Indexed once rather than scanned per element: the loop below visits every card on the
+    // board, and a lookup through the list inside it makes placing one card cost the square
+    // of how many there are.
+    const cardById = previous ? new Map(visibleCards.map((card) => [card.id, card])) : null;
     const sizes = previous
       ? [...canvasEl.querySelectorAll<HTMLElement>("[data-card-id]")].flatMap((el) => {
-          const card = visibleCards.find(({ id }) => id === el.dataset.cardId);
+          const cardId = el.dataset.cardId;
+          const card = cardId ? cardById!.get(cardId) : undefined;
           return card?.posX === previous.posX && card.posY === previous.posY
             ? [{
                 posX: card.posX,
@@ -381,6 +388,7 @@
       lastX: card.posX,
       lastY: card.posY,
       groupIds,
+      groupIdSet: new Set(groupIds),
       groupPrevPositions,
       moved: false,
     };
@@ -391,7 +399,7 @@
 
   function updateDraggedCard(clientX: number, clientY: number, snapToGrid = false) {
     if (!dragState) return;
-    const { cardId, offsetX, offsetY, groupIds } = dragState;
+    const { cardId, offsetX, offsetY, groupIdSet } = dragState;
     const rect = canvasEl.getBoundingClientRect();
     const rawX = (clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
     const rawY = (clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
@@ -401,12 +409,21 @@
     const dy = y - dragState.lastY;
     dragState.lastX = x;
     dragState.lastY = y;
-    cards = cards.map((c) => {
-      if (c.id === cardId) return { ...c, posX: x, posY: y };
-      if (groupIds.includes(c.id))
-        return { ...c, posX: Math.max(0, c.posX + dx), posY: Math.max(0, c.posY + dy) };
-      return c;
-    });
+    // Written through the rows themselves rather than mapped into a replacement array.
+    // This runs on every pointer move, and replacing the array marks the whole list dirty:
+    // the derived layer grouping is rebuilt and every card on the board re-evaluates its
+    // styles, sixty times a second, to move one card and whatever is glued to it. Assigning
+    // a position touches only the card it belongs to. `groupIdSet` keeps the membership
+    // test flat, which the array it replaces did not.
+    for (const c of cards) {
+      if (c.id === cardId) {
+        c.posX = x;
+        c.posY = y;
+      } else if (groupIdSet.has(c.id)) {
+        c.posX = Math.max(0, c.posX + dx);
+        c.posY = Math.max(0, c.posY + dy);
+      }
+    }
   }
 
   export function handleCardClick(e: MouseEvent, cardId: string) {

@@ -75,7 +75,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
           id: taskspace.id,
           name: taskspace.name,
           scopeId: taskspace.scopeId,
-          path: taskspace.path,
+          // A taskspace path names a directory on the machine the workspace lives on, and a
+          // static export is built to be published — to GitHub Pages, as the README
+          // describes. Page data is baked into the output, so a path put here is served to
+          // anyone who visits, whether or not the UI draws it. The board's own content is
+          // the point of the export; the local paths behind it are not part of it.
+          path: prerender ? null : taskspace.path,
           pathKind: taskspace.pathKind,
         }) satisfies TaskspaceSummary,
     ),

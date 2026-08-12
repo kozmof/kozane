@@ -184,6 +184,136 @@ describe("Project page", () => {
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   });
 
+  /**
+   * One poll, start to finish. `waitFor` sees a mock the moment it is *called*, which for
+   * the snapshot body is well before the page has applied it and released its in-flight
+   * guard — so the next poll would be dropped rather than sent.
+   */
+  async function poll(fetch: ReturnType<typeof vi.fn>) {
+    const before = fetch.mock.calls.length;
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(fetch.mock.calls.length).toBeGreaterThan(before));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  it("sends back the tag it holds and leaves the board alone when nothing changed", async () => {
+    const snapshotJson = vi.fn(async () => data);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ etag: '"board-1"' }),
+        json: snapshotJson,
+      })
+      .mockResolvedValue({ ok: false, status: 304, headers: new Headers({ etag: '"board-1"' }) });
+    vi.stubGlobal("fetch", fetch);
+
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    await poll(fetch);
+    // Nothing to revalidate against yet, so the first poll asks for the whole board.
+    expect(fetch.mock.calls[0][1]).not.toHaveProperty("headers");
+    expect(snapshotJson).toHaveBeenCalledOnce();
+
+    await poll(fetch);
+
+    expect(fetch.mock.calls[1][0]).toBe("/project-1/api/snapshot");
+    expect(fetch.mock.calls[1][1]).toMatchObject({
+      cache: "no-store",
+      headers: { "if-none-match": '"board-1"' },
+    });
+    // A 304 carries no body at all, so nothing is parsed and nothing is re-applied.
+    expect(snapshotJson).toHaveBeenCalledOnce();
+  });
+
+  it("asks for the whole board again after a snapshot it could not apply", async () => {
+    const snapshotJson = vi.fn(async () => data);
+    const tagged = () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ etag: '"board-1"' }),
+      json: snapshotJson,
+    });
+    let resolveSnapshot!: (response: ReturnType<typeof tagged>) => void;
+    const inFlight = new Promise<ReturnType<typeof tagged>>((r) => (resolveSnapshot = r));
+    // Routed by URL rather than by call order: the drop saves positions in between, and a
+    // mutation's reply handed to the poll would be applied to the board as if it were one.
+    let firstPoll = true;
+    const fetch = vi.fn((url: unknown, _init?: RequestInit) => {
+      if (!String(url).endsWith("/api/snapshot"))
+        return Promise.resolve({ ok: true, json: async () => ({ ok: true }) });
+      if (!firstPoll) return Promise.resolve(tagged());
+      firstPoll = false;
+      return inFlight;
+    });
+    vi.stubGlobal("fetch", fetch);
+
+    render(ProjectPage, {
+      props: { data, params: { projectId: "project-1" }, form: null },
+    });
+
+    // The poll goes out first; the drag starts while it is still in flight, which is what
+    // makes the page drop the answer when it finally lands.
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    await fireEvent.mouseDown(card, { button: 0, clientX: 30, clientY: 60 });
+    await fireEvent.mouseMove(window, { clientX: 222, clientY: 180 });
+
+    resolveSnapshot(tagged());
+    await waitFor(() => expect(snapshotJson).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // Let the drop and its position save finish, so polling is allowed again.
+    await fireEvent.mouseUp(window);
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fetch.mockClear();
+    await poll(fetch);
+
+    // The dropped snapshot was never on the board, so claiming to hold its tag would leave
+    // the page waiting forever on a change the server had already sent.
+    const pollCall = fetch.mock.calls.find(([url]) => String(url).endsWith("/api/snapshot"))!;
+    expect(pollCall).toBeDefined();
+    expect(pollCall[1]).not.toHaveProperty("headers");
+  });
+
+  it("carries a glued partner along with the card under the pointer", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+    const glued = {
+      ...data,
+      cards: data.cards.map((card) => ({ ...card, glueId: "g1" })),
+      glueRels: [
+        { glueId: "g1", cardId: "card-1" },
+        { glueId: "g1", cardId: "card-2" },
+      ],
+    };
+
+    render(ProjectPage, {
+      props: { data: glued, params: { projectId: "project-1" }, form: null },
+    });
+
+    const alpha = screen.getByRole("button", { name: "Card: Alpha" });
+    const beta = screen.getByRole("button", { name: "Card: Beta" });
+
+    await fireEvent.mouseDown(alpha, { button: 0, clientX: 30, clientY: 60 });
+    await fireEvent.mouseMove(window, { clientX: 222, clientY: 180 });
+
+    // Alpha goes where the pointer took it. Beta is moved by the same delta rather than to
+    // the same place, so the 72px the two were apart is still there afterwards.
+    expect(alpha).toHaveStyle({ left: "216px", top: "168px" });
+    expect(beta).toHaveStyle({ left: "288px", top: "168px" });
+
+    await fireEvent.mouseUp(window);
+  });
+
   it("uses the configured shortcut to focus the create-card input", async () => {
     render(ProjectPage, {
       props: {

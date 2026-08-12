@@ -1,6 +1,16 @@
 import { error } from "@sveltejs/kit";
+import { BATCH_MAX } from "$lib/constants";
 
 type JsonRecord = Record<string, unknown>;
+
+/**
+ * Guards a request array against {@link BATCH_MAX} before anything is done with it, so an
+ * oversized body is refused while it is still just a list rather than partway into a
+ * statement SQLite will not accept.
+ */
+export function requireWithinBatchLimit(length: number, key: string): void {
+  if (length > BATCH_MAX) throw error(400, `${key} must have at most ${BATCH_MAX} items`);
+}
 
 export async function readJsonObject(request: Request): Promise<JsonRecord> {
   let body: unknown;
@@ -51,6 +61,9 @@ export function requireStringArray(body: JsonRecord, key: string, minLength = 1)
   if (!Array.isArray(value)) throw error(400, `${key} must be an array`);
   if (value.length < minLength)
     throw error(400, `${key} must have at least ${minLength} item${minLength === 1 ? "" : "s"}`);
+  // Checked before the per-item work below, which is what an oversized body would otherwise
+  // pay for twice over.
+  requireWithinBatchLimit(value.length, key);
   if (value.some((item) => typeof item !== "string" || item.length === 0))
     throw error(400, `${key} must contain non-empty strings`);
   requireUniqueStrings(value, key);

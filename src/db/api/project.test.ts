@@ -8,10 +8,27 @@ import {
   updateProjectName,
   setDefaultProject,
 } from "./project.js";
+import { addBundle } from "./bundle.js";
+import { addLayer } from "./layer.js";
+import { addCard } from "./card.js";
+import { glueCards } from "./glue.js";
+import { glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
+import type { DB } from "../tx.js";
 
 async function db() {
   return createTestDB();
+}
+
+/** A project holding two cards glued to each other. */
+async function projectWithGluedCards(d: DB, name: string) {
+  const projectId = await addProject({ db: d, name });
+  await addLayer({ db: d, projectId, name: "Base", isDefault: true });
+  const bundleId = await addBundle({ db: d, projectId, name: "B" });
+  const cardA = await addCard({ db: d, bundleId, content: "A" });
+  const cardB = await addCard({ db: d, bundleId, content: "B" });
+  const glueId = await glueCards({ db: d, cardIds: [cardA, cardB] });
+  return { projectId, glueId };
 }
 
 describe("addProject", () => {
@@ -96,6 +113,44 @@ describe("deleteProject", () => {
   it("throws NotFoundError when project does not exist", async () => {
     const d = await db();
     await expect(deleteProject({ db: d, projectId: "ghost" })).rejects.toThrow(NotFoundError);
+  });
+
+  it("promotes the oldest survivor when several could replace the default", async () => {
+    // Repeated because the bug this guards against is an unordered `limit(1)`: a single run
+    // can pick the right row by luck.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const d = await db();
+      const first = await addProject({ db: d, name: "First", isDefault: true });
+      const second = await addProject({ db: d, name: "Second" });
+      await addProject({ db: d, name: "Third" });
+
+      await deleteProject({ db: d, projectId: first });
+
+      const survivors = await getAllProjects({ db: d });
+      expect(survivors.find(({ isDefault }) => isDefault)?.id).toBe(second);
+    }
+  });
+
+  it("removes the glue groups its cards leave behind", async () => {
+    const d = await db();
+    const { projectId } = await projectWithGluedCards(d, "Doomed");
+    expect(await d.select().from(glueTable)).toHaveLength(1);
+
+    await deleteProject({ db: d, projectId });
+
+    // The cards cascade away without passing through glue.ts, so nothing else would ever
+    // remove the group row they belonged to.
+    expect(await d.select().from(glueTable)).toEqual([]);
+  });
+
+  it("leaves another project's glue groups alone", async () => {
+    const d = await db();
+    const doomed = await projectWithGluedCards(d, "Doomed");
+    const kept = await projectWithGluedCards(d, "Kept");
+
+    await deleteProject({ db: d, projectId: doomed.projectId });
+
+    expect((await d.select().from(glueTable)).map(({ id }) => id)).toEqual([kept.glueId]);
   });
 });
 

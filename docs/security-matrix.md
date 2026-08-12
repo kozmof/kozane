@@ -94,9 +94,14 @@ and glue. There is no API key, no login page, and no way to authenticate,
 because there is no server. Composing, dragging, deleting, taskspaces, and
 live sync are all disabled.
 
-Do not export a workspace that holds anything you would not publish. The
-machine-specific workspace path is stripped from the output, but the content is
-not.
+Do not export a workspace that holds anything you would not publish. Card text,
+bundle names, scope names, layer names, and warp positions are all part of the
+export by design — that is what is being published.
+
+Filesystem paths are not. The machine-specific workspace path is stripped, and
+taskspace paths are redacted from the page data the export bakes in, so the
+directories a workspace was worked in are not served to whoever opens the site.
+Taskspaces therefore do not appear in a static export at all.
 
 ## Where each rule lives
 

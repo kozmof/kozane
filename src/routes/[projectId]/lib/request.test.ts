@@ -7,7 +7,9 @@ import {
   requireStringArray,
   requireTrimmedString,
   requireUniqueStrings,
+  requireWithinBatchLimit,
 } from "./request.js";
+import { BATCH_MAX } from "$lib/constants";
 
 function expectHttpError(fn: () => unknown, status: number, message: string) {
   expect(fn).toThrow(expect.objectContaining({ status, body: { message } }));
@@ -152,6 +154,38 @@ describe("requireStringArray", () => {
       400,
       "cardIds must be unique",
     );
+  });
+});
+
+describe("requireWithinBatchLimit", () => {
+  it("accepts a batch at the limit", () => {
+    expect(() => requireWithinBatchLimit(BATCH_MAX, "cardIds")).not.toThrow();
+  });
+
+  it("throws one past the limit", () => {
+    expectHttpError(
+      () => requireWithinBatchLimit(BATCH_MAX + 1, "cardIds"),
+      400,
+      `cardIds must have at most ${BATCH_MAX} items`,
+    );
+  });
+});
+
+describe("requireStringArray batch limit", () => {
+  it("rejects an oversized array before checking its contents", () => {
+    // Every element is invalid, so a message about element types would prove the
+    // per-item scan ran first — the work the limit exists to avoid.
+    const cardIds = Array.from({ length: BATCH_MAX + 1 }, () => 42);
+    expectHttpError(
+      () => requireStringArray({ cardIds }, "cardIds"),
+      400,
+      `cardIds must have at most ${BATCH_MAX} items`,
+    );
+  });
+
+  it("accepts an array at the limit", () => {
+    const cardIds = Array.from({ length: BATCH_MAX }, (_, i) => `card-${i}`);
+    expect(requireStringArray({ cardIds }, "cardIds")).toHaveLength(BATCH_MAX);
   });
 });
 

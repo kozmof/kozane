@@ -2,12 +2,16 @@ import type {
   CardWithGlue,
   Bundle,
   Layer,
+  ProjectDataSnapshot,
   Scope,
   ScopeRel,
   GlueRel,
   TaskspaceSummary,
   Warp,
 } from "$lib/types";
+
+// Re-exported for the components and tests that already name it through this module.
+export type { ProjectDataSnapshot } from "$lib/types";
 
 /** The layer new cards land on, falling back to the project's default layer. */
 export function resolveActiveLayerId(layers: Layer[], preferredId: string | null): string | null {
@@ -67,18 +71,6 @@ export class SidebarState {
     this.newScopeName = "";
     this.newWcName = "";
   }
-}
-
-export interface ProjectDataSnapshot {
-  project: { id: string };
-  cards: CardWithGlue[];
-  bundles: Bundle[];
-  layers: Layer[];
-  warps: Warp[];
-  scopes: Scope[];
-  scopeRels: ScopeRel[];
-  glueRels: GlueRel[];
-  taskspaces: TaskspaceSummary[];
 }
 
 export class ProjectState {

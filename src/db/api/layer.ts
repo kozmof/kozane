@@ -1,5 +1,5 @@
 import { layerTable } from "../schema.js";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { NeedsProject, NeedsProjectLayer, Layer } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
@@ -99,12 +99,16 @@ export async function reorderLayers({
     if (requested.size !== existing.length) return { ok: false, reason: "stale" };
     if (!existing.every(({ id }) => requested.has(id))) return { ok: false, reason: "foreign" };
 
-    for (const [position, layerId] of layerIds.entries()) {
-      await tx
-        .update(layerTable)
-        .set({ position })
-        .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)));
-    }
+    // One statement rather than one per layer. Same shape as the position and zIndex
+    // updates in card.ts, and safe for the same reason: the checks above prove `layerIds`
+    // is exactly this project's layer set, so no row the WHERE matches lacks a WHEN.
+    // `position` carries no unique index, so there is no half-applied ordering to collide
+    // with along the way either.
+    const whens = layerIds.map((layerId, position) => sql`WHEN ${layerId} THEN ${position}`);
+    await tx
+      .update(layerTable)
+      .set({ position: sql`CASE ${layerTable.id} ${sql.join(whens, sql` `)} END` })
+      .where(and(eq(layerTable.projectId, projectId), inArray(layerTable.id, layerIds)));
     return { ok: true };
   });
 }

@@ -27,15 +27,31 @@ import { LOGIN_PATH } from "./lib/server/login";
 process.env.HOST ??= "127.0.0.1";
 
 let registeredRoot: string | null = null;
-function registerRuntimeState(root: string | null): void {
-  if (!root || registeredRoot === root) return;
+/**
+ * Set once the workspace turns out to belong to another server. Remembered rather than
+ * rediscovered: without it every request races for the same lock file and answers with a
+ * fresh 500, which reads as an intermittent fault rather than the one permanent condition
+ * it is. The reservation is not attempted at module load, where a plain `vite build` that
+ * happens to run inside a workspace would claim it.
+ */
+let runtimeStateConflict: string | null = null;
+
+/** The reason this process may not serve `root`, or null when it may. */
+function registerRuntimeState(root: string | null): string | null {
+  if (runtimeStateConflict) return runtimeStateConflict;
+  if (!root || registeredRoot === root) return null;
   const active = claimServerState(root, process.pid, {
     memory: process.env.KOZANE_MEMORY_MODE === "1",
     databaseUrl: process.env.KOZANE_RUNTIME_DATABASE_URL,
   });
-  if (active) throw new Error(`Kozane workspace is already served by process ${active.pid}`);
+  if (active) {
+    runtimeStateConflict = `Kozane workspace is already served by process ${active.pid}. Stop that server, or run this one against another workspace.`;
+    console.error(`[kozane] ${runtimeStateConflict}`);
+    return runtimeStateConflict;
+  }
   registeredRoot = root;
   process.once("exit", () => removeServerState(root));
+  return null;
 }
 
 const handleRequest: Handle = async ({ event, resolve }) => {
@@ -50,7 +66,9 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     return resolve(event);
   }
 
-  registerRuntimeState(root);
+  const conflict = registerRuntimeState(root);
+  if (conflict) return applySecurityHeaders(new Response(conflict, { status: 503 }));
+
   const configuredKey = root ? readApiKey(root) : null;
   if (!configuredKey && remoteBindingRequiresApiKey()) {
     return applySecurityHeaders(

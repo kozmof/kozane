@@ -9,6 +9,17 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 }
 
+/**
+ * Dissolves any of `glueIds` left holding fewer than two cards, for callers that removed
+ * the cards themselves. Deleting a card through a cascade — a project going away takes its
+ * bundles, their cards, and those cards' `glue_rel` rows with it — never passes through
+ * this module, so the parent `glue` rows would survive with nothing pointing at them.
+ * Collect the ids before the cascade; they cannot be found afterwards.
+ */
+export async function dissolveOrphanGlueGroupsInTx(db: Tx, glueIds: string[]): Promise<void> {
+  await dissolveOrphanGroups(db, [...new Set(glueIds)]);
+}
+
 async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<string[]> {
   if (affectedGlueIds.length === 0) return [];
 
