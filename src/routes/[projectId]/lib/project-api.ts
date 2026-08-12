@@ -1,5 +1,6 @@
 import type { CardPositionPatch } from "./project-page.js";
 import type { Warp } from "$lib/types.js";
+import type { WarpListEntry } from "$lib/warp-list.js";
 
 function jsonRequest(
   fetcher: typeof fetch,
@@ -175,6 +176,40 @@ export function deleteWarp(
 /** The other projects' warps, as the palette lists them. */
 export function fetchWarpDirectory(fetcher: typeof fetch, projectId: string): Promise<Response> {
   return fetcher(`/${projectId}/api/warp-directory`);
+}
+
+/**
+ * The rows the warp directory answers with, or null when the body is not a list of them.
+ * Checked for the same reason {@link parseWarp} is, and more so: a palette row is rendered
+ * whole and then scrolled to, so an unexpected body would list rows reading `undefined`
+ * and send the view to `NaN`. All or nothing — a list half of which cannot be trusted is
+ * not one to replace a working list with.
+ */
+export function parseWarpEntries(value: unknown): WarpListEntry[] | null {
+  if (!Array.isArray(value)) return null;
+  const entries: WarpListEntry[] = [];
+  for (const row of value) {
+    if (typeof row !== "object" || row === null) return null;
+    const { id, projectId, projectName, label, posX, posY, hint, isCurrent } = row as Record<
+      string,
+      unknown
+    >;
+    if (typeof id !== "string" || typeof projectId !== "string") return null;
+    if (typeof projectName !== "string" || typeof isCurrent !== "boolean") return null;
+    if (!Number.isFinite(label) || !Number.isFinite(posX) || !Number.isFinite(posY)) return null;
+    if (hint !== null && typeof hint !== "string") return null;
+    entries.push({
+      id,
+      projectId,
+      projectName,
+      label: label as number,
+      posX: posX as number,
+      posY: posY as number,
+      hint,
+      isCurrent,
+    });
+  }
+  return entries;
 }
 
 export function createScope(

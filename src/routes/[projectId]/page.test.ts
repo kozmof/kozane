@@ -917,6 +917,66 @@ describe("Warps", () => {
     expect(screen.getByLabelText("Warp 3")).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("wraps round rather than sticking on a warp the board cannot centre", async () => {
+    // 2700 on the fixture's 2800-wide board: the scroll runs out before the warp reaches
+    // the middle of an 800px viewport, so the warp goes on lying right of the view centre
+    // even once the view has arrived on it — and pressing → again used to land back on it.
+    const { container } = renderPage({
+      warps: [
+        { id: "warp-1", projectId: "project-1", posX: 600, posY: 1000 },
+        { id: "warp-2", projectId: "project-1", posX: 2700, posY: 1000 },
+      ],
+    });
+    const canvas = canvasOf(container);
+
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(canvas.scrollLeft).toBe(2000);
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+
+    // Back round to the leftmost warp, as it would from any other warp on the board.
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(canvas.scrollLeft).toBe(200);
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("keeps an edge warp as a destination once the view has panned off it", async () => {
+    const { container } = renderPage({
+      warps: [
+        { id: "warp-1", projectId: "project-1", posX: 600, posY: 1000 },
+        { id: "warp-2", projectId: "project-1", posX: 2700, posY: 1000 },
+      ],
+    });
+    const canvas = canvasOf(container);
+
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+
+    // Dragged back to the middle of the board: the focused warp is somewhere to the right
+    // again, so it is what → goes to, rather than something to wrap past.
+    canvas.scrollLeft = 1000;
+    await fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(canvas.scrollLeft).toBe(2000);
+    expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("does one thing when one key is bound to two warp actions", async () => {
+    // `kozane doctor config` warns about a collision, but the config still loads and the
+    // page still has to behave: one press must not both set a warp and remove one.
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-new", projectId: "project-1", posX: 1400, posY: 1000 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ uiConfig: { ...data.uiConfig, removeWarpShortcut: "w" } });
+
+    await fireEvent.mouseDown(screen.getByLabelText("Warp 1"));
+    await fireEvent.keyDown(window, { key: "w" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch.mock.calls[0][0]).toBe("/project-1/api/warps");
+    expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-1");
+  });
+
   it("focuses a warp that is clicked", async () => {
     renderPage();
 
@@ -1073,6 +1133,19 @@ describe("Warps", () => {
 
     it("keeps the warps it was given when the re-read fails", async () => {
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")));
+      renderPage();
+
+      await openPalette();
+
+      await waitFor(() =>
+        expect(screen.getByRole("option", { name: /Umesao 1969/ })).toBeInTheDocument(),
+      );
+    });
+
+    it("keeps the warps it was given when the re-read is not a list of rows", async () => {
+      // A palette row is rendered whole and then scrolled to, so a body that is not one
+      // is treated as no answer at all rather than listed as `undefined`.
+      vi.stubGlobal("fetch", directoryResponse([{ id: "warp-10", projectName: "Research" }]));
       renderPage();
 
       await openPalette();

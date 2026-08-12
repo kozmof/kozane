@@ -12,6 +12,7 @@ import {
   edgeScrollVelocity,
   glueGroupIds,
   glueIdByCardId,
+  isViewCenteredOn,
   layerStack,
   moveWithin,
   nearestWarpInDirection,
@@ -443,6 +444,24 @@ describe("scrollForViewCenter", () => {
     expect(scrollForViewCenter(9000, 800, 1, 5000)).toBe(5000);
     // A canvas smaller than its viewport has nowhere to scroll.
     expect(scrollForViewCenter(9000, 800, 1, -200)).toBe(0);
+  });
+});
+
+describe("isViewCenteredOn", () => {
+  it("is true when the point sits in the middle of the viewport", () => {
+    expect(isViewCenteredOn(1000, 1400, 800, 1, 5000)).toBe(true);
+    expect(isViewCenteredOn(1000, 1000, 800, 1, 5000)).toBe(false);
+  });
+
+  it("is true at the edge of the board, where the point cannot reach the middle", () => {
+    // The scroll runs out 380 short of centring a point at 5580, and the view has still
+    // arrived at everything of it there is to arrive at.
+    expect(isViewCenteredOn(4800, 5580, 800, 1, 4800)).toBe(true);
+  });
+
+  it("allows the pixel a browser may round a scroll offset by", () => {
+    expect(isViewCenteredOn(1000.5, 1400, 800, 1, 5000)).toBe(true);
+    expect(isViewCenteredOn(1002, 1400, 800, 1, 5000)).toBe(false);
   });
 });
 

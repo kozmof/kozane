@@ -43,6 +43,12 @@ export type CardMarker = {
   zIndex: number;
   /** The opening of the card's text — enough to name it, not the whole of it. */
   content: string;
+  /**
+   * How many characters the whole card holds, which is what says how far past `content` it
+   * goes. Without it a long card would be measured as the short one it arrives as: the
+   * hint names the card nearest the warp, and how near a card is depends on how tall it is.
+   */
+  contentChars: number;
 };
 type GetCardMarkers = NeedsDB & { projectIds: string[] };
 
@@ -53,7 +59,9 @@ type GetCardMarkers = NeedsDB & { projectIds: string[] };
  * project with a warp is read to place one palette row.
  *
  * The single case this changes: a card whose first {@link HINT_SOURCE_MAX_CHARS}
- * characters are all whitespace reads as blank here, and a blank card lends no hint.
+ * characters are all whitespace reads as blank here, and a blank card lends no hint. How
+ * tall the card is drawn does not depend on the cut, because `contentChars` carries the
+ * length the text goes on to.
  */
 const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
 
@@ -74,6 +82,9 @@ export async function getCardMarkersByProjects({
       posY: cardTable.posY,
       zIndex: cardTable.zIndex,
       content: sql<string>`substr(${cardTable.content}, 1, ${HINT_SOURCE_MAX_CHARS})`,
+      // `length()` counts characters rather than bytes for text, so this is the same
+      // count the opening above is cut by.
+      contentChars: sql<number>`length(${cardTable.content})`,
     })
     .from(cardTable)
     .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))

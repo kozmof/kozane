@@ -291,6 +291,29 @@ export function scrollForViewCenter(
   return clamp(center * zoom - viewportSize / 2, 0, Math.max(0, maxScroll));
 }
 
+/** How far a scroll offset may sit from the one asked for and still count as arrived. */
+const SCROLL_EPSILON = 1;
+
+/**
+ * Whether a viewport scrolled to `scroll` is showing `center` as centred as the board
+ * allows, along one axis. Not the same question as "is the view centre this point": a
+ * point within half a viewport of the canvas edge can never reach the middle, because
+ * {@link scrollForViewCenter} clamps, and the view has still arrived at everything it can
+ * of it. Compared to the nearest pixel, since a browser may round a scroll offset to whole
+ * device pixels.
+ */
+export function isViewCenteredOn(
+  scroll: number,
+  center: number,
+  viewportSize: number,
+  zoom: number,
+  maxScroll: number,
+): boolean {
+  return (
+    Math.abs(scroll - scrollForViewCenter(center, viewportSize, zoom, maxScroll)) <= SCROLL_EPSILON
+  );
+}
+
 export type WarpDirection = "left" | "right" | "up" | "down";
 
 /** Arrow keys, as data, so the key-to-direction step is testable outside the component. */

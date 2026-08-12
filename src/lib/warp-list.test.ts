@@ -161,6 +161,25 @@ describe("nearestCardHint", () => {
     expect(hintFor(warp("w1", 100, 100), [card(0, 0, "short"), below])).toBe("just below");
   });
 
+  it("measures a card read as an opening by how long it turned out to be", () => {
+    // How the palette reads another project's cards: the first few hundred characters,
+    // plus the length of the whole. Measured as the short text it arrives as, the tall
+    // card would stop above the warp and its neighbour would be named instead — so one
+    // warp would carry one hint on its own board and another in the palette.
+    const long = "x".repeat(1500);
+    const opening = long.slice(0, 240);
+    const below = card(0, 700, "the card below");
+    const at = warp("w1", 100, 600);
+    const truncatedHint = `${"x".repeat(WARP_HINT_MAX_CHARS - 1)}…`;
+
+    expect(nearestCardHint(at, [card(0, 0, long), below], METRICS)).toBe(truncatedHint);
+    expect(
+      nearestCardHint(at, [{ ...card(0, 0, opening), contentChars: long.length }, below], METRICS),
+    ).toBe(truncatedHint);
+    // Without the length, the same card reads as the short one it arrived as.
+    expect(nearestCardHint(at, [card(0, 0, opening), below], METRICS)).toBe("the card below");
+  });
+
   it("ignores cards beyond the hint radius", () => {
     const justOutside = WARP_HINT_RADIUS + 1;
 

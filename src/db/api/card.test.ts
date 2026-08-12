@@ -138,8 +138,8 @@ describe("getCardMarkersByProjects", () => {
 
     expect(markers).toEqual(
       expect.arrayContaining([
-        { projectId, posX: 24, posY: 48, zIndex: 0, content: "In b1" },
-        { projectId, posX: 96, posY: 96, zIndex: 3, content: "In b2" },
+        { projectId, posX: 24, posY: 48, zIndex: 0, content: "In b1", contentChars: 5 },
+        { projectId, posX: 96, posY: 96, zIndex: 3, content: "In b2", contentChars: 5 },
       ]),
     );
     expect(markers).toHaveLength(2);
@@ -169,6 +169,26 @@ describe("getCardMarkersByProjects", () => {
     expect(marker.content.length).toBeGreaterThan(WARP_HINT_MAX_CHARS);
     expect(marker.content.length).toBeLessThan(4000);
     expect(marker.content).toBe("A".repeat(marker.content.length));
+  });
+
+  it("says how long the whole card is, however little of it is read", async () => {
+    const { db, projectId, bundleId } = await setup();
+    // What the opening cannot say: how tall the card is drawn, which is what decides
+    // whether a warp is sitting on it.
+    await addCard({ db, bundleId, content: "A".repeat(4000) });
+
+    const [marker] = await getCardMarkersByProjects({ db, projectIds: [projectId] });
+
+    expect(marker.contentChars).toBe(4000);
+  });
+
+  it("counts characters rather than bytes", async () => {
+    const { db, projectId, bundleId } = await setup();
+    await addCard({ db, bundleId, content: "日本語" });
+
+    const [marker] = await getCardMarkersByProjects({ db, projectIds: [projectId] });
+
+    expect(marker.contentChars).toBe(3);
   });
 });
 

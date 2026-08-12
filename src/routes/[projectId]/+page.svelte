@@ -11,6 +11,7 @@
     updateCard,
     patchCardPositions,
     fetchWarpDirectory,
+    parseWarpEntries,
     deleteWarp,
     failureMessage,
   } from "./lib/project-api";
@@ -84,6 +85,7 @@
     getNewCardPosition: (seq: number) => { posX: number; posY: number };
     getViewCenter: () => { posX: number; posY: number };
     getWarpPosition: () => { posX: number; posY: number };
+    isCenteredOn: (posX: number, posY: number) => boolean;
     centerOn: (posX: number, posY: number) => void;
     recenter: () => void;
   } = $state()!;
@@ -128,11 +130,14 @@
   $effect(() => {
     if (data === loadedData) return;
     loadedData = data;
-    // `?? []`: as on the initial read above — a static export built before this feature
-    // carries no directory, and spreading `undefined` into the palette's rows would throw.
-    warpDirectory = data.warpDirectory ?? [];
     if (data.project.id !== loadedProjectId) {
       loadedProjectId = data.project.id;
+      // Only on a project change: the directory that arrives with a board is the one for
+      // that board. A same-project reload would otherwise throw away the copy the palette
+      // keeps fresh for itself — including a row it has just removed. `?? []`: as on the
+      // initial read above, a static export built before this feature carries no
+      // directory, and spreading `undefined` into the palette's rows would throw.
+      warpDirectory = data.warpDirectory ?? [];
       s.resetFromData(data);
       newCardSeq = 0;
       sidebarsVisible = data.uiConfig.defaultShowSidePanel;
@@ -320,7 +325,10 @@
     if (readonly) return;
     try {
       const res = await fetchWarpDirectory(s.fetcher, s.projectId);
-      if (res.ok) warpDirectory = await res.json();
+      if (!res.ok) return;
+      const parsed = parseWarpEntries(await res.json().catch(() => null));
+      // An answer that is not a list of rows is treated as no answer at all.
+      if (parsed) warpDirectory = parsed;
     } catch {
       // The copy that came with the page stays: a stale list beats an empty one.
     }
@@ -368,6 +376,22 @@
       warpDirectory = previous;
       s.setError(await failureMessage(res, "Failed to remove warp"));
     }
+  }
+
+  /**
+   * The warps an arrow key may still travel to: all of them, less the focused one once the
+   * view has arrived on it. A warp within half a viewport of the canvas edge cannot be
+   * brought to the middle of the view, so it goes on reading as lying ahead after the jump
+   * has landed — and pressing the same arrow again would keep choosing it instead of
+   * wrapping round the board. Dropping it only once the view is as centred on it as the
+   * board allows leaves the ordinary case alone: pan away from a warp and it is a
+   * destination again.
+   */
+  function reachableWarps() {
+    const focused = s.warps.find(({ id }) => id === s.focusedWarpId);
+    return focused && canvasComponent.isCenteredOn(focused.posX, focused.posY)
+      ? s.warps.filter(({ id }) => id !== focused.id)
+      : s.warps;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -426,7 +450,12 @@
       // Measured from where the view is now, so warping works the same whether you
       // arrived by arrow key or by dragging the canvas.
       const { posX, posY } = canvasComponent.getViewCenter();
-      const target = warpInDirection(s.warps, { x: posX, y: posY }, direction, s.focusedWarpId);
+      const target = warpInDirection(
+        reachableWarps(),
+        { x: posX, y: posY },
+        direction,
+        s.focusedWarpId,
+      );
       if (target) {
         e.preventDefault();
         canvasComponent.centerOn(target.posX, target.posY);
@@ -439,6 +468,7 @@
       // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
       warpsVisible = true;
       void actions.handleSetWarp(canvasComponent.getWarpPosition());
+      return;
     }
     if (e.key === data.uiConfig.removeWarpShortcut && s.focusedWarpId) {
       void actions.handleRemoveWarp(s.focusedWarpId);

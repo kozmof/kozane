@@ -18,6 +18,7 @@
     glueIdByCardId,
     cardPositionPatches,
     INACTIVE_LAYER_OPACITY,
+    isViewCenteredOn,
     layerStack,
     previousPositions,
     verticalListPosition,
@@ -285,6 +286,31 @@
       posX: clamp(Math.round(x), 0, canvasWidth),
       posY: clamp(Math.round(y), 0, canvasHeight),
     };
+  }
+
+  /**
+   * Whether the viewport is already showing this point as centred as the board allows —
+   * which is what "the view has arrived here" means near a canvas edge, where a point
+   * cannot be brought to the middle at all. {@link centerOn} moves nothing when this is
+   * already true.
+   */
+  export function isCenteredOn(posX: number, posY: number): boolean {
+    return (
+      isViewCenteredOn(
+        canvasEl.scrollLeft,
+        posX,
+        canvasEl.clientWidth,
+        zoom,
+        canvasEl.scrollWidth - canvasEl.clientWidth,
+      ) &&
+      isViewCenteredOn(
+        canvasEl.scrollTop,
+        posY,
+        canvasEl.clientHeight,
+        zoom,
+        canvasEl.scrollHeight - canvasEl.clientHeight,
+      )
+    );
   }
 
   /** Moves the viewport so `posX`/`posY` sits in the middle of it. Zoom is left alone. */

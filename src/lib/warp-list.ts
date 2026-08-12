@@ -17,8 +17,21 @@ export type WarpListEntry = {
   isCurrent: boolean;
 };
 
-/** Anything positioned on a board that can lend a warp its hint. */
-export type HintCard = { posX: number; posY: number; content: string; zIndex?: number };
+/**
+ * Anything positioned on a board that can lend a warp its hint. `content` may be only the
+ * opening of the card — see {@link HintCard.contentChars}.
+ */
+export type HintCard = {
+  posX: number;
+  posY: number;
+  content: string;
+  /**
+   * How many characters the whole card holds, when `content` is only its opening. Omitted
+   * when `content` is the whole of it, which is the case on the board being viewed.
+   */
+  contentChars?: number;
+  zIndex?: number;
+};
 
 /** What every card on a board is drawn at, which is what turns a position into a box. */
 export type CardMetrics = { cardWidth: number; fontSize: number };
@@ -125,6 +138,22 @@ export function estimateCardHeight(content: string, { cardWidth, fontSize }: Car
 }
 
 /**
+ * How tall a hint card is drawn, whether it arrived whole or as an opening. A card read
+ * for the palette carries only its first few hundred characters, and measuring that as the
+ * whole card would draw a long note as a short one — so the opening is measured and scaled
+ * by how much text there turned out to be, taking it as representative of the rest. That
+ * assumption is what a hint is worth: an estimate of which card a warp is sitting on, made
+ * the same way wherever the row is built, so a warp is named after the same card whether
+ * it is read from its own board or from another project's.
+ */
+function hintCardHeight(card: HintCard, metrics: CardMetrics): number {
+  const measured = estimateCardHeight(card.content, metrics);
+  const sampled = [...card.content].length;
+  if (card.contentChars === undefined || sampled === 0) return measured;
+  return measured * Math.max(1, card.contentChars / sampled);
+}
+
+/**
  * Squared distance from a point to a card's box, which is zero anywhere inside it. Squared
  * throughout: the ordering is the same as the real distance, without the square root.
  */
@@ -137,7 +166,7 @@ function squaredDistanceToCard(
   const dy = Math.max(
     card.posY - point.posY,
     0,
-    point.posY - (card.posY + estimateCardHeight(card.content, metrics)),
+    point.posY - (card.posY + hintCardHeight(card, metrics)),
   );
   return dx * dx + dy * dy;
 }

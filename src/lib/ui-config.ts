@@ -209,8 +209,9 @@ export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiCon
  * two shortcuts bound to the same key.
  *
  * A reserved key is an error and the field is dropped, so its default stands. A collision
- * is a warning — both actions still happen, and that is worth reporting rather than worth
- * refusing to start on. Both are judged against the config as it will actually be used,
+ * is a warning — the page fires whichever action it reaches first and the other becomes
+ * unreachable, which is worth reporting rather than worth refusing to start on. Both are
+ * judged against the config as it will actually be used,
  * defaults included, since an override lands on a default as easily as on another
  * override; only fields the config sets for itself are reported, because a field left at
  * its default is not the one the author can go and change.
