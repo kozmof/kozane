@@ -140,6 +140,22 @@ describe("WarpPalette", () => {
     expect(onJump).not.toHaveBeenCalled();
   });
 
+  it("takes the keyboard back when the row that was removed had it", async () => {
+    const user = userEvent.setup();
+    const props = makeProps();
+    const { rerender } = render(WarpPalette, { props });
+
+    // Clicking the button focuses it, and removing the warp unmounts it: without the panel
+    // taking focus back, the browser drops it on <body>, where neither this panel's key
+    // handler nor the page's — held off while the palette is open — would see another key.
+    await user.click(screen.getByRole("button", { name: "Remove warp 1 in Kozane" }));
+    await rerender({ ...props, entries: entries.filter(({ id }) => id !== "w1") });
+
+    expect(dialog()).toHaveFocus();
+    await fireEvent.keyDown(dialog(), { key: "ArrowDown" });
+    expect(highlighted()).toHaveTextContent("Umesao 1969");
+  });
+
   it("has no remove buttons in a read-only export", () => {
     render(WarpPalette, { props: makeProps({ readonly: true }) });
 

@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
+import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
@@ -40,9 +41,21 @@ export type CardMarker = {
   posX: number;
   posY: number;
   zIndex: number;
+  /** The opening of the card's text — enough to name it, not the whole of it. */
   content: string;
 };
 type GetCardMarkers = NeedsDB & { projectIds: string[] };
+
+/**
+ * How much of a card's text this reads. A hint is at most {@link WARP_HINT_MAX_CHARS}
+ * characters once its whitespace is collapsed, so several times that is more than enough
+ * to build one, while a card may hold ten thousand — and every card of every
+ * project with a warp is read to place one palette row.
+ *
+ * The single case this changes: a card whose first {@link HINT_SOURCE_MAX_CHARS}
+ * characters are all whitespace reads as blank here, and a blank card lends no hint.
+ */
+const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
 
 /**
  * Just enough of every card in `projectIds` to say what is near a point: the warp palette
@@ -60,7 +73,7 @@ export async function getCardMarkersByProjects({
       posX: cardTable.posX,
       posY: cardTable.posY,
       zIndex: cardTable.zIndex,
-      content: cardTable.content,
+      content: sql<string>`substr(${cardTable.content}, 1, ${HINT_SOURCE_MAX_CHARS})`,
     })
     .from(cardTable)
     .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))

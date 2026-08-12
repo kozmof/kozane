@@ -265,7 +265,7 @@ kozane doctor config --strict
 | Severity    | Reported for                                                                |
 | ----------- | --------------------------------------------------------------------------- |
 | `✗` error   | unreadable file, invalid JSON, missing required key, invalid value          |
-| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo |
+| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo; two `ui.*Shortcut` keys bound to the same key |
 | `ℹ` note    | unset optional keys, each listed with the default standing in for it        |
 
 Required: `name`, `taskspace.defaultDir`, `taskspace.searchRoots`. Optional: everything
@@ -891,6 +891,11 @@ Taskspace created.
     "unglueCardShortcut": "u",
     "moveCardsShortcut": "m",
     "deleteCardsShortcut": "Delete",
+    "defaultShowWarps": true,
+    "warpMarkerSize": 20,
+    "setWarpShortcut": "a",
+    "toggleWarpsShortcut": "A",
+    "removeWarpShortcut": "x",
     "canvasWidth": 5600,
     "canvasHeight": 4000
   }
@@ -904,6 +909,12 @@ editing this file by hand.
 The default `"vertical-list"` stacks newly created cards downward in one non-overlapping
 column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping layout
 with light overlap between cards.
+
+Every `ui.*Shortcut` is compared against one `event.key`, so `"A"` means Shift+A. The four
+arrow keys are reserved for moving between warps, and a shortcut bound to one is an invalid
+value like any other: `kozane doctor config` reports it as an error, and the field falls
+back to its default. Two shortcuts bound to the same key are kept — both actions still
+happen — and reported as a warning.
 
 `ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
 inside them: a card or a warp written past the edge is clamped to it, and the response

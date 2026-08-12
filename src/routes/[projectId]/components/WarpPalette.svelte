@@ -25,10 +25,16 @@
   let rowEls: Record<string, HTMLButtonElement> = {};
 
   // Rows come and go while the palette is open — removing a warp is done from here. The
-  // bindings of rows that have gone are dropped rather than kept for the life of the panel.
+  // bindings of rows that have gone are dropped rather than kept for the life of the panel,
+  // and the panel takes the keyboard back whenever focus has fallen outside it: clicking a
+  // remove button focuses that button, and removing the row unmounts it, which drops focus
+  // to <body> — where neither this panel's handler nor the page's, held off while the
+  // palette is open, would ever see another key. The same run on open is what puts the
+  // keyboard on the panel in the first place, rather than on the canvas behind it.
   $effect(() => {
     const live = new Set(entries.map(({ id }) => id));
     for (const id of Object.keys(rowEls)) if (!live.has(id)) delete rowEls[id];
+    if (panelEl && !panelEl.contains(document.activeElement)) panelEl.focus();
   });
 
   // The starting highlight, resolved against the list rather than trusted: a focused warp
@@ -40,12 +46,6 @@
       null,
   );
   let groups = $derived(groupWarpEntries(entries));
-
-  // The palette opens under the keyboard, so it takes focus: the arrow keys have to reach
-  // it rather than the canvas behind it.
-  $effect(() => {
-    panelEl?.focus();
-  });
 
   $effect(() => {
     // Optional-called: jsdom has no layout, and scrolling a list is not worth a crash.

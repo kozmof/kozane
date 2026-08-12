@@ -30,6 +30,7 @@ import {
   selectionRectFromPoints,
   worldRectToScreenRect,
 } from "./project-page.js";
+import { ARROW_KEYS } from "../../../lib/constants.js";
 import type { Card, GlueRel } from "../../../db/api/types.js";
 
 const cards: Card[] = [
@@ -558,5 +559,12 @@ describe("ARROW_DIRECTIONS", () => {
       ArrowDown: "down",
     });
     expect(ARROW_DIRECTIONS.Enter).toBeUndefined();
+  });
+
+  it("covers exactly the keys a shortcut is not allowed to take", () => {
+    // ARROW_KEYS is what `ui.*Shortcut` is validated against. A key that moved the view
+    // without being reserved could be bound to a shortcut as well, and one press would
+    // then both warp and do the other thing.
+    expect(Object.keys(ARROW_DIRECTIONS).sort()).toEqual([...ARROW_KEYS].sort());
   });
 });

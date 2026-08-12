@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CARD_BOX,
   buildWarpDirectory,
   groupWarpEntries,
   moveHighlight,
@@ -27,6 +30,46 @@ function card(posX: number, posY: number, content: string, zIndex = 0) {
 const METRICS = { cardWidth: 200, fontSize: 10 };
 const hintFor = (point: { posX: number; posY: number }, cards: ReturnType<typeof card>[]) =>
   nearestCardHint(point, cards, METRICS);
+
+describe("CARD_BOX", () => {
+  // Read out of the component rather than repeated here. Panda extracts `css({...})` at
+  // build time and so cannot take these from a variable, which leaves the two copies free
+  // to drift apart — and a drifted copy shows up only as hints quietly naming the wrong
+  // neighbouring card, which is not something anyone would think to check.
+  // From the repository root, the way the Vitest config resolves its own paths: a test
+  // file's own URL is not a file: one once Vite has transformed it.
+  const cardSource = readFileSync(
+    resolve("src/routes/[projectId]/components/KozaneCard.svelte"),
+    "utf8",
+  );
+  // The content block is the styled element that sets a minimum height.
+  const contentStyle = cardSource.split("\n").find((line) => line.includes("minHeight"));
+
+  function styleValue(property: string): string {
+    const found = contentStyle?.match(new RegExp(`${property}: "([^"]+)"`))?.[1];
+    if (found === undefined) {
+      throw new Error(
+        `KozaneCard.svelte no longer states ${property} on the same line as minHeight, ` +
+          `so CARD_BOX cannot be checked against it. Re-point this test at the card's styles.`,
+      );
+    }
+    return found;
+  }
+
+  it("has the padding the card's content block is drawn with", () => {
+    const [vertical, horizontal] = styleValue("padding")
+      .split(" ")
+      .map((part) => Number.parseInt(part, 10));
+
+    expect(CARD_BOX.paddingY).toBe(vertical * 2);
+    expect(CARD_BOX.paddingX).toBe(horizontal * 2);
+  });
+
+  it("has the card's line height and minimum content height", () => {
+    expect(CARD_BOX.lineHeightRatio).toBe(Number(styleValue("lineHeight")));
+    expect(CARD_BOX.minContentHeight).toBe(Number.parseInt(styleValue("minHeight"), 10));
+  });
+});
 
 describe("estimateCardHeight", () => {
   it("gives a short card the height of the empty content block", () => {

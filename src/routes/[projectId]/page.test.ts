@@ -853,6 +853,26 @@ describe("Warps", () => {
     await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
   });
 
+  it("sets one warp however long the key is held down", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-new", projectId: "project-1", posX: 1400, posY: 1000 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ warps: [] });
+
+    // A held key repeats about thirty times a second: every repeat that reached the
+    // handler would be another POST and another marker stacked on the same point, with
+    // only the topmost reachable to remove.
+    await fireEvent.keyDown(window, { key: "w" });
+    await fireEvent.keyDown(window, { key: "w", repeat: true });
+    await fireEvent.keyDown(window, { key: "w", repeat: true });
+
+    await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(screen.queryByLabelText("Warp 2")).not.toBeInTheDocument();
+  });
+
   it("numbers the markers in creation order", () => {
     renderPage();
 
@@ -1227,6 +1247,17 @@ describe("Warps", () => {
       });
 
       await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1000));
+    });
+
+    it("drops the warp it landed on from the query and leaves the rest alone", async () => {
+      visit("http://localhost/project-1?warp=warp-2&scope=reading");
+      vi.stubGlobal("fetch", vi.fn());
+
+      renderPage();
+
+      await waitFor(() =>
+        expect(replaceState).toHaveBeenCalledWith("/project-1?scope=reading", {}),
+      );
     });
 
     it("opens in the middle of the board when the warp is gone", () => {

@@ -1,4 +1,4 @@
-import { CANVAS_W, CANVAS_H } from "./constants.js";
+import { ARROW_KEYS, CANVAS_W, CANVAS_H } from "./constants.js";
 
 export type NewCardPlacement = "grid" | "vertical-list";
 
@@ -86,8 +86,11 @@ export const UI_BOOL_FIELDS = [
 
 export const NEW_CARD_PLACEMENTS = ["grid", "vertical-list"] as const;
 
-export const UI_STR_FIELDS = [
-  "defaultFontFamily",
+/**
+ * Every field that binds a key. Checked for keys the UI reserves and for two fields
+ * bound to the same key, neither of which a per-field type check can see.
+ */
+export const UI_SHORTCUT_FIELDS = [
   "toggleFootersShortcut",
   "togglePanelsShortcut",
   "focusCardInputShortcut",
@@ -103,6 +106,9 @@ export const UI_STR_FIELDS = [
   "toggleWarpsShortcut",
   "removeWarpShortcut",
 ] as const;
+
+/** Built on {@link UI_SHORTCUT_FIELDS}, so a new shortcut is key-checked by adding it there. */
+export const UI_STR_FIELDS = ["defaultFontFamily", ...UI_SHORTCUT_FIELDS] as const;
 
 /** Every field name a `ui` block may carry. Anything else is an unknown key. */
 export const UI_KNOWN_KEYS = Object.keys(DEFAULT_UI_CONFIG) as (keyof UiConfig)[];
@@ -180,6 +186,8 @@ export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiCon
     accept(field, candidate);
   }
 
+  checkShortcuts(raw, value, issues);
+
   const placement = raw.newCardPlacement;
   if (placement !== undefined) {
     if (NEW_CARD_PLACEMENTS.includes(placement as never)) {
@@ -194,6 +202,59 @@ export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiCon
   }
 
   return { value, issues };
+}
+
+/**
+ * The two checks no single field can make: a shortcut bound to a key the UI reserves, and
+ * two shortcuts bound to the same key.
+ *
+ * A reserved key is an error and the field is dropped, so its default stands. A collision
+ * is a warning — both actions still happen, and that is worth reporting rather than worth
+ * refusing to start on. Both are judged against the config as it will actually be used,
+ * defaults included, since an override lands on a default as easily as on another
+ * override; only fields the config sets for itself are reported, because a field left at
+ * its default is not the one the author can go and change.
+ */
+function checkShortcuts(
+  raw: Record<string, unknown>,
+  value: Partial<UiConfig>,
+  issues: ConfigIssue[],
+): void {
+  const reserved: readonly string[] = ARROW_KEYS;
+  for (const field of UI_SHORTCUT_FIELDS) {
+    const candidate = value[field];
+    if (candidate === undefined || !reserved.includes(candidate)) continue;
+    issues.push({
+      path: `ui.${field}`,
+      severity: "error",
+      message: `ui.${field} must not be "${candidate}", which moves between warps`,
+      found: candidate,
+    });
+    delete value[field];
+  }
+
+  const effective = { ...DEFAULT_UI_CONFIG, ...value };
+  const fieldsByKey = new Map<string, (keyof UiConfig)[]>();
+  for (const field of UI_SHORTCUT_FIELDS) {
+    const key = effective[field];
+    // An empty binding matches no key at all, so any number of them collide with nothing.
+    if (key === "") continue;
+    fieldsByKey.set(key, [...(fieldsByKey.get(key) ?? []), field]);
+  }
+
+  for (const [key, fields] of fieldsByKey) {
+    if (fields.length < 2) continue;
+    const named = fields.map((field) => `ui.${field}`).join(", ");
+    for (const field of fields) {
+      if (raw[field] === undefined) continue;
+      issues.push({
+        path: `ui.${field}`,
+        severity: "warning",
+        message: `${named} are bound to the same key "${key}"`,
+        found: key,
+      });
+    }
+  }
 }
 
 export type ParseUiOptions = {
@@ -212,6 +273,9 @@ export type ParseUiOptions = {
  */
 export function parseUiOverrides(ui: unknown, { strict }: ParseUiOptions): Partial<UiConfig> {
   const { value, issues } = validateUiOverrides(ui);
-  if (strict && issues.length > 0) throw new Error(`Invalid Kozane config: ${issues[0].message}`);
+  // Errors only: a warning describes a config that works, just oddly, and stopping the
+  // CLI on one would make a shortcut collision harder to live with than the collision is.
+  const blocking = issues.find((issue) => issue.severity === "error");
+  if (strict && blocking) throw new Error(`Invalid Kozane config: ${blocking.message}`);
   return value;
 }

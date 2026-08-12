@@ -42,6 +42,11 @@ describe("parseUiOverrides", () => {
     ["a non-boolean boolean field", { defaultShowFooter: "yes" }, "ui.defaultShowFooter must be a"],
     ["a non-string string field", { defaultFontFamily: 12 }, "ui.defaultFontFamily must be a"],
     ["an unknown placement", { newCardPlacement: "spiral" }, "ui.newCardPlacement must be"],
+    [
+      "a shortcut on a key that moves between warps",
+      { setWarpShortcut: "ArrowRight" },
+      `ui.setWarpShortcut must not be "ArrowRight"`,
+    ],
   ];
 
   for (const [label, ui, message] of invalid) {
@@ -91,6 +96,73 @@ describe("validateUiOverrides", () => {
   it("reports the rejected value so a doctor can show it", () => {
     const [issue] = validateUiOverrides({ defaultFontFamily: 12 }).issues;
     expect(issue.found).toBe(12);
+  });
+});
+
+describe("shortcut bindings", () => {
+  const issuesFor = (ui: Record<string, unknown>) => validateUiOverrides(ui).issues;
+
+  it("warns when two shortcuts are bound to the same key", () => {
+    const issues = issuesFor({ setWarpShortcut: "z", removeWarpShortcut: "z" });
+
+    expect(issues).toEqual([
+      {
+        path: "ui.setWarpShortcut",
+        severity: "warning",
+        message: `ui.setWarpShortcut, ui.removeWarpShortcut are bound to the same key "z"`,
+        found: "z",
+      },
+      {
+        path: "ui.removeWarpShortcut",
+        severity: "warning",
+        message: `ui.setWarpShortcut, ui.removeWarpShortcut are bound to the same key "z"`,
+        found: "z",
+      },
+    ]);
+  });
+
+  it("sees a collision with a shortcut left at its default", () => {
+    // `f` is toggleFootersShortcut out of the box: the config only has to name one side.
+    const issues = issuesFor({ setWarpShortcut: DEFAULT_UI_CONFIG.toggleFootersShortcut });
+
+    expect(issues).toHaveLength(1);
+    expect(issues[0].path).toBe("ui.setWarpShortcut");
+    expect(issues[0].message).toContain("ui.toggleFootersShortcut");
+  });
+
+  it("keeps a colliding binding, since both actions still work", () => {
+    const { value } = validateUiOverrides({ setWarpShortcut: "z", removeWarpShortcut: "z" });
+
+    expect(value).toEqual({ setWarpShortcut: "z", removeWarpShortcut: "z" });
+    expect(
+      parseUiOverrides({ setWarpShortcut: "z", removeWarpShortcut: "z" }, { strict: true }),
+    ).toEqual({ setWarpShortcut: "z", removeWarpShortcut: "z" });
+  });
+
+  it("says nothing about the defaults on their own", () => {
+    expect(issuesFor({})).toEqual([]);
+    expect(issuesFor({ defaultFontSize: 14 })).toEqual([]);
+  });
+
+  it("ignores empty bindings, which match no key to collide over", () => {
+    expect(issuesFor({ setWarpShortcut: "", removeWarpShortcut: "" })).toEqual([]);
+  });
+
+  it("drops a shortcut bound to an arrow key so its default stands", () => {
+    const { value, issues } = validateUiOverrides({
+      setWarpShortcut: "ArrowUp",
+      removeWarpShortcut: "z",
+    });
+
+    expect(value).toEqual({ removeWarpShortcut: "z" });
+    expect(issues).toEqual([
+      {
+        path: "ui.setWarpShortcut",
+        severity: "error",
+        message: `ui.setWarpShortcut must not be "ArrowUp", which moves between warps`,
+        found: "ArrowUp",
+      },
+    ]);
   });
 });
 

@@ -13,4 +13,11 @@ export const DEFAULT_SERVER_HOST = "127.0.0.1";
 export const DEFAULT_SERVER_PORT = 17173;
 /** Default port for `kozane net ssg preview`, kept adjacent to {@link DEFAULT_SERVER_PORT}. */
 export const DEFAULT_PREVIEW_PORT = 17174;
+/**
+ * The keys the browser UI moves between warps with, on their own and with `Shift` for the
+ * warp palette. Reserved: a shortcut bound to one of these would fire alongside the jump
+ * the same press makes, so `ui.*Shortcut` may not take them.
+ */
+export const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const;
+
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

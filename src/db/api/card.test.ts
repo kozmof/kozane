@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
+import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import {
   addCard,
   getCard,
@@ -155,6 +156,19 @@ describe("getCardMarkersByProjects", () => {
     const markers = await getCardMarkersByProjects({ db, projectIds: [otherProjectId] });
 
     expect(markers).toMatchObject([{ projectId: otherProjectId, content: "Theirs" }]);
+  });
+
+  it("reads only the opening of a long card", async () => {
+    const { db, projectId, bundleId } = await setup();
+    // Every card of every project with a warp is read to place one palette row, and a hint
+    // is a few dozen characters: the rest of a long card is not worth carrying.
+    await addCard({ db, bundleId, content: "A".repeat(4000) });
+
+    const [marker] = await getCardMarkersByProjects({ db, projectIds: [projectId] });
+
+    expect(marker.content.length).toBeGreaterThan(WARP_HINT_MAX_CHARS);
+    expect(marker.content.length).toBeLessThan(4000);
+    expect(marker.content).toBe("A".repeat(marker.content.length));
   });
 });
 

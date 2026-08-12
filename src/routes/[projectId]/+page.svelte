@@ -181,12 +181,15 @@
 
   /**
    * Drops the `?warp=` the jump arrived with, so panning away and reloading does not snap
-   * back to it. Best-effort: the URL is cosmetic here, and a router that is not ready yet
-   * is not worth an error banner.
+   * back to it. Only that parameter: anything else on the URL belongs to whoever put it
+   * there. Best-effort: the URL is cosmetic here, and a router that is not ready yet is
+   * not worth an error banner.
    */
   function clearWarpQuery() {
+    const url = new URL(page.url);
+    url.searchParams.delete("warp");
     try {
-      replaceState(page.url.pathname, {});
+      replaceState(`${url.pathname}${url.search}`, {});
     } catch {
       // Ignored: see above.
     }
@@ -370,6 +373,11 @@
   function handleKeydown(e: KeyboardEvent) {
     // The palette owns the keyboard while it is open, including the key that closes it.
     if (warpPaletteOpen) return;
+    // A held key repeats around thirty times a second, and every shortcut below is a
+    // discrete command rather than something to hold: without this, resting on the
+    // set-warp key drops a warp per repeat — each one a POST and a marker stacked on the
+    // last, with only the topmost reachable to remove.
+    if (e.repeat) return;
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
     // Shortcuts are single keys, and `event.key` carries no modifier but Shift: without
@@ -389,9 +397,21 @@
     // Below this line the composer's action bar owns the keyboard whenever cards are
     // selected, which is what keeps the warp keys from colliding with it.
     if (s.selection.selectedCards.size > 0) return;
-    if (e.key === data.uiConfig.toggleFootersShortcut) showFooters = !showFooters;
-    if (e.key === data.uiConfig.togglePanelsShortcut) sidebarsVisible = !sidebarsVisible;
-    if (e.key === data.uiConfig.toggleWarpsShortcut) warpsVisible = !warpsVisible;
+    // One key, one action: each branch returns, so a config that binds two shortcuts to
+    // the same key does one thing rather than both. `kozane doctor config` warns about
+    // such a binding, but the config is still loaded and the page still has to behave.
+    if (e.key === data.uiConfig.toggleFootersShortcut) {
+      showFooters = !showFooters;
+      return;
+    }
+    if (e.key === data.uiConfig.togglePanelsShortcut) {
+      sidebarsVisible = !sidebarsVisible;
+      return;
+    }
+    if (e.key === data.uiConfig.toggleWarpsShortcut) {
+      warpsVisible = !warpsVisible;
+      return;
+    }
 
     const direction = ARROW_DIRECTIONS[e.key];
     if (direction && e.shiftKey) {

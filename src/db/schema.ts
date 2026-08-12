@@ -3,6 +3,7 @@ import {
   sqliteTable,
   text,
   integer,
+  index,
   primaryKey,
   uniqueIndex,
   check,
@@ -72,17 +73,25 @@ export const layerTable = sqliteTable(
  * centre, and the browser UI moves the viewport between them with the arrow keys. There
  * is no name column: warps are numbered by creation order, and uuidv7 ids already sort
  * that way.
+ *
+ * The index on `project_id` is spelled out because nothing else here implies one: the
+ * project-scoped tables that carry a name get theirs from a unique index on
+ * `(project_id, name)`, and a warp has no name to be unique in.
  */
-export const warpTable = sqliteTable("warp", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  projectId: text("project_id")
-    .notNull()
-    .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  posX: integer("pos_x").notNull().default(0),
-  posY: integer("pos_y").notNull().default(0),
-});
+export const warpTable = sqliteTable(
+  "warp",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    posX: integer("pos_x").notNull().default(0),
+    posY: integer("pos_y").notNull().default(0),
+  },
+  (t) => [index("warp_project").on(t.projectId)],
+);
 
 export const scopeTable = sqliteTable(
   "scope",

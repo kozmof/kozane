@@ -42,13 +42,26 @@ export function cardMetrics(ui: {
  */
 export const WARP_HINT_RADIUS = 480;
 
-// The card's own chrome, from KozaneCard.svelte: 8px above and below the text, a footer
-// that holds its space even when hidden, and a floor under the content block.
-const CARD_PADDING_X = 20;
-const CARD_PADDING_Y = 16;
-const CARD_FOOTER_HEIGHT = 24;
-const CARD_MIN_CONTENT_HEIGHT = 44;
-const CARD_LINE_HEIGHT_RATIO = 1.65;
+/**
+ * The card's own chrome, transcribed from KozaneCard.svelte: 8px above and below the text,
+ * a footer that holds its space even when hidden, and a floor under the content block.
+ *
+ * Transcribed rather than imported because the component states them inside `css({...})`,
+ * which Panda extracts at build time and so cannot read from a variable. Exported instead,
+ * so `warp-list.test.ts` can hold these against the component's own styles: a card
+ * restyled without touching them leaves every hint naming the wrong neighbour, and a
+ * plausible wrong hint is not something anyone would notice.
+ */
+export const CARD_BOX = {
+  /** Left plus right padding. */
+  paddingX: 20,
+  /** Top plus bottom padding. */
+  paddingY: 16,
+  /** Only the footer's own height is estimated; the rest are the component's literals. */
+  footerHeight: 24,
+  minContentHeight: 44,
+  lineHeightRatio: 1.65,
+} as const;
 /**
  * Width of one narrow character cell relative to the font size, for the monospace the
  * cards default to.
@@ -102,13 +115,13 @@ export function textCells(text: string): number {
 export function estimateCardHeight(content: string, { cardWidth, fontSize }: CardMetrics): number {
   const cellsPerLine = Math.max(
     1,
-    Math.floor((cardWidth - CARD_PADDING_X) / (fontSize * CHAR_WIDTH_RATIO)),
+    Math.floor((cardWidth - CARD_BOX.paddingX) / (fontSize * CHAR_WIDTH_RATIO)),
   );
   const lines = content
     .split("\n")
     .reduce((total, line) => total + Math.max(1, Math.ceil(textCells(line) / cellsPerLine)), 0);
-  const textHeight = lines * fontSize * CARD_LINE_HEIGHT_RATIO + CARD_PADDING_Y;
-  return Math.max(CARD_MIN_CONTENT_HEIGHT, textHeight) + CARD_FOOTER_HEIGHT;
+  const textHeight = lines * fontSize * CARD_BOX.lineHeightRatio + CARD_BOX.paddingY;
+  return Math.max(CARD_BOX.minContentHeight, textHeight) + CARD_BOX.footerHeight;
 }
 
 /**
@@ -275,15 +288,30 @@ export function buildWarpDirectory({
   metrics,
   excludeProjectId,
 }: BuildWarpDirectory): WarpListEntry[] {
+  // Bucketed once instead of filtered inside the loop: a workspace's cards are scanned
+  // one time between them all, rather than once for every project it holds.
+  const warpsByProject = groupByProject(warps);
+  const cardsByProject = groupByProject(cards);
   return projects.flatMap((project) =>
     project.id === excludeProjectId
       ? []
       : warpEntriesForProject({
           project,
-          warps: warps.filter((warp) => warp.projectId === project.id),
-          cards: cards.filter((card) => card.projectId === project.id),
+          warps: warpsByProject.get(project.id) ?? [],
+          cards: cardsByProject.get(project.id) ?? [],
           metrics,
           isCurrent: false,
         }),
   );
+}
+
+/** Rows by the project they belong to, each bucket in the order the rows arrived. */
+function groupByProject<T extends { projectId: string }>(rows: readonly T[]): Map<string, T[]> {
+  const byProject = new Map<string, T[]>();
+  for (const row of rows) {
+    const bucket = byProject.get(row.projectId);
+    if (bucket) bucket.push(row);
+    else byProject.set(row.projectId, [row]);
+  }
+  return byProject;
 }

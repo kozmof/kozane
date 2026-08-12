@@ -56,7 +56,7 @@ there after a reload and in another tab.
 
 - Set — press `a`. A numbered marker appears under the mouse pointer, or at the
   centre of the view if the pointer is off the canvas. Warps are numbered in the
-  order they were made.
+  order they were made. One press makes one warp, however long the key is held.
 - Warp — press `←`, `→`, `↑`, or `↓`. The view moves to the nearest warp in that
   direction and the marker highlights. Once there is none, the board wraps
   round: `→` off the rightmost warp arrives at the leftmost, and `↓` off the
@@ -81,7 +81,9 @@ there after a reload and in another tab.
 Warp keys work when no cards are selected: while a selection is live, the
 composer's action bar owns the keyboard. They are single keys, so a shortcut held
 with `Ctrl`, `Cmd`, or `Alt` does nothing — `Cmd+A` still selects text rather than
-dropping a warp. A static export keeps warping — the
+dropping a warp. The letters are `ui.setWarpShortcut`, `ui.toggleWarpsShortcut` and
+`ui.removeWarpShortcut` in `.kozane/config.json` and can be rebound; the arrow keys
+cannot, since they are what moves between warps. A static export keeps warping — the
 cross-project list included — and the show/hide toggle, and drops setting and
 removing along with every other write.
 
