@@ -2,9 +2,10 @@
 
 ## Overview
 
-Kozane is a local-first CLI tool for card-based thinking and file-based writing.
+Kozane is a local-first workspace for arranging short pieces of text on a canvas.
 The CLI starts a local SvelteKit web server and manages project initialization,
-database bootstrapping, taskspace files, and workspace health.
+database bootstrapping, taskspace files, and workspace health. This document
+records the command surface the codebase implements today.
 
 ```
 kozane
@@ -26,39 +27,40 @@ Most operations (card creation, bundle management, card positions) are scoped to
 ### Bundles
 
 A bundle is a named label attached to every card. Each project has one default bundle
-("General") created automatically. Bundles give cards a colour in the UI and act as
-a coarse categorisation — not a folder hierarchy.
+("General") created automatically. Bundles give cards a color in the UI and act as a
+coarse category rather than a folder hierarchy.
 
 ### Layers
 
 A layer is a surface within a project that cards sit on. Every card belongs to exactly one
 layer, and every project has one default layer ("Base") created automatically. Layers are
-stacked: the UI draws the selected layer at full strength with the rest dimmed behind it,
+stacked. The UI draws the selected layer at full strength with the rest dimmed behind it,
 so one set of cards can be worked on without the others in the way.
 
 Layers are ordered by position, bottom to top. `kozane layer move` shifts a layer one step
-at a time; `layer list` prints them in the same bottom-to-top order.
+at a time, and `layer list` prints them in the same bottom-to-top order.
 
 Unlike bundles and scopes, a layer can be named on the command line by its name as well as
-by its full or short ID — names are unique within a project. An exact name wins, then a
-case-insensitive one, then a short ID.
+by its full or short ID, because names are unique within a project. An exact name wins,
+then a case-insensitive one, then a short ID.
 
-Deleting a layer does not delete its cards: they move to the project's default layer. The
+Deleting a layer does not delete its cards. They move to the project's default layer. The
 default layer cannot be deleted.
 
 ### Warps
 
-A warp is a saved place on a project's canvas: a point the browser UI moves the view to
-with the arrow keys. Warps have no name — they are numbered by creation order — and no
-CLI commands, since a viewport position means nothing in a terminal. They are listed here
-because they are project data: `kozane db export` carries them, and deleting a project
-deletes its warps. See the [Browser UI handbook](../docs/browser-ui-handbook.md).
+A warp is a saved place on a project's canvas, a point the browser UI moves the view to
+with the arrow keys. Warps have no name and are numbered by creation order. They have no
+CLI commands either, since a viewport position means nothing in a terminal. They are
+listed here because they are project data. `kozane db export` carries them, and deleting
+a project deletes its warps. See the
+[Browser UI handbook](../docs/browser-ui-handbook.md).
 
 ### Scopes
 
-A scope is a **named cross-project grouping of cards**. Unlike projects and bundles,
-a scope does not belong to any one project — the same scope can contain cards from
-multiple projects simultaneously.
+A scope is a named cross-project grouping of cards. Unlike projects and bundles, a scope
+does not belong to any one project, so the same scope can contain cards from multiple
+projects at once.
 
 ```
 scope "Q3 planning"
@@ -67,20 +69,24 @@ scope "Q3 planning"
   └── card from project "frontend"  (bundle: Roadmap)
 ```
 
-Scopes are the bridge between the card canvas and the filesystem. A **taskspace** for a scope stores an identity marker. Run `kozane card list` from
-that directory to read the scope's current cards directly from the database, regardless of
-which project they belong to.
+Scopes are the bridge between the card canvas and the filesystem. A taskspace for a scope
+stores an identity marker. Run `kozane card list` from that directory to read the scope's
+current cards directly from the database, regardless of which project they belong to.
 
 Cards are added to a scope explicitly (via the UI's scope panel or `taskspace create --scope`).
-Deleting a scope from the UI removes that project's cards from it; the scope itself
-is only deleted when it has no member cards left across any project.
+Deleting a scope from the UI removes that project's cards from it. The scope itself is
+only deleted when it has no member cards left across any project.
 
 ### Taskspaces
 
-A taskspace is a filesystem directory tied to a scope. It holds:
+A taskspace is a filesystem directory tied to a scope. It holds one file that Kozane
+writes:
 
-- `.taskspace.json` — identity anchor (stable UUID, survives rename/move)
-- `kozane card list` — dynamically lists scope cards. If the scope was deleted or the taskspace was created without one, the CLI reports that status and lists directly associated cards
+- `.taskspace.json` — identity anchor (stable UUID, survives rename and move)
+
+Run `kozane card list` from a taskspace directory to list the scope's current cards. If
+the scope was deleted, or the taskspace was created without one, the CLI reports that
+status and lists the cards associated directly with the taskspace.
 
 Taskspaces are discovered by `kozane taskspace scan`, which walks the directories listed
 in `config.taskspace.searchRoots` and reconciles what is on disk with the database.
@@ -88,6 +94,12 @@ in `config.taskspace.searchRoots` and reconciles what is on disk with the databa
 ---
 
 ## Installation
+
+Published package:
+
+```bash
+npm install --global kozane   # or: npm install --save-dev kozane
+```
 
 Development (from source):
 
@@ -108,7 +120,7 @@ pnpm build:cli            # compile to dist/
     backups/              # database backups created before migrations/imports
 ```
 
-Taskspaces live wherever the user chooses (default: project root).
+Taskspaces live wherever you choose (default: project root).
 Each taskspace directory carries its own identity marker:
 
 ```
@@ -158,18 +170,23 @@ Default project: main
 Starts the local Kozane web UI and (by default) opens the browser.
 
 ```bash
-kozane open [--host <host>] [--port <port>] [--memory] [--log-requests] [--no-open]
+kozane open [--host <host>] [--port <port>] [--memory] [--log-requests]
+            [--allow-remote] [--no-open]
 ```
 
 Options:
 
-| Flag             | Default     | Description                              |
-| ---------------- | ----------- | ---------------------------------------- |
-| `--host`         | `127.0.0.1` | Bind host (from config if unset)         |
-| `--port`         | `17173`     | Port number (from config if unset)       |
-| `--memory`       | false       | Use a fresh database for this server run |
-| `--log-requests` | false       | Log each HTTP request as structured JSON |
-| `--no-open`      | false       | Start server without opening the browser |
+| Flag             | Default     | Description                                        |
+| ---------------- | ----------- | -------------------------------------------------- |
+| `--host`         | `127.0.0.1` | Bind host (from config if unset)                   |
+| `--port`         | `17173`     | Port number (from config if unset)                 |
+| `--memory`       | false       | Use a fresh temporary database for this server run |
+| `--log-requests` | false       | Log each HTTP request as structured JSON           |
+| `--allow-remote` | false       | Serve through an HTTPS reverse proxy (see below)   |
+| `--no-open`      | false       | Start server without opening the browser           |
+
+`--allow-remote` requires a generated API key and `--no-open`, and it rejects plain HTTP.
+See the [Security matrix](../docs/security-matrix.md) for what each run mode exposes.
 
 Host and port are resolved in this order, first match wins:
 
@@ -181,13 +198,13 @@ Host and port are resolved in this order, first match wins:
 `17173` avoids the ports popular dev servers claim by default (Vite `5173`, Vite preview
 `4173`, `3000`, `8080`, …) and sits below the Linux ephemeral range, so it is not handed
 out to outgoing connections. An explicit port that is not an integer between 0 and 65535
-is an error; the command does not fall through to the next source. Port `0` asks the OS
-for an ephemeral port.
+is an error, and the command does not fall through to the next source. Port `0` asks the
+OS for an ephemeral port.
 
 Behavior:
 
 1. Walks up from CWD to find `.kozane/config.json` → project root.
-2. Checks DB migration status; exits with an error if migrations are not current. With
+2. Checks DB migration status and exits with an error if migrations are not current. With
    `--memory`, creates and migrates a fresh temporary session database with one project named
    `:memory:` instead. While the server is running, project-dependent CLI commands use this
    database and select its sole project automatically, so `--project` can be omitted.
@@ -212,6 +229,74 @@ Kozane database needs attention before the UI can start.
 ...
 Run: kozane db migrate
 ```
+
+---
+
+### `kozane api key generate`
+
+Generates the workspace API key and prints it once. The key is written to
+`.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request
+needs the key.
+
+```bash
+kozane api key generate
+```
+
+Exits with an error if a key already exists, pointing at `kozane api key refresh`.
+
+### `kozane api key refresh`
+
+Replaces the existing key with a new one and prints it. The previous key stops working
+immediately.
+
+```bash
+kozane api key refresh
+```
+
+Exits with an error if no key exists yet.
+
+---
+
+### `kozane net ssg generate`
+
+Builds a read-only static site from the current workspace, for hosting on GitHub Pages or
+any static host. The export carries a full snapshot of the database and has no server, so
+every write operation is disabled in it.
+
+```bash
+kozane net ssg generate [--out <dir>] [--base <path>]
+```
+
+Options:
+
+| Flag            | Default   | Description                                                |
+| --------------- | --------- | ---------------------------------------------------------- |
+| `--out <dir>`   | `./site`  | Output directory, emptied and rewritten on each run        |
+| `--base <path>` | site root | Base path when hosted under a subdirectory, e.g. `/kozane` |
+
+Requires migrations to be current, and requires the source build toolchain, so run it from
+a cloned repository after `pnpm install`. The output directory gets a `.nojekyll` file so
+GitHub Pages serves SvelteKit's `_app/` directory.
+
+### `kozane net ssg preview`
+
+Serves a generated site over HTTP, resolving URLs the way GitHub Pages does.
+
+```bash
+kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <port>] [--no-open]
+```
+
+Options:
+
+| Flag            | Default     | Description                                  |
+| --------------- | ----------- | -------------------------------------------- |
+| `--out <dir>`   | `./site`    | Directory to serve                           |
+| `--base <path>` | site root   | Base path the site was built with            |
+| `--host`        | `127.0.0.1` | Bind host (or `KOZANE_PREVIEW_HOST`)         |
+| `--port`        | `17174`     | Port number (or `KOZANE_PREVIEW_PORT`)       |
+| `--no-open`     | false       | Start the server without opening the browser |
+
+Exits with an error if the directory holds no `index.html`.
 
 ---
 
@@ -254,25 +339,25 @@ is actually wrong. `doctor` itself keeps running through a broken config.
 
 ### `kozane doctor config`
 
-Checks `.kozane/config.json` and reports **every** problem at once, unlike the commands
-that read the config for real and stop at the first one.
+Checks `.kozane/config.json` and reports every problem at once, unlike the commands that
+read the config for real and stop at the first one.
 
 ```bash
 kozane doctor config
 kozane doctor config --strict
 ```
 
-| Severity    | Reported for                                                                |
-| ----------- | --------------------------------------------------------------------------- |
-| `✗` error   | unreadable file, invalid JSON, missing required key, invalid value          |
-| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo; two `ui.*Shortcut` keys bound to the same key |
-| `ℹ` note    | unset optional keys, each listed with the default standing in for it        |
+| Severity    | Reported for                                                                                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `✗` error   | unreadable file, invalid JSON, missing required key, invalid value                                                             |
+| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo, and two `ui.*Shortcut` keys bound to the same key |
+| `ℹ` note    | unset optional keys, each listed with the default standing in for it                                                           |
 
 Required: `name`, `taskspace.defaultDir`, `taskspace.searchRoots`. Optional: everything
-under `server` and `ui` — each falls back to its built-in default.
+under `server` and `ui`, each of which falls back to its built-in default.
 
 Exit code `1` when there is at least one error, `0` otherwise. `--strict` makes warnings
-fail too, for setups that want an unknown key to break the build.
+fail too, for setups where an unknown key should break the build.
 
 Output:
 
@@ -285,7 +370,7 @@ Config: /path/to/project/.kozane/config.json
   ⚠  ui.defaultFontSze is not a known key — did you mean "defaultFontSize"?
   ℹ  server: 1 of 2 keys not set — using defaults
        host: "127.0.0.1"
-  ℹ  ui: 22 of 23 keys not set — using defaults
+  ℹ  ui: 27 of 28 keys not set — using defaults
        defaultFontSize: 11.5
        defaultFontFamily: "monospace"
        …
@@ -463,7 +548,7 @@ kozane layer rename Draft Sketches
 
 ### `kozane layer move <layer> <direction>`
 
-Moves a layer one step up or down the stack. `<direction>` must be `up` or `down`; moving
+Moves a layer one step up or down the stack. `<direction>` must be `up` or `down`. Moving
 past either end is an error, as is any other direction.
 
 ```bash
@@ -492,10 +577,11 @@ kozane card add <content> [--project <projectId>] [--bundle <bundleId>]
                           [--x <number>] [--y <number>]
 ```
 
-Project, bundle, and scope options accept full or short IDs; `--layer` also accepts a layer
-name. Without `--project`, the workspace default project is used. Without `--bundle`, that
-project’s default bundle is used. Without `--layer`, that project's default layer is used. When `--scope` is provided, card creation and scope
-membership are committed in one transaction.
+Project, bundle, and scope options accept full or short IDs, and `--layer` also accepts a
+layer name. Without `--project`, the workspace default project is used. Without `--bundle`, that
+project's default bundle is used. Without `--layer`, that project's default layer is used.
+When `--scope` is provided, card creation and scope membership are committed in one
+transaction.
 
 Example:
 
@@ -510,8 +596,8 @@ kozane card add "Investigate caching" --project eb155d6 --scope e3ee90b --x 48 -
 Splits text using a configurable JavaScript regular expression, trims each segment,
 and adds every non-empty segment as a separate card. The default pattern splits on
 `. ` (a period followed by a space), `。`, or a blank line, preserving dots inside
-values such as `example.com`. Generated cards are
-placed on unoccupied grid positions instead of being stacked at the same coordinates. Pass the text as an argument or pipe
+values such as `example.com`. Generated cards are placed on unoccupied grid positions
+instead of being stacked at the same coordinates. Pass the text as an argument or pipe
 it through standard input:
 
 ```bash
@@ -521,8 +607,8 @@ kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
 The command accepts `--pattern`, `--project`, `--bundle`, `--scope`, and `--layer`, using
-full or short IDs — and, for `--layer`, a layer name.
-These options work with piped input as well:
+full or short IDs. `--layer` also accepts a layer name. These options work with piped
+input as well:
 
 ```bash
 cat foo.txt | kozane card squash --project eb155d6 --scope e3ee90b
@@ -572,7 +658,7 @@ kozane card list --taskspace <path>
 
 When the current directory contains `.taskspace.json`, running `kozane card list`
 without project or bundle options automatically uses that marker. The marker must be
-in the current directory; parent directories are not searched.
+in the current directory, and parent directories are not searched.
 
 `--taskspace <path>` accepts either a taskspace directory or the
 `.taskspace.json` file itself. Scoped taskspaces list the current scope members
@@ -633,13 +719,13 @@ States:
 | Status    | Meaning                                                                     |
 | --------- | --------------------------------------------------------------------------- |
 | `current` | Every migration in the journal has been applied                             |
-| `pending` | Newer migrations exist; run `kozane db migrate`                             |
+| `pending` | Newer migrations exist, so run `kozane db migrate`                          |
 | `missing` | The database file does not exist                                            |
 | `gapped`  | A migration older than the newest applied one was never applied or was lost |
 | `unknown` | The migration metadata could not be read                                    |
 
 A `gapped` database cannot be repaired by `kozane db migrate`, which only applies
-migrations newer than the newest recorded one; restore a backup instead.
+migrations newer than the newest recorded one. Restore a backup instead.
 
 ---
 
@@ -653,7 +739,7 @@ kozane db migrate
 
 Behavior:
 
-1. Checks migration status; exits early if already current.
+1. Checks migration status and exits early if already current.
 2. Exits with an error if the database file is missing, or status is unknown or gapped.
 3. Creates a timestamped backup in `.kozane/backups/` before migrating.
 4. Runs Drizzle migrations.
@@ -688,7 +774,7 @@ Options:
 Behavior:
 
 - Requires migrations to be current.
-- Writes to `file` if given; otherwise prints to stdout.
+- Writes to `file` if given, otherwise prints to stdout.
 - Writes export format version 5. Older files can still be imported: version 2
   (exported before projects had a default flag) comes back with every project
   non-default, version 3 (before layers) gets a rebuilt default layer per project,
@@ -746,7 +832,7 @@ kozane db restore [file]
 Behavior:
 
 - If `file` is omitted, lists available backups in `.kozane/backups/` and uses the most recent.
-- Backs up the current database before overwriting it (best-effort; skipped if the file is corrupted).
+- Backs up the current database before overwriting it (best-effort, skipped if the file is corrupted).
 - Copies the chosen backup over the live database.
 
 Output:
@@ -763,8 +849,8 @@ Restored: .kozane/backups/kozane.20240101T120000.db
 
 ### `kozane taskspace scan`
 
-Scans the filesystem for taskspaces and reports differences from the database.
-**Dry-run by default** — pass `--apply` to write changes.
+Scans the filesystem for taskspaces and reports differences from the database. It is a
+dry run by default. Pass `--apply` to write changes.
 
 ```bash
 kozane taskspace scan [--apply] [--reattach] [--cleanup]
@@ -783,9 +869,9 @@ Behavior:
 1. Walks directories listed in `config.taskspace.searchRoots`.
 2. For each `<dir>/.taskspace.json` found, reads the `taskspaceId`.
 3. Compares with DB records:
-   - **Path changed** → reports as `moved`; with `--apply`, updates `path` and `lastSeenAt`.
-   - **DB record missing** → reports as `orphan`; with `--apply --reattach`, inserts the record.
-   - **Marker missing for DB record** → reports as `missing`; with `--apply --cleanup`, deletes the DB record.
+   - Path changed → reported as `moved`. With `--apply`, updates `path` and `lastSeenAt`.
+   - DB record missing → reported as `orphan`. With `--apply --reattach`, inserts the record.
+   - Marker missing for DB record → reported as `missing`. With `--apply --cleanup`, deletes the DB record.
 4. Updates `lastSeenAt` for all matched records when `--apply` is given.
 
 Dry-run output (no `--apply`):
@@ -821,17 +907,18 @@ Scan complete. 1 updated, 1 deleted.
 Creates a new taskspace.
 
 ```bash
-kozane taskspace create <name> [--scope <scopeId>] [--no-scope] [--dir <path>]
+kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
+                              [--project <projectId>] [--dir <path>]
 ```
 
 Options:
 
-| Flag                | Description                                                |
-| ------------------- | ---------------------------------------------------------- |
-| `--scope <scopeId>` | Attach taskspace to an existing scope                      |
-| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
-| `--project <id>`    | Override the workspace default project                     |
-| `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)         |
+| Flag                | Description                                                         |
+| ------------------- | ------------------------------------------------------------------- |
+| `--scope <scopeId>` | Attach taskspace to an existing scope                               |
+| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)          |
+| `--project <id>`    | Project to own it, required when the workspace has several projects |
+| `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)                  |
 
 Either `--scope` or `--no-scope` is required.
 
@@ -871,7 +958,7 @@ Taskspace created.
   "ui": {
     "defaultFontSize": 11.5,
     "defaultFontFamily": "monospace",
-    "defaultCardWidth": 240,
+    "defaultCardWidth": 210,
     "newCardPlacement": "vertical-list",
     "defaultZoom": 1,
     "zoomStep": 0.05,
@@ -879,6 +966,7 @@ Taskspace created.
     "rightPanelWidth": 232,
     "defaultShowFooter": false,
     "defaultShowSidePanel": false,
+    "defaultShowWarps": true,
     "warpMarkerSize": 20,
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",
@@ -891,8 +979,6 @@ Taskspace created.
     "unglueCardShortcut": "u",
     "moveCardsShortcut": "m",
     "deleteCardsShortcut": "Delete",
-    "defaultShowWarps": true,
-    "warpMarkerSize": 20,
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",
     "removeWarpShortcut": "x",
@@ -902,7 +988,7 @@ Taskspace created.
 }
 ```
 
-Only `name` and the `taskspace` keys are required; `server` and `ui` fall back to their
+Only `name` and the `taskspace` keys are required. `server` and `ui` fall back to their
 built-in defaults key by key. Run [`kozane doctor config`](#kozane-doctor-config) after
 editing this file by hand.
 
@@ -911,13 +997,13 @@ column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping
 with light overlap between cards.
 
 Every `ui.*Shortcut` is compared against one `event.key`, so `"A"` means Shift+A. The four
-arrow keys are reserved for moving between warps, and a shortcut bound to one is an invalid
-value like any other: `kozane doctor config` reports it as an error, and the field falls
-back to its default. Two shortcuts bound to the same key are kept — both actions still
-happen — and reported as a warning.
+arrow keys are reserved for moving between warps, and a shortcut bound to one is an
+invalid value like any other. `kozane doctor config` reports it as an error, and the field
+falls back to its default. Two shortcuts bound to the same key are kept, so both actions
+still happen, and the pair is reported as a warning.
 
 `ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
-inside them: a card or a warp written past the edge is clamped to it, and the response
+inside them. A card or a warp written past the edge is clamped to it, and the response
 reports the position as stored rather than as sent.
 
 ---
@@ -939,11 +1025,11 @@ Identity anchor written at the root of each taskspace directory at creation time
 }
 ```
 
-The marker stores full UUIDs. Commands print the short form of the same IDs —
-`0d5878b` and `aa414b7` above — and accept either.
+The marker stores full UUIDs. Commands print the short form of the same IDs, `0d5878b`
+and `aa414b7` above, and accept either.
 
-The marker is the **filesystem anchor**. The database stores only the last-known
-path. Renaming or moving the directory does not change the taskspace's identity —
+The marker is the filesystem anchor. The database stores only the last-known path.
+Renaming or moving the directory does not change the taskspace's identity, and
 `kozane taskspace scan --apply` recovers the new path automatically.
 
 ---
@@ -986,8 +1072,8 @@ taskspaces placed anywhere on the filesystem.
 | Column         | Type                | Notes                            |
 | -------------- | ------------------- | -------------------------------- |
 | `id`           | text PK             | UUID v7, stable identity         |
-| `project_id`   | text FK → project   | nullable; cascade delete         |
-| `scope_id`     | text FK → scope     | nullable; set null on delete     |
+| `project_id`   | text FK → project   | nullable, cascade delete         |
+| `scope_id`     | text FK → scope     | nullable, set null on delete     |
 | `name`         | text                | display name                     |
 | `path`         | text                | current known filesystem path    |
 | `path_kind`    | text enum           | `project_relative` \| `absolute` |
@@ -999,52 +1085,55 @@ taskspaces placed anywhere on the filesystem.
 
 ## Collision handling (taskspace scan)
 
-| Situation                                  | Behavior                                                  |
-| ------------------------------------------ | --------------------------------------------------------- |
-| Marker found, DB record missing            | Reported as orphan; `--apply --reattach` re-links         |
-| DB record exists, marker missing           | Reported as "missing"; `--apply --cleanup` deletes        |
-| Same `taskspaceId` in multiple directories | Reported as duplicate; use `kozane taskspace fork` (v0.2) |
+| Situation                                  | Behavior                                               |
+| ------------------------------------------ | ------------------------------------------------------ |
+| Marker found, DB record missing            | Reported as orphan, `--apply --reattach` re-links      |
+| DB record exists, marker missing           | Reported as missing, `--apply --cleanup` deletes       |
+| Same `taskspaceId` in multiple directories | Reported as duplicate, `kozane taskspace fork` planned |
 
 ---
 
-## v0.1 scope
+## Implemented surface
 
 ```
 CLI:
   kozane init
   kozane open
+  kozane net ssg generate
+  kozane net ssg preview
   kozane doctor
   kozane doctor config
   kozane status
-  kozane project list
-  kozane project create
-  kozane project delete
-  kozane db status
-  kozane db migrate
-  kozane db export
-  kozane db import
-  kozane db restore
-  kozane taskspace scan
-  kozane taskspace create
+  kozane api key generate
+  kozane api key refresh
+  kozane project list / create / delete / default
+  kozane scope list / add / delete
+  kozane layer list / add / rename / move / delete
+  kozane card add / squash / show / list / layer / nearest
+  kozane db status / migrate / export / import / restore
+  kozane taskspace scan / create
 
 UI (SvelteKit):
   project dashboard
-  bundle list
-  card creation / editing
+  bundle list and filtering
+  card creation, editing, gluing, and arranging
+  layers
+  warps, including the cross-project warp list
   scope builder
   taskspace creation
 
 Filesystem:
   .taskspace.json marker
   taskspace directory creation
+  static site export
 ```
 
-## Planned (v0.2+)
+## Planned
 
 ```
-kozane export <scope-id>         # export scope cards to markdown
+kozane export <scope-id>                # export scope cards to markdown
 kozane taskspace repair <id> --path ... # rewrite missing marker after confirmation
 kozane taskspace fork <dir>             # assign new id to a duplicate
 kozane scope inspect
-kozane card add / list / search
+kozane card search
 ```

@@ -35,10 +35,10 @@ incorrect `PROTOCOL_HEADER` configuration causes requests to fail closed with HT
 The built-in authentication throttle is intentionally process-local. Configure rate limiting at
 the reverse proxy or ingress so limits survive restarts and cover every instance.
 
-`ADDRESS_HEADER` matters to that throttle as much as to your logs: it counts failures per
-client address, and without the header every request behind the proxy arrives from the proxy's
-own address. All remote clients then share one counter, so a single client failing to
-authenticate can throttle everyone else. Configure the proxy chain before allowing remote
+`ADDRESS_HEADER` matters to that throttle as much as to your logs. The throttle counts
+failures per client address, and without the header every request behind the proxy arrives
+from the proxy's own address. All remote clients then share one counter, so a single client
+failing to authenticate can throttle everyone else. Configure the proxy chain before allowing remote
 access, not after.
 
 Rotate the key with `kozane api key refresh`. Rotation immediately invalidates the previous

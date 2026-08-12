@@ -96,7 +96,7 @@ live sync are all disabled.
 
 Do not export a workspace that holds anything you would not publish. Card text,
 bundle names, scope names, layer names, and warp positions are all part of the
-export by design — that is what is being published.
+export by design, because that is what is being published.
 
 Filesystem paths are not. The machine-specific workspace path is stripped, and
 taskspace paths are redacted from the page data the export bakes in, so the

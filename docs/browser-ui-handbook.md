@@ -55,7 +55,7 @@ wide. Warps belong to the project and are stored with it, so they are still
 there after a reload and in another tab.
 
 - Set — press `a`. A numbered marker appears under the mouse pointer, or at the
-  centre of the view if the pointer is off the canvas. Warps are numbered in the
+  center of the view if the pointer is off the canvas. Warps are numbered in the
   order they were made. One press makes one warp, however long the key is held.
 - Warp — press `←`, `→`, `↑`, or `↓`. The view moves to the nearest warp in that
   direction and the marker highlights. Once there is none, the board wraps
@@ -67,25 +67,25 @@ there after a reload and in another tab.
   each warp named after the card it sits on, or the nearest one when it sits on
   the bare board. `↑` and `↓` move through the list,
   `Enter` or a click jumps, and `Esc` closes it. A warp in this project just moves
-  the view; a warp in another project opens that project's board already centred on
-  it. The direction pressed does not matter — all four open the same list. Each row
-  has a remove button, which is the only way to remove another project's warps
-  without going there.
+  the view. A warp in another project opens that project's board already centered
+  on it. The direction pressed does not matter, since all four open the same list.
+  Each row has a remove button, which is the only way to remove another project's
+  warps without going there.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
 - Show or hide — press `Shift+A`. Setting a warp, or warping to one, shows the
-  markers again, so the selected warp — the one `x` removes — is never invisible.
+  markers again, so the warp that `x` removes is never invisible.
 - Size — markers are 20 pixels across. Set `ui.warpMarkerSize` (8 to 64) to make
-  them bigger or smaller; the number inside scales with the circle.
+  them bigger or smaller, and the number inside scales with the circle.
 
-Warp keys work when no cards are selected: while a selection is live, the
+Warp keys work when no cards are selected. While a selection is live, the
 composer's action bar owns the keyboard. They are single keys, so a shortcut held
-with `Ctrl`, `Cmd`, or `Alt` does nothing — `Cmd+A` still selects text rather than
-dropping a warp. The letters are `ui.setWarpShortcut`, `ui.toggleWarpsShortcut` and
-`ui.removeWarpShortcut` in `.kozane/config.json` and can be rebound; the arrow keys
-cannot, since they are what moves between warps. A static export keeps warping — the
-cross-project list included — and the show/hide toggle, and drops setting and
-removing along with every other write.
+with `Ctrl`, `Cmd`, or `Alt` does nothing, and `Cmd+A` still selects text rather
+than dropping a warp. The letters are `ui.setWarpShortcut`,
+`ui.toggleWarpsShortcut`, and `ui.removeWarpShortcut` in `.kozane/config.json` and
+can be rebound. The arrow keys cannot, since they are what moves between warps. A
+static export keeps warping, including the cross-project list, and the show/hide
+toggle. It drops setting and removing along with every other write.
 
 ## Creating cards
 
@@ -98,11 +98,12 @@ The composer floats at the bottom-center of the canvas.
    card, and `Esc` to unfocus the input.
 
 New cards appear near the center of the current view, snapped to the grid.
-Create several in a row and they fan out across a four-column layout instead of
-stacking. The bundle dropdown at the top of the composer sets the new card's
-bundle. If a bundle filter is active in the left panel, new cards inherit it, and
-if a scope is active in the right panel, new cards are added to that scope
-automatically.
+Create several in a row and they stack downward in one column without
+overlapping. Set `ui.newCardPlacement` to `"grid"` in `.kozane/config.json` for a
+compact four-column layout instead. The bundle dropdown at the top of the
+composer sets the new card's bundle. If a bundle filter is active in the left
+panel, new cards inherit it, and if a scope is active in the right panel, new
+cards are added to that scope automatically.
 
 ## Editing a card
 
@@ -183,7 +184,7 @@ its project, and every project starts with a layer named `Base`.
 
 One layer is selected at a time. Its cards are drawn at full strength above all
 the others, and the remaining layers fade well back, in their own order. Cards
-on a dimmed layer stay live: you can still click, drag, and edit them, and a
+on a dimmed layer stay live. You can still click, drag, and edit them, and a
 card you drag rises above the layers on top of it and comes back to full
 strength while it moves. "Bring to front" and "Send to back" reorder a card
 within its own layer.
