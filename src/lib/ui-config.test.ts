@@ -144,6 +144,23 @@ describe("shortcut bindings", () => {
     expect(issuesFor({ defaultFontSize: 14 })).toEqual([]);
   });
 
+  it("checks the resize shortcut like every other binding", () => {
+    // Added to UI_SHORTCUT_FIELDS rather than checked on its own, which is what earns it
+    // the arrow-key refusal and the collision warning without any code of its own.
+    expect(issuesFor({ resizeCardShortcut: "ArrowLeft" })).toEqual([
+      {
+        path: "ui.resizeCardShortcut",
+        severity: "error",
+        message: `ui.resizeCardShortcut must not be "ArrowLeft", which moves between warps`,
+        found: "ArrowLeft",
+      },
+    ]);
+    expect(issuesFor({ resizeCardShortcut: DEFAULT_UI_CONFIG.glueCardsShortcut })).toHaveLength(1);
+    expect(parseUiOverrides({ resizeCardShortcut: "k" }, { strict: true })).toEqual({
+      resizeCardShortcut: "k",
+    });
+  });
+
   it("ignores empty bindings, which match no key to collide over", () => {
     expect(issuesFor({ setWarpShortcut: "", removeWarpShortcut: "" })).toEqual([]);
   });

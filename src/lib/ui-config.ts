@@ -26,6 +26,7 @@ export type UiConfig = {
   glueCardsShortcut: string;
   unglueCardShortcut: string;
   moveCardsShortcut: string;
+  resizeCardShortcut: string;
   deleteCardsShortcut: string;
   setWarpShortcut: string;
   toggleWarpsShortcut: string;
@@ -57,6 +58,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   glueCardsShortcut: "g",
   unglueCardShortcut: "u",
   moveCardsShortcut: "m",
+  resizeCardShortcut: "r",
   deleteCardsShortcut: "Delete",
   setWarpShortcut: "a",
   // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
@@ -66,9 +68,16 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   canvasHeight: CANVAS_H,
 };
 
+/**
+ * The widths a card may be drawn at. Shared by `ui.defaultCardWidth` and by a card's own
+ * `width` column, so resizing a card on the board cannot reach a size the setting behind
+ * it would have been refused for.
+ */
+export const CARD_WIDTH_RANGE: [number, number] = [40, 1200];
+
 export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = {
   defaultFontSize: [4, 128],
-  defaultCardWidth: [40, 1200],
+  defaultCardWidth: CARD_WIDTH_RANGE,
   defaultZoom: [0.1, 10],
   zoomStep: [0.01, 1],
   leftPanelWidth: [80, 800],
@@ -101,6 +110,7 @@ export const UI_SHORTCUT_FIELDS = [
   "glueCardsShortcut",
   "unglueCardShortcut",
   "moveCardsShortcut",
+  "resizeCardShortcut",
   "deleteCardsShortcut",
   "setWarpShortcut",
   "toggleWarpsShortcut",

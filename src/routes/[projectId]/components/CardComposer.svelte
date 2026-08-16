@@ -27,6 +27,10 @@
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
     onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
+    /** Shows or hides the card's resize handle. The drag itself belongs to the canvas. */
+    onResizeToggle?: (cardId: string) => void;
+    /** The card currently showing one, so the button can read as the toggle it is. */
+    resizingCardId?: string | null;
     shortcuts?: UiConfig;
   }
 
@@ -50,6 +54,8 @@
     onMoveToProject,
     onSelectionLayerChange,
     onStackOrderChange,
+    onResizeToggle,
+    resizingCardId = null,
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
@@ -176,6 +182,8 @@
       onUnglueOne?.(primaryCard.id);
     } else if (e.key === shortcuts.moveCardsShortcut && otherProjects.length > 0) {
       showProjectPicker = !showProjectPicker;
+    } else if (e.key === shortcuts.resizeCardShortcut && selectedCards.length === 1) {
+      onResizeToggle?.(selectedCards[0].id);
     } else if (e.key === shortcuts.deleteCardsShortcut) onDeleteSelected?.(ids);
     else handled = false;
 
@@ -270,6 +278,13 @@
       <div class={css({ display: "contents" })}>
         <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
         <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+        <button
+          class={css({ flex: "1", padding: "8px 12px", background: "ink.white", borderRadius: "4px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", border: "1px solid" })}
+          style:border-color={resizingCardId === selectedCards[0].id ? "var(--colors-select-accent)" : "var(--colors-neutral-border)"}
+          style:color={resizingCardId === selectedCards[0].id ? "var(--colors-select-accent)" : "var(--colors-ink-black)"}
+          aria-pressed={resizingCardId === selectedCards[0].id}
+          onclick={() => onResizeToggle?.(selectedCards[0].id)}
+        >{resizingCardId === selectedCards[0].id ? "Done resizing" : "Resize"} ({shortcuts.resizeCardShortcut})</button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->

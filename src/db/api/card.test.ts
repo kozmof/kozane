@@ -227,6 +227,43 @@ describe("updateCard (position)", () => {
   });
 });
 
+describe("updateCard (width)", () => {
+  it("starts a new card with no width of its own", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    const card = await getCard({ db, bundleId, cardId });
+    // Null rather than a number: the card is drawn at `ui.defaultCardWidth` and keeps
+    // following it, which is what an untouched card is supposed to do.
+    expect(card?.width).toBeNull();
+  });
+
+  it("pins a width", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await updateCard({ db, cardId, bundleId, width: 360 });
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.width).toBe(360);
+  });
+
+  it("clears a width back to null", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await updateCard({ db, cardId, bundleId, width: 360 });
+    await updateCard({ db, cardId, bundleId, width: null });
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.width).toBeNull();
+  });
+
+  it("leaves the width alone when it is not named", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await updateCard({ db, cardId, bundleId, width: 360 });
+    await updateCard({ db, cardId, bundleId, content: "There" });
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.width).toBe(360);
+  });
+});
+
 describe("updateCard", () => {
   it("updates only the provided fields", async () => {
     const { db, bundleId } = await setup();

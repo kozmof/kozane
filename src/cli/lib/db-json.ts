@@ -61,6 +61,7 @@ export const TABLES = [
       "pos_x",
       "pos_y",
       "z_index",
+      "width",
     ],
     orderBy: ["id"],
   },

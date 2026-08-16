@@ -69,6 +69,46 @@ describe("PATCH /[projectId]/api/cards/[cardId]", () => {
     );
   });
 
+  it("updates card width", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    await PATCH(event(db, projectId, cardId, jsonRequest({ width: 360 })));
+    await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ width: 360 });
+  });
+
+  it("clears card width when it is sent as null", async () => {
+    const { db, projectId, bundleId, cardId } = await setup();
+    await PATCH(event(db, projectId, cardId, jsonRequest({ width: 360 })));
+
+    await PATCH(event(db, projectId, cardId, jsonRequest({ width: null })));
+
+    // Null is a value here, not an omission: the card goes back to following
+    // `ui.defaultCardWidth` rather than keeping the 360 it was just given.
+    await expect(getCard({ db, bundleId, cardId })).resolves.toMatchObject({ width: null });
+  });
+
+  it("rejects a non-integer card width", async () => {
+    const { db, projectId, cardId } = await setup();
+    await expectHttpRejection(
+      PATCH(event(db, projectId, cardId, jsonRequest({ width: 210.5 }))),
+      400,
+      "width must be an integer",
+    );
+  });
+
+  it("rejects a card width outside the allowed range", async () => {
+    const { db, projectId, cardId } = await setup();
+    await expectHttpRejection(
+      PATCH(event(db, projectId, cardId, jsonRequest({ width: 39 }))),
+      400,
+      "width must be between 40 and 1200",
+    );
+    await expectHttpRejection(
+      PATCH(event(db, projectId, cardId, jsonRequest({ width: 1201 }))),
+      400,
+      "width must be between 40 and 1200",
+    );
+  });
+
   it("moves card to another bundle in the same project", async () => {
     const { db, projectId, cardId } = await setup();
     const otherBundleId = await addBundle({ db, projectId, name: "Other" });

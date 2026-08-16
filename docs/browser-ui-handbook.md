@@ -138,6 +138,7 @@ showing the selection count. The actions and their keyboard shortcuts:
 | Glue or Unglue all | `g`      | Two or more cards selected      |
 | Unglue this        | `u`      | Primary card is in a glue group |
 | Move to project    | `m`      | Another project exists          |
+| Resize             | `r`      | Exactly one card selected       |
 | Delete             | `Delete` | Any selection                   |
 | Clear selection    | `Esc`    | Any selection                   |
 
@@ -156,6 +157,24 @@ selected card there.
 
 Card positions and stacking changes save automatically. If a save fails, an
 error banner appears and the affected cards revert to where they were.
+
+## Resizing a card
+
+Every card is drawn at `ui.defaultCardWidth`, 210 pixels by default, and change
+that setting and the whole board follows it. A single card can be given a width
+of its own instead.
+
+Select one card and press `r`, or click "Resize". A handle appears on the card's
+right edge. Drag it to set the width, which snaps to the same 24-pixel grid
+positions do, and the new width saves when you let go. Widths run from 40 to
+1200 pixels. Press `r` again, click "Done resizing", or clear the selection to
+put the handle away — the width you set stays either way.
+
+Resizing acts on the one selected card, including a card in a glue group: glue
+binds where cards are, not how wide they are. A card you have never resized has
+no width of its own and goes on following `ui.defaultCardWidth`. A static export
+draws the widths it was built with but cannot change them, like every other
+write.
 
 ## Gluing cards
 

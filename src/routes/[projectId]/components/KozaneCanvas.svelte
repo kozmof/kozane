@@ -29,8 +29,10 @@
     worldRectToScreenRect,
   } from "../lib/project-page";
   import type { CardPositionPatch } from "../lib/project-page";
-  import type { NewCardPlacement } from "$lib/ui-config";
+  import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
   import { clamp } from "$lib/constants";
+
+  const [CARD_WIDTH_MIN, CARD_WIDTH_MAX] = CARD_WIDTH_RANGE;
 
   let {
     cards = $bindable(),
@@ -42,6 +44,7 @@
     selectedCards = $bindable(),
     primarySelectedId = $bindable(),
     composerCard = $bindable(),
+    resizingCardId = $bindable(),
     scopeCardIds,
     warps,
     focusedWarpId,
@@ -59,6 +62,7 @@
     fontSize,
     fontFamily,
     onPersistPositions,
+    onPersistWidth,
     onPositionActivityStart,
     onPositionActivityEnd,
     onError,
@@ -73,6 +77,8 @@
     selectedCards: Set<string>;
     primarySelectedId: string | null;
     composerCard: CardWithGlue | null;
+    /** The one card showing its resize handle, or null when none is armed. */
+    resizingCardId: string | null;
     scopeCardIds: Set<string> | null;
     /** In creation order: a warp's number is its place in this list. */
     warps: Warp[];
@@ -96,6 +102,7 @@
     fontSize: number;
     fontFamily: string;
     onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
+    onPersistWidth: (cardId: string, width: number) => Promise<boolean>;
     onPositionActivityStart: () => void;
     onPositionActivityEnd: () => void;
     onError: (message: string) => void;
@@ -114,6 +121,8 @@
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
   let dragPointer: { x: number; y: number } | null = null;
+  /** Where the pointer was last seen during a resize, so the release can snap to the grid. */
+  let resizePointerX: number | null = null;
   // Where the mouse was last seen, so a warp can be dropped under it. Null until the
   // pointer moves at all, which is the case a keyboard-only session stays in.
   let lastPointer: { x: number; y: number } | null = null;
@@ -172,6 +181,30 @@
     groupPrevPositions: Map<string, { x: number; y: number }>;
     moved: boolean;
   } | null = null;
+
+  let resizeState: {
+    cardId: string;
+    /** Where the pointer went down, in client pixels: the drag is measured from here. */
+    startClientX: number;
+    /** The width the card was drawn at when the drag began, in canvas pixels. */
+    startWidth: number;
+    /**
+     * The width to put back if the save fails. Distinct from `startWidth`, which is
+     * always a number: null is a card that had no width of its own and was following
+     * `ui.defaultCardWidth`, and a failed resize has to leave it doing that.
+     */
+    prevWidth: number | null;
+    moved: boolean;
+  } | null = null;
+
+  // A handle belongs to a card selected on its own. Clear the selection, click another
+  // card, or shift-click a second one into it, and the handle goes away with the state
+  // that justified it — including on `Escape`, which clears the selection.
+  $effect(() => {
+    if (resizingCardId === null) return;
+    if (selectedCards.size === 1 && selectedCards.has(resizingCardId)) return;
+    resizingCardId = null;
+  });
 
   let panState: {
     startX: number;
@@ -370,7 +403,7 @@
   }
 
   export function handleCardMouseDown(e: MouseEvent, cardId: string) {
-    if (readonly || e.button !== 0 || dragState) return;
+    if (readonly || e.button !== 0 || dragState || resizeState) return;
     e.stopPropagation();
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
@@ -395,6 +428,45 @@
     draggingId = cardId;
     dragPointer = { x: e.clientX, y: e.clientY };
     onPositionActivityStart();
+  }
+
+  /** What a card is drawn at: its own width when it has one, the workspace default when not. */
+  function widthOf(card: CardWithGlue): number {
+    return card.width ?? cardWidth;
+  }
+
+  export function handleResizeMouseDown(e: MouseEvent, cardId: string) {
+    if (readonly || e.button !== 0 || dragState || resizeState) return;
+    const card = cards.find((c) => c.id === cardId);
+    if (!card) return;
+    resizeState = {
+      cardId,
+      startClientX: e.clientX,
+      startWidth: widthOf(card),
+      prevWidth: card.width,
+      moved: false,
+    };
+    // Counted as position activity for the same reason a drag is: the live-sync poll
+    // replaces the card list wholesale, and a card being resized would snap back to its
+    // stored width mid-drag.
+    onPositionActivityStart();
+  }
+
+  function updateResizedCard(clientX: number, snapToGrid = false) {
+    if (!resizeState) return;
+    const { cardId, startClientX, startWidth } = resizeState;
+    // Divided by zoom so the edge keeps up with the pointer rather than lagging or
+    // outrunning it on a zoomed board.
+    const raw = startWidth + (clientX - startClientX) / zoom;
+    const snapped = snapToGrid ? Math.round(raw / GRID) * GRID : raw;
+    const width = Math.round(clamp(snapped, CARD_WIDTH_MIN, CARD_WIDTH_MAX));
+    // Written through the row rather than mapped into a replacement array, for the reason
+    // spelled out in `updateDraggedCard`: this runs on every pointer move.
+    for (const c of cards) {
+      if (c.id !== cardId) continue;
+      c.width = width;
+      break;
+    }
   }
 
   function updateDraggedCard(clientX: number, clientY: number, snapToGrid = false) {
@@ -509,6 +581,11 @@
         }
         updateDraggedCard(e.clientX, e.clientY);
       }
+      if (resizeState) {
+        resizePointerX = e.clientX;
+        if (Math.abs(e.clientX - resizeState.startClientX) > 4) resizeState.moved = true;
+        updateResizedCard(e.clientX);
+      }
       if (panState) {
         const { startX, startY, scrollLeft, scrollTop } = panState;
         canvasEl.scrollLeft = scrollLeft - (e.clientX - startX);
@@ -554,6 +631,33 @@
               return c;
             });
             onError("Failed to save card position");
+          }
+        } else {
+          onPositionActivityEnd();
+        }
+      }
+      if (resizeState) {
+        if (resizeState.moved && resizePointerX !== null) {
+          updateResizedCard(resizePointerX, true);
+        }
+        const { cardId, moved, prevWidth } = resizeState;
+        resizeState = null;
+        resizePointerX = null;
+        if (moved) {
+          const sent = cards.find((c) => c.id === cardId)?.width ?? null;
+          let ok = false;
+          try {
+            ok = sent === null ? true : await onPersistWidth(cardId, sent);
+          } finally {
+            onPositionActivityEnd();
+          }
+          if (!ok) {
+            // Only put the width back if it is still the one that failed to save: a poll
+            // or another resize may have moved on since the request went out.
+            cards = cards.map((c) =>
+              c.id === cardId && c.width === sent ? { ...c, width: prevWidth } : c,
+            );
+            onError("Failed to save card width");
           }
         } else {
           onPositionActivityEnd();
@@ -678,12 +782,14 @@
               isDragging={draggingId === card.id}
               zIndex={card.zIndex}
               {showFooters}
-              {cardWidth}
+              cardWidth={widthOf(card)}
               {fontSize}
               {fontFamily}
+              isResizing={resizingCardId === card.id}
               onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
               onCardClick={(e) => handleCardClick(e, card.id)}
               onCardDblClick={() => handleCardDblClick(card.id)}
+              onResizeMouseDown={(e) => handleResizeMouseDown(e, card.id)}
             />
           {/each}
         </div>

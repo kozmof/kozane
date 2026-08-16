@@ -220,11 +220,16 @@ type UpdateCard = NeedsDB & {
   posX?: number;
   posY?: number;
   zIndex?: number;
+  /**
+   * `null` clears the card's own width, putting it back under `ui.defaultCardWidth`.
+   * Undefined leaves whichever of the two it is on now alone.
+   */
+  width?: number | null;
 };
 type CardUpdate = Partial<
   Pick<
     typeof cardTable.$inferInsert,
-    "content" | "posX" | "posY" | "zIndex" | "bundleId" | "layerId"
+    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId"
   >
 >;
 
@@ -238,12 +243,14 @@ export async function updateCard({
   posX,
   posY,
   zIndex,
+  width,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
   if (content !== undefined) fields.content = content;
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;
   if (zIndex !== undefined) fields.zIndex = zIndex;
+  if (width !== undefined) fields.width = width;
   if (newBundleId !== undefined) fields.bundleId = newBundleId;
   if (layerId !== undefined) fields.layerId = layerId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");

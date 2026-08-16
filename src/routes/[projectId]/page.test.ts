@@ -30,6 +30,7 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      width: null,
     },
     {
       id: "card-2",
@@ -41,6 +42,7 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      width: null,
     },
   ],
   // Around the centre of the view the stubbed canvas metrics below produce: (1400, 1000).
@@ -77,6 +79,7 @@ const data = {
     glueCardsShortcut: "g",
     unglueCardShortcut: "u",
     moveCardsShortcut: "m",
+    resizeCardShortcut: "r",
     deleteCardsShortcut: "Delete",
     setWarpShortcut: "w",
     toggleWarpsShortcut: "W",
@@ -388,6 +391,109 @@ describe("Project page", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument(),
     );
+  });
+});
+
+describe("Card width", () => {
+  /** Selects Alpha and arms its resize handle with the configured shortcut. */
+  async function armAlpha() {
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.keyDown(window, { key: "r" });
+    return screen.getByLabelText("Drag to resize card width");
+  }
+
+  it("has no handle until a single card is armed", async () => {
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Beta" }), { shiftKey: true });
+    await fireEvent.keyDown(window, { key: "r" });
+
+    expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
+  });
+
+  it("widens the card on the drag and saves where it lands", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    const handle = await armAlpha();
+    const card = screen.getByRole("button", { name: "Card: Alpha" });
+    // Starts at the configured 210 and follows the pointer while the button is down.
+    expect(card).toHaveStyle({ width: "210px" });
+
+    await fireEvent.mouseDown(handle, { button: 0, clientX: 240 });
+    await fireEvent.mouseMove(window, { clientX: 340 });
+    expect(card).toHaveStyle({ width: "310px" });
+
+    // The release snaps to the 24px grid the board is laid out on: 310 -> 312.
+    await fireEvent.mouseUp(window);
+    expect(card).toHaveStyle({ width: "312px" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/cards/card-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ width: 312 }),
+    });
+  });
+
+  it("saves nothing for a press that never became a drag", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    const handle = await armAlpha();
+    await fireEvent.mouseDown(handle, { button: 0, clientX: 240 });
+    await fireEvent.mouseUp(window);
+
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("puts the old width back and reports when the save fails", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    const handle = await armAlpha();
+    await fireEvent.mouseDown(handle, { button: 0, clientX: 240 });
+    await fireEvent.mouseMove(window, { clientX: 340 });
+    await fireEvent.mouseUp(window);
+
+    // Back to following `ui.defaultCardWidth`, which is where the card started: the
+    // failed save leaves it with no width of its own rather than with a stale 312.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ width: "210px" }),
+    );
+    expect(screen.getByText("Failed to save card width")).toBeInTheDocument();
+  });
+
+  it("takes the handle away when the selection behind it goes", async () => {
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    await armAlpha();
+    await fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
+  });
+
+  it("draws a card at its own width and offers no handle in a read-only export", async () => {
+    const wide = {
+      ...data,
+      readonly: true,
+      cards: data.cards.map((card) => (card.id === "card-1" ? { ...card, width: 336 } : card)),
+    };
+    render(ProjectPage, { props: { data: wide, params: { projectId: "project-1" }, form: null } });
+
+    // A static export renders the widths it was built with; it just cannot change them.
+    expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ width: "336px" });
+    expect(screen.getByRole("button", { name: "Card: Beta" })).toHaveStyle({ width: "210px" });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    await fireEvent.keyDown(window, { key: "r" });
+    expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
   });
 });
 

@@ -280,6 +280,45 @@ describe("CardComposer — selection mode", () => {
 
     expect(onSelectionBundleChange).toHaveBeenCalledWith(["card-1", "card-2"], "b2");
   });
+
+  it("arms resizing from the button and from the shortcut", async () => {
+    const user = userEvent.setup();
+    const onResizeToggle = vi.fn();
+    render(CardComposer, {
+      props: makeProps({ selectedCards: [selectedCards[0]], onResizeToggle }),
+    });
+
+    await user.click(screen.getByRole("button", { name: "Resize (r)" }));
+    await user.keyboard("r");
+
+    expect(onResizeToggle).toHaveBeenNthCalledWith(1, "card-1");
+    expect(onResizeToggle).toHaveBeenNthCalledWith(2, "card-1");
+  });
+
+  it("reads as armed once the card is the one being resized", () => {
+    render(CardComposer, {
+      props: makeProps({ selectedCards: [selectedCards[0]], resizingCardId: "card-1" }),
+    });
+
+    expect(screen.getByRole("button", { name: "Done resizing (r)" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("does not offer resizing for a multi-card selection", async () => {
+    const user = userEvent.setup();
+    const onResizeToggle = vi.fn();
+    render(CardComposer, { props: makeProps({ selectedCards, onResizeToggle }) });
+
+    await user.keyboard("r");
+
+    // One handle, one card: with several selected there is no saying which of them a drag
+    // on a shared handle would be about to widen.
+    expect(screen.queryByRole("button", { name: /Resize/ })).not.toBeInTheDocument();
+    expect(onResizeToggle).not.toHaveBeenCalled();
+  });
+
   it("runs customized single-card shortcuts", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

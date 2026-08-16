@@ -56,6 +56,17 @@ export function optionalNumber(body: JsonRecord, key: string): number | undefine
   return value;
 }
 
+/**
+ * A number field that may also arrive as `null`. Null is a value here — "this card has no
+ * width of its own" — where `undefined` means "leave whatever it has alone", which is the
+ * distinction {@link optionalNumber} cannot make on its own. `card.width` is the only
+ * field that needs it: null is how a resized card goes back to `ui.defaultCardWidth`.
+ */
+export function optionalNullableNumber(body: JsonRecord, key: string): number | null | undefined {
+  if (body[key] === null) return null;
+  return optionalNumber(body, key);
+}
+
 export function requireStringArray(body: JsonRecord, key: string, minLength = 1): string[] {
   const value = body[key];
   if (!Array.isArray(value)) throw error(400, `${key} must be an array`);

@@ -17,6 +17,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      width: null,
     },
     color,
     isSelected: false,
@@ -161,5 +162,39 @@ describe("KozaneCard", () => {
   it("exposes selected state with aria-pressed", () => {
     render(KozaneCard, { props: makeProps({ isSelected: true }) });
     expect(screen.getByRole("button")).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("draws the card at the width it is given", () => {
+    const { container } = render(KozaneCard, { props: makeProps({ cardWidth: 360 }) });
+    const card = container.querySelector("[role=button]") as HTMLElement;
+    expect(card.style.width).toBe("360px");
+  });
+
+  it("hides the resize handle until the card is armed", () => {
+    render(KozaneCard, { props: makeProps() });
+    // Absent rather than merely invisible: an unarmed board must carry no grab targets
+    // along its card edges for a drag or a rectangle selection to catch on.
+    expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
+  });
+
+  it("shows the resize handle once the card is armed", () => {
+    render(KozaneCard, { props: makeProps({ isResizing: true }) });
+    expect(screen.getByLabelText("Drag to resize card width")).toBeInTheDocument();
+  });
+
+  it("starts a resize from the handle without starting a card drag", async () => {
+    const user = userEvent.setup();
+    const onResizeMouseDown = vi.fn();
+    const onCardMouseDown = vi.fn();
+    render(KozaneCard, {
+      props: makeProps({ isResizing: true, onResizeMouseDown, onCardMouseDown }),
+    });
+
+    await user.click(screen.getByLabelText("Drag to resize card width"));
+
+    expect(onResizeMouseDown).toHaveBeenCalledOnce();
+    // The handle sits on top of the card: without the stopPropagation it carries, this
+    // press would move the card instead of widening it.
+    expect(onCardMouseDown).not.toHaveBeenCalled();
   });
 });

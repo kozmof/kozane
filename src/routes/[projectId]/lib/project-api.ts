@@ -56,7 +56,14 @@ export function updateCard(
   fetcher: typeof fetch,
   projectId: string,
   cardId: string,
-  card: { content?: string; bundleId?: string; layerId?: string; zIndex?: number },
+  card: {
+    content?: string;
+    bundleId?: string;
+    layerId?: string;
+    zIndex?: number;
+    /** Null drops the card's own width, putting it back under `ui.defaultCardWidth`. */
+    width?: number | null;
+  },
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "PATCH", card);
 }

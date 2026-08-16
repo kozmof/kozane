@@ -24,6 +24,8 @@
     onMoveToProject?: (cardIds: string[], targetProjectId: string) => void;
     onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
+    onResizeToggle?: (cardId: string) => void;
+    resizingCardId?: string | null;
     shortcuts: UiConfig;
   }
 
@@ -47,6 +49,8 @@
     onMoveToProject,
     onSelectionLayerChange,
     onStackOrderChange,
+    onResizeToggle,
+    resizingCardId = null,
     shortcuts,
   }: Props = $props();
 
@@ -90,6 +94,8 @@
     {onMoveToProject}
     {onSelectionLayerChange}
     {onStackOrderChange}
+    {onResizeToggle}
+    {resizingCardId}
     {shortcuts}
   />
 </div>

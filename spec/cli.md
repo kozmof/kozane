@@ -978,6 +978,7 @@ Taskspace created.
     "glueCardsShortcut": "g",
     "unglueCardShortcut": "u",
     "moveCardsShortcut": "m",
+    "resizeCardShortcut": "r",
     "deleteCardsShortcut": "Delete",
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",
@@ -1001,6 +1002,10 @@ arrow keys are reserved for moving between warps, and a shortcut bound to one is
 invalid value like any other. `kozane doctor config` reports it as an error, and the field
 falls back to its default. Two shortcuts bound to the same key are kept, so both actions
 still happen, and the pair is reported as a warning.
+
+`ui.defaultCardWidth` is what a card is drawn at until it is resized on the board. A card
+resized there keeps a width of its own and stops following the setting; every other card
+goes on tracking it. Both are held to the same 40–1200 range.
 
 `ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
 inside them. A card or a warp written past the edge is clamped to it, and the response

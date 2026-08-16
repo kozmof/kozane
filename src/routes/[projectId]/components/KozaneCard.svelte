@@ -16,9 +16,12 @@
     cardWidth: number;
     fontSize: number;
     fontFamily: string;
+    /** Armed by the resize shortcut: draws the handle that drags the right edge. */
+    isResizing?: boolean;
     onCardMouseDown: (e: MouseEvent) => void;
     onCardClick: (e: MouseEvent) => void;
     onCardDblClick: () => void;
+    onResizeMouseDown?: (e: MouseEvent) => void;
   }
 
   let {
@@ -34,9 +37,11 @@
     cardWidth,
     fontSize,
     fontFamily,
+    isResizing = false,
     onCardMouseDown,
     onCardClick,
     onCardDblClick,
+    onResizeMouseDown,
   }: Props = $props();
 
   let background = $derived(
@@ -139,4 +144,28 @@
       </span>
     </span>
   </div>
+
+  <!-- Resize handle. Drawn only while the card is armed, so an ordinary board carries no
+       grab targets along its card edges for a drag or a rectangle selection to catch on.
+       It straddles the right edge rather than sitting inside it, which is where the
+       pointer goes looking for one. -->
+  {#if isResizing}
+    <button
+      class={css({ position: "absolute", top: "0", bottom: "0", width: "9px", padding: "0", border: "none", borderRadius: "1px", cursor: "ew-resize" })}
+      aria-label="Drag to resize card width"
+      data-resize-handle="true"
+      style:right="-5px"
+      style:background="var(--colors-select-accent)"
+      style:opacity="0.55"
+      onmousedown={(e) => {
+        // Without this the card underneath starts a drag and the card moves instead of
+        // growing. The canvas takes the resize from here.
+        e.stopPropagation();
+        e.preventDefault();
+        onResizeMouseDown?.(e);
+      }}
+      onclick={(e) => e.stopPropagation()}
+      ondblclick={(e) => e.stopPropagation()}
+    ></button>
+  {/if}
 </div>

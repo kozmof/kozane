@@ -101,8 +101,15 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
   // The whole stored row, not just the id: posX/posY were clamped above, so a client
   // that echoed back what it sent would render the card in the wrong place until the
-  // next snapshot poll corrected it.
-  return json({ id, ...stored, taskspaceId: null, glueId: null } satisfies CardWithGlue);
+  // next snapshot poll corrected it. A new card has no width of its own — it is drawn
+  // at `ui.defaultCardWidth` until someone resizes it.
+  return json({
+    id,
+    ...stored,
+    taskspaceId: null,
+    glueId: null,
+    width: null,
+  } satisfies CardWithGlue);
 };
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {

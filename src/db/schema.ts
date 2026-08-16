@@ -161,6 +161,13 @@ export const cardTable = sqliteTable("card", {
   posX: integer("pos_x").notNull().default(0),
   posY: integer("pos_y").notNull().default(0),
   zIndex: integer("z_index").notNull().default(0),
+  /**
+   * How wide the card is drawn, in canvas pixels. Nullable, and null is the ordinary
+   * case: a card without one is drawn at `ui.defaultCardWidth` and keeps following that
+   * setting as it changes. Only a card resized on the board pins a width of its own, so
+   * widening every card is still one line of config rather than a pass over the table.
+   */
+  width: integer(),
 });
 
 export const glueTable = sqliteTable("glue", {

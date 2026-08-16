@@ -49,11 +49,18 @@ export class SelectionState {
   selectedCards = $state(new Set<string>());
   primarySelectedId = $state<string | null>(null);
   composerCard = $state<CardWithGlue | null>(null);
+  /**
+   * The card showing its resize handle, armed by the resize shortcut. Only ever one: the
+   * handle is somewhere to put the pointer, and two on the board at once would leave
+   * nothing saying which card the next drag is about to resize.
+   */
+  resizingCardId = $state<string | null>(null);
 
   reset() {
     this.selectedCards = new Set();
     this.primarySelectedId = null;
     this.composerCard = null;
+    this.resizingCardId = null;
   }
 }
 

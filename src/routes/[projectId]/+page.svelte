@@ -330,6 +330,21 @@
     return res.ok;
   }
 
+  /** Shows the card's resize handle, or takes it away when it is the one already showing. */
+  function handleResizeToggle(cardId: string) {
+    s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
+  }
+
+  /**
+   * The canvas has already written the new width onto the card, the way a drag writes a
+   * new position: this only saves it, and answers whether the save took, so the canvas can
+   * put the old width back if it did not.
+   */
+  async function handlePersistWidth(cardId: string, width: number): Promise<boolean> {
+    const res = await updateCard(s.mutationFetcher, data.project.id, cardId, { width });
+    return res.ok;
+  }
+
   async function handleStackOrderChange(cardId: string, direction: "front" | "back") {
     const card = s.cards.find((item) => item.id === cardId);
     if (!card) return;
@@ -531,6 +546,7 @@
       bind:selectedCards={s.selection.selectedCards}
       bind:primarySelectedId={s.selection.primarySelectedId}
       bind:composerCard={s.selection.composerCard}
+      bind:resizingCardId={s.selection.resizingCardId}
       {scopeCardIds}
       warps={s.warps}
       focusedWarpId={s.focusedWarpId}
@@ -548,6 +564,7 @@
       fontSize={data.uiConfig.defaultFontSize}
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
+      onPersistWidth={handlePersistWidth}
       onPositionActivityStart={startPositionActivity}
       onPositionActivityEnd={endPositionActivity}
       onError={(msg) => (s.lastError = msg)}
@@ -610,6 +627,8 @@
       onMoveToProject={actions.handleMoveSelectionToProject}
       onSelectionLayerChange={actions.handleSelectionLayerChange}
       onStackOrderChange={handleStackOrderChange}
+      onResizeToggle={handleResizeToggle}
+      resizingCardId={s.selection.resizingCardId}
       shortcuts={data.uiConfig}
     />
     {/if}

@@ -11,9 +11,11 @@ import type {
 
 // zIndex is required: the column is NOT NULL DEFAULT 0, so every card the server
 // hands out has one, and making it optional here only spread `?? 0` through the UI.
+// `width` is the opposite case and stays nullable: null is a card that follows
+// `ui.defaultCardWidth`, which is most of them.
 export type CardData = Pick<
   Card,
-  "id" | "content" | "bundleId" | "layerId" | "posX" | "posY" | "taskspaceId" | "zIndex"
+  "id" | "content" | "bundleId" | "layerId" | "posX" | "posY" | "taskspaceId" | "zIndex" | "width"
 >;
 
 export interface CardWithGlue extends CardData {

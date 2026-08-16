@@ -57,6 +57,13 @@
       "when": 1786535076317,
       "tag": "0007_warp_project_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1786862909711,
+      "tag": "0008_card_width",
+      "breakpoints": true
     }
   ]
 }
