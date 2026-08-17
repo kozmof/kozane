@@ -121,6 +121,42 @@ export function createProjectActions(state: ProjectState) {
     }
   }
 
+  /**
+   * Splits a card into one card per segment of its text. Applied only once the server
+   * confirms it, the way glue and scope membership are: the pieces come back with the
+   * positions and ids the server gave them, and nothing local was changed to roll back.
+   */
+  async function handleSquashCard(cardId: string) {
+    const res = await api.squashCard(state.mutationFetcher, state.projectId, cardId);
+    if (!res.ok) {
+      // The server's own wording says which card it refused and why — "does not split into
+      // more than one card" is the part that tells the user to pick a different card.
+      state.setError(await api.failureMessage(res, "Failed to squash card"));
+      return;
+    }
+    const parsed = await res.json().catch(() => null);
+    const cards = (parsed as { cards?: unknown } | null)?.cards;
+    if (!Array.isArray(cards) || cards.length === 0) {
+      state.setError("Failed to squash card");
+      return;
+    }
+    state.cards = [...state.cards.filter((c) => c.id !== cardId), ...cards];
+    state.glueRels = state.glueRels.filter((r) => r.cardId !== cardId);
+    // The pieces inherit the card's scope memberships server-side, so the sidebar's counts
+    // follow them here rather than waiting a poll to catch up.
+    const scopeIds = state.scopeRels.filter((r) => r.cardId === cardId).map((r) => r.scopeId);
+    state.scopeRels = [
+      ...state.scopeRels.filter((r) => r.cardId !== cardId),
+      ...scopeIds.flatMap((scopeId) => cards.map((c) => ({ scopeId, cardId: c.id }))),
+    ];
+    // The pieces are what there is to work on now: the card that was selected is gone, and
+    // leaving the selection empty would drop the action bar the squash was started from.
+    state.selection.selectedCards = new Set<string>(cards.map((c) => c.id));
+    state.selection.primarySelectedId = cards[0].id;
+    state.selection.composerCard = null;
+    state.selection.resizingCardId = null;
+  }
+
   async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
     const cardIdSet = new Set(cardIds);
     const prevCards = state.cards;
@@ -437,6 +473,7 @@ export function createProjectActions(state: ProjectState) {
     handleUnglueOne,
     handleUnglueSelected,
     handleDeleteSelected,
+    handleSquashCard,
     handleMoveSelectionToProject,
     handleCreateBundle,
     handleDeleteBundle,

@@ -6,14 +6,16 @@ import {
   createCardFromTaskspace,
   deleteProjectCards,
   moveCardsToProject,
+  squashProjectCard,
 } from "./composite.js";
 import { deleteBundleWithReassign, deleteLayerWithReassign } from "./composite.js";
 import { addProject } from "./project.js";
 import { addBundle, getAllBundles, getBundle } from "./bundle.js";
 import { addScope } from "./scope.js";
 import { addTaskspace } from "./taskspace.js";
-import { addCard, getAllCards, getCard, getCardBundleNames } from "./card.js";
-import { getAllCardsByScope } from "./scope-rel.js";
+import { addCard, getAllCards, getCard, getCardBundleNames, updateCard } from "./card.js";
+import { addScopeRel, getAllCardsByScope } from "./scope-rel.js";
+import { BATCH_MAX } from "../../lib/constants.js";
 import { getGlueRelsByCards, glueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
@@ -439,5 +441,188 @@ describe("moveCardsToProject", () => {
     // own card must remain in source (transaction rolled back)
     const rows = await getCardBundleNames({ db, cardIds: [ownCard] });
     expect(rows[0].bundleId).toBe(srcBundle);
+  });
+});
+
+describe("squashProjectCard", () => {
+  const CANVAS = { canvasWidth: 5600, canvasHeight: 4000 };
+
+  async function squashSetup() {
+    const base = await setup();
+    const cardId = await addCard({
+      db: base.db,
+      bundleId: base.bundleId,
+      content: "First thought. Second thought. 第三の考え。",
+      posX: 1000,
+      posY: 500,
+      zIndex: 7,
+    });
+    return { ...base, cardId };
+  }
+
+  it("replaces the card with one card per segment", async () => {
+    const { db, projectId, bundleId, cardId } = await squashSetup();
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.cards.map(({ content }) => content)).toEqual([
+      "First thought",
+      "Second thought",
+      "第三の考え",
+    ]);
+    expect(await getCard({ db, bundleId, cardId })).toBeUndefined();
+    expect(await getAllCards({ db, bundleId })).toHaveLength(3);
+  });
+
+  it("lays the pieces out from where the card sat, the first one in its place", async () => {
+    const { db, projectId, cardId } = await squashSetup();
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok && result.cards.map(({ posX, posY }) => ({ posX, posY }))).toEqual([
+      { posX: 1000, posY: 500 },
+      { posX: 1280, posY: 500 },
+      { posX: 1560, posY: 500 },
+    ]);
+  });
+
+  it("skips a slot another card already sits on", async () => {
+    const { db, projectId, bundleId, cardId } = await squashSetup();
+    await addCard({ db, bundleId, content: "In the way", posX: 1280, posY: 500 });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok && result.cards.map(({ posX }) => posX)).toEqual([1000, 1560, 1840]);
+  });
+
+  it("gives the pieces the card's bundle, layer, taskspace, width, and stacking", async () => {
+    const { db, projectId, bundleId, scopeId } = await setup();
+    const layerId = (await getDefaultLayer({ db, projectId }))!.id;
+    const taskspaceId = await addTaskspace({ db, name: "T", scopeId, path: "/tmp/t" });
+    const cardId = await addCard({
+      db,
+      bundleId,
+      layerId,
+      taskspaceId,
+      content: "One. Two",
+      zIndex: 4,
+    });
+    await updateCard({ db, cardId, bundleId, width: 320 });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const card of result.cards) {
+      expect(card.bundleId).toBe(bundleId);
+      expect(card.layerId).toBe(layerId);
+      expect(card.taskspaceId).toBe(taskspaceId);
+      expect(card.width).toBe(320);
+    }
+    // In the order the text reads, above whatever the source sat above.
+    expect(result.cards.map(({ zIndex }) => zIndex)).toEqual([4, 5]);
+  });
+
+  it("gathers the pieces into every scope the card was in", async () => {
+    const { db, projectId, bundleId, scopeId, cardId } = await squashSetup();
+    await addScopeRel({ db, scopeId, cardId });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    const gathered = await getAllCardsByScope({ db, scopeId });
+    expect(gathered.map(({ id }) => id).sort()).toEqual(
+      (result.ok ? result.cards.map(({ id }) => id) : []).sort(),
+    );
+    expect(await getAllCards({ db, bundleId })).toHaveLength(3);
+  });
+
+  it("dissolves the glue group the card leaves behind", async () => {
+    const { db, projectId, bundleId, cardId } = await squashSetup();
+    const partner = await addCard({ db, bundleId, content: "Partner" });
+    const glueId = await glueCards({ db, cardIds: [cardId, partner] });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    // The partner must not be left alone in a group the UI still offers to unglue, and the
+    // pieces are one card's worth of text rather than a group someone arranged.
+    expect(await getGlueRelsByCards({ db, cardIds: [partner] })).toEqual([]);
+    expect(await db.select().from(glueTable).where(eq(glueTable.id, glueId))).toEqual([]);
+  });
+
+  it("refuses a card whose text yields a single segment, leaving it alone", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "One indivisible thought" });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result).toEqual({ ok: false, reason: "indivisible" });
+    expect(await getCard({ db, bundleId, cardId })).toBeDefined();
+  });
+
+  it("refuses a card that belongs to another project", async () => {
+    const { db, projectId } = await setup();
+    const otherId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
+    const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
+    const foreign = await addCard({ db, bundleId: otherBundle, content: "One. Two" });
+
+    const result = await squashProjectCard({ db, projectId, cardId: foreign, ...CANVAS });
+
+    expect(result).toEqual({ ok: false, reason: "not-found" });
+    expect(await getCard({ db, bundleId: otherBundle, cardId: foreign })).toBeDefined();
+  });
+
+  it("creates a set too large for one insert statement", async () => {
+    const { db, projectId, bundleId, scopeId } = await setup();
+    const cardId = await addCard({
+      db,
+      bundleId,
+      content: Array.from({ length: 250 }, (_, i) => `Piece ${i}`).join(". "),
+    });
+    await addScopeRel({ db, scopeId, cardId });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok && result.cards).toHaveLength(250);
+    expect(await getAllCards({ db, bundleId })).toHaveLength(250);
+    // The scope memberships are batched the same way the cards are.
+    expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(250);
+  });
+
+  it("refuses a card that would split into more cards than one request may carry", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({
+      db,
+      bundleId,
+      content: Array.from({ length: BATCH_MAX + 1 }, (_, i) => `Piece ${i}`).join(". "),
+    });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result).toEqual({ ok: false, reason: "too-many" });
+    expect(await getCard({ db, bundleId, cardId })).toBeDefined();
+  });
+
+  it("keeps the pieces on the board when the card sits against its edge", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({
+      db,
+      bundleId,
+      content: "One. Two. Three",
+      posX: CANVAS.canvasWidth - 10,
+      posY: CANVAS.canvasHeight,
+    });
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    for (const { posX, posY } of result.cards) {
+      expect(posX).toBeLessThanOrEqual(CANVAS.canvasWidth);
+      expect(posY).toBeLessThanOrEqual(CANVAS.canvasHeight);
+    }
   });
 });

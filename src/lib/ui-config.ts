@@ -27,6 +27,7 @@ export type UiConfig = {
   unglueCardShortcut: string;
   moveCardsShortcut: string;
   resizeCardShortcut: string;
+  squashCardShortcut: string;
   deleteCardsShortcut: string;
   setWarpShortcut: string;
   toggleWarpsShortcut: string;
@@ -59,6 +60,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   unglueCardShortcut: "u",
   moveCardsShortcut: "m",
   resizeCardShortcut: "r",
+  squashCardShortcut: "s",
   deleteCardsShortcut: "Delete",
   setWarpShortcut: "a",
   // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
@@ -111,6 +113,7 @@ export const UI_SHORTCUT_FIELDS = [
   "unglueCardShortcut",
   "moveCardsShortcut",
   "resizeCardShortcut",
+  "squashCardShortcut",
   "deleteCardsShortcut",
   "setWarpShortcut",
   "toggleWarpsShortcut",

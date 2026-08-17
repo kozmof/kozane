@@ -80,6 +80,7 @@ const data = {
     unglueCardShortcut: "u",
     moveCardsShortcut: "m",
     resizeCardShortcut: "r",
+    squashCardShortcut: "s",
     deleteCardsShortcut: "Delete",
     setWarpShortcut: "w",
     toggleWarpsShortcut: "W",
@@ -1577,5 +1578,102 @@ describe("Warps", () => {
 
       expect(canvasOf(container).scrollLeft).toBe(1000);
     });
+  });
+});
+
+describe("Squash", () => {
+  const splittable = {
+    ...data,
+    cards: [{ ...data.cards[0], content: "First thought. Second thought" }, data.cards[1]],
+  };
+
+  const pieces = [
+    {
+      id: "card-3",
+      bundleId: "b1",
+      layerId: "l1",
+      content: "First thought",
+      posX: 24,
+      posY: 48,
+      zIndex: 0,
+      glueId: null,
+      taskspaceId: null,
+      width: null,
+    },
+    {
+      id: "card-4",
+      bundleId: "b1",
+      layerId: "l1",
+      content: "Second thought",
+      posX: 304,
+      posY: 48,
+      zIndex: 1,
+      glueId: null,
+      taskspaceId: null,
+      width: null,
+    },
+  ];
+
+  it("replaces the selected card with the pieces the server answers with", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cards: pieces }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data: splittable, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Card: First thought. Second thought" }),
+    );
+    await fireEvent.keyDown(window, { key: "s" });
+
+    expect(fetch).toHaveBeenCalledWith("/project-1/api/cards/squash", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardId: "card-1" }),
+    });
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Card: First thought" })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Card: Second thought" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Card: First thought. Second thought" }),
+    ).not.toBeInTheDocument();
+    // The pieces are what is selected now, so the next action lands on them.
+    expect(screen.getByText("2 cards")).toBeInTheDocument();
+  });
+
+  it("offers nothing to press for a card with no split in it", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cards: [] }) });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, { props: { data, params: { projectId: "project-1" }, form: null } });
+
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+    expect(screen.getByRole("button", { name: /^Squash/ })).toBeDisabled();
+
+    await fireEvent.keyDown(window, { key: "s" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("reports the reason the server gave and leaves the card alone", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: "Card text splits into more than 2000 cards" }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(ProjectPage, {
+      props: { data: splittable, params: { projectId: "project-1" }, form: null },
+    });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Card: First thought. Second thought" }),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: /^Squash/ }));
+
+    expect(
+      await screen.findByText("Card text splits into more than 2000 cards"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Card: First thought. Second thought" }),
+    ).toBeInTheDocument();
   });
 });

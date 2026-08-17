@@ -628,6 +628,7 @@
       onSelectionLayerChange={actions.handleSelectionLayerChange}
       onStackOrderChange={handleStackOrderChange}
       onResizeToggle={handleResizeToggle}
+      onSquashCard={actions.handleSquashCard}
       resizingCardId={s.selection.resizingCardId}
       shortcuts={data.uiConfig}
     />

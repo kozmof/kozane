@@ -9,12 +9,15 @@ import {
 } from "./card.js";
 import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
 import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "./layer.js";
-import { addScopeRel } from "./scope-rel.js";
+import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
 import { NotFoundError, DefaultBundleError, DefaultLayerError } from "./utils.js";
-import { inArray } from "drizzle-orm";
-import { cardTable } from "../schema.js";
+import { and, eq, inArray } from "drizzle-orm";
+import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
+import type { Card } from "./types.js";
+import { BATCH_MAX, clamp } from "../../lib/constants.js";
+import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 
 type CreateCardFromTaskspace = {
   db: DB;
@@ -92,6 +95,127 @@ export async function deleteProjectCards({
     await unglueCardsInTx(tx, uniqueIds);
     await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
     return true;
+  });
+}
+
+type SquashProjectCard = {
+  db: DB;
+  projectId: string;
+  cardId: string;
+  canvasWidth: number;
+  canvasHeight: number;
+};
+
+export type SquashCardResult =
+  | { ok: false; reason: "not-found" | "indivisible" | "too-many" }
+  | { ok: true; cards: Card[] };
+
+/**
+ * How many rows one insert carries. Every column of every row binds a parameter, and a
+ * card has enough of them that a card count SQLite is happy with is still a statement it
+ * is not. Small enough to stay well clear of that, large enough that an ordinary squash
+ * is a single statement.
+ */
+const INSERT_CHUNK = 200;
+
+function chunked<T>(rows: T[], size = INSERT_CHUNK): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < rows.length; start += size)
+    chunks.push(rows.slice(start, start + size));
+  return chunks;
+}
+
+/**
+ * Replaces a card with one card per segment of its text, in the manner of
+ * `kozane card squash`: the pieces inherit its bundle, layer, taskspace, width, and scope
+ * memberships, are laid out from where it sat, and the card itself is removed. All in one
+ * transaction, so a failure leaves the original whole rather than half of it on the board.
+ *
+ * Refuses a card whose text yields a single segment — squashing it would delete and
+ * recreate the same card under a new id, breaking any reference to the old one for nothing.
+ *
+ * The source leaves its glue group on the way out, for the reason `deleteProjectCards`
+ * gives. The pieces start unglued: they are one card's worth of text, not a group someone
+ * arranged.
+ */
+export async function squashProjectCard({
+  db,
+  projectId,
+  cardId,
+  canvasWidth,
+  canvasHeight,
+}: SquashProjectCard): Promise<SquashCardResult> {
+  return withTx(db, async (tx) => {
+    const inProject = and(
+      eq(cardTable.bundleId, bundleTable.id),
+      eq(bundleTable.projectId, projectId),
+    );
+    const source = await tx
+      .select({
+        id: cardTable.id,
+        bundleId: cardTable.bundleId,
+        layerId: cardTable.layerId,
+        taskspaceId: cardTable.taskspaceId,
+        content: cardTable.content,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+        zIndex: cardTable.zIndex,
+        width: cardTable.width,
+      })
+      .from(cardTable)
+      .innerJoin(bundleTable, inProject)
+      .where(eq(cardTable.id, cardId))
+      .get();
+    if (!source) return { ok: false, reason: "not-found" };
+
+    const contents = splitCardContent(source.content);
+    if (contents.length < 2) return { ok: false, reason: "indivisible" };
+    if (contents.length > BATCH_MAX) return { ok: false, reason: "too-many" };
+
+    const occupied = await tx
+      .select({ id: cardTable.id, posX: cardTable.posX, posY: cardTable.posY })
+      .from(cardTable)
+      .innerJoin(bundleTable, inProject);
+    const positions = squashCardPositions(
+      // Not the source's own slot: it is about to be deleted, so the first piece takes the
+      // place the card the user was looking at had.
+      occupied.filter(({ id }) => id !== cardId),
+      contents.length,
+      { origin: { posX: source.posX, posY: source.posY }, canvasWidth },
+    );
+
+    const cards: Card[] = [];
+    const rows = contents.map((content, index) => ({
+      bundleId: source.bundleId,
+      layerId: source.layerId,
+      taskspaceId: source.taskspaceId,
+      content,
+      // The layout runs off the board once the origin is near enough to an edge, and a
+      // stored position outside it is one the viewport can never reach.
+      posX: clamp(positions[index].posX, 0, canvasWidth),
+      posY: clamp(positions[index].posY, 0, canvasHeight),
+      // Above whatever the source sat above, and in the order the text reads.
+      zIndex: source.zIndex + index,
+      width: source.width,
+    }));
+    for (const batch of chunked(rows))
+      cards.push(...(await tx.insert(cardTable).values(batch).returning()));
+
+    // What the source was gathered into, the pieces are gathered into: a scope is a
+    // working set, and splitting a card is not a decision to leave one.
+    const scopeIds = (await getScopeRelsByCards({ db: tx, cardIds: [cardId] })).map(
+      ({ scopeId }) => scopeId,
+    );
+    const scopeRels = scopeIds.flatMap((scopeId) =>
+      cards.map(({ id }) => ({ scopeId, cardId: id })),
+    );
+    for (const batch of chunked(scopeRels))
+      await tx.insert(scopeRelTable).values(batch).onConflictDoNothing();
+
+    await unglueCardsInTx(tx, [cardId]);
+    await tx.delete(cardTable).where(eq(cardTable.id, cardId));
+
+    return { ok: true, cards };
   });
 }
 

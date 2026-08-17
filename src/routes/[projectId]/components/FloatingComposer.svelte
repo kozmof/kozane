@@ -25,6 +25,7 @@
     onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     onResizeToggle?: (cardId: string) => void;
+    onSquashCard?: (cardId: string) => void;
     resizingCardId?: string | null;
     shortcuts: UiConfig;
   }
@@ -50,6 +51,7 @@
     onSelectionLayerChange,
     onStackOrderChange,
     onResizeToggle,
+    onSquashCard,
     resizingCardId = null,
     shortcuts,
   }: Props = $props();
@@ -95,6 +97,7 @@
     {onSelectionLayerChange}
     {onStackOrderChange}
     {onResizeToggle}
+    {onSquashCard}
     {resizingCardId}
     {shortcuts}
   />

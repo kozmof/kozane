@@ -979,6 +979,7 @@ Taskspace created.
     "unglueCardShortcut": "u",
     "moveCardsShortcut": "m",
     "resizeCardShortcut": "r",
+    "squashCardShortcut": "s",
     "deleteCardsShortcut": "Delete",
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",

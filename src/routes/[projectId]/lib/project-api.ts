@@ -76,6 +76,18 @@ export function deleteCard(
   return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "DELETE");
 }
 
+/**
+ * Replaces one card with a card per segment of its text. The split pattern is the
+ * server's, so nothing about it travels in the request.
+ */
+export function squashCard(
+  fetcher: typeof fetch,
+  projectId: string,
+  cardId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/cards/squash`, "POST", { cardId });
+}
+
 export function deleteCards(
   fetcher: typeof fetch,
   projectId: string,

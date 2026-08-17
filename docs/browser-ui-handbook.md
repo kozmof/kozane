@@ -139,6 +139,7 @@ showing the selection count. The actions and their keyboard shortcuts:
 | Unglue this        | `u`      | Primary card is in a glue group |
 | Move to project    | `m`      | Another project exists          |
 | Resize             | `r`      | Exactly one card selected       |
+| Squash             | `s`      | One card whose text splits      |
 | Delete             | `Delete` | Any selection                   |
 | Clear selection    | `Esc`    | Any selection                   |
 
@@ -175,6 +176,30 @@ binds where cards are, not how wide they are. A card you have never resized has
 no width of its own and goes on following `ui.defaultCardWidth`. A static export
 draws the widths it was built with but cannot change them, like every other
 write.
+
+## Squashing a card into its pieces
+
+A card you wrote in one go often holds several thoughts. Squashing splits it into
+one card per thought, which is the kozane method's own move: small cards you can
+arrange.
+
+Select one card and press `s`, or click "Squash". The text is split on `. ` (a
+period followed by a space), `。`, or a blank line — the same rule
+`kozane card squash` uses, so dots inside `example.com` are left alone. Each
+segment becomes a card, and the original is removed. The whole thing is one
+transaction: either every piece is on the board or the card is untouched.
+
+The first piece takes the place the card was in, and the rest are laid out to its
+right and below, skipping positions other cards already sit on. Because the split
+happens before the pieces are drawn, they are spaced rather than measured, and a
+long piece can overlap the one below it until you drag it. Every piece inherits
+the card's bundle, layer, and width, and joins every scope the card was in. The
+pieces are left selected, so the next action applies to all of them at once.
+
+"Squash" is greyed out for a card whose text has nothing to split on: squashing
+it would replace the card with a copy under a new ID for no gain. A card in a
+glue group can still be squashed — the card leaves the group on its way out, and
+the pieces start unglued.
 
 ## Gluing cards
 

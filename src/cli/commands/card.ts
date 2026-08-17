@@ -14,7 +14,7 @@ import { resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
-import { CANVAS_W } from "../../lib/constants.js";
+import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveProjectId } from "../lib/project-selection.js";
 
 type CardOptions = { project?: string; bundle?: string; taskspace?: string };
@@ -75,37 +75,6 @@ async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
 function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
-}
-
-export const DEFAULT_SQUASH_PATTERN = String.raw`\. |。|\r?\n[ \t]*\r?\n`;
-
-export function splitCardContent(content: string, pattern = DEFAULT_SQUASH_PATTERN): string[] {
-  return content
-    .split(new RegExp(pattern))
-    .map((part) => part.trim())
-    .filter(Boolean);
-}
-
-const SQUASH_COLUMN_SPACING = 280;
-const SQUASH_ROW_SPACING = 160;
-const SQUASH_COLUMNS = Math.floor(CANVAS_W / SQUASH_COLUMN_SPACING);
-
-type CardPosition = { posX: number; posY: number };
-
-export function squashCardPositions(occupied: CardPosition[], count: number): CardPosition[] {
-  const occupiedKeys = new Set(occupied.map(({ posX, posY }) => `${posX},${posY}`));
-  const positions: CardPosition[] = [];
-  for (let slot = 0; positions.length < count; slot++) {
-    const position = {
-      posX: (slot % SQUASH_COLUMNS) * SQUASH_COLUMN_SPACING,
-      posY: Math.floor(slot / SQUASH_COLUMNS) * SQUASH_ROW_SPACING,
-    };
-    const key = `${position.posX},${position.posY}`;
-    if (occupiedKeys.has(key)) continue;
-    occupiedKeys.add(key);
-    positions.push(position);
-  }
-  return positions;
 }
 
 /** Prints one line per card, adding a distance column when the cards carry one. */

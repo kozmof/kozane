@@ -5,6 +5,7 @@
   import { css } from "styled-system/css";
   import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
   import { DEFAULT_UI_CONFIG, type UiConfig } from "$lib/ui-config";
+  import { splitCardContent } from "$lib/squash";
   import { orderLayers } from "../lib/project-page";
 
   interface Props {
@@ -29,6 +30,8 @@
     onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
     /** Shows or hides the card's resize handle. The drag itself belongs to the canvas. */
     onResizeToggle?: (cardId: string) => void;
+    /** Replaces the card with one card per segment of its text. */
+    onSquashCard?: (cardId: string) => void;
     /** The card currently showing one, so the button can read as the toggle it is. */
     resizingCardId?: string | null;
     shortcuts?: UiConfig;
@@ -55,9 +58,18 @@
     onSelectionLayerChange,
     onStackOrderChange,
     onResizeToggle,
+    onSquashCard,
     resizingCardId = null,
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
+
+  // The same split the server would make, asked here so the button can say up front that a
+  // card has nothing to split on, rather than by way of an error banner after the request.
+  const squashableCard = $derived(
+    selectedCards.length === 1 && splitCardContent(selectedCards[0].content).length > 1
+      ? selectedCards[0]
+      : null,
+  );
 
   let showProjectPicker = $state(false);
   // Topmost first, to read the way the layer control and the canvas stack.
@@ -184,6 +196,8 @@
       showProjectPicker = !showProjectPicker;
     } else if (e.key === shortcuts.resizeCardShortcut && selectedCards.length === 1) {
       onResizeToggle?.(selectedCards[0].id);
+    } else if (e.key === shortcuts.squashCardShortcut && squashableCard) {
+      onSquashCard?.(squashableCard.id);
     } else if (e.key === shortcuts.deleteCardsShortcut) onDeleteSelected?.(ids);
     else handled = false;
 
@@ -285,6 +299,23 @@
           aria-pressed={resizingCardId === selectedCards[0].id}
           onclick={() => onResizeToggle?.(selectedCards[0].id)}
         >{resizingCardId === selectedCards[0].id ? "Done resizing" : "Resize"} ({shortcuts.resizeCardShortcut})</button>
+        <button
+          class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", fontSize: "12px", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
+          style:cursor={squashableCard ? "pointer" : "default"}
+          style:color={squashableCard ? "var(--colors-ink-black)" : "var(--colors-neutral-faded)"}
+          title={squashableCard
+            ? "Replace this card with one card per sentence"
+            : "This card has nothing to split on"}
+          disabled={!squashableCard}
+          onclick={() => squashableCard && onSquashCard?.(squashableCard.id)}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <rect x="1.5" y="1" width="9" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="1.5" y="7.5" width="9" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M1 6h10" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1.5" stroke-linecap="round"/>
+          </svg>
+          Squash ({shortcuts.squashCardShortcut})
+        </button>
       </div>
     {/if}
     <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
