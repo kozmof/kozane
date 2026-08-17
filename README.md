@@ -49,8 +49,6 @@ kozane open
 
 To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a project named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default project named `main`. Run `kozane project default <id>` to change which project commands use when `--project` is omitted.
 
-The server defaults to `127.0.0.1:17173`. That port stays out of the way of the defaults other dev servers take, such as Vite's 5173, 3000, and 8080. Change it with `--host` and `--port`, with the `KOZANE_HOST` and `KOZANE_PORT` environment variables, or by editing `server` in `.kozane/config.json`. The flag wins over the environment, and the environment wins over the config file.
-
 The `/health` endpoint checks server and database readiness.
 
 For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
