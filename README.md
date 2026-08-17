@@ -1,11 +1,11 @@
 # Kozane
 
-Kozane is a local-first workspace for arranging short pieces of text on a canvas.
-It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
+Kozane is a workspace for short texts.
+It builds on the kozane method (こざね法), a way of organizing thoughts on small cards developed by the Japanese anthropologist Tadao Umesao.
 
 ## Status
 
-Kozane is beta software under active development and is not yet production-ready. Commands and data formats can still change, so avoid using it for irreplaceable data.
+Kozane is beta software under active development and is not yet production-ready.
 
 ## Requirements
 
@@ -47,13 +47,13 @@ kozane init
 kozane open
 ```
 
-For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md). On a board wider than the screen, press `a` to drop a warp under the pointer and use the arrow keys to move between warps, wrapping around at the edges. `Shift` with an arrow key lists every warp in the workspace, so one jump reaches another project's board.
-
 To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a project named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default project named `main`. Run `kozane project default <id>` to change which project commands use when `--project` is omitted.
 
 The server defaults to `127.0.0.1:17173`. That port stays out of the way of the defaults other dev servers take, such as Vite's 5173, 3000, and 8080. Change it with `--host` and `--port`, with the `KOZANE_HOST` and `KOZANE_PORT` environment variables, or by editing `server` in `.kozane/config.json`. The flag wins over the environment, and the environment wins over the config file.
 
-The `/health` endpoint checks server and database readiness and reports process CPU capacity and system memory usage as percentages on a 0–100 scale.
+The `/health` endpoint checks server and database readiness.
+
+For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
 
 ## Adding cards from text
 
@@ -74,8 +74,6 @@ Pass a JavaScript regular expression source to customize the separator:
 ```sh
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
-
-A card already on the board can be squashed the same way: select it in the browser UI and press `s`, and it is replaced by one card per sentence. See the [Browser UI handbook](./docs/browser-ui-handbook.md).
 
 Project, bundle, layer, and scope options also work with piped files:
 
@@ -158,22 +156,6 @@ kozane doctor config
 Migrations create a backup first. Back up the entire `.kozane` directory and test restores regularly.
 After hand-editing `.kozane/config.json`, `kozane doctor config` lists every missing key,
 unknown key, and invalid value in one pass.
-
-## Development and releases
-
-Building Kozane itself from source requires pnpm 10.17.0:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm verify
-pnpm audit:production
-pnpm smoke:package
-pnpm test:e2e
-```
-
-`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. `pnpm verify:production` runs the complete local release gate, including the dependency audit, installed-package smoke test, and real-browser workflow test. CI verifies the current Node 24 LTS and latest release lines, packages the result, runs a deployed-workflow smoke test, and exercises the built application in Chromium. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
-
-For TLS, process supervision, monitoring, backup, restore, and release-gate guidance, see [Production operations](./docs/production.md).
 
 ## License
 
