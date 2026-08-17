@@ -1,14 +1,11 @@
 # Kozane
 
 Kozane is a local-first workspace for arranging short pieces of text on a canvas.
-It builds on the kozane method (こざね法), a way of organizing ideas on small cards
-developed by the Japanese anthropologist Tadao Umesao.
+It builds on the kozane method (こざね法), a way of organizing ideas on small cards developed by the Japanese anthropologist Tadao Umesao.
 
 ## Status
 
-Kozane is beta software under active development and is not yet
-production-ready. Commands and data formats can still change, so avoid using it
-for irreplaceable data.
+Kozane is beta software under active development and is not yet production-ready. Commands and data formats can still change, so avoid using it for irreplaceable data.
 
 ## Requirements
 
@@ -16,8 +13,7 @@ for irreplaceable data.
 
 ## Install
 
-Install Kozane globally with npm or pnpm to make the `kozane` command available
-everywhere:
+Install Kozane globally with npm or pnpm to make the `kozane` command available everywhere:
 
 ```sh
 npm install --global kozane
@@ -25,8 +21,7 @@ npm install --global kozane
 pnpm add --global kozane
 ```
 
-Or install it as a development dependency to keep the `kozane` command scoped to the
-project:
+Or install it as a development dependency to keep the `kozane` command scoped to the project:
 
 ```sh
 npm install --save-dev kozane
@@ -52,26 +47,13 @@ kozane init
 kozane open
 ```
 
-For working in the browser UI, see the
-[Browser UI handbook](./docs/browser-ui-handbook.md). On a board wider than the
-screen, press `a` to drop a warp under the pointer and use the arrow keys to
-move between warps, wrapping around at the edges. `Shift` with an arrow key lists
-every warp in the workspace, so one jump reaches another project's board.
+For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md). On a board wider than the screen, press `a` to drop a warp under the pointer and use the arrow keys to move between warps, wrapping around at the edges. `Shift` with an arrow key lists every warp in the workspace, so one jump reaches another project's board.
 
-To start with an empty database that exists only for the lifetime of the server,
-use `kozane open --memory`. It creates a project named `:memory:`, and all
-changes are discarded when the server stops. `kozane init` creates a default
-project named `main`. Run `kozane project default <id>` to change which project
-commands use when `--project` is omitted.
+To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a project named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default project named `main`. Run `kozane project default <id>` to change which project commands use when `--project` is omitted.
 
-The server defaults to `127.0.0.1:17173`. That port stays out of the way of the
-defaults other dev servers take, such as Vite's 5173, 3000, and 8080. Change it
-with `--host` and `--port`, with the `KOZANE_HOST` and `KOZANE_PORT` environment
-variables, or by editing `server` in `.kozane/config.json`. The flag wins over
-the environment, and the environment wins over the config file.
+The server defaults to `127.0.0.1:17173`. That port stays out of the way of the defaults other dev servers take, such as Vite's 5173, 3000, and 8080. Change it with `--host` and `--port`, with the `KOZANE_HOST` and `KOZANE_PORT` environment variables, or by editing `server` in `.kozane/config.json`. The flag wins over the environment, and the environment wins over the config file.
 
-The `/health` endpoint checks server and database readiness and reports process CPU
-capacity and system memory usage as percentages on a 0–100 scale.
+The `/health` endpoint checks server and database readiness and reports process CPU capacity and system memory usage as percentages on a 0–100 scale.
 
 ## Adding cards from text
 
@@ -81,9 +63,7 @@ Create one card from a quoted argument:
 kozane card add "Investigate caching"
 ```
 
-To turn sentences into separate cards, use `card squash`. By default it splits on
-`. ` (a period followed by a space), `。`, and blank lines, so dots inside URLs
-such as `example.com` are preserved. It trims whitespace and ignores empty segments:
+To turn sentences into separate cards, use `card squash`. By default it splits on `. ` (a period followed by a space), `。`, and blank lines, so dots inside URLs such as `example.com` are preserved. It trims whitespace and ignores empty segments:
 
 ```sh
 cat foo.txt | kozane card squash
@@ -95,14 +75,15 @@ Pass a JavaScript regular expression source to customize the separator:
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
+A card already on the board can be squashed the same way: select it in the browser UI and press `s`, and it is replaced by one card per sentence. See the [Browser UI handbook](./docs/browser-ui-handbook.md).
+
 Project, bundle, layer, and scope options also work with piped files:
 
 ```sh
 cat foo.txt | kozane card squash --project eb155d6 --bundle 72ac1f8 --scope e3ee90b
 ```
 
-A layer is a surface cards sit on, so a set of cards can be worked on with the
-rest of the board dimmed behind it. Every project starts with a `Base` layer:
+A layer is a surface cards sit on, so a set of cards can be worked on with the rest of the board dimmed behind it. Every project starts with a `Base` layer:
 
 ```sh
 kozane layer list
@@ -124,25 +105,13 @@ kozane api key generate
 kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
-The key is stored separately in `.kozane/api.json` with owner-only permissions.
-Once that file exists, every HTTP request requires the key. API clients send it
-as `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`.
+The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients send it as `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`.
 `kozane api key refresh` immediately replaces the old key.
 
-For a browser on another device, open `https://your-proxy/`. Any unauthenticated
-page load is redirected to a login page where you paste the key once. Kozane
-stores it as an HttpOnly cookie and sends you back to where you were headed.
-Opening `https://your-proxy/?api_key=<key>` skips the form. Kozane exchanges the
-query parameter for the same cookie and removes it from the URL. API and `fetch`
-clients are unaffected. An unauthenticated request without a valid
-`Authorization: Bearer` or `X-API-Key` header still receives a `401`, not the
-login page.
+For a browser on another device, open `https://your-proxy/`. Any unauthenticated page load is redirected to a login page where you paste the key once. Kozane stores it as an HttpOnly cookie and sends you back to where you were headed.
+Opening `https://your-proxy/?api_key=<key>` skips the form. Kozane exchanges the query parameter for the same cookie and removes it from the URL. API and `fetch` clients are unaffected. An unauthenticated request without a valid `Authorization: Bearer` or `X-API-Key` header still receives a `401`, not the login page.
 
-`--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain
-HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the
-trusted protocol header as described in
-[Production operations](./docs/production.md), and use firewall restrictions and
-an unprivileged runtime user.
+`--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described in [Production operations](./docs/production.md), and use firewall restrictions and an unprivileged runtime user.
 
 For a full breakdown of what each run mode exposes, see the [Security matrix](./docs/security-matrix.md).
 
@@ -154,17 +123,13 @@ Export the current workspace as a static site:
 kozane net ssg generate --out ./site
 ```
 
-When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass
-the base path:
+When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass the base path:
 
 ```sh
 kozane net ssg generate --out ./site --base /kozane
 ```
 
-The output directory includes a `.nojekyll` file so GitHub Pages serves
-SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages
-for it. Static export requires the source build toolchain, so run it from a
-cloned repository after `pnpm install`.
+The output directory includes a `.nojekyll` file so GitHub Pages serves SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages for it. Static export requires the source build toolchain, so run it from a cloned repository after `pnpm install`.
 
 Preview it over HTTP, not by opening the files directly.
 
@@ -172,11 +137,8 @@ Preview it over HTTP, not by opening the files directly.
 kozane net ssg preview      # serves ./site at http://127.0.0.1:17174
 ```
 
-`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it
-matches what you get once deployed. Use `--out <dir>` to serve a different
-directory, `--port` and `--host` (or `KOZANE_PREVIEW_PORT` and
-`KOZANE_PREVIEW_HOST`) to change the address, and `--no-open` to skip launching a
-browser. If the site was built with `--base`, preview it with the same base:
+`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches what you get once deployed. Use `--out <dir>` to serve a different
+directory, `--port` and `--host` (or `KOZANE_PREVIEW_PORT` and `KOZANE_PREVIEW_HOST`) to change the address, and `--no-open` to skip launching a browser. If the site was built with `--base`, preview it with the same base:
 
 ```sh
 kozane net ssg preview --base /kozane
@@ -209,16 +171,9 @@ pnpm smoke:package
 pnpm test:e2e
 ```
 
-`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a
-clean production build. `pnpm verify:production` runs the complete local release
-gate, including the dependency audit, installed-package smoke test, and
-real-browser workflow test. CI verifies the current Node 24 LTS and latest
-release lines, packages the result, runs a deployed-workflow smoke test, and
-exercises the built application in Chromium. Package builds clean `build/` and
-`dist/` first to prevent stale artifacts.
+`pnpm verify` runs static checks, formatting, coverage thresholds, tests, and a clean production build. `pnpm verify:production` runs the complete local release gate, including the dependency audit, installed-package smoke test, and real-browser workflow test. CI verifies the current Node 24 LTS and latest release lines, packages the result, runs a deployed-workflow smoke test, and exercises the built application in Chromium. Package builds clean `build/` and `dist/` first to prevent stale artifacts.
 
-For TLS, process supervision, monitoring, backup, restore, and release-gate guidance, see
-[Production operations](./docs/production.md).
+For TLS, process supervision, monitoring, backup, restore, and release-gate guidance, see [Production operations](./docs/production.md).
 
 ## License
 
