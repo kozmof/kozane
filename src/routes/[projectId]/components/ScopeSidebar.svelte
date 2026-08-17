@@ -178,7 +178,6 @@
           <div class={css({ padding: "8px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "5px" })}>
             <input
               class={css({ flex: "1", padding: "6px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "2px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
-              placeholder="taskspace name"
               bind:value={newWcName}
               onkeydown={(e) => e.key === "Enter" && onCreateTaskspace()}
             />

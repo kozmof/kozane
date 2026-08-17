@@ -381,7 +381,7 @@
   {:else}
     <!-- Input row (create / edit) -->
     <div
-      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "0px", padding: "8px 10px", transition: "border-color 0.15s" })}
+      class={css({ display: "flex", alignItems: "center", gap: "8px", background: "ink.white", border: "1px solid", borderRadius: "0px", padding: "8px 10px", transition: "border-color 0.15s", marginBottom: "8px" })}
       style:border-color={borderColor}
     >
       <textarea
@@ -412,10 +412,6 @@
           />
         </svg>
       </button>
-    </div>
-
-    <div class={css({ marginTop: "5px", fontSize: "10px", color: "neutral.muted" })}>
-      Enter to {mode === "edit" ? "save" : "create"} · Shift+Enter for newline · Esc to unfocus
     </div>
   {/if}
 </div>

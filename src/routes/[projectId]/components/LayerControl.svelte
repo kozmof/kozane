@@ -385,7 +385,6 @@
         <div class={css({ marginTop: "4px", paddingTop: "4px", borderTop: "1px solid token(colors.neutral.dim)", display: "flex", gap: "4px" })}>
           <input
             class={css({ flex: "1", minWidth: "0", padding: "5px 8px", border: "1px solid token(colors.neutral.dim)", borderRadius: "2px", fontSize: "11.5px", background: "ink.white", fontFamily: "inherit", color: "ink.black" })}
-            placeholder="New layer"
             aria-label="New layer name"
             bind:value={newLayerName}
             onkeydown={(e) => e.key === "Enter" && create()}
