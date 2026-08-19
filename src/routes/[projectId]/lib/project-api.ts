@@ -299,3 +299,17 @@ export function createTaskspace(
 ): Promise<Response> {
   return jsonRequest(fetcher, `/${projectId}/api/taskspaces`, "POST", taskspace);
 }
+
+/**
+ * One directory of a taskspace. `path` is relative to the taskspace root and empty for the
+ * root itself; the panel asks again with a deeper path each time a folder is opened.
+ */
+export function fetchTaskspaceFiles(
+  fetcher: typeof fetch,
+  projectId: string,
+  taskspaceId: string,
+  path: string,
+): Promise<Response> {
+  const query = path ? `?path=${encodeURIComponent(path)}` : "";
+  return fetcher(`/${projectId}/api/taskspaces/${taskspaceId}/files${query}`);
+}

@@ -33,6 +33,32 @@ export interface BundleWithColor {
 export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
 /**
+ * One row of a taskspace directory listing. Names and metadata only — the listing endpoint
+ * never reads a file, so nothing here can carry the contents of one.
+ *
+ * A symlink is reported as itself rather than as whatever it points at, and is not
+ * expandable in the panel: following one is how a listing confined to a taskspace would
+ * stop being confined to it.
+ */
+export type TaskspaceEntryKind = "directory" | "file" | "symlink" | "other";
+
+export interface TaskspaceEntry {
+  name: string;
+  kind: TaskspaceEntryKind;
+  /** Bytes, for regular files. Null for everything else, where a size means nothing. */
+  size: number | null;
+  modifiedAt: string | null;
+}
+
+export interface TaskspaceListing {
+  /** The listed directory, relative to the taskspace root and always `/`-separated. */
+  path: string;
+  entries: TaskspaceEntry[];
+  /** True when the directory held more than {@link TASKSPACE_DIR_ENTRIES_MAX} entries. */
+  truncated: boolean;
+}
+
+/**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and
  * the client reloads into it, so the two cannot drift into different shapes.
  *

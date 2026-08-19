@@ -641,6 +641,8 @@
     scopes={s.scopes}
     scopeRels={s.scopeRels}
     taskspaces={s.taskspaces}
+    taskspaceTree={s.taskspaceTree}
+    treeContext={{ fetcher: s.fetcher, projectId: s.projectId }}
     selectedCards={s.selection.selectedCards}
     bind:activeScope={s.sidebar.activeScope}
     bind:newScopeName={s.sidebar.newScopeName}

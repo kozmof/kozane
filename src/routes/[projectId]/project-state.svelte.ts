@@ -9,6 +9,7 @@ import type {
   TaskspaceSummary,
   Warp,
 } from "$lib/types";
+import { TaskspaceTreeState } from "./lib/taskspace-tree.svelte.js";
 
 // Re-exported for the components and tests that already name it through this module.
 export type { ProjectDataSnapshot } from "$lib/types";
@@ -111,6 +112,7 @@ export class ProjectState {
 
   selection = new SelectionState();
   sidebar = new SidebarState();
+  taskspaceTree = new TaskspaceTreeState();
 
   lastError = $state<string | null>(null);
 
@@ -132,6 +134,7 @@ export class ProjectState {
     this.taskspaces = data.taskspaces;
     this.selection.reset();
     this.sidebar.reset();
+    this.taskspaceTree.reset();
     this.lastError = null;
   }
 
@@ -151,6 +154,9 @@ export class ProjectState {
     this.scopeRels = data.scopeRels;
     this.glueRels = data.glueRels;
     this.taskspaces = data.taskspaces;
+    // A taskspace deleted by the CLI or another tab must not leave its directory rows
+    // cached behind the row that is gone.
+    this.taskspaceTree.prune(data.taskspaces.map(({ id }) => id));
 
     const cardIds = new Set(data.cards.map(({ id }) => id));
     this.selection.selectedCards = new Set(

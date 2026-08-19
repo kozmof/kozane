@@ -29,3 +29,11 @@ export const DEFAULT_PREVIEW_PORT = 17174;
 export const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const;
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/**
+ * How many entries one directory listing may carry. A taskspace is an ordinary directory
+ * the user works in, so it may well hold a `node_modules` — a listing has to stay a
+ * listing rather than become a several-megabyte answer nobody asked for. The panel says
+ * so when a directory is cut off.
+ */
+export const TASKSPACE_DIR_ENTRIES_MAX = 500;

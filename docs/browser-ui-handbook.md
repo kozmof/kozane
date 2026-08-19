@@ -286,6 +286,23 @@ copy show a `taskspace` badge in their footer. Manage taskspaces on disk with
 `kozane taskspace scan` and `kozane taskspace create`, described in the
 [CLI specification](../spec/cli.md).
 
+### Browsing a taskspace
+
+Click a taskspace to open its directory tree. Folders open one at a time, each
+read when you first click it, so a taskspace holding a large checkout costs
+nothing until you go looking inside it. A folder you close keeps what it read,
+and opening it again is immediate.
+
+The tree is for reading, and only names, sizes, and modification times are read.
+Clicking a file does nothing: there is no way to open or edit a file from the
+browser. Dotfiles and dot-directories are hidden, so `.taskspace.json`, `.git`,
+and an `.env` are all left out. A symbolic link is listed as itself and cannot
+be opened.
+
+The tree does not refresh on its own — live sync watches the database, not the
+disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
+than 500 entries is cut off, and the panel says so at the end of the listing.
+
 ## Card footers
 
 Toggle footers with the `f` key. A footer shows, when relevant, the glue-group

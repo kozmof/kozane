@@ -103,9 +103,36 @@ taskspace paths are redacted from the page data the export bakes in, so the
 directories a workspace was worked in are not served to whoever opens the site.
 Taskspaces therefore do not appear in a static export at all.
 
+## Taskspace file listing
+
+The browser UI lists the contents of a taskspace directory, so the server reads
+the filesystem on behalf of whoever has the page open. What that reaches is
+bounded.
+
+- Names and metadata only. The endpoint answers with entry names, kinds, sizes,
+  and modification times. No endpoint returns the contents of a file.
+- Confined to the taskspace. The directory comes from the taskspace record and
+  the workspace root; the request chooses only where to look inside it. A path
+  that walks out with `..` is refused, and so is one that resolves out through a
+  symlink. Symlinks are listed but never followed.
+- Dot-entries are skipped, which keeps `.git`, `.taskspace.json`, and a stray
+  `.env` out of the listing.
+- Gated like everything else. When a workspace has an API key, a listing request
+  without it gets 401 the same as any other request.
+
+One consequence is worth stating plainly. A taskspace created outside the
+workspace root — `kozane taskspace create --dir <path>` — is listable, because
+the boundary is the taskspace directory rather than the root. Point a taskspace
+at a directory only if you would show its file names to anyone who can reach the
+server.
+
+A static export lists nothing: it has no server to ask, and taskspace paths are
+stripped from it, so no taskspace appears at all.
+
 ## Where each rule lives
 
 - Host and key checks at startup — `src/cli/commands/open.ts`
 - Per-request key, TLS, redirect, and rate-limit gating — `src/hooks.server.ts`
 - Loopback, TLS, and rate-limit helpers — `src/lib/server/security.ts`
 - Login page and `next` guard — `src/routes/login/` and `src/lib/server/login.ts`
+- Taskspace listing boundary — `src/lib/server/taskspace-files.ts`

@@ -7,6 +7,9 @@ import {
   type TaskspaceMarker,
 } from "../../lib/taskspace-marker.js";
 import { readTaskspaceMarker } from "./taskspace-marker.js";
+import { resolveTaskspacePath } from "../../lib/taskspace-path.js";
+
+export { resolveTaskspacePath };
 
 export {
   TASKSPACE_MARKER_FILE,
@@ -62,14 +65,6 @@ function readMarker(dir: string): TaskspaceMarker | null {
   } catch {
     return null;
   }
-}
-
-export function resolveTaskspacePath(
-  storedPath: string,
-  pathKind: "project_relative" | "absolute",
-  projectRoot: string,
-): string {
-  return pathKind === "absolute" ? storedPath : join(projectRoot, storedPath);
 }
 
 export type TaskspaceRecord = {

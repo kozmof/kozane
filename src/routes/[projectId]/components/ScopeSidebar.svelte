@@ -1,6 +1,8 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
+  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte";
+  import TaskspaceTree from "./TaskspaceTree.svelte";
 
   let {
     visible,
@@ -8,6 +10,8 @@
     scopes,
     scopeRels,
     taskspaces,
+    taskspaceTree,
+    treeContext,
     selectedCards,
     activeScope = $bindable(),
     newScopeName = $bindable(),
@@ -24,6 +28,8 @@
     scopes: Scope[];
     scopeRels: ScopeRel[];
     taskspaces: TaskspaceSummary[];
+    taskspaceTree: TaskspaceTreeState;
+    treeContext: TaskspaceTreeContext;
     selectedCards: Set<string>;
     activeScope: string | null;
     newScopeName: string;
@@ -62,7 +68,59 @@
   function sideBtn(active: boolean) {
     return cx(sideBtnBase, active && sideBtnActiveClass);
   }
+
+  const taskspaceRowClass = css({
+    display: "flex",
+    alignItems: "center",
+    gap: "5px",
+    width: "100%",
+    padding: "4px 6px",
+    background: "transparent",
+    border: "none",
+    borderRadius: "2px",
+    textAlign: "left",
+    fontSize: "11.5px",
+    fontFamily: "inherit",
+    color: "ink.secondary",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+  });
+  const taskspaceRowButtonClass = css({
+    cursor: "pointer",
+    paddingRight: "24px",
+    "&:hover": { backgroundColor: "neutral.bg" },
+  });
+  const taskspaceChevronClass = css({ width: "8px", fontSize: "8px", color: "neutral.subtle", flexShrink: "0" });
+  const taskspaceNameClass = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
+  const taskspaceRefreshClass = css({
+    position: "absolute",
+    right: "4px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "16px",
+    height: "16px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    borderRadius: "2px",
+    fontSize: "11px",
+    color: "neutral.subtle",
+    opacity: "0",
+    transition: "opacity 0.12s, color 0.12s",
+    "&:hover": { color: "ink.black" },
+  });
 </script>
+
+{#snippet taskspaceIcon()}
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
+    <path d="M1 4.5h8" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
+    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-neutral-icon-dim)" />
+  </svg>
+{/snippet}
 
 <aside
   class={css({
@@ -155,21 +213,44 @@
           {#if scopeTaskspaces.length > 0}
             <div class={css({ borderTop: "1px solid token(colors.neutral.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
               {#each scopeTaskspaces as taskspace (taskspace.id)}
-                <div class={css({
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "4px 6px",
-                  borderRadius: "2px",
-                  fontSize: "11.5px",
-                  color: "ink.secondary",
-                })}>
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-                    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
-                    <path d="M1 4.5h8" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
-                    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-neutral-icon-dim)" />
-                  </svg>
-                  <span class={css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" })}>{taskspace.name}</span>
+                {@const expanded = taskspaceTree.isExpanded(taskspace.id, "")}
+                <div class={css({ display: "flex", flexDirection: "column", gap: "1px" })}>
+                  <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .taskspace-refresh": { opacity: "1" } })}>
+                    <!-- A static export has no server to ask, and its taskspaces carry no
+                         path to ask about, so the row stays the plain label it always was. -->
+                    {#if readonly}
+                      <div class={taskspaceRowClass}>
+                        <span class={taskspaceChevronClass}></span>
+                        {@render taskspaceIcon()}
+                        <span class={taskspaceNameClass}>{taskspace.name}</span>
+                      </div>
+                    {:else}
+                      <button
+                        class={cx(taskspaceRowClass, taskspaceRowButtonClass)}
+                        onclick={() => taskspaceTree.toggle(treeContext, taskspace.id, "")}
+                        aria-expanded={expanded}
+                      >
+                        <span class={taskspaceChevronClass}>{expanded ? "▾" : "▸"}</span>
+                        {@render taskspaceIcon()}
+                        <span class={taskspaceNameClass}>{taskspace.name}</span>
+                      </button>
+                      {#if expanded}
+                        <button
+                          class={cx("taskspace-refresh", taskspaceRefreshClass)}
+                          title="Re-read this taskspace from disk"
+                          onclick={(e) => { e.stopPropagation(); taskspaceTree.refresh(treeContext, taskspace.id); }}
+                        >⟳</button>
+                      {/if}
+                    {/if}
+                  </div>
+                  {#if expanded && !readonly}
+                    <TaskspaceTree
+                      tree={taskspaceTree}
+                      ctx={treeContext}
+                      taskspaceId={taskspace.id}
+                      path=""
+                    />
+                  {/if}
                 </div>
               {/each}
             </div>
