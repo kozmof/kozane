@@ -3,6 +3,7 @@
   import { TASKSPACE_DIR_ENTRIES_MAX } from "$lib/constants";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
+  import TreeArrow from "./TreeArrow.svelte";
 
   let {
     tree,
@@ -53,15 +54,7 @@
     color: "neutral.subtle",
     fontStyle: "italic",
   });
-  const chevronClass = css({ width: "8px", fontSize: "8px", color: "neutral.subtle", flexShrink: "0" });
 </script>
-
-{#snippet folderIcon()}
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-    <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
-    <path d="M3 1.5h4v1.5H3z" fill="var(--colors-neutral-icon-dim)" />
-  </svg>
-{/snippet}
 
 {#snippet fileIcon(isLink: boolean)}
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
@@ -91,8 +84,7 @@
         onclick={() => tree.toggle(ctx, taskspaceId, childPath(entry.name))}
         aria-expanded={expanded}
       >
-        <span class={chevronClass}>{expanded ? "▾" : "▸"}</span>
-        {@render folderIcon()}
+        <TreeArrow {expanded} />
         <span class={nameClass}>{entry.name}</span>
       </button>
       {#if expanded}
@@ -103,7 +95,6 @@
            is drawn as what it is and stays closed, because following one is not something
            a listing confined to the taskspace can do. -->
       <div class={rowBase} style:padding-left={`${indent}px`} title={entry.kind === "symlink" ? "Symbolic link" : undefined}>
-        <span class={chevronClass}></span>
         {@render fileIcon(entry.kind === "symlink")}
         <span class={nameClass}>{entry.name}</span>
       </div>

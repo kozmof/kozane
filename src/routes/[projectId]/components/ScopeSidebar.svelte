@@ -3,6 +3,7 @@
   import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
+  import TreeArrow from "./TreeArrow.svelte";
 
   let {
     visible,
@@ -90,7 +91,6 @@
     paddingRight: "24px",
     "&:hover": { backgroundColor: "neutral.bg" },
   });
-  const taskspaceChevronClass = css({ width: "8px", fontSize: "8px", color: "neutral.subtle", flexShrink: "0" });
   const taskspaceNameClass = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
   const taskspaceRefreshClass = css({
     position: "absolute",
@@ -220,7 +220,6 @@
                          path to ask about, so the row stays the plain label it always was. -->
                     {#if readonly}
                       <div class={taskspaceRowClass}>
-                        <span class={taskspaceChevronClass}></span>
                         {@render taskspaceIcon()}
                         <span class={taskspaceNameClass}>{taskspace.name}</span>
                       </div>
@@ -230,8 +229,7 @@
                         onclick={() => taskspaceTree.toggle(treeContext, taskspace.id, "")}
                         aria-expanded={expanded}
                       >
-                        <span class={taskspaceChevronClass}>{expanded ? "▾" : "▸"}</span>
-                        {@render taskspaceIcon()}
+                        <TreeArrow {expanded} />
                         <span class={taskspaceNameClass}>{taskspace.name}</span>
                       </button>
                       {#if expanded}
