@@ -1,4 +1,4 @@
-import { ARROW_KEYS, CANVAS_W, CANVAS_H } from "./constants.js";
+import { ARROW_KEYS, CANVAS_W, CANVAS_H, CONTENT_MAX } from "./constants.js";
 
 export type NewCardPlacement = "grid" | "vertical-list";
 
@@ -34,6 +34,14 @@ export type UiConfig = {
   removeWarpShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
+  /**
+   * How much text one card may hold, in characters. Not a drawing setting like the rest of
+   * this block, but a limit on what may be written — it sits here because it is a
+   * workspace-wide preference the user edits in the same file, and because both writers
+   * that enforce it, the card endpoints and `kozane card add`, already read this config to
+   * find the board they clamp positions to.
+   */
+  contentMax: number;
 };
 
 export const DEFAULT_UI_CONFIG: UiConfig = {
@@ -68,6 +76,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   removeWarpShortcut: "x",
   canvasWidth: CANVAS_W,
   canvasHeight: CANVAS_H,
+  contentMax: CONTENT_MAX,
 };
 
 /**
@@ -87,6 +96,14 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   warpMarkerSize: [8, 64],
   canvasWidth: [400, 20000],
   canvasHeight: [400, 20000],
+  /**
+   * The floor keeps a sentence writable, which is the unit `card squash` cuts text into —
+   * a limit below that turns an ordinary paste into a command that cannot succeed. The
+   * ceiling is where the board's once-a-second poll stops being reasonable: it carries
+   * every card's whole text, not an excerpt, so the cost of raising this is paid on every
+   * poll of every open tab rather than once at write time.
+   */
+  contentMax: [100, 1_000_000],
 };
 
 export const UI_BOOL_FIELDS = [

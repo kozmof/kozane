@@ -8,6 +8,7 @@ import { requireCardInProject } from "../../../lib/guards";
 import { clamp, contentLimitIssue } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { canvasBounds } from "$lib/server/canvas";
+import { contentMax } from "$lib/server/content-limit";
 import {
   optionalNullableNumber,
   optionalNumber,
@@ -25,7 +26,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   const rawContent = optionalString(body, "content");
   if (rawContent !== undefined && !rawContent.trim()) throw error(400, "content must not be empty");
-  const contentIssue = rawContent === undefined ? null : contentLimitIssue(rawContent);
+  const contentIssue =
+    rawContent === undefined ? null : contentLimitIssue(rawContent, contentMax());
   if (contentIssue) throw error(400, contentIssue);
   const content = rawContent !== undefined ? rawContent.trim() : undefined;
 

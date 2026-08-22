@@ -22,6 +22,7 @@ import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveProjectId } from "../lib/project-selection.js";
 import { contentLimitIssue } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
+import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 
 type CardOptions = { project?: string; bundle?: string; taskspace?: string };
 type CardAddOptions = Omit<CardOptions, "taskspace"> & {
@@ -101,10 +102,12 @@ async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): P
 
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
   try {
-    const contentIssue = contentLimitIssue(content);
+    const { root } = requireWorkspace();
+    // After the workspace, not before: the limit is `ui.contentMax` of this workspace, so
+    // there is nothing to hold the text against until one has been found.
+    const contentIssue = contentLimitIssue(content, contentMaxForRoot(resolve(root)));
     if (contentIssue) throw new Error(contentIssue);
 
-    const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
@@ -180,15 +183,18 @@ export async function cardSquash(
   try {
     const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
+
+    const { root } = requireWorkspace();
     // Each segment becomes a card of its own, so each is held to the limit a card is held
-    // to. Reported by position, which is the only thing that tells one segment of a piped
-    // file from another.
+    // to — this workspace's `ui.contentMax`, which is why this waits for the workspace.
+    // Reported by position, the only thing that tells one segment of a piped file from
+    // another, and checked before anything is written so a refusal leaves the board alone.
+    const limit = contentMaxForRoot(resolve(root));
     for (const [index, segment] of contents.entries()) {
-      const issue = contentLimitIssue(segment);
+      const issue = contentLimitIssue(segment, limit);
       if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
     }
 
-    const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);

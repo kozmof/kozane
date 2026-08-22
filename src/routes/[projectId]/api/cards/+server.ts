@@ -14,6 +14,7 @@ import {
 import { deleteProjectCards } from "../../../../db/api/composite";
 import { contentLimitIssue } from "$lib/constants";
 import { clampToCanvas } from "$lib/server/canvas";
+import { contentMax } from "$lib/server/content-limit";
 import {
   optionalNumber,
   optionalString,
@@ -67,7 +68,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const scopeId = optionalString(body, "scopeId");
   const requestedLayerId = optionalString(body, "layerId");
 
-  const contentIssue = contentLimitIssue(content);
+  const contentIssue = contentLimitIssue(content, contentMax());
   if (contentIssue) throw error(400, contentIssue);
 
   const bundle = await getBundle({ db, projectId, bundleId });

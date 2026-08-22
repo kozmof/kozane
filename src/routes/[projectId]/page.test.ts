@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
 import { SAFE_AREA_GRACE_MS } from "./lib/project-page";
+import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 import { goto, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 
@@ -57,6 +58,10 @@ const data = {
   taskspaces: [],
   otherProjects: [],
   uiConfig: {
+    // Spread first so a setting added to UiConfig arrives here at its default instead of
+    // failing this file to type-check. Everything below is deliberately *not* a default:
+    // the page has to read each one rather than hardcode what it happens to be.
+    ...DEFAULT_UI_CONFIG,
     defaultFontSize: 11.5,
     defaultFontFamily: "monospace",
     defaultCardWidth: 210,

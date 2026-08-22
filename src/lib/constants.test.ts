@@ -53,16 +53,31 @@ describe("UI config", () => {
 
 describe("contentLimitIssue", () => {
   it("passes text at the limit", () => {
-    expect(contentLimitIssue("x".repeat(CONTENT_MAX))).toBeNull();
+    expect(contentLimitIssue("x".repeat(CONTENT_MAX), CONTENT_MAX)).toBeNull();
   });
 
   it("passes empty text — emptiness is the caller's own check", () => {
-    expect(contentLimitIssue("")).toBeNull();
+    expect(contentLimitIssue("", CONTENT_MAX)).toBeNull();
   });
 
   it("reports text one character past the limit, naming it", () => {
-    const issue = contentLimitIssue("x".repeat(CONTENT_MAX + 1));
+    const issue = contentLimitIssue("x".repeat(CONTENT_MAX + 1), CONTENT_MAX);
     expect(issue).toBe(`content must be a string under ${CONTENT_MAX} characters`);
+  });
+
+  // The limit is the workspace's `ui.contentMax`, not the built-in default, so the
+  // message has to name whichever one the caller passed.
+  it("holds text to a raised limit and says so", () => {
+    expect(contentLimitIssue("x".repeat(CONTENT_MAX + 1), 20_000)).toBeNull();
+    expect(contentLimitIssue("x".repeat(20_001), 20_000)).toBe(
+      "content must be a string under 20000 characters",
+    );
+  });
+
+  it("holds text to a lowered limit and says so", () => {
+    expect(contentLimitIssue("x".repeat(500), 200)).toBe(
+      "content must be a string under 200 characters",
+    );
   });
 });
 

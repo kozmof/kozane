@@ -43,11 +43,15 @@ function cli(cwd: string, ...args: string[]): string {
   return result.stdout;
 }
 
-function configureCanvas(root: string, canvasWidth: number, canvasHeight: number): void {
+function configureUi(root: string, overrides: Record<string, unknown>): void {
   const path = join(root, ".kozane", "config.json");
   const config = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
   const ui = (config.ui ?? {}) as Record<string, unknown>;
-  writeFileSync(path, JSON.stringify({ ...config, ui: { ...ui, canvasWidth, canvasHeight } }));
+  writeFileSync(path, JSON.stringify({ ...config, ui: { ...ui, ...overrides } }));
+}
+
+function configureCanvas(root: string, canvasWidth: number, canvasHeight: number): void {
+  configureUi(root, { canvasWidth, canvasHeight });
 }
 
 /** Every card of the workspace as `card list` prints it: `<id> <bundle> (<x>, <y>) <text>`. */
@@ -77,6 +81,23 @@ describe("card add", () => {
     const result = run(root, ["card", "add", "x".repeat(CONTENT_MAX + 1)]);
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain(`content must be a string under ${CONTENT_MAX} characters`);
+    expect(cli(root, "card", "list")).toContain("No cards found.");
+  });
+
+  it("accepts text the built-in default would refuse once ui.contentMax is raised", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    configureUi(root, { contentMax: 20_000 });
+    expect(cli(root, "card", "add", "x".repeat(CONTENT_MAX + 1))).toContain("Card added.");
+  });
+
+  it("refuses text the built-in default would accept once ui.contentMax is lowered", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    configureUi(root, { contentMax: 280 });
+    const result = run(root, ["card", "add", "x".repeat(281)]);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("content must be a string under 280 characters");
     expect(cli(root, "card", "list")).toContain("No cards found.");
   });
 
@@ -113,6 +134,17 @@ describe("card squash", () => {
     expect(result.stderr).toContain("Card 2 of 3");
     expect(result.stderr).toContain(`content must be a string under ${CONTENT_MAX} characters`);
     // Refused before anything was written, so the workspace is as it was.
+    expect(cli(root, "card", "list")).toContain("No cards found.");
+  });
+
+  it("holds each segment to the workspace's own ui.contentMax", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    configureUi(root, { contentMax: 280 });
+    const result = run(root, ["card", "squash"], `short. ${"x".repeat(281)}. tail`);
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Card 2 of 3");
+    expect(result.stderr).toContain("content must be a string under 280 characters");
     expect(cli(root, "card", "list")).toContain("No cards found.");
   });
 

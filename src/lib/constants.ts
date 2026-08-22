@@ -1,15 +1,24 @@
 export const CANVAS_W = 5600;
 export const CANVAS_H = 4000;
+/**
+ * How much text one card holds by default. The workspace may raise or lower it with
+ * `ui.contentMax`, so this is the fallback rather than the limit — read the setting
+ * through `lib/server/content-limit.ts` and pass it to {@link contentLimitIssue}.
+ */
 export const CONTENT_MAX = 10_000;
 /**
- * Why this card's text is past {@link CONTENT_MAX}, or null when it is not, in the wording
- * both writers refuse it with. The HTTP routes turn it into a 400 and `kozane card add`
- * into a failed command: the two reach the same table through the same `addCard`, so the
- * limit held against a card has to be one limit rather than one each.
+ * Why this card's text is past `contentMax`, or null when it is not, in the wording both
+ * writers refuse it with. The HTTP routes turn it into a 400 and `kozane card add` into a
+ * failed command: the two reach the same table through the same `addCard`, so the limit
+ * held against a card has to be one limit rather than one each.
+ *
+ * The limit is a parameter rather than read here because it comes from the workspace
+ * config, which this module cannot reach — `ui-config.ts` imports from it, not the other
+ * way round. That is the same split `clampToBounds` and `canvasBounds` have.
  */
-export function contentLimitIssue(content: string): string | null {
-  return content.length > CONTENT_MAX
-    ? `content must be a string under ${CONTENT_MAX} characters`
+export function contentLimitIssue(content: string, contentMax: number): string | null {
+  return content.length > contentMax
+    ? `content must be a string under ${contentMax} characters`
     : null;
 }
 export const NAME_MAX = 255;
