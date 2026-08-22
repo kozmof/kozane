@@ -110,3 +110,23 @@ test("redirects an unauthenticated browser to the login page and logs in", async
 
   await context.close();
 });
+
+test("creates a project from the list page and opens it", async ({ page }) => {
+  await page.goto(`${baseUrl}/?api_key=${encodeURIComponent(apiKey)}`);
+
+  // A blank name is refused without leaving the page.
+  await page.getByRole("button", { name: "Create project" }).click();
+  await expect(page.getByRole("alert")).toContainText("Project name is required");
+
+  await page.getByLabel("New project name").fill("Made in the browser");
+  await page.getByRole("button", { name: "Create project" }).click();
+
+  const created = page.getByRole("link", { name: "Made in the browser" });
+  await expect(created).toBeVisible();
+  // The input clears so the next project can be typed straight away.
+  await expect(page.getByLabel("New project name")).toHaveValue("");
+
+  // The default bundle and layer came with it, so the canvas is usable.
+  await created.click();
+  await expect(page.getByLabel("Write a card")).toBeFocused();
+});

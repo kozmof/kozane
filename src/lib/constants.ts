@@ -12,6 +12,8 @@ export const NAME_MAX = 255;
 export const BATCH_MAX = 2_000;
 /** Name of the default layer every project is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
+/** Name of the default bundle every project is created with. */
+export const DEFAULT_BUNDLE_NAME = "General";
 export const DEFAULT_SERVER_HOST = "127.0.0.1";
 /**
  * Default port for `kozane open`. Picked to stay clear of ports popular tools take by

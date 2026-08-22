@@ -4,14 +4,11 @@ import { dbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import {
-  addProject,
+  createProject,
   deleteProject,
   getAllProjects,
   setDefaultProject,
 } from "../../db/api/project.js";
-import { addBundle } from "../../db/api/bundle.js";
-import { addLayer } from "../../db/api/layer.js";
-import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 
 export async function projectCreate(name: string): Promise<void> {
@@ -19,9 +16,7 @@ export async function projectCreate(name: string): Promise<void> {
   const url = dbUrl(resolve(root));
   await runMigrations(url);
   const db = await createDb(url);
-  const projectId = await addProject({ db, name });
-  await addBundle({ db, projectId, name: "General", isDefault: true });
-  await addLayer({ db, projectId, name: DEFAULT_LAYER_NAME, isDefault: true });
+  const projectId = await createProject({ db, name });
   const projectIds = (await getAllProjects({ db })).map((project) => project.id);
   console.log(`Project created.`);
   console.log(`  id  : ${shortId(projectId, projectIds)}`);

@@ -19,8 +19,14 @@ kozane open
 
 This starts the server, which defaults to `http://127.0.0.1:17173`, and opens a
 browser. The landing page lists the workspace's projects, and the workspace
-default is tagged "Default". Click a project to open its canvas. If there are no
-projects yet, the page tells you to run `kozane project create <name>`.
+default is tagged "Default". Click a project to open its canvas.
+
+To start a new project, type a name into the field below the list and press
+the "+" button beside it, the same as creating a bundle or a layer. It arrives
+with the default "General" bundle and "Base" layer, the same as
+`kozane project create <name>`, and appears in the list ready to open. A
+read-only static export has no server to create anything, so it shows the CLI
+command instead of the field.
 
 The back arrow at the top of the left panel returns to the project list.
 

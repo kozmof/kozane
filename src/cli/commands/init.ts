@@ -3,10 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
-import { addProject } from "../../db/api/project.js";
-import { addBundle } from "../../db/api/bundle.js";
-import { addLayer } from "../../db/api/layer.js";
-import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
+import { createProject } from "../../db/api/project.js";
 
 export async function init(): Promise<void> {
   const projectRoot = process.cwd();
@@ -28,9 +25,7 @@ export async function init(): Promise<void> {
 
   await runMigrations(dbUrl(projectRoot));
   const db = await createDb(dbUrl(projectRoot));
-  const projectId = await addProject({ db, name: "main", isDefault: true });
-  await addBundle({ db, projectId, name: "General", isDefault: true });
-  await addLayer({ db, projectId, name: DEFAULT_LAYER_NAME, isDefault: true });
+  await createProject({ db, name: "main", isDefault: true });
 
   console.log(`
 Kozane initialized.

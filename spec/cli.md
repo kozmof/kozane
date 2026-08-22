@@ -442,7 +442,10 @@ Behavior:
 1. Requires a Kozane workspace (walks up from CWD).
 2. Runs Drizzle migrations (idempotent).
 3. Inserts a `project` DB record → gets a stable UUID.
-4. Creates a default "General" bundle for the project.
+4. Creates a default "General" bundle and a default "Base" layer for the project.
+
+Steps 3 and 4 are one transaction, so a project never exists without the bundle and layer
+a canvas needs. The browser project list creates projects through the same routine.
 
 Output:
 

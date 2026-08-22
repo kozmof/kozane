@@ -2,18 +2,20 @@ import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
 import {
   addProject,
+  createProject,
   getProject,
   getAllProjects,
   deleteProject,
   updateProjectName,
   setDefaultProject,
 } from "./project.js";
-import { addBundle } from "./bundle.js";
-import { addLayer } from "./layer.js";
+import { addBundle, getAllBundles } from "./bundle.js";
+import { addLayer, getAllLayers } from "./layer.js";
 import { addCard } from "./card.js";
 import { glueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
+import { DEFAULT_BUNDLE_NAME, DEFAULT_LAYER_NAME, NAME_MAX } from "../../lib/constants.js";
 import type { DB } from "../tx.js";
 
 async function db() {
@@ -43,6 +45,40 @@ describe("addProject", () => {
     const id1 = await addProject({ db: d, name: "A" });
     const id2 = await addProject({ db: d, name: "B" });
     expect(id1).not.toBe(id2);
+  });
+});
+
+describe("createProject", () => {
+  it("returns a non-empty id", async () => {
+    const d = await db();
+    expect(await createProject({ db: d, name: "My Project" })).toBeTruthy();
+  });
+
+  it("creates the default bundle and layer the canvas needs", async () => {
+    const d = await db();
+    const projectId = await createProject({ db: d, name: "My Project" });
+
+    const bundles = await getAllBundles({ db: d, projectId });
+    expect(bundles).toHaveLength(1);
+    expect(bundles[0]).toMatchObject({ name: DEFAULT_BUNDLE_NAME, isDefault: true });
+
+    const layers = await getAllLayers({ db: d, projectId });
+    expect(layers).toHaveLength(1);
+    expect(layers[0]).toMatchObject({ name: DEFAULT_LAYER_NAME, isDefault: true, position: 0 });
+  });
+
+  it("leaves the project non-default unless asked", async () => {
+    const d = await db();
+    const plain = await createProject({ db: d, name: "Plain" });
+    const flagged = await createProject({ db: d, name: "Flagged", isDefault: true });
+    expect((await getProject({ db: d, projectId: plain }))?.isDefault).toBe(false);
+    expect((await getProject({ db: d, projectId: flagged }))?.isDefault).toBe(true);
+  });
+
+  it("writes nothing when a name is rejected", async () => {
+    const d = await db();
+    await expect(createProject({ db: d, name: "x".repeat(NAME_MAX + 1) })).rejects.toThrow();
+    expect(await getAllProjects({ db: d })).toEqual([]);
   });
 });
 
