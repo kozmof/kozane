@@ -88,7 +88,7 @@
           nameInput?.focus();
         };
       }}
-      class={css({ display: "flex", flexDirection: "column", gap: "8px", marginTop: "10px" })}
+      class={css({ display: "flex", flexDirection: "column", gap: "8px", marginTop: "9px" })}
     >
       <div class={css({ display: "flex", alignItems: "center", gap: "8px" })}>
         <input
