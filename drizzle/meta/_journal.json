@@ -71,6 +71,13 @@
       "when": 1787405674766,
       "tag": "0009_taskspace_scope_index",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1787435972045,
+      "tag": "0010_card_scope_rel_indexes",
+      "breakpoints": true
     }
   ]
 }

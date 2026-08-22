@@ -1,5 +1,57 @@
 import * as api from "./lib/project-api";
+import type { CardWithGlue, GlueRel } from "$lib/types";
 import type { ProjectState } from "./project-state.svelte.js";
+
+/**
+ * Undoing an optimistic edit, by field and by card rather than by restoring the array the
+ * edit started from.
+ *
+ * The whole-array form was wrong whenever two edits overlapped. Each one captured
+ * `state.cards` before its request and put that copy back on failure, so a rollback also
+ * reverted every change applied in the meantime — a card moved to another bundle would
+ * silently jump back because an unrelated delete failed. The poll is held off while a
+ * mutation is pending (`ProjectState.mutationFetcher`), but nothing serializes the user's
+ * own clicks, and the second edit is the one that loses.
+ *
+ * These are applied against whatever the board holds at the moment the failure lands, so
+ * an edit that succeeded alongside is left where it is.
+ */
+function fieldSnapshot<K extends keyof CardWithGlue>(
+  cards: CardWithGlue[],
+  cardIds: Iterable<string>,
+  field: K,
+): Map<string, CardWithGlue[K]> {
+  const wanted = new Set(cardIds);
+  const previous = new Map<string, CardWithGlue[K]>();
+  for (const card of cards) if (wanted.has(card.id)) previous.set(card.id, card[field]);
+  return previous;
+}
+
+function restoreField<K extends keyof CardWithGlue>(
+  cards: CardWithGlue[],
+  field: K,
+  previous: Map<string, CardWithGlue[K]>,
+): CardWithGlue[] {
+  return cards.map((card) =>
+    previous.has(card.id) ? { ...card, [field]: previous.get(card.id)! } : card,
+  );
+}
+
+/**
+ * Puts removed rows back, skipping any the board has since regained. They land at the end
+ * rather than where they were, which changes nothing on the canvas: cards are stacked by
+ * `zIndex` within their layer, not by their place in this list — `handleSquashCard`
+ * already appends for the same reason.
+ */
+function reinsert<T extends { id: string }>(current: T[], removed: T[]): T[] {
+  const present = new Set(current.map(({ id }) => id));
+  return [...current, ...removed.filter(({ id }) => !present.has(id))];
+}
+
+function reinsertGlueRels(current: GlueRel[], removed: GlueRel[]): GlueRel[] {
+  const present = new Set(current.map(({ cardId }) => cardId));
+  return [...current, ...removed.filter(({ cardId }) => !present.has(cardId))];
+}
 
 /**
  * The `stacking` a layer move answers with, as a lookup. Read defensively: an older
@@ -23,22 +75,21 @@ export function createProjectActions(state: ProjectState) {
   async function handleCardBundleChange(newBundleId: string) {
     if (!state.selection.composerCard) return;
     const cardId = state.selection.composerCard.id;
-    const prevCards = state.cards;
+    const previous = fieldSnapshot(state.cards, [cardId], "bundleId");
     state.cards = state.cards.map((c) => (c.id === cardId ? { ...c, bundleId: newBundleId } : c));
     const res = await api.updateCard(state.mutationFetcher, state.projectId, cardId, {
       bundleId: newBundleId,
     });
     if (!res.ok) {
-      state.cards = prevCards;
+      state.cards = restoreField(state.cards, "bundleId", previous);
       state.setError("Failed to change bundle");
     }
   }
 
   async function handleSelectionBundleChange(cardIds: string[], newBundleId: string) {
-    const prevCards = state.cards;
-    state.cards = state.cards.map((c) =>
-      cardIds.includes(c.id) ? { ...c, bundleId: newBundleId } : c,
-    );
+    const previous = fieldSnapshot(state.cards, cardIds, "bundleId");
+    const moving = new Set(cardIds);
+    state.cards = state.cards.map((c) => (moving.has(c.id) ? { ...c, bundleId: newBundleId } : c));
     const res = await api.batchReassignBundle(
       state.mutationFetcher,
       state.projectId,
@@ -46,7 +97,7 @@ export function createProjectActions(state: ProjectState) {
       newBundleId,
     );
     if (!res.ok) {
-      state.cards = prevCards;
+      state.cards = restoreField(state.cards, "bundleId", previous);
       state.setError("Failed to change bundle for selected cards");
     }
   }
@@ -96,27 +147,42 @@ export function createProjectActions(state: ProjectState) {
     await unglue(cardIds, "Failed to unglue cards");
   }
 
-  async function handleDeleteSelected(cardIds: string[]) {
+  /**
+   * Takes cards off the board before the server has confirmed they are gone, and hands
+   * back the undo for it. Delete and move-to-project do exactly the same thing here and
+   * differ only in the request they make and in what they say when it fails.
+   */
+  function removeCardsOptimistically(cardIds: string[]): () => void {
     const cardIdSet = new Set(cardIds);
-    const prevCards = state.cards;
-    const prevGlueRels = state.glueRels;
-    const prevSelectedCards = state.selection.selectedCards;
-    const prevPrimarySelectedId = state.selection.primarySelectedId;
+    const removedCards = state.cards.filter((c) => cardIdSet.has(c.id));
+    const removedGlueRels = state.glueRels.filter((r) => cardIdSet.has(r.cardId));
+    const wasSelected = [...state.selection.selectedCards].filter((id) => cardIdSet.has(id));
+    const pid = state.selection.primarySelectedId;
+    const wasPrimary = pid !== null && cardIdSet.has(pid) ? pid : null;
 
     state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
     state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
     state.selection.selectedCards = new Set(
       [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
     );
-    const pid = state.selection.primarySelectedId;
-    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
+    if (wasPrimary) state.selection.primarySelectedId = null;
 
+    return () => {
+      state.cards = reinsert(state.cards, removedCards);
+      state.glueRels = reinsertGlueRels(state.glueRels, removedGlueRels);
+      state.selection.selectedCards = new Set([...state.selection.selectedCards, ...wasSelected]);
+      // Only when nothing has claimed it since: the user may have picked another card while
+      // the request was in flight, and that choice is newer than this undo.
+      if (wasPrimary && state.selection.primarySelectedId === null)
+        state.selection.primarySelectedId = wasPrimary;
+    };
+  }
+
+  async function handleDeleteSelected(cardIds: string[]) {
+    const undo = removeCardsOptimistically(cardIds);
     const res = await api.deleteCards(state.mutationFetcher, state.projectId, cardIds);
     if (!res.ok) {
-      state.cards = prevCards;
-      state.glueRels = prevGlueRels;
-      state.selection.selectedCards = prevSelectedCards;
-      state.selection.primarySelectedId = prevPrimarySelectedId;
+      undo();
       state.setError("Failed to delete cards");
     }
   }
@@ -158,20 +224,7 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleMoveSelectionToProject(cardIds: string[], targetProjectId: string) {
-    const cardIdSet = new Set(cardIds);
-    const prevCards = state.cards;
-    const prevGlueRels = state.glueRels;
-    const prevSelectedCards = state.selection.selectedCards;
-    const prevPrimarySelectedId = state.selection.primarySelectedId;
-
-    state.cards = state.cards.filter((c) => !cardIdSet.has(c.id));
-    state.glueRels = state.glueRels.filter((r) => !cardIdSet.has(r.cardId));
-    state.selection.selectedCards = new Set(
-      [...state.selection.selectedCards].filter((id) => !cardIdSet.has(id)),
-    );
-    const pid = state.selection.primarySelectedId;
-    if (pid !== null && cardIdSet.has(pid)) state.selection.primarySelectedId = null;
-
+    const undo = removeCardsOptimistically(cardIds);
     const res = await api.moveCardsToProject(
       state.mutationFetcher,
       state.projectId,
@@ -179,10 +232,7 @@ export function createProjectActions(state: ProjectState) {
       targetProjectId,
     );
     if (!res.ok) {
-      state.cards = prevCards;
-      state.glueRels = prevGlueRels;
-      state.selection.selectedCards = prevSelectedCards;
-      state.selection.primarySelectedId = prevPrimarySelectedId;
+      undo();
       state.setError("Failed to move cards to project");
     }
   }
@@ -331,8 +381,9 @@ export function createProjectActions(state: ProjectState) {
   }
 
   async function handleSelectionLayerChange(cardIds: string[], layerId: string) {
-    const prevCards = state.cards;
-    state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, layerId } : c));
+    const previous = fieldSnapshot(state.cards, cardIds, "layerId");
+    const moving = new Set(cardIds);
+    state.cards = state.cards.map((c) => (moving.has(c.id) ? { ...c, layerId } : c));
     const res = await api.batchReassignLayer(
       state.mutationFetcher,
       state.projectId,
@@ -340,7 +391,7 @@ export function createProjectActions(state: ProjectState) {
       layerId,
     );
     if (!res.ok) {
-      state.cards = prevCards;
+      state.cards = restoreField(state.cards, "layerId", previous);
       state.setError("Failed to move cards to another layer");
       return;
     }

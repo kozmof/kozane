@@ -1,18 +1,9 @@
 import type { EntryGenerator, PageServerLoad } from "./$types";
-import type { TaskspaceSummary } from "$lib/types";
 import { error } from "@sveltejs/kit";
 import { getDb } from "../../db/client";
-import { getProject, getAllProjects } from "../../db/api/project";
-import { getAllBundles } from "../../db/api/bundle";
-import { getAllLayers } from "../../db/api/layer";
-import { getAllWarps } from "../../db/api/warp";
-import { getScopesInProject } from "../../db/api/scope";
-import { getCardsByBundles } from "../../db/api/card";
-import { getGlueRelsByCards } from "../../db/api/glue";
-import { getScopeRelsByCards } from "../../db/api/scope-rel";
-import { cardsWithGlueIds } from "./lib/project-page";
+import { getAllProjects } from "../../db/api/project";
+import { loadProjectSnapshot } from "./lib/project-snapshot";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
-import { getTaskspacesInProject } from "../../db/api/taskspace";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 
 // Static export (kozane net ssg generate): prerender one page per project. `entries` tells
@@ -34,56 +25,23 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
   const { projectId } = params;
 
-  const project = await getProject({ db, projectId });
-  if (!project) throw error(404, "Project not found");
-
-  const [bundles, layers, warps, scopes, allProjects] = await Promise.all([
-    getAllBundles({ db, projectId }),
-    getAllLayers({ db, projectId }),
-    getAllWarps({ db, projectId }),
-    getScopesInProject({ db, projectId }),
+  // The same read `/api/snapshot` makes, so the board this page opens on and the board the
+  // poll keeps it at are assembled by one piece of code rather than two.
+  const [loaded, allProjects, warpDirectory] = await Promise.all([
+    loadProjectSnapshot({ db, projectId, includeTaskspacePaths: !prerender }),
     getAllProjects({ db }),
-  ]);
-
-  const bundleIds = bundles.map((b) => b.id);
-  const cards = await getCardsByBundles({ db, bundleIds });
-  const cardIds = cards.map((c) => c.id);
-
-  const [glueRels, scopeRels, taskspaces, warpDirectory] = await Promise.all([
-    getGlueRelsByCards({ db, cardIds }),
-    getScopeRelsByCards({ db, cardIds }),
-    getTaskspacesInProject({ db, projectId }),
     // The other projects' warps, for the Shift+arrow palette. Baked into a static export
-    // too, which is why the palette works there without an endpoint to call.
+    // too, which is why the palette works there without an endpoint to call. Independent
+    // of the board itself, so it is read alongside rather than after it.
     loadWarpDirectory({ db, projectId }),
   ]);
+  if (!loaded) throw error(404, "Project not found");
 
   return {
-    project,
-    bundles,
-    layers,
-    warps,
+    ...loaded.snapshot,
+    project: loaded.project,
     warpDirectory,
     otherProjects: allProjects.filter((p) => p.id !== projectId),
-    cards: cardsWithGlueIds(cards, glueRels),
-    glueRels,
-    scopes,
-    scopeRels,
-    taskspaces: taskspaces.map(
-      (taskspace) =>
-        ({
-          id: taskspace.id,
-          name: taskspace.name,
-          scopeId: taskspace.scopeId,
-          // A taskspace path names a directory on the machine the workspace lives on, and a
-          // static export is built to be published — to GitHub Pages, as the README
-          // describes. Page data is baked into the output, so a path put here is served to
-          // anyone who visits, whether or not the UI draws it. The board's own content is
-          // the point of the export; the local paths behind it are not part of it.
-          path: prerender ? null : taskspace.path,
-          pathKind: taskspace.pathKind,
-        }) satisfies TaskspaceSummary,
-    ),
     uiConfig: getWorkspaceUiConfig(),
     readonly,
   };

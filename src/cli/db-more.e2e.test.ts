@@ -88,8 +88,11 @@ describe("additional database CLI branches", () => {
           "DROP TABLE warp",
           // Indexes added after 0004 belong to the rolled-back migrations too: the
           // journal says they were never applied, so leaving one behind makes the
-          // re-apply fail on a name that already exists.
+          // re-apply fail on a name that already exists. Only the ones on tables this
+          // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
+          // and `warp`'s with the table it drops.
           "DROP INDEX IF EXISTS taskspace_scope",
+          "DROP INDEX IF EXISTS scope_rel_card",
           "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
         ],
         "write",
@@ -156,8 +159,11 @@ describe("additional database CLI branches", () => {
         "DROP TABLE warp",
         // Indexes added after 0004 belong to the rolled-back migrations too: the
         // journal says they were never applied, so leaving one behind makes the
-        // re-apply fail on a name that already exists.
+        // re-apply fail on a name that already exists. Only the ones on tables this
+        // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
+        // and `warp`'s with the table it drops.
         "DROP INDEX IF EXISTS taskspace_scope",
+        "DROP INDEX IF EXISTS scope_rel_card",
         "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
       ]) {
         await client.execute(sql);

@@ -87,12 +87,30 @@ export function isBrowserNavigation(request: Request): boolean {
   return (request.headers.get("accept") ?? "").includes("text/html");
 }
 
+/**
+ * The policy for a response Kozane built by hand rather than one SvelteKit rendered — the
+ * two 503s, the 426, the 401, the 429, the login redirect.
+ *
+ * Pages already carry a policy and a stricter one: `kit.csp` in `svelte.config.js` is
+ * applied while the page is rendered, with nonces for the scripts SvelteKit inlines. This
+ * is only for the responses that never reach that code, which would otherwise name no
+ * policy at all. They are plain text or empty, so `none` across the board costs them
+ * nothing.
+ *
+ * Set rather than overwritten only when absent, so a rendered page keeps the policy that
+ * was built for it. (The prerendered export carries its policy in a `<meta>` tag instead,
+ * which this could not see — but that path returns before `applySecurityHeaders` is
+ * reached, so the question does not arise.)
+ */
+const FALLBACK_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+
 export function applySecurityHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.set("referrer-policy", "no-referrer");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-frame-options", "DENY");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
+  if (!headers.has("content-security-policy")) headers.set("content-security-policy", FALLBACK_CSP);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

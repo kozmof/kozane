@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   _resetWorkspaceRootForTest,
   getTaskspaceDefaultDir,
+  getUiConfigForRoot,
   getWorkspaceUiConfig,
 } from "./config.js";
 import { DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
@@ -83,5 +84,56 @@ describe("getTaskspaceDefaultDir", () => {
     writeConfig({ name: "w", taskspace: { defaultDir: "work" } });
 
     expect(getTaskspaceDefaultDir(root)).toBe("work");
+  });
+});
+
+describe("two workspaces in one process", () => {
+  /**
+   * `getUiConfigForRoot` takes its root from the caller, so a single process can be asked
+   * about two workspaces — and used to hold one cache slot for whichever was asked about
+   * last. Each read evicted the other's entry, and the answers were only ever right
+   * because the signature happened to carry the inode.
+   */
+  it("keeps each workspace's settings apart", () => {
+    const other = mkdtempSync(join(tmpdir(), "kozane-config-other-"));
+    mkdirSync(join(other, ".kozane"));
+    try {
+      writeConfig({ name: "w", ui: { defaultZoom: 1.5 } });
+      writeFileSync(
+        join(other, ".kozane", "config.json"),
+        JSON.stringify({ name: "other", ui: { defaultZoom: 2.5 } }),
+      );
+
+      // Interleaved, because reading one must not disturb the other.
+      expect(getUiConfigForRoot(root).defaultZoom).toBe(1.5);
+      expect(getUiConfigForRoot(other).defaultZoom).toBe(2.5);
+      expect(getUiConfigForRoot(root).defaultZoom).toBe(1.5);
+      expect(getUiConfigForRoot(other).defaultZoom).toBe(2.5);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  it("still re-reads a workspace whose file changed under it", () => {
+    const other = mkdtempSync(join(tmpdir(), "kozane-config-other-"));
+    mkdirSync(join(other, ".kozane"));
+    try {
+      const otherConfig = join(other, ".kozane", "config.json");
+      writeConfig({ name: "w", ui: { defaultZoom: 1.5 } });
+      writeFileSync(otherConfig, JSON.stringify({ name: "other", ui: { defaultZoom: 2.5 } }));
+      expect(getUiConfigForRoot(root).defaultZoom).toBe(1.5);
+      expect(getUiConfigForRoot(other).defaultZoom).toBe(2.5);
+
+      // A different length as well as different bytes: `fileSignature` documents that two
+      // same-length rewrites inside one filesystem timestamp tick are indistinguishable to
+      // it, and this test is about the cache being keyed per workspace, not about closing
+      // that gap.
+      writeFileSync(otherConfig, JSON.stringify({ name: "other", ui: { defaultZoom: 3.25 } }));
+
+      expect(getUiConfigForRoot(other).defaultZoom).toBe(3.25);
+      expect(getUiConfigForRoot(root).defaultZoom).toBe(1.5);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
   });
 });

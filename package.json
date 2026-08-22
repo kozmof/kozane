@@ -41,7 +41,7 @@
     "pack:check-name": "v=$(echo $npm_package_version) && name='kozane-'$v && echo $name",
     "pack:check-counts": "name=$(pnpm run --silent pack:check-name) && echo $(tar -tzf /tmp/$name.tgz | wc -l)",
     "pack:check-list": "name=$(pnpm run --silent pack:check-name) && tar -tzf /tmp/$name.tgz | sort",
-    "pack:check-compare": "counts=$(pnpm run --silent pack:check-counts) && if [ $counts -ne 356 ]; then echo \"ERROR: expected 356 files in tgz, got $counts. Listing:\"; pnpm run --silent pack:check-list; exit 1; else echo OK; fi",
+    "pack:check-compare": "counts=$(pnpm run --silent pack:check-counts) && if [ $counts -ne 360 ]; then echo \"ERROR: expected 360 files in tgz, got $counts. Listing:\"; pnpm run --silent pack:check-list; exit 1; else echo OK; fi",
     "preflight": "TMPDIR=/tmp npm_config_cache=/tmp/kozane-npm-cache pnpm publish --dry-run",
     "pre-release-check": "pnpm preflight && pnpm pack:check",
     "clean": "node scripts/clean.mjs",

@@ -80,3 +80,22 @@ describe("server security", () => {
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   });
 });
+
+describe("content security policy", () => {
+  it("names a policy for a response Kozane built itself", () => {
+    const response = applySecurityHeaders(new Response("Unauthorized", { status: 401 }));
+    expect(response.headers.get("content-security-policy")).toBe(
+      "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    );
+  });
+
+  it("leaves the policy SvelteKit built for a rendered page alone", () => {
+    const rendered = new Response("<html></html>", {
+      headers: { "content-security-policy": "default-src 'self'; script-src 'nonce-abc'" },
+    });
+
+    expect(applySecurityHeaders(rendered).headers.get("content-security-policy")).toBe(
+      "default-src 'self'; script-src 'nonce-abc'",
+    );
+  });
+});

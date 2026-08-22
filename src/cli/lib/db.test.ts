@@ -36,7 +36,7 @@ describe("getMigrationStatus", () => {
     if (status.state !== "missing") return;
     expect(status.pendingCount).toBeGreaterThan(0);
     // The newest migration in drizzle/: update this when another one is generated.
-    expect(status.latest?.tag).toBe("0009_taskspace_scope_index");
+    expect(status.latest?.tag).toBe("0010_card_scope_rel_indexes");
   });
 
   it("reports current after migrations are applied", async () => {

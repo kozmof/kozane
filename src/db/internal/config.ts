@@ -20,11 +20,29 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
 // beforeEach. After the first resolution the value is cached for the lifetime
 // of the process (production never changes the workspace mid-run).
 let _workspaceRoot: string | null | undefined = undefined;
-// Which config file the two caches below were built from. `undefined` means nothing has
-// been read yet; `null` means there was no readable file, which is itself worth caching.
-let _configSignature: string | null | undefined = undefined;
-let _parsedConfig: Record<string, unknown> | null = null;
-let _uiConfig: UiConfig | undefined = undefined;
+/**
+ * What was last read out of one config file, keyed by that file's path.
+ *
+ * Per path rather than one slot for whichever root was asked about last, because
+ * `getUiConfigForRoot` takes a root from its caller and the CLI hands it one it found
+ * itself. Two roots in a single process shared the one slot, so each read evicted the
+ * other's and the cache stopped being a cache — and the correctness of the arrangement
+ * rested entirely on `fileSignature` including the inode, which is a lot to ask of a
+ * field documented as a heuristic about *versions of one file*.
+ *
+ * `signature: null` records that there was no readable file, which is worth remembering
+ * too. Unbounded in principle; in practice a process sees one workspace, or the handful a
+ * test suite creates.
+ */
+type ConfigCacheEntry = {
+  signature: string | null;
+  parsed: Record<string, unknown> | null;
+  /** Derived from `parsed`, so it lives and dies with the entry rather than beside it. */
+  ui?: UiConfig;
+};
+const configCache = new Map<string, ConfigCacheEntry>();
+/** The UI defaults handed out when there is no workspace at all, and so no file to key by. */
+let _rootlessUiConfig: UiConfig | undefined = undefined;
 
 function resolveWorkspaceRoot(): string | null {
   if (_workspaceRoot !== undefined) return _workspaceRoot;
@@ -37,9 +55,8 @@ function resolveWorkspaceRoot(): string | null {
 // For tests only — resets the cache so a fresh KOZANE_WORKSPACE_ROOT is picked up.
 export function _resetWorkspaceRootForTest(): void {
   _workspaceRoot = undefined;
-  _configSignature = undefined;
-  _parsedConfig = null;
-  _uiConfig = undefined;
+  configCache.clear();
+  _rootlessUiConfig = undefined;
 }
 
 function configPath(root: string): string {
@@ -53,27 +70,35 @@ function configPath(root: string): string {
  * user is invited to hand-edit — settings that appeared to do nothing until the server was
  * restarted would look like settings that do not work.
  */
-function readParsedConfig(root: string): Record<string, unknown> | null {
-  const signature = fileSignature(configPath(root));
-  if (_configSignature !== undefined && _configSignature === signature) return _parsedConfig;
-  _configSignature = signature;
-  // Derived from the same bytes, so it is rebuilt on the next call rather than left stale.
-  _uiConfig = undefined;
-  if (signature === null) {
-    _parsedConfig = null;
+function parseConfigFile(path: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf-8"));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
     return null;
   }
-  try {
-    const raw = readFileSync(configPath(root), "utf-8");
-    const parsed: unknown = JSON.parse(raw);
-    _parsedConfig =
-      typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
-        ? (parsed as Record<string, unknown>)
-        : null;
-  } catch {
-    _parsedConfig = null;
-  }
-  return _parsedConfig;
+}
+
+/** The cache entry for `root`, re-read whenever the file behind it has changed. */
+function configEntry(root: string): ConfigCacheEntry {
+  const path = configPath(root);
+  const signature = fileSignature(path);
+  const cached = configCache.get(path);
+  if (cached && cached.signature === signature) return cached;
+  // A fresh entry rather than a mutated one, which is what drops the derived `ui` with the
+  // bytes it came from instead of leaving it to be cleared by hand.
+  const entry: ConfigCacheEntry = {
+    signature,
+    parsed: signature === null ? null : parseConfigFile(path),
+  };
+  configCache.set(path, entry);
+  return entry;
+}
+
+function readParsedConfig(root: string): Record<string, unknown> | null {
+  return configEntry(root).parsed;
 }
 
 function workspaceDbUrl(): string | null {
@@ -100,14 +125,13 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
  * would otherwise rest on. `getTaskspaceDefaultDir` takes a root for the same reason.
  */
 export function getUiConfigForRoot(root: string): UiConfig {
-  // Called first: it clears the derived cache below when the file has changed.
-  const parsed = readParsedConfig(root);
-  return (_uiConfig ??= { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(parsed) });
+  const entry = configEntry(root);
+  return (entry.ui ??= { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(entry.parsed) });
 }
 
 export function getWorkspaceUiConfig(): UiConfig {
   const root = resolveWorkspaceRoot();
-  if (!root) return (_uiConfig ??= { ...DEFAULT_UI_CONFIG });
+  if (!root) return (_rootlessUiConfig ??= { ...DEFAULT_UI_CONFIG });
   return getUiConfigForRoot(root);
 }
 

@@ -157,35 +157,49 @@ export const taskspaceTable = sqliteTable(
   (t) => [index("taskspace_scope").on(t.scopeId)],
 );
 
-export const cardTable = sqliteTable("card", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  bundleId: text("bundle_id")
-    .notNull()
-    .references(() => bundleTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  // Every card sits on exactly one layer of its project. Callers that omit it get the
-  // project's default layer (see addCard).
-  layerId: text("layer_id")
-    .notNull()
-    .references(() => layerTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  taskspaceId: text("taskspace_id").references(() => taskspaceTable.id, {
-    // When taskspaceId is deleted, card is retained but set to null.
-    onDelete: "set null",
-    onUpdate: "cascade",
-  }),
-  content: text().notNull(),
-  posX: integer("pos_x").notNull().default(0),
-  posY: integer("pos_y").notNull().default(0),
-  zIndex: integer("z_index").notNull().default(0),
-  /**
-   * How wide the card is drawn, in canvas pixels. Nullable, and null is the ordinary
-   * case: a card without one is drawn at `ui.defaultCardWidth` and keeps following that
-   * setting as it changes. Only a card resized on the board pins a width of its own, so
-   * widening every card is still one line of config rather than a pass over the table.
-   */
-  width: integer(),
-});
+export const cardTable = sqliteTable(
+  "card",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    bundleId: text("bundle_id")
+      .notNull()
+      .references(() => bundleTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    // Every card sits on exactly one layer of its project. Callers that omit it get the
+    // project's default layer (see addCard).
+    layerId: text("layer_id")
+      .notNull()
+      .references(() => layerTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    taskspaceId: text("taskspace_id").references(() => taskspaceTable.id, {
+      // When taskspaceId is deleted, card is retained but set to null.
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    content: text().notNull(),
+    posX: integer("pos_x").notNull().default(0),
+    posY: integer("pos_y").notNull().default(0),
+    zIndex: integer("z_index").notNull().default(0),
+    /**
+     * How wide the card is drawn, in canvas pixels. Nullable, and null is the ordinary
+     * case: a card without one is drawn at `ui.defaultCardWidth` and keeps following that
+     * setting as it changes. Only a card resized on the board pins a width of its own, so
+     * widening every card is still one line of config rather than a pass over the table.
+     */
+    width: integer(),
+  },
+  (t) => [
+    // Read on every page load and on every snapshot poll, by `getCardsByBundles`: the board
+    // asks for the cards of this project's bundles once a second for as long as a tab is
+    // open. Without it SQLite answers that with a full scan of `card`, the largest table
+    // here, per poll per tab.
+    index("card_bundle").on(t.bundleId),
+    // `reassignLayerCards` selects by layer alone — deleting a layer moves its cards to the
+    // default one, and the scan it would otherwise be is over every card in the workspace,
+    // not just the layer's.
+    index("card_layer").on(t.layerId),
+  ],
+);
 
 export const glueTable = sqliteTable("glue", {
   id: text("id")
@@ -211,7 +225,13 @@ export const scopeRelTable = sqliteTable(
       .notNull()
       .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
   },
-  (t) => [primaryKey({ columns: [t.scopeId, t.cardId] })],
+  (t) => [
+    primaryKey({ columns: [t.scopeId, t.cardId] }),
+    // The primary key leads with `scope_id`, so it cannot answer a lookup by card — and
+    // `getScopeRelsByCards` is exactly that, once per page load and once per snapshot poll.
+    // Same argument as `taskspace_scope`, on the table that grows fastest.
+    index("scope_rel_card").on(t.cardId),
+  ],
 );
 
 // Relations enable the .query.* relational API (db.query.projectTable.findMany({ with: { bundles: true } }))

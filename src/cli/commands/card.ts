@@ -280,13 +280,23 @@ export async function cardShow(requestedId: string): Promise<void> {
   try {
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
-    const cards = await db.select({ id: cardTable.id, content: cardTable.content }).from(cardTable);
+    // Ids alone: resolving a short id needs every id in the workspace, but printing one
+    // card needs one card's text. Selected together, `kozane card show` read the whole
+    // content column — every card of every project — to put a single card on stdout.
+    const cards = await db.select({ id: cardTable.id }).from(cardTable);
     const cardId = resolveShortId(
       requestedId,
       cards.map(({ id }) => id),
       "Card",
     );
-    const card = findById(cards, cardId, "Card");
+    const card = await db
+      .select({ content: cardTable.content })
+      .from(cardTable)
+      .where(eq(cardTable.id, cardId))
+      .get();
+    // Not `findById`: the row is fetched by a second query rather than found in the list
+    // the id was resolved against, which is the case its docstring warns a `!` would break.
+    if (!card) throw new Error(`Card not found: ${requestedId}`);
     console.log(card.content);
   } catch (error) {
     fail(error);
@@ -297,12 +307,13 @@ export async function cardNearest(requestedId: string): Promise<void> {
   try {
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
-    const cards = await db
+    // Positions first, without the text. Resolving a short id needs every card in the
+    // workspace, but only the origin's own project is ever printed — carrying `content`
+    // through this pass read every other project's cards to throw them away again.
+    const placed = await db
       .select({
         id: cardTable.id,
         projectId: bundleTable.projectId,
-        bundle: bundleTable.name,
-        content: cardTable.content,
         posX: cardTable.posX,
         posY: cardTable.posY,
       })
@@ -310,12 +321,24 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
     const cardId = resolveShortId(
       requestedId,
-      cards.map(({ id }) => id),
+      placed.map(({ id }) => id),
       "Card",
     );
-    const origin = findById(cards, cardId, "Card");
+    const origin = findById(placed, cardId, "Card");
+
+    // Now the text, for the one project that is about to be printed.
+    const cards = await db
+      .select({
+        id: cardTable.id,
+        bundle: bundleTable.name,
+        content: cardTable.content,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+      })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .where(eq(bundleTable.projectId, origin.projectId));
     const sorted = cards
-      .filter(({ projectId }) => projectId === origin.projectId)
       .map((card) => ({
         ...card,
         distance: Math.hypot(card.posX - origin.posX, card.posY - origin.posY),
