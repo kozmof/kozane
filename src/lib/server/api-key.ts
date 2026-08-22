@@ -1,16 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
-import {
-  chmodSync,
-  closeSync,
-  fsyncSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileSignature } from "./file-signature.js";
+import { writeFileAtomic } from "./atomic-write.js";
 
 export const API_KEY_FILE = "api.json";
 export const API_KEY_COOKIE = "kozane_api_key";
@@ -22,27 +14,10 @@ export function apiKeyPath(workspaceRoot: string): string {
 
 /** Writes a key file without exposing partial contents after a crash or disk-full error. */
 export function writeApiKey(workspaceRoot: string, value: ApiKeyFile): void {
-  const target = apiKeyPath(workspaceRoot);
-  const temporary = `${target}.tmp-${process.pid}-${Date.now()}`;
-  let fd: number | undefined;
-  try {
-    fd = openSync(temporary, "wx", 0o600);
-    writeFileSync(fd, JSON.stringify(value, null, 2) + "\n");
-    fsyncSync(fd);
-    closeSync(fd);
-    fd = undefined;
-    renameSync(temporary, target);
-    chmodSync(target, 0o600);
-    const directoryFd = openSync(join(workspaceRoot, ".kozane"), "r");
-    try {
-      fsyncSync(directoryFd);
-    } finally {
-      closeSync(directoryFd);
-    }
-  } finally {
-    if (fd !== undefined) closeSync(fd);
-    rmSync(temporary, { force: true });
-  }
+  // Owner-only: the file holds the workspace's one credential.
+  writeFileAtomic(apiKeyPath(workspaceRoot), JSON.stringify(value, null, 2) + "\n", {
+    mode: 0o600,
+  });
 }
 
 /**

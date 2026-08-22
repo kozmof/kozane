@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
+import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
 import { type UiConfig, DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
 import { type WorkspaceConfig, validateWorkspaceConfig } from "./config-schema.js";
@@ -47,9 +48,17 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
   return value;
 }
 
+/**
+ * Writes the workspace config atomically. Not only for the half-written file a crash would
+ * otherwise leave behind in the one file that says a workspace is a workspace: the rename
+ * gives it a new inode, which is how the readers' cache (`db/internal/config.ts`, keyed by
+ * {@link fileSignature}) tells a rewrite from the version it already parsed. Written in
+ * place, two configs of the same length written inside one filesystem timestamp tick are
+ * indistinguishable, and the second would go unread.
+ */
 export function writeConfig(projectRoot: string, config: WorkspaceConfig): void {
   const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  writeFileAtomic(configPath, JSON.stringify(config, null, 2) + "\n");
 }
 
 export function dbPath(projectRoot: string): string {
