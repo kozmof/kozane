@@ -4,6 +4,7 @@ import {
   addTaskspace,
   getTaskspace,
   getAllTaskspaces,
+  getTaskspacesInProject,
   updateTaskspace,
   deleteTaskspace,
 } from "./taskspace.js";
@@ -146,5 +147,51 @@ describe("deleteTaskspace", () => {
   it("throws NotFoundError for a missing id", async () => {
     const { db } = await setup();
     await expect(deleteTaskspace({ db, taskspaceId: "ghost" })).rejects.toThrow(NotFoundError);
+  });
+});
+
+describe("getTaskspacesInProject", () => {
+  const names = (rows: { name: string }[]) => rows.map((r) => r.name).sort();
+
+  async function twoProjects() {
+    const d = await createTestDB();
+    const p1 = await addProject({ db: d, name: "P1" });
+    const p2 = await addProject({ db: d, name: "P2" });
+    return { d, p1, p2 };
+  }
+
+  it("returns this project's taskspaces and not another project's", async () => {
+    const { d, p1, p2 } = await twoProjects();
+    await addTaskspace({ db: d, projectId: p1, name: "mine" });
+    await addTaskspace({ db: d, projectId: p2, name: "theirs" });
+
+    expect(names(await getTaskspacesInProject({ db: d, projectId: p1 }))).toEqual(["mine"]);
+    expect(names(await getTaskspacesInProject({ db: d, projectId: p2 }))).toEqual(["theirs"]);
+  });
+
+  it("returns a taskspace with no project to every project", async () => {
+    const { d, p1, p2 } = await twoProjects();
+    // A reattach from a marker naming no project leaves project_id null; that row is
+    // unplaced rather than somebody else's, so it must not be invisible everywhere.
+    await addTaskspace({ db: d, name: "unassigned" });
+
+    expect(names(await getTaskspacesInProject({ db: d, projectId: p1 }))).toEqual(["unassigned"]);
+    expect(names(await getTaskspacesInProject({ db: d, projectId: p2 }))).toEqual(["unassigned"]);
+  });
+
+  it("returns an empty list for a project with nothing of its own", async () => {
+    const { d, p1, p2 } = await twoProjects();
+    await addTaskspace({ db: d, projectId: p2, name: "theirs" });
+
+    expect(await getTaskspacesInProject({ db: d, projectId: p1 })).toEqual([]);
+  });
+
+  it("carries the scope attachment through", async () => {
+    const { d, p1 } = await twoProjects();
+    const scopeId = await addScope({ db: d, name: "S" });
+    await addTaskspace({ db: d, projectId: p1, scopeId, name: "scoped" });
+
+    const [row] = await getTaskspacesInProject({ db: d, projectId: p1 });
+    expect(row.scopeId).toBe(scopeId);
   });
 });

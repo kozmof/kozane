@@ -1,0 +1,1 @@
+CREATE INDEX `taskspace_scope` ON `taskspace` (`scope_id`);

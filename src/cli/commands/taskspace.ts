@@ -15,7 +15,14 @@ import {
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { resolveProjectId } from "../lib/project-selection.js";
-import { addTaskspace, deleteTaskspace } from "../../db/api/taskspace.js";
+import {
+  addTaskspace,
+  deleteTaskspace,
+  getAllTaskspaces,
+  getTaskspacesInProject,
+} from "../../db/api/taskspace.js";
+import { getAllProjects } from "../../db/api/project.js";
+import { getAllScopes } from "../../db/api/scope.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
 
@@ -242,4 +249,62 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
   console.log(`  id   : ${shortId(id, taskspaceIds)}`);
   console.log(`  name : ${name}`);
   console.log(`  path : ${targetDir}`);
+}
+
+// ─── taskspace list ────────────────────────────────────────────────────────────────
+
+export type TaskspaceListOptions = { project?: string };
+
+/**
+ * Every taskspace in the workspace, with the project and scope each one sits under.
+ *
+ * Workspace-wide on purpose: a board draws only its own project's taskspaces and the
+ * unassigned ones, so this is where a taskspace created from another project is visible at
+ * all. `--project` narrows it to exactly what that project's board would show, unassigned
+ * rows included.
+ */
+export async function taskspaceList(options: TaskspaceListOptions = {}): Promise<void> {
+  try {
+    const { root } = requireWorkspace();
+    const db = await createDb(commandDbUrl(resolve(root)));
+
+    // Short IDs are drawn against every taskspace in the workspace, so the ID printed for a
+    // row is the same one whether or not --project narrowed the list.
+    const all = await getAllTaskspaces({ db });
+    const taskspaceIds = all.map(({ id }) => id);
+
+    const projectId = options.project ? await resolveProjectId(db, options.project) : null;
+    const taskspaces = projectId ? await getTaskspacesInProject({ db, projectId }) : all;
+    if (taskspaces.length === 0) {
+      console.log(projectId ? "No taskspaces found in this project." : "No taskspaces found.");
+      return;
+    }
+
+    const projectNameById = new Map(
+      (await getAllProjects({ db })).map((project) => [project.id, project.name]),
+    );
+    const scopeNameById = new Map(
+      (await getAllScopes({ db })).map((scope) => [scope.id, scope.name]),
+    );
+
+    for (const taskspace of taskspaces) {
+      // An em dash in either column is a real state, not missing data: a taskspace with no
+      // project shows on every board, and one with no scope gathers no cards.
+      const project = taskspace.projectId
+        ? (projectNameById.get(taskspace.projectId) ?? taskspace.projectId)
+        : "—";
+      const scope = taskspace.scopeId
+        ? (scopeNameById.get(taskspace.scopeId) ?? taskspace.scopeId)
+        : "—";
+      const path = taskspace.path
+        ? resolveTaskspacePath(taskspace.path, taskspace.pathKind, root)
+        : "(no path)";
+      console.log(
+        `${shortId(taskspace.id, taskspaceIds)}  ${taskspace.name || "(unnamed)"}  ${project}  ${scope}  ${path}`,
+      );
+    }
+  } catch (error) {
+    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
 }

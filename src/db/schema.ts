@@ -96,8 +96,14 @@ export const warpTable = sqliteTable(
 export const scopeTable = sqliteTable(
   "scope",
   {
-    // A scope is intentionally cross-project. Do not add project_id here; projects see
-    // the shared scope list, while membership is expressed through scope_rel/card rows.
+    // A scope is intentionally cross-project. Do not add project_id here: a scope is
+    // placed by what refers to it — scope_rel/card rows, and taskspace.scope_id — not by
+    // a column, which is what lets one scope hold cards from several projects at once.
+    //
+    // That is not the same as every project seeing every scope. A board draws the scopes
+    // `getScopesInProject` selects, and a project_id here would make that a column read
+    // but would also make a shared scope impossible. The CLI keeps the workspace-wide
+    // view (`kozane scope list`).
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
@@ -112,33 +118,44 @@ export const scopeTable = sqliteTable(
 export const PATH_KINDS = ["project_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
-export const taskspaceTable = sqliteTable("taskspace", {
-  id: text("id")
-    .primaryKey()
-    .$defaultFn(() => uuidv7()),
-  // nullable: the CLI creates a taskspace without a project_id when the workspace has
-  // 0 projects or multiple projects and --project is not supplied. Cascade delete
-  // removes the record if the linked project is later deleted.
-  projectId: text("project_id").references(() => projectTable.id, {
-    onDelete: "cascade",
-    onUpdate: "cascade",
-  }),
-  scopeId: text("scope_id").references(() => scopeTable.id, {
-    // When scopeId is deleted, taskspace is retained but set to null.
-    onDelete: "set null",
-    onUpdate: "cascade",
-  }),
-  name: text().notNull().default(""),
-  path: text("path"),
-  pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("project_relative"),
-  lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const taskspaceTable = sqliteTable(
+  "taskspace",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    // nullable, but nothing writes a null on the ordinary paths: `taskspace create` and
+    // the HTTP route both resolve a project first, and `taskspace create` exits rather
+    // than proceed without one. What lands here empty is a reattach — `taskspace scan
+    // --apply --reattach` inserts from the on-disk marker, and a marker naming no project
+    // ("projectId": "") gives a record with none. Such a record is unplaced rather than
+    // another project's, which is why `getTaskspacesInProject` shows it on every board.
+    // Cascade delete removes the record if the linked project is later deleted.
+    projectId: text("project_id").references(() => projectTable.id, {
+      onDelete: "cascade",
+      onUpdate: "cascade",
+    }),
+    scopeId: text("scope_id").references(() => scopeTable.id, {
+      // When scopeId is deleted, taskspace is retained but set to null.
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    name: text().notNull().default(""),
+    path: text("path"),
+    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("project_relative"),
+    lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  // Read once per scope by `getScopesInProject`, which asks whether a scope has a
+  // taskspace at all and whether it has one of this project. Without this the board's
+  // once-a-second poll scans the whole table twice for every scope in the workspace.
+  (t) => [index("taskspace_scope").on(t.scopeId)],
+);
 
 export const cardTable = sqliteTable("card", {
   id: text("id")

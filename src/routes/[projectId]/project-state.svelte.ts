@@ -178,6 +178,9 @@ export class ProjectState {
     ) {
       this.sidebar.activeBundle = null;
     }
+    // A scope can leave this list without being deleted: `data.scopes` is narrowed to the
+    // ones this project draws, so an unattached scope another project has since claimed
+    // simply stops arriving. Either way it must not stay the active filter.
     if (
       this.sidebar.activeScope &&
       !data.scopes.some(({ id }) => id === this.sidebar.activeScope)

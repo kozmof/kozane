@@ -29,9 +29,11 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
   if (!(await getProject({ db, projectId: params.projectId })))
     throw error(404, "Project not found");
 
-  // Deliberately not filtered by projectId: taskspaces are cross-project (see the note in
-  // db/api/taskspace.ts), and the panel lists every taskspace of the active scope whatever
-  // project it was created from. Scoping here would blank out rows the panel still draws.
+  // Looked up by id alone. The board only ever asks about taskspaces it was given, and
+  // `getTaskspacesInProject` is what decides those — this project's and the unassigned
+  // ones. Repeating that filter here would buy nothing: the boundary that matters is the
+  // one `listTaskspaceDirectory` holds below, which keeps a request inside whichever
+  // taskspace directory it named regardless of how the row was found.
   const taskspace = await getTaskspace({ db, taskspaceId: params.taskspaceId });
   if (!taskspace) throw error(404, "Taskspace not found");
   if (!taskspace.path) throw error(404, "Taskspace has no directory");

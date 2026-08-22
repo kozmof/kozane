@@ -73,9 +73,21 @@ Scopes are the bridge between the card canvas and the filesystem. A taskspace fo
 stores an identity marker. Run `kozane card list` from that directory to read the scope's
 current cards directly from the database, regardless of which project they belong to.
 
+A board shows only the scopes its own project has reason to draw: those holding one of its
+cards, those one of its taskspaces is attached to, and those nothing anywhere refers to yet.
+A scope used only by another project is not on it. The CLI is the workspace-wide view —
+`kozane scope list` names every scope and the projects each one reaches, and
+`kozane taskspace list` does the same for taskspaces. Pass `--project` to either to see
+exactly what that project's board draws.
+
 Cards are added to a scope explicitly (via the UI's scope panel or `taskspace create --scope`).
-Deleting a scope from the UI removes that project's cards from it. The scope itself is
-only deleted when it has no member cards left across any project.
+Deleting a scope from the UI removes that project's cards from it. The scope itself is only
+deleted once nothing anywhere refers to it: no member cards in any project, and no
+taskspaces attached. A scope another project has attached a taskspace to but not yet filed
+cards into therefore survives, rather than being removed out from under it.
+
+`kozane scope delete` is the blunter one: it deletes the scope workspace-wide whatever
+still refers to it, leaving those taskspaces unscoped.
 
 ### Taskspaces
 
@@ -90,6 +102,17 @@ status and lists the cards associated directly with the taskspace.
 
 Taskspaces are discovered by `kozane taskspace scan`, which walks the directories listed
 in `config.taskspace.searchRoots` and reconciles what is on disk with the database.
+`kozane taskspace list` reads only the database and reports every taskspace with the
+project and scope it sits under.
+
+A taskspace records the project it was created for, and a board shows its own project's
+taskspaces. `taskspace create` always settles on one — `--project` if given, otherwise the
+default project, otherwise the only project there is — and exits with an error when none of
+those applies. It never creates a taskspace with no project.
+
+A record can still end up without one through `taskspace scan --apply --reattach`, which
+inserts from the on-disk marker: a marker naming no project gives a taskspace with none,
+and that taskspace appears on every board until something places it.
 
 ---
 
@@ -499,13 +522,21 @@ unique within the workspace.
 
 ### `kozane scope list`
 
-Lists all scopes using collision-safe short IDs.
+Lists every scope in the workspace using collision-safe short IDs, followed by the projects
+that scope reaches — through a card filed into it or a taskspace attached to it. A scope no
+project has reached yet is shown as `(unused)`; those are visible from every board.
 
 ```bash
 kozane scope list
+kozane scope list --project <projectId>
 ```
 
-If no scopes exist, the command prints `No scopes found.`
+`--project` narrows the list to what that project's board draws. Short IDs are always
+computed against every scope in the workspace, so an ID printed here is the same one
+whether or not the list was narrowed.
+
+If no scopes exist, the command prints `No scopes found.`, or
+`No scopes found in this project.` when `--project` was given.
 
 ### `kozane scope delete <id>`
 
@@ -850,6 +881,32 @@ Restored: .kozane/backups/kozane.20240101T120000.db
 
 ---
 
+### `kozane taskspace list`
+
+Lists every taskspace in the workspace as `<id>  <name>  <project>  <scope>  <path>`, using
+collision-safe short IDs. This is the workspace-wide view: a board draws only its own
+project's taskspaces plus the unassigned ones, so a taskspace created from another project
+is visible here and nowhere else.
+
+```bash
+kozane taskspace list
+kozane taskspace list --project <projectId>
+```
+
+`--project` narrows the list to what that project's board draws, which includes taskspaces
+with no project of their own. An em dash in the project or scope column is a real state
+rather than missing data: an unassigned taskspace appears on every board, and an unscoped
+one gathers no cards. Short IDs are always computed against every taskspace in the
+workspace, so an ID printed here is the same one whether or not the list was narrowed.
+
+If no taskspaces exist, the command prints `No taskspaces found.`, or
+`No taskspaces found in this project.` when `--project` was given.
+
+Unlike `kozane taskspace scan`, this reads only the database and never touches the
+filesystem, so it reports what Kozane believes rather than what is on disk.
+
+---
+
 ### `kozane taskspace scan`
 
 Scans the filesystem for taskspaces and reports differences from the database. It is a
@@ -1116,11 +1173,11 @@ CLI:
   kozane api key generate
   kozane api key refresh
   kozane project list / create / delete / default
-  kozane scope list / add / delete
+  kozane scope list [--project] / add / delete
   kozane layer list / add / rename / move / delete
   kozane card add / squash / show / list / layer / nearest
   kozane db status / migrate / export / import / restore
-  kozane taskspace scan / create
+  kozane taskspace list [--project] / scan / create
 
 UI (SvelteKit):
   project dashboard

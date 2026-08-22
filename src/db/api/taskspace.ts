@@ -1,14 +1,35 @@
 import { taskspaceTable } from "../schema.js";
 import type { PathKind } from "../schema.js";
-import { eq } from "drizzle-orm";
-import type { NeedsDB, NeedsTaskspace, Taskspace } from "./types.js";
+import { eq, isNull, or } from "drizzle-orm";
+import type { NeedsDB, NeedsProject, NeedsTaskspace, Taskspace } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
-// Intentionally unscoped: taskspaces are tied to scopes, and scopes are
-// cross-project. The UI needs all taskspaces to show their scope associations
-// regardless of which project is currently viewed (per spec §Scopes).
+/**
+ * Every taskspace in the workspace, whichever project it belongs to. The workspace-wide
+ * view — `kozane taskspace list`, `kozane taskspace scan` — rather than the board's; the
+ * browser asks {@link getTaskspacesInProject}.
+ */
 export async function getAllTaskspaces({ db }: NeedsDB): Promise<Taskspace[]> {
   return db.select().from(taskspaceTable);
+}
+
+/**
+ * The taskspaces one project's board has reason to draw: its own, plus the ones assigned
+ * to no project at all.
+ *
+ * `project_id` is nullable, and a row carrying none is unplaced rather than somebody
+ * else's — see the note on `taskspaceTable` for how one gets that way. Those rows appear
+ * on every board; a reattached taskspace whose marker named no project would otherwise be
+ * invisible everywhere, with nothing in the UI able to place it.
+ */
+export async function getTaskspacesInProject({
+  db,
+  projectId,
+}: NeedsProject): Promise<Taskspace[]> {
+  return db
+    .select()
+    .from(taskspaceTable)
+    .where(or(eq(taskspaceTable.projectId, projectId), isNull(taskspaceTable.projectId)));
 }
 
 type AddTaskspace = NeedsDB & {

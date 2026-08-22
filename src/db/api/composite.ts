@@ -16,7 +16,7 @@ import { NotFoundError, DefaultBundleError, DefaultLayerError } from "./utils.js
 import { and, eq, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
 import type { Card } from "./types.js";
-import { BATCH_MAX, clamp } from "../../lib/constants.js";
+import { BATCH_MAX, INSERT_CHUNK_MAX, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 
 type CreateCardFromTaskspace = {
@@ -110,15 +110,7 @@ export type SquashCardResult =
   | { ok: false; reason: "not-found" | "indivisible" | "too-many" }
   | { ok: true; cards: Card[] };
 
-/**
- * How many rows one insert carries. Every column of every row binds a parameter, and a
- * card has enough of them that a card count SQLite is happy with is still a statement it
- * is not. Small enough to stay well clear of that, large enough that an ordinary squash
- * is a single statement.
- */
-const INSERT_CHUNK = 200;
-
-function chunked<T>(rows: T[], size = INSERT_CHUNK): T[][] {
+function chunked<T>(rows: T[], size = INSERT_CHUNK_MAX): T[][] {
   const chunks: T[][] = [];
   for (let start = 0; start < rows.length; start += size)
     chunks.push(rows.slice(start, start + size));
@@ -246,16 +238,16 @@ async function remapCardsByName({
   create,
   assign,
 }: RemapCardsByName): Promise<void> {
+  // Resolved and grouped in one pass, so the id a card is filed under is the one just
+  // looked up rather than a second lookup that has to be asserted non-empty.
   const targetIdByName = new Map<string, string>();
-  for (const { name } of current) {
-    if (targetIdByName.has(name)) continue;
-    const existing = targets.find((target) => target.name === name);
-    targetIdByName.set(name, existing ? existing.id : await create(name));
-  }
-
   const groups = new Map<string, string[]>();
   for (const { cardId, name } of current) {
-    const targetId = targetIdByName.get(name)!;
+    let targetId = targetIdByName.get(name);
+    if (targetId === undefined) {
+      targetId = targets.find((target) => target.name === name)?.id ?? (await create(name));
+      targetIdByName.set(name, targetId);
+    }
     const group = groups.get(targetId) ?? [];
     group.push(cardId);
     groups.set(targetId, group);

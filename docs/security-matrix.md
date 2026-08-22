@@ -88,11 +88,17 @@ kozane net ssg generate
 Builds plain HTML, CSS, and JS with no server, for hosting on GitHub Pages or
 any static host.
 
-The export is public and read-only. It carries a full snapshot of the database
-at build time, so anyone who can open the site reads every card, bundle, scope,
-and glue. There is no API key, no login page, and no way to authenticate,
-because there is no server. Composing, dragging, deleting, taskspaces, and
-live sync are all disabled.
+The export is public and read-only. It bakes out one page per project, each
+carrying that project's cards, bundles, layers, warps, and glue, along with the
+scopes that project draws. Anyone who can open the site reads all of it. There
+is no API key, no login page, and no way to authenticate, because there is no
+server. Composing, dragging, deleting, taskspaces, and live sync are all
+disabled.
+
+Every project in the workspace is exported, so narrowing scopes to a project
+hides nothing here: a scope used by any project is on that project's page, and
+one used by none is on every page. It is a question of which page a scope
+appears on, not of whether it is published.
 
 Do not export a workspace that holds anything you would not publish. Card text,
 bundle names, scope names, layer names, and warp positions are all part of the

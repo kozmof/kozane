@@ -26,6 +26,9 @@
   }: {
     visible: boolean;
     panelWidth: number;
+    // Both already narrowed to this project by the snapshot, not filtered here: see
+    // ProjectDataSnapshot. Nothing in this panel should assume it holds every scope or
+    // every taskspace in the workspace.
     scopes: Scope[];
     scopeRels: ScopeRel[];
     taskspaces: TaskspaceSummary[];
@@ -151,6 +154,9 @@
               <path d="M3 5h4M3 3.5h2" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" stroke-linecap="round" />
             </svg>
             <span class={flex1Class}>{scope.name}</span>
+            <!-- This project's cards in the scope, not the scope's total: scopeRels is
+                 built from this project's cards. A shared scope reads differently on each
+                 board, which is the number each board can act on. -->
             <span class={countClass}>
               {scopeRels.filter((r) => r.scopeId === scope.id).length}
             </span>

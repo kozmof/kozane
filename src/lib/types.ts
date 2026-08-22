@@ -72,9 +72,15 @@ export interface ProjectDataSnapshot {
   bundles: Bundle[];
   layers: Layer[];
   warps: Warp[];
+  /**
+   * Not every scope in the workspace: the ones this project has reason to draw, as
+   * `getScopesInProject` decides. A scope another project alone is working in is absent,
+   * and the client must not treat this as the full list — `kozane scope list` is that.
+   */
   scopes: Scope[];
   scopeRels: ScopeRel[];
   glueRels: GlueRel[];
+  /** Likewise narrowed: this project's taskspaces, plus the ones assigned to no project. */
   taskspaces: TaskspaceSummary[];
 }
 

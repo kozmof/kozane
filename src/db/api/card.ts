@@ -268,16 +268,18 @@ export type CardPositionUpdate = {
   posY: number;
 };
 
-// The CASE has no ELSE, so a row matched by the WHERE without a matching WHEN would
-// be assigned NULL in a NOT NULL column. That is prevented by construction — the
-// WHERE is built from exactly these `positions` — and the row-count assertion in
-// `updateProjectCardPositions` fails the transaction if the two ever diverge.
+// Each CASE ends in an ELSE that writes the column back to itself, so a row matched by
+// the WHERE without a matching WHEN is left as it was. The two are built from the same
+// list and cannot diverge today; the ELSE is what keeps the failure mode of a future
+// divergence "this row was not moved" rather than "NULL into a NOT NULL column", which
+// aborts the whole statement. The row-count assertion in `updateProjectCardPositions`
+// still fails the transaction if it ever happens, so it cannot pass silently either.
 function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; posY: SQL } {
   const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
   const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
   return {
-    posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} END`,
-    posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} END`,
+    posX: sql`CASE ${cardTable.id} ${sql.join(whenX, sql` `)} ELSE ${cardTable.posX} END`,
+    posY: sql`CASE ${cardTable.id} ${sql.join(whenY, sql` `)} ELSE ${cardTable.posY} END`,
   };
 }
 
@@ -329,11 +331,10 @@ type ReassignCardsToLayer = {
 export type CardStacking = { cardId: string; zIndex: number };
 export type ReassignLayerResult = { ok: false } | { ok: true; stacking: CardStacking[] };
 
-// Same shape as buildPositionCaseWhen, and safe for the same reason: the WHERE is built
-// from exactly these rows, so no row the update matches is missing a WHEN.
+// Same shape as buildPositionCaseWhen, including the ELSE, and for the same reason.
 function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
   const whens = stacking.map((s) => sql`WHEN ${s.cardId} THEN ${s.zIndex}`);
-  return sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} END`;
+  return sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} ELSE ${cardTable.zIndex} END`;
 }
 
 /**

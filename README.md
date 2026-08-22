@@ -92,6 +92,17 @@ kozane layer move Sketches down
 
 A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
+## Seeing across projects
+
+A board shows the scopes and taskspaces its own project uses, plus any not yet claimed by a project. A scope another project alone is working in stays off it. The CLI is the workspace-wide view:
+
+```sh
+kozane scope list                    # every scope, and the projects each one reaches
+kozane taskspace list                # every taskspace, with its project and scope
+```
+
+Pass `--project <id>` to either to see exactly what that project's board draws.
+
 ## Security and remote access
 
 Generate a per-workspace API key before allowing remote access:

@@ -3,7 +3,15 @@ import { requireWorkspace } from "../lib/project.js";
 import { commandDbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
-import { addScope, deleteScope, getAllScopes } from "../../db/api/scope.js";
+import {
+  addScope,
+  deleteScope,
+  getAllScopes,
+  getScopeProjectUsage,
+  getScopesInProject,
+} from "../../db/api/scope.js";
+import { getAllProjects } from "../../db/api/project.js";
+import { resolveProjectId } from "../lib/project-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 
 function fail(error: unknown): never {
@@ -29,18 +37,48 @@ export async function scopeAdd(name: string): Promise<void> {
   }
 }
 
-export async function scopeList(): Promise<void> {
+export type ScopeListOptions = { project?: string };
+
+/**
+ * Every scope in the workspace and the projects each one reaches.
+ *
+ * Workspace-wide on purpose: a board draws only its own project's scopes, so this is where
+ * a scope shared with — or stranded in — another project is visible at all. `--project`
+ * narrows it to exactly what that project's board would show.
+ */
+export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
   try {
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
-    const scopes = await getAllScopes({ db });
+
+    // Short IDs are always drawn against every scope in the workspace, so the ID printed
+    // for a scope is the same one whether or not --project narrowed the list.
+    const allScopes = await getAllScopes({ db });
+    const scopeIds = allScopes.map((scope) => scope.id);
+
+    const projectId = options.project ? await resolveProjectId(db, options.project) : null;
+    const scopes = projectId ? await getScopesInProject({ db, projectId }) : allScopes;
     if (scopes.length === 0) {
-      console.log("No scopes found.");
+      console.log(projectId ? "No scopes found in this project." : "No scopes found.");
       return;
     }
-    const scopeIds = scopes.map((scope) => scope.id);
+
+    const projects = await getAllProjects({ db });
+    const projectNameById = new Map(projects.map((project) => [project.id, project.name]));
+    const usage = await getScopeProjectUsage({ db });
+    const projectsByScope = new Map<string, string[]>();
+    for (const { scopeId, projectId: usedBy } of usage) {
+      const names = projectsByScope.get(scopeId) ?? [];
+      names.push(projectNameById.get(usedBy) ?? usedBy);
+      projectsByScope.set(scopeId, names);
+    }
+
     for (const scope of scopes) {
-      console.log(`${shortId(scope.id, scopeIds)}  ${scope.name}`);
+      // "(unused)" rather than a blank column: a scope no project has reached yet is
+      // visible from every board, and that is worth saying rather than leaving to be read
+      // as missing data.
+      const where = projectsByScope.get(scope.id)?.sort().join(", ") ?? "(unused)";
+      console.log(`${shortId(scope.id, scopeIds)}  ${scope.name}  ${where}`);
     }
   } catch (error) {
     fail(error);

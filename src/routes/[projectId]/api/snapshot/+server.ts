@@ -6,11 +6,11 @@ import { getProject } from "../../../../db/api/project";
 import { getAllBundles } from "../../../../db/api/bundle";
 import { getAllLayers } from "../../../../db/api/layer";
 import { getAllWarps } from "../../../../db/api/warp";
-import { getAllScopes } from "../../../../db/api/scope";
+import { getScopesInProject } from "../../../../db/api/scope";
 import { getCardsByBundles } from "../../../../db/api/card";
 import { getGlueRelsByCards } from "../../../../db/api/glue";
 import { getScopeRelsByCards } from "../../../../db/api/scope-rel";
-import { getAllTaskspaces } from "../../../../db/api/taskspace";
+import { getTaskspacesInProject } from "../../../../db/api/taskspace";
 import { cardsWithGlueIds } from "../../lib/project-page";
 
 /**
@@ -47,8 +47,8 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
     getAllBundles({ db: locals.db, projectId: params.projectId }),
     getAllLayers({ db: locals.db, projectId: params.projectId }),
     getAllWarps({ db: locals.db, projectId: params.projectId }),
-    getAllScopes({ db: locals.db }),
-    getAllTaskspaces({ db: locals.db }),
+    getScopesInProject({ db: locals.db, projectId: params.projectId }),
+    getTaskspacesInProject({ db: locals.db, projectId: params.projectId }),
   ]);
   const cards = await getCardsByBundles({
     db: locals.db,
@@ -71,6 +71,11 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
     scopes,
     scopeRels,
     glueRels,
+    // `path` is a directory on the machine the workspace lives on, and it is sent as
+    // stored — unlike the static export, which nulls it (see the note in +page.server.ts).
+    // The difference is who is on the other end: an export is built to be published to
+    // anyone, while this endpoint is behind the workspace API key, and the taskspace panel
+    // exists to show the user their own directories.
     taskspaces: taskspaces.map(
       ({ id, name, scopeId, path, pathKind }) =>
         ({ id, name, scopeId, path, pathKind }) satisfies TaskspaceSummary,

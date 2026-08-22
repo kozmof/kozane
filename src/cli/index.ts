@@ -10,7 +10,7 @@ import { open } from "./commands/open.js";
 import { ssg, ssgPreview } from "./commands/ssg.js";
 import { doctor, doctorConfig } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
-import { taskspaceScan, taskspaceCreate } from "./commands/taskspace.js";
+import { taskspaceScan, taskspaceCreate, taskspaceList } from "./commands/taskspace.js";
 import { projectCreate, projectDefault, projectDelete, projectList } from "./commands/project.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import {
@@ -133,8 +133,9 @@ const scope = program.command("scope").description("Scope management");
 
 scope
   .command("list")
-  .description("List all scopes in the current workspace")
-  .action(() => scopeList());
+  .description("List every scope in the workspace and the projects each one reaches")
+  .option("--project <projectId>", "Show only the scopes this project's board draws")
+  .action((opts) => scopeList(opts));
 
 scope
   .command("add <name>")
@@ -203,6 +204,12 @@ db.command("restore [file]")
   .action((file) => dbRestore(file));
 
 const taskspace = program.command("taskspace").description("Taskspace management");
+
+taskspace
+  .command("list")
+  .description("List every taskspace in the workspace with its project and scope")
+  .option("--project <projectId>", "Show only the taskspaces this project's board draws")
+  .action((opts) => taskspaceList(opts));
 
 taskspace
   .command("scan")

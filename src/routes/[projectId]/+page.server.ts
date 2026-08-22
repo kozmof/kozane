@@ -6,13 +6,13 @@ import { getProject, getAllProjects } from "../../db/api/project";
 import { getAllBundles } from "../../db/api/bundle";
 import { getAllLayers } from "../../db/api/layer";
 import { getAllWarps } from "../../db/api/warp";
-import { getAllScopes } from "../../db/api/scope";
+import { getScopesInProject } from "../../db/api/scope";
 import { getCardsByBundles } from "../../db/api/card";
 import { getGlueRelsByCards } from "../../db/api/glue";
 import { getScopeRelsByCards } from "../../db/api/scope-rel";
 import { cardsWithGlueIds } from "./lib/project-page";
 import { getWorkspaceUiConfig } from "../../db/internal/config";
-import { getAllTaskspaces } from "../../db/api/taskspace";
+import { getTaskspacesInProject } from "../../db/api/taskspace";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 
 // Static export (kozane net ssg generate): prerender one page per project. `entries` tells
@@ -41,7 +41,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     getAllBundles({ db, projectId }),
     getAllLayers({ db, projectId }),
     getAllWarps({ db, projectId }),
-    getAllScopes({ db }),
+    getScopesInProject({ db, projectId }),
     getAllProjects({ db }),
   ]);
 
@@ -52,7 +52,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const [glueRels, scopeRels, taskspaces, warpDirectory] = await Promise.all([
     getGlueRelsByCards({ db, cardIds }),
     getScopeRelsByCards({ db, cardIds }),
-    getAllTaskspaces({ db }), // intentionally unscoped — see taskspace.ts
+    getTaskspacesInProject({ db, projectId }),
     // The other projects' warps, for the Shift+arrow palette. Baked into a static export
     // too, which is why the palette works there without an endpoint to call.
     loadWarpDirectory({ db, projectId }),

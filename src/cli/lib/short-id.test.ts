@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveShortId, shortId, shortIdMap } from "./short-id.js";
+import { findById, resolveShortId, shortId, shortIdMap } from "./short-id.js";
 
 const first = "019f71f2-a749-7539-9342-17b86d2a0000";
 const second = "019f71f2-a749-7539-9342-17b87abc0000";
@@ -63,5 +63,20 @@ describe("resolveShortId", () => {
     expect(() => resolveShortId("17b8", [first, second], "Project")).toThrow(
       "Ambiguous project ID",
     );
+  });
+});
+
+describe("findById", () => {
+  const rows = [
+    { id: "a", name: "Alpha" },
+    { id: "b", name: "Beta" },
+  ];
+
+  it("returns the row with the matching id", () => {
+    expect(findById(rows, "b", "Layer")).toEqual({ id: "b", name: "Beta" });
+  });
+
+  it("throws a labelled error when the id is not in the list", () => {
+    expect(() => findById(rows, "c", "Layer")).toThrow("Layer not found: c");
   });
 });

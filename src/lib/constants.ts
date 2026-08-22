@@ -10,6 +10,18 @@ export const NAME_MAX = 255;
  * real selection that reaching it means something other than a user dragging cards.
  */
 export const BATCH_MAX = 2_000;
+/**
+ * How many rows one multi-row INSERT carries. The same SQLite variable limit
+ * {@link BATCH_MAX} answers for, from the other side: there a request names ids and each
+ * binds one parameter or a few, while here every column of every row binds one, so a row
+ * count SQLite is happy with is far lower than an id count. Kept next to `BATCH_MAX` so
+ * a table that grows a column is one place to revisit rather than two — a caller may hand
+ * an insert up to `BATCH_MAX` rows, and this is what splits them.
+ *
+ * Small enough to stay well clear of the limit, large enough that an ordinary squash is a
+ * single statement.
+ */
+export const INSERT_CHUNK_MAX = 200;
 /** Name of the default layer every project is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
 /** Name of the default bundle every project is created with. */

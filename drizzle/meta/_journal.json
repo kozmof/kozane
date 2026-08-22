@@ -64,6 +64,13 @@
       "when": 1786862909711,
       "tag": "0008_card_width",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1787405674766,
+      "tag": "0009_taskspace_scope_index",
+      "breakpoints": true
     }
   ]
 }

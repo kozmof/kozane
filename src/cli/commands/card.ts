@@ -10,7 +10,7 @@ import { getDefaultBundle } from "../../db/api/bundle.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
-import { resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
+import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
@@ -220,14 +220,14 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
       cards.map(({ id }) => id),
       "Card",
     );
-    const { projectId } = cards.find(({ id }) => id === cardId)!;
+    const { projectId } = findById(cards, cardId, "Card");
     const layers = await getAllLayers({ db, projectId });
     const layerId = resolveLayerRef(layers, requestedLayer);
 
     if (!(await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId })).ok)
       throw new Error("Card and layer do not belong to the same project.");
 
-    const layer = layers.find(({ id }) => id === layerId)!;
+    const layer = findById(layers, layerId, "Layer");
     console.log("Card moved to another layer.");
     console.log(
       `  id   : ${shortId(
@@ -251,7 +251,7 @@ export async function cardShow(requestedId: string): Promise<void> {
       cards.map(({ id }) => id),
       "Card",
     );
-    const card = cards.find(({ id }) => id === cardId)!;
+    const card = findById(cards, cardId, "Card");
     console.log(card.content);
   } catch (error) {
     fail(error);
@@ -278,7 +278,7 @@ export async function cardNearest(requestedId: string): Promise<void> {
       cards.map(({ id }) => id),
       "Card",
     );
-    const origin = cards.find(({ id }) => id === cardId)!;
+    const origin = findById(cards, cardId, "Card");
     const sorted = cards
       .filter(({ projectId }) => projectId === origin.projectId)
       .map((card) => ({

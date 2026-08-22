@@ -268,8 +268,17 @@ is named, its name, ID, or short ID all work, and an exact name wins.
 
 ## Scopes
 
-A scope is a cross-project grouping of cards. The right panel lists scopes with a
-member count each.
+A scope is a cross-project grouping of cards. The right panel lists scopes
+with a member count each. The count is this project's cards in the scope,
+not the scope's total.
+
+A scope can hold cards from several projects, but the panel lists only the
+ones this project has reason to draw: scopes holding one of its cards,
+scopes one of its taskspaces is attached to, and scopes nothing anywhere
+refers to yet — so a scope you have just named, and not yet filed anything
+into, stays put. A scope only another project is working in is not shown.
+Run `kozane scope list` to see every scope in the workspace and which
+projects reach each one.
 
 - Filter — click a scope to highlight its cards. Cards outside it are dimmed.
   Click again to clear.
@@ -280,7 +289,8 @@ member count each.
   already in that scope.
 - Delete — hover a scope and click the `×`. This removes this project's cards
   from the scope. The cards themselves are kept, and the scope disappears
-  workspace-wide only once no cards reference it.
+  workspace-wide only once nothing anywhere refers to it — no cards in any
+  project, and no taskspaces.
 
 ## Taskspaces
 
@@ -288,8 +298,13 @@ A taskspace is a filesystem directory tied to a scope, used to write scope
 cards to disk. Open a scope in the right panel to see its taskspaces. To
 create one, select the scope, type a name in the taskspace input, and press
 `Enter` or `+`. A scope must be active first. Cards that belong to a working
-copy show a `taskspace` badge in their footer. Manage taskspaces on disk with
-`kozane taskspace scan` and `kozane taskspace create`, described in the
+copy show a `taskspace` badge in their footer.
+
+The taskspaces under a scope are narrowed like the scopes themselves: this
+project's, plus any that belong to no project. Run `kozane taskspace list`
+to see every taskspace in the workspace with the project it belongs to.
+Manage taskspaces on disk with `kozane taskspace scan` and
+`kozane taskspace create`, described in the
 [CLI specification](../spec/cli.md).
 
 ### Browsing a taskspace

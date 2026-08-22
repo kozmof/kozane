@@ -71,3 +71,18 @@ export function resolveShortId(input: string, allIds: string[], label: string): 
   if (matches.length === 0) throw new Error(`${label} not found: ${input}`);
   throw new Error(`Ambiguous ${label.toLowerCase()} ID: ${input}. Use more characters.`);
 }
+
+/**
+ * The row an id names, or an error saying it is missing.
+ *
+ * Every caller here has just put the id through {@link resolveShortId} against ids drawn
+ * from this same list, so the row is always there and a bare `.find(...)!` was correct.
+ * It stops being correct the moment the list a row is looked up in stops being the list
+ * the id was resolved against — a filter added between the two, a second query — and a
+ * `!` turns that into a `TypeError` on a property read somewhere further down.
+ */
+export function findById<T extends { id: string }>(rows: T[], id: string, label: string): T {
+  const row = rows.find((candidate) => candidate.id === id);
+  if (!row) throw new Error(`${label} not found: ${id}`);
+  return row;
+}
