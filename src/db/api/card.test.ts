@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
+import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 import {
   addCard,
+  addCards,
+  defaultLayerIdForBundle,
   getCard,
   getAllCards,
   getCardsByBundles,
@@ -26,6 +29,53 @@ async function setup() {
   const bundleId = await addBundle({ db, projectId, name: "General" });
   return { db, projectId, bundleId };
 }
+
+describe("addCards", () => {
+  it("returns nothing for an empty list, without touching the database", async () => {
+    const { db, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    expect(await addCards({ db, bundleId, layerId, cards: [] })).toEqual([]);
+    expect(await getAllCards({ db, bundleId })).toHaveLength(0);
+  });
+
+  it("stores each row's own content and position", async () => {
+    const { db, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const ids = await addCards({
+      db,
+      bundleId,
+      layerId,
+      cards: [
+        { content: "first", posX: 10, posY: 20 },
+        { content: "second", posX: 30, posY: 40 },
+      ],
+    });
+    expect(ids).toHaveLength(2);
+    const first = await getCard({ db, bundleId, cardId: ids[0] });
+    const second = await getCard({ db, bundleId, cardId: ids[1] });
+    expect(first).toMatchObject({ content: "first", posX: 10, posY: 20, layerId });
+    expect(second).toMatchObject({ content: "second", posX: 30, posY: 40, layerId });
+  });
+
+  // The ids come back in the order the rows were given, which is the order the text of a
+  // squashed card reads — a caller filing them into a scope pairs them up by position.
+  it("returns ids in the order the rows were given, across a chunk boundary", async () => {
+    const { db, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const cards = Array.from({ length: INSERT_CHUNK_MAX + 25 }, (_, index) => ({
+      content: `card ${index}`,
+      posX: index,
+      posY: 0,
+    }));
+    const ids = await addCards({ db, bundleId, layerId, cards });
+
+    expect(ids).toHaveLength(cards.length);
+    expect(new Set(ids).size).toBe(cards.length);
+    const stored = await getAllCards({ db, bundleId });
+    const byId = new Map(stored.map((card) => [card.id, card]));
+    expect(ids.map((id) => byId.get(id)?.content)).toEqual(cards.map(({ content }) => content));
+  });
+});
 
 describe("addCard", () => {
   it("returns a non-empty id", async () => {

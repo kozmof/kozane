@@ -92,12 +92,23 @@ function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   return parseUiOverrides((raw as Record<string, unknown>).ui, { strict: false });
 }
 
-export function getWorkspaceUiConfig(): UiConfig {
-  const root = resolveWorkspaceRoot();
-  if (!root) return (_uiConfig ??= { ...DEFAULT_UI_CONFIG });
+/**
+ * The UI settings of a workspace whose root the caller already holds — the CLI, which
+ * finds it with `requireWorkspace()` rather than from the environment
+ * {@link getWorkspaceUiConfig} reads. Same file, same parse, same cache; only how the root
+ * was arrived at differs, and asking the two to agree is what a CLI reading these settings
+ * would otherwise rest on. `getTaskspaceDefaultDir` takes a root for the same reason.
+ */
+export function getUiConfigForRoot(root: string): UiConfig {
   // Called first: it clears the derived cache below when the file has changed.
   const parsed = readParsedConfig(root);
   return (_uiConfig ??= { ...DEFAULT_UI_CONFIG, ...extractUiOverrides(parsed) });
+}
+
+export function getWorkspaceUiConfig(): UiConfig {
+  const root = resolveWorkspaceRoot();
+  if (!root) return (_uiConfig ??= { ...DEFAULT_UI_CONFIG });
+  return getUiConfigForRoot(root);
 }
 
 export function getDBURL(): string {

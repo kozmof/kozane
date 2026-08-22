@@ -3,6 +3,7 @@ import { bundleTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from 
 import type { NeedsDB, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
+import { chunked } from "../../lib/constants.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
 
@@ -44,6 +45,24 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
     .where(and(eq(scopeRelTable.scopeId, scopeId), eq(scopeRelTable.cardId, cardId)))
     .returning({ scopeId: scopeRelTable.scopeId });
   assertFound(deleted, `ScopeRel scopeId=${scopeId} cardId=${cardId}`);
+}
+
+type AddScopeRels = NeedsScope & { cardIds: string[] };
+
+/**
+ * Files many cards into one scope, in {@link chunked} statements rather than one per card.
+ * Idempotent the way {@link addScopeRel} is.
+ *
+ * Unlike {@link addScopeMembers} this checks no ownership and opens no transaction, so it
+ * suits a caller that has already established both — `kozane card squash`, which inserts
+ * the cards it is filing in the same transaction a moment earlier.
+ */
+export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Promise<void> {
+  for (const batch of chunked(cardIds))
+    await db
+      .insert(scopeRelTable)
+      .values(batch.map((cardId) => ({ scopeId, cardId })))
+      .onConflictDoNothing();
 }
 
 type AddScopeMembers = { db: DB; scopeId: string; projectId: string; cardIds: string[] };

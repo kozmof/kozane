@@ -5,10 +5,14 @@ import { requireWorkspace } from "../lib/project.js";
 import { commandDbUrl } from "../lib/config.js";
 import { createDb } from "../../db/client.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
-import { addCard, reassignCardsToLayer } from "../../db/api/card.js";
+import { addCard, addCards, reassignCardsToLayer } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
 import { getAllLayers } from "../../db/api/layer.js";
-import { addScopeRel, getCardsByScopeWithBundleName } from "../../db/api/scope-rel.js";
+import {
+  addScopeRel,
+  addScopeRels,
+  getCardsByScopeWithBundleName,
+} from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
@@ -16,6 +20,8 @@ import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveProjectId } from "../lib/project-selection.js";
+import { contentLimitIssue } from "../../lib/constants.js";
+import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 
 type CardOptions = { project?: string; bundle?: string; taskspace?: string };
 type CardAddOptions = Omit<CardOptions, "taskspace"> & {
@@ -95,20 +101,30 @@ async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): P
 
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
   try {
+    const contentIssue = contentLimitIssue(content);
+    if (contentIssue) throw new Error(contentIssue);
+
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const layerId = await resolveLayerId(db, projectId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
+    // `--x`/`--y` are held to the board the same way the create endpoint holds a dragged
+    // card, and against the same workspace bounds: a position outside them is one the
+    // viewport can never scroll to, so a card stored there is a card nobody can find.
+    const placement = clampToBounds(
+      options.x ?? 0,
+      options.y ?? 0,
+      canvasBoundsForRoot(resolve(root)),
+    );
     const id = await withTx(db, async (tx) => {
       const cardId = await addCard({
         db: tx,
         bundleId,
         layerId,
         content,
-        posX: options.x,
-        posY: options.y,
+        ...placement,
       });
       if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
       return cardId;
@@ -164,6 +180,13 @@ export async function cardSquash(
   try {
     const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
+    // Each segment becomes a card of its own, so each is held to the limit a card is held
+    // to. Reported by position, which is the only thing that tells one segment of a piped
+    // file from another.
+    for (const [index, segment] of contents.entries()) {
+      const issue = contentLimitIssue(segment);
+      if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
+    }
 
     const { root } = requireWorkspace();
     const db = await createDb(commandDbUrl(resolve(root)));
@@ -176,27 +199,33 @@ export async function cardSquash(
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(eq(bundleTable.projectId, projectId));
-    const positions = squashCardPositions(occupied, contents.length);
+    // The workspace's own board, not the built-in default: `ui.canvasWidth` decides how
+    // many columns the layout wraps at, and laying out against 5600 on a board configured
+    // narrower puts the right-hand columns past its edge. Clamped afterwards for the rows,
+    // which run downwards without a wrap to stop them — the same pair of steps
+    // `squashProjectCard` takes for the board's own squash.
+    const bounds = canvasBoundsForRoot(resolve(root));
+    const positions = squashCardPositions(occupied, contents.length, {
+      canvasWidth: bounds.canvasWidth,
+    });
     const ids = await withTx(db, async (tx) => {
-      const cardIds: string[] = [];
-      for (const [index, cardContent] of contents.entries()) {
-        const cardId = await addCard({
-          db: tx,
-          bundleId,
-          layerId,
+      const cardIds = await addCards({
+        db: tx,
+        bundleId,
+        layerId,
+        cards: contents.map((cardContent, index) => ({
           content: cardContent,
-          ...positions[index],
-        });
-        if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-        cardIds.push(cardId);
-      }
+          ...clampToBounds(positions[index].posX, positions[index].posY, bounds),
+        })),
+      });
+      if (scopeId) await addScopeRels({ db: tx, scopeId, cardIds });
       return cardIds;
     });
 
     const allCards = await db.select({ id: cardTable.id }).from(cardTable);
-    const allCardIds = allCards.map(({ id }) => id);
+    const shortIds = shortIdMap(allCards.map(({ id }) => id));
     console.log(`${ids.length} ${ids.length === 1 ? "card" : "cards"} added.`);
-    for (const id of ids) console.log(`  ${shortId(id, allCardIds)}`);
+    for (const id of ids) console.log(`  ${shortIds.get(id) ?? id}`);
   } catch (error) {
     fail(error);
   }

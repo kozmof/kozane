@@ -12,7 +12,7 @@ import {
   type CardPositionUpdate,
 } from "../../../../db/api/card";
 import { deleteProjectCards } from "../../../../db/api/composite";
-import { CONTENT_MAX } from "$lib/constants";
+import { contentLimitIssue } from "$lib/constants";
 import { clampToCanvas } from "$lib/server/canvas";
 import {
   optionalNumber,
@@ -67,8 +67,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const scopeId = optionalString(body, "scopeId");
   const requestedLayerId = optionalString(body, "layerId");
 
-  if (content.length > CONTENT_MAX)
-    throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
+  const contentIssue = contentLimitIssue(content);
+  if (contentIssue) throw error(400, contentIssue);
 
   const bundle = await getBundle({ db, projectId, bundleId });
   if (!bundle) throw error(400, "Bundle not found in project");

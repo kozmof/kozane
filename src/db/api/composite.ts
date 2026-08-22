@@ -16,7 +16,7 @@ import { NotFoundError, DefaultBundleError, DefaultLayerError } from "./utils.js
 import { and, eq, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
 import type { Card } from "./types.js";
-import { BATCH_MAX, INSERT_CHUNK_MAX, clamp } from "../../lib/constants.js";
+import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 
 type CreateCardFromTaskspace = {
@@ -109,13 +109,6 @@ type SquashProjectCard = {
 export type SquashCardResult =
   | { ok: false; reason: "not-found" | "indivisible" | "too-many" }
   | { ok: true; cards: Card[] };
-
-function chunked<T>(rows: T[], size = INSERT_CHUNK_MAX): T[][] {
-  const chunks: T[][] = [];
-  for (let start = 0; start < rows.length; start += size)
-    chunks.push(rows.slice(start, start + size));
-  return chunks;
-}
 
 /**
  * Replaces a card with one card per segment of its text, in the manner of

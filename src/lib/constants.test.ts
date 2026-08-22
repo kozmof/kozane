@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { clamp, CANVAS_W, CANVAS_H, CONTENT_MAX } from "./constants.js";
+import {
+  clamp,
+  chunked,
+  contentLimitIssue,
+  CANVAS_W,
+  CANVAS_H,
+  CONTENT_MAX,
+  INSERT_CHUNK_MAX,
+} from "./constants.js";
 import { DEFAULT_UI_CONFIG, UI_NUM_RANGES } from "./ui-config.js";
 
 describe("clamp", () => {
@@ -40,6 +48,54 @@ describe("UI config", () => {
   it("uses a 5% zoom step by default and defines its override range", () => {
     expect(DEFAULT_UI_CONFIG.zoomStep).toBe(0.05);
     expect(UI_NUM_RANGES.zoomStep).toEqual([0.01, 1]);
+  });
+});
+
+describe("contentLimitIssue", () => {
+  it("passes text at the limit", () => {
+    expect(contentLimitIssue("x".repeat(CONTENT_MAX))).toBeNull();
+  });
+
+  it("passes empty text — emptiness is the caller's own check", () => {
+    expect(contentLimitIssue("")).toBeNull();
+  });
+
+  it("reports text one character past the limit, naming it", () => {
+    const issue = contentLimitIssue("x".repeat(CONTENT_MAX + 1));
+    expect(issue).toBe(`content must be a string under ${CONTENT_MAX} characters`);
+  });
+});
+
+describe("chunked", () => {
+  it("returns nothing for an empty list", () => {
+    expect(chunked([])).toEqual([]);
+  });
+
+  it("keeps a list shorter than the chunk size whole", () => {
+    expect(chunked([1, 2, 3], 5)).toEqual([[1, 2, 3]]);
+  });
+
+  it("splits an exact multiple without a trailing empty chunk", () => {
+    expect(chunked([1, 2, 3, 4], 2)).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
+  it("puts the remainder in a final short chunk", () => {
+    expect(chunked([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+  });
+
+  it("defaults to INSERT_CHUNK_MAX", () => {
+    const rows = Array.from({ length: INSERT_CHUNK_MAX + 1 }, (_, i) => i);
+    const chunks = chunked(rows);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toHaveLength(INSERT_CHUNK_MAX);
+    expect(chunks[1]).toHaveLength(1);
+  });
+
+  it("preserves order across the split", () => {
+    expect(chunked([1, 2, 3, 4, 5], 2).flat()).toEqual([1, 2, 3, 4, 5]);
   });
 });
 

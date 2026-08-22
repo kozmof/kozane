@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
+import { chunked } from "../../lib/constants.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
@@ -147,6 +148,34 @@ export async function addCard({
     })
     .returning({ id: cardTable.id });
   return row.id;
+}
+
+type AddCards = NeedsBundle & {
+  layerId: string;
+  cards: { content: string; posX: number; posY: number }[];
+};
+
+/**
+ * Inserts many cards onto one bundle and layer, in {@link chunked} statements rather than
+ * one round trip each. `kozane card squash` turns a pasted file into a card per sentence,
+ * which is the one CLI path that writes cards by the hundred; the board's squash endpoint
+ * batches the same way (see `squashProjectCard`).
+ *
+ * Returns the new ids in the order the rows were given, which is the order the text reads.
+ * `layerId` is required rather than defaulted: every caller here has already resolved one,
+ * and looking it up per chunk is the round trip this exists to avoid.
+ */
+export async function addCards({ db, bundleId, layerId, cards }: AddCards): Promise<string[]> {
+  if (cards.length === 0) return [];
+  const ids: string[] = [];
+  for (const batch of chunked(cards)) {
+    const rows = await db
+      .insert(cardTable)
+      .values(batch.map((card) => ({ bundleId, layerId, ...card })))
+      .returning({ id: cardTable.id });
+    ids.push(...rows.map(({ id }) => id));
+  }
+  return ids;
 }
 
 // Card deletion lives in composite.ts: removing a card cascades its glue_rel rows

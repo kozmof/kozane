@@ -5,7 +5,7 @@ import { getLayer } from "../../../../../db/api/layer";
 import { updateCard } from "../../../../../db/api/card";
 import { deleteProjectCards } from "../../../../../db/api/composite";
 import { requireCardInProject } from "../../../lib/guards";
-import { CONTENT_MAX, clamp } from "$lib/constants";
+import { clamp, contentLimitIssue } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { canvasBounds } from "$lib/server/canvas";
 import {
@@ -25,8 +25,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
   const rawContent = optionalString(body, "content");
   if (rawContent !== undefined && !rawContent.trim()) throw error(400, "content must not be empty");
-  if (rawContent !== undefined && rawContent.length > CONTENT_MAX)
-    throw error(400, `content must be a string under ${CONTENT_MAX} characters`);
+  const contentIssue = rawContent === undefined ? null : contentLimitIssue(rawContent);
+  if (contentIssue) throw error(400, contentIssue);
   const content = rawContent !== undefined ? rawContent.trim() : undefined;
 
   let newBundleId: string | undefined;

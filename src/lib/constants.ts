@@ -1,6 +1,17 @@
 export const CANVAS_W = 5600;
 export const CANVAS_H = 4000;
 export const CONTENT_MAX = 10_000;
+/**
+ * Why this card's text is past {@link CONTENT_MAX}, or null when it is not, in the wording
+ * both writers refuse it with. The HTTP routes turn it into a 400 and `kozane card add`
+ * into a failed command: the two reach the same table through the same `addCard`, so the
+ * limit held against a card has to be one limit rather than one each.
+ */
+export function contentLimitIssue(content: string): string | null {
+  return content.length > CONTENT_MAX
+    ? `content must be a string under ${CONTENT_MAX} characters`
+    : null;
+}
 export const NAME_MAX = 255;
 /**
  * How many ids one request may name. Every batch endpoint binds a parameter per id, and the
@@ -22,6 +33,20 @@ export const BATCH_MAX = 2_000;
  * single statement.
  */
 export const INSERT_CHUNK_MAX = 200;
+
+/**
+ * Splits rows into the statement-sized batches {@link INSERT_CHUNK_MAX} names. Here rather
+ * than beside either caller because both writers run the same insert — the board's squash
+ * endpoint and `kozane card squash` — and a chunk size applied on one path only leaves the
+ * variable limit still waiting on the other.
+ */
+export function chunked<T>(rows: T[], size = INSERT_CHUNK_MAX): T[][] {
+  const chunks: T[][] = [];
+  for (let start = 0; start < rows.length; start += size)
+    chunks.push(rows.slice(start, start + size));
+  return chunks;
+}
+
 /** Name of the default layer every project is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
 /** Name of the default bundle every project is created with. */

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
 import {
   addScopeRel,
+  addScopeRels,
   removeScopeRel,
   getAllCardsByScope,
   getCardsByScopeWithBundleName,
@@ -16,6 +17,7 @@ import { addCard } from "./card.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer } from "./layer.js";
+import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -26,6 +28,43 @@ async function setup() {
   const cardId = await addCard({ db, bundleId, content: "Card A" });
   return { db, projectId, bundleId, scopeId, cardId };
 }
+
+describe("addScopeRels", () => {
+  it("does nothing for an empty list", async () => {
+    const { db, scopeId } = await setup();
+    await addScopeRels({ db, scopeId, cardIds: [] });
+    expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(0);
+  });
+
+  it("files every card into the scope in one call", async () => {
+    const { db, bundleId, scopeId } = await setup();
+    const cardIds = [
+      await addCard({ db, bundleId, content: "one" }),
+      await addCard({ db, bundleId, content: "two" }),
+      await addCard({ db, bundleId, content: "three" }),
+    ];
+    await addScopeRels({ db, scopeId, cardIds });
+    const members = await getAllCardsByScope({ db, scopeId });
+    expect(members.map(({ id }) => id).sort()).toEqual([...cardIds].sort());
+  });
+
+  // Idempotent the way addScopeRel is: a card already in the scope is left as one row.
+  it("ignores a card already filed into the scope", async () => {
+    const { db, scopeId, cardId } = await setup();
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRels({ db, scopeId, cardIds: [cardId] });
+    expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(1);
+  });
+
+  it("files more cards than one statement carries", async () => {
+    const { db, bundleId, scopeId } = await setup();
+    const cardIds: string[] = [];
+    for (let index = 0; index < INSERT_CHUNK_MAX + 5; index++)
+      cardIds.push(await addCard({ db, bundleId, content: `c${index}` }));
+    await addScopeRels({ db, scopeId, cardIds });
+    expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(cardIds.length);
+  });
+});
 
 describe("addScopeRel", () => {
   it("adds a card to a scope", async () => {
