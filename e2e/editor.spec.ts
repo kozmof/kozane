@@ -187,7 +187,9 @@ test("puts the caret back at the edit an undo takes back", async ({ page }) => {
   await openTheFile(page);
   await page.getByTestId("editor-sink").focus();
 
-  // Edit the third line, then walk the caret up to the first.
+  // Edit the third line, then walk the caret up to the first. The two characters are typed
+  // in one go, so they are one undo entry rather than two — consecutive edits in one place
+  // are grouped, and a single Ctrl+Z below takes back both.
   await page.getByText("charlie").click();
   await page.keyboard.press("End");
   await page.keyboard.type("!!");

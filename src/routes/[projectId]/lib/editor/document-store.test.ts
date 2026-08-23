@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { EditorDocument, orderCarets, sameCaret } from "./document-store.svelte.js";
 
 function doc(content: string): EditorDocument {
@@ -151,14 +151,16 @@ describe("EditorDocument", () => {
   });
 
   it("reports the caret across a run of undos back to the start", () => {
-    const d = doc("a\n");
-    d.insert({ line: 0, column: 1 }, "b");
-    d.insert({ line: 0, column: 2 }, "c");
-    expect(d.text()).toBe("abc\n");
+    // Two edits in different places, so each is its own entry: consecutive edits in one
+    // place are joined into a single undo, which the grouping tests below cover.
+    const d = doc("a\nb\n");
+    d.insert({ line: 0, column: 1 }, "X");
+    d.insert({ line: 1, column: 1 }, "Y");
+    expect(d.text()).toBe("aX\nbY\n");
 
-    expect(d.undo()).toEqual({ line: 0, column: 2 });
+    expect(d.undo()).toEqual({ line: 1, column: 1 });
     expect(d.undo()).toEqual({ line: 0, column: 1 });
-    expect(d.text()).toBe("a\n");
+    expect(d.text()).toBe("a\nb\n");
   });
 
   it("answers null rather than a position when there is nothing to undo or redo", () => {
@@ -173,6 +175,90 @@ describe("EditorDocument", () => {
     expect(d.text()).toBe("oree\n");
     expect(d.undo()).toEqual({ line: 0, column: 1 });
     expect(d.text()).toBe("one\ntwo\nthree\n");
+  });
+
+  describe("grouping consecutive edits into one undo", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Grouping keys off the wall clock, so the clock is what a test has to drive. */
+    function atTime(ms: number): void {
+      vi.setSystemTime(new Date(ms));
+    }
+
+    it("takes back a run of typing in one undo", () => {
+      vi.useFakeTimers();
+      atTime(1000);
+
+      const d = doc("");
+      let at = { line: 0, column: 0 };
+      for (const ch of "hello") at = d.insert(at, ch);
+      expect(d.text()).toBe("hello");
+
+      // One press, not five: without a grouping window every keystroke is its own entry.
+      d.undo();
+      expect(d.text()).toBe("");
+    });
+
+    it("puts the caret back at the start of the run it took back", () => {
+      vi.useFakeTimers();
+      atTime(1000);
+
+      const d = doc("say \n");
+      let at = { line: 0, column: 4 };
+      for (const ch of "hello") at = d.insert(at, ch);
+      expect(d.text()).toBe("say hello\n");
+
+      expect(d.undo()).toEqual({ line: 0, column: 4 });
+      expect(d.text()).toBe("say \n");
+    });
+
+    it("starts a new entry after a pause longer than the window", () => {
+      vi.useFakeTimers();
+      atTime(1000);
+
+      const d = doc("");
+      let at = d.insert({ line: 0, column: 0 }, "a");
+      at = d.insert(at, "b");
+
+      // Long enough to fall outside the window, so the next character stands alone.
+      atTime(5000);
+      d.insert(at, "c");
+      expect(d.text()).toBe("abc");
+
+      d.undo();
+      expect(d.text()).toBe("ab");
+      d.undo();
+      expect(d.text()).toBe("");
+    });
+
+    it("does not group edits made in different places", () => {
+      vi.useFakeTimers();
+      atTime(1000);
+
+      const d = doc("one\ntwo\n");
+      d.insert({ line: 0, column: 3 }, "!");
+      d.insert({ line: 1, column: 3 }, "?");
+      expect(d.text()).toBe("one!\ntwo?\n");
+
+      // Two entries even inside the window: a jump elsewhere ends the run.
+      d.undo();
+      expect(d.text()).toBe("one!\ntwo\n");
+    });
+
+    it("does not group a delete with the typing before it", () => {
+      vi.useFakeTimers();
+      atTime(1000);
+
+      const d = doc("");
+      const at = d.insert({ line: 0, column: 0 }, "ab");
+      d.delete({ line: 0, column: 0 }, at);
+      expect(d.text()).toBe("");
+
+      d.undo();
+      expect(d.text()).toBe("ab");
+    });
   });
 
   it("walks back and forward through history", () => {

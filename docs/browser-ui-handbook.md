@@ -344,7 +344,14 @@ Reloading discards what is in the editor, which is the point: the alternative is
 silently throwing away the change that arrived while you were typing.
 
 Undo and redo are `Ctrl+Z` and `Ctrl+Shift+Z` (or `Cmd`), and the history belongs
-to the editing session rather than to the file — closing the panel ends it.
+to the editing session rather than to the file — closing the panel ends it. Undo
+moves the caret to the edit it takes back, so what changed is on screen rather
+than somewhere you have to go looking for.
+
+A run of typing comes back in one press rather than a character at a time.
+Consecutive edits are joined into one entry while they continue each other; a
+pause, a move to somewhere else in the file, or a switch from typing to deleting
+each start a new one.
 
 Set `ui.editorVimMode` to `true` in `.kozane/config.json` for vim key bindings.
 The panel then opens in normal mode, and the status bar shows which mode it is

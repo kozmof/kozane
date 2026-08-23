@@ -16,6 +16,21 @@ export type VisibleLine = {
   content: string;
 };
 
+/**
+ * How long consecutive edits keep joining one undo entry.
+ *
+ * Off in Reed by default, which makes every keystroke its own entry and turns undoing a
+ * mistyped word into holding the key down. With a window, a run of typing comes back in
+ * one press and the caret returns to where the run started.
+ *
+ * Reed only joins edits that continue each other, so this does not group more than it
+ * should: a pause longer than the window starts a new entry, and so does an edit somewhere
+ * else in the document or an edit of a different kind — typing, then deleting, is always
+ * two. 300ms is short enough that the boundaries land where a typist pauses to think,
+ * which is where an undo boundary is wanted anyway.
+ */
+const UNDO_GROUP_MS = 300;
+
 /** Ordered so `start` is never after `end`, whichever way the selection was made. */
 export function orderCarets(a: Caret, b: Caret): { start: Caret; end: Caret } {
   const aFirst = a.line < b.line || (a.line === b.line && a.column <= b.column);
@@ -53,7 +68,7 @@ export class EditorDocument {
   savedRevision = $state(0);
 
   constructor(content: string) {
-    this.#store = store.createDocumentStore({ content });
+    this.#store = store.createDocumentStore({ content, undoGroupTimeout: UNDO_GROUP_MS });
     this.state = this.#store.getSnapshot();
     this.#unsubscribe = this.#store.subscribe(() => {
       this.state = this.#store.getSnapshot();
