@@ -53,6 +53,13 @@ export function sameCaret(a: Caret, b: Caret): boolean {
  * Coordinates on this class are `(line, column)` in characters, which is what the render
  * layer and the key handling both work in. Reed positions are byte offsets; the conversion
  * happens here and nowhere else, so no caller has to remember which of the two it holds.
+ *
+ * Reed's own types are used as they come. Nothing here needs unwrapping: `query`, `scan`
+ * and `history` are declared plain, and the `rendering` calls that still carry a cost
+ * brand return `Costed<L, T>`, which is `T & CostBrand<L>` — an intersection, and so
+ * already assignable to `T`. The same goes for `ByteOffset`, which is `number & Brand`.
+ * This module once cast every one of these through `as unknown as`, which was load-bearing
+ * against Reed 1 and became a way to not notice a Reed 2 signature changing underneath.
  */
 export class EditorDocument {
   #store: ReedStore;
@@ -87,15 +94,15 @@ export class EditorDocument {
   }
 
   get lineCount(): number {
-    return query.getLineCount(this.state) as unknown as number;
+    return query.getLineCount(this.state);
   }
 
   get canUndo(): boolean {
-    return history.canUndo(this.state) as unknown as boolean;
+    return history.canUndo(this.state);
   }
 
   get canRedo(): boolean {
-    return history.canRedo(this.state) as unknown as boolean;
+    return history.canRedo(this.state);
   }
 
   get dirty(): boolean {
@@ -117,18 +124,20 @@ export class EditorDocument {
       startLine: Math.max(0, startLine),
       visibleLineCount,
       overscan,
-    }) as unknown as { lines: readonly VisibleLine[] };
+    });
+    // Narrowed to the two fields the panel draws. Reed's own `VisibleLine` also carries
+    // byte offsets and a newline flag, which are its coordinates rather than this one's.
     return result.lines.map(({ lineNumber, content }) => ({ lineNumber, content }));
   }
 
   /** One line's text, or `""` for a line that is out of range. */
   lineText(line: number): string {
-    return (rendering.getLineContent(this.state, line) as unknown as string | null) ?? "";
+    return rendering.getLineContent(this.state, line) ?? "";
   }
 
   /** The whole document. O(n) — for saving, not for drawing. */
   text(): string {
-    return scan.getValue(this.state.pieceTable) as unknown as string;
+    return scan.getValue(this.state.pieceTable);
   }
 
   /** Holds a caret inside the document, and inside the line it names. */
@@ -142,19 +151,17 @@ export class EditorDocument {
   }
 
   #byteOffset({ line, column }: Caret): number {
-    const offset = rendering.lineColumnToPosition(this.state, line, column) as unknown as
-      | number
-      | null;
+    const offset = rendering.lineColumnToPosition(this.state, line, column);
     // A caret past the end of the document resolves to nothing; the end of the document is
     // the nearest position that exists, and is where a caret in that state belongs.
     return offset ?? this.state.pieceTable.totalLength;
   }
 
   #caretAt(byteOffset: number): Caret {
-    const at = rendering.positionToLineColumn(
-      this.state,
-      byteOffset as never,
-    ) as unknown as Caret | null;
+    // Through the branded constructor rather than `as never`: `position.byteOffset` is
+    // what every other call here builds an offset with, and it is the one that would
+    // object if Reed ever asked for something other than a byte offset.
+    const at = rendering.positionToLineColumn(this.state, position.byteOffset(byteOffset));
     return at ?? { line: 0, column: 0 };
   }
 
@@ -233,8 +240,8 @@ export class EditorDocument {
 
   /** The caret this document's own selection points at, or null when it has none. */
   selectionCaret(): Caret | null {
-    const head = query.getSelectionHead(this.state) as unknown as number | undefined | null;
-    return head === undefined || head === null ? null : this.#caretAt(head);
+    const head = query.getSelectionHead(this.state);
+    return head == null ? null : this.#caretAt(head);
   }
 
   /**
