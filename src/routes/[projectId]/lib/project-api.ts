@@ -313,3 +313,32 @@ export function fetchTaskspaceFiles(
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
   return fetcher(`/${projectId}/api/taskspaces/${taskspaceId}/files${query}`);
 }
+
+/**
+ * The text of one taskspace file, for the editor. A sibling of {@link fetchTaskspaceFiles}
+ * and deliberately a different endpoint: that one answers with names and metadata, and
+ * this is the only one that returns what is in a file.
+ */
+export function fetchTaskspaceFile(
+  fetcher: typeof fetch,
+  projectId: string,
+  taskspaceId: string,
+  path: string,
+): Promise<Response> {
+  const query = `?path=${encodeURIComponent(path)}`;
+  return fetcher(`/${projectId}/api/taskspaces/${taskspaceId}/file${query}`);
+}
+
+/**
+ * Saves the editor's text back. `signature` is what the file was read at, and the server
+ * refuses the write with a 409 if the file has changed since — so a save cannot discard an
+ * edit made on disk while the panel had it open.
+ */
+export function saveTaskspaceFile(
+  fetcher: typeof fetch,
+  projectId: string,
+  taskspaceId: string,
+  file: { path: string; content: string; signature: string | null },
+): Promise<Response> {
+  return jsonRequest(fetcher, `/${projectId}/api/taskspaces/${taskspaceId}/file`, "PUT", file);
+}

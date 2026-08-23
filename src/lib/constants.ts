@@ -85,3 +85,13 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
  * so when a directory is cut off.
  */
 export const TASKSPACE_DIR_ENTRIES_MAX = 500;
+
+/**
+ * How large a file the editor will open, in bytes. The panel reads a file whole and hands
+ * it to a piece table held in the tab, so the ceiling is what one browser tab can hold a
+ * document in comfortably rather than what the disk can produce. A taskspace is an
+ * ordinary working directory and may hold a database dump or a bundled asset; those are
+ * refused by size before anything is read, not truncated into something that would save
+ * back as a corrupted file.
+ */
+export const TASKSPACE_FILE_BYTES_MAX = 1_048_576;

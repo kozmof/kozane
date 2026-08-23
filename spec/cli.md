@@ -1027,6 +1027,7 @@ Taskspace created.
     "defaultShowFooter": false,
     "defaultShowSidePanel": false,
     "defaultShowWarps": true,
+    "editorVimMode": false,
     "warpMarkerSize": 20,
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",

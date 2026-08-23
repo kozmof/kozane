@@ -1,9 +1,36 @@
-import { type Dirent, lstatSync, readdirSync, realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
-import { TASKSPACE_DIR_ENTRIES_MAX } from "../constants.js";
+import { type Dirent, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
+import { writeFileAtomic } from "./atomic-write.js";
+import { fileSignature } from "./file-signature.js";
 
-export type TaskspaceFilesReason = "invalid-path" | "not-found" | "forbidden";
+export type TaskspaceFilesReason =
+  | "invalid-path"
+  | "not-found"
+  | "forbidden"
+  | "too-large"
+  | "not-text"
+  | "stale";
+
+/**
+ * What each reason means over HTTP.
+ *
+ * Beside the reasons rather than in the routes because both the listing and the file
+ * endpoints answer with it, and because being exhaustive is the point: a reason added to
+ * the union without a code here is a compile error, rather than a route that quietly
+ * answers `undefined` and turns a refusal into a 500.
+ */
+export const TASKSPACE_FILES_STATUS: Record<TaskspaceFilesReason, number> = {
+  "invalid-path": 400,
+  forbidden: 403,
+  "not-found": 404,
+  // The file changed on disk since the editor read it. A conflict rather than a bad
+  // request: nothing about what was sent is wrong, only the version it was sent against.
+  stale: 409,
+  "too-large": 413,
+  "not-text": 415,
+};
 
 /**
  * A listing that could not be produced, carrying why. The reason is what the route turns
@@ -133,4 +160,196 @@ export function listTaskspaceDirectory({
   }
 
   return { path: relative(realBase, real).split(sep).join("/"), entries, truncated };
+}
+
+/**
+ * The taskspace-relative path of one file, resolved and held inside the taskspace.
+ *
+ * The boundary is the same one {@link listTaskspaceDirectory} holds, and for the same
+ * reason: the caller supplies `baseDir` from the taskspace record, and the request chooses
+ * only where to look within it. It is checked twice — once on the path as spelled, so a
+ * `..` cannot walk out, and once on what it turned out to be with every link followed.
+ *
+ * Dot-entries are refused rather than hidden. The listing skips them, so `.env` and
+ * `.taskspace.json` are never announced to the panel; without the same rule here they
+ * would still be readable by anyone who typed the name, and the tree hiding them would be
+ * decoration rather than a boundary.
+ */
+function resolveTaskspaceFile(baseDir: string, subPath: string): { real: string; base: string } {
+  let realBase: string;
+  try {
+    realBase = realpathSync(baseDir);
+  } catch (e) {
+    throw mapFsError(e, "Taskspace directory not found");
+  }
+
+  const segments = subPath.split("/").filter((segment) => segment !== "");
+  if (segments.length === 0) throw new TaskspaceFilesError("invalid-path", "No file named");
+  // Checked before the dot rule below, which would otherwise catch `..` too and answer a
+  // traversal attempt with a message about dotfiles.
+  if (segments.includes("..") || segments.includes("."))
+    throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+  if (segments.some((segment) => segment.startsWith(".")))
+    throw new TaskspaceFilesError("invalid-path", "Dot-entries cannot be opened");
+
+  const requested = resolve(realBase, segments.join(sep));
+  if (!isWithin(realBase, requested))
+    throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+
+  // The directory is resolved rather than the file, so that a file which does not exist
+  // yet still gets its containing directory checked. Whether the file itself is there is
+  // `lstat`'s answer below, and it is a different one — "not found" rather than "outside".
+  let realDir: string;
+  try {
+    realDir = realpathSync(dirname(requested));
+  } catch (e) {
+    throw mapFsError(e, "Directory not found");
+  }
+  if (!isWithin(realBase, realDir))
+    throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+
+  return { real: resolve(realDir, segments[segments.length - 1]), base: realBase };
+}
+
+/**
+ * `real` as an ordinary file of a size the editor will take on, or the reason it is not.
+ *
+ * `lstat` rather than `stat`: a symlink is reported as itself, so a link pointing out of
+ * the taskspace is refused here rather than followed. The listing draws links as links and
+ * does not open them, and this is the same rule at the other end.
+ */
+function statRegularFile(real: string): number {
+  let stat;
+  try {
+    stat = lstatSync(real);
+  } catch (e) {
+    throw mapFsError(e, "File not found");
+  }
+  if (stat.isSymbolicLink())
+    throw new TaskspaceFilesError("invalid-path", "Symbolic links cannot be opened");
+  if (!stat.isFile()) throw new TaskspaceFilesError("invalid-path", "Not a regular file");
+  // Checked from the stat rather than from what came back, so an oversized file costs one
+  // syscall instead of a read of however many megabytes it happens to be.
+  if (stat.size > TASKSPACE_FILE_BYTES_MAX)
+    throw new TaskspaceFilesError(
+      "too-large",
+      `File is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
+    );
+  return stat.size;
+}
+
+/**
+ * Text as the editor holds it, or the reason these bytes are not text.
+ *
+ * Strict UTF-8, because the panel round-trips what it opens: bytes decoded leniently come
+ * back as replacement characters, and saving would write that corruption to disk over the
+ * original. A NUL is refused on the same grounds — it is the one byte that reliably says
+ * "this was never text" — so the editor cannot be pointed at a binary and used to destroy
+ * it.
+ */
+function decodeText(bytes: Uint8Array): string {
+  if (bytes.includes(0)) throw new TaskspaceFilesError("not-text", "File is not UTF-8 text");
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new TaskspaceFilesError("not-text", "File is not UTF-8 text");
+  }
+}
+
+export type TaskspaceFile = {
+  /** The file read, relative to the taskspace root and always `/`-separated. */
+  path: string;
+  content: string;
+  /**
+   * Identity of the bytes that were read, from {@link fileSignature}. Handed back on save
+   * so a file changed underneath is refused rather than overwritten.
+   */
+  signature: string | null;
+};
+
+type TaskspaceFileTarget = {
+  /** The taskspace root, already resolved from its database record. */
+  baseDir: string;
+  /** A `/`-separated path relative to `baseDir`. */
+  subPath: string;
+};
+
+/**
+ * One text file of a taskspace, as the editor opens it.
+ *
+ * The counterpart to {@link listTaskspaceDirectory}, and deliberately a separate function
+ * from it: a listing carries names and metadata and nothing else, which is worth keeping
+ * true of the code as well as of the answer.
+ */
+export function readTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
+  const { real, base } = resolveTaskspaceFile(baseDir, subPath);
+  statRegularFile(real);
+
+  let bytes: Uint8Array;
+  try {
+    bytes = readFileSync(real);
+  } catch (e) {
+    throw mapFsError(e, "File not found");
+  }
+
+  return {
+    path: relative(base, real).split(sep).join("/"),
+    content: decodeText(bytes),
+    signature: fileSignature(real),
+  };
+}
+
+export type WriteTaskspaceFile = TaskspaceFileTarget & {
+  content: string;
+  /**
+   * The signature the editor last read. A mismatch means the file changed on disk since
+   * it was opened, and the write is refused rather than allowed to discard that change.
+   */
+  signature: string | null;
+};
+
+/**
+ * Saves `content` over an existing text file of a taskspace.
+ *
+ * Only over an existing one. There is no affordance in the panel for creating a file, and
+ * an endpoint that writes to a path nobody has seen is a larger thing to hold inside a
+ * boundary than one that writes back to a file the tree already listed.
+ *
+ * The write goes through {@link writeFileAtomic}, so a failure leaves the original intact
+ * rather than truncated, and the rename it ends with is what makes the returned signature
+ * reliably different from the one that came in.
+ */
+export function writeTaskspaceFile({
+  baseDir,
+  subPath,
+  content,
+  signature,
+}: WriteTaskspaceFile): TaskspaceFile {
+  const { real, base } = resolveTaskspaceFile(baseDir, subPath);
+  statRegularFile(real);
+
+  if (content.includes("\0"))
+    throw new TaskspaceFilesError("not-text", "Content is not UTF-8 text");
+  if (Buffer.byteLength(content, "utf-8") > TASKSPACE_FILE_BYTES_MAX)
+    throw new TaskspaceFilesError(
+      "too-large",
+      `Content is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
+    );
+
+  // Read immediately before the write rather than trusted from the open: the check is
+  // against what is on disk now, which is the only version the save can actually clobber.
+  if (fileSignature(real) !== signature)
+    throw new TaskspaceFilesError("stale", "File changed on disk since it was opened");
+
+  try {
+    writeFileAtomic(real, content);
+  } catch (e) {
+    throw mapFsError(e, "File not found");
+  }
+
+  return {
+    path: relative(base, real).split(sep).join("/"),
+    content,
+    signature: fileSignature(real),
+  };
 }

@@ -109,31 +109,51 @@ taskspace paths are redacted from the page data the export bakes in, so the
 directories a workspace was worked in are not served to whoever opens the site.
 Taskspaces therefore do not appear in a static export at all.
 
-## Taskspace file listing
+## Taskspace files
 
-The browser UI lists the contents of a taskspace directory, so the server reads
-the filesystem on behalf of whoever has the page open. What that reaches is
-bounded.
+The browser UI lists a taskspace directory, and opens and saves the text files in
+it, so the server reads and writes the filesystem on behalf of whoever has the
+page open. What that reaches is bounded.
 
-- Names and metadata only. The endpoint answers with entry names, kinds, sizes,
-  and modification times. No endpoint returns the contents of a file.
-- Confined to the taskspace. The directory comes from the taskspace record and
-  the workspace root; the request chooses only where to look inside it. A path
-  that walks out with `..` is refused, and so is one that resolves out through a
-  symlink. Symlinks are listed but never followed.
-- Dot-entries are skipped, which keeps `.git`, `.taskspace.json`, and a stray
-  `.env` out of the listing.
-- Gated like everything else. When a workspace has an API key, a listing request
-  without it gets 401 the same as any other request.
+Both the listing and the file endpoints are confined the same way. The directory
+comes from the taskspace record and the workspace root; the request chooses only
+where to look inside it. A path that walks out with `..` is refused, and so is
+one that resolves out through a symlink — the boundary is checked twice, once on
+the path as written and once on what it turned out to be with every link
+followed. Dot-entries are refused outright, which keeps `.git`,
+`.taskspace.json`, and a stray `.env` both out of the listing and beyond reach of
+anyone who types the name. Both are gated like everything else: when a workspace
+has an API key, a request without it gets 401.
 
-One consequence is worth stating plainly. A taskspace created outside the
-workspace root — `kozane taskspace create --dir <path>` — is listable, because
-the boundary is the taskspace directory rather than the root. Point a taskspace
-at a directory only if you would show its file names to anyone who can reach the
-server.
+**Listing** answers with entry names, kinds, sizes, and modification times, and
+nothing else. Symlinks are listed but never followed.
 
-A static export lists nothing: it has no server to ask, and taskspace paths are
-stripped from it, so no taskspace appears at all.
+**Reading** returns the text of one regular file. Symlinks, directories, and
+anything that is not a regular file are refused, as is a file over 1 MB or one
+that is not valid UTF-8.
+
+**Writing** replaces the contents of a file that is already there. It never
+creates one, never writes outside the taskspace, and never writes a path
+containing a dot-entry. The write is atomic — a temporary file, then a rename —
+so a failure leaves the original intact rather than truncated. A save also
+carries the file's identity as it was read, and is refused with 409 if the file
+changed on disk since, so a save cannot silently discard someone else's edit.
+
+Two consequences are worth stating plainly.
+
+- A taskspace created outside the workspace root — `kozane taskspace create --dir
+  <path>` — is both readable and writable, because the boundary is the taskspace
+  directory rather than the root. Point a taskspace at a directory only if you
+  would let anyone who can reach the server read and rewrite the text files in
+  it.
+- On a local server with no API key, which is the state after a plain `kozane
+  init`, any local user or process that can reach the port can rewrite those
+  files. That is the same trust boundary the database already sits behind, but
+  it now extends to the working directory a taskspace points at. Generate a key
+  with `kozane api key generate` if that is not what you want.
+
+A static export has neither: no server to ask, and taskspace paths are stripped
+from it, so no taskspace appears at all.
 
 ## Where each rule lives
 
@@ -141,4 +161,5 @@ stripped from it, so no taskspace appears at all.
 - Per-request key, TLS, redirect, and rate-limit gating — `src/hooks.server.ts`
 - Loopback, TLS, and rate-limit helpers — `src/lib/server/security.ts`
 - Login page and `next` guard — `src/routes/login/` and `src/lib/server/login.ts`
-- Taskspace listing boundary — `src/lib/server/taskspace-files.ts`
+- Taskspace listing, read, and write boundary — `src/lib/server/taskspace-files.ts`
+- Atomic file replacement — `src/lib/server/atomic-write.ts`

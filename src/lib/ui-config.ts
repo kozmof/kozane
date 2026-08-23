@@ -14,6 +14,12 @@ export type UiConfig = {
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
   defaultShowWarps: boolean;
+  /**
+   * Whether the taskspace file editor starts in vim normal mode and takes the vim key
+   * bindings. Off by default: the bindings would otherwise ambush anyone who opened a file
+   * expecting to type into it.
+   */
+  editorVimMode: boolean;
   /** Diameter of a warp marker, in canvas pixels. */
   warpMarkerSize: number;
   toggleFootersShortcut: string;
@@ -56,6 +62,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowFooter: false,
   defaultShowSidePanel: false,
   defaultShowWarps: true,
+  editorVimMode: false,
   warpMarkerSize: 20,
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
@@ -110,6 +117,7 @@ export const UI_BOOL_FIELDS = [
   "defaultShowFooter",
   "defaultShowSidePanel",
   "defaultShowWarps",
+  "editorVimMode",
 ] as const;
 
 export const NEW_CARD_PLACEMENTS = ["grid", "vertical-list"] as const;

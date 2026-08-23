@@ -6,15 +6,9 @@ import { getWorkspaceRoot } from "../../../../../../db/internal/config";
 import { resolveTaskspacePath } from "$lib/taskspace-path";
 import {
   listTaskspaceDirectory,
+  TASKSPACE_FILES_STATUS,
   TaskspaceFilesError,
-  type TaskspaceFilesReason,
 } from "$lib/server/taskspace-files";
-
-const STATUS: Record<TaskspaceFilesReason, number> = {
-  "invalid-path": 400,
-  forbidden: 403,
-  "not-found": 404,
-};
 
 /**
  * One directory of a taskspace, for the tree the scope panel draws. The panel asks per
@@ -48,7 +42,7 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
   try {
     return json(listTaskspaceDirectory({ baseDir, subPath: url.searchParams.get("path") ?? "" }));
   } catch (e) {
-    if (e instanceof TaskspaceFilesError) throw error(STATUS[e.reason], e.message);
+    if (e instanceof TaskspaceFilesError) throw error(TASKSPACE_FILES_STATUS[e.reason], e.message);
     console.error("Failed to list taskspace directory:", e);
     throw error(500, "Failed to list taskspace directory");
   }

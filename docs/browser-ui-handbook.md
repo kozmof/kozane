@@ -314,15 +314,46 @@ read when you first click it, so a taskspace holding a large checkout costs
 nothing until you go looking inside it. A folder you close keeps what it read,
 and opening it again is immediate.
 
-The tree is for reading, and only names, sizes, and modification times are read.
-Clicking a file does nothing: there is no way to open or edit a file from the
-browser. Dotfiles and dot-directories are hidden, so `.taskspace.json`, `.git`,
-and an `.env` are all left out. A symbolic link is listed as itself and cannot
-be opened.
+Listing a directory reads only names, sizes, and modification times. Dotfiles and
+dot-directories are hidden, so `.taskspace.json`, `.git`, and an `.env` are all
+left out, and none of them can be opened by typing the name either. A symbolic
+link is listed as itself and cannot be opened, because following one is not
+something a read confined to the taskspace can do.
 
 The tree does not refresh on its own — live sync watches the database, not the
 disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
 than 500 entries is cut off, and the panel says so at the end of the listing.
+
+### Editing a file
+
+Click a file to open it in an editor panel over the canvas. Type into it and
+press `Ctrl+S` or `Cmd+S` to save, or use the Save button in the panel header. A
+dot beside the path means there are unsaved changes. `Esc` closes the panel, but
+not over an unsaved change — save it or close it with the button.
+
+Only text files can be opened, and only up to 1 MB. A file larger than that, or
+one that is not valid UTF-8, is refused rather than truncated or mangled: the
+panel writes back what it holds, so anything it could not read exactly is
+something it must not be allowed to save over. Saving replaces an existing file
+and never creates one; there is no way to add a file from the browser.
+
+The file is read when it is opened, and the save is checked against what is on
+disk at that moment. If the file changed underneath — another editor, a build, a
+`git checkout` — the save is refused and the panel offers to reload from disk.
+Reloading discards what is in the editor, which is the point: the alternative is
+silently throwing away the change that arrived while you were typing.
+
+Undo and redo are `Ctrl+Z` and `Ctrl+Shift+Z` (or `Cmd`), and the history belongs
+to the editing session rather than to the file — closing the panel ends it.
+
+Set `ui.editorVimMode` to `true` in `.kozane/config.json` for vim key bindings.
+The panel then opens in normal mode, and the status bar shows which mode it is
+in. The bindings are `hjkl`, `w`/`b`/`e`, `0`/`^`/`$`, `gg`/`G`, `i`/`a`/`I`/`A`,
+`o`/`O`, `x`, `dd`, `u`, and `Ctrl+r`. `Esc` leaves insert mode rather than
+closing the panel. Saving stays on `Ctrl+S` in both modes.
+
+A static export made with `kozane net ssg generate` has no server to read a file
+from, so the rows stay inert there and clicking one does nothing.
 
 ## Card footers
 

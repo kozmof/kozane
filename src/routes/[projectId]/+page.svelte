@@ -41,6 +41,8 @@
   import FloatingComposer from "./components/FloatingComposer.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
+  import FileEditor from "./components/FileEditor.svelte";
+  import { EditorSession } from "./lib/editor/editor-session.svelte";
 
   let { data }: PageProps = $props();
 
@@ -62,6 +64,9 @@
   let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let warpPaletteOpen = $state(false);
+  // The taskspace file the editor has open, if any. One at a time: the panel is a place to
+  // work on a file, not a set of tabs, and a second one would want somewhere to put them.
+  const editor = new EditorSession();
   // Every other project's warps. Loaded with the page so the palette opens filled in, and
   // re-fetched when it opens so a warp set elsewhere since then is not missing.
   // `?? []`: a static export built before this feature has no directory in its page data.
@@ -440,6 +445,10 @@
   function handleKeydown(e: KeyboardEvent) {
     // The palette owns the keyboard while it is open, including the key that closes it.
     if (warpPaletteOpen) return;
+    // So does the editor. Its own handler stops propagation, but a click on the panel
+    // chrome — a button rather than the text — leaves focus somewhere that does not, and
+    // the board must not act on a key aimed at an open file.
+    if (editor.isOpen) return;
     // A held key repeats around thirty times a second, and every shortcut below is a
     // discrete command rather than something to hold: without this, resting on the
     // set-warp key drops a warp per repeat — each one a POST and a marker stacked on the
@@ -652,6 +661,21 @@
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
     onCreateTaskspace={actions.handleCreateTaskspace}
+    onOpenFile={readonly
+      ? undefined
+      : (taskspaceId, taskspaceName, path) =>
+          editor.open(
+            { fetcher: s.fetcher, projectId: s.projectId },
+            { taskspaceId, taskspaceName, path },
+          )}
     {readonly}
+  />
+
+  <FileEditor
+    session={editor}
+    ctx={{ fetcher: s.fetcher, projectId: s.projectId }}
+    vimMode={data.uiConfig.editorVimMode}
+    {readonly}
+    onClose={() => undefined}
   />
 </div>

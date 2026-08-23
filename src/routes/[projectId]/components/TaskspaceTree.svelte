@@ -11,6 +11,7 @@
     taskspaceId,
     path,
     depth = 0,
+    onOpenFile,
   }: {
     tree: TaskspaceTreeState;
     ctx: TaskspaceTreeContext;
@@ -18,6 +19,11 @@
     /** Directory being listed, relative to the taskspace root. Empty is the root. */
     path: string;
     depth?: number;
+    /**
+     * Opens a file in the editor. Absent in a static export, where there is no endpoint to
+     * read one with, and the rows stay inert as they always were.
+     */
+    onOpenFile?: (taskspacePath: string) => void;
   } = $props();
 
   const node = $derived(tree.node(taskspaceId, path));
@@ -88,12 +94,29 @@
         <span class={nameClass}>{entry.name}</span>
       </button>
       {#if expanded}
-        <TaskspaceTree {tree} {ctx} {taskspaceId} path={childPath(entry.name)} depth={depth + 1} />
+        <TaskspaceTree
+          {tree}
+          {ctx}
+          {taskspaceId}
+          path={childPath(entry.name)}
+          depth={depth + 1}
+          {onOpenFile}
+        />
       {/if}
+    {:else if entry.kind === "file" && onOpenFile}
+      <button
+        class={cx(rowBase, clickableClass)}
+        style:padding-left={`${indent}px`}
+        onclick={() => onOpenFile(childPath(entry.name))}
+      >
+        {@render fileIcon(false)}
+        <span class={nameClass}>{entry.name}</span>
+      </button>
     {:else}
-      <!-- Files are shown, not opened: no endpoint returns the contents of one. A symlink
-           is drawn as what it is and stays closed, because following one is not something
-           a listing confined to the taskspace can do. -->
+      <!-- A symlink is drawn as what it is and stays closed, because following one is not
+           something a read confined to the taskspace can do. Anything that is neither a
+           regular file nor a directory is inert for the same reason, and so is every row
+           in a static export, which has no endpoint to read a file with. -->
       <div class={rowBase} style:padding-left={`${indent}px`} title={entry.kind === "symlink" ? "Symbolic link" : undefined}>
         {@render fileIcon(entry.kind === "symlink")}
         <span class={nameClass}>{entry.name}</span>

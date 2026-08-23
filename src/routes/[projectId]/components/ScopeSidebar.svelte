@@ -22,6 +22,7 @@
     onAddToScope,
     onRemoveFromScope,
     onCreateTaskspace,
+    onOpenFile,
     readonly = false,
   }: {
     visible: boolean;
@@ -43,6 +44,11 @@
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
     onCreateTaskspace: () => void;
+    /**
+     * Opens one file of one taskspace in the editor. Absent in a static export, which has
+     * no endpoint to read a file with, and the tree rows stay inert there.
+     */
+    onOpenFile?: (taskspaceId: string, taskspaceName: string, path: string) => void;
     // Read-only export: keep scope filtering, hide create/delete/membership controls.
     readonly?: boolean;
   } = $props();
@@ -253,6 +259,8 @@
                       ctx={treeContext}
                       taskspaceId={taskspace.id}
                       path=""
+                      onOpenFile={onOpenFile &&
+                        ((filePath) => onOpenFile(taskspace.id, taskspace.name, filePath))}
                     />
                   {/if}
                 </div>

@@ -95,3 +95,55 @@ describe("TaskspaceTree", () => {
     expect(screen.getByText("Directory not found")).toBeTruthy();
   });
 });
+
+describe("TaskspaceTree opening a file", () => {
+  async function mountWithOpen(
+    byPath: Parameters<typeof fetcherFor>[0],
+    onOpenFile?: (taskspacePath: string) => void,
+  ) {
+    const fetcher = fetcherFor(byPath);
+    const ctx = { fetcher: fetcher as never, projectId: "project-1" };
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "", onOpenFile } });
+    return { tree, fetcher };
+  }
+
+  it("asks to open a file when its row is clicked", async () => {
+    const onOpenFile = vi.fn();
+    await mountWithOpen({ "": { entries: [{ name: "app.ts", kind: "file" }] } }, onOpenFile);
+
+    await userEvent.click(screen.getByRole("button", { name: /app\.ts/ }));
+    expect(onOpenFile).toHaveBeenCalledWith("app.ts");
+  });
+
+  it("names a file in a subdirectory by its path from the taskspace root", async () => {
+    const onOpenFile = vi.fn();
+    const fetcher = fetcherFor({
+      "": { entries: [{ name: "src", kind: "directory" }] },
+      src: { entries: [{ name: "app.ts", kind: "file" }] },
+    });
+    const ctx = { fetcher: fetcher as never, projectId: "project-1" };
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "", onOpenFile } });
+
+    await userEvent.click(screen.getByRole("button", { name: /src/ }));
+    await userEvent.click(await screen.findByRole("button", { name: /app\.ts/ }));
+    expect(onOpenFile).toHaveBeenCalledWith("src/app.ts");
+  });
+
+  it("leaves a symbolic link inert, because following one is not something a read can do", async () => {
+    const onOpenFile = vi.fn();
+    await mountWithOpen({ "": { entries: [{ name: "link", kind: "symlink" }] } }, onOpenFile);
+
+    expect(screen.queryByRole("button", { name: /link/ })).toBeNull();
+    expect(onOpenFile).not.toHaveBeenCalled();
+  });
+
+  it("leaves every row inert when there is no handler, as a static export has none", async () => {
+    await mountWithOpen({ "": { entries: [{ name: "app.ts", kind: "file" }] } }, undefined);
+    expect(screen.queryByRole("button", { name: /app\.ts/ })).toBeNull();
+    expect(screen.getByText("app.ts")).toBeInTheDocument();
+  });
+});
