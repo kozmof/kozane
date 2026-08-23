@@ -138,8 +138,9 @@ test("places the caret where the text is clicked", async ({ page }) => {
 
   // Clicking well past the end of the text stops at the end of the line rather than
   // running on into the empty space after it. "charlie" is seven characters, so the
-  // caret belongs at column 8.
-  await page.mouse.click(box.x + box.width - 1, middleY);
+  // caret belongs at column 8. Halfway across the panel rather than at its edge: a line
+  // runs the full width of the surface, and its far edge is where the scrollbar sits.
+  await page.mouse.click(box.x + box.width / 2, middleY);
   await expect(page.getByText("Ln 3, Col 8")).toBeVisible();
 
   // And the top of a line belongs to that line: the vertical padding was being counted
@@ -163,6 +164,23 @@ test("takes focus back when the text is clicked after focus went elsewhere", asy
   // And it is really focused, not just painted: typing lands in the file.
   await page.keyboard.type("X");
   await expect(page.getByTitle("Unsaved changes")).toBeVisible();
+});
+
+test("fits the text to the panel rather than overflowing it sideways", async ({ page }) => {
+  await openTheFile(page);
+
+  const surface = page.getByTestId("editor-surface");
+  const overflow = await surface.evaluate((el) => el.scrollWidth - el.clientWidth);
+  // A short file has nothing to scroll to. The sizer used to add its own padding on top of
+  // a 100% width, which put a horizontal scrollbar under every file and pushed each line a
+  // padding past the visible edge.
+  expect(overflow).toBe(0);
+
+  // And a line ends where the panel does, so a click anywhere along it reaches the editor.
+  const lineBox = await page.getByText("charlie").boundingBox();
+  const surfaceBox = await surface.boundingBox();
+  if (!lineBox || !surfaceBox) throw new Error("no box");
+  expect(lineBox.x + lineBox.width).toBeLessThanOrEqual(surfaceBox.x + surfaceBox.width + 1);
 });
 
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {

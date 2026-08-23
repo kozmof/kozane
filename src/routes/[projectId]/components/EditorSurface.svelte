@@ -456,12 +456,16 @@
   data-testid="editor-surface"
 >
   <!-- The sizer is what the scrollbar measures: the whole document's height, whether or
-       not the lines that make it up are currently in the DOM. -->
+       not the lines that make it up are currently in the DOM.
+
+       No padding of its own. Everything inside is absolutely positioned, and an absolute
+       child is placed against the padding box — so padding here moved nothing, while
+       still widening the box past the scroll container and putting a horizontal scrollbar
+       under every file. The gaps come from `PAD_X`/`PAD_Y`, which the lines carry as their
+       own padding and the caret and selection add when they are placed. -->
   <div
-    class={css({ position: "relative", width: "100%" })}
+    class={css({ position: "relative", width: "100%", boxSizing: "border-box" })}
     style:height={`${contentHeight + PAD_Y * 2}px`}
-    style:padding={`${PAD_Y}px ${PAD_X}px`}
-    style:box-sizing="content-box"
   >
     <!-- Selection, painted under the text as rectangles. -->
     {#each rects as rect, i (i)}
