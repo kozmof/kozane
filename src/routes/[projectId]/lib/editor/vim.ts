@@ -109,11 +109,12 @@ function wordEnd(doc: EditorDocument, from: Caret): Caret {
   return { line, column };
 }
 
-function deleteLine(doc: EditorDocument, line: number): Caret {
+/** `caretBefore` is where the caret sat when `dd` was pressed, which is where undo returns it. */
+function deleteLine(doc: EditorDocument, line: number, caretBefore: Caret): Caret {
   const lastLine = doc.lineCount - 1;
-  if (line < lastLine) doc.delete({ line, column: 0 }, { line: line + 1, column: 0 });
-  else if (line > 0) doc.delete(endOfLine(doc, line - 1), endOfLine(doc, line));
-  else doc.delete({ line: 0, column: 0 }, endOfLine(doc, 0));
+  if (line < lastLine) doc.delete({ line, column: 0 }, { line: line + 1, column: 0 }, caretBefore);
+  else if (line > 0) doc.delete(endOfLine(doc, line - 1), endOfLine(doc, line), caretBefore);
+  else doc.delete({ line: 0, column: 0 }, endOfLine(doc, 0), caretBefore);
   return clampNormal(doc, { line: Math.min(line, Math.max(0, doc.lineCount - 1)), column: 0 });
 }
 
@@ -189,7 +190,7 @@ export function handleVimKey(
   if (vim.pending === "d") {
     if (event.key === "d") {
       if (readonly) return normal(at);
-      return normal(deleteLine(doc, line));
+      return normal(deleteLine(doc, line, at));
     }
     return normal(at);
   }

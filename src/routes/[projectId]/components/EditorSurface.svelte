@@ -131,7 +131,9 @@
   function deleteSelection(): boolean {
     const span = selected();
     if (!span) return false;
-    caret = doc.delete(span.start, span.end);
+    // The live caret is one end of the selection, and which end depends on the direction
+    // it was dragged. It is where undo has to put it back to.
+    caret = doc.delete(span.start, span.end, caret);
     collapse();
     return true;
   }
@@ -270,11 +272,14 @@
       case "Backspace": {
         event.preventDefault();
         if (deleteSelection()) return;
+        // Backspace takes what is behind the caret, so the caret was at the end of the
+        // range rather than its start — which is where undo belongs.
         if (caret.column > 0)
-          caret = doc.delete({ line: caret.line, column: caret.column - 1 }, caret);
+          caret = doc.delete({ line: caret.line, column: caret.column - 1 }, caret, caret);
         else if (caret.line > 0)
           caret = doc.delete(
             { line: caret.line - 1, column: doc.lineText(caret.line - 1).length },
+            caret,
             caret,
           );
         return;

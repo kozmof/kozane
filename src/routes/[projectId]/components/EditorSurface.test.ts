@@ -132,6 +132,46 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("alpha!X\n");
   });
 
+  it("returns the caret to where it was when a backspace is undone", async () => {
+    const { doc, sink } = mount("hello world\n", { caret: { line: 0, column: 5 } });
+    sink.focus();
+    await userEvent.keyboard("{Backspace}");
+    expect(doc.text()).toBe("hell world\n");
+
+    await userEvent.keyboard("{Control>}z{/Control}");
+    expect(doc.text()).toBe("hello world\n");
+
+    // Typing shows where the caret really is: back at column 5, where the backspace was
+    // pressed from, rather than at 4 where the deletion began.
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("helloX world\n");
+  });
+
+  it("returns the caret to where it was when a forward delete is undone", async () => {
+    const { doc, sink } = mount("hello world\n", { caret: { line: 0, column: 5 } });
+    sink.focus();
+    await userEvent.keyboard("{Delete}");
+    expect(doc.text()).toBe("helloworld\n");
+
+    await userEvent.keyboard("{Control>}z{/Control}");
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("helloX world\n");
+  });
+
+  it("returns the caret to the end a selection was dragged to when its delete is undone", async () => {
+    const { doc, sink } = mount("hello world\n", {
+      caret: { line: 0, column: 11 },
+      anchor: { line: 0, column: 6 },
+    });
+    sink.focus();
+    await userEvent.keyboard("{Backspace}");
+    expect(doc.text()).toBe("hello \n");
+
+    await userEvent.keyboard("{Control>}z{/Control}");
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("hello worldX\n");
+  });
+
   it("leaves the caret alone when there is nothing to undo", async () => {
     const { doc, sink } = mount("alpha\n", { caret: { line: 0, column: 2 } });
     sink.focus();

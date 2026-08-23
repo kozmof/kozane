@@ -181,8 +181,17 @@ export class EditorDocument {
     return this.#caretAt(start + byteLength(text));
   }
 
-  /** Deletes `start`–`end`, and answers where the caret ends up. */
-  delete(start: Caret, end: Caret): Caret {
+  /**
+   * Deletes `start`–`end`, and answers where the caret ends up.
+   *
+   * `caretBefore` is where the caret was when the key was pressed, which is not something
+   * the range says: a backspace deletes what is behind a caret sitting at `end`, and a
+   * forward delete takes what is in front of one sitting at `start`. It is what undo puts
+   * the caret back to, so passing the wrong end of the range returns it a character away
+   * from where the edit was made. Defaults to `start`, which is right for a deletion the
+   * caret was already sitting at the front of.
+   */
+  delete(start: Caret, end: Caret, caretBefore: Caret = start): Caret {
     const from = this.#byteOffset(start);
     const to = this.#byteOffset(end);
     if (from === to) return start;
@@ -190,14 +199,17 @@ export class EditorDocument {
       store.DocumentActions.delete(
         position.byteOffset(from),
         position.byteOffset(to),
-        this.#selectionAt(from),
+        this.#selectionAt(this.#byteOffset(caretBefore)),
       ),
     );
     return this.#caretAt(from);
   }
 
-  /** Replaces `start`–`end` with `text` in one entry, so one undo takes it all back. */
-  replace(start: Caret, end: Caret, text: string): Caret {
+  /**
+   * Replaces `start`–`end` with `text` in one entry, so one undo takes it all back.
+   * `caretBefore` carries the same meaning as on {@link delete}.
+   */
+  replace(start: Caret, end: Caret, text: string, caretBefore: Caret = start): Caret {
     const from = this.#byteOffset(start);
     const to = this.#byteOffset(end);
     this.#store.dispatch(
@@ -205,7 +217,7 @@ export class EditorDocument {
         position.byteOffset(from),
         position.byteOffset(to),
         text,
-        this.#selectionAt(from),
+        this.#selectionAt(this.#byteOffset(caretBefore)),
       ),
     );
     return this.#caretAt(from + byteLength(text));

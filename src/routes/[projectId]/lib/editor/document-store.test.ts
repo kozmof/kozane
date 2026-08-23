@@ -136,6 +136,50 @@ describe("EditorDocument", () => {
     expect(d.undo()).toEqual({ line: 1, column: 2 });
   });
 
+  it("returns the caret to the end of a backspaced range, where the caret actually was", () => {
+    // A backspace at column 5 deletes [4,5) — the caret was at 5, not at 4, and 5 is where
+    // undo has to put it back. Recording the range's start instead left it a character
+    // short of where the typing had got to.
+    const d = doc("hello world\n");
+    d.delete({ line: 0, column: 4 }, { line: 0, column: 5 }, { line: 0, column: 5 });
+    expect(d.text()).toBe("hell world\n");
+    expect(d.undo()).toEqual({ line: 0, column: 5 });
+    expect(d.text()).toBe("hello world\n");
+  });
+
+  it("returns the caret to the start of a forward-deleted range", () => {
+    // Delete takes what is in front of the caret, so the caret was at the start already.
+    const d = doc("hello world\n");
+    d.delete({ line: 0, column: 5 }, { line: 0, column: 6 }, { line: 0, column: 5 });
+    expect(d.undo()).toEqual({ line: 0, column: 5 });
+  });
+
+  it("takes the range's start when no caret is named", () => {
+    const d = doc("hello world\n");
+    d.delete({ line: 0, column: 4 }, { line: 0, column: 5 });
+    expect(d.undo()).toEqual({ line: 0, column: 4 });
+  });
+
+  it("returns the caret to the end a selection was dragged to", () => {
+    const d = doc("hello world\n");
+    // Dragged right to left, so the live caret is the start of the range.
+    d.delete({ line: 0, column: 6 }, { line: 0, column: 11 }, { line: 0, column: 6 });
+    expect(d.undo()).toEqual({ line: 0, column: 6 });
+
+    const back = doc("hello world\n");
+    // Dragged left to right, so the live caret is the end of it.
+    back.delete({ line: 0, column: 6 }, { line: 0, column: 11 }, { line: 0, column: 11 });
+    expect(back.undo()).toEqual({ line: 0, column: 11 });
+  });
+
+  it("still lands a redo at the deletion point rather than at the recorded caret", () => {
+    const d = doc("hello world\n");
+    d.delete({ line: 0, column: 4 }, { line: 0, column: 5 }, { line: 0, column: 5 });
+    d.undo();
+    expect(d.redo()).toEqual({ line: 0, column: 4 });
+    expect(d.text()).toBe("hell world\n");
+  });
+
   it("puts the caret back where an undone replace was made", () => {
     const d = doc("alpha\nbravo\n");
     d.replace({ line: 1, column: 0 }, { line: 1, column: 5 }, "X");

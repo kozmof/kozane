@@ -88,6 +88,13 @@ async function columnX(page: Page, lineText: string, column: number): Promise<nu
   );
 }
 
+/** The vertical middle of the line reading `lineText`. */
+async function lineY(page: Page, lineText: string): Promise<number> {
+  const box = await page.getByText(lineText, { exact: true }).boundingBox();
+  if (!box) throw new Error(`no box for line ${lineText}`);
+  return box.y + box.height / 2;
+}
+
 /** The middle of the cell `column` occupies, which is where a click on it belongs. */
 async function cellCentre(page: Page, lineText: string, column: number): Promise<number> {
   const [left, right] = await Promise.all([
@@ -345,6 +352,28 @@ test("draws only the lines in view and scrolls the rest of a long file", async (
   await surface.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
   await expect(page.getByText("line 399", { exact: true })).toBeVisible();
   await expect(page.getByText("line 0", { exact: true })).toBeHidden();
+});
+
+test("returns the caret to where a backspace was pressed from when it is undone", async ({
+  page,
+}) => {
+  await openFile(page, "selectme.md");
+
+  // Put the caret after "e", backspace it away, then undo.
+  const line = "abcdefghij";
+  await page.mouse.click(await columnX(page, line, 5), await lineY(page, line));
+  await expect(page.getByText("Ln 1, Col 6")).toBeVisible();
+
+  await page.keyboard.press("Backspace");
+  await expect(page.getByText("abcdfghij")).toBeVisible();
+  await expect(page.getByText("Ln 1, Col 5")).toBeVisible();
+
+  // Back to column 6, where the key was pressed from — not column 5, where the deletion
+  // began. The difference is a character, and it is the difference between carrying on
+  // typing and having to look for where you were.
+  await page.keyboard.press("Control+z");
+  await expect(page.getByText("abcdefghij")).toBeVisible();
+  await expect(page.getByText("Ln 1, Col 6")).toBeVisible();
 });
 
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {
