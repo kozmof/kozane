@@ -174,19 +174,22 @@
     if (accel) {
       switch (event.key) {
         case "z":
-        case "Z":
+        case "Z": {
           event.preventDefault();
-          if (event.shiftKey) doc.redo();
-          else doc.undo();
+          // Where the edit was, not where the caret happened to be sitting: an undo that
+          // leaves the caret behind sends you looking for what just changed.
+          const to = event.shiftKey ? doc.redo() : doc.undo();
           collapse();
-          caret = doc.clamp(caret);
+          caret = doc.clamp(to ?? caret);
           return;
-        case "y":
+        }
+        case "y": {
           event.preventDefault();
-          doc.redo();
+          const to = doc.redo();
           collapse();
-          caret = doc.clamp(caret);
+          caret = doc.clamp(to ?? caret);
           return;
+        }
         case "a":
           event.preventDefault();
           anchor = { line: 0, column: 0 };

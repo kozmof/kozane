@@ -189,6 +189,41 @@ describe("vim edits", () => {
     expect(vim.pending).toBeNull();
   });
 
+  it("moves the caret to the edit u takes back", () => {
+    // Delete a character on the last line, walk up to the first, then undo: the caret
+    // belongs back at the restored text, not left where the motions ended.
+    const { caret, text } = press("alpha\nbravo\ncharlie\n", [
+      "j",
+      "j",
+      "l",
+      "l",
+      "x",
+      "g",
+      "g",
+      "u",
+    ]);
+    expect(text).toBe("alpha\nbravo\ncharlie\n");
+    expect(caret).toEqual({ line: 2, column: 2 });
+  });
+
+  it("moves the caret to the edit Ctrl+r puts back", () => {
+    const { caret, text } = press("alpha\nbravo\n", [
+      "j",
+      "x",
+      "g",
+      "g",
+      "u",
+      { key: "r", ctrl: true },
+    ]);
+    expect(text).toBe("alpha\nravo\n");
+    expect(caret).toEqual({ line: 1, column: 0 });
+  });
+
+  it("leaves the caret where it is when there is nothing to undo", () => {
+    const { caret } = press("alpha\n", ["l", "l", "u"]);
+    expect(caret).toEqual({ line: 0, column: 2 });
+  });
+
   it("undoes with u and redoes with Ctrl+r", () => {
     const doc = new EditorDocument("abc\n");
     let vim = createVimState();

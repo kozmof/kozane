@@ -154,8 +154,12 @@ export function handleVimKey(
   // except the one vim defines.
   if (accel) {
     if (event.key === "r") {
-      doc.redo();
-      return { vim: { ...vim, pending: null }, caret: clampNormal(doc, caret), anchor: null };
+      const to = doc.redo();
+      return {
+        vim: { ...vim, pending: null },
+        caret: clampNormal(doc, to ?? caret),
+        anchor: null,
+      };
     }
     return null;
   }
@@ -252,8 +256,9 @@ export function handleVimKey(
       return normal(at);
     }
     case "u":
-      doc.undo();
-      return normal(at);
+      // `normal` clamps, so an undone edit at the end of a line lands on its last
+      // character rather than after it, as vim does.
+      return normal(doc.undo() ?? at);
   }
 
   // An unbound key in normal mode is still vim's: swallowing it is what keeps a stray

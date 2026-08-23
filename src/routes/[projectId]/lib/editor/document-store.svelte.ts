@@ -1,4 +1,4 @@
-import { history, query, rendering, scan, store } from "@kozmof/reed";
+import { history, position, query, rendering, scan, store } from "@kozmof/reed";
 
 type DocumentState = ReturnType<ReturnType<typeof store.createDocumentStore>["getSnapshot"]>;
 type ReedStore = ReturnType<typeof store.createDocumentStore>;
@@ -143,10 +143,26 @@ export class EditorDocument {
     return at ?? { line: 0, column: 0 };
   }
 
+  /**
+   * Where the caret was when an edit was made, recorded on the action itself.
+   *
+   * This is what undo has to put the caret back to. Reed keeps the selection an action
+   * carried in its history entry and restores it on the way back, so an edit dispatched
+   * without one leaves nothing to return to and undo strands the caret wherever it
+   * happens to be — which, for an edit made far up a long file, is nowhere near the text
+   * that just changed.
+   */
+  #selectionAt(byteOffset: number) {
+    const at = position.byteOffset(byteOffset);
+    return [{ anchor: at, head: at }];
+  }
+
   /** Inserts `text` at `at`, and answers where the caret ends up. */
   insert(at: Caret, text: string): Caret {
     const start = this.#byteOffset(at);
-    this.#store.dispatch(store.DocumentActions.insert(start as never, text));
+    this.#store.dispatch(
+      store.DocumentActions.insert(position.byteOffset(start), text, this.#selectionAt(start)),
+    );
     return this.#caretAt(start + byteLength(text));
   }
 
@@ -155,7 +171,13 @@ export class EditorDocument {
     const from = this.#byteOffset(start);
     const to = this.#byteOffset(end);
     if (from === to) return start;
-    this.#store.dispatch(store.DocumentActions.delete(from as never, to as never));
+    this.#store.dispatch(
+      store.DocumentActions.delete(
+        position.byteOffset(from),
+        position.byteOffset(to),
+        this.#selectionAt(from),
+      ),
+    );
     return this.#caretAt(from);
   }
 
@@ -163,7 +185,14 @@ export class EditorDocument {
   replace(start: Caret, end: Caret, text: string): Caret {
     const from = this.#byteOffset(start);
     const to = this.#byteOffset(end);
-    this.#store.dispatch(store.DocumentActions.replace(from as never, to as never, text));
+    this.#store.dispatch(
+      store.DocumentActions.replace(
+        position.byteOffset(from),
+        position.byteOffset(to),
+        text,
+        this.#selectionAt(from),
+      ),
+    );
     return this.#caretAt(from + byteLength(text));
   }
 
@@ -175,12 +204,28 @@ export class EditorDocument {
     return whole.slice(from, to);
   }
 
-  undo(): void {
-    if (this.canUndo) this.#store.dispatch(store.DocumentActions.undo());
+  /** The caret this document's own selection points at, or null when it has none. */
+  selectionCaret(): Caret | null {
+    const head = query.getSelectionHead(this.state) as unknown as number | undefined | null;
+    return head === undefined || head === null ? null : this.#caretAt(head);
   }
 
-  redo(): void {
-    if (this.canRedo) this.#store.dispatch(store.DocumentActions.redo());
+  /**
+   * Steps back one edit and answers where the caret belongs: the position recorded with
+   * the edit being undone. Null when there was nothing to undo, so a caller can leave the
+   * caret where it is rather than move it somewhere nothing chose.
+   */
+  undo(): Caret | null {
+    if (!this.canUndo) return null;
+    this.#store.dispatch(store.DocumentActions.undo());
+    return this.selectionCaret();
+  }
+
+  /** The counterpart to {@link undo}: forward one edit, and where that leaves the caret. */
+  redo(): Caret | null {
+    if (!this.canRedo) return null;
+    this.#store.dispatch(store.DocumentActions.redo());
+    return this.selectionCaret();
   }
 }
 

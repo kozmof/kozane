@@ -119,6 +119,62 @@ describe("EditorDocument", () => {
     expect(d.textBetween({ line: 1, column: 0 }, { line: 1, column: 3 })).toBe("two");
   });
 
+  it("puts the caret back where an undone insert was made", () => {
+    const d = doc("alpha\nbravo\ncharlie\n");
+    d.insert({ line: 2, column: 7 }, "!!!");
+    expect(d.text()).toBe("alpha\nbravo\ncharlie!!!\n");
+
+    // The caret is far from the edit when the undo happens — up at the top of the file.
+    expect(d.undo()).toEqual({ line: 2, column: 7 });
+    expect(d.text()).toBe("alpha\nbravo\ncharlie\n");
+  });
+
+  it("puts the caret back where an undone delete was made", () => {
+    const d = doc("alpha\nbravo\ncharlie\n");
+    d.delete({ line: 1, column: 2 }, { line: 1, column: 5 });
+    expect(d.text()).toBe("alpha\nbr\ncharlie\n");
+    expect(d.undo()).toEqual({ line: 1, column: 2 });
+  });
+
+  it("puts the caret back where an undone replace was made", () => {
+    const d = doc("alpha\nbravo\n");
+    d.replace({ line: 1, column: 0 }, { line: 1, column: 5 }, "X");
+    expect(d.undo()).toEqual({ line: 1, column: 0 });
+  });
+
+  it("moves the caret past the text a redo puts back", () => {
+    const d = doc("alpha\n");
+    d.insert({ line: 0, column: 5 }, "!!");
+    d.undo();
+    expect(d.redo()).toEqual({ line: 0, column: 7 });
+    expect(d.text()).toBe("alpha!!\n");
+  });
+
+  it("reports the caret across a run of undos back to the start", () => {
+    const d = doc("a\n");
+    d.insert({ line: 0, column: 1 }, "b");
+    d.insert({ line: 0, column: 2 }, "c");
+    expect(d.text()).toBe("abc\n");
+
+    expect(d.undo()).toEqual({ line: 0, column: 2 });
+    expect(d.undo()).toEqual({ line: 0, column: 1 });
+    expect(d.text()).toBe("a\n");
+  });
+
+  it("answers null rather than a position when there is nothing to undo or redo", () => {
+    const d = doc("a\n");
+    expect(d.undo()).toBeNull();
+    expect(d.redo()).toBeNull();
+  });
+
+  it("tracks the caret through a multi-line edit", () => {
+    const d = doc("one\ntwo\nthree\n");
+    d.delete({ line: 0, column: 1 }, { line: 2, column: 2 });
+    expect(d.text()).toBe("oree\n");
+    expect(d.undo()).toEqual({ line: 0, column: 1 });
+    expect(d.text()).toBe("one\ntwo\nthree\n");
+  });
+
   it("walks back and forward through history", () => {
     const d = doc("a\n");
     expect(d.canUndo).toBe(false);

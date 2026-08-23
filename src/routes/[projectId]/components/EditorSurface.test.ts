@@ -103,6 +103,43 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("ab\n");
   });
 
+  it("moves the caret to the edit an undo takes back", async () => {
+    const { doc, sink } = mount("alpha\nbravo\n", { caret: { line: 0, column: 5 } });
+    sink.focus();
+    await userEvent.keyboard("!");
+    expect(doc.text()).toBe("alpha!\nbravo\n");
+
+    // Walk the caret away from the edit, onto the line below.
+    await userEvent.keyboard("{ArrowDown}{End}");
+    await userEvent.keyboard("{Control>}z{/Control}");
+    expect(doc.text()).toBe("alpha\nbravo\n");
+
+    // Typing now proves where the caret actually is: back at the undone edit, not left
+    // down on the second line where it was when undo was pressed.
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("alphaX\nbravo\n");
+  });
+
+  it("moves the caret past the text a redo puts back", async () => {
+    const { doc, sink } = mount("alpha\n", { caret: { line: 0, column: 5 } });
+    sink.focus();
+    await userEvent.keyboard("!");
+    await userEvent.keyboard("{Control>}z{/Control}");
+    await userEvent.keyboard("{Control>}{Shift>}z{/Shift}{/Control}");
+    expect(doc.text()).toBe("alpha!\n");
+
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("alpha!X\n");
+  });
+
+  it("leaves the caret alone when there is nothing to undo", async () => {
+    const { doc, sink } = mount("alpha\n", { caret: { line: 0, column: 2 } });
+    sink.focus();
+    await userEvent.keyboard("{Control>}z{/Control}");
+    await userEvent.keyboard("X");
+    expect(doc.text()).toBe("alXpha\n");
+  });
+
   it("leaves the save accelerator for the overlay to handle", async () => {
     const { doc, sink } = mount("a\n", { caret: { line: 0, column: 1 } });
     sink.focus();

@@ -183,6 +183,30 @@ test("fits the text to the panel rather than overflowing it sideways", async ({ 
   expect(lineBox.x + lineBox.width).toBeLessThanOrEqual(surfaceBox.x + surfaceBox.width + 1);
 });
 
+test("puts the caret back at the edit an undo takes back", async ({ page }) => {
+  await openTheFile(page);
+  await page.getByTestId("editor-sink").focus();
+
+  // Edit the third line, then walk the caret up to the first.
+  await page.getByText("charlie").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type("!!");
+  await expect(page.getByText("charlie!!")).toBeVisible();
+
+  await page.keyboard.press("Control+Home");
+  await expect(page.getByText("Ln 1, Col 1")).toBeVisible();
+
+  // Undo belongs at the text it restored, not at the caret it was pressed from.
+  await page.keyboard.press("Control+z");
+  await expect(page.getByText("charlie")).toBeVisible();
+  await expect(page.getByText("Ln 3, Col 8")).toBeVisible();
+
+  // Redo lands past the text it put back.
+  await page.keyboard.press("Control+Shift+z");
+  await expect(page.getByText("charlie!!")).toBeVisible();
+  await expect(page.getByText("Ln 3, Col 10")).toBeVisible();
+});
+
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {
   await openTheFile(page);
   await page.getByTestId("editor-sink").focus();
