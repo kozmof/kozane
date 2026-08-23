@@ -1,7 +1,7 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { getProject } from "../../../../../../db/api/project";
-import { getTaskspace } from "../../../../../../db/api/taskspace";
+import { getTaskspaceInProject } from "../../../../../../db/api/taskspace";
 import { getWorkspaceRoot } from "../../../../../../db/internal/config";
 import { resolveTaskspacePath } from "$lib/taskspace-path";
 import {
@@ -23,12 +23,16 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
   if (!(await getProject({ db, projectId: params.projectId })))
     throw error(404, "Project not found");
 
-  // Looked up by id alone. The board only ever asks about taskspaces it was given, and
-  // `getTaskspacesInProject` is what decides those — this project's and the unassigned
-  // ones. Repeating that filter here would buy nothing: the boundary that matters is the
-  // one `listTaskspaceDirectory` holds below, which keeps a request inside whichever
-  // taskspace directory it named regardless of how the row was found.
-  const taskspace = await getTaskspace({ db, taskspaceId: params.taskspaceId });
+  // Looked up under the same filter the board draws with — this project's taskspaces and
+  // the unassigned ones — so the panel and the endpoints behind it answer about one set.
+  // What keeps a request inside a directory is the boundary `listTaskspaceDirectory` holds
+  // below, which stands however the row was found; this is about the endpoint not quietly
+  // reaching further than the project it is addressed to.
+  const taskspace = await getTaskspaceInProject({
+    db,
+    projectId: params.projectId,
+    taskspaceId: params.taskspaceId,
+  });
   if (!taskspace) throw error(404, "Taskspace not found");
   if (!taskspace.path) throw error(404, "Taskspace has no directory");
 

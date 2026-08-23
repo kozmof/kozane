@@ -1,6 +1,6 @@
 import { taskspaceTable } from "../schema.js";
 import type { PathKind } from "../schema.js";
-import { eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import type { NeedsDB, NeedsProject, NeedsTaskspace, Taskspace } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
@@ -30,6 +30,36 @@ export async function getTaskspacesInProject({
     .select()
     .from(taskspaceTable)
     .where(or(eq(taskspaceTable.projectId, projectId), isNull(taskspaceTable.projectId)));
+}
+
+type GetTaskspaceInProject = NeedsProject & { taskspaceId: string };
+
+/**
+ * One taskspace, but only if this project's board can see it — its own, or one assigned to
+ * no project at all. Exactly the filter {@link getTaskspacesInProject} applies, for a
+ * single row, so "shown in the panel" and "reachable through the project's endpoints" stay
+ * the same set rather than two that happen to agree.
+ *
+ * The HTTP routes look a taskspace up this way rather than by id alone. That is not what
+ * keeps a request inside a directory — `taskspace-files.ts` holds that boundary, and holds
+ * it however the row was found — but a project's endpoint answering about another
+ * project's taskspace is a surprise nothing else in the API offers.
+ */
+export async function getTaskspaceInProject({
+  db,
+  projectId,
+  taskspaceId,
+}: GetTaskspaceInProject): Promise<Taskspace | undefined> {
+  return db
+    .select()
+    .from(taskspaceTable)
+    .where(
+      and(
+        eq(taskspaceTable.id, taskspaceId),
+        or(eq(taskspaceTable.projectId, projectId), isNull(taskspaceTable.projectId)),
+      ),
+    )
+    .get();
 }
 
 type AddTaskspace = NeedsDB & {

@@ -1,7 +1,7 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { getProject } from "../../../../../../db/api/project";
-import { getTaskspace } from "../../../../../../db/api/taskspace";
+import { getTaskspaceInProject } from "../../../../../../db/api/taskspace";
 import { getWorkspaceRoot } from "../../../../../../db/internal/config";
 import { resolveTaskspacePath } from "$lib/taskspace-path";
 import {
@@ -17,16 +17,20 @@ import { optionalString, readJsonObject, requireString } from "../../../../lib/r
  * workspace root alone. The request chooses only where to look within it, and
  * `readTaskspaceFile`/`writeTaskspaceFile` are what hold it to that.
  *
- * The same lookup the sibling `files/` route makes, for the same reason: the board only
- * ever asks about taskspaces it was given, and the boundary that matters is the one
- * enforced below rather than how the row was found.
+ * The row is fetched through `getTaskspaceInProject`, so a project's endpoint answers only
+ * about the taskspaces that project's board draws. That is not what keeps a request inside
+ * a directory — the functions above hold that boundary however the row was found — but
+ * every other project-scoped endpoint here refuses a row belonging to another project, and
+ * being the one that does not is a difference nothing gains from.
+ *
+ * The same lookup the sibling `files/` route makes.
  */
 async function taskspaceBaseDir(locals: App.Locals, projectId: string, taskspaceId: string) {
   const { db } = locals;
 
   if (!(await getProject({ db, projectId }))) throw error(404, "Project not found");
 
-  const taskspace = await getTaskspace({ db, taskspaceId });
+  const taskspace = await getTaskspaceInProject({ db, projectId, taskspaceId });
   if (!taskspace) throw error(404, "Taskspace not found");
   if (!taskspace.path) throw error(404, "Taskspace has no directory");
 

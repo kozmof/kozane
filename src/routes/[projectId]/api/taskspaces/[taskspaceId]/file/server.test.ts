@@ -155,6 +155,34 @@ describe("/[projectId]/api/taskspaces/[taskspaceId]/file", () => {
         "Taskspace not found",
       );
     });
+
+    it("answers 404 for a taskspace belonging to another project", async () => {
+      const otherProjectId = await addProject({ db, name: "Other Project" });
+      const otherTaskspaceId = await addTaskspace({
+        db,
+        projectId: otherProjectId,
+        name: "demo",
+        path: "demo",
+      });
+
+      // The file is there and readable; the project the endpoint is addressed to is what
+      // refuses it, the way every other project-scoped endpoint here does.
+      await expectHttpRejection(
+        GET(getEvent(db, projectId, otherTaskspaceId, "README.md")),
+        404,
+        "Taskspace not found",
+      );
+    });
+
+    it("reads a taskspace assigned to no project from any project's endpoint", async () => {
+      // Unplaced rather than another project's, and drawn on every board — so the file
+      // endpoint behind that panel has to answer about it too.
+      const unassignedId = await addTaskspace({ db, name: "demo", path: "demo" });
+
+      expect((await body(GET(getEvent(db, projectId, unassignedId, "README.md")))).content).toBe(
+        "hello\n",
+      );
+    });
   });
 
   describe("PUT", () => {

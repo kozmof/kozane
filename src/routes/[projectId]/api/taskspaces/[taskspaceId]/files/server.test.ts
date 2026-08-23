@@ -107,6 +107,34 @@ describe("GET /[projectId]/api/taskspaces/[taskspaceId]/files", () => {
     await expectHttpRejection(GET(event(db, projectId, randomUUID())), 404, "Taskspace not found");
   });
 
+  it("404s a taskspace belonging to another project", async () => {
+    const otherProjectId = await addProject({ db, name: "Other Project" });
+    const otherTaskspaceId = await addTaskspace({
+      db,
+      projectId: otherProjectId,
+      name: "demo",
+      path: "demo",
+    });
+
+    // The directory is real and readable — what refuses this is the project the endpoint
+    // is addressed to, not the filesystem boundary underneath it.
+    await expectHttpRejection(
+      GET(event(db, projectId, otherTaskspaceId)),
+      404,
+      "Taskspace not found",
+    );
+  });
+
+  it("lists a taskspace assigned to no project from any project's endpoint", async () => {
+    // Unplaced rather than somebody else's: `getTaskspacesInProject` draws these on every
+    // board, so the endpoints behind that panel have to answer about them too.
+    const unassignedId = await addTaskspace({ db, name: "demo", path: "demo" });
+
+    const result = await listing(GET(event(db, projectId, unassignedId)));
+
+    expect(result.entries.map((entry) => entry.name)).toContain("README.md");
+  });
+
   it("404s a taskspace with no stored path", async () => {
     const id = await addTaskspace({ db, projectId, name: "pathless" });
     await expectHttpRejection(GET(event(db, projectId, id)), 404, "Taskspace has no directory");
