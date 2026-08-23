@@ -367,10 +367,34 @@
     );
   }
 
+  /** True for a click on the native scrollbar rather than on the text. */
+  function onScrollbar(event: MouseEvent): boolean {
+    if (!scrollEl) return false;
+    const { clientWidth, clientHeight } = scrollEl;
+    // Nothing measurable — no layout, so no scrollbar to be on. Answering "yes" on a zero
+    // width would call every click a scrollbar drag and swallow the focus it was meant to
+    // take.
+    if (clientWidth === 0 || clientHeight === 0) return false;
+    const box = scrollEl.getBoundingClientRect();
+    // `clientWidth`/`clientHeight` exclude the scrollbars, so a point past either is on one.
+    return event.clientX - box.left > clientWidth || event.clientY - box.top > clientHeight;
+  }
+
   function handleMousedown(event: MouseEvent): void {
     if (event.button !== 0) return;
+    // Dragging the scrollbar is the browser's, and preventing its default below would stop
+    // the thumb from moving.
+    if (onScrollbar(event)) return;
+
     const at = caretFromEvent(event);
     if (!at) return;
+
+    // The focus this moves is the whole point. A mousedown's default action puts focus on
+    // the nearest focusable ancestor of what was clicked, and the surface is plain divs —
+    // so the default is to focus nothing, which lands *after* this handler and blurs the
+    // sink `focus()` just focused. Without this, clicking the text of an unfocused editor
+    // leaves it unfocused, and the caret never comes back.
+    event.preventDefault();
     setCaret(at, event.shiftKey);
     focus();
 
@@ -424,6 +448,7 @@
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   onmousedown={handleMousedown}
   bind:clientHeight={viewportHeight}
+  data-testid="editor-surface"
 >
   <!-- The sizer is what the scrollbar measures: the whole document's height, whether or
        not the lines that make it up are currently in the DOM. -->

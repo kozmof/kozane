@@ -132,6 +132,23 @@ test("places the caret where the text is clicked", async ({ page }) => {
   await expect(page.getByText("Ln 3, Col 5")).toBeVisible();
 });
 
+test("takes focus back when the text is clicked after focus went elsewhere", async ({ page }) => {
+  await openTheFile(page);
+  await page.getByTestId("editor-sink").focus();
+
+  // Move focus out of the editor entirely, the way clicking the panel chrome does.
+  await page.getByRole("button", { name: "Close" }).focus();
+  await expect(page.getByTestId("editor-cursor")).toBeHidden();
+
+  await page.getByText("bravo").click();
+  await expect(page.getByTestId("editor-cursor")).toBeVisible();
+  await expect(page.getByTestId("editor-sink")).toBeFocused();
+
+  // And it is really focused, not just painted: typing lands in the file.
+  await page.keyboard.type("X");
+  await expect(page.getByTitle("Unsaved changes")).toBeVisible();
+});
+
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {
   await openTheFile(page);
   await page.getByTestId("editor-sink").focus();

@@ -231,6 +231,63 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("a\n");
   });
 
+  it("takes focus back when the text is clicked after being unfocused", async () => {
+    const { sink } = mount("hello\nworld\n");
+    sink.focus();
+    sink.blur();
+    expect(document.activeElement).not.toBe(sink);
+
+    await fireEvent.mouseDown(screen.getByTestId("editor-surface"), {
+      button: 0,
+      clientX: 20,
+      clientY: 20,
+    });
+    expect(document.activeElement).toBe(sink);
+  });
+
+  it("suppresses the mousedown default that would blur the sink again", () => {
+    // jsdom does not implement the focus-moving default action of mousedown, so the focus
+    // assertion above passes with or without the fix. This is the part that actually keeps
+    // a real browser from clearing focus a moment after `focus()` was called: the surface
+    // is plain divs, so the default is to focus nothing.
+    mount("hello\n");
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 });
+    screen.getByTestId("editor-surface").dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it("leaves a scrollbar drag to the browser", () => {
+    mount("hello\n");
+    const surface = screen.getByTestId("editor-surface");
+    // A laid-out element has to be faked: jsdom reports every box as zero, and the
+    // scrollbar region is defined entirely by the gap between the border box and the
+    // client box.
+    Object.defineProperty(surface, "clientWidth", { value: 300, configurable: true });
+    Object.defineProperty(surface, "clientHeight", { value: 200, configurable: true });
+    surface.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
+
+    const onBar = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 310, // past clientWidth: the vertical scrollbar
+      clientY: 100,
+    });
+    surface.dispatchEvent(onBar);
+    expect(onBar.defaultPrevented).toBe(false);
+
+    // And a click on the text beside it is still the editor's.
+    const onText = new MouseEvent("mousedown", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+    surface.dispatchEvent(onText);
+    expect(onText.defaultPrevented).toBe(true);
+  });
+
   it("lets keys through to whatever is hosting it, which is what owns Escape and saving", async () => {
     // The surface claims no key from its host: `FileEditor` is what stops propagation, and
     // it can only do that for keys that reach it. A surface that swallowed everything here
