@@ -59,10 +59,10 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
   }
   const value = parsed as Record<string, unknown>;
   if (typeof value.apiKey !== "string" || value.apiKey.length === 0) {
-    throw new Error("Invalid Kozane API key: apiKey must be a non-empty string");
+    throw new Error(`Invalid Kozane API key at ${path}: apiKey must be a non-empty string`);
   }
   if (typeof value.createdAt !== "string" || Number.isNaN(Date.parse(value.createdAt))) {
-    throw new Error("Invalid Kozane API key: createdAt must be an ISO date string");
+    throw new Error(`Invalid Kozane API key at ${path}: createdAt must be an ISO date string`);
   }
   // Frozen because every caller from here on is handed the same object rather than a fresh
   // parse of the file, and a shared value that can be written through is a trap.
@@ -71,6 +71,28 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
   // time, which is what makes a fixed file take effect without a restart.
   apiKeyCache.set(path, { signature, value: result });
   return result;
+}
+
+export type ApiKeyResult =
+  /** `key` is null when the workspace simply has no key file, which is the ordinary case. */
+  { ok: true; key: ApiKeyFile | null } | { ok: false; message: string };
+
+/**
+ * The workspace's key, or why it could not be read.
+ *
+ * {@link readApiKey} throws, which is right for a caller that can let the throw travel —
+ * and wrong for the three that cannot. Every HTTP request consults the key file, so an
+ * unreadable one is not a fault of the request being served: unguarded, a hand-edited
+ * `api.json` turns every page load and every poll into an unexplained 500, which is the
+ * one failure mode that says nothing about the file behind it. The server and `kozane
+ * open` answer with the message instead, and `kozane doctor` reports it as a check.
+ */
+export function readApiKeyResult(workspaceRoot: string): ApiKeyResult {
+  try {
+    return { ok: true, key: readApiKey(workspaceRoot) };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 export function apiKeysEqual(actual: string | undefined, expected: string): boolean {

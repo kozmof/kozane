@@ -73,6 +73,43 @@ describe("production request hook", () => {
     });
   });
 
+  it("answers 503 naming the file when the API key cannot be read", async () => {
+    const root = workspace();
+    // What a hand-edit leaves behind. Unguarded this threw out of the hook, and every
+    // page load and every poll became a 500 that said nothing about the file behind it.
+    writeFileSync(join(root, ".kozane", "api.json"), "{not json");
+    state.root = root;
+
+    const resolver = vi.fn();
+    const response = await handle({
+      event: event() as never,
+      resolve: resolver as never,
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.text()).toContain("api.json");
+    // The request never reached the app: an unreadable key means nothing can be authorised.
+    expect(resolver).not.toHaveBeenCalled();
+  });
+
+  it("serves normally again once a malformed API key file is repaired", async () => {
+    const root = workspace();
+    const path = join(root, ".kozane", "api.json");
+    writeFileSync(path, "{not json");
+    state.root = root;
+    expect((await handle({ event: event() as never, resolve: vi.fn() as never })).status).toBe(503);
+
+    // No restart: `readApiKey` never caches a file that failed to parse, so the repair
+    // takes effect on the very next request.
+    writeFileSync(path, JSON.stringify({ apiKey: "fixed", createdAt: new Date().toISOString() }));
+
+    const response = await handle({
+      event: event("http://localhost/", { authorization: "Bearer fixed" }) as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(response.status).toBe(200);
+  });
+
   it("fails closed when a remotely bound server has no API key", async () => {
     process.env.HOST = "0.0.0.0";
     const response = await handle({

@@ -7,7 +7,7 @@ import {
   API_KEY_COOKIE,
   apiKeyCookieOptions,
   apiKeysEqual,
-  readApiKey,
+  readApiKeyResult,
   requestApiKey,
 } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
@@ -85,7 +85,21 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   const conflict = registerRuntimeState(root);
   if (conflict) return applySecurityHeaders(new Response(conflict, { status: 503 }));
 
-  const configuredKey = root ? readApiKey(root) : null;
+  const key = root ? readApiKeyResult(root) : ({ ok: true, key: null } as const);
+  if (!key.ok) {
+    // Answered rather than thrown, the way the database below is. The key file is consulted
+    // on every request, so an unreadable one is not a fault of the request being served:
+    // left to throw, a hand-edited `api.json` turns every page load and every poll into a
+    // 500 that says nothing about the file behind it. 503 rather than 500 because the
+    // condition is the workspace's, not this request's, and it clears without a restart —
+    // `readApiKey` re-reads a malformed file every time, so fixing it takes effect at once.
+    return applySecurityHeaders(
+      new Response(`${key.message}. Fix the file, or run 'kozane api key refresh' to replace it.`, {
+        status: 503,
+      }),
+    );
+  }
+  const configuredKey = key.key;
   if (!configuredKey && remoteBindingRequiresApiKey()) {
     return applySecurityHeaders(
       new Response("Remote binding requires a Kozane API key. Run 'kozane api key generate'.", {

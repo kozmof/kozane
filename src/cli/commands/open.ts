@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
-import { readApiKey } from "../../lib/server/api-key.js";
+import { readApiKeyResult } from "../../lib/server/api-key.js";
 import { getMigrationStatus, runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import { projectTable, bundleTable, layerTable } from "../../db/schema.js";
@@ -69,7 +69,17 @@ export async function open(options: OpenOptions): Promise<void> {
     return;
   }
   const shouldOpen = options.open ?? true;
-  const apiKey = readApiKey(root);
+  // Read as a result rather than thrown: a malformed `api.json` otherwise leaves the
+  // command as an unhandled rejection and a stack trace, where every other way `open`
+  // refuses — a port in use, a workspace already served — prints a line and exits 1.
+  const apiKeyResult = readApiKeyResult(root);
+  if (!apiKeyResult.ok) {
+    console.error(apiKeyResult.message);
+    console.error('Fix the file, or run "kozane api key refresh" to replace it.');
+    process.exitCode = 1;
+    return;
+  }
+  const apiKey = apiKeyResult.key;
   const localBinding = isLoopbackHost(host);
   const remoteBinding = !localBinding;
 

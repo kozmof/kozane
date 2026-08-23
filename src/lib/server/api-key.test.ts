@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { apiKeysEqual, readApiKey, requestApiKey, writeApiKey } from "./api-key";
+import { apiKeysEqual, readApiKey, readApiKeyResult, requestApiKey, writeApiKey } from "./api-key";
 
 function workspace(): string {
   const root = mkdtempSync(join(tmpdir(), "kozane-api-key-"));
@@ -69,6 +69,46 @@ describe("API key", () => {
     writeApiKey(root, { apiKey: "repaired", createdAt: "2026-07-19T00:00:00.000Z" });
 
     expect(readApiKey(root)?.apiKey).toBe("repaired");
+  });
+
+  it("reports a missing key file as an absent key rather than a failure", () => {
+    expect(readApiKeyResult(workspace())).toEqual({ ok: true, key: null });
+  });
+
+  it("reports a malformed key file as a failure naming the file", () => {
+    const root = workspace();
+    const path = join(root, ".kozane", "api.json");
+    writeFileSync(path, "{not json");
+
+    const result = readApiKeyResult(root);
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure");
+    expect(result.message).toContain(path);
+  });
+
+  it("reports a key file missing a field as a failure naming the field", () => {
+    const root = workspace();
+    writeFileSync(
+      join(root, ".kozane", "api.json"),
+      JSON.stringify({ createdAt: "2026-07-19T00:00:00.000Z" }),
+    );
+
+    const result = readApiKeyResult(root);
+    if (result.ok) throw new Error("expected a failure");
+    expect(result.message).toMatch(/apiKey must be a non-empty string/);
+  });
+
+  it("goes back to reporting success once a malformed file is repaired", () => {
+    const root = workspace();
+    writeFileSync(join(root, ".kozane", "api.json"), "{not json");
+    expect(readApiKeyResult(root).ok).toBe(false);
+
+    writeApiKey(root, { apiKey: "repaired", createdAt: "2026-07-19T00:00:00.000Z" });
+
+    expect(readApiKeyResult(root)).toEqual({
+      ok: true,
+      key: { apiKey: "repaired", createdAt: "2026-07-19T00:00:00.000Z" },
+    });
   });
 
   it("accepts bearer and X-API-Key credentials", () => {

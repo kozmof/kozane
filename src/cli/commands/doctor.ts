@@ -11,6 +11,7 @@ import {
   readConfig,
   dbUrl,
 } from "../lib/config.js";
+import { apiKeyPath, readApiKeyResult } from "../../lib/server/api-key.js";
 import { getMigrationStatus } from "../lib/db.js";
 import { diagnoseConfig } from "../lib/config-diagnostics.js";
 
@@ -68,7 +69,24 @@ export async function doctor(): Promise<void> {
     check("config.json valid", configOk, configOk ? undefined : "run kozane doctor config"),
   );
 
-  // 4. kozane.db readable/writable
+  // 4. api.json valid, when there is one at all. A workspace has no key until
+  // `kozane api key generate` is run, so an absent file is not a problem and is not
+  // reported as one. What this catches is the file that exists and cannot be read: every
+  // HTTP request consults it, so a hand-edited one takes the whole server to 503 until it
+  // is fixed, and `doctor` is where that should be visible without starting a server.
+  const apiKeyFile = apiKeyPath(root);
+  if (existsSync(apiKeyFile)) {
+    const apiKeyResult = readApiKeyResult(root);
+    checks.push(
+      check(
+        "api.json valid",
+        apiKeyResult.ok,
+        apiKeyResult.ok ? undefined : `${apiKeyResult.message}; run kozane api key refresh`,
+      ),
+    );
+  }
+
+  // 5. kozane.db readable/writable
   const dbFile = join(root, KOZANE_DIR, DB_FILE);
   let dbOk = existsSync(dbFile);
   if (dbOk) {
@@ -82,7 +100,7 @@ export async function doctor(): Promise<void> {
     check("kozane.db readable/writable", dbOk, dbOk ? undefined : "file missing or inaccessible"),
   );
 
-  // 5. DB migration status
+  // 6. DB migration status
   if (dbOk) {
     let migrationOk = false;
     let detail: string | undefined;
@@ -105,7 +123,7 @@ export async function doctor(): Promise<void> {
     checks.push(check("DB migrations current", migrationOk, detail));
   }
 
-  // 6 Port available
+  // 7. Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);
