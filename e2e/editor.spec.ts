@@ -451,6 +451,49 @@ test("commits an IME composition as one word rather than one character at a time
   await expect(page.getByText("日本")).toBeHidden();
 });
 
+test("closes on Escape and on a click outside the panel", async ({ page }) => {
+  const panel = page.getByRole("dialog", { name: /Editing/ });
+
+  await openTheFile(page);
+  await page.getByTestId("editor-sink").focus();
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+
+  // The board is what "outside" means here: the canvas the panel sits over.
+  await page.getByRole("button", { name: "notes.md", exact: true }).click();
+  await expect(panel).toBeVisible();
+  await page.mouse.click(80, 300);
+  await expect(panel).toBeHidden();
+});
+
+test("asks before either route throws unsaved changes away", async ({ page }) => {
+  const panel = page.getByRole("dialog", { name: /Editing/ });
+  await openFile(page, "grouped.md");
+
+  await page.getByTestId("editor-sink").focus();
+  await page.keyboard.type("edited");
+  await expect(page.getByTitle("Unsaved changes")).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeVisible();
+  await expect(page.getByText("This file has unsaved changes.")).toBeVisible();
+
+  // Backing out leaves the file open and still edited.
+  await page.getByRole("button", { name: "Keep editing" }).click();
+  await expect(page.getByText("This file has unsaved changes.")).toBeHidden();
+  await expect(page.getByTitle("Unsaved changes")).toBeVisible();
+
+  // A click on the board asks the same question rather than closing.
+  await page.mouse.click(80, 300);
+  await expect(page.getByText("This file has unsaved changes.")).toBeVisible();
+  await expect(panel).toBeVisible();
+
+  await page.getByRole("button", { name: "Discard and close" }).click();
+  await expect(panel).toBeHidden();
+  // Discarded rather than written: the file on disk is untouched.
+  expect(readFileSync(join(taskspaceDir, "grouped.md"), "utf8")).toBe("start \n");
+});
+
 test("leaves a file untouched when it is closed without saving", async ({ page }) => {
   writeFileSync(join(taskspaceDir, "notes.md"), "untouched\n");
   await openTheFile(page);

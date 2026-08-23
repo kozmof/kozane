@@ -50,17 +50,55 @@
   });
 
   // A file that arrives fresh starts in normal mode when vim is on, whatever the last one
-  // was left in.
+  // was left in, and with no question hanging over it from the file before.
   $effect(() => {
     void session.file;
     vim = createVimState();
+    confirmingClose = false;
+  });
+
+  /**
+   * A press outside the panel closes the file.
+   *
+   * `mousedown` rather than `click`, because a click is only delivered where the press and
+   * the release agree: selecting text and releasing past the edge of the panel is a click
+   * on the board, and closing the file out from under a drag is not what that meant.
+   */
+  $effect(() => {
+    if (!session.isOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!panelEl || panelEl.contains(event.target as Node)) return;
+      requestClose();
+    };
+    globalThis.addEventListener("mousedown", onDown);
+    return () => globalThis.removeEventListener("mousedown", onDown);
   });
 
   async function save(): Promise<void> {
     await session.save(ctx);
   }
 
+  /**
+   * Set when a close was asked for over unsaved changes.
+   *
+   * Escape and a click on the board are both easy to do by accident, and closing throws
+   * the edit away for good — the document goes with the panel, so there is no undo left to
+   * reach for. So they ask, rather than either destroying the work or refusing and leaving
+   * no way out.
+   */
+  let confirmingClose = $state(false);
+
+  /** Closes, or asks first. What every route out of the panel goes through. */
+  function requestClose(): void {
+    if (session.dirty) {
+      confirmingClose = true;
+      return;
+    }
+    close();
+  }
+
   function close(): void {
+    confirmingClose = false;
     session.close();
     onClose();
   }
@@ -88,11 +126,13 @@
       if (!readonly) void save();
       return;
     }
-    // Escape closes, but not out from under an unsaved change, and not while vim is using
-    // it to leave insert mode.
-    if (event.key === "Escape" && !session.dirty && !(vimMode && vim.mode === "insert")) {
+    // Escape closes, except while vim is using it to leave insert mode. Over an unsaved
+    // change it asks rather than closing; a second Escape then backs out of the asking,
+    // which is what an Escape pressed at a question should do.
+    if (event.key === "Escape" && !(vimMode && vim.mode === "insert")) {
       event.preventDefault();
-      close();
+      if (confirmingClose) confirmingClose = false;
+      else requestClose();
     }
   }
 
@@ -237,7 +277,11 @@
         flexShrink: "0",
       })}
     >
-      <span class={css({ color: "taskspace.text", flexShrink: "0" })}>
+      <!-- All one tone. The taskspace is the context and the path is the subject, so the
+           two are told apart by weight of grey rather than by a colour: the badge on a card
+           footer is where the taskspace green means something, and repeating it here made
+           the header louder than the file it names. -->
+      <span class={css({ color: "neutral.secondary", flexShrink: "0" })}>
         {session.file?.taskspaceName}
       </span>
       <span class={css({ color: "neutral.muted" })}>/</span>
@@ -259,8 +303,30 @@
           {session.saving ? "Saving…" : "Save"}
         </button>
       {/if}
-      <button class={barButton} onclick={close}>Close</button>
+      <button class={barButton} onclick={requestClose}>Close</button>
     </div>
+
+    <!-- Notices. The unsaved-changes question comes first: it is the only one waiting on an
+         answer, and burying it under a stale error would leave the panel looking stuck. -->
+    {#if confirmingClose}
+      <div
+        class={css({
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "6px 10px",
+          background: "select.surface",
+          fontSize: "11.5px",
+          color: "ink.secondary",
+          flexShrink: "0",
+        })}
+        role="alert"
+      >
+        <span class={css({ flex: "1" })}>This file has unsaved changes.</span>
+        <button class={barButton} onclick={() => (confirmingClose = false)}>Keep editing</button>
+        <button class={barButton} onclick={close}>Discard and close</button>
+      </div>
+    {/if}
 
     <!-- Conflict and error notices -->
     {#if session.conflict}

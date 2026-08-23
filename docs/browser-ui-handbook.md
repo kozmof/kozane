@@ -328,8 +328,12 @@ than 500 entries is cut off, and the panel says so at the end of the listing.
 
 Click a file to open it in an editor panel over the canvas. Type into it and
 press `Ctrl+S` or `Cmd+S` to save, or use the Save button in the panel header. A
-dot beside the path means there are unsaved changes. `Esc` closes the panel, but
-not over an unsaved change — save it or close it with the button.
+dot beside the path means there are unsaved changes.
+
+Close the panel with `Esc`, the Close button, or a click anywhere outside it.
+Over an unsaved change all three ask first, offering to keep editing or to
+discard and close, since closing ends the editing session and takes its undo
+history with it. A second `Esc` backs out of the question.
 
 Drag the panel's left edge to make it wider or narrower, or focus the edge and
 use `←` and `→`. The width lasts as long as the tab is open, including across

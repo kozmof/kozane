@@ -338,3 +338,100 @@ describe("FileEditor resizing", () => {
     expect(widthOf(reopened)).toBe(chosen);
   });
 });
+
+describe("FileEditor closing", () => {
+  async function dirty() {
+    const mounted = await mount();
+    await screen.findByRole("dialog");
+    mounted.session.doc!.insert({ line: 0, column: 0 }, "x");
+    await waitFor(() => expect(screen.getByTitle("Unsaved changes")).toBeInTheDocument());
+    return mounted;
+  }
+
+  it("closes a clean file on a press outside the panel", async () => {
+    const { session } = await mount();
+    await screen.findByRole("dialog");
+
+    await fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(session.isOpen).toBe(false));
+  });
+
+  it("stays open for a press inside the panel", async () => {
+    const { session } = await mount();
+    const dialog = await screen.findByRole("dialog");
+
+    await fireEvent.mouseDown(dialog);
+    await fireEvent.mouseDown(screen.getByTestId("editor-sink"));
+    expect(session.isOpen).toBe(true);
+  });
+
+  it("stops listening once the file is closed", async () => {
+    const { session, onClose } = await mount();
+    await screen.findByRole("dialog");
+    await fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(session.isOpen).toBe(false));
+
+    onClose.mockClear();
+    await fireEvent.mouseDown(document.body);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("asks before discarding unsaved changes on a press outside", async () => {
+    const { session } = await dirty();
+
+    await fireEvent.mouseDown(document.body);
+    expect(session.isOpen).toBe(true);
+    expect(await screen.findByText("This file has unsaved changes.")).toBeInTheDocument();
+  });
+
+  it("asks before discarding unsaved changes on Escape", async () => {
+    const { session } = await dirty();
+
+    await userEvent.keyboard("{Escape}");
+    expect(session.isOpen).toBe(true);
+    expect(await screen.findByText("This file has unsaved changes.")).toBeInTheDocument();
+  });
+
+  it("closes when the discard is confirmed", async () => {
+    const { session } = await dirty();
+    await fireEvent.mouseDown(document.body);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Discard and close" }));
+    expect(session.isOpen).toBe(false);
+  });
+
+  it("goes back to editing when the question is declined", async () => {
+    const { session } = await dirty();
+    await fireEvent.mouseDown(document.body);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Keep editing" }));
+    expect(session.isOpen).toBe(true);
+    expect(screen.queryByText("This file has unsaved changes.")).toBeNull();
+  });
+
+  it("backs out of the question on a second Escape rather than closing", async () => {
+    const { session } = await dirty();
+    await userEvent.keyboard("{Escape}");
+    await screen.findByText("This file has unsaved changes.");
+
+    await userEvent.keyboard("{Escape}");
+    expect(session.isOpen).toBe(true);
+    expect(screen.queryByText("This file has unsaved changes.")).toBeNull();
+  });
+
+  it("asks when the header Close is pressed over unsaved changes", async () => {
+    const { session } = await dirty();
+    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(session.isOpen).toBe(true);
+    expect(await screen.findByText("This file has unsaved changes.")).toBeInTheDocument();
+  });
+
+  it("drops the question when a different file is opened", async () => {
+    const { session, ctx } = await dirty();
+    await userEvent.keyboard("{Escape}");
+    await screen.findByText("This file has unsaved changes.");
+
+    await session.open(ctx, { ...REF, path: "other.md" });
+    await waitFor(() => expect(screen.queryByText("This file has unsaved changes.")).toBeNull());
+  });
+});
