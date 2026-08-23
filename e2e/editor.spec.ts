@@ -376,6 +376,37 @@ test("returns the caret to where a backspace was pressed from when it is undone"
   await expect(page.getByText("Ln 1, Col 6")).toBeVisible();
 });
 
+test("resizes by dragging the left edge, and keeps the width across a close", async ({ page }) => {
+  await openTheFile(page);
+
+  const panel = page.getByRole("dialog", { name: /Editing/ });
+  const before = (await panel.boundingBox())!.width;
+
+  // Drag the edge 150px to the left, which widens the panel by the same.
+  const handle = page.getByRole("separator", { name: "Resize editor" });
+  const grip = (await handle.boundingBox())!;
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(grip.x - 150, grip.y + grip.height / 2, { steps: 10 });
+  await page.mouse.up();
+
+  const widened = (await panel.boundingBox())!.width;
+  expect(widened).toBeGreaterThan(before + 100);
+
+  // The width belongs to the page rather than to the file, so it survives a close.
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toBeHidden();
+
+  await page.getByRole("button", { name: "notes.md", exact: true }).click();
+  await expect(panel).toBeVisible();
+  expect((await panel.boundingBox())!.width).toBeCloseTo(widened, 0);
+
+  // A reload starts from the default again: the width is per tab and never stored.
+  await page.reload();
+  await openTheFile(page);
+  expect((await panel.boundingBox())!.width).toBeCloseTo(before, 0);
+});
+
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {
   await openTheFile(page);
   await page.getByTestId("editor-sink").focus();

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "../lib/editor/editor-session.svelte.js";
@@ -228,5 +228,113 @@ describe("FileEditor", () => {
 
     expect(session.isOpen).toBe(true);
     expect(screen.getByTestId("vim-mode")).toHaveTextContent("NORMAL");
+  });
+});
+
+describe("FileEditor resizing", () => {
+  /**
+   * The splitter reports its own width, which is what the assertions read. jsdom drops CSS
+   * `clamp()` from an inline style, so the rendered width is not observable here; the value
+   * the splitter is set to is, and it is the thing under test.
+   */
+  async function splitter() {
+    return screen.findByRole("separator", { name: "Resize editor" });
+  }
+
+  function widthOf(el: HTMLElement): number {
+    return Number(el.getAttribute("aria-valuenow"));
+  }
+
+  it("offers a splitter on the left edge, reporting its width and floor", async () => {
+    await mount();
+    const bar = await splitter();
+    expect(bar).toHaveAttribute("aria-orientation", "vertical");
+    expect(bar).toHaveAttribute("aria-valuemin", "320");
+    expect(widthOf(bar)).toBeGreaterThanOrEqual(320);
+  });
+
+  it("widens the panel when the edge is dragged left", async () => {
+    await mount();
+    const bar = await splitter();
+    const before = widthOf(bar);
+
+    await fireEvent.mouseDown(bar, { button: 0, clientX: 900 });
+    await fireEvent.mouseMove(window, { clientX: 700 });
+    await fireEvent.mouseUp(window);
+
+    expect(widthOf(bar)).toBe(before + 200);
+  });
+
+  it("narrows the panel when the edge is dragged right", async () => {
+    await mount();
+    const bar = await splitter();
+
+    // Widen first, so there is room to come back without meeting the floor.
+    await fireEvent.mouseDown(bar, { button: 0, clientX: 900 });
+    await fireEvent.mouseMove(window, { clientX: 600 });
+    await fireEvent.mouseUp(window);
+    const wide = widthOf(bar);
+
+    await fireEvent.mouseDown(bar, { button: 0, clientX: 600 });
+    await fireEvent.mouseMove(window, { clientX: 700 });
+    await fireEvent.mouseUp(window);
+    expect(widthOf(bar)).toBe(wide - 100);
+  });
+
+  it("stops resizing once the drag has finished", async () => {
+    await mount();
+    const bar = await splitter();
+
+    await fireEvent.mouseDown(bar, { button: 0, clientX: 900 });
+    await fireEvent.mouseMove(window, { clientX: 800 });
+    await fireEvent.mouseUp(window);
+    const settled = widthOf(bar);
+
+    await fireEvent.mouseMove(window, { clientX: 400 });
+    expect(widthOf(bar)).toBe(settled);
+  });
+
+  it("resizes from the keyboard, left widening and right narrowing", async () => {
+    await mount();
+    const bar = await splitter();
+    const start = widthOf(bar);
+
+    await fireEvent.keyDown(bar, { key: "ArrowLeft" });
+    expect(widthOf(bar)).toBe(start + 16);
+
+    await fireEvent.keyDown(bar, { key: "ArrowLeft" });
+    expect(widthOf(bar)).toBe(start + 32);
+
+    await fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(widthOf(bar)).toBe(start + 16);
+  });
+
+  it("never narrows below the floor", async () => {
+    await mount();
+    const bar = await splitter();
+    for (let i = 0; i < 80; i++) await fireEvent.keyDown(bar, { key: "ArrowRight" });
+    expect(widthOf(bar)).toBe(320);
+  });
+
+  it("leaves keys other than the arrows to the panel", async () => {
+    const { session } = await mount();
+    const bar = await splitter();
+    await fireEvent.keyDown(bar, { key: "Escape" });
+    // Escape still closes the file: the splitter claims the arrows and nothing else.
+    await waitFor(() => expect(session.isOpen).toBe(false));
+  });
+
+  it("keeps the width across closing and reopening a file", async () => {
+    const { session, ctx } = await mount();
+    const bar = await splitter();
+    await fireEvent.keyDown(bar, { key: "ArrowLeft" });
+    const chosen = widthOf(bar);
+
+    session.close();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await session.open(ctx, REF);
+    const reopened = await splitter();
+    expect(widthOf(reopened)).toBe(chosen);
   });
 });

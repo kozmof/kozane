@@ -67,6 +67,11 @@
   // The taskspace file the editor has open, if any. One at a time: the panel is a place to
   // work on a file, not a set of tabs, and a second one would want somewhere to put them.
   const editor = new EditorSession();
+  // Held here rather than in the panel so it outlives closing a file: the width someone
+  // dragged to is about the workspace, not about the file that happened to be open. Null
+  // until dragged, when the responsive default applies. Per tab, and not stored, so a
+  // reload starts from the default again.
+  let editorWidth = $state<number | null>(null);
   // Every other project's warps. Loaded with the page so the palette opens filled in, and
   // re-fetched when it opens so a warp set elsewhere since then is not missing.
   // `?? []`: a static export built before this feature has no directory in its page data.
@@ -676,6 +681,7 @@
     ctx={{ fetcher: s.fetcher, projectId: s.projectId }}
     vimMode={data.uiConfig.editorVimMode}
     {readonly}
+    bind:width={editorWidth}
     onClose={() => undefined}
   />
 </div>

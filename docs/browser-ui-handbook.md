@@ -331,6 +331,11 @@ press `Ctrl+S` or `Cmd+S` to save, or use the Save button in the panel header. A
 dot beside the path means there are unsaved changes. `Esc` closes the panel, but
 not over an unsaved change — save it or close it with the button.
 
+Drag the panel's left edge to make it wider or narrower, or focus the edge and
+use `←` and `→`. The width lasts as long as the tab is open, including across
+closing one file and opening another, and starts from the default again after a
+reload.
+
 Only text files can be opened, and only up to 1 MB. A file larger than that, or
 one that is not valid UTF-8, is refused rather than truncated or mangled: the
 panel writes back what it holds, so anything it could not read exactly is
