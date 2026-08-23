@@ -292,7 +292,27 @@
         {session.file?.path}
       </span>
       {#if session.dirty}
-        <span class={css({ color: "state.error" })} title="Unsaved changes">●</span>
+        <!-- A ring of dots rather than a filled disc: unsaved is a state on its way
+             somewhere, and an outline reads as that where a solid mark reads as a count.
+             Drawn rather than set as `◌`, which is a combining-mark placeholder and comes
+             out a different size in every font. The dash is a point with a round cap, which
+             is what turns each one into a dot; the gap divides the circumference into
+             eight, so the seam where the dashes meet has nowhere to show. The gap is tied
+             to the radius — 2πr/8 — so changing the size means recomputing it, or the dots
+             bunch up on one side. -->
+        <span class={css({ color: "select.accent", display: "flex" })} title="Unsaved changes">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+            <circle
+              cx="5.5"
+              cy="5.5"
+              r="4.5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-dasharray="0.01 3.53"
+            />
+          </svg>
+        </span>
       {/if}
       {#if !readonly}
         <button
