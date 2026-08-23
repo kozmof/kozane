@@ -484,6 +484,7 @@
         style:width={rect.width === null
           ? `calc(100% - ${rect.left + PAD_X}px)`
           : `${rect.width}px`}
+        data-testid="editor-selection"
         style:height={`${rect.height}px`}
       ></div>
     {/each}
@@ -493,6 +494,7 @@
       <div
         bind:this={lineEls[line.lineNumber]}
         class={lineClass}
+        data-line={line.lineNumber}
         style:top={`${line.lineNumber * LINE_HEIGHT + PAD_Y}px`}
         style:padding-left={`${PAD_X}px`}
         style:padding-right={`${PAD_X}px`}

@@ -344,3 +344,31 @@ describe("EditorSurface", () => {
     }
   });
 });
+
+describe("EditorSurface test hooks", () => {
+  it("tags each drawn line with its line number", () => {
+    const { doc } = mount("alpha\nbravo\ncharlie\n");
+    const drawn = [...document.querySelectorAll("[data-line]")].map((el) =>
+      Number(el.getAttribute("data-line")),
+    );
+    expect(drawn).toContain(0);
+    expect(drawn).toContain(1);
+    // Never more lines than the document has: the window is drawn, not the document.
+    expect(drawn.length).toBeLessThanOrEqual(doc.lineCount);
+  });
+
+  it("paints a selection as its own rectangles", () => {
+    mount("hello world\n", {
+      caret: { line: 0, column: 5 },
+      anchor: { line: 0, column: 0 },
+    });
+    // One line selected, so one rectangle. The count is what the browser specs assert
+    // against, and jsdom can at least confirm they are drawn at all.
+    expect(document.querySelectorAll("[data-testid='editor-selection']")).toHaveLength(1);
+  });
+
+  it("paints nothing when there is no selection", () => {
+    mount("hello world\n", { caret: { line: 0, column: 5 }, anchor: null });
+    expect(document.querySelectorAll("[data-testid='editor-selection']")).toHaveLength(0);
+  });
+});

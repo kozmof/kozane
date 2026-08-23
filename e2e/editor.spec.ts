@@ -47,14 +47,54 @@ async function waitForServer(): Promise<void> {
   throw new Error("Kozane editor test server did not start");
 }
 
-/** Opens the board, shows the panels, and opens `notes.md` from the taskspace tree. */
-async function openTheFile(page: import("@playwright/test").Page): Promise<void> {
+type Page = import("@playwright/test").Page;
+
+/** Opens the board, shows the panels, and opens one file from the taskspace tree. */
+async function openFile(page: Page, name: string): Promise<void> {
   await page.goto(`${baseUrl}/${projectId}`);
   await page.getByTitle("Show panels").click();
   await page.getByRole("button", { name: "Work" }).click();
   await page.getByRole("button", { name: "demo" }).click();
-  await page.getByRole("button", { name: "notes.md" }).click();
-  await expect(page.getByRole("dialog", { name: /Editing notes\.md/ })).toBeVisible();
+  await page.getByRole("button", { name, exact: true }).click();
+  await expect(page.getByRole("dialog", { name: new RegExp(`Editing ${name}`) })).toBeVisible();
+}
+
+async function openTheFile(page: Page): Promise<void> {
+  await openFile(page, "notes.md");
+}
+
+/**
+ * The client x of a column's left edge on the line reading `lineText`, measured in the page
+ * with the same `Range` the editor uses.
+ *
+ * Asking the browser rather than assuming a character width is the point: these tests exist
+ * to check the editor against real font metrics, and a test that computed its own expected
+ * pixels from a nominal cell size would only be checking its own arithmetic.
+ */
+async function columnX(page: Page, lineText: string, column: number): Promise<number> {
+  return page.evaluate(
+    ({ lineText, column }) => {
+      const el = [...document.querySelectorAll("[data-line]")].find(
+        (d) => d.textContent === lineText,
+      );
+      if (!el?.firstChild) throw new Error(`no line reading ${lineText}`);
+      const range = document.createRange();
+      range.setStart(el.firstChild, 0);
+      range.setEnd(el.firstChild, column);
+      const rect = range.getBoundingClientRect();
+      return column === 0 ? rect.left : rect.right;
+    },
+    { lineText, column },
+  );
+}
+
+/** The middle of the cell `column` occupies, which is where a click on it belongs. */
+async function cellCentre(page: Page, lineText: string, column: number): Promise<number> {
+  const [left, right] = await Promise.all([
+    columnX(page, lineText, column),
+    columnX(page, lineText, column + 1),
+  ]);
+  return (left + right) / 2;
 }
 
 test.beforeAll(async () => {
@@ -67,6 +107,15 @@ test.beforeAll(async () => {
   mkdirSync(join(taskspaceDir, "src"), { recursive: true });
   writeFileSync(join(taskspaceDir, "notes.md"), "alpha\nbravo\ncharlie\n");
   writeFileSync(join(taskspaceDir, "src", "app.ts"), "export {}\n");
+  // A line of double-width cells beside single-width ones. The measured geometry exists for
+  // exactly this, and a font's real metrics are the only thing that can confirm it.
+  writeFileSync(join(taskspaceDir, "cjk.md"), "あいうabc\nplain\n");
+  writeFileSync(join(taskspaceDir, "selectme.md"), "abcdefghij\nsecond\n");
+  writeFileSync(join(taskspaceDir, "grouped.md"), "start \n");
+  writeFileSync(
+    join(taskspaceDir, "long.md"),
+    Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n",
+  );
 
   // The marker carries the full UUIDs; the CLI prints short ids, and the routes want the
   // full ones.
@@ -207,6 +256,95 @@ test("puts the caret back at the edit an undo takes back", async ({ page }) => {
   await page.keyboard.press("Control+Shift+z");
   await expect(page.getByText("charlie!!")).toBeVisible();
   await expect(page.getByText("Ln 3, Col 10")).toBeVisible();
+});
+
+test("lands a click on the right character in a line of double-width cells", async ({ page }) => {
+  await openFile(page, "cjk.md");
+
+  // "あいうabc" — three double-width cells then three single-width ones. The unit tests
+  // model this with a stubbed measurer; only a real font can say whether the model is
+  // right, which is what makes this worth running in a browser.
+  const line = "あいうabc";
+  const y = (await page.getByText(line).boundingBox())!.y + 10;
+
+  for (const column of [0, 1, 2, 3, 4, 5]) {
+    await page.mouse.click(await cellCentre(page, line, column), y);
+    await expect(page.getByText(`Ln 1, Col ${column + 1}`)).toBeVisible();
+  }
+
+  // The cells really are unequal, so the loop above is not passing on a line that a
+  // fixed character width would have got right anyway. Only "wider", not "twice as wide":
+  // how much wider depends on which fonts the machine running this has, and the claim
+  // worth making here does not.
+  const wide = (await columnX(page, line, 1)) - (await columnX(page, line, 0));
+  const narrow = (await columnX(page, line, 4)) - (await columnX(page, line, 3));
+  expect(wide).toBeGreaterThan(narrow);
+});
+
+test("selects what was dragged over and replaces it", async ({ page }) => {
+  await openFile(page, "selectme.md");
+  const line = "abcdefghij";
+  const y = (await page.getByText(line).boundingBox())!.y + 10;
+
+  // Drag from the start of "c" to the start of "g": four characters.
+  await page.mouse.move(await columnX(page, line, 2), y);
+  await page.mouse.down();
+  await page.mouse.move(await columnX(page, line, 6), y, { steps: 8 });
+  await page.mouse.up();
+
+  // The selection is painted as its own rectangles rather than by the browser, so there is
+  // something to see as well as something to act on.
+  await expect(page.getByTestId("editor-selection")).toHaveCount(1);
+
+  await page.keyboard.press("Backspace");
+  await expect(page.getByText("abghij")).toBeVisible();
+});
+
+test("groups a run of typing into one undo, and breaks the group after a pause", async ({
+  page,
+}) => {
+  await openFile(page, "grouped.md");
+  await page.getByTestId("editor-sink").focus();
+  await page.keyboard.press("End");
+
+  await page.keyboard.type("hello");
+  await expect(page.getByText("start hello")).toBeVisible();
+
+  // One press takes the whole run back. The unit tests drive a fake clock; this is the
+  // only place the real one is exercised.
+  await page.keyboard.press("Control+z");
+  await expect(page.getByText("start")).toBeVisible();
+  await expect(page.getByText("start hello")).toBeHidden();
+
+  // Past the window, so what follows is a new entry rather than more of the last one.
+  await page.keyboard.type("one");
+  await page.waitForTimeout(600);
+  await page.keyboard.type("two");
+  await expect(page.getByText("start onetwo")).toBeVisible();
+
+  await page.keyboard.press("Control+z");
+  await expect(page.getByText("start one")).toBeVisible();
+});
+
+test("draws only the lines in view and scrolls the rest of a long file", async ({ page }) => {
+  await openFile(page, "long.md");
+
+  const surface = page.getByTestId("editor-surface");
+  await expect(page.getByText("line 0", { exact: true })).toBeVisible();
+
+  // The DOM holds a viewport, not the document: 400 lines are in the file and nothing like
+  // 400 line elements are drawn.
+  const drawn = await surface.evaluate((el) => el.querySelectorAll("[data-line]").length);
+  expect(drawn).toBeGreaterThan(0);
+  expect(drawn).toBeLessThan(120);
+
+  // The sizer gives the scrollbar the whole document's height to move through.
+  const scrollable = await surface.evaluate((el) => el.scrollHeight - el.clientHeight);
+  expect(scrollable).toBeGreaterThan(1000);
+
+  await surface.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await expect(page.getByText("line 399", { exact: true })).toBeVisible();
+  await expect(page.getByText("line 0", { exact: true })).toBeHidden();
 });
 
 test("refuses to save over a file that changed on disk, and reloads it", async ({ page }) => {
