@@ -176,6 +176,14 @@ describe("selectionRects", () => {
 describe("domMeasurer", () => {
   const CELL = 8;
 
+  /**
+   * `PAD` stands in for the line's own `padding-left`, which is why the element's left edge
+   * and the text's first character are at different places here. Measuring against the
+   * element rather than the text is what put every column one padding too far right, so
+   * the two are kept deliberately apart in the stub.
+   */
+  const PAD = 12;
+
   function stubLayout(text: string) {
     // Each character is CELL wide, except a CJK one, which is two cells.
     const el = document.createElement("div");
@@ -188,9 +196,13 @@ describe("domMeasurer", () => {
       return x;
     };
 
-    el.getBoundingClientRect = () => ({ left: 100, right: 100 + widthOf(text.length) }) as DOMRect;
+    // The element starts at 100; its text starts a padding further in, at 100 + PAD.
+    el.getBoundingClientRect = () =>
+      ({ left: 100, right: 100 + PAD + widthOf(text.length) }) as DOMRect;
     Range.prototype.getBoundingClientRect = function (this: Range) {
-      return { left: 100, right: 100 + widthOf(this.endOffset) } as DOMRect;
+      const left = 100 + PAD + widthOf(this.startOffset);
+      const right = 100 + PAD + widthOf(this.endOffset);
+      return { left, right, width: right - left } as DOMRect;
     };
 
     return { el, widthOf };
@@ -202,12 +214,46 @@ describe("domMeasurer", () => {
     delete Range.prototype.getBoundingClientRect;
   });
 
-  it("measures a column against the line's own left edge", () => {
+  it("measures a column from the start of the text, not from the element", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
+    // None of these carry the line's padding: the caller adds it back when drawing, and
+    // counting it here too drew the caret a padding — about two characters — too far right,
+    // and past the last character at the end of a line.
     expect(measure.columnToX(0, 0)).toBe(0);
     expect(measure.columnToX(0, 3)).toBe(CELL * 3);
     expect(measure.columnToX(0, 5)).toBe(CELL * 5);
+  });
+
+  it("keeps column 0 continuous with every other column", () => {
+    // Column 0 used to be special-cased to 0 while every other column carried the padding,
+    // so the step from 0 to 1 was a padding wider than a character. That discontinuity is
+    // what made a click at the start of a line land on column 1.
+    const { el } = stubLayout("hello");
+    const measure = domMeasurer(() => el);
+    expect(measure.columnToX(0, 1) - measure.columnToX(0, 0)).toBe(CELL);
+    expect(measure.columnToX(0, 2) - measure.columnToX(0, 1)).toBe(CELL);
+  });
+
+  it("puts a click at the very start of the text on column 0", () => {
+    const { el } = stubLayout("hello");
+    const measure = domMeasurer(() => el);
+    expect(measure.xToColumn(0, 0)).toBe(0);
+    expect(measure.xToColumn(0, 1)).toBe(0);
+  });
+
+  it("round-trips a column through x and back", () => {
+    const { el } = stubLayout("hello");
+    const measure = domMeasurer(() => el);
+    for (const column of [0, 1, 2, 3, 4, 5]) {
+      expect(measure.xToColumn(0, measure.columnToX(0, column))).toBe(column);
+    }
+  });
+
+  it("puts a click at the end of the text on the last column, not past it", () => {
+    const { el } = stubLayout("hello");
+    const measure = domMeasurer(() => el);
+    expect(measure.xToColumn(0, CELL * 5)).toBe(5);
   });
 
   it("finds the column a point falls in", () => {

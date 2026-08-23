@@ -134,7 +134,16 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
     return { node: text, length: text.length };
   };
 
-  const widthTo = (node: Text, column: number, el: HTMLElement): number => {
+  /**
+   * Pixels from the start of the line's text to the left edge of `column`.
+   *
+   * The *width* of the range rather than its edge measured against the element: a line is
+   * drawn with horizontal padding, so the element's left edge is not where its text
+   * begins, and measuring from it made every column one padding too far right. A width
+   * has no origin to get wrong, and is zero at column 0 by construction rather than by an
+   * early return that quietly disagreed with every other column.
+   */
+  const widthTo = (node: Text, column: number): number => {
     if (column <= 0) return 0;
     const range = document.createRange();
     range.setStart(node, 0);
@@ -142,26 +151,19 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
     // Optional-called: jsdom implements Range without the rect methods, and a component
     // test that renders the surface must not die on a measurement it was never going to
     // get a real answer to. Everywhere with layout this is an ordinary call.
-    const measured = range.getBoundingClientRect?.();
-    const origin = el.getBoundingClientRect?.();
-    if (!measured || !origin) return 0;
-    // Measured against the line's own left edge so the number is independent of where the
-    // panel happens to be scrolled to.
-    return measured.right - origin.left;
+    return range.getBoundingClientRect?.()?.width ?? 0;
   };
 
   return {
     columnToX(line, column) {
-      const el = lineElement(line);
       const found = textNodeOf(line);
-      if (!el || !found) return 0;
-      return widthTo(found.node, column, el);
+      if (!found) return 0;
+      return widthTo(found.node, column);
     },
 
     xToColumn(line, x) {
-      const el = lineElement(line);
       const found = textNodeOf(line);
-      if (!el || !found) return 0;
+      if (!found) return 0;
       if (x <= 0) return 0;
 
       // Binary search for the last column whose left edge is at or before x, then take
@@ -171,13 +173,13 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
       let high = found.length;
       while (low < high) {
         const mid = Math.ceil((low + high) / 2);
-        if (widthTo(found.node, mid, el) <= x) low = mid;
+        if (widthTo(found.node, mid) <= x) low = mid;
         else high = mid - 1;
       }
 
       if (low >= found.length) return found.length;
-      const here = widthTo(found.node, low, el);
-      const next = widthTo(found.node, low + 1, el);
+      const here = widthTo(found.node, low);
+      const next = widthTo(found.node, low + 1);
       return x - here > next - x ? low + 1 : low;
     },
   };

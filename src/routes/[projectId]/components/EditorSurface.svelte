@@ -358,9 +358,14 @@
     const sizer = scrollEl?.firstElementChild as HTMLElement | undefined;
     if (!sizer) return null;
     const box = sizer.getBoundingClientRect();
+    // The paddings come off here because the measurer answers in text coordinates: x from
+    // the first character of a line, y from the first line. They are added back when the
+    // caret and the selection are drawn, which is the same pair of offsets in the other
+    // direction. Leaving them on put a click a padding to the right of where it was aimed
+    // and, in the bottom of a line, on the line below.
     return pointToCaret(
-      event.clientX - box.left,
-      event.clientY - box.top,
+      event.clientX - box.left - PAD_X,
+      event.clientY - box.top - PAD_Y,
       LINE_HEIGHT,
       doc.lineCount,
       measure,
@@ -469,7 +474,9 @@
         })}
         style:top={`${rect.top + PAD_Y}px`}
         style:left={`${rect.left + PAD_X}px`}
-        style:width={rect.width === null ? `calc(100% - ${rect.left}px)` : `${rect.width}px`}
+        style:width={rect.width === null
+          ? `calc(100% - ${rect.left + PAD_X}px)`
+          : `${rect.width}px`}
         style:height={`${rect.height}px`}
       ></div>
     {/each}

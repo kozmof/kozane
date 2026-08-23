@@ -121,15 +121,31 @@ test("types into a file and saves it to disk", async ({ page }) => {
 test("places the caret where the text is clicked", async ({ page }) => {
   await openTheFile(page);
 
-  // Clicking into the middle of the third line has to land on the character under the
-  // pointer, which is the whole of what the measured geometry is for.
   const charlie = page.getByText("charlie");
   const box = await charlie.boundingBox();
   if (!box) throw new Error("no box for the line");
-  // Four characters in, sampled at the middle of the line's height.
-  await page.mouse.click(box.x + box.width * (4 / 7), box.y + box.height / 2);
+  // The line is drawn with horizontal padding, so its box starts a padding before its
+  // text. Counting that padding as part of the text is what put a click about two
+  // characters to the right of where it was aimed.
+  const padLeft = await charlie.evaluate((el) =>
+    Number.parseFloat(getComputedStyle(el).paddingLeft),
+  );
+  const middleY = box.y + box.height / 2;
 
-  await expect(page.getByText("Ln 3, Col 5")).toBeVisible();
+  // Clicking the first character lands on the first column, not the second.
+  await page.mouse.click(box.x + padLeft + 1, middleY);
+  await expect(page.getByText("Ln 3, Col 1")).toBeVisible();
+
+  // Clicking well past the end of the text stops at the end of the line rather than
+  // running on into the empty space after it. "charlie" is seven characters, so the
+  // caret belongs at column 8.
+  await page.mouse.click(box.x + box.width - 1, middleY);
+  await expect(page.getByText("Ln 3, Col 8")).toBeVisible();
+
+  // And the top of a line belongs to that line: the vertical padding was being counted
+  // too, which put the bottom of each line on the line below.
+  await page.mouse.click(box.x + padLeft + 1, box.y + 1);
+  await expect(page.getByText("Ln 3, Col 1")).toBeVisible();
 });
 
 test("takes focus back when the text is clicked after focus went elsewhere", async ({ page }) => {
