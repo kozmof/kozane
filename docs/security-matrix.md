@@ -142,12 +142,12 @@ changed on disk since, so a save cannot silently discard someone else's edit.
 Two consequences are worth stating plainly.
 
 - A taskspace created outside the workspace root — `kozane taskspace create --dir
-  <path>` — is both readable and writable, because the boundary is the taskspace
+<path>` — is both readable and writable, because the boundary is the taskspace
   directory rather than the root. Point a taskspace at a directory only if you
   would let anyone who can reach the server read and rewrite the text files in
   it.
 - On a local server with no API key, which is the state after a plain `kozane
-  init`, any local user or process that can reach the port can rewrite those
+init`, any local user or process that can reach the port can rewrite those
   files. That is the same trust boundary the database already sits behind, but
   it now extends to the working directory a taskspace points at. Generate a key
   with `kozane api key generate` if that is not what you want.
