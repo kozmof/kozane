@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { createTestDB } from "../../test-utils/db.js";
+import {
+  createTestDB,
+  isTooManyVariables,
+  seedCards,
+  SQLITE_VARIABLE_MAX,
+} from "../../test-utils/db.js";
 import {
   addScopeRel,
   addScopeRels,
@@ -10,14 +15,18 @@ import {
   removeScopeMembers,
   removeScopeMembersFromProject,
   getScopeRelsByCards,
+  getScopeRelsByProject,
 } from "./scope-rel.js";
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
-import { addLayer } from "./layer.js";
+import { addLayer, getDefaultLayer } from "./layer.js";
 import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
+
+const sortRels = (rels: { scopeId: string; cardId: string }[]) =>
+  [...rels].sort((a, b) => a.scopeId.localeCompare(b.scopeId) || a.cardId.localeCompare(b.cardId));
 
 async function setup() {
   const db = await createTestDB();
@@ -230,5 +239,63 @@ describe("removeScopeMembersFromProject", () => {
 
     expect(ok).toBe(false);
     expect(await getScopeRelsByCards({ db, cardIds: [cardId, otherCardId] })).toHaveLength(2);
+  });
+});
+
+describe("getScopeRelsByProject", () => {
+  it("returns nothing for a project whose cards are in no scope", async () => {
+    const { db, projectId } = await setup();
+    expect(await getScopeRelsByProject({ db, projectId })).toEqual([]);
+  });
+
+  it("agrees with getScopeRelsByCards handed every card of the project", async () => {
+    const { db, projectId, bundleId, scopeId, cardId } = await setup();
+    const second = await addCard({ db, bundleId, content: "Card B" });
+    const otherScopeId = await addScope({ db, name: "S2" });
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRel({ db, scopeId, cardId: second });
+    await addScopeRel({ db, scopeId: otherScopeId, cardId });
+
+    const byProject = await getScopeRelsByProject({ db, projectId });
+
+    expect(byProject).toHaveLength(3);
+    expect(sortRels(byProject)).toEqual(
+      sortRels(await getScopeRelsByCards({ db, cardIds: [cardId, second] })),
+    );
+  });
+
+  // A scope is deliberately cross-project, so this is the case that separates "the scopes
+  // this board draws" from "every row in the table": another project's card filed into the
+  // same scope must not arrive on this project's board.
+  it("leaves another project's memberships of a shared scope out", async () => {
+    const { db, projectId, scopeId, cardId } = await setup();
+    const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
+    await addScopeRel({ db, scopeId, cardId });
+    await addScopeRel({ db, scopeId, cardId: otherCardId });
+
+    expect(await getScopeRelsByProject({ db, projectId })).toEqual([{ scopeId, cardId }]);
+  });
+
+  // `scope_rel` is the table that grows fastest, so it is the one that reaches SQLite's
+  // parameter ceiling first — and reaching it stopped the board loading rather than slowing
+  // it down. Selecting by project binds one parameter however many cards there are.
+  it("reads a project holding more cards than one statement could name", async () => {
+    const { db, projectId, bundleId, scopeId } = await setup();
+    const layerId = (await getDefaultLayer({ db, projectId }))!.id;
+    const cardIds = await seedCards(db, {
+      bundleId,
+      layerId,
+      count: SQLITE_VARIABLE_MAX + 1,
+      prefix: "big",
+    });
+    await addScopeRels({ db, scopeId, cardIds: cardIds.slice(0, 3) });
+
+    await expect(getScopeRelsByCards({ db, cardIds }).catch(isTooManyVariables)).resolves.toBe(
+      true,
+    );
+    await expect(getScopeRelsByProject({ db, projectId })).resolves.toHaveLength(3);
   });
 });

@@ -1,8 +1,9 @@
 import { bundleTable, cardTable, layerTable } from "../schema.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { AnyColumn, SQL } from "drizzle-orm";
 import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
+import type { CardData } from "../../lib/types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { chunked } from "../../lib/constants.js";
 import { assertFound, columnCount } from "./utils.js";
@@ -35,6 +36,56 @@ type GetCardsByBundles = NeedsDB & { bundleIds: string[] };
 export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): Promise<Card[]> {
   if (bundleIds.length === 0) return [];
   return db.select().from(cardTable).where(inArray(cardTable.bundleId, bundleIds));
+}
+
+/**
+ * The card columns the browser is sent, and only those.
+ *
+ * `CardData` names them once as a type; this names them once as a query. The two are held
+ * together by the `satisfies` below rather than by anyone remembering: a key added to
+ * `CardData` is missing here and a key removed from it is excess here, and both are compile
+ * errors. `readCard` in `snapshot-reader.ts` is the third member of that set, and breaks the
+ * same way — so a column reaches the board only when all three have been changed to admit it.
+ *
+ * The board is what makes this worth spelling out rather than selecting the row and letting
+ * the extra columns ride along. Precisely: drizzle's `select()` enumerates the columns the
+ * *schema* declares, so a column that exists only in the database never arrives here anyway
+ * — but one added to `cardTable` did, by the act of adding it. `CardData` is a hand-written
+ * `Pick`, so it would not gain the column and nothing on the path would object, and the
+ * board is a published surface: served to every browser on page load, and baked into
+ * `kozane net ssg generate` output, whose exact contents `docs/security-matrix.md`
+ * enumerates. Opting a column in is one line here; opting one out after it has been
+ * exported is not a thing that can be done.
+ */
+const CARD_DATA_SELECTION = {
+  id: cardTable.id,
+  content: cardTable.content,
+  bundleId: cardTable.bundleId,
+  layerId: cardTable.layerId,
+  posX: cardTable.posX,
+  posY: cardTable.posY,
+  taskspaceId: cardTable.taskspaceId,
+  zIndex: cardTable.zIndex,
+  width: cardTable.width,
+} satisfies Record<keyof CardData, AnyColumn>;
+
+/**
+ * The cards of a project's bundles, narrowed to what a board draws.
+ *
+ * The read behind both halves of the snapshot — the page load and the once-a-second poll —
+ * which is the pair `loadProjectSnapshot` exists to keep identical. It used to select the
+ * whole row: the poll's reader rebuilt each card from the fields it knows, so the two paths
+ * already agreed on what the *client* kept, and disagreed on what crossed the wire.
+ */
+export async function getCardDataByBundles({
+  db,
+  bundleIds,
+}: GetCardsByBundles): Promise<CardData[]> {
+  if (bundleIds.length === 0) return [];
+  return db
+    .select(CARD_DATA_SELECTION)
+    .from(cardTable)
+    .where(inArray(cardTable.bundleId, bundleIds));
 }
 
 export type CardMarker = {

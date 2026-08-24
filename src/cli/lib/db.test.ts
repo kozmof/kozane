@@ -1,5 +1,13 @@
 import { createClient } from "@libsql/client";
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -169,5 +177,37 @@ describe("restoreDb", () => {
 
     await expect(restoreDb(source, target)).rejects.toThrow();
     expect(readFileSync(target, "utf8")).toBe("original");
+  });
+
+  // A write-ahead log holds commits the main file does not, so one left beside a database
+  // that has been swapped underneath it describes a history the restored database never
+  // had — SQLite would replay it and produce neither the backup nor what was there before.
+  // Written by hand rather than by provoking WAL mode: nothing here sets `journal_mode`, so
+  // the point is that the restore clears these whether or not the driver is using them.
+  it("clears the log files left beside the database it replaces", async () => {
+    const root = tempRoot();
+    const source = join(root, "backup.db");
+    const target = join(root, "current.db");
+    await runMigrations(tempDbUrl(source));
+    writeFileSync(target, "old database");
+    writeFileSync(`${target}-wal`, "stale log");
+    writeFileSync(`${target}-shm`, "stale index");
+
+    await restoreDb(source, target);
+
+    expect(existsSync(`${target}-wal`)).toBe(false);
+    expect(existsSync(`${target}-shm`)).toBe(false);
+    expect((await getMigrationStatus(tempDbUrl(target))).state).toBe("current");
+  });
+
+  it("leaves nothing of the staged copy behind", async () => {
+    const root = tempRoot();
+    const source = join(root, "backup.db");
+    const target = join(root, "current.db");
+    await runMigrations(tempDbUrl(source));
+
+    await restoreDb(source, target);
+
+    expect(readdirSync(root).filter((name) => name.includes(".restore-"))).toEqual([]);
   });
 });

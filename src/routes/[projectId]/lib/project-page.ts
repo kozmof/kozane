@@ -1,5 +1,5 @@
-import type { Card, GlueRel } from "$db/api/types.js";
-import type { CardWithGlue } from "$lib/types.js";
+import type { GlueRel } from "$db/api/types.js";
+import type { CardData, CardWithGlue } from "$lib/types.js";
 import { clamp } from "$lib/constants.js";
 import type { CardPositionUpdate } from "$db/api/card.js";
 export type { CardPositionUpdate as CardPositionPatch } from "$db/api/card.js";
@@ -124,7 +124,16 @@ export function glueIdByCardId<T extends { cardId: string; glueId: string }>(glu
   return new Map(glueRels.map((rel) => [rel.cardId, rel.glueId]));
 }
 
-export function cardsWithGlueIds(cards: Card[], glueRels: GlueRel[]): CardWithGlue[] {
+/**
+ * Pairs each card with the glue group it belongs to, if any.
+ *
+ * Takes `CardData` rather than the whole `Card` row, because the spread below is what puts
+ * these on the wire: handed a full row it would carry every column of `card` to the browser,
+ * including any added later for reasons that have nothing to do with drawing a board. The
+ * caller reads exactly `CardData` (see `getCardDataByBundles`), and this asks for no more
+ * than the caller has.
+ */
+export function cardsWithGlueIds(cards: CardData[], glueRels: GlueRel[]): CardWithGlue[] {
   const cardGlueMap = glueIdByCardId(glueRels);
   return cards.map((card) => ({
     ...card,

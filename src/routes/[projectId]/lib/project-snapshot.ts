@@ -6,9 +6,9 @@ import { getAllBundles } from "$db/api/bundle";
 import { getAllLayers } from "$db/api/layer";
 import { getAllWarps } from "$db/api/warp";
 import { getScopesInProject } from "$db/api/scope";
-import { getCardsByBundles } from "$db/api/card";
-import { getGlueRelsByCards } from "$db/api/glue";
-import { getScopeRelsByCards } from "$db/api/scope-rel";
+import { getCardDataByBundles } from "$db/api/card";
+import { getGlueRelsByProject } from "$db/api/glue";
+import { getScopeRelsByProject } from "$db/api/scope-rel";
 import { getTaskspacesInProject } from "$db/api/taskspace";
 import { cardsWithGlueIds } from "./project-page.js";
 
@@ -56,13 +56,18 @@ export async function loadProjectSnapshot({
     getTaskspacesInProject({ db, projectId }),
   ]);
 
-  // Sequential, unlike the rest: the cards are what the two relation reads below are keyed
-  // by, so there is nothing to overlap them with.
-  const cards = await getCardsByBundles({ db, bundleIds: bundles.map(({ id }) => id) });
-  const cardIds = cards.map(({ id }) => id);
+  // Still sequential, though the data dependency that made it so is gone: the two reads
+  // below select by project now rather than by the card ids this line produces, for the
+  // reason `getGlueRelsByProject` gives. What is left is an ordering preference. None of
+  // this is one consistent read of the database — a CLI write can land between any two of
+  // these queries — so the order only decides which way that skews, and a relation row for
+  // a card the board has not got is worse for the client than a card whose relation row is
+  // a tick behind: the second draws as unglued until the next poll, the first refers to
+  // nothing.
+  const cards = await getCardDataByBundles({ db, bundleIds: bundles.map(({ id }) => id) });
   const [glueRels, scopeRels] = await Promise.all([
-    getGlueRelsByCards({ db, cardIds }),
-    getScopeRelsByCards({ db, cardIds }),
+    getGlueRelsByProject({ db, projectId }),
+    getScopeRelsByProject({ db, projectId }),
   ]);
 
   const snapshot = {

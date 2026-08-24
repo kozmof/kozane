@@ -1,14 +1,44 @@
-import { glueTable, glueRelTable } from "../schema.js";
-import { count, inArray } from "drizzle-orm";
-import type { NeedsDB } from "./types.js";
+import { bundleTable, cardTable, glueTable, glueRelTable } from "../schema.js";
+import { count, eq, getTableColumns, inArray } from "drizzle-orm";
+import type { GlueRel, NeedsDB, NeedsProject } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsInProject } from "./card.js";
 import { chunked } from "../../lib/constants.js";
 import { columnCount } from "./utils.js";
 
+/**
+ * The glue rows of a named handful of cards. For a caller that already holds the ids and
+ * knows how many there are — a route acting on a selection, which `BATCH_MAX` caps.
+ *
+ * Not for the board: see {@link getGlueRelsByProject}.
+ */
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
+}
+
+/**
+ * Every glue row of a project's cards, selected by the project rather than by naming them.
+ *
+ * The same answer {@link getGlueRelsByCards} gives when handed every card of a project, and
+ * the reason it is a separate function is the "every": that form binds one SQL parameter
+ * per card, and the board asks for it on every page load and every snapshot poll. SQLite
+ * refuses a statement past its variable limit — and builds the whole thing in memory before
+ * finding out — so a project large enough stops loading rather than loading slowly. It is
+ * the one read that took an id list nothing bounded: `BATCH_MAX` caps what a *request* may
+ * name, and this list came out of the database.
+ *
+ * The join binds one parameter whatever the board holds, and walks indexes the schema
+ * already has at every step: `bundle`'s primary key from `card`, and `glue_rel`'s from the
+ * card side, whose `card_id` is itself the primary key.
+ */
+export async function getGlueRelsByProject({ db, projectId }: NeedsProject): Promise<GlueRel[]> {
+  return db
+    .select(getTableColumns(glueRelTable))
+    .from(glueRelTable)
+    .innerJoin(cardTable, eq(cardTable.id, glueRelTable.cardId))
+    .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId))
+    .where(eq(bundleTable.projectId, projectId));
 }
 
 /**

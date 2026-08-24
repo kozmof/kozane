@@ -2,6 +2,7 @@ import {
   chmodSync,
   closeSync,
   fsyncSync,
+  lstatSync,
   openSync,
   renameSync,
   rmSync,
@@ -18,9 +19,36 @@ import { dirname } from "node:path";
 let temporaryCounter = 0;
 
 type WriteFileAtomicOptions = {
-  /** Permissions for the finished file. Omitted leaves it to the umask, as a plain write would. */
+  /**
+   * Permissions for the finished file. Omitted keeps whatever the file being replaced had,
+   * and falls back to the umask only where there is no such file — see {@link existingMode}.
+   */
   mode?: number;
 };
+
+/**
+ * The permissions of the file about to be replaced, or nothing where there is none to keep.
+ *
+ * This exists because the rename below gives the target a new inode, which is the whole
+ * point of the write and also its one side effect: the new file carries the mode it was
+ * created with rather than the mode of the thing it stands in for. A caller that named no
+ * mode means "leave this file as it was", not "reset it to the umask" — without this, a
+ * shell script saved through the taskspace editor comes back stripped of the bit that made
+ * it executable, and nothing reports it.
+ *
+ * `lstat`, and regular files only: a symlink or a device node is *replaced* by this write
+ * rather than rewritten, so its bits describe something that will not be there afterwards.
+ */
+function existingMode(target: string): number | undefined {
+  try {
+    const stat = lstatSync(target);
+    // Masked to the permission bits — `mode` also carries the file type, which `open` and
+    // `chmod` would refuse.
+    return stat.isFile() ? stat.mode & 0o7777 : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Writes a file by filling a temporary and renaming it over the target, so nothing ever
@@ -42,18 +70,19 @@ export function writeFileAtomic(
   contents: string,
   { mode }: WriteFileAtomicOptions = {},
 ): void {
+  const finalMode = mode ?? existingMode(target);
   const temporary = `${target}.tmp-${process.pid}-${Date.now()}-${temporaryCounter++}`;
   let fd: number | undefined;
   try {
-    fd = mode === undefined ? openSync(temporary, "wx") : openSync(temporary, "wx", mode);
+    fd = finalMode === undefined ? openSync(temporary, "wx") : openSync(temporary, "wx", finalMode);
     writeFileSync(fd, contents);
     fsyncSync(fd);
     closeSync(fd);
     fd = undefined;
     renameSync(temporary, target);
-    // The open above is subject to the umask, so the mode a caller asked for is only
-    // guaranteed once it has been set outright.
-    if (mode !== undefined) chmodSync(target, mode);
+    // The open above is subject to the umask, so the mode is only guaranteed once it has
+    // been set outright.
+    if (finalMode !== undefined) chmodSync(target, finalMode);
     const directoryFd = openSync(dirname(target), "r");
     try {
       fsyncSync(directoryFd);

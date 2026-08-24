@@ -119,6 +119,34 @@ describe("EditorDocument", () => {
     expect(d.textBetween({ line: 1, column: 0 }, { line: 1, column: 3 })).toBe("two");
   });
 
+  // The span used to be measured by counting characters and adding one per line for the
+  // newline between them, which is a claim about the file's line endings. On CRLF it ran a
+  // character short for every line the span crossed, so a copy out of the editor came back
+  // shifted — and further with every line.
+  it("reads across CRLF line endings without drifting", () => {
+    const d = doc("one\r\ntwo\r\nthree\r\n");
+    expect(d.textBetween({ line: 1, column: 0 }, { line: 1, column: 3 })).toBe("two");
+    expect(d.textBetween({ line: 2, column: 0 }, { line: 2, column: 5 })).toBe("three");
+    expect(d.textBetween({ line: 0, column: 1 }, { line: 1, column: 2 })).toBe("ne\r\ntw");
+  });
+
+  // A column counts UTF-16 code units, so an astral character takes two of them and the
+  // span has to be cut in the same units the column is quoted in.
+  it("reads a span measured past a multi-byte character", () => {
+    const d = doc("🗂 files\nplain\n");
+    expect(d.lineText(0).length).toBe(8);
+    expect(d.textBetween({ line: 0, column: 0 }, { line: 0, column: 2 })).toBe("🗂");
+    expect(d.textBetween({ line: 0, column: 3 }, { line: 0, column: 8 })).toBe("files");
+    // And across a line, where the offset of the second caret depends on the first line's
+    // length in those same units.
+    expect(d.textBetween({ line: 0, column: 3 }, { line: 1, column: 5 })).toBe("files\nplain");
+  });
+
+  it("reads nothing between a caret and itself", () => {
+    const d = doc("one\ntwo\n");
+    expect(d.textBetween({ line: 1, column: 1 }, { line: 1, column: 1 })).toBe("");
+  });
+
   it("puts the caret back where an undone insert was made", () => {
     const d = doc("alpha\nbravo\ncharlie\n");
     d.insert({ line: 2, column: 7 }, "!!!");

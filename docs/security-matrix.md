@@ -43,6 +43,9 @@ The cookie is not marked `Secure`, which is correct for loopback HTTP because
 the traffic never leaves the host. `kozane open` sets the server `ORIGIN` to the
 loopback URL so the login form passes SvelteKit's cross-site check.
 
+That URL becomes the browser launcher's command line, where other local users
+can read it; `--no-open` and the login page avoid that.
+
 ### Host checking without a key
 
 A keyless workspace checks the `Host` header and answers `403` to anything that

@@ -365,7 +365,26 @@ async function validateRestoreCandidate(path: string): Promise<void> {
   }
 }
 
-/** Validate a backup, flush it, then atomically replace the workspace database. */
+/**
+ * The files SQLite keeps beside a database file, which anything replacing one has to
+ * account for. A write-ahead log holds committed transactions that are not yet in the main
+ * file, so a `-wal` left beside a database that has been swapped underneath it describes a
+ * history that database never had.
+ */
+function sidecarPaths(dbFile: string): string[] {
+  return [`${dbFile}-wal`, `${dbFile}-shm`];
+}
+
+/**
+ * Validate a backup, flush it, then atomically replace the workspace database.
+ *
+ * The rename alone is not the whole replacement. Nothing here sets `journal_mode`, so the
+ * mode is the driver's to choose and may change under us; in WAL, the file being replaced
+ * has a `-wal` beside it holding commits the main file does not, and SQLite would go on
+ * replaying that log over the restored database. The result is neither the backup nor what
+ * was there before. Removing the sidecars is correct in every journal mode — in the others
+ * there are none to remove — so this does not depend on knowing which one is in force.
+ */
 export async function restoreDb(backupPath: string, targetPath: string): Promise<void> {
   const stagedPath = `${targetPath}.restore-${process.pid}-${Date.now()}`;
   try {
@@ -379,6 +398,10 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
       closeSync(fd);
     }
     renameSync(stagedPath, targetPath);
+    // After the rename rather than before: until the new file is in place there is still a
+    // database here that its log belongs to, and a crash between the two would otherwise
+    // leave the *old* database stripped of commits it had.
+    for (const sidecar of sidecarPaths(targetPath)) rmSync(sidecar, { force: true });
     const directoryFd = openSync(dirname(targetPath), "r");
     try {
       fsyncSync(directoryFd);
@@ -386,6 +409,8 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
       closeSync(directoryFd);
     }
   } finally {
-    rmSync(stagedPath, { force: true });
+    // The staged copy is opened by `validateRestoreCandidate`, which is enough to give it
+    // sidecars of its own; they are no part of the restored database either way.
+    for (const path of [stagedPath, ...sidecarPaths(stagedPath)]) rmSync(path, { force: true });
   }
 }

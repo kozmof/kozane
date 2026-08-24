@@ -1,4 +1,12 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -45,13 +53,45 @@ describe("writeFileAtomic", () => {
   });
 
   // Compared against a plain write rather than against fixed bits, which would only be
-  // asserting this machine's umask. The point is that config.json keeps the permissions it
-  // had before this replaced the plain write behind it.
-  it("leaves permissions to the umask when no mode is asked for", () => {
+  // asserting this machine's umask. The point is that a *new* file is left to the umask,
+  // exactly as a plain write would leave it.
+  it("leaves permissions to the umask for a file that did not exist", () => {
     const reference = join(dir, "reference.json");
     writeFileSync(reference, "public");
     writeFileAtomic(target, "public");
     expect(statSync(target).mode & 0o777).toBe(statSync(reference).mode & 0o777);
+  });
+
+  // The rename gives the target a new inode, so without carrying the mode over the new file
+  // arrives with whatever the umask says and the old permissions are simply gone.
+  it("keeps the permissions of the file it replaces", () => {
+    writeFileSync(target, "old", { mode: 0o640 });
+    chmodSync(target, 0o640);
+
+    writeFileAtomic(target, "new");
+
+    expect(statSync(target).mode & 0o777).toBe(0o640);
+  });
+
+  // The case this is actually for: a taskspace holds ordinary working files, and saving a
+  // script through the browser editor must not quietly take away the bit that runs it.
+  it("leaves an executable file executable", () => {
+    writeFileSync(target, "#!/bin/sh\necho old\n");
+    chmodSync(target, 0o755);
+
+    writeFileAtomic(target, "#!/bin/sh\necho new\n");
+
+    expect(statSync(target).mode & 0o777).toBe(0o755);
+    expect(readFileSync(target, "utf-8")).toBe("#!/bin/sh\necho new\n");
+  });
+
+  it("prefers an explicitly requested mode over the one already there", () => {
+    writeFileSync(target, "old");
+    chmodSync(target, 0o644);
+
+    writeFileAtomic(target, "secret", { mode: 0o600 });
+
+    expect(statSync(target).mode & 0o777).toBe(0o600);
   });
 
   // The reason writeConfig uses this. Two writes of the same length land in one filesystem

@@ -1,10 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDB } from "../../test-utils/db.js";
+import {
+  createTestDB,
+  isTooManyVariables,
+  seedCards,
+  SQLITE_VARIABLE_MAX,
+} from "../../test-utils/db.js";
+import type { DB } from "../tx.js";
 import { addProject } from "./project.js";
 import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
-import { getGlueRelsByCards, glueCards, unglueCards } from "./glue.js";
+import { getGlueRelsByCards, getGlueRelsByProject, glueCards, unglueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
 import { addLayer } from "./layer.js";
 
@@ -144,5 +150,63 @@ describe("glueCards over the insert batch size", () => {
     expect(new Set(cleared)).toEqual(new Set(cardIds));
     expect(await getGlueRelsByCards({ db, cardIds })).toEqual([]);
     expect(await db.select().from(glueTable).where(eq(glueTable.id, glueId))).toEqual([]);
+  });
+});
+
+
+/** A project of `cardCount` cards, built through {@link seedCards}. */
+async function projectWithCards(db: DB, name: string, cardCount: number) {
+  const projectId = await addProject({ db, name });
+  const { id: layerId } = await addLayer({ db, projectId, name: "Base", isDefault: true });
+  const bundleId = await addBundle({ db, projectId, name: `${name}-bundle` });
+  const cardIds = await seedCards(db, { bundleId, layerId, count: cardCount, prefix: name });
+  return { projectId, bundleId, cardIds };
+}
+
+const byCardId = (rels: { cardId: string }[]) =>
+  [...rels].sort((a, b) => a.cardId.localeCompare(b.cardId));
+
+describe("getGlueRelsByProject", () => {
+  it("returns nothing for a project whose cards are all unglued", async () => {
+    const db = await createTestDB();
+    const { projectId } = await projectWithCards(db, "P", 3);
+    expect(await getGlueRelsByProject({ db, projectId })).toEqual([]);
+  });
+
+  it("agrees with getGlueRelsByCards handed every card of the project", async () => {
+    const db = await createTestDB();
+    const { projectId, cardIds } = await projectWithCards(db, "P", 4);
+    await glueCards({ db, cardIds: [cardIds[0], cardIds[1]] });
+    await glueCards({ db, cardIds: [cardIds[2], cardIds[3]] });
+
+    const byProject = await getGlueRelsByProject({ db, projectId });
+
+    expect(byProject).toHaveLength(4);
+    expect(byCardId(byProject)).toEqual(byCardId(await getGlueRelsByCards({ db, cardIds })));
+  });
+
+  it("leaves another project's glue rows out", async () => {
+    const db = await createTestDB();
+    const mine = await projectWithCards(db, "mine", 2);
+    const theirs = await projectWithCards(db, "theirs", 2);
+    await glueCards({ db, cardIds: mine.cardIds });
+    await glueCards({ db, cardIds: theirs.cardIds });
+
+    const rels = await getGlueRelsByProject({ db, projectId: mine.projectId });
+
+    expect(new Set(rels.map((rel) => rel.cardId))).toEqual(new Set(mine.cardIds));
+  });
+
+  // Why this function exists at all. `getGlueRelsByCards` binds one parameter per card, and
+  // the board handed it every card in the project on every page load and every poll — so a
+  // project this size did not load slowly, it did not load. Selecting by project binds one
+  // parameter whatever the board holds, which takes the row count out of the question.
+  it("reads a project holding more cards than one statement could name", async () => {
+    const db = await createTestDB();
+    const { projectId, cardIds } = await projectWithCards(db, "big", SQLITE_VARIABLE_MAX + 1);
+    await glueCards({ db, cardIds: cardIds.slice(0, 2) });
+
+    await expect(getGlueRelsByCards({ db, cardIds }).catch(isTooManyVariables)).resolves.toBe(true);
+    await expect(getGlueRelsByProject({ db, projectId })).resolves.toHaveLength(2);
   });
 });

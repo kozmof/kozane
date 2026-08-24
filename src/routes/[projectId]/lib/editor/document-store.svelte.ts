@@ -230,12 +230,31 @@ export class EditorDocument {
     return this.#caretAt(from + byteLength(text));
   }
 
-  /** The text between two carets. O(n) in the span, so not for drawing. */
+  /**
+   * The text between two carets. O(n) in the document, so not for drawing.
+   *
+   * A caret is turned into an index by asking Reed where its *line* starts and adding the
+   * column to that. The line start is the part that cannot be counted here: the previous
+   * version summed the lines above and added one apiece for the separator between them,
+   * which is a claim about the file's line endings that nothing in this class is in a
+   * position to make. On CRLF it ran a character short for every line the span crossed, so
+   * a copy out of the editor came back shifted, and further with every line.
+   *
+   * The column is added in the string's own units rather than resolved through Reed as
+   * well, and deliberately: a column counts UTF-16 code units, so it can land inside a
+   * surrogate pair, and a byte-level cut there would silently replace half a character with
+   * `U+FFFD`. Slicing the string keeps that case exactly as it has always been.
+   */
   textBetween(start: Caret, end: Caret): string {
     const whole = this.text();
-    const from = charOffset(whole, start, this);
-    const to = charOffset(whole, end, this);
-    return whole.slice(from, to);
+    // One encode for both ends. A line start always falls on a character boundary, whatever
+    // the line ending is, so decoding the prefix up to one is lossless.
+    const bytes = new TextEncoder().encode(whole);
+    const charOffset = ({ line, column }: Caret): number => {
+      const lineStart = this.#byteOffset({ line, column: 0 });
+      return new TextDecoder().decode(bytes.subarray(0, lineStart)).length + column;
+    };
+    return whole.slice(charOffset(start), charOffset(end));
   }
 
   /** The caret this document's own selection points at, or null when it has none. */
@@ -265,11 +284,4 @@ export class EditorDocument {
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
-}
-
-/** A caret as an index into the whole document string, for the slicing helpers above. */
-function charOffset(whole: string, caret: Caret, doc: EditorDocument): number {
-  let offset = 0;
-  for (let line = 0; line < caret.line; line++) offset += doc.lineText(line).length + 1;
-  return offset + caret.column;
 }

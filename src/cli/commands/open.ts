@@ -14,6 +14,7 @@ import {
   activeServerProcess,
   claimServerState,
   removeServerState,
+  writeServerState,
 } from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
 import { resolvePort } from "../lib/port.js";
@@ -31,13 +32,27 @@ type OpenOptions = {
   logRequests?: boolean;
 };
 
+/**
+ * Opens the workspace in the user's browser, and says so when it cannot.
+ *
+ * `execFile` without a callback swallows the spawn error — a missing `xdg-open` produces
+ * no throw and no output — so a headless box got a URL printed a second earlier, then
+ * silence, with nothing connecting the two. The fallback names the URL again rather than
+ * only reporting the failure, because typing it in is the whole of the recovery.
+ */
 export function openBrowser(url: string): void {
+  const onFailure = (error: Error | null) => {
+    if (!error) return;
+    console.error(`\nCould not open a browser automatically (${error.message}).`);
+    console.error(`Open this URL yourself:\n${url}\n`);
+  };
+
   if (process.platform === "darwin") {
-    execFile("open", [url]);
+    execFile("open", [url], onFailure);
   } else if (process.platform === "win32") {
-    execFile("cmd.exe", ["/c", "start", "", url]);
+    execFile("cmd.exe", ["/c", "start", "", url], onFailure);
   } else {
-    execFile("xdg-open", [url]);
+    execFile("xdg-open", [url], onFailure);
   }
 }
 
@@ -141,6 +156,25 @@ export async function open(options: OpenOptions): Promise<void> {
   const url = `http://${urlHost}:${port}`;
   const browserUrl = apiKey ? url + "/?api_key=" + encodeURIComponent(apiKey.apiKey) : url;
 
+  // The workspace is reserved before the server is started rather than after it. The
+  // reservation is the authority on who serves this workspace, and consulting it second
+  // meant two `kozane open` runs could both pass the check above, both spawn a server, and
+  // one of them be killed once already listening — a window a whole process launch wide.
+  // `activeServerProcess` above stays: it fails early, before a temporary database has been
+  // built, and this is the one that actually decides.
+  const conflictingServer = claimServerState(root, process.pid, {
+    memory: options.memory === true,
+    databaseUrl: options.memory ? dbURL : undefined,
+  });
+  if (conflictingServer) {
+    cleanupMemory();
+    console.error(
+      `Kozane is already running for this workspace (process ${conflictingServer.pid}).`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`Kozane workspace: ${config.name}`);
   const databaseLabel = options.memory
     ? ":memory: (discarded when the server stops)"
@@ -172,20 +206,15 @@ export async function open(options: OpenOptions): Promise<void> {
     stdio: "inherit",
   });
 
+  // Re-pointed at the server itself now that it has a pid. The reservation was taken above
+  // in this process's name, which held the workspace across the spawn; from here the
+  // process that has to be found alive is the one actually serving it, and it is the one
+  // `removeServerState` below is matched against.
   if (child.pid) {
-    const conflictingServer = claimServerState(root, child.pid, {
+    writeServerState(root, child.pid, {
       memory: options.memory === true,
       databaseUrl: options.memory ? dbURL : undefined,
     });
-    if (conflictingServer) {
-      child.kill("SIGTERM");
-      cleanupMemory();
-      console.error(
-        `Kozane is already running for this workspace (process ${conflictingServer.pid}).`,
-      );
-      process.exitCode = 1;
-      return;
-    }
   }
 
   let stopping = false;
@@ -202,6 +231,9 @@ export async function open(options: OpenOptions): Promise<void> {
   }
 
   child.on("error", (err) => {
+    // The reservation is held from before the spawn now, so a server that never started has
+    // to give it back — under whichever pid it ended up recorded against.
+    removeServerState(root, child.pid ?? process.pid);
     cleanupMemory();
     console.error("Failed to start server:", err.message);
     process.exit(1);

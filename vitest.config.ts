@@ -41,11 +41,29 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,svelte}"],
+      // What the thresholds below describe, and — just as important — what they do not.
+      //
+      // Two areas are outside this measurement for reasons that are about the tooling
+      // rather than about how well they are tested, so the percentage is not a statement
+      // about the whole tree and should not be read as one:
+      //
+      // - **Svelte components.** v8 reports `0/0` for a `.svelte` file even while its own
+      //   test suite renders it and passes — the compiled output carries no mapping this
+      //   provider can attribute back to the component. Including them would not lower the
+      //   number honestly, it would add zero statements and zero covered statements and
+      //   make the figure mean less. They are covered by the component suites beside them
+      //   (`KozaneCard.test.ts`, `CardComposer.test.ts`, and six more) and by `e2e/`.
+      // - **CLI commands.** Genuinely 0% *in this process*, because every one of them is
+      //   exercised by spawning `kozane` as a subprocess — `src/cli/*.e2e.test.ts` — which
+      //   v8 cannot instrument from here. Counting them would report code with nine e2e
+      //   suites behind it as untested.
+      //
+      // Everything else is measured, which is what the thresholds hold.
       exclude: [
         // Test infrastructure
         "src/test-utils/**",
         "src/app.d.ts",
-        // CLI entry/commands are exercised through subprocess and installed-package smoke tests.
+        // Exercised by subprocess e2e suites this process cannot measure; see the note above.
         "src/cli/index.ts",
         "src/cli/commands/**",
         // Filesystem discovery/configuration require isolated CLI integration coverage.
@@ -62,8 +80,9 @@ export default defineConfig({
         "src/db/schema.ts",
         // SvelteKit wiring — no logic to assert
         "src/lib/index.ts",
-        // Page load functions and Svelte components require integration/e2e testing
+        // Page load functions require integration/e2e testing
         "src/routes/**/*page.server.ts",
+        // Not measurable by v8 rather than not tested; see the note above.
         "src/routes/**/*.svelte",
       ],
       reporter: ["text", "html", "lcov"],

@@ -1,6 +1,6 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
-import type { NeedsDB, NeedsScope, Card, ScopeRel } from "./types.js";
+import type { NeedsDB, NeedsProject, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 import { chunked } from "../../lib/constants.js";
@@ -150,10 +150,32 @@ export async function removeScopeMembersFromProject({
 }
 
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
+
+/**
+ * The scope memberships of a named handful of cards, for a caller that already holds the
+ * ids and knows how many there are. Not for the board: see {@link getScopeRelsByProject}.
+ */
 export async function getScopeRelsByCards({
   db,
   cardIds,
 }: GetScopeRelsByCards): Promise<ScopeRel[]> {
   if (cardIds.length === 0) return [];
   return db.select().from(scopeRelTable).where(inArray(scopeRelTable.cardId, cardIds));
+}
+
+/**
+ * Every scope membership of a project's cards, selected by the project rather than by
+ * naming them. The counterpart to `getGlueRelsByProject`, for the same reason and on the
+ * table that grows fastest — see the note there.
+ *
+ * Reaches `scope_rel` through `scope_rel_card`, which the schema declares precisely because
+ * the primary key leads with `scope_id` and so cannot answer a lookup by card.
+ */
+export async function getScopeRelsByProject({ db, projectId }: NeedsProject): Promise<ScopeRel[]> {
+  return db
+    .select(getTableColumns(scopeRelTable))
+    .from(scopeRelTable)
+    .innerJoin(cardTable, eq(cardTable.id, scopeRelTable.cardId))
+    .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId))
+    .where(eq(bundleTable.projectId, projectId));
 }
