@@ -51,7 +51,7 @@
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e"
   },
   "dependencies": {
-    "@kozmof/reed": "^2.0.0",
+    "@kozmof/reed": "^3.0.0",
     "@libsql/client": "^0.17.4",
     "@sveltejs/adapter-node": "^5.5.7",
     "commander": "^14.0.3",

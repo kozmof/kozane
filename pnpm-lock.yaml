@@ -13,8 +13,8 @@ importers:
   .:
     dependencies:
       '@kozmof/reed':
-        specifier: ^2.0.0
-        version: 2.0.0
+        specifier: ^3.0.0
+        version: 3.0.0
       '@libsql/client':
         specifier: ^0.17.4
         version: 0.17.4
@@ -693,8 +693,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@kozmof/reed@2.0.0':
-    resolution: {integrity: sha512-Cg67AnT30a0CnCjvu1pgxcOS2huDrMrDMfewjO1U4O9haHZLm2S6EFnvt8ojN+exMBn9WyuYT++NejY/vzynxA==}
+  '@kozmof/reed@3.0.0':
+    resolution: {integrity: sha512-T9+9F/lLfMEzNYcySsLmUPtX69oewnUkP1Yj2jvsFAs0+oGO0rk99OLd+GantlofzuOd4VB3f5ZZpTRWHgmhPA==}
     engines: {node: '>=20'}
 
   '@libsql/client@0.17.4':
@@ -3121,7 +3121,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@kozmof/reed@2.0.0': {}
+  '@kozmof/reed@3.0.0': {}
 
   '@libsql/client@0.17.4':
     dependencies:

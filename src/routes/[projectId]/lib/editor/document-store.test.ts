@@ -375,6 +375,62 @@ describe("EditorDocument", () => {
     expect(d.clamp({ line: 1, column: 99 })).toEqual({ line: 1, column: 2 });
   });
 
+  describe("carets on characters wider than one column", () => {
+    // "a😀b": the emoji is one character and two columns, so column 2 names its second
+    // half. Reed refuses an edit at a byte offset inside a code point, and a line sliced
+    // there for rendering comes back with a replacement character.
+    const line = "a😀b\n";
+
+    it("pulls a caret inside a character back to its start", () => {
+      const d = doc(line);
+      expect(d.clamp({ line: 0, column: 2 })).toEqual({ line: 0, column: 1 });
+      expect(d.clamp({ line: 0, column: 1 })).toEqual({ line: 0, column: 1 });
+      expect(d.clamp({ line: 0, column: 3 })).toEqual({ line: 0, column: 3 });
+    });
+
+    it("steps forward over a whole character", () => {
+      const d = doc(line);
+      expect(d.columnAfter(0, 0)).toBe(1);
+      expect(d.columnAfter(0, 1)).toBe(3);
+      expect(d.columnAfter(0, 3)).toBe(4);
+      expect(d.columnAfter(0, 4)).toBe(4);
+    });
+
+    it("steps back over a whole character", () => {
+      const d = doc(line);
+      expect(d.columnBefore(0, 4)).toBe(3);
+      expect(d.columnBefore(0, 3)).toBe(1);
+      expect(d.columnBefore(0, 1)).toBe(0);
+      expect(d.columnBefore(0, 0)).toBe(0);
+    });
+
+    it("steps off a column that landed inside a character", () => {
+      const d = doc(line);
+      expect(d.columnAfter(0, 2)).toBe(3);
+      expect(d.columnBefore(0, 2)).toBe(0);
+    });
+
+    it("deletes the character a backspace steps back over, and not half of it", () => {
+      const d = doc(line);
+      const at = d.delete({ line: 0, column: d.columnBefore(0, 3) }, { line: 0, column: 3 });
+      expect(d.text()).toBe("ab\n");
+      expect(at).toEqual({ line: 0, column: 1 });
+    });
+
+    it("edits at a caret inside a character rather than throwing", () => {
+      const d = doc(line);
+      // Reed 3 answers a byte offset inside a code point with a RangeError, which out of a
+      // keystroke handler would take the editor down with it.
+      expect(() => d.insert({ line: 0, column: 2 }, "X")).not.toThrow();
+      expect(d.text()).toBe("aX😀b\n");
+    });
+
+    it("reads a span whose ends were named inside a character", () => {
+      const d = doc(line);
+      expect(d.textBetween({ line: 0, column: 0 }, { line: 0, column: 2 })).toBe("a");
+    });
+  });
+
   it("tracks state through the subscription rather than being read by hand", () => {
     const d = doc("a\n");
     const first = d.state;

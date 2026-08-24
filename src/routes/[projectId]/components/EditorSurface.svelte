@@ -214,7 +214,8 @@
     switch (event.key) {
       case "ArrowLeft": {
         event.preventDefault();
-        if (caret.column > 0) moveTo({ line: caret.line, column: caret.column - 1 }, extend);
+        if (caret.column > 0)
+          moveTo({ line: caret.line, column: doc.columnBefore(caret.line, caret.column) }, extend);
         else if (caret.line > 0)
           moveTo({ line: caret.line - 1, column: doc.lineText(caret.line - 1).length }, extend);
         return;
@@ -222,7 +223,7 @@
       case "ArrowRight": {
         event.preventDefault();
         if (caret.column < doc.lineText(caret.line).length)
-          moveTo({ line: caret.line, column: caret.column + 1 }, extend);
+          moveTo({ line: caret.line, column: doc.columnAfter(caret.line, caret.column) }, extend);
         else if (caret.line < lastLine) moveTo({ line: caret.line + 1, column: 0 }, extend);
         return;
       }
@@ -275,7 +276,11 @@
         // Backspace takes what is behind the caret, so the caret was at the end of the
         // range rather than its start — which is where undo belongs.
         if (caret.column > 0)
-          caret = doc.delete({ line: caret.line, column: caret.column - 1 }, caret, caret);
+          caret = doc.delete(
+            { line: caret.line, column: doc.columnBefore(caret.line, caret.column) },
+            caret,
+            caret,
+          );
         else if (caret.line > 0)
           caret = doc.delete(
             { line: caret.line - 1, column: doc.lineText(caret.line - 1).length },
@@ -289,7 +294,10 @@
         if (deleteSelection()) return;
         const lineLength = doc.lineText(caret.line).length;
         if (caret.column < lineLength)
-          caret = doc.delete(caret, { line: caret.line, column: caret.column + 1 });
+          caret = doc.delete(caret, {
+            line: caret.line,
+            column: doc.columnAfter(caret.line, caret.column),
+          });
         else if (caret.line < lastLine)
           caret = doc.delete(caret, { line: caret.line + 1, column: 0 });
         return;

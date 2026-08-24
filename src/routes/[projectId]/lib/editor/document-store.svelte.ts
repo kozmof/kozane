@@ -1,4 +1,5 @@
 import { history, position, query, rendering, scan, store } from "@kozmof/reed";
+import type { SelectionRange } from "@kozmof/reed";
 
 type DocumentState = ReturnType<ReturnType<typeof store.createDocumentStore>["getSnapshot"]>;
 type ReedStore = ReturnType<typeof store.createDocumentStore>;
@@ -54,12 +55,21 @@ export function sameCaret(a: Caret, b: Caret): boolean {
  * layer and the key handling both work in. Reed positions are byte offsets; the conversion
  * happens here and nowhere else, so no caller has to remember which of the two it holds.
  *
- * Reed's own types are used as they come. Nothing here needs unwrapping: `query`, `scan`
- * and `history` are declared plain, and the `rendering` calls that still carry a cost
- * brand return `Costed<L, T>`, which is `T & CostBrand<L>` — an intersection, and so
- * already assignable to `T`. The same goes for `ByteOffset`, which is `number & Brand`.
- * This module once cast every one of these through `as unknown as`, which was load-bearing
- * against Reed 1 and became a way to not notice a Reed 2 signature changing underneath.
+ * Reed's own types are used as they come. Nothing here needs unwrapping: Reed 3 strips the
+ * cost algebra at its `api/*` boundary, so `rendering` answers a plain `string | null` and
+ * a plain `VisibleLinesResult` where Reed 2 answered those inside a `Costed<L, T>`. What
+ * remains branded is `ByteOffset`, which is `number & Brand` and so already assignable to
+ * `number`. This module once cast every one of these through `as unknown as`, which was
+ * load-bearing against Reed 1 and became a way to not notice a signature changing
+ * underneath.
+ *
+ * Every caret this class hands out or accepts sits on a UTF-8 code-point boundary, which
+ * Reed 3 requires of the offsets an edit names and enforces by throwing `RangeError`. A
+ * column counts UTF-16 code units, so the two disagree exactly on characters outside the
+ * BMP — an emoji is one character, two columns wide — and a caret stepped one column at a
+ * time lands between the halves of one. {@link clamp}, {@link columnBefore} and
+ * {@link columnAfter} are what keep that from reaching a dispatch: before Reed 3 the same
+ * caret inserted text into the middle of a code point and left mojibake behind.
  */
 export class EditorDocument {
   #store: ReedStore;
@@ -140,18 +150,58 @@ export class EditorDocument {
     return scan.getValue(this.state.pieceTable);
   }
 
-  /** Holds a caret inside the document, and inside the line it names. */
+  /**
+   * Holds a caret inside the document, inside the line it names, and on a character
+   * boundary.
+   *
+   * The last of those is what a caret arriving from somewhere that counts columns needs:
+   * a click resolved by measuring pixels, or a vertical move that carries a column onto a
+   * line where it falls in the middle of an emoji. Such a column is pulled back to the
+   * start of the character it landed inside, so the caret names a position that both the
+   * renderer can slice a line at and Reed will accept an edit at.
+   */
   clamp({ line, column }: Caret): Caret {
     const lastLine = Math.max(0, this.lineCount - 1);
     const safeLine = Math.min(Math.max(0, line), lastLine);
-    return {
-      line: safeLine,
-      column: Math.min(Math.max(0, column), this.lineText(safeLine).length),
-    };
+    return { line: safeLine, column: snapColumn(this.lineText(safeLine), column) };
+  }
+
+  /**
+   * The column one character before `column`, for a leftward step or a backspace.
+   *
+   * One character, not one column: stepping by a column would put the caret between the
+   * halves of a surrogate pair, and a backspace would take half an emoji.
+   */
+  columnBefore(line: number, column: number): number {
+    const text = this.lineText(line);
+    const at = snapColumn(text, column);
+    if (at <= 0) return 0;
+    return isLowSurrogate(text.charCodeAt(at - 1)) && isHighSurrogate(text.charCodeAt(at - 2))
+      ? at - 2
+      : at - 1;
+  }
+
+  /** The counterpart to {@link columnBefore}: one character forward. */
+  columnAfter(line: number, column: number): number {
+    const text = this.lineText(line);
+    const at = snapColumn(text, column);
+    if (at >= text.length) return text.length;
+    return isHighSurrogate(text.charCodeAt(at)) && isLowSurrogate(text.charCodeAt(at + 1))
+      ? at + 2
+      : at + 1;
   }
 
   #byteOffset({ line, column }: Caret): number {
-    const offset = rendering.lineColumnToPosition(this.state, line, column);
+    // Snapped again here, where every caret this class turns into an offset passes, rather
+    // than trusted from the caller: a column that names half a character converts to an
+    // offset inside a code point, and Reed 3 throws a `RangeError` on an edit that carries
+    // one. Thrown out of a keystroke handler that would take the editor down, so the last
+    // word on the invariant belongs at the conversion rather than at each of its callers.
+    const offset = rendering.lineColumnToPosition(
+      this.state,
+      line,
+      snapColumn(this.lineText(line), column),
+    );
     // A caret past the end of the document resolves to nothing; the end of the document is
     // the nearest position that exists, and is where a caret in that state belongs.
     return offset ?? this.state.pieceTable.totalLength;
@@ -174,8 +224,10 @@ export class EditorDocument {
    * happens to be — which, for an edit made far up a long file, is nowhere near the text
    * that just changed.
    */
-  #selectionAt(byteOffset: number) {
+  #selectionAt(byteOffset: number): [SelectionRange] {
     const at = position.byteOffset(byteOffset);
+    // A tuple rather than an array: Reed 3 takes a non-empty selection, having found that
+    // an empty one names no caret to come back to and so is never what a caller meant.
     return [{ anchor: at, head: at }];
   }
 
@@ -241,9 +293,10 @@ export class EditorDocument {
    * a copy out of the editor came back shifted, and further with every line.
    *
    * The column is added in the string's own units rather than resolved through Reed as
-   * well, and deliberately: a column counts UTF-16 code units, so it can land inside a
-   * surrogate pair, and a byte-level cut there would silently replace half a character with
-   * `U+FFFD`. Slicing the string keeps that case exactly as it has always been.
+   * well, and deliberately: the slice is then a slice of the same string the columns were
+   * measured against. It is snapped first, so a column naming half a character cuts at the
+   * character instead — the alternative being a copied span that ends in half a surrogate
+   * pair and pastes as `U+FFFD`.
    */
   textBetween(start: Caret, end: Caret): string {
     const whole = this.text();
@@ -252,7 +305,8 @@ export class EditorDocument {
     const bytes = new TextEncoder().encode(whole);
     const charOffset = ({ line, column }: Caret): number => {
       const lineStart = this.#byteOffset({ line, column: 0 });
-      return new TextDecoder().decode(bytes.subarray(0, lineStart)).length + column;
+      const at = snapColumn(this.lineText(line), column);
+      return new TextDecoder().decode(bytes.subarray(0, lineStart)).length + at;
     };
     return whole.slice(charOffset(start), charOffset(end));
   }
@@ -284,4 +338,25 @@ export class EditorDocument {
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/**
+ * A column held inside `text` and moved off the inside of a character.
+ *
+ * Pulled back rather than forward, so the position names the start of the character it
+ * landed in — the same character a click on that half of the pair was aimed at.
+ */
+function snapColumn(text: string, column: number): number {
+  const at = Math.min(Math.max(0, column), text.length);
+  return isLowSurrogate(text.charCodeAt(at)) && isHighSurrogate(text.charCodeAt(at - 1))
+    ? at - 1
+    : at;
 }

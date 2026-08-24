@@ -22,11 +22,15 @@ export function createVimState(): VimState {
  * Normal mode sits the caret *on* a character rather than between two, so the last column
  * of a line is its last character and not the position after it. An empty line has the one
  * position, which is why the floor is zero rather than a negative.
+ *
+ * The last character is asked for rather than counted back one column, because a column is
+ * a UTF-16 code unit and a line ending in an emoji has two of them for its last character.
+ * `doc.clamp` then holds the caret on the character it names, for the same reason.
  */
 function clampNormal(doc: EditorDocument, { line, column }: Caret): Caret {
   const safeLine = Math.min(Math.max(0, line), Math.max(0, doc.lineCount - 1));
-  const length = doc.lineText(safeLine).length;
-  return { line: safeLine, column: Math.min(Math.max(0, column), Math.max(0, length - 1)) };
+  const lastCharacter = doc.columnBefore(safeLine, doc.lineText(safeLine).length);
+  return doc.clamp({ line: safeLine, column: Math.min(Math.max(0, column), lastCharacter) });
 }
 
 /** The column after the last character, which is where insert mode may sit. */
@@ -144,7 +148,10 @@ export function handleVimKey(
       // Leaving insert mode steps the caret back onto the last character typed, as vim does.
       return {
         vim: { mode: "normal", pending: null },
-        caret: clampNormal(doc, { line: caret.line, column: caret.column - 1 }),
+        caret: clampNormal(doc, {
+          line: caret.line,
+          column: doc.columnBefore(caret.line, caret.column),
+        }),
         anchor: null,
       };
     }
@@ -199,10 +206,10 @@ export function handleVimKey(
     // Motions
     case "h":
     case "ArrowLeft":
-      return normal({ line, column: at.column - 1 });
+      return normal({ line, column: doc.columnBefore(line, at.column) });
     case "l":
     case "ArrowRight":
-      return normal({ line, column: at.column + 1 });
+      return normal({ line, column: doc.columnAfter(line, at.column) });
     case "j":
     case "ArrowDown":
       return normal({ line: Math.min(line + 1, lastLine), column: at.column });
@@ -234,7 +241,7 @@ export function handleVimKey(
     case "i":
       return insertAt(at);
     case "a":
-      return insertAt({ line, column: Math.min(at.column + 1, text.length) });
+      return insertAt({ line, column: doc.columnAfter(line, at.column) });
     case "I":
       return insertAt(firstNonBlank(doc, line));
     case "A":
@@ -253,7 +260,7 @@ export function handleVimKey(
     // Edits
     case "x": {
       if (readonly || text.length === 0) return normal(at);
-      doc.delete(at, { line, column: at.column + 1 });
+      doc.delete(at, { line, column: doc.columnAfter(line, at.column) });
       return normal(at);
     }
     case "u":

@@ -90,6 +90,29 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("abXc\n");
   });
 
+  it("walks the arrow keys over an emoji rather than into the middle of it", async () => {
+    // Two columns, one character. A caret between them is a byte offset inside a code
+    // point, which Reed refuses an edit at.
+    const { doc, sink } = mount("a😀b\n", { caret: { line: 0, column: 0 } });
+    sink.focus();
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}X");
+    expect(doc.text()).toBe("a😀Xb\n");
+  });
+
+  it("takes a whole emoji on Backspace", async () => {
+    const { doc, sink } = mount("a😀b\n", { caret: { line: 0, column: 3 } });
+    sink.focus();
+    await userEvent.keyboard("{Backspace}");
+    expect(doc.text()).toBe("ab\n");
+  });
+
+  it("takes a whole emoji on Delete", async () => {
+    const { doc, sink } = mount("a😀b\n", { caret: { line: 0, column: 1 } });
+    sink.focus();
+    await userEvent.keyboard("{Delete}");
+    expect(doc.text()).toBe("ab\n");
+  });
+
   it("undoes and redoes with the accelerator", async () => {
     const { doc, sink } = mount("a\n", { caret: { line: 0, column: 1 } });
     sink.focus();

@@ -109,6 +109,18 @@ describe("vim motions", () => {
     expect(press("あいう\n", ["l"]).caret).toEqual({ line: 0, column: 1 });
     expect(press("あいう\n", ["$"]).caret).toEqual({ line: 0, column: 2 });
   });
+
+  // An emoji is one character and two columns, and a caret between the two names half of
+  // it: nothing can be typed there, and the line cannot be sliced there to be drawn.
+  it("steps over an emoji in one press rather than landing inside it", () => {
+    expect(press("a😀b\n", ["l"]).caret).toEqual({ line: 0, column: 1 });
+    expect(press("a😀b\n", ["l", "l"]).caret).toEqual({ line: 0, column: 3 });
+    expect(press("a😀b\n", ["l", "l", "h"]).caret).toEqual({ line: 0, column: 1 });
+  });
+
+  it("puts $ on the last character of a line that ends in an emoji", () => {
+    expect(press("ab😀\n", ["$"]).caret).toEqual({ line: 0, column: 2 });
+  });
 });
 
 describe("vim mode transitions", () => {
@@ -161,6 +173,10 @@ describe("vim edits", () => {
   it("deletes the character under the caret with x", () => {
     expect(press("abc\n", ["x"]).text).toBe("bc\n");
     expect(press("abc\n", ["l", "x"]).text).toBe("ac\n");
+  });
+
+  it("deletes a whole emoji with x", () => {
+    expect(press("a😀b\n", ["l", "x"]).text).toBe("ab\n");
   });
 
   it("does nothing on x at an empty line", () => {
