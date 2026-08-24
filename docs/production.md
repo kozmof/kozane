@@ -48,7 +48,10 @@ key. Treat `.kozane/api.json` as a secret and never copy it into logs or source 
 
 Use a process supervisor such as systemd, Docker, or your platform's service manager. Configure
 automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
-with the API key. It verifies that the database accepts queries.
+with the API key. It verifies that the database accepts queries, answering `200` with
+`{"status":"ok",...}` when it does and `503` with `{"status":"error",...}` when it does not.
+Alert on the `status` field rather than on the status code alone; the cause of a failure is
+written to the log, not to the response.
 
 Run only one Kozane server per workspace, enforced by an exclusive runtime reservation.
 `kozane open` checks the reservation before it starts anything and refuses outright. A server

@@ -3,6 +3,8 @@ import { count, inArray } from "drizzle-orm";
 import type { NeedsDB } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsInProject } from "./card.js";
+import { chunked } from "../../lib/constants.js";
+import { columnCount } from "./utils.js";
 
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -71,7 +73,11 @@ async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
 
   // Create a new glue group for all specified cards.
   const [{ id: newGlueId }] = await db.insert(glueTable).values({}).returning({ id: glueTable.id });
-  await db.insert(glueRelTable).values(cardIds.map((cardId) => ({ glueId: newGlueId, cardId })));
+  // Chunked like every other bulk insert here: a route may name up to `BATCH_MAX` cards,
+  // and a row per card at two columns each puts one statement well past the parameter
+  // budget `INSERT_PARAMS_MAX` sets.
+  for (const batch of chunked(cardIds, { columnsPerRow: columnCount(glueRelTable) }))
+    await db.insert(glueRelTable).values(batch.map((cardId) => ({ glueId: newGlueId, cardId })));
 
   return newGlueId;
 }

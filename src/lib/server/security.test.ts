@@ -5,6 +5,7 @@ import {
   _resetAuthFailuresForTest,
   applySecurityHeaders,
   clearAuthFailures,
+  isAllowedRequestHost,
   isBrowserNavigation,
   isLoopbackHost,
   recordAuthFailure,
@@ -97,5 +98,41 @@ describe("content security policy", () => {
     expect(applySecurityHeaders(rendered).headers.get("content-security-policy")).toBe(
       "default-src 'self'; script-src 'nonce-abc'",
     );
+  });
+});
+
+describe("request host allowlist", () => {
+  it("accepts the loopback names a workspace is reached by", () => {
+    expect(isAllowedRequestHost("localhost:17173")).toBe(true);
+    expect(isAllowedRequestHost("127.0.0.1:17173")).toBe(true);
+    expect(isAllowedRequestHost("127.0.0.1")).toBe(true);
+    expect(isAllowedRequestHost("[::1]:17173")).toBe(true);
+  });
+
+  // The rebinding case: a name someone else controls, resolved to this address.
+  it("rejects a name that is not the workspace's own", () => {
+    expect(isAllowedRequestHost("attacker.example:17173")).toBe(false);
+    expect(isAllowedRequestHost("kozane.local")).toBe(false);
+  });
+
+  it("accepts a host named in the allow list", () => {
+    expect(isAllowedRequestHost("kozane.local", "kozane.local")).toBe(true);
+    expect(isAllowedRequestHost("kozane.local:17173", "other.test, kozane.local")).toBe(true);
+    expect(isAllowedRequestHost("kozane.local", "other.test")).toBe(false);
+  });
+
+  it("is case- and port-insensitive, matching how a browser may spell a host", () => {
+    expect(isAllowedRequestHost("KOZANE.Local:8080", "kozane.local")).toBe(true);
+  });
+
+  // An empty entry in the list must not become a wildcard for a request naming no host.
+  it("does not let an empty allow-list entry match", () => {
+    expect(isAllowedRequestHost("", "")).toBe(false);
+    expect(isAllowedRequestHost("", ",, ,")).toBe(false);
+    expect(isAllowedRequestHost("evil.test", ",,")).toBe(false);
+  });
+
+  it("rejects everything unnamed when no allow list is set", () => {
+    expect(isAllowedRequestHost("evil.test", undefined)).toBe(false);
   });
 });

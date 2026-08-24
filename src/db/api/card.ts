@@ -50,6 +50,12 @@ export type CardMarker = {
    * hint names the card nearest the warp, and how near a card is depends on how tall it is.
    */
   contentChars: number;
+  /**
+   * The card's own drawn width, or null where it follows `ui.defaultCardWidth`. Read for
+   * the same reason `contentChars` is: the hint names the card nearest the warp, and how
+   * near a card is depends on the box it is drawn in — which a resized card sets itself.
+   */
+  width: number | null;
 };
 type GetCardMarkers = NeedsDB & { projectIds: string[] };
 
@@ -71,13 +77,14 @@ const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
  * names a warp after the card closest to it, and pulling whole rows for several projects
  * to read three columns is not worth it.
  *
- * Bounded by width of row, not by count of rows. Two of the three dimensions could be
- * narrowed here — `nearestCardHint` measures horizontally against a fixed `cardWidth`, and
- * a card starting further below a warp than `WARP_HINT_RADIUS` can never reach it — but
- * the fourth edge cannot: a card's drawn height comes from how much text it holds, so an
- * arbitrarily tall card sitting well above a warp still reaches it. Filtering on the three
- * sound edges alone would drop exactly the cards the remaining one is there to keep, so
- * the narrowing has to be all four or none, and all four means the height model in SQL.
+ * Bounded by width of row, not by count of rows. Three of the four edges could be narrowed
+ * here — a card is drawn no wider than the largest of `ui.defaultCardWidth` and the widths
+ * cards pin for themselves, and one starting further below a warp than `WARP_HINT_RADIUS`
+ * can never reach it — but the fourth cannot: a card's drawn height comes from how much
+ * text it holds, so an arbitrarily tall card sitting well above a warp still reaches it.
+ * Filtering on the three sound edges alone would drop exactly the cards the remaining one
+ * is there to keep, so the narrowing has to be all four or none, and all four means the
+ * height model in SQL.
  *
  * What is filtered is the one thing that costs nothing to be sure of: a card whose text is
  * blank lends no hint (`nearestCardHint` skips it), so it need not be sent. `trim` here
@@ -99,6 +106,7 @@ export async function getCardMarkersByProjects({
       // `length()` counts characters rather than bytes for text, so this is the same
       // count the opening above is cut by.
       contentChars: sql<number>`length(${cardTable.content})`,
+      width: cardTable.width,
     })
     .from(cardTable)
     .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))

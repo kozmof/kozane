@@ -256,3 +256,145 @@ describe("export table list", () => {
     }
   });
 });
+
+/**
+ * `validateDumpRefs` exists to name the offending row, because SQLite's own
+ * `FOREIGN KEY constraint failed` names nothing. None of its branches had a test, which is
+ * how three of the export's foreign keys — `card.layer_id`, `layer.project_id` and
+ * `warp.project_id` — came to have no check at all while the docblock claimed every one
+ * was covered.
+ */
+describe("import reference validation", () => {
+  let sequence = 0;
+
+  async function seededDump() {
+    const sourceUrl = await migratedDbUrl(`refs-source-${sequence++}.db`);
+    await seedDb(sourceUrl);
+    return exportDbJson(sourceUrl);
+  }
+
+  async function expectRejectedImport(
+    corrupt: (tables: Awaited<ReturnType<typeof seededDump>>["tables"]) => void,
+    message: string | RegExp,
+  ) {
+    const dump = await seededDump();
+    corrupt(dump.tables);
+
+    const targetUrl = await migratedDbUrl(`refs-target-${sequence++}.db`);
+    await seedDb(targetUrl);
+
+    await expect(importDbJson(targetUrl, dump)).rejects.toThrow(message);
+
+    // The refusal lands before the delete loop, so the workspace being imported into is
+    // still whole. A dump rejected halfway would be the worst of both.
+    const after = await exportDbJson(targetUrl);
+    expect(after.tables.card).toHaveLength(2);
+    expect(after.tables.project).toHaveLength(1);
+  }
+
+  it("rejects a card on an unknown layer", async () => {
+    await expectRejectedImport((tables) => {
+      tables.card[0].layer_id = "layer-missing";
+    }, "card card-1: references unknown layer_id layer-missing");
+  });
+
+  it("rejects a layer in an unknown project", async () => {
+    await expectRejectedImport((tables) => {
+      tables.layer[0].project_id = "project-missing";
+    }, "layer layer-1: references unknown project_id project-missing");
+  });
+
+  it("rejects a warp in an unknown project", async () => {
+    await expectRejectedImport((tables) => {
+      tables.warp[0].project_id = "project-missing";
+    }, "warp warp-1: references unknown project_id project-missing");
+  });
+
+  it("rejects a bundle in an unknown project", async () => {
+    await expectRejectedImport((tables) => {
+      tables.bundle[0].project_id = "project-missing";
+    }, "bundle bundle-1: references unknown project_id project-missing");
+  });
+
+  it("rejects a card in an unknown bundle", async () => {
+    await expectRejectedImport((tables) => {
+      tables.card[0].bundle_id = "bundle-missing";
+    }, "card card-1: references unknown bundle_id bundle-missing");
+  });
+
+  it("rejects a card in an unknown taskspace", async () => {
+    await expectRejectedImport((tables) => {
+      tables.card[0].taskspace_id = "taskspace-missing";
+    }, "card card-1: references unknown taskspace_id taskspace-missing");
+  });
+
+  it("rejects a taskspace in an unknown scope", async () => {
+    await expectRejectedImport((tables) => {
+      tables.taskspace[0].scope_id = "scope-missing";
+    }, "taskspace taskspace-1: references unknown scope_id scope-missing");
+  });
+
+  it("rejects a glue_rel naming an unknown card", async () => {
+    await expectRejectedImport((tables) => {
+      tables.glue_rel[0].card_id = "card-missing";
+    }, "glue_rel: references unknown card_id card-missing");
+  });
+
+  it("rejects a scope_rel naming an unknown scope", async () => {
+    await expectRejectedImport((tables) => {
+      tables.scope_rel[0].scope_id = "scope-missing";
+    }, "scope_rel: references unknown scope_id scope-missing");
+  });
+
+  it("rejects two projects claiming to be the default", async () => {
+    await expectRejectedImport((tables) => {
+      tables.project.push({ ...tables.project[0], id: "project-2", is_default: 1 });
+      tables.project[0].is_default = 1;
+    }, "more than one project is marked as the default");
+  });
+
+  // `card.layer_id` is NOT NULL, so a null here would otherwise reach SQLite as a
+  // constraint failure rather than as the missing reference it is.
+  it("reports a null layer_id as an unknown reference rather than a constraint failure", async () => {
+    await expectRejectedImport((tables) => {
+      tables.card[0].layer_id = null;
+    }, "card card-1: references unknown layer_id null");
+  });
+});
+
+describe("import batching", () => {
+  // Rows used to go in one statement per row. `chunked` splits them by the parameter
+  // budget instead, so a table wider than the batch size still lands in one piece — and a
+  // count that spans several batches is the case a wrong `VALUES` shape would break.
+  it("restores a table spanning several insert batches", async () => {
+    const sourceUrl = await migratedDbUrl("batch-source.db");
+    const targetUrl = await migratedDbUrl("batch-target.db");
+    await seedDb(sourceUrl);
+
+    const client = createClient({ url: sourceUrl });
+    const cardCount = 512;
+    try {
+      await client.batch(
+        Array.from({ length: cardCount }, (_unused, index) => ({
+          sql: "INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
+          args: [`bulk-${index}`, "bundle-1", "layer-1", `card ${index}`, index, index * 2],
+        })),
+        "write",
+      );
+    } finally {
+      client.close();
+    }
+
+    const dump = await exportDbJson(sourceUrl);
+    // The two seeded cards plus the bulk ones.
+    expect(dump.tables.card).toHaveLength(cardCount + 2);
+
+    await expect(importDbJson(targetUrl, dump)).resolves.toMatchObject({
+      card: cardCount + 2,
+    });
+
+    // Round-tripped whole: same rows, same values, in the same order.
+    const imported = await exportDbJson(targetUrl);
+    expect(imported.tables.card).toEqual(dump.tables.card);
+  });
+});

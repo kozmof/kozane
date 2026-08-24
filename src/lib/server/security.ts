@@ -48,6 +48,37 @@ export function remoteBindingRequiresTls(
   return !isLoopbackHost(host) && protocol !== "https:";
 }
 
+/**
+ * Whether a request's `Host` names this workspace, for the one mode that has nothing else
+ * to go on: a workspace with no API key, bound to loopback.
+ *
+ * That mode authenticates nobody — `kozane init` leaves it there, and the security matrix
+ * says so. What the matrix understates is the reach: a name under someone else's control
+ * can be pointed at `127.0.0.1` (DNS rebinding), and the browser then treats this server as
+ * that name's own origin. `ORIGIN` does not settle it, because SvelteKit's CSRF check
+ * covers form-ish POSTs and says nothing about a `GET`, and the whole board is a `GET`.
+ * The API-key cookie is not at risk either way — it belongs to the loopback origin and is
+ * never sent to the attacker's name — which is exactly why this is scoped to the keyless
+ * case rather than applied to every request.
+ *
+ * `KOZANE_ALLOWED_HOSTS` is the escape hatch, comma-separated, for a hosts-file alias or a
+ * local proxy in front of a keyless workspace. Generating a key is the better answer, and
+ * makes this gate moot.
+ */
+export function isAllowedRequestHost(
+  host: string,
+  allowList = process.env.KOZANE_ALLOWED_HOSTS,
+): boolean {
+  if (isLoopbackHost(host)) return true;
+  const normalized = normalizeHost(host);
+  // An empty entry would otherwise match a request that named no host at all.
+  return (allowList ?? "")
+    .split(",")
+    .map((entry) => normalizeHost(entry))
+    .filter((entry) => entry !== "")
+    .includes(normalized);
+}
+
 export function recordAuthFailure(client: string, now = Date.now()): number | null {
   const current = authFailures.get(client);
   const rolledOver = !current || current.resetAt <= now;

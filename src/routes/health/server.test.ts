@@ -24,6 +24,21 @@ describe("health endpoint", () => {
     const run = vi.fn(async () => {
       throw failure;
     });
-    await expect(GET({ locals: { db: { run } } } as never)).rejects.toBe(failure);
+    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    // Answered rather than thrown: a probe reads `status` out of the body, which a
+    // rendered error page would not carry.
+    const response = await GET({ locals: { db: { run } } } as never);
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      status: "error",
+      error: "database is not answering queries",
+      cpuUsage: expect.any(Number),
+      memoryUsage: expect.any(Number),
+    });
+    // The cause still reaches the log, which is the only place it is recorded now.
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("Health check failed"), failure);
+    error.mockRestore();
   });
 });

@@ -19,8 +19,33 @@ function getMemoryUsageRate(): number {
   return percentage(((total - freemem()) / total) * 100);
 }
 
+/**
+ * Readiness, as a probe reads it.
+ *
+ * A database that will not answer is reported rather than thrown. Left to throw, the one
+ * endpoint whose job is to say whether the server is healthy answers with a rendered error
+ * page — a probe then has only the status code to go on, and the body says nothing about
+ * what failed. 503 rather than 500 because the condition is the workspace's and clears
+ * without a restart, which is the same distinction `hooks.server.ts` draws for the key
+ * file.
+ *
+ * `status` is the field to alert on, and it is present either way.
+ */
 export const GET: RequestHandler = async ({ locals }) => {
-  await locals.db.run(sql.raw("select 1"));
+  try {
+    await locals.db.run(sql.raw("select 1"));
+  } catch (e) {
+    console.error("[kozane] Health check failed:", e);
+    return json(
+      {
+        status: "error",
+        error: "database is not answering queries",
+        cpuUsage: getCpuUsageRate(),
+        memoryUsage: getMemoryUsageRate(),
+      },
+      { status: 503 },
+    );
+  }
   return json({
     status: "ok",
     cpuUsage: getCpuUsageRate(),

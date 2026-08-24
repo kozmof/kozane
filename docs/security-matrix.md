@@ -13,12 +13,12 @@ When a workspace has an API key, two rules hold in every server mode.
 
 ## At a glance
 
-| Mode                                    | Network reach   | API key  | Transport       | Auth enforced          | Writes |
-| --------------------------------------- | --------------- | -------- | --------------- | ---------------------- | ------ |
-| Local                                   | Loopback only   | Optional | HTTP            | Only when a key exists | Yes    |
-| Local with `--allow-remote`             | Loopback only   | Required | HTTP            | Yes                    | Yes    |
-| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | Yes                    | Yes    |
-| Static export (SSG)                     | Wherever hosted | None     | Host-defined    | No server              | No     |
+| Mode                                    | Network reach   | API key  | Transport       | Auth enforced          | Host checked       | Writes |
+| --------------------------------------- | --------------- | -------- | --------------- | ---------------------- | ------------------ | ------ |
+| Local                                   | Loopback only   | Optional | HTTP            | Only when a key exists | Only without a key | Yes    |
+| Local with `--allow-remote`             | Loopback only   | Required | HTTP            | Yes                    | No                 | Yes    |
+| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | Yes                    | No                 | Yes    |
+| Static export (SSG)                     | Wherever hosted | None     | Host-defined    | No server              | No server          | No     |
 
 ## Local
 
@@ -42,6 +42,26 @@ An API key is optional in this mode.
 The cookie is not marked `Secure`, which is correct for loopback HTTP because
 the traffic never leaves the host. `kozane open` sets the server `ORIGIN` to the
 loopback URL so the login form passes SvelteKit's cross-site check.
+
+### Host checking without a key
+
+A keyless workspace checks the `Host` header and answers `403` to anything that
+is not a loopback name. Without a key there is no credential to check, and a
+hostname someone else controls can be pointed at `127.0.0.1` — DNS rebinding —
+after which a page they serve is treated by the browser as this server's own
+origin. `ORIGIN` does not settle that on its own: SvelteKit's cross-site check
+covers form-shaped `POST`s, and reading the board is a `GET`.
+
+To reach a keyless workspace under another name, such as a hosts-file alias or a
+local proxy, list it in `KOZANE_ALLOWED_HOSTS` (comma-separated):
+
+```sh
+KOZANE_ALLOWED_HOSTS=kozane.local kozane open
+```
+
+Generating a key is the better answer. Once a workspace has one the check does
+not apply, because the key is then the thing being verified — and the API-key
+cookie belongs to the loopback origin, so a rebound page never receives it.
 
 ## Local with `--allow-remote`
 

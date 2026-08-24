@@ -15,7 +15,7 @@ import {
   WARP_HINT_MAX_CHARS,
   WARP_HINT_RADIUS,
 } from "./warp-list.js";
-import type { WarpListEntry } from "./warp-list.js";
+import type { HintCard, WarpListEntry } from "./warp-list.js";
 
 function warp(id: string, posX: number, posY: number, projectId = "p1") {
   return { id, projectId, posX, posY };
@@ -28,7 +28,9 @@ function card(posX: number, posY: number, content: string, zIndex = 0) {
 // Round numbers to keep the boxes in these tests easy to follow: 30 characters to a line,
 // and a one-line card 200 wide by 68 tall.
 const METRICS = { cardWidth: 200, fontSize: 10 };
-const hintFor = (point: { posX: number; posY: number }, cards: ReturnType<typeof card>[]) =>
+// `HintCard` rather than what `card()` returns, so a test can also hand over the optional
+// fields a real card carries — `width` above all, which decides the box it is measured in.
+const hintFor = (point: { posX: number; posY: number }, cards: HintCard[]) =>
   nearestCardHint(point, cards, METRICS);
 
 describe("CARD_BOX", () => {
@@ -375,5 +377,47 @@ describe("buildWarpDirectory", () => {
         excludeProjectId: "p1",
       }),
     ).toEqual([]);
+  });
+});
+
+/**
+ * A card that has been resized pins a `width`, and that is the box it is drawn in. Measured
+ * at `ui.defaultCardWidth` instead, a resized card is the wrong size in both directions —
+ * the height follows from what the text wraps to at that width — and the hint can name the
+ * wrong neighbour, which is not a thing anyone would spot.
+ */
+describe("nearestCardHint with a card's own width", () => {
+  it("measures a widened card at the width it is drawn at", () => {
+    const warpPoint = warp("w1", 350, 30);
+    const widened = { ...card(0, 0, "under the marker"), width: 400 };
+    const neighbour = card(420, 30, "next door");
+
+    // Drawn 400 wide, the warp sits inside it and nothing else can be nearer.
+    expect(hintFor(warpPoint, [widened, neighbour])).toBe("under the marker");
+    // Measured at the default 200 instead, its box stops at x=200 and the neighbour wins.
+    expect(hintFor(warpPoint, [{ ...widened, width: null }, neighbour])).toBe("next door");
+  });
+
+  it("measures a narrowed card as the taller card it wraps into", () => {
+    // 60 characters: two lines at the default width, five at 100 wide.
+    const content = "x".repeat(60);
+    const warpPoint = warp("w1", 0, 600);
+
+    // Two lines high, the card stops well short of the hint radius.
+    expect(hintFor(warpPoint, [card(0, 0, content)])).toBeNull();
+    // Narrowed, the same text wraps to five lines and does reach.
+    expect(hintFor(warpPoint, [{ ...card(0, 0, content), width: 100 }])).toBeTruthy();
+  });
+
+  it("falls back to the shared metrics when a card pins no width", () => {
+    const warpPoint = warp("w1", 250, 30);
+    // x=250 is outside a 200-wide card anchored at 0, and inside a 200-wide one at 220.
+    expect(hintFor(warpPoint, [card(0, 0, "left"), card(220, 30, "right")])).toBe("right");
+    expect(
+      hintFor(warpPoint, [
+        { ...card(0, 0, "left"), width: null },
+        { ...card(220, 30, "right"), width: null },
+      ]),
+    ).toBe("right");
   });
 });

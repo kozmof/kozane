@@ -31,6 +31,16 @@ export type HintCard = {
    */
   contentChars?: number;
   zIndex?: number;
+  /**
+   * The card's own drawn width, when it has pinned one. Null or omitted is the ordinary
+   * case — a card following `ui.defaultCardWidth`, which is what `metrics` carries.
+   *
+   * A resized card measured at the default width is measured as the wrong box in both
+   * directions: too narrow or too wide horizontally, and the wrong height with it, since
+   * height is what the text wraps to at that width. Both are what decides which card a
+   * warp is named after, and a plausible wrong hint is not something anyone would notice.
+   */
+  width?: number | null;
 };
 
 /** What every card on a board is drawn at, which is what turns a position into a box. */
@@ -137,6 +147,11 @@ export function estimateCardHeight(content: string, { cardWidth, fontSize }: Car
   return Math.max(CARD_BOX.minContentHeight, textHeight) + CARD_BOX.footerHeight;
 }
 
+/** What this card is actually drawn at: its own width if it pinned one, else the default. */
+function hintCardWidth(card: HintCard, metrics: CardMetrics): number {
+  return card.width ?? metrics.cardWidth;
+}
+
 /**
  * How tall a hint card is drawn, whether it arrived whole or as an opening. A card read
  * for the palette carries only its first few hundred characters, and measuring that as the
@@ -145,9 +160,15 @@ export function estimateCardHeight(content: string, { cardWidth, fontSize }: Car
  * assumption is what a hint is worth: an estimate of which card a warp is sitting on, made
  * the same way wherever the row is built, so a warp is named after the same card whether
  * it is read from its own board or from another project's.
+ *
+ * Measured at the card's own width, so a resized card wraps to the number of lines it
+ * really wraps to.
  */
 function hintCardHeight(card: HintCard, metrics: CardMetrics): number {
-  const measured = estimateCardHeight(card.content, metrics);
+  const measured = estimateCardHeight(card.content, {
+    cardWidth: hintCardWidth(card, metrics),
+    fontSize: metrics.fontSize,
+  });
   const sampled = [...card.content].length;
   if (card.contentChars === undefined || sampled === 0) return measured;
   return measured * Math.max(1, card.contentChars / sampled);
@@ -162,7 +183,11 @@ function squaredDistanceToCard(
   card: HintCard,
   metrics: CardMetrics,
 ): number {
-  const dx = Math.max(card.posX - point.posX, 0, point.posX - (card.posX + metrics.cardWidth));
+  const dx = Math.max(
+    card.posX - point.posX,
+    0,
+    point.posX - (card.posX + hintCardWidth(card, metrics)),
+  );
   const dy = Math.max(
     card.posY - point.posY,
     0,

@@ -1,6 +1,6 @@
 import { createClient, type InValue } from "@libsql/client";
 import { v7 as uuidv7 } from "uuid";
-import { DEFAULT_LAYER_NAME } from "../../lib/constants.js";
+import { chunked, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 5;
@@ -113,10 +113,17 @@ function selectSql(table: (typeof TABLES)[number]): string {
   return `SELECT ${columns} FROM ${quoteIdent(table.name)} ORDER BY ${orderBy}`;
 }
 
-function insertSql(table: (typeof TABLES)[number]): string {
+/**
+ * A multi-row INSERT for `rowCount` rows of `table`. Sized by the caller through
+ * {@link chunked}, the same way every other bulk writer here sizes one — a restore used to
+ * spend a round trip per row, which on a workspace of any size is the slowest thing the
+ * CLI does.
+ */
+function insertSql(table: (typeof TABLES)[number], rowCount: number): string {
   const columns = table.columns.map(quoteIdent).join(", ");
-  const placeholders = table.columns.map(() => "?").join(", ");
-  return `INSERT INTO ${quoteIdent(table.name)} (${columns}) VALUES (${placeholders})`;
+  const tuple = `(${table.columns.map(() => "?").join(", ")})`;
+  const values = Array.from({ length: rowCount }, () => tuple).join(", ");
+  return `INSERT INTO ${quoteIdent(table.name)} (${columns}) VALUES ${values}`;
 }
 
 function deleteSql(table: (typeof TABLES)[number]): string {
@@ -332,6 +339,7 @@ export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
 function validateDumpRefs(tables: TableRows): void {
   const projectIds = new Set(tables.project.map((r) => r.id as string));
   const bundleIds = new Set(tables.bundle.map((r) => r.id as string));
+  const layerIds = new Set(tables.layer.map((r) => r.id as string));
   const cardIds = new Set(tables.card.map((r) => r.id as string));
   const glueIds = new Set(tables.glue.map((r) => r.id as string));
   const scopeIds = new Set(tables.scope.map((r) => r.id as string));
@@ -343,9 +351,21 @@ function validateDumpRefs(tables: TableRows): void {
     if (!projectIds.has(row.project_id as string))
       throw new Error(`bundle ${row.id}: references unknown project_id ${row.project_id}`);
   }
+  for (const row of tables.layer) {
+    if (!projectIds.has(row.project_id as string))
+      throw new Error(`layer ${row.id}: references unknown project_id ${row.project_id}`);
+  }
+  for (const row of tables.warp) {
+    if (!projectIds.has(row.project_id as string))
+      throw new Error(`warp ${row.id}: references unknown project_id ${row.project_id}`);
+  }
   for (const row of tables.card) {
     if (!bundleIds.has(row.bundle_id as string))
       throw new Error(`card ${row.id}: references unknown bundle_id ${row.bundle_id}`);
+    // `card.layer_id` is NOT NULL, so a null arriving here is caught by the same check
+    // and reported as the unknown reference it is rather than as a constraint failure.
+    if (!layerIds.has(row.layer_id as string))
+      throw new Error(`card ${row.id}: references unknown layer_id ${row.layer_id}`);
     if (row.taskspace_id !== null && !taskspaceIds.has(row.taskspace_id as string))
       throw new Error(`card ${row.id}: references unknown taskspace_id ${row.taskspace_id}`);
   }
@@ -387,11 +407,12 @@ export async function importDbJson(
       }
 
       for (const table of TABLES) {
-        const sql = insertSql(table);
-        for (const row of dump.tables[table.name]) {
+        for (const batch of chunked(dump.tables[table.name], {
+          columnsPerRow: table.columns.length,
+        })) {
           await client.execute({
-            sql,
-            args: table.columns.map((column) => row[column] as InValue),
+            sql: insertSql(table, batch.length),
+            args: batch.flatMap((row) => table.columns.map((column) => row[column] as InValue)),
           });
         }
       }

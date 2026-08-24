@@ -7,6 +7,7 @@ import { readApiKeyResult } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
 import {
   applySecurityHeaders,
+  isAllowedRequestHost,
   remoteBindingRequiresApiKey,
   remoteBindingRequiresTls,
 } from "./lib/server/security";
@@ -74,10 +75,13 @@ function registerRuntimeState(root: string | null): string | null {
  * 4. **Remote binding has a key**, and 5. **remote binding is over TLS.** Both refuse a
  *    misconfigured *server*, so they run before any question of who is asking — a
  *    workspace bound to the world without a key must not answer a login page either.
- * 6. **Login page exemption.** After 3–5 so those still apply to it, and before the key
+ * 6. **Host, for a keyless workspace only.** The one mode with no key to check, so the
+ *    name the request arrived under is all there is to go on; see `isAllowedRequestHost`.
+ *    Skipped entirely once a key exists, where gate 8 is the real answer.
+ * 7. **Login page exemption.** After 3–6 so those still apply to it, and before the key
  *    check so that redirecting an unauthenticated browser to it cannot loop.
- * 7. **The key check** (`authenticateRequest`).
- * 8. **The database**, opened only for a request that got this far.
+ * 8. **The key check** (`authenticateRequest`).
+ * 9. **The database**, opened only for a request that got this far.
  */
 const handleRequest: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
@@ -123,6 +127,21 @@ const handleRequest: Handle = async ({ event, resolve }) => {
         { status: 426, headers: { upgrade: "TLS/1.2" } },
       ),
     );
+  }
+  // A keyless workspace has no credential to check, so the name the request arrived under
+  // is the only thing separating the user's own browser from a page that pointed someone
+  // else's hostname at this address. Read from the raw header rather than `event.url`,
+  // which `kozane open` pins through `ORIGIN` and which would therefore always agree.
+  if (!configuredKey) {
+    const requestHost = event.request.headers.get("host") ?? event.url.host;
+    if (!isAllowedRequestHost(requestHost)) {
+      return applySecurityHeaders(
+        new Response(
+          `This Kozane workspace does not answer to host "${requestHost}". Reach it on localhost, run 'kozane api key generate' to allow named access, or set KOZANE_ALLOWED_HOSTS.`,
+          { status: 403 },
+        ),
+      );
+    }
   }
   // The login page must render and accept its form POST without a valid key,
   // otherwise redirecting unauthenticated browsers to it would loop. It runs

@@ -186,13 +186,45 @@ describe("getCardMarkersByProjects", () => {
 
     const markers = await getCardMarkersByProjects({ db, projectIds: [projectId] });
 
+    // `width` is null for a card that has never been resized, which is most of them: it
+    // follows `ui.defaultCardWidth` until someone pins one.
     expect(markers).toEqual(
       expect.arrayContaining([
-        { projectId, posX: 24, posY: 48, zIndex: 0, content: "In b1", contentChars: 5 },
-        { projectId, posX: 96, posY: 96, zIndex: 3, content: "In b2", contentChars: 5 },
+        {
+          projectId,
+          posX: 24,
+          posY: 48,
+          zIndex: 0,
+          content: "In b1",
+          contentChars: 5,
+          width: null,
+        },
+        {
+          projectId,
+          posX: 96,
+          posY: 96,
+          zIndex: 3,
+          content: "In b2",
+          contentChars: 5,
+          width: null,
+        },
       ]),
     );
     expect(markers).toHaveLength(2);
+  });
+
+  // The reason the column is read at all: a resized card is drawn in a box it set itself,
+  // and that is the box `nearestCardHint` measures a warp against.
+  it("carries the width of a card that has been resized", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Wide", posX: 24, posY: 48 });
+    await updateCard({ db, cardId, bundleId, width: 420 });
+
+    const markers = await getCardMarkersByProjects({ db, projectIds: [projectId] });
+
+    expect(markers).toEqual([
+      { projectId, posX: 24, posY: 48, zIndex: 0, content: "Wide", contentChars: 4, width: 420 },
+    ]);
   });
 
   it("does not return cards from a project not in the list", async () => {

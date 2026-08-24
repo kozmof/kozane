@@ -212,3 +212,63 @@ describe("production request hook", () => {
     );
   });
 });
+
+/**
+ * The gate for the one mode with no credential to check. A keyless workspace on loopback
+ * authenticates nobody, so a name pointed at this address by DNS rebinding would otherwise
+ * read the whole board over ordinary `GET`s — which SvelteKit's CSRF origin check does not
+ * cover.
+ */
+describe("keyless workspace host gate", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.HOST = "127.0.0.1";
+    delete process.env.KOZANE_ALLOWED_HOSTS;
+    state.root = workspace();
+    _resetAuthFailuresForTest();
+  });
+
+  it("serves a request that arrived on a loopback name", async () => {
+    const response = await handle({
+      event: event("http://localhost/", { host: "127.0.0.1:17173" }) as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it("refuses a request that arrived under someone else's name", async () => {
+    const resolve = vi.fn(async () => new Response("ok"));
+    const response = await handle({
+      event: event("http://localhost/", { host: "attacker.example" }) as never,
+      resolve: resolve as never,
+    });
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain("attacker.example");
+    // The board was never assembled, let alone sent.
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("serves a host named in KOZANE_ALLOWED_HOSTS", async () => {
+    process.env.KOZANE_ALLOWED_HOSTS = "kozane.local";
+    const response = await handle({
+      event: event("http://localhost/", { host: "kozane.local" }) as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(response.status).toBe(200);
+  });
+
+  // With a key configured the key is the defence, and the cookie belongs to the loopback
+  // origin so a rebound page never receives it. Named hosts must keep working there —
+  // that is the documented reverse-proxy deployment.
+  it("does not apply to a workspace that has an API key", async () => {
+    state.root = workspace("secret");
+    const response = await handle({
+      event: event("http://kozane.example/", {
+        host: "kozane.example",
+        authorization: "Bearer secret",
+      }) as never,
+      resolve: vi.fn(async () => new Response("ok")) as never,
+    });
+    expect(response.status).toBe(200);
+  });
+});
