@@ -153,7 +153,6 @@ describe("glueCards over the insert batch size", () => {
   });
 });
 
-
 /** A project of `cardCount` cards, built through {@link seedCards}. */
 async function projectWithCards(db: DB, name: string, cardCount: number) {
   const projectId = await addProject({ db, name });
