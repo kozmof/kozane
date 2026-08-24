@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addWarp } from "../../../../db/api/warp.js";
-import { addProject } from "../../../../db/api/project.js";
-import { addBundle } from "../../../../db/api/bundle.js";
-import { addLayer } from "../../../../db/api/layer.js";
-import { addCard } from "../../../../db/api/card.js";
-import type { DB } from "../../../../db/tx.js";
+import { addWarp } from "$db/api/warp.js";
+import { addProject } from "$db/api/project.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addLayer } from "$db/api/layer.js";
+import { addCard } from "$db/api/card.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { GET } from "./+server.js";
 

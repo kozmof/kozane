@@ -29,7 +29,7 @@ vi.mock("./lib/project-api", () => ({
   createTaskspace: vi.fn(),
 }));
 
-import * as api from "./lib/project-api";
+import * as api from "./lib/project-api.js";
 
 function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
   return {

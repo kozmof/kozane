@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { loadProjectSnapshot } from "../../lib/project-snapshot";
+import { loadProjectSnapshot } from "../../lib/project-snapshot.js";
 
 /**
  * A tag for the exact bytes of a snapshot. Derived from the payload rather than from a

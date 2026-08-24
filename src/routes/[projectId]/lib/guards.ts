@@ -1,9 +1,9 @@
 import { error } from "@sveltejs/kit";
-import { bundleTable, cardTable } from "../../../db/schema";
+import { bundleTable, cardTable } from "$db/schema";
 import { and, eq } from "drizzle-orm";
-import type { AnyDB } from "../../../db/client";
-import type { Card } from "../../../db/api/types";
-import { cardsInProject } from "../../../db/api/card";
+import type { AnyDB } from "$db/client";
+import type { Card } from "$db/api/types";
+import { cardsInProject } from "$db/api/card";
 
 /** Verifies a card belongs to the given project (via its bundle). Throws 404 if not found. */
 export async function requireCardInProject(

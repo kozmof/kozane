@@ -4,9 +4,8 @@ import { dirname, join, resolve } from "node:path";
 import { cpSync, existsSync, rmSync, writeFileSync } from "node:fs";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
-import { getMigrationStatus } from "../lib/db.js";
+import { requireCurrentMigrations } from "../lib/db.js";
 import { createStaticServer } from "../lib/static-server.js";
-import { migrationStatusMessage } from "./db.js";
 import { openBrowser } from "./open.js";
 import { hyperlink } from "../lib/hyperlink.js";
 import { resolvePort } from "../lib/port.js";
@@ -35,13 +34,7 @@ export async function ssg(options: SsgOptions): Promise<void> {
   const base = normalizeBase(options.base);
 
   const dbURL = dbUrl(resolve(root));
-  const migrationStatus = await getMigrationStatus(dbURL);
-  if (migrationStatus.state !== "current") {
-    console.error("Kozane database needs attention before it can be exported.");
-    console.error(migrationStatusMessage(migrationStatus));
-    console.error("\nRun: kozane db migrate");
-    process.exit(1);
-  }
+  await requireCurrentMigrations(dbURL, "it can be exported");
 
   const outDir = resolve(process.cwd(), options.out ?? "site");
   const buildDir = join(packageRoot, "build-ssg");

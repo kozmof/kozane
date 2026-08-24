@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GET } from "./+server";
+import { GET } from "./+server.js";
 
 describe("health endpoint", () => {
   it("checks the database before reporting readiness", async () => {

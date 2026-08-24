@@ -1,8 +1,8 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { getProject } from "../../../../../../db/api/project";
-import { getTaskspaceInProject } from "../../../../../../db/api/taskspace";
-import { getWorkspaceRoot } from "../../../../../../db/internal/config";
+import { getProject } from "$db/api/project";
+import { getTaskspaceInProject } from "$db/api/taskspace";
+import { getWorkspaceRoot } from "$db/internal/config";
 import { resolveTaskspacePath } from "$lib/taskspace-path";
 import {
   readTaskspaceFile,
@@ -10,7 +10,7 @@ import {
   TaskspaceFilesError,
   writeTaskspaceFile,
 } from "$lib/server/taskspace-files";
-import { optionalString, readJsonObject, requireString } from "../../../../lib/request";
+import { optionalString, readJsonObject, requireString } from "../../../../lib/request.js";
 
 /**
  * The taskspace directory one request is confined to, resolved from the record and the

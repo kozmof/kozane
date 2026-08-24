@@ -1,17 +1,13 @@
 import type { RequestHandler } from "./$types";
 import type { CardWithGlue } from "$lib/types";
 import { json, error } from "@sveltejs/kit";
-import { getBundle } from "../../../../db/api/bundle";
-import { getDefaultLayer, getLayer } from "../../../../db/api/layer";
-import { getScope } from "../../../../db/api/scope";
-import { addScopeRel } from "../../../../db/api/scope-rel";
-import { withTx } from "../../../../db/tx";
-import {
-  addCard,
-  updateProjectCardPositions,
-  type CardPositionUpdate,
-} from "../../../../db/api/card";
-import { deleteProjectCards } from "../../../../db/api/composite";
+import { getBundle } from "$db/api/bundle";
+import { getDefaultLayer, getLayer } from "$db/api/layer";
+import { getScope } from "$db/api/scope";
+import { addScopeRel } from "$db/api/scope-rel";
+import { withTx } from "$db/tx";
+import { addCard, updateProjectCardPositions, type CardPositionUpdate } from "$db/api/card";
+import { deleteProjectCards } from "$db/api/composite";
 import { contentLimitIssue } from "$lib/constants";
 import { clampToCanvas } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
@@ -24,7 +20,7 @@ import {
   requireTrimmedString,
   requireUniqueStrings,
   requireWithinBatchLimit,
-} from "../../lib/request";
+} from "../../lib/request.js";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
   const value = body.positions;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { addLayer, getAllLayers } from "../../../../db/api/layer.js";
-import { addProject } from "../../../../db/api/project.js";
-import type { DB } from "../../../../db/tx.js";
+import { addLayer, getAllLayers } from "$db/api/layer.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { PATCH, POST } from "./+server.js";
 

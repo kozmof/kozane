@@ -1,6 +1,7 @@
-import * as api from "./lib/project-api";
+import * as api from "./lib/project-api.js";
 import type { CardWithGlue, GlueRel } from "$lib/types";
 import type { ProjectState } from "./project-state.svelte.js";
+import { readArray, readFiniteNumber, readString, readStringArray } from "./lib/response.js";
 
 /**
  * Undoing an optimistic edit, by field and by card rather than by restoring the array the
@@ -59,14 +60,13 @@ function reinsertGlueRels(current: GlueRel[], removed: GlueRel[]): GlueRel[] {
  * cards keep the zIndex they had.
  */
 function readStacking(parsed: unknown): Map<string, number> {
-  const stacking = (parsed as { stacking?: unknown } | null)?.stacking;
-  if (!Array.isArray(stacking)) return new Map();
+  const stacking = readArray(parsed, "stacking");
+  if (!stacking) return new Map();
   return new Map(
-    stacking.flatMap((entry: unknown) => {
-      const { cardId, zIndex } = (entry ?? {}) as { cardId?: unknown; zIndex?: unknown };
-      return typeof cardId === "string" && typeof zIndex === "number"
-        ? [[cardId, zIndex] as const]
-        : [];
+    stacking.flatMap((entry) => {
+      const cardId = readString(entry, "cardId");
+      const zIndex = readFiniteNumber(entry, "zIndex");
+      return cardId !== undefined && zIndex !== undefined ? [[cardId, zIndex] as const] : [];
     }),
   );
 }
@@ -110,12 +110,11 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to glue cards");
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const glueId = readString(await res.json().catch(() => null), "glueId");
+    if (glueId === undefined) {
       state.setError("Failed to glue cards");
       return;
     }
-    const { glueId } = parsed;
     state.glueRels = [
       ...state.glueRels.filter((r) => !cardIds.includes(r.cardId)),
       ...cardIds.map((cardId) => ({ glueId, cardId })),
@@ -129,12 +128,12 @@ export function createProjectActions(state: ProjectState) {
       state.setError(errorMsg);
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const cleared = readStringArray(await res.json().catch(() => null), "clearedCardIds");
+    if (cleared === undefined) {
       state.setError(errorMsg);
       return;
     }
-    const clearedSet = new Set<string>(parsed.clearedCardIds);
+    const clearedSet = new Set(cleared);
     state.glueRels = state.glueRels.filter((r) => !clearedSet.has(r.cardId));
     state.cards = state.cards.map((c) => (clearedSet.has(c.id) ? { ...c, glueId: null } : c));
   }
@@ -245,15 +244,12 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to create bundle");
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const id = readString(await res.json().catch(() => null), "id");
+    if (id === undefined) {
       state.setError("Failed to create bundle");
       return;
     }
-    state.bundles = [
-      ...state.bundles,
-      { id: parsed.id, projectId: state.projectId, name, isDefault: false },
-    ];
+    state.bundles = [...state.bundles, { id, projectId: state.projectId, name, isDefault: false }];
     state.sidebar.newBundleName = "";
   }
 
@@ -263,13 +259,13 @@ export function createProjectActions(state: ProjectState) {
       state.setError("Failed to delete bundle");
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const defaultBundleId = readString(await res.json().catch(() => null), "defaultBundleId");
+    if (defaultBundleId === undefined) {
       state.setError("Failed to delete bundle");
       return;
     }
     state.cards = state.cards.map((c) =>
-      c.bundleId === bundleId ? { ...c, bundleId: parsed.defaultBundleId } : c,
+      c.bundleId === bundleId ? { ...c, bundleId: defaultBundleId } : c,
     );
     state.bundles = state.bundles.filter((b) => b.id !== bundleId);
     if (state.sidebar.activeBundle === bundleId) state.sidebar.activeBundle = null;
@@ -286,22 +282,18 @@ export function createProjectActions(state: ProjectState) {
       return;
     }
     const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const id = readString(parsed, "id");
+    const position = readFiniteNumber(parsed, "position");
+    if (id === undefined || position === undefined) {
       state.setError("Failed to create layer");
       return;
     }
     state.layers = [
       ...state.layers,
-      {
-        id: parsed.id,
-        projectId: state.projectId,
-        name: trimmed,
-        position: parsed.position,
-        isDefault: false,
-      },
+      { id, projectId: state.projectId, name: trimmed, position, isDefault: false },
     ];
     // A layer is created to be drawn on, so it becomes the one new cards land on.
-    state.activeLayerId = parsed.id;
+    state.activeLayerId = id;
   }
 
   async function handleDeleteLayer(layerId: string) {
@@ -310,16 +302,16 @@ export function createProjectActions(state: ProjectState) {
       state.setError(await api.failureMessage(res, "Failed to delete layer"));
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
+    const defaultLayerId = readString(await res.json().catch(() => null), "defaultLayerId");
+    if (defaultLayerId === undefined) {
       state.setError("Failed to delete layer");
       return;
     }
     state.cards = state.cards.map((c) =>
-      c.layerId === layerId ? { ...c, layerId: parsed.defaultLayerId } : c,
+      c.layerId === layerId ? { ...c, layerId: defaultLayerId } : c,
     );
     state.layers = state.layers.filter((l) => l.id !== layerId);
-    if (state.activeLayerId === layerId) state.activeLayerId = parsed.defaultLayerId;
+    if (state.activeLayerId === layerId) state.activeLayerId = defaultLayerId;
   }
 
   async function handleSetWarp(position: { posX: number; posY: number }) {

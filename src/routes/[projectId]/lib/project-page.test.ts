@@ -32,7 +32,7 @@ import {
   worldRectToScreenRect,
 } from "./project-page.js";
 import { ARROW_KEYS } from "../../../lib/constants.js";
-import type { Card, GlueRel } from "../../../db/api/types.js";
+import type { Card, GlueRel } from "$db/api/types.js";
 
 const cards: Card[] = [
   {

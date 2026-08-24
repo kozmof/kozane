@@ -256,6 +256,79 @@ export function listBackups(projectRoot: string): string[] {
     .map((f) => join(backupDir, f));
 }
 
+function migrationLabel(migration: { tag: string; when: number } | null): string {
+  return migration ? `${migration.tag} (${migration.when})` : "none";
+}
+
+/**
+ * A migration status as the CLI reports it, and the way out of it.
+ *
+ * Here rather than beside a command because three commands print it and one library
+ * function does — `requireCurrentMigrations` below. It used to live in `commands/db.ts`,
+ * which made `open` and `ssg` import from a sibling command module to get at it, and put
+ * it out of reach of anything in `lib/` entirely.
+ */
+export function migrationStatusMessage(status: MigrationStatus): string {
+  const lines = [
+    `Database: ${status.dbPath ?? "unknown"}`,
+    `Status  : ${status.state}`,
+    `Latest  : ${migrationLabel(status.latest)}`,
+  ];
+  if (status.state !== "unknown") {
+    lines.push(`Applied : ${migrationLabel(status.applied)}`);
+  }
+
+  if (status.state === "pending") {
+    lines.push(`Pending : ${status.pendingCount}`);
+    lines.push(`Run     : kozane db migrate`);
+  } else if (status.state === "gapped") {
+    lines.push(`Pending : ${status.pendingCount}`);
+    lines.push(`Skipped : ${status.skipped.map((entry) => entry.tag).join(", ")}`);
+    lines.push(`Detail  : migrations were applied out of order or a record was lost`);
+    lines.push(`Try     : kozane db restore  (kozane db migrate cannot repair this)`);
+  } else if (status.state === "missing") {
+    lines.push(`Detail  : database file is missing`);
+  } else if (status.state === "unknown") {
+    lines.push(`Detail  : ${status.error}`);
+    lines.push(`Try     : kozane doctor`);
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Stops the command unless every migration is applied.
+ *
+ * The one rule for schema drift, so that a workspace left behind by an upgrade fails the
+ * same way whichever command reaches it first. `kozane open` and `kozane net ssg generate`
+ * already refused this way; the workspace commands did not, and split three ways instead —
+ * `layer add`, `scope add` and `project create` called {@link runMigrations} outright,
+ * while `card add`, `taskspace create` and the rest went straight at the stale schema and
+ * failed with whatever SQLite said about a missing column.
+ *
+ * Migrating here was the worse of the two. `kozane db migrate` takes a backup first and
+ * refuses a gapped history; a bare `runMigrations` on the way into an unrelated command
+ * does neither, so the one operation the docs promise is backed up was also the one that
+ * could happen without anybody asking for it.
+ *
+ * Never suggests `db migrate` for a state it cannot repair: a gapped history needs a
+ * restore, and `migrationStatusMessage` says so.
+ */
+export async function requireCurrentMigrations(dbUrl: string, purpose: string): Promise<void> {
+  const status = await getMigrationStatus(dbUrl);
+  if (status.state === "current") return;
+
+  console.error(`Kozane database needs attention before ${purpose}.`);
+  console.error(migrationStatusMessage(status));
+  if (status.state === "pending") {
+    console.error("\nRun: kozane db migrate");
+  } else {
+    console.error("\nRun: kozane db status");
+    console.error("Run: kozane doctor");
+  }
+  process.exit(1);
+}
+
 export async function runMigrations(dbUrl: string): Promise<void> {
   const client = createClient({ url: dbUrl });
   const db = drizzle(client, { schema });

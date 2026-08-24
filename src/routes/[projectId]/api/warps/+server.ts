@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addWarp } from "../../../../db/api/warp";
-import { isForeignKeyError } from "../../../../db/api/utils";
-import { readJsonObject, optionalNumber } from "../../lib/request";
+import { addWarp } from "$db/api/warp";
+import { isForeignKeyError } from "$db/api/utils";
+import { readJsonObject, optionalNumber } from "../../lib/request.js";
 import { clampToCanvas } from "$lib/server/canvas";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {

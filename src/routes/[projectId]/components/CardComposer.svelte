@@ -6,7 +6,7 @@
   import type { CardWithGlue, BundleWithColor, GlueRel, Layer } from "$lib/types";
   import { DEFAULT_UI_CONFIG, type UiConfig } from "$lib/ui-config";
   import { splitCardContent } from "$lib/squash";
-  import { orderLayers } from "../lib/project-page";
+  import { orderLayers } from "../lib/project-page.js";
 
   interface Props {
     editingCard: CardWithGlue | null;

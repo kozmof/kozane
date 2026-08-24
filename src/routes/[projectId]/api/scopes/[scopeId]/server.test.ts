@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addBundle } from "../../../../../db/api/bundle.js";
-import { addCard } from "../../../../../db/api/card.js";
-import { addScope, getAllScopes } from "../../../../../db/api/scope.js";
-import { addScopeRel, getScopeRelsByCards } from "../../../../../db/api/scope-rel.js";
-import { addProject } from "../../../../../db/api/project.js";
-import type { DB } from "../../../../../db/tx.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addCard } from "$db/api/card.js";
+import { addScope, getAllScopes } from "$db/api/scope.js";
+import { addScopeRel, getScopeRelsByCards } from "$db/api/scope-rel.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE } from "./+server.js";
-import { addLayer } from "../../../../../db/api/layer.js";
+import { addLayer } from "$db/api/layer.js";
 
 function event(db: DB, projectId: string, scopeId: string) {
   return {

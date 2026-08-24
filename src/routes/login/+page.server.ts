@@ -1,15 +1,15 @@
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
-import { getWorkspaceRoot } from "../../db/internal/config";
+import { getWorkspaceRoot } from "$db/internal/config";
 import {
   API_KEY_COOKIE,
   apiKeyCookieOptions,
   apiKeysEqual,
   readApiKeyResult,
   type ApiKeyFile,
-} from "../../lib/server/api-key";
-import { safeNext } from "../../lib/server/login";
-import { clearAuthFailures, recordAuthFailure } from "../../lib/server/security";
+} from "../../lib/server/api-key.js";
+import { safeNext } from "../../lib/server/login.js";
+import { clearAuthFailures, recordAuthFailure } from "../../lib/server/security.js";
 
 // Dynamic auth endpoint: must never be prerendered into the static export.
 export const prerender = false;

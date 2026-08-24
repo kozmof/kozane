@@ -10,6 +10,7 @@ import type {
   Warp,
 } from "$lib/types";
 import { TaskspaceTreeState } from "./lib/taskspace-tree.svelte.js";
+import { Activity } from "./lib/activity.js";
 
 // Re-exported for the components and tests that already name it through this module.
 export type { ProjectDataSnapshot } from "$lib/types";
@@ -84,19 +85,15 @@ export class SidebarState {
 export class ProjectState {
   projectId = $state("");
   fetcher: typeof fetch = fetch;
-  pendingMutations = $state(0);
-  mutationVersion = $state(0);
+  /**
+   * The mutations this board has outstanding. The snapshot poll stands down while any is
+   * open and drops an answer that arrived across one — see `snapshot-poll.ts`, which is
+   * handed this alongside the page's own drag activity.
+   */
+  readonly mutations = new Activity();
 
-  mutationFetcher: typeof fetch = async (input, init) => {
-    this.pendingMutations += 1;
-    this.mutationVersion += 1;
-    try {
-      return await this.fetcher(input, init);
-    } finally {
-      this.pendingMutations = Math.max(0, this.pendingMutations - 1);
-      this.mutationVersion += 1;
-    }
-  };
+  mutationFetcher: typeof fetch = (input, init) =>
+    this.mutations.track(() => this.fetcher(input, init));
 
   cards = $state<CardWithGlue[]>([]);
   bundles = $state<Bundle[]>([]);

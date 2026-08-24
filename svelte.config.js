@@ -35,8 +35,13 @@ const config = {
         "style-src": ["self", "unsafe-inline"],
       },
     },
+    // Aliases resolve only in code Vite compiles, which is `src/routes`. `src/cli`,
+    // `src/db` and `src/lib` are built by `tsc --project tsconfig.cli.json`, which does
+    // not rewrite import paths, so those three keep relative specifiers — which is why
+    // `$lib` appears nowhere outside `src/routes` either.
     alias: {
       "styled-system": "./styled-system",
+      $db: "./src/db",
     },
   },
 };

@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { getBundle } from "../../../../../db/api/bundle";
-import { reassignCardsToBundle } from "../../../../../db/api/card";
-import { readJsonObject, requireString, requireStringArray } from "../../../lib/request";
+import { getBundle } from "$db/api/bundle";
+import { reassignCardsToBundle } from "$db/api/card";
+import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

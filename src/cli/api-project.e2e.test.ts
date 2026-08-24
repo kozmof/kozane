@@ -117,7 +117,7 @@ describe("project, status, and doctor CLI flow", () => {
     expect(status).toContain("Bundles      : 2");
     expect(status).toContain("Cards        : 1");
     expect(status).toContain("Scopes       : 1");
-    expect(status).toContain("Taskspaces: 1");
+    expect(status).toContain("Taskspaces   : 1");
 
     const configPath = join(root, ".kozane", "config.json");
     const config = JSON.parse(readFileSync(configPath, "utf-8"));

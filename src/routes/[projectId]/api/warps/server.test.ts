@@ -3,12 +3,12 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { getAllWarps } from "../../../../db/api/warp.js";
-import { addProject } from "../../../../db/api/project.js";
-import type { DB } from "../../../../db/tx.js";
+import { getAllWarps } from "$db/api/warp.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { CANVAS_W, CANVAS_H } from "../../../../lib/constants.js";
-import { _resetWorkspaceRootForTest } from "../../../../db/internal/config.js";
+import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 import { POST } from "./+server.js";
 
 function jsonRequest(body: unknown): Request {

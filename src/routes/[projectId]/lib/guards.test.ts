@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { allCardsBelongToProject, requireCardInProject } from "./guards.js";
 import { createTestDB } from "../../../test-utils/db.js";
-import { addProject } from "../../../db/api/project.js";
-import { addBundle } from "../../../db/api/bundle.js";
-import { addCard } from "../../../db/api/card.js";
-import { addLayer } from "../../../db/api/layer.js";
+import { addProject } from "$db/api/project.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addCard } from "$db/api/card.js";
+import { addLayer } from "$db/api/layer.js";
 
 async function setup() {
   const db = await createTestDB();

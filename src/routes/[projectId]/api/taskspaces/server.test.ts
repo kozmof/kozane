@@ -4,13 +4,13 @@ import { join } from "node:path";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
 import { POST } from "./+server.js";
-import { addProject } from "../../../../db/api/project.js";
-import { addScope } from "../../../../db/api/scope.js";
-import { getAllTaskspaces } from "../../../../db/api/taskspace.js";
+import { addProject } from "$db/api/project.js";
+import { addScope } from "$db/api/scope.js";
+import { getAllTaskspaces } from "$db/api/taskspace.js";
 import { createTestDB } from "../../../../test-utils/db.js";
-import type { DB } from "../../../../db/tx.js";
+import type { DB } from "$db/tx.js";
 import { TASKSPACE_MARKER_FILE } from "../../../../lib/taskspace-marker.js";
-import { _resetWorkspaceRootForTest } from "../../../../db/internal/config.js";
+import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/taskspaces", {

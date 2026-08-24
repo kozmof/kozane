@@ -9,7 +9,7 @@
     safeTriangle,
     SAFE_AREA_GRACE_MS,
     type Triangle,
-  } from "../lib/project-page";
+  } from "../lib/project-page.js";
 
   let {
     layers,

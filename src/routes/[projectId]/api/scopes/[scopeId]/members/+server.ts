@@ -1,7 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addScopeMembers, removeScopeMembersFromProject } from "../../../../../../db/api/scope-rel";
-import { readJsonObject, requireStringArray } from "../../../../lib/request";
+import { addScopeMembers, removeScopeMembersFromProject } from "$db/api/scope-rel";
+import { readJsonObject, requireStringArray } from "../../../../lib/request.js";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

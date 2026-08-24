@@ -1,6 +1,6 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { deleteScopeFromProject } from "../../../../../db/api/scope";
+import { deleteScopeFromProject } from "$db/api/scope";
 
 export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;

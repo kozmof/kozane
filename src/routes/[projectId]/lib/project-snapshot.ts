@@ -1,16 +1,16 @@
-import type { AnyDB } from "../../../db/client";
-import type { Project } from "../../../db/api/types";
+import type { AnyDB } from "$db/client";
+import type { Project } from "$db/api/types";
 import type { ProjectDataSnapshot, TaskspaceSummary } from "$lib/types";
-import { getProject } from "../../../db/api/project";
-import { getAllBundles } from "../../../db/api/bundle";
-import { getAllLayers } from "../../../db/api/layer";
-import { getAllWarps } from "../../../db/api/warp";
-import { getScopesInProject } from "../../../db/api/scope";
-import { getCardsByBundles } from "../../../db/api/card";
-import { getGlueRelsByCards } from "../../../db/api/glue";
-import { getScopeRelsByCards } from "../../../db/api/scope-rel";
-import { getTaskspacesInProject } from "../../../db/api/taskspace";
-import { cardsWithGlueIds } from "./project-page";
+import { getProject } from "$db/api/project";
+import { getAllBundles } from "$db/api/bundle";
+import { getAllLayers } from "$db/api/layer";
+import { getAllWarps } from "$db/api/warp";
+import { getScopesInProject } from "$db/api/scope";
+import { getCardsByBundles } from "$db/api/card";
+import { getGlueRelsByCards } from "$db/api/glue";
+import { getScopeRelsByCards } from "$db/api/scope-rel";
+import { getTaskspacesInProject } from "$db/api/taskspace";
+import { cardsWithGlueIds } from "./project-page.js";
 
 type LoadProjectSnapshot = {
   db: AnyDB;

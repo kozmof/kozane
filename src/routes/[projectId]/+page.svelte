@@ -14,7 +14,7 @@
     parseWarpEntries,
     deleteWarp,
     failureMessage,
-  } from "./lib/project-api";
+  } from "./lib/project-api.js";
   import {
     applyPalette,
     ARROW_DIRECTIONS,
@@ -22,8 +22,8 @@
     maxZIndex,
     minZIndex,
     warpInDirection,
-  } from "./lib/project-page";
-  import type { CardPositionPatch } from "./lib/project-page";
+  } from "./lib/project-page.js";
+  import type { CardPositionPatch } from "./lib/project-page.js";
   import {
     cardMetrics,
     warpEntriesForProject,
@@ -31,8 +31,8 @@
     type WarpListEntry,
   } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
-  import { ProjectState, storeActiveLayerId } from "./project-state.svelte";
-  import { createProjectActions } from "./project-actions.svelte";
+  import { ProjectState, storeActiveLayerId } from "./project-state.svelte.js";
+  import { createProjectActions } from "./project-actions.svelte.js";
   import BundleSidebar from "./components/BundleSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
@@ -42,7 +42,9 @@
   import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
-  import { EditorSession } from "./lib/editor/editor-session.svelte";
+  import { EditorSession } from "./lib/editor/editor-session.svelte.js";
+  import { Activity } from "./lib/activity.js";
+  import { startSnapshotPoll } from "./lib/snapshot-poll.js";
 
   let { data }: PageProps = $props();
 
@@ -77,18 +79,10 @@
   // `?? []`: a static export built before this feature has no directory in its page data.
   let warpDirectory = $state.raw<WarpListEntry[]>(untrack(() => data.warpDirectory ?? []));
   let newCardSeq = 0;
-  let positionActivityCount = 0;
-  let positionActivityVersion = 0;
-
-  function startPositionActivity() {
-    positionActivityCount += 1;
-    positionActivityVersion += 1;
-  }
-
-  function endPositionActivity() {
-    positionActivityCount = Math.max(0, positionActivityCount - 1);
-    positionActivityVersion += 1;
-  }
+  // A drag in progress, and the save that follows it. Held apart from `s.mutations`
+  // because the canvas opens it before any request exists: the poll has to stand down for
+  // the drag itself, not only for the PATCH at the end of it.
+  const positionActivity = new Activity();
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: {
@@ -228,76 +222,13 @@
   onMount(() => {
     // A static export has no /api/snapshot endpoint and no writers to sync with.
     if (readonly) return;
-    let refreshing = false;
-    /**
-     * The tag of the snapshot currently applied, and the project it describes. Sent back so
-     * the server can answer "nothing new" instead of the whole board: most polls find no
-     * change, and re-applying an identical snapshot rebuilds every reactive list on the page
-     * once a second for nothing.
-     *
-     * Kept with its project because the same poll serves whichever board is open, and a tag
-     * from the previous one would describe data this one never had.
-     */
-    let applied: { projectId: string; etag: string } | null = null;
-
-    const refresh = async () => {
-      if (
-        refreshing ||
-        positionActivityCount > 0 ||
-        s.pendingMutations > 0 ||
-        document.visibilityState === "hidden"
-      )
-        return;
-      refreshing = true;
-      const activityVersion = positionActivityVersion;
-      const mutationVersion = s.mutationVersion;
-      const projectId = s.projectId;
-      const known = applied?.projectId === projectId ? applied.etag : null;
-      try {
-        const response = await s.fetcher(`/${projectId}/api/snapshot`, {
-          // Revalidation is done by hand with the tag below, so the browser's own cache is
-          // kept out of it — served from there, a 304 would arrive as a full 200 again.
-          cache: "no-store",
-          ...(known && { headers: { "if-none-match": known } }),
-        });
-        // 304: the board already matches the database, and there is nothing to apply.
-        if (response.status === 304) return;
-        if (response.ok) {
-          const snapshot = await response.json();
-          if (
-            positionActivityCount === 0 &&
-            positionActivityVersion === activityVersion &&
-            s.pendingMutations === 0 &&
-            s.mutationVersion === mutationVersion
-          ) {
-            s.refreshFromData(snapshot);
-            // Recorded only once the data is actually on the board. A snapshot dropped by
-            // the guards above was never applied, so claiming to hold it would leave the
-            // page waiting on a change the server has already sent.
-            //
-            // No tag means no conditional request to make: the poll simply goes on asking
-            // for the whole board, which is what it did before there was one to send.
-            const etag = response.headers?.get("etag") ?? null;
-            applied = etag ? { projectId, etag } : null;
-          }
-        }
-      } catch {
-        // A later poll retries transient navigation or database failures.
-      } finally {
-        refreshing = false;
-      }
-    };
-    const interval = window.setInterval(refresh, 1_000);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", refresh);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", refresh);
-    };
+    return startSnapshotPoll({
+      fetcher: s.fetcher,
+      projectId: () => s.projectId,
+      activities: [positionActivity, s.mutations],
+      apply: (snapshot) => s.refreshFromData(snapshot),
+      isHidden: () => document.visibilityState === "hidden",
+    });
   });
 
   // ── Domain action handlers ────────────────────────────────────
@@ -557,10 +488,7 @@
       layers={s.layers}
       activeLayerId={s.activeLayerId}
       {bundleColorById}
-      bind:selectedCards={s.selection.selectedCards}
-      bind:primarySelectedId={s.selection.primarySelectedId}
-      bind:composerCard={s.selection.composerCard}
-      bind:resizingCardId={s.selection.resizingCardId}
+      selection={s.selection}
       {scopeCardIds}
       warps={s.warps}
       focusedWarpId={s.focusedWarpId}
@@ -579,8 +507,8 @@
       fontFamily={data.uiConfig.defaultFontFamily}
       onPersistPositions={handlePersistPositions}
       onPersistWidth={handlePersistWidth}
-      onPositionActivityStart={startPositionActivity}
-      onPositionActivityEnd={endPositionActivity}
+      onPositionActivityStart={() => positionActivity.begin()}
+      onPositionActivityEnd={() => positionActivity.end()}
       onError={(msg) => (s.lastError = msg)}
       {readonly}
     />

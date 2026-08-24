@@ -7,6 +7,7 @@ import {
   backupDb,
   getMigrationStatus,
   listBackups,
+  migrationStatusMessage,
   restoreDb,
   runMigrations,
   type MigrationStatus,
@@ -25,38 +26,6 @@ type DbExportOptions = {
 type DbImportOptions = {
   force?: boolean;
 };
-
-function migrationLabel(migration: { tag: string; when: number } | null): string {
-  return migration ? `${migration.tag} (${migration.when})` : "none";
-}
-
-export function migrationStatusMessage(status: MigrationStatus): string {
-  const lines = [
-    `Database: ${status.dbPath ?? "unknown"}`,
-    `Status  : ${status.state}`,
-    `Latest  : ${migrationLabel(status.latest)}`,
-  ];
-  if (status.state !== "unknown") {
-    lines.push(`Applied : ${migrationLabel(status.applied)}`);
-  }
-
-  if (status.state === "pending") {
-    lines.push(`Pending : ${status.pendingCount}`);
-    lines.push(`Run     : kozane db migrate`);
-  } else if (status.state === "gapped") {
-    lines.push(`Pending : ${status.pendingCount}`);
-    lines.push(`Skipped : ${status.skipped.map((entry) => entry.tag).join(", ")}`);
-    lines.push(`Detail  : migrations were applied out of order or a record was lost`);
-    lines.push(`Try     : kozane db restore  (kozane db migrate cannot repair this)`);
-  } else if (status.state === "missing") {
-    lines.push(`Detail  : database file is missing`);
-  } else if (status.state === "unknown") {
-    lines.push(`Detail  : ${status.error}`);
-    lines.push(`Try     : kozane doctor`);
-  }
-
-  return lines.join("\n");
-}
 
 export async function dbStatus(): Promise<void> {
   const { root } = requireWorkspace();

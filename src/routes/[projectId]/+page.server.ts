@@ -1,9 +1,9 @@
 import type { EntryGenerator, PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
-import { getDb } from "../../db/client";
-import { getAllProjects } from "../../db/api/project";
-import { loadProjectSnapshot } from "./lib/project-snapshot";
-import { getWorkspaceUiConfig } from "../../db/internal/config";
+import { getDb } from "$db/client";
+import { getAllProjects } from "$db/api/project";
+import { loadProjectSnapshot } from "./lib/project-snapshot.js";
+import { getWorkspaceUiConfig } from "$db/internal/config";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 
 // Static export (kozane net ssg generate): prerender one page per project. `entries` tells

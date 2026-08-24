@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
-  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte";
+  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
 

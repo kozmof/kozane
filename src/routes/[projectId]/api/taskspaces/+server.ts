@@ -2,16 +2,16 @@ import { mkdir, open, rmdir, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addTaskspace, deleteTaskspace } from "../../../../db/api/taskspace";
-import { getProject } from "../../../../db/api/project";
-import { getScope } from "../../../../db/api/scope";
-import { readJsonObject, requireTrimmedString } from "../../lib/request";
-import { getWorkspaceRoot, getTaskspaceDefaultDir } from "../../../../db/internal/config";
+import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
+import { getProject } from "$db/api/project";
+import { getScope } from "$db/api/scope";
+import { readJsonObject, requireTrimmedString } from "../../lib/request.js";
+import { getWorkspaceRoot, getTaskspaceDefaultDir } from "$db/internal/config";
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
-} from "../../../../lib/taskspace-marker";
+} from "../../../../lib/taskspace-marker.js";
 import { NAME_MAX } from "$lib/constants";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {

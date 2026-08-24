@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { and, eq } from "drizzle-orm";
-import { requireWorkspace } from "../lib/project.js";
-import { commandDbUrl } from "../lib/config.js";
-import { createDb } from "../../db/client.js";
+import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard, addCards, reassignCardsToLayer } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
@@ -79,11 +76,6 @@ async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
   );
 }
 
-function fail(error: unknown): never {
-  console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-}
-
 /** Prints one line per card, adding a distance column when the cards carry one. */
 async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): Promise<void> {
   if (cards.length === 0) {
@@ -101,14 +93,12 @@ async function printCards(db: DB, cards: (ListedCard | DistanceListedCard)[]): P
 }
 
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
-  try {
-    const { root } = requireWorkspace();
-    // After the workspace, not before: the limit is `ui.contentMax` of this workspace, so
-    // there is nothing to hold the text against until one has been found.
-    const contentIssue = contentLimitIssue(content, contentMaxForRoot(resolve(root)));
+  await runWorkspaceCommand(async ({ db, root }) => {
+    // Held against this workspace's `ui.contentMax`, which is why the check waits for the
+    // workspace rather than running on the way in.
+    const contentIssue = contentLimitIssue(content, contentMaxForRoot(root));
     if (contentIssue) throw new Error(contentIssue);
 
-    const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const layerId = await resolveLayerId(db, projectId, options.layer);
@@ -116,11 +106,7 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     // `--x`/`--y` are held to the board the same way the create endpoint holds a dragged
     // card, and against the same workspace bounds: a position outside them is one the
     // viewport can never scroll to, so a card stored there is a card nobody can find.
-    const placement = clampToBounds(
-      options.x ?? 0,
-      options.y ?? 0,
-      canvasBoundsForRoot(resolve(root)),
-    );
+    const placement = clampToBounds(options.x ?? 0, options.y ?? 0, canvasBoundsForRoot(root));
     const id = await withTx(db, async (tx) => {
       const cardId = await addCard({
         db: tx,
@@ -171,31 +157,27 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
           scopes.map(({ id }) => id),
         )}`,
       );
-  } catch (error) {
-    fail(error);
-  }
+  });
 }
 
 export async function cardSquash(
   content: string | undefined,
   options: CardSquashOptions = {},
 ): Promise<void> {
-  try {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
 
-    const { root } = requireWorkspace();
     // Each segment becomes a card of its own, so each is held to the limit a card is held
-    // to — this workspace's `ui.contentMax`, which is why this waits for the workspace.
-    // Reported by position, the only thing that tells one segment of a piped file from
-    // another, and checked before anything is written so a refusal leaves the board alone.
-    const limit = contentMaxForRoot(resolve(root));
+    // to — this workspace's `ui.contentMax`. Reported by position, the only thing that
+    // tells one segment of a piped file from another, and checked before anything is
+    // written so a refusal leaves the board alone.
+    const limit = contentMaxForRoot(root);
     for (const [index, segment] of contents.entries()) {
       const issue = contentLimitIssue(segment, limit);
       if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
     }
 
-    const db = await createDb(commandDbUrl(resolve(root)));
     const projectId = await resolveProjectId(db, options.project);
     const bundleId = await resolveBundleId(db, projectId, options.bundle);
     const layerId = await resolveLayerId(db, projectId, options.layer);
@@ -210,7 +192,7 @@ export async function cardSquash(
     // narrower puts the right-hand columns past its edge. Clamped afterwards for the rows,
     // which run downwards without a wrap to stop them — the same pair of steps
     // `squashProjectCard` takes for the board's own squash.
-    const bounds = canvasBoundsForRoot(resolve(root));
+    const bounds = canvasBoundsForRoot(root);
     const positions = squashCardPositions(occupied, contents.length, {
       canvasWidth: bounds.canvasWidth,
     });
@@ -232,9 +214,7 @@ export async function cardSquash(
     const shortIds = shortIdMap(allCards.map(({ id }) => id));
     console.log(`${ids.length} ${ids.length === 1 ? "card" : "cards"} added.`);
     for (const id of ids) console.log(`  ${shortIds.get(id) ?? id}`);
-  } catch (error) {
-    fail(error);
-  }
+  });
 }
 
 /**
@@ -243,9 +223,7 @@ export async function cardSquash(
  * project that actually owns the card.
  */
 export async function cardSetLayer(requestedCardId: string, requestedLayer: string): Promise<void> {
-  try {
-    const { root } = requireWorkspace();
-    const db = await createDb(commandDbUrl(resolve(root)));
+  await runWorkspaceCommand(async ({ db }) => {
     const cards = await db
       .select({ id: cardTable.id, projectId: bundleTable.projectId })
       .from(cardTable)
@@ -271,15 +249,11 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
       )}`,
     );
     console.log(`  layer: ${layer.name}`);
-  } catch (error) {
-    fail(error);
-  }
+  });
 }
 
 export async function cardShow(requestedId: string): Promise<void> {
-  try {
-    const { root } = requireWorkspace();
-    const db = await createDb(commandDbUrl(resolve(root)));
+  await runWorkspaceCommand(async ({ db }) => {
     // Ids alone: resolving a short id needs every id in the workspace, but printing one
     // card needs one card's text. Selected together, `kozane card show` read the whole
     // content column — every card of every project — to put a single card on stdout.
@@ -298,15 +272,11 @@ export async function cardShow(requestedId: string): Promise<void> {
     // the id was resolved against, which is the case its docstring warns a `!` would break.
     if (!card) throw new Error(`Card not found: ${requestedId}`);
     console.log(card.content);
-  } catch (error) {
-    fail(error);
-  }
+  });
 }
 
 export async function cardNearest(requestedId: string): Promise<void> {
-  try {
-    const { root } = requireWorkspace();
-    const db = await createDb(commandDbUrl(resolve(root)));
+  await runWorkspaceCommand(async ({ db }) => {
     // Positions first, without the text. Resolving a short id needs every card in the
     // workspace, but only the origin's own project is ever printed — carrying `content`
     // through this pass read every other project's cards to throw them away again.
@@ -345,18 +315,14 @@ export async function cardNearest(requestedId: string): Promise<void> {
       }))
       .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
     await printCards(db, sorted);
-  } catch (error) {
-    fail(error);
-  }
+  });
 }
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
-  try {
+  await runWorkspaceCommand(async ({ db }) => {
     if (options.taskspace && (options.project || options.bundle))
       throw new Error("--taskspace cannot be combined with --project or --bundle.");
 
-    const { root } = requireWorkspace();
-    const db = await createDb(commandDbUrl(resolve(root)));
     const locatedMarker =
       options.taskspace || (!options.project && !options.bundle)
         ? readTaskspaceMarker(options.taskspace)
@@ -416,7 +382,5 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(and(...conditions));
     await printCards(db, cards);
-  } catch (error) {
-    fail(error);
-  }
+  });
 }

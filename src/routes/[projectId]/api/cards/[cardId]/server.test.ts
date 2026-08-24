@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { addBundle } from "../../../../../db/api/bundle.js";
-import { addCard, getCard } from "../../../../../db/api/card.js";
-import { addProject } from "../../../../../db/api/project.js";
-import type { DB } from "../../../../../db/tx.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addCard, getCard } from "$db/api/card.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE, PATCH } from "./+server.js";
-import { addLayer } from "../../../../../db/api/layer.js";
+import { addLayer } from "$db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/cards/card-1", {

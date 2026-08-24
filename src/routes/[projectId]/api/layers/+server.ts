@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addLayer, reorderLayers, type ReorderRejection } from "../../../../db/api/layer";
-import { isForeignKeyError, isUniqueConstraintError } from "../../../../db/api/utils";
-import { readJsonObject, requireStringArray, requireTrimmedString } from "../../lib/request";
+import { addLayer, reorderLayers, type ReorderRejection } from "$db/api/layer";
+import { isForeignKeyError, isUniqueConstraintError } from "$db/api/utils";
+import { readJsonObject, requireStringArray, requireTrimmedString } from "../../lib/request.js";
 import { NAME_MAX } from "$lib/constants";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {

@@ -6,10 +6,9 @@ import { tmpdir } from "node:os";
 import { requireWorkspace } from "../lib/project.js";
 import { dbUrl } from "../lib/config.js";
 import { readApiKeyResult } from "../../lib/server/api-key.js";
-import { getMigrationStatus, runMigrations } from "../lib/db.js";
+import { requireCurrentMigrations, runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
 import { projectTable, bundleTable, layerTable } from "../../db/schema.js";
-import { migrationStatusMessage } from "./db.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import {
   activeServerProcess,
@@ -132,18 +131,9 @@ export async function open(options: OpenOptions): Promise<void> {
     rmSync(memoryDir, { recursive: true, force: true });
     memoryDir = undefined;
   };
-  const migrationStatus = options.memory ? null : await getMigrationStatus(dbURL);
-  if (migrationStatus && migrationStatus.state !== "current") {
-    console.error("Kozane database needs attention before the UI can start.");
-    console.error(migrationStatusMessage(migrationStatus));
-    if (migrationStatus.state === "pending") {
-      console.error("\nRun: kozane db migrate");
-    } else {
-      console.error("\nRun: kozane db status");
-      console.error("Run: kozane doctor");
-    }
-    process.exit(1);
-  }
+  // A memory server builds and migrates its own database a few lines above, so there is
+  // nothing here that could be behind.
+  if (!options.memory) await requireCurrentMigrations(dbURL, "the UI can start");
 
   const serverEntry = join(packageRoot, "build", "index.js");
   const normalizedHost = normalizeHost(host);

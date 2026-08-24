@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getAllScopes } from "../../../../db/api/scope.js";
-import { addProject } from "../../../../db/api/project.js";
-import type { DB } from "../../../../db/tx.js";
+import { getAllScopes } from "$db/api/scope.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { POST } from "./+server.js";
 

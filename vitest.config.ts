@@ -20,6 +20,9 @@ export default defineConfig({
     conditions: ["browser"],
     alias: {
       $lib: path.resolve("./src/lib"),
+      // Mirrors `kit.alias` in svelte.config.js. Both are for `src/routes` only; see the
+      // note there on why the tsc-built directories keep relative specifiers.
+      $db: path.resolve("./src/db"),
       "styled-system": path.resolve("./styled-system"),
       "@libsql/client": libsqlNodeEntry,
       // SvelteKit virtual modules — only real in a Vite/SvelteKit build.
@@ -49,6 +52,10 @@ export default defineConfig({
         "src/cli/lib/config.ts",
         "src/cli/lib/project.ts",
         "src/cli/lib/taskspace-scan.ts",
+        // Command scaffolding: finds the workspace, opens its database, and exits the
+        // process on failure. Exercised by every subprocess test in src/cli/*.e2e.test.ts,
+        // none of which can be measured from this process.
+        "src/cli/lib/workspace-command.ts",
         // DB plumbing — no logic to assert
         "src/db/internal/**",
         "src/db/client.ts",

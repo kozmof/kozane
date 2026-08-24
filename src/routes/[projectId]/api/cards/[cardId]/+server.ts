@@ -1,10 +1,10 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { getBundle } from "../../../../../db/api/bundle";
-import { getLayer } from "../../../../../db/api/layer";
-import { updateCard } from "../../../../../db/api/card";
-import { deleteProjectCards } from "../../../../../db/api/composite";
-import { requireCardInProject } from "../../../lib/guards";
+import { getBundle } from "$db/api/bundle";
+import { getLayer } from "$db/api/layer";
+import { updateCard } from "$db/api/card";
+import { deleteProjectCards } from "$db/api/composite";
+import { requireCardInProject } from "../../../lib/guards.js";
 import { clamp, contentLimitIssue } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { canvasBounds } from "$lib/server/canvas";
@@ -15,7 +15,7 @@ import {
   optionalString,
   readJsonObject,
   requireString,
-} from "../../../lib/request";
+} from "../../../lib/request.js";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

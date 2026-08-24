@@ -1,6 +1,6 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { getProject } from "../../../../db/api/project";
+import { getProject } from "$db/api/project";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 
 /**

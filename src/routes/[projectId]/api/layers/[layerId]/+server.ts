@@ -1,13 +1,9 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { updateLayerName } from "../../../../../db/api/layer";
-import { deleteLayerWithReassign } from "../../../../../db/api/composite";
-import {
-  NotFoundError,
-  DefaultLayerError,
-  isUniqueConstraintError,
-} from "../../../../../db/api/utils";
-import { readJsonObject, requireTrimmedString } from "../../../lib/request";
+import { updateLayerName } from "$db/api/layer";
+import { deleteLayerWithReassign } from "$db/api/composite";
+import { NotFoundError, DefaultLayerError, isUniqueConstraintError } from "$db/api/utils";
+import { readJsonObject, requireTrimmedString } from "../../../lib/request.js";
 import { NAME_MAX } from "$lib/constants";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {

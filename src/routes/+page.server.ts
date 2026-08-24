@@ -1,7 +1,7 @@
 import type { Actions, PageServerLoad, RequestEvent } from "./$types";
 import { fail } from "@sveltejs/kit";
-import { createProject, getAllProjects } from "../db/api/project";
-import { getWorkspaceRoot } from "../db/internal/config";
+import { createProject, getAllProjects } from "../db/api/project.js";
+import { getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
 
 // Static export (kozane net ssg generate): prerender to HTML and hide the local workspace path,

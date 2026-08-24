@@ -5,6 +5,7 @@
   import SelectionRect from "./SelectionRect.svelte";
   import WarpMarker from "./WarpMarker.svelte";
   import type { CardWithGlue, BundleWithColor, GlueRel, Layer, Warp } from "$lib/types";
+  import type { SelectionState } from "../project-state.svelte.js";
   import {
     GRID,
     PALETTE,
@@ -27,8 +28,8 @@
     selectionRectFromPoints,
     viewCenterWorld,
     worldRectToScreenRect,
-  } from "../lib/project-page";
-  import type { CardPositionPatch } from "../lib/project-page";
+  } from "../lib/project-page.js";
+  import type { CardPositionPatch } from "../lib/project-page.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
   import { clamp } from "$lib/constants";
 
@@ -41,10 +42,7 @@
     layers,
     activeLayerId,
     bundleColorById,
-    selectedCards = $bindable(),
-    primarySelectedId = $bindable(),
-    composerCard = $bindable(),
-    resizingCardId = $bindable(),
+    selection,
     scopeCardIds,
     warps,
     focusedWarpId,
@@ -74,11 +72,14 @@
     layers: Layer[];
     activeLayerId: string | null;
     bundleColorById: Map<string, BundleWithColor>;
-    selectedCards: Set<string>;
-    primarySelectedId: string | null;
-    composerCard: CardWithGlue | null;
-    /** The one card showing its resize handle, or null when none is armed. */
-    resizingCardId: string | null;
+    /**
+     * What the board has picked out, as the one object it already is on `ProjectState`.
+     * Passed whole rather than as four `$bindable` props: they are written back together —
+     * a click sets the selection and its primary in the same breath — and four separate
+     * bindings made that look like four independent channels. Mutating the shared class is
+     * the same two-way flow with one name on it.
+     */
+    selection: SelectionState;
     scopeCardIds: Set<string> | null;
     /** In creation order: a warp's number is its place in this list. */
     warps: Warp[];
@@ -201,9 +202,10 @@
   // card, or shift-click a second one into it, and the handle goes away with the state
   // that justified it — including on `Escape`, which clears the selection.
   $effect(() => {
-    if (resizingCardId === null) return;
-    if (selectedCards.size === 1 && selectedCards.has(resizingCardId)) return;
-    resizingCardId = null;
+    const armed = selection.resizingCardId;
+    if (armed === null) return;
+    if (selection.selectedCards.size === 1 && selection.selectedCards.has(armed)) return;
+    selection.resizingCardId = null;
   });
 
   let panState: {
@@ -398,8 +400,8 @@
       // where that reaches onto a dimmed layer.
       glueGroupIds(glueGroupMap, cardToGlue, cardId).forEach((id) => next.add(id));
     });
-    selectedCards = next;
-    primarySelectedId = primaryId;
+    selection.selectedCards = next;
+    selection.primarySelectedId = primaryId;
   }
 
   export function handleCardMouseDown(e: MouseEvent, cardId: string) {
@@ -408,7 +410,7 @@
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
     const rect = canvasEl.getBoundingClientRect();
-    const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selectedCards, cardId);
+    const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId);
     const groupPrevPositions = previousPositions(cards, groupIds);
     dragState = {
       cardId,
@@ -500,37 +502,37 @@
 
   export function handleCardClick(e: MouseEvent, cardId: string) {
     if (readonly || dragState?.moved) return;
-    if (composerCard && composerCard.id !== cardId) composerCard = null;
+    if (selection.composerCard && selection.composerCard.id !== cardId) selection.composerCard = null;
     const groupIds = glueGroupIds(glueGroupMap, cardToGlue, cardId);
     if (e.shiftKey) {
-      const next = new Set(selectedCards);
+      const next = new Set(selection.selectedCards);
       if (next.has(cardId)) {
         groupIds.forEach((id) => next.delete(id));
       } else {
         groupIds.forEach((id) => next.add(id));
       }
-      selectedCards = next;
-    } else if (selectedCards.has(cardId) && groupIds.length > 1) {
-      primarySelectedId = cardId;
+      selection.selectedCards = next;
+    } else if (selection.selectedCards.has(cardId) && groupIds.length > 1) {
+      selection.primarySelectedId = cardId;
     } else {
-      primarySelectedId = cardId;
+      selection.primarySelectedId = cardId;
       const allSelected =
-        groupIds.every((id) => selectedCards.has(id)) &&
-        selectedCards.size === groupIds.length;
-      selectedCards = allSelected ? new Set() : new Set(groupIds);
+        groupIds.every((id) => selection.selectedCards.has(id)) &&
+        selection.selectedCards.size === groupIds.length;
+      selection.selectedCards = allSelected ? new Set() : new Set(groupIds);
     }
   }
 
   export function handleCardDblClick(cardId: string) {
     if (readonly || dragState?.moved) return;
     const card = cards.find((c) => c.id === cardId);
-    if (card) composerCard = card;
+    if (card) selection.composerCard = card;
   }
 
   function handleCanvasMouseDown(e: MouseEvent) {
     if (!readonly && e.button === 0 && e.shiftKey) {
       e.preventDefault();
-      composerCard = null;
+      selection.composerCard = null;
       dragState = null;
       draggingId = null;
       panState = null;
@@ -547,8 +549,8 @@
       return;
     }
     if (e.button !== 0) return;
-    composerCard = null;
-    if (!e.shiftKey) { selectedCards = new Set(); primarySelectedId = null; }
+    selection.composerCard = null;
+    if (!e.shiftKey) { selection.selectedCards = new Set(); selection.primarySelectedId = null; }
     panState = {
       startX: e.clientX,
       startY: e.clientY,
@@ -773,9 +775,9 @@
             <KozaneCard
               {card}
               {color}
-              isSelected={selectedCards.has(card.id)}
-              isPrimaryUnglue={card.id === primarySelectedId && !!card.glueId}
-              isComposing={composerCard?.id === card.id}
+              isSelected={selection.selectedCards.has(card.id)}
+              isPrimaryUnglue={card.id === selection.primarySelectedId && !!card.glueId}
+              isComposing={selection.composerCard?.id === card.id}
               dimmed={(group.active || group.floating) &&
                 scopeCardIds !== null &&
                 !scopeCardIds.has(card.id)}
@@ -785,7 +787,7 @@
               cardWidth={widthOf(card)}
               {fontSize}
               {fontFamily}
-              isResizing={resizingCardId === card.id}
+              isResizing={selection.resizingCardId === card.id}
               onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
               onCardClick={(e) => handleCardClick(e, card.id)}
               onCardDblClick={() => handleCardDblClick(card.id)}

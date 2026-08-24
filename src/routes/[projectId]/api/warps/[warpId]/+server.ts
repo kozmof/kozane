@@ -1,7 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { deleteWarp } from "../../../../../db/api/warp";
-import { NotFoundError } from "../../../../../db/api/utils";
+import { deleteWarp } from "$db/api/warp";
+import { NotFoundError } from "$db/api/utils";
 
 export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;

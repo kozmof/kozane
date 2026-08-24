@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
-import { requireWorkspace } from "../lib/project.js";
-import { commandDbUrl } from "../lib/config.js";
-import { createDb } from "../../db/client.js";
+import { runWorkspaceCommand } from "../lib/workspace-command.js";
+import type { WorkspaceConfig } from "../lib/config.js";
+import type { DB } from "../../db/tx.js";
 import {
   scanTaskspaces,
   diffTaskspaces,
@@ -48,9 +48,17 @@ export async function taskspaceScan(options: ScanOptions = {}): Promise<void> {
     process.exit(1);
   }
 
-  const { root, config } = requireWorkspace();
-  const db = await createDb(commandDbUrl(resolve(root)));
+  await runWorkspaceCommand(async ({ db, root, config }) => {
+    await scanWithin(db, root, config, options);
+  });
+}
 
+async function scanWithin(
+  db: DB,
+  root: string,
+  config: WorkspaceConfig,
+  options: ScanOptions,
+): Promise<void> {
   const searchRoots = config.taskspace.searchRoots.map((r) => (isAbsolute(r) ? r : join(root, r)));
 
   const found = scanTaskspaces(searchRoots);
@@ -170,85 +178,76 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     console.error("Error: --scope <scopeId> is required. Use --no-scope to create without one.");
     process.exit(1);
   }
-  const { root, config } = requireWorkspace();
-  const db = await createDb(commandDbUrl(resolve(root)));
+  await runWorkspaceCommand(async ({ db, root, config }) => {
+    // Resolved plainly now: the wrapper turns a throw from either of these into the same
+    // `Error: …` line the two hand-written catch blocks here used to print.
+    const scopeId =
+      typeof options.scope === "string"
+        ? resolveShortId(
+            options.scope,
+            (await db.select({ id: scopeTable.id }).from(scopeTable)).map(({ id }) => id),
+            "Scope",
+          )
+        : undefined;
 
-  let scopeId: string | undefined;
-  if (typeof options.scope === "string") {
-    const scopes = await db.select({ id: scopeTable.id }).from(scopeTable);
+    const targetDir = options.dir
+      ? resolve(options.dir)
+      : resolve(root, config.taskspace.defaultDir, name);
+
+    if (existsSync(targetDir)) {
+      const existingMarker = join(targetDir, TASKSPACE_MARKER_FILE);
+      if (existsSync(existingMarker)) {
+        console.error(`Directory already contains a Kozane taskspace: ${targetDir}`);
+        process.exit(1);
+      }
+    }
+
+    const pathKind = targetDir.startsWith(root)
+      ? ("project_relative" as const)
+      : ("absolute" as const);
+    const storedPath = pathKind === "project_relative" ? relative(root, targetDir) : targetDir;
+
+    const projectId = await resolveProjectId(db, options.project);
+
+    const id = await addTaskspace({
+      db,
+      projectId,
+      scopeId,
+      name,
+      path: storedPath,
+      pathKind,
+      lastSeenAt: new Date(),
+    });
+
+    const dirCreated = !existsSync(targetDir);
     try {
-      scopeId = resolveShortId(
-        options.scope,
-        scopes.map(({ id }) => id),
-        "Scope",
-      );
-    } catch (error) {
-      console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
+      mkdirSync(targetDir, { recursive: true });
+      const marker = {
+        kind: TASKSPACE_MARKER_KIND,
+        version: TASKSPACE_MARKER_VERSION,
+        taskspaceId: id,
+        projectId: projectId ?? "",
+      };
+      writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
+    } catch (e) {
+      // Kept as its own catch rather than left to the wrapper: the record and the
+      // directory both have to be undone before anything is said, and the two-line message
+      // names the step that failed as well as the reason.
+      await deleteTaskspace({ db, taskspaceId: id });
+      if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
+      console.error("Failed to initialize taskspace directory.");
+      console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);
     }
-  }
 
-  const targetDir = options.dir
-    ? resolve(options.dir)
-    : resolve(root, config.taskspace.defaultDir, name);
-
-  if (existsSync(targetDir)) {
-    const existingMarker = join(targetDir, TASKSPACE_MARKER_FILE);
-    if (existsSync(existingMarker)) {
-      console.error(`Directory already contains a Kozane taskspace: ${targetDir}`);
-      process.exit(1);
-    }
-  }
-
-  const pathKind = targetDir.startsWith(resolve(root))
-    ? ("project_relative" as const)
-    : ("absolute" as const);
-  const storedPath =
-    pathKind === "project_relative" ? relative(resolve(root), targetDir) : targetDir;
-
-  let projectId: string | undefined;
-  try {
-    projectId = await resolveProjectId(db, options.project);
-  } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
-
-  const id = await addTaskspace({
-    db,
-    projectId,
-    scopeId,
-    name,
-    path: storedPath,
-    pathKind,
-    lastSeenAt: new Date(),
+    console.log(`Taskspace created.`);
+    const taskspaceIds = (await db.select({ id: taskspaceTable.id }).from(taskspaceTable)).map(
+      ({ id }) => id,
+    );
+    console.log(`  id   : ${shortId(id, taskspaceIds)}`);
+    console.log(`  name : ${name}`);
+    console.log(`  path : ${targetDir}`);
   });
-
-  const dirCreated = !existsSync(targetDir);
-  try {
-    mkdirSync(targetDir, { recursive: true });
-    const marker = {
-      kind: TASKSPACE_MARKER_KIND,
-      version: TASKSPACE_MARKER_VERSION,
-      taskspaceId: id,
-      projectId: projectId ?? "",
-    };
-    writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
-  } catch (e) {
-    await deleteTaskspace({ db, taskspaceId: id });
-    if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
-    console.error("Failed to initialize taskspace directory.");
-    console.error(e instanceof Error ? e.message : String(e));
-    process.exit(1);
-  }
-
-  console.log(`Taskspace created.`);
-  const taskspaceIds = (await db.select({ id: taskspaceTable.id }).from(taskspaceTable)).map(
-    ({ id }) => id,
-  );
-  console.log(`  id   : ${shortId(id, taskspaceIds)}`);
-  console.log(`  name : ${name}`);
-  console.log(`  path : ${targetDir}`);
 }
 
 // ─── taskspace list ────────────────────────────────────────────────────────────────
@@ -264,10 +263,7 @@ export type TaskspaceListOptions = { project?: string };
  * rows included.
  */
 export async function taskspaceList(options: TaskspaceListOptions = {}): Promise<void> {
-  try {
-    const { root } = requireWorkspace();
-    const db = await createDb(commandDbUrl(resolve(root)));
-
+  await runWorkspaceCommand(async ({ db, root }) => {
     // Short IDs are drawn against every taskspace in the workspace, so the ID printed for a
     // row is the same one whether or not --project narrowed the list.
     const all = await getAllTaskspaces({ db });
@@ -303,8 +299,5 @@ export async function taskspaceList(options: TaskspaceListOptions = {}): Promise
         `${shortId(taskspace.id, taskspaceIds)}  ${taskspace.name || "(unnamed)"}  ${project}  ${scope}  ${path}`,
       );
     }
-  } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    process.exit(1);
-  }
+  });
 }

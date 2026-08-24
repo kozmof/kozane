@@ -70,6 +70,19 @@ const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
  * Just enough of every card in `projectIds` to say what is near a point: the warp palette
  * names a warp after the card closest to it, and pulling whole rows for several projects
  * to read three columns is not worth it.
+ *
+ * Bounded by width of row, not by count of rows. Two of the three dimensions could be
+ * narrowed here — `nearestCardHint` measures horizontally against a fixed `cardWidth`, and
+ * a card starting further below a warp than `WARP_HINT_RADIUS` can never reach it — but
+ * the fourth edge cannot: a card's drawn height comes from how much text it holds, so an
+ * arbitrarily tall card sitting well above a warp still reaches it. Filtering on the three
+ * sound edges alone would drop exactly the cards the remaining one is there to keep, so
+ * the narrowing has to be all four or none, and all four means the height model in SQL.
+ *
+ * What is filtered is the one thing that costs nothing to be sure of: a card whose text is
+ * blank lends no hint (`nearestCardHint` skips it), so it need not be sent. `trim` here
+ * runs on the whole column rather than the opening below, which only ever discards rows
+ * the caller would have discarded anyway.
  */
 export async function getCardMarkersByProjects({
   db,
@@ -89,7 +102,7 @@ export async function getCardMarkersByProjects({
     })
     .from(cardTable)
     .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .where(inArray(bundleTable.projectId, projectIds));
+    .where(and(inArray(bundleTable.projectId, projectIds), sql`trim(${cardTable.content}) <> ''`));
 }
 
 type GetCard = NeedsBundle & { cardId: string };

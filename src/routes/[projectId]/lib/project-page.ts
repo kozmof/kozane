@@ -1,8 +1,8 @@
-import type { Card, GlueRel } from "../../../db/api/types.js";
+import type { Card, GlueRel } from "$db/api/types.js";
 import type { CardWithGlue } from "$lib/types.js";
 import { clamp } from "$lib/constants.js";
-import type { CardPositionUpdate } from "../../../db/api/card.js";
-export type { CardPositionUpdate as CardPositionPatch } from "../../../db/api/card.js";
+import type { CardPositionUpdate } from "$db/api/card.js";
+export type { CardPositionUpdate as CardPositionPatch } from "$db/api/card.js";
 
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;

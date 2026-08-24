@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addScope } from "../../../../db/api/scope";
-import { isUniqueConstraintError } from "../../../../db/api/utils";
-import { readJsonObject, requireTrimmedString } from "../../lib/request";
+import { addScope } from "$db/api/scope";
+import { isUniqueConstraintError } from "$db/api/utils";
+import { readJsonObject, requireTrimmedString } from "../../lib/request.js";
 import { NAME_MAX } from "$lib/constants";
 
 // params.projectId is intentionally unused: scopes are cross-project by design, so there

@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { addBundle } from "../../../../../db/api/bundle.js";
-import { addCard, getCard } from "../../../../../db/api/card.js";
-import { addLayer } from "../../../../../db/api/layer.js";
-import { addProject } from "../../../../../db/api/project.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addCard, getCard } from "$db/api/card.js";
+import { addLayer } from "$db/api/layer.js";
+import { addProject } from "$db/api/project.js";
 import { BATCH_MAX } from "../../../../../lib/constants.js";
-import type { DB } from "../../../../../db/tx.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { POST } from "./+server.js";
 

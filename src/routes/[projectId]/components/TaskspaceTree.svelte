@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import { TASKSPACE_DIR_ENTRIES_MAX } from "$lib/constants";
-  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte";
+  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
 

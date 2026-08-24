@@ -156,6 +156,29 @@ Each taskspace directory carries its own identity marker:
 
 ## Commands
 
+### What every workspace command does first
+
+`project`, `card`, `layer`, `scope`, `taskspace` and `status` all open the workspace the
+same way, and it is the same three steps every time.
+
+1. **Find the workspace**, walking up from the current directory. Without one, the command
+   exits 1 with `No Kozane workspace found. Run "kozane init" first.`
+2. **Require the database to be current.** A database missing migrations stops the command
+   with the same report `kozane open` gives, and a pointer to `kozane db migrate` — or to
+   `kozane db status` and `kozane doctor` when the history has gaps, which `db migrate`
+   cannot repair. No command migrates on its way past: migrations take a backup first, and
+   that only happens when `kozane db migrate` is asked for by name. `kozane status` is the
+   exception and reports on a workspace whatever state it is in.
+3. **Open the session database.** While a `kozane open --memory` server is running, that is
+   its temporary database rather than `.kozane/kozane.db`, so these commands act on the
+   board that is actually open.
+
+Anything thrown after that becomes `Error: <message>` on stderr and exit 1.
+
+`init`, `open`, `doctor`, `net ssg` and the `db` commands are outside this: each opens the
+on-disk database directly, because each has a reason to run when the steps above would
+refuse.
+
 ### `kozane init`
 
 Initializes Kozane in the current directory.
@@ -425,7 +448,7 @@ Projects     : 1
 Bundles      : 6
 Cards        : 128
 Scopes       : 4
-Taskspaces: 3
+Taskspaces   : 3
 ```
 
 ---
@@ -463,7 +486,7 @@ kozane project create <name>
 Behavior:
 
 1. Requires a Kozane workspace (walks up from CWD).
-2. Runs Drizzle migrations (idempotent).
+2. Requires the database to be current, as every workspace command does (see below).
 3. Inserts a `project` DB record → gets a stable UUID.
 4. Creates a default "General" bundle and a default "Base" layer for the project.
 

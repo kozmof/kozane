@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import ProjectPage from "./+page.svelte";
-import { SAFE_AREA_GRACE_MS } from "./lib/project-page";
+import { SAFE_AREA_GRACE_MS } from "./lib/project-page.js";
 import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 import { goto, replaceState } from "$app/navigation";
 import { page } from "$app/state";

@@ -49,7 +49,7 @@ kozane open
 
 To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a project named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default project named `main`. Run `kozane project default <id>` to change which project commands use when `--project` is omitted.
 
-The `/health` endpoint checks server and database readiness.
+The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key a monitoring probe has to send it too — see [Production operations](./docs/production.md).
 
 For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
 

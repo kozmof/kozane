@@ -1,10 +1,10 @@
 import type { RequestHandler } from "./$types";
 import type { CardWithGlue } from "$lib/types";
 import { json, error } from "@sveltejs/kit";
-import { squashProjectCard, type SquashCardResult } from "../../../../../db/api/composite";
+import { squashProjectCard, type SquashCardResult } from "$db/api/composite";
 import { canvasBounds } from "$lib/server/canvas";
 import { BATCH_MAX } from "$lib/constants";
-import { readJsonObject, requireString } from "../../../lib/request";
+import { readJsonObject, requireString } from "../../../lib/request.js";
 
 type SquashFailure = Extract<SquashCardResult, { ok: false }>["reason"];
 

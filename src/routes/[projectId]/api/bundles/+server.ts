@@ -1,8 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { addBundle } from "../../../../db/api/bundle";
-import { isForeignKeyError, isUniqueConstraintError } from "../../../../db/api/utils";
-import { readJsonObject, requireTrimmedString } from "../../lib/request";
+import { addBundle } from "$db/api/bundle";
+import { isForeignKeyError, isUniqueConstraintError } from "$db/api/utils";
+import { readJsonObject, requireTrimmedString } from "../../lib/request.js";
 import { NAME_MAX } from "$lib/constants";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {

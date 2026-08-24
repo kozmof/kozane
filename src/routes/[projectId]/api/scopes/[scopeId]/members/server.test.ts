@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { addBundle } from "../../../../../../db/api/bundle.js";
-import { addCard } from "../../../../../../db/api/card.js";
-import { addScope } from "../../../../../../db/api/scope.js";
-import { getScopeRelsByCards } from "../../../../../../db/api/scope-rel.js";
-import { addProject } from "../../../../../../db/api/project.js";
-import type { DB } from "../../../../../../db/tx.js";
+import { addBundle } from "$db/api/bundle.js";
+import { addCard } from "$db/api/card.js";
+import { addScope } from "$db/api/scope.js";
+import { getScopeRelsByCards } from "$db/api/scope-rel.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
 import { DELETE, POST } from "./+server.js";
-import { addLayer } from "../../../../../../db/api/layer.js";
+import { addLayer } from "$db/api/layer.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/project-1/api/scopes/scope-1/members", {

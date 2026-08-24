@@ -1,6 +1,7 @@
 import type { CardPositionPatch } from "./project-page.js";
 import type { Warp } from "$lib/types.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
+import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
 
 function jsonRequest(
   fetcher: typeof fetch,
@@ -177,11 +178,13 @@ export function createWarp(
  * and drawn on the board — so an unexpected body would put a marker at `undefined`.
  */
 export function parseWarp(value: unknown): Warp | null {
-  if (typeof value !== "object" || value === null) return null;
-  const { id, projectId, posX, posY } = value as Record<string, unknown>;
-  if (typeof id !== "string" || typeof projectId !== "string") return null;
-  if (!Number.isFinite(posX) || !Number.isFinite(posY)) return null;
-  return { id, projectId, posX: posX as number, posY: posY as number };
+  const id = readString(value, "id");
+  const projectId = readString(value, "projectId");
+  const posX = readFiniteNumber(value, "posX");
+  const posY = readFiniteNumber(value, "posY");
+  if (id === undefined || projectId === undefined) return null;
+  if (posX === undefined || posY === undefined) return null;
+  return { id, projectId, posX, posY };
 }
 
 export function deleteWarp(
@@ -208,25 +211,18 @@ export function parseWarpEntries(value: unknown): WarpListEntry[] | null {
   if (!Array.isArray(value)) return null;
   const entries: WarpListEntry[] = [];
   for (const row of value) {
-    if (typeof row !== "object" || row === null) return null;
-    const { id, projectId, projectName, label, posX, posY, hint, isCurrent } = row as Record<
-      string,
-      unknown
-    >;
-    if (typeof id !== "string" || typeof projectId !== "string") return null;
-    if (typeof projectName !== "string" || typeof isCurrent !== "boolean") return null;
-    if (!Number.isFinite(label) || !Number.isFinite(posX) || !Number.isFinite(posY)) return null;
-    if (hint !== null && typeof hint !== "string") return null;
-    entries.push({
-      id,
-      projectId,
-      projectName,
-      label: label as number,
-      posX: posX as number,
-      posY: posY as number,
-      hint,
-      isCurrent,
-    });
+    const id = readString(row, "id");
+    const projectId = readString(row, "projectId");
+    const projectName = readString(row, "projectName");
+    const isCurrent = readBoolean(row, "isCurrent");
+    const label = readFiniteNumber(row, "label");
+    const posX = readFiniteNumber(row, "posX");
+    const posY = readFiniteNumber(row, "posY");
+    const hint = readNullableString(row, "hint");
+    if (id === undefined || projectId === undefined || projectName === undefined) return null;
+    if (isCurrent === undefined || hint === undefined) return null;
+    if (label === undefined || posX === undefined || posY === undefined) return null;
+    entries.push({ id, projectId, projectName, label, posX, posY, hint, isCurrent });
   }
   return entries;
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { addWarp, getAllWarps } from "../../../../../db/api/warp.js";
-import { addProject } from "../../../../../db/api/project.js";
-import type { DB } from "../../../../../db/tx.js";
+import { addWarp, getAllWarps } from "$db/api/warp.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
 import { DELETE } from "./+server.js";
 

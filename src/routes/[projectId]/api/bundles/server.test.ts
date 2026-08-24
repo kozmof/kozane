@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { getAllBundles } from "../../../../db/api/bundle.js";
-import { addProject } from "../../../../db/api/project.js";
-import type { DB } from "../../../../db/tx.js";
+import { getAllBundles } from "$db/api/bundle.js";
+import { addProject } from "$db/api/project.js";
+import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { POST } from "./+server.js";
 
