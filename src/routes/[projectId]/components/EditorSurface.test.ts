@@ -388,6 +388,30 @@ describe("EditorSurface", () => {
     expect(onText.defaultPrevented).toBe(true);
   });
 
+  it("leaves the view where a scroll put it rather than springing back to the caret", async () => {
+    // The panel follows the caret when the *caret* moves. Following it when the *view* moves
+    // is the same code with the scroll position as a dependency, and it pinned a long file
+    // to the caret's line: the wheel moved nothing and the scrollbar sprang back on release.
+    mount(Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n");
+    const surface = screen.getByTestId("editor-surface");
+    // Faked as above, and for the same reason: jsdom has no layout, so it reports a zero
+    // client box and never moves a scroll position of its own.
+    let scrolled = 0;
+    Object.defineProperty(surface, "clientHeight", { value: 200, configurable: true });
+    Object.defineProperty(surface, "scrollTop", {
+      get: () => scrolled,
+      set: (value: number) => (scrolled = value),
+      configurable: true,
+    });
+
+    scrolled = 4000;
+    await fireEvent.scroll(surface);
+
+    expect(scrolled).toBe(4000);
+    // And the window that was drawn is the one the scroll asked for, not the caret's.
+    expect(screen.getByText("line 200")).toBeInTheDocument();
+  });
+
   it("lets keys through to whatever is hosting it, which is what owns Escape and saving", async () => {
     // The surface claims no key from its host: `FileEditor` is what stops propagation, and
     // it can only do that for keys that reach it. A surface that swallowed everything here

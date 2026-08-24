@@ -447,12 +447,24 @@
   }
 
   // ── Following the caret ───────────────────────────────────────
+  //
+  // The caret is the only thing this follows. Where the view currently sits is read off the
+  // element rather than from the `scrollTop` and `viewportHeight` state beside it, which
+  // would make scrolling a dependency: the effect ran again on every scroll, and with the
+  // caret above the new position its first branch put the view straight back on the caret.
+  // A long file could not be scrolled through at all — the scrollbar sprang back to the top
+  // on release, and the wheel moved nothing.
   $effect(() => {
     const top = caret.line * LINE_HEIGHT;
     if (!scrollEl) return;
-    if (top < scrollTop) scrollEl.scrollTop = top;
-    else if (top + LINE_HEIGHT > scrollTop + viewportHeight)
-      scrollEl.scrollTop = top + LINE_HEIGHT - viewportHeight;
+    const viewTop = scrollEl.scrollTop;
+    const viewHeight = scrollEl.clientHeight;
+    // Before the panel has been laid out there is no view to be in or out of, and scrolling
+    // against a zero height would only move the file away from the caret.
+    if (viewHeight === 0) return;
+    if (top < viewTop) scrollEl.scrollTop = top;
+    else if (top + LINE_HEIGHT > viewTop + viewHeight)
+      scrollEl.scrollTop = top + LINE_HEIGHT - viewHeight;
   });
 
   const lineClass = css({

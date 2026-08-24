@@ -500,7 +500,12 @@ test("leaves a file untouched when it is closed without saving", async ({ page }
 
   await page.getByTestId("editor-sink").focus();
   await page.keyboard.type("dirty");
+
+  // The header Close is the third route out of the panel, and it asks over unsaved changes
+  // like the other two do — the test above covers Escape and a click on the board.
   await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByText("This file has unsaved changes.")).toBeVisible();
+  await page.getByRole("button", { name: "Discard and close" }).click();
 
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(readFileSync(join(taskspaceDir, "notes.md"), "utf8")).toBe("untouched\n");
