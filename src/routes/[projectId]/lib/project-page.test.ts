@@ -12,6 +12,7 @@ import {
   edgeScrollVelocity,
   glueGroupIds,
   glueIdByCardId,
+  GRID,
   isViewCenteredOn,
   layerStack,
   moveWithin,
@@ -24,6 +25,7 @@ import {
   previousPositions,
   reorderByDrop,
   reorderByNudge,
+  resizedCardWidth,
   safeTriangle,
   insideTriangle,
   verticalListPosition,
@@ -588,5 +590,46 @@ describe("ARROW_DIRECTIONS", () => {
     // without being reserved could be bound to a shortcut as well, and one press would
     // then both warp and do the other thing.
     expect(Object.keys(ARROW_DIRECTIONS).sort()).toEqual([...ARROW_KEYS].sort());
+  });
+});
+
+describe("resizedCardWidth", () => {
+  const RANGE: readonly [number, number] = [40, 1200];
+  const resize = (over: Partial<Parameters<typeof resizedCardWidth>[0]> = {}) =>
+    resizedCardWidth({
+      startWidth: 200,
+      deltaX: 0,
+      zoom: 1,
+      snapToGrid: false,
+      range: RANGE,
+      ...over,
+    });
+
+  it("follows the pointer one for one at zoom 1", () => {
+    expect(resize({ deltaX: 60 })).toBe(260);
+    expect(resize({ deltaX: -60 })).toBe(140);
+  });
+
+  it("keeps the edge under the pointer on a zoomed board", () => {
+    // Half zoom: 60 screen pixels is 120 canvas pixels.
+    expect(resize({ deltaX: 60, zoom: 0.5 })).toBe(320);
+    expect(resize({ deltaX: 60, zoom: 2 })).toBe(230);
+  });
+
+  it("snaps to the grid when asked", () => {
+    expect(resize({ deltaX: 10, snapToGrid: true }) % GRID).toBe(0);
+    expect(resize({ deltaX: 10, snapToGrid: true })).toBe(216);
+  });
+
+  it("holds the result inside the range, snapped or not", () => {
+    expect(resize({ deltaX: -10_000 })).toBe(40);
+    expect(resize({ deltaX: 10_000 })).toBe(1200);
+    // A grid multiple outside the range must not escape it: the clamp runs after the snap.
+    expect(resize({ deltaX: -10_000, snapToGrid: true })).toBe(40);
+    expect(resize({ deltaX: 10_000, snapToGrid: true })).toBe(1200);
+  });
+
+  it("always answers a whole number of pixels", () => {
+    expect(Number.isInteger(resize({ deltaX: 7, zoom: 0.3 }))).toBe(true);
   });
 });

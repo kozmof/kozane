@@ -1,5 +1,5 @@
 import { error } from "@sveltejs/kit";
-import { BATCH_MAX } from "$lib/constants";
+import { BATCH_MAX, NAME_MAX } from "$lib/constants";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -33,6 +33,20 @@ export function requireTrimmedString(
   const value = body[key];
   if (typeof value !== "string" || !value.trim()) throw error(400, message);
   return value.trim();
+}
+
+/**
+ * A user-supplied name: present, non-blank once trimmed, and within {@link NAME_MAX}.
+ *
+ * The two halves belong together. `assertNameWithinLimit` in `db/api/utils.ts` holds the
+ * same limit for callers that never reach a route — the CLI above all — but it throws,
+ * which over HTTP is a 500 for what is plainly a bad request. So every endpoint taking a
+ * name checked the length itself, in six places, with the message written out six times.
+ */
+export function requireBoundedName(body: JsonRecord, key = "name"): string {
+  const name = requireTrimmedString(body, key);
+  if (name.length > NAME_MAX) throw error(400, `${key} must be ${NAME_MAX} characters or fewer`);
+  return name;
 }
 
 export function requireString(body: JsonRecord, key: string): string {

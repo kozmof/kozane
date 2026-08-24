@@ -43,8 +43,14 @@ export function squashCardPositions(
   // last. They are clamped back onto the board by the caller that stores them.
   const columns = Math.max(1, Math.floor((canvasWidth - origin.posX) / SQUASH_COLUMN_SPACING));
   const occupiedKeys = new Set(occupied.map(({ posX, posY }) => `${posX},${posY}`));
+  // A slot is skipped only when a card already sits on it, and each slot names a distinct
+  // point, so `count + occupied` slots hold `count` free ones however the two interleave.
+  // The loop reads as "keep going until enough are found", which is the same thing right
+  // up until the arithmetic above stops agreeing with it — and then it is an endless loop
+  // inside a request. Bounded, the worst case is a layout that came out wrong instead.
+  const slotLimit = count + occupiedKeys.size;
   const positions: CardPosition[] = [];
-  for (let slot = 0; positions.length < count; slot++) {
+  for (let slot = 0; positions.length < count && slot < slotLimit; slot++) {
     const position = {
       posX: origin.posX + (slot % columns) * SQUASH_COLUMN_SPACING,
       posY: origin.posY + Math.floor(slot / columns) * SQUASH_ROW_SPACING,
@@ -54,5 +60,10 @@ export function squashCardPositions(
     occupiedKeys.add(key);
     positions.push(position);
   }
+  // Unreachable by the argument above, and filled rather than left short because the
+  // caller indexes this list per card: one position per card is the contract, and a
+  // caller crashing on `positions[i].posX` is a worse way to learn the bound was wrong
+  // than a few cards stacked on the origin.
+  while (positions.length < count) positions.push({ ...origin });
   return positions;
 }

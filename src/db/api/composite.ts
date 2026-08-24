@@ -12,7 +12,7 @@ import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
-import { NotFoundError, DefaultBundleError, DefaultLayerError } from "./utils.js";
+import { NotFoundError, DefaultBundleError, DefaultLayerError, columnCount } from "./utils.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
 import type { Card } from "./types.js";
@@ -183,7 +183,7 @@ export async function squashProjectCard({
       zIndex: source.zIndex + index,
       width: source.width,
     }));
-    for (const batch of chunked(rows))
+    for (const batch of chunked(rows, { columnsPerRow: columnCount(cardTable) }))
       cards.push(...(await tx.insert(cardTable).values(batch).returning()));
 
     // What the source was gathered into, the pieces are gathered into: a scope is a

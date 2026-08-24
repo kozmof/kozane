@@ -44,17 +44,56 @@ export const BATCH_MAX = 2_000;
 export const INSERT_CHUNK_MAX = 200;
 
 /**
- * Splits rows into the statement-sized batches {@link INSERT_CHUNK_MAX} names. Here rather
- * than beside either caller because both writers run the same insert — the board's squash
- * endpoint and `kozane card squash` — and a chunk size applied on one path only leaves the
- * variable limit still waiting on the other.
+ * How many bound parameters one INSERT may carry. {@link INSERT_CHUNK_MAX} is a row count,
+ * which only stands in for this while every caller inserts a row of about the same width —
+ * so this is the budget the row count was picked against, named so a wider table shrinks
+ * its own batches instead of quietly spending more of it.
+ *
+ * SQLite's own ceiling is 32766 parameters per statement on any build Kozane runs against
+ * (999 before 3.32, which predates the `node:sqlite` era entirely). Well under either, for
+ * the reason {@link BATCH_MAX} gives: the statement is assembled in memory before SQLite
+ * says whether it will take it.
  */
-export function chunked<T>(rows: T[], size = INSERT_CHUNK_MAX): T[][] {
+export const INSERT_PARAMS_MAX = 2_000;
+
+/**
+ * Splits rows into statement-sized batches. Here rather than beside any one caller because
+ * several writers run the same insert — the board's squash endpoint and `kozane card
+ * squash` among them — and a chunk size applied on one path only leaves the variable limit
+ * still waiting on the other.
+ *
+ * `columnsPerRow` is what keeps the batch honest for a table wider than the one this was
+ * sized against: the batch is the smaller of {@link INSERT_CHUNK_MAX} rows and whatever
+ * {@link INSERT_PARAMS_MAX} affords at that width, so a table that grows a column narrows
+ * its batches rather than widening its statements. Omitted, the row count stands alone, as
+ * it did before — callers inserting a two-column relation row have nothing to gain from it.
+ */
+export function chunked<T>(
+  rows: T[],
+  { size = INSERT_CHUNK_MAX, columnsPerRow }: { size?: number; columnsPerRow?: number } = {},
+): T[][] {
+  const affordable = columnsPerRow
+    ? Math.max(1, Math.floor(INSERT_PARAMS_MAX / columnsPerRow))
+    : size;
+  const batchSize = Math.min(size, affordable);
   const chunks: T[][] = [];
-  for (let start = 0; start < rows.length; start += size)
-    chunks.push(rows.slice(start, start + size));
+  for (let start = 0; start < rows.length; start += batchSize)
+    chunks.push(rows.slice(start, start + batchSize));
   return chunks;
 }
+
+/**
+ * How a taskspace's stored `path` is to be read: relative to the workspace root, which
+ * keeps a workspace portable, or as an absolute path, which is what `kozane taskspace
+ * create --dir <outside-root>` records.
+ *
+ * Here rather than beside the column it types, because both sides of that column need it —
+ * `taskspaceTable` declares the enum from this list, and `resolveTaskspacePath` decides
+ * what to do with the value. A leaf module is the one place both can reach without either
+ * importing the other.
+ */
+export const PATH_KINDS = ["project_relative", "absolute"] as const;
+export type PathKind = (typeof PATH_KINDS)[number];
 
 /** Name of the default layer every project is created with. */
 export const DEFAULT_LAYER_NAME = "Base";

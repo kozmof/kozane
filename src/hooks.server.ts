@@ -3,22 +3,14 @@ import { error } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
 import { getWorkspaceRoot } from "./db/internal/config";
-import {
-  API_KEY_COOKIE,
-  apiKeyCookieOptions,
-  apiKeysEqual,
-  readApiKeyResult,
-  requestApiKey,
-} from "./lib/server/api-key";
+import { readApiKeyResult } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
 import {
   applySecurityHeaders,
-  clearAuthFailures,
-  isBrowserNavigation,
-  recordAuthFailure,
   remoteBindingRequiresApiKey,
   remoteBindingRequiresTls,
 } from "./lib/server/security";
+import { authenticateRequest } from "./lib/server/request-auth";
 import { LOGIN_PATH } from "./lib/server/login";
 
 // Default to localhost so that running `node build/index.js` directly without
@@ -70,6 +62,23 @@ function registerRuntimeState(root: string | null): string | null {
   return null;
 }
 
+/**
+ * The gates every request passes, in the order they run. The order is load-bearing, so it
+ * is written down rather than left to be inferred from the sequence below:
+ *
+ * 1. **SSG bypass.** A prerender pass is not a request from anyone and skips the rest.
+ * 2. **Runtime state.** Another server holding this workspace is a condition of the
+ *    workspace, not of the request, so it answers before anything about the request is read.
+ * 3. **Key file readable.** Likewise the workspace's, and answered rather than thrown: see
+ *    `readApiKeyResult`.
+ * 4. **Remote binding has a key**, and 5. **remote binding is over TLS.** Both refuse a
+ *    misconfigured *server*, so they run before any question of who is asking — a
+ *    workspace bound to the world without a key must not answer a login page either.
+ * 6. **Login page exemption.** After 3–5 so those still apply to it, and before the key
+ *    check so that redirecting an unauthenticated browser to it cannot loop.
+ * 7. **The key check** (`authenticateRequest`).
+ * 8. **The database**, opened only for a request that got this far.
+ */
 const handleRequest: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
 
@@ -122,58 +131,8 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     return applySecurityHeaders(await resolve(event));
   }
   if (configuredKey) {
-    const queryKey = event.url.searchParams.get("api_key") ?? undefined;
-    const suppliedKey = queryKey ?? requestApiKey(event.request, event.cookies.get(API_KEY_COOKIE));
-    if (!apiKeysEqual(suppliedKey, configuredKey.apiKey)) {
-      const client = event.getClientAddress();
-      const retryAfter = recordAuthFailure(client);
-      // A rate-limited request is never redirected into the login page — that
-      // would let a brute-force loop bypass the limiter — so 429 wins for every
-      // client type. Otherwise send browser navigations to the login page and
-      // keep the machine-readable 401 for API/fetch clients.
-      if (retryAfter) {
-        return applySecurityHeaders(
-          new Response("Too Many Requests", {
-            status: 429,
-            headers: { "retry-after": String(retryAfter) },
-          }),
-        );
-      }
-      if (isBrowserNavigation(event.request)) {
-        const next = event.url.pathname + event.url.search;
-        return applySecurityHeaders(
-          new Response(null, {
-            status: 303,
-            headers: { location: `${LOGIN_PATH}?next=${encodeURIComponent(next)}` },
-          }),
-        );
-      }
-      return applySecurityHeaders(
-        new Response("Unauthorized", {
-          status: 401,
-          headers: { "www-authenticate": 'Bearer realm="Kozane"' },
-        }),
-      );
-    }
-    clearAuthFailures(event.getClientAddress());
-    if (queryKey) {
-      const cookie = event.cookies.serialize(
-        API_KEY_COOKIE,
-        configuredKey.apiKey,
-        apiKeyCookieOptions(event.url.protocol === "https:"),
-      );
-      const cleanUrl = new URL(event.url);
-      cleanUrl.searchParams.delete("api_key");
-      return applySecurityHeaders(
-        new Response(null, {
-          status: 303,
-          headers: {
-            location: cleanUrl.pathname + cleanUrl.search,
-            "set-cookie": cookie,
-          },
-        }),
-      );
-    }
+    const auth = authenticateRequest(event, configuredKey);
+    if (auth.kind === "respond") return applySecurityHeaders(auth.response);
   }
   try {
     event.locals.db = await getDb();

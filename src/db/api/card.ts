@@ -5,7 +5,7 @@ import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { chunked } from "../../lib/constants.js";
-import { assertFound } from "./utils.js";
+import { assertFound, columnCount } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 // ── Simple operations (no ownership check) ────────────────────────────────────
@@ -181,7 +181,7 @@ type AddCards = NeedsBundle & {
 export async function addCards({ db, bundleId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
   const ids: string[] = [];
-  for (const batch of chunked(cards)) {
+  for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
       .insert(cardTable)
       .values(batch.map((card) => ({ bundleId, layerId, ...card })))

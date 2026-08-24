@@ -107,12 +107,19 @@
       : null,
   );
   let defaultBundleId = $derived(s.sidebar.activeBundle ?? bundlesWithColors[0]?.id ?? "");
+  // One pass over the cards instead of a scan per selected id. A selection is capped at
+  // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
+  // every keystroke that touched the selection.
+  let cardById = $derived(new Map(s.cards.map((c) => [c.id, c])));
+  // `flatMap` rather than `map(...)!.filter(Boolean)`: an id whose card has gone — deleted
+  // by the CLI between one poll and the next — is dropped here, and dropping it is exactly
+  // what the `!` was asserting could not be necessary.
   let selectedCardObjects = $derived(
-    [...s.selection.selectedCards].map((id) => s.cards.find((c) => c.id === id)!).filter(Boolean),
+    [...s.selection.selectedCards].flatMap((id) => cardById.get(id) ?? []),
   );
   let selectionGlueRels = $derived(s.glueRels.filter((r) => s.selection.selectedCards.has(r.cardId)));
   let primaryCard = $derived(
-    s.selection.primarySelectedId ? (s.cards.find((c) => c.id === s.selection.primarySelectedId) ?? null) : null,
+    s.selection.primarySelectedId ? (cardById.get(s.selection.primarySelectedId) ?? null) : null,
   );
   // This project's rows come from live state rather than the server, so a warp just set
   // with the warp key is in the palette before any request comes back.

@@ -415,6 +415,40 @@ export function clampZoom(value: number): number {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
 }
 
+type ResizedCardWidth = {
+  /** The width the card was drawn at when the drag began. */
+  startWidth: number;
+  /** How far the pointer has travelled since, in screen pixels. */
+  deltaX: number;
+  zoom: number;
+  snapToGrid: boolean;
+  range: readonly [min: number, max: number];
+};
+
+/**
+ * How wide a card being resized is drawn.
+ *
+ * Divided by `zoom` because the pointer moves in screen pixels and the card is measured in
+ * canvas ones: without it the edge lags the pointer on a zoomed-out board and outruns it on
+ * a zoomed-in one.
+ *
+ * Rounded last, after both the snap and the clamp. Rounding before the clamp could put the
+ * result a pixel outside the range the clamp was there to hold, and snapping after it would
+ * do the same — the grid multiple nearest a clamped value is not necessarily inside the
+ * range either.
+ */
+export function resizedCardWidth({
+  startWidth,
+  deltaX,
+  zoom,
+  snapToGrid,
+  range: [min, max],
+}: ResizedCardWidth): number {
+  const raw = startWidth + deltaX / zoom;
+  const snapped = snapToGrid ? Math.round(raw / GRID) * GRID : raw;
+  return Math.round(clamp(snapped, min, max));
+}
+
 export function edgeScrollVelocity(
   pointer: number,
   start: number,

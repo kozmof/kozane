@@ -7,6 +7,7 @@ import {
   CANVAS_H,
   CONTENT_MAX,
   INSERT_CHUNK_MAX,
+  INSERT_PARAMS_MAX,
 } from "./constants.js";
 import { DEFAULT_UI_CONFIG, UI_NUM_RANGES } from "./ui-config.js";
 
@@ -87,18 +88,18 @@ describe("chunked", () => {
   });
 
   it("keeps a list shorter than the chunk size whole", () => {
-    expect(chunked([1, 2, 3], 5)).toEqual([[1, 2, 3]]);
+    expect(chunked([1, 2, 3], { size: 5 })).toEqual([[1, 2, 3]]);
   });
 
   it("splits an exact multiple without a trailing empty chunk", () => {
-    expect(chunked([1, 2, 3, 4], 2)).toEqual([
+    expect(chunked([1, 2, 3, 4], { size: 2 })).toEqual([
       [1, 2],
       [3, 4],
     ]);
   });
 
   it("puts the remainder in a final short chunk", () => {
-    expect(chunked([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+    expect(chunked([1, 2, 3, 4, 5], { size: 2 })).toEqual([[1, 2], [3, 4], [5]]);
   });
 
   it("defaults to INSERT_CHUNK_MAX", () => {
@@ -110,7 +111,28 @@ describe("chunked", () => {
   });
 
   it("preserves order across the split", () => {
-    expect(chunked([1, 2, 3, 4, 5], 2).flat()).toEqual([1, 2, 3, 4, 5]);
+    expect(chunked([1, 2, 3, 4, 5], { size: 2 }).flat()).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it("narrows the batch when a row is too wide for the parameter budget", () => {
+    const columnsPerRow = INSERT_PARAMS_MAX / 50; // 50 rows' worth of parameters
+    const rows = Array.from({ length: 120 }, (_, i) => i);
+    const chunks = chunked(rows, { columnsPerRow });
+    expect(chunks[0]).toHaveLength(50);
+    expect(chunks.flat()).toEqual(rows);
+    for (const chunk of chunks)
+      expect(chunk.length * columnsPerRow).toBeLessThanOrEqual(INSERT_PARAMS_MAX);
+  });
+
+  it("keeps the row count as the ceiling for a narrow row", () => {
+    const rows = Array.from({ length: INSERT_CHUNK_MAX + 1 }, (_, i) => i);
+    // Two columns affords far more than INSERT_CHUNK_MAX rows, so the row count still wins.
+    expect(chunked(rows, { columnsPerRow: 2 })[0]).toHaveLength(INSERT_CHUNK_MAX);
+  });
+
+  it("never yields an empty batch, however wide the row", () => {
+    const chunks = chunked([1, 2, 3], { columnsPerRow: INSERT_PARAMS_MAX * 10 });
+    expect(chunks).toEqual([[1], [2], [3]]);
   });
 });
 

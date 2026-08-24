@@ -100,14 +100,20 @@ export async function reorderLayers({
     if (!existing.every(({ id }) => requested.has(id))) return { ok: false, reason: "foreign" };
 
     // One statement rather than one per layer. Same shape as the position and zIndex
-    // updates in card.ts, and safe for the same reason: the checks above prove `layerIds`
-    // is exactly this project's layer set, so no row the WHERE matches lacks a WHEN.
-    // `position` carries no unique index, so there is no half-applied ordering to collide
-    // with along the way either.
+    // updates in card.ts, including the ELSE, and safe for the same reason: the checks
+    // above prove `layerIds` is exactly this project's layer set, so no row the WHERE
+    // matches lacks a WHEN. `position` carries no unique index, so there is no
+    // half-applied ordering to collide with along the way either.
+    //
+    // The ELSE writes the column back to itself, so should the WHERE and the WHENs ever
+    // diverge, the row is left where it was rather than taking a NULL into a NOT NULL
+    // column and aborting the statement.
     const whens = layerIds.map((layerId, position) => sql`WHEN ${layerId} THEN ${position}`);
     await tx
       .update(layerTable)
-      .set({ position: sql`CASE ${layerTable.id} ${sql.join(whens, sql` `)} END` })
+      .set({
+        position: sql`CASE ${layerTable.id} ${sql.join(whens, sql` `)} ELSE ${layerTable.position} END`,
+      })
       .where(and(eq(layerTable.projectId, projectId), inArray(layerTable.id, layerIds)));
     return { ok: true };
   });

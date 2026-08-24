@@ -5,20 +5,18 @@ import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
 import { getProject } from "$db/api/project";
 import { getScope } from "$db/api/scope";
-import { readJsonObject, requireTrimmedString } from "../../lib/request.js";
+import { readJsonObject, requireBoundedName, requireTrimmedString } from "../../lib/request.js";
 import { getWorkspaceRoot, getTaskspaceDefaultDir } from "$db/internal/config";
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
-import { NAME_MAX } from "$lib/constants";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
-  const name = requireTrimmedString(body, "name");
-  if (name.length > NAME_MAX) throw error(400, `name must be ${NAME_MAX} characters or fewer`);
+  const name = requireBoundedName(body);
   const scopeId = requireTrimmedString(body, "scopeId");
 
   if (!(await getProject({ db, projectId: params.projectId })))

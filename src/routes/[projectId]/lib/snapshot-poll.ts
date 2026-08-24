@@ -1,5 +1,7 @@
+import { base } from "$app/paths";
 import type { ProjectDataSnapshot } from "$lib/types.js";
 import type { Activity } from "./activity.js";
+import { readProjectSnapshot } from "./snapshot-reader.js";
 
 /** How often the board asks the server whether anything has changed. */
 export const SNAPSHOT_POLL_MS = 1_000;
@@ -61,7 +63,7 @@ export function startSnapshotPoll({
     const currentProjectId = projectId();
     const known = applied?.projectId === currentProjectId ? applied.etag : null;
     try {
-      const response = await fetcher(`/${currentProjectId}/api/snapshot`, {
+      const response = await fetcher(`${base}/${currentProjectId}/api/snapshot`, {
         // Revalidation is done by hand with the tag below, so the browser's own cache is
         // kept out of it — served from there, a 304 would arrive as a full 200 again.
         cache: "no-store",
@@ -70,7 +72,12 @@ export function startSnapshotPoll({
       // 304: the board already matches the database, and there is nothing to apply.
       if (response.status === 304) return;
       if (!response.ok) return;
-      const snapshot = await response.json();
+      // Read rather than trusted: `response.json()` resolves to `any`, and a body that is
+      // not a snapshot would otherwise be applied as one. An unreadable body is dropped
+      // exactly as a failed request is — the board keeps what it has, and no tag is
+      // recorded, so the next poll asks for the whole thing again.
+      const snapshot = readProjectSnapshot(await response.json());
+      if (!snapshot) return;
       if (!activities.every((activity, index) => activity.unchangedSince(versions[index]))) return;
       apply(snapshot);
       // Recorded only once the data is actually on the board. A snapshot dropped by the

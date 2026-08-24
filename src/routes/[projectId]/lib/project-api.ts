@@ -1,7 +1,23 @@
+import { base } from "$app/paths";
 import type { CardPositionPatch } from "./project-page.js";
 import type { Warp } from "$lib/types.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
 import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
+
+/**
+ * The URL of one project-scoped endpoint.
+ *
+ * Every request here went out as `/${projectId}/api/…`, which is right only while `base`
+ * is empty. It is empty in every mode that has these endpoints to call — a static export
+ * is the one build with a non-empty base, and it is read-only, so the poll and every
+ * mutation are switched off before a URL is ever built. That made the missing prefix
+ * harmless and invisible in equal measure: the first request added to a path a read-only
+ * board still walks would have gone to the wrong origin under `--base`, and nothing here
+ * would have said so. One place to be wrong is better than twenty-eight.
+ */
+function apiUrl(projectId: string, path: string): string {
+  return `${base}/${projectId}/api${path}`;
+}
 
 function jsonRequest(
   fetcher: typeof fetch,
@@ -23,7 +39,7 @@ export function patchCardPositions(
   projectId: string,
   positions: CardPositionPatch[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards`, "PATCH", { positions });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards"), "PATCH", { positions });
 }
 
 export function createCard(
@@ -39,7 +55,7 @@ export function createCard(
     layerId?: string;
   },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards`, "POST", card);
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards"), "POST", card);
 }
 
 /**
@@ -66,7 +82,7 @@ export function updateCard(
     width?: number | null;
   },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "PATCH", card);
+  return jsonRequest(fetcher, apiUrl(projectId, `/cards/${cardId}`), "PATCH", card);
 }
 
 export function deleteCard(
@@ -74,7 +90,7 @@ export function deleteCard(
   projectId: string,
   cardId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/${cardId}`, "DELETE");
+  return jsonRequest(fetcher, apiUrl(projectId, `/cards/${cardId}`), "DELETE");
 }
 
 /**
@@ -86,7 +102,7 @@ export function squashCard(
   projectId: string,
   cardId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/squash`, "POST", { cardId });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards/squash"), "POST", { cardId });
 }
 
 export function deleteCards(
@@ -94,7 +110,7 @@ export function deleteCards(
   projectId: string,
   cardIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards`, "DELETE", { cardIds });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards"), "DELETE", { cardIds });
 }
 
 export function glueCards(
@@ -102,7 +118,7 @@ export function glueCards(
   projectId: string,
   cardIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/glues`, "POST", { cardIds });
+  return jsonRequest(fetcher, apiUrl(projectId, "/glues"), "POST", { cardIds });
 }
 
 export function unglueCards(
@@ -110,7 +126,7 @@ export function unglueCards(
   projectId: string,
   cardIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/glues`, "DELETE", { cardIds });
+  return jsonRequest(fetcher, apiUrl(projectId, "/glues"), "DELETE", { cardIds });
 }
 
 export function createBundle(
@@ -118,7 +134,7 @@ export function createBundle(
   projectId: string,
   name: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/bundles`, "POST", { name });
+  return jsonRequest(fetcher, apiUrl(projectId, "/bundles"), "POST", { name });
 }
 
 export function deleteBundle(
@@ -126,7 +142,7 @@ export function deleteBundle(
   projectId: string,
   bundleId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/bundles/${bundleId}`, "DELETE");
+  return jsonRequest(fetcher, apiUrl(projectId, `/bundles/${bundleId}`), "DELETE");
 }
 
 export function createLayer(
@@ -134,7 +150,7 @@ export function createLayer(
   projectId: string,
   name: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/layers`, "POST", { name });
+  return jsonRequest(fetcher, apiUrl(projectId, "/layers"), "POST", { name });
 }
 
 export function deleteLayer(
@@ -142,7 +158,7 @@ export function deleteLayer(
   projectId: string,
   layerId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/layers/${layerId}`, "DELETE");
+  return jsonRequest(fetcher, apiUrl(projectId, `/layers/${layerId}`), "DELETE");
 }
 
 export function renameLayer(
@@ -151,7 +167,7 @@ export function renameLayer(
   layerId: string,
   name: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/layers/${layerId}`, "PATCH", { name });
+  return jsonRequest(fetcher, apiUrl(projectId, `/layers/${layerId}`), "PATCH", { name });
 }
 
 /** `layerIds` is the project's full layer ordering, bottom to top. */
@@ -160,7 +176,7 @@ export function reorderLayers(
   projectId: string,
   layerIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/layers`, "PATCH", { layerIds });
+  return jsonRequest(fetcher, apiUrl(projectId, "/layers"), "PATCH", { layerIds });
 }
 
 /** `posX`/`posY` are the world coordinates of the view centre to come back to. */
@@ -169,7 +185,7 @@ export function createWarp(
   projectId: string,
   position: { posX: number; posY: number },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/warps`, "POST", position);
+  return jsonRequest(fetcher, apiUrl(projectId, "/warps"), "POST", position);
 }
 
 /**
@@ -192,12 +208,12 @@ export function deleteWarp(
   projectId: string,
   warpId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/warps/${warpId}`, "DELETE");
+  return jsonRequest(fetcher, apiUrl(projectId, `/warps/${warpId}`), "DELETE");
 }
 
 /** The other projects' warps, as the palette lists them. */
 export function fetchWarpDirectory(fetcher: typeof fetch, projectId: string): Promise<Response> {
-  return fetcher(`/${projectId}/api/warp-directory`);
+  return fetcher(apiUrl(projectId, "/warp-directory"));
 }
 
 /**
@@ -232,7 +248,7 @@ export function createScope(
   projectId: string,
   name: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/scopes`, "POST", { name });
+  return jsonRequest(fetcher, apiUrl(projectId, "/scopes"), "POST", { name });
 }
 
 export function deleteScope(
@@ -240,7 +256,7 @@ export function deleteScope(
   projectId: string,
   scopeId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/scopes/${scopeId}`, "DELETE");
+  return jsonRequest(fetcher, apiUrl(projectId, `/scopes/${scopeId}`), "DELETE");
 }
 
 export function addCardsToScope(
@@ -249,7 +265,7 @@ export function addCardsToScope(
   scopeId: string,
   cardIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/scopes/${scopeId}/members`, "POST", { cardIds });
+  return jsonRequest(fetcher, apiUrl(projectId, `/scopes/${scopeId}/members`), "POST", { cardIds });
 }
 
 export function removeCardsFromScope(
@@ -258,7 +274,9 @@ export function removeCardsFromScope(
   scopeId: string,
   cardIds: string[],
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/scopes/${scopeId}/members`, "DELETE", { cardIds });
+  return jsonRequest(fetcher, apiUrl(projectId, `/scopes/${scopeId}/members`), "DELETE", {
+    cardIds,
+  });
 }
 
 export function batchReassignBundle(
@@ -267,7 +285,7 @@ export function batchReassignBundle(
   cardIds: string[],
   bundleId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/bundle`, "PATCH", { cardIds, bundleId });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards/bundle"), "PATCH", { cardIds, bundleId });
 }
 
 export function batchReassignLayer(
@@ -276,7 +294,7 @@ export function batchReassignLayer(
   cardIds: string[],
   layerId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/layer`, "PATCH", { cardIds, layerId });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards/layer"), "PATCH", { cardIds, layerId });
 }
 
 export function moveCardsToProject(
@@ -285,7 +303,10 @@ export function moveCardsToProject(
   cardIds: string[],
   targetProjectId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/cards/move`, "POST", { cardIds, targetProjectId });
+  return jsonRequest(fetcher, apiUrl(projectId, "/cards/move"), "POST", {
+    cardIds,
+    targetProjectId,
+  });
 }
 
 export function createTaskspace(
@@ -293,7 +314,7 @@ export function createTaskspace(
   projectId: string,
   taskspace: { name: string; scopeId: string },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/taskspaces`, "POST", taskspace);
+  return jsonRequest(fetcher, apiUrl(projectId, "/taskspaces"), "POST", taskspace);
 }
 
 /**
@@ -307,7 +328,7 @@ export function fetchTaskspaceFiles(
   path: string,
 ): Promise<Response> {
   const query = path ? `?path=${encodeURIComponent(path)}` : "";
-  return fetcher(`/${projectId}/api/taskspaces/${taskspaceId}/files${query}`);
+  return fetcher(apiUrl(projectId, `/taskspaces/${taskspaceId}/files${query}`));
 }
 
 /**
@@ -322,7 +343,7 @@ export function fetchTaskspaceFile(
   path: string,
 ): Promise<Response> {
   const query = `?path=${encodeURIComponent(path)}`;
-  return fetcher(`/${projectId}/api/taskspaces/${taskspaceId}/file${query}`);
+  return fetcher(apiUrl(projectId, `/taskspaces/${taskspaceId}/file${query}`));
 }
 
 /**
@@ -336,5 +357,5 @@ export function saveTaskspaceFile(
   taskspaceId: string,
   file: { path: string; content: string; signature: string | null },
 ): Promise<Response> {
-  return jsonRequest(fetcher, `/${projectId}/api/taskspaces/${taskspaceId}/file`, "PUT", file);
+  return jsonRequest(fetcher, apiUrl(projectId, `/taskspaces/${taskspaceId}/file`), "PUT", file);
 }

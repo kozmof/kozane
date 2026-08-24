@@ -3,7 +3,7 @@ import type { RequestHandler } from "./$types";
 import { getProject } from "$db/api/project";
 import { getTaskspaceInProject } from "$db/api/taskspace";
 import { getWorkspaceRoot } from "$db/internal/config";
-import { resolveTaskspacePath } from "$lib/taskspace-path";
+import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import {
   listTaskspaceDirectory,
   TASKSPACE_FILES_STATUS,

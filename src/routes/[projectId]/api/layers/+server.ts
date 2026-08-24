@@ -2,16 +2,13 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addLayer, reorderLayers, type ReorderRejection } from "$db/api/layer";
 import { isForeignKeyError, isUniqueConstraintError } from "$db/api/utils";
-import { readJsonObject, requireStringArray, requireTrimmedString } from "../../lib/request.js";
-import { NAME_MAX } from "$lib/constants";
+import { readJsonObject, requireBoundedName, requireStringArray } from "../../lib/request.js";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
   const body = await readJsonObject(request);
-  const name = requireTrimmedString(body, "name");
-
-  if (name.length > NAME_MAX) throw error(400, `name must be ${NAME_MAX} characters or fewer`);
+  const name = requireBoundedName(body);
 
   try {
     const { id, position } = await addLayer({ db, projectId, name });

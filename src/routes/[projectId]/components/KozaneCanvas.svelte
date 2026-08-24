@@ -22,6 +22,7 @@
     isViewCenteredOn,
     layerStack,
     previousPositions,
+    resizedCardWidth,
     verticalListPosition,
     rectsIntersect,
     scrollForViewCenter,
@@ -32,8 +33,6 @@
   import type { CardPositionPatch } from "../lib/project-page.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
   import { clamp } from "$lib/constants";
-
-  const [CARD_WIDTH_MIN, CARD_WIDTH_MAX] = CARD_WIDTH_RANGE;
 
   let {
     cards = $bindable(),
@@ -457,11 +456,13 @@
   function updateResizedCard(clientX: number, snapToGrid = false) {
     if (!resizeState) return;
     const { cardId, startClientX, startWidth } = resizeState;
-    // Divided by zoom so the edge keeps up with the pointer rather than lagging or
-    // outrunning it on a zoomed board.
-    const raw = startWidth + (clientX - startClientX) / zoom;
-    const snapped = snapToGrid ? Math.round(raw / GRID) * GRID : raw;
-    const width = Math.round(clamp(snapped, CARD_WIDTH_MIN, CARD_WIDTH_MAX));
+    const width = resizedCardWidth({
+      startWidth,
+      deltaX: clientX - startClientX,
+      zoom,
+      snapToGrid,
+      range: CARD_WIDTH_RANGE,
+    });
     // Written through the row rather than mapped into a replacement array, for the reason
     // spelled out in `updateDraggedCard`: this runs on every pointer move.
     for (const c of cards) {

@@ -2,16 +2,13 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addBundle } from "$db/api/bundle";
 import { isForeignKeyError, isUniqueConstraintError } from "$db/api/utils";
-import { readJsonObject, requireTrimmedString } from "../../lib/request.js";
-import { NAME_MAX } from "$lib/constants";
+import { readJsonObject, requireBoundedName } from "../../lib/request.js";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
   const body = await readJsonObject(request);
-  const name = requireTrimmedString(body, "name");
-
-  if (name.length > NAME_MAX) throw error(400, `name must be ${NAME_MAX} characters or fewer`);
+  const name = requireBoundedName(body);
 
   try {
     const id = await addBundle({ db, projectId, name });

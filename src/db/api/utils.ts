@@ -1,4 +1,17 @@
+import { getTableColumns, type Table } from "drizzle-orm";
 import { NAME_MAX } from "../../lib/constants.js";
+
+/**
+ * How many columns a table has, for an insert sizing its batches by what it binds rather
+ * than by a row count written down beside it (see `chunked`).
+ *
+ * Read off the Drizzle table, so a column added to the schema narrows the batches by
+ * itself. An over-estimate where a caller omits a defaulted column, which is the safe
+ * direction: the batch comes out smaller than it strictly had to be, never larger.
+ */
+export function columnCount(table: Table): number {
+  return Object.keys(getTableColumns(table)).length;
+}
 
 export class NotFoundError extends Error {
   constructor(label: string) {

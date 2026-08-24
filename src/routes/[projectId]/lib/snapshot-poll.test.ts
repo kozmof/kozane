@@ -3,7 +3,20 @@ import { Activity } from "./activity.js";
 import { SNAPSHOT_POLL_MS, startSnapshotPoll } from "./snapshot-poll.js";
 import type { ProjectDataSnapshot } from "$lib/types.js";
 
-const SNAPSHOT = { project: { id: "p1" }, cards: [] } as unknown as ProjectDataSnapshot;
+// A whole snapshot, not a stand-in for one: the poll reads what it is sent through
+// `readProjectSnapshot` and drops a body that is not a snapshot, so a fixture missing half
+// its lists would be testing the drop path in every case. No cast, for the same reason.
+const SNAPSHOT: ProjectDataSnapshot = {
+  project: { id: "p1" },
+  cards: [],
+  bundles: [],
+  layers: [],
+  warps: [],
+  scopes: [],
+  scopeRels: [],
+  glueRels: [],
+  taskspaces: [],
+};
 
 function snapshotResponse(etag?: string): Response {
   return new Response(JSON.stringify(SNAPSHOT), {
@@ -162,5 +175,27 @@ describe("startSnapshotPoll", () => {
     harness.stop();
     await tick();
     expect(harness.fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops a body that is not a snapshot rather than applying it", async () => {
+    const notASnapshot = new Response(JSON.stringify({ project: { id: "p1" } }), { status: 200 });
+    const harness = start(vi.fn().mockResolvedValue(notASnapshot));
+    await tick();
+    expect(harness.applied).toEqual([]);
+    harness.stop();
+  });
+
+  it("does not remember the tag of a body it could not read", async () => {
+    const unreadable = () =>
+      new Response(JSON.stringify({ nonsense: true }), { status: 200, headers: { etag: '"v1"' } });
+    const harness = start(vi.fn().mockImplementation(async () => unreadable()));
+    await tick();
+    await tick();
+    // No tag was recorded, so the second poll asks for the whole board again rather than
+    // claiming to hold a snapshot it never applied.
+    const [, second] = harness.fetcher.mock.calls;
+    expect(second[1].headers).toBeUndefined();
+    expect(harness.applied).toEqual([]);
+    harness.stop();
   });
 });

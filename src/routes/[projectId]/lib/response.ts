@@ -25,6 +25,19 @@ export function readString(source: unknown, key: string): string | undefined {
 }
 
 /**
+ * A string field that is allowed to be empty, unlike {@link readString}, which treats an
+ * empty string as absent because every field it reads is an id.
+ *
+ * Card text and layer names are the cases: a card with no text yet is an ordinary card the
+ * board draws as "Empty card…", and refusing it here would drop the whole snapshot it
+ * arrived in. `undefined` still means "absent, or not a string".
+ */
+export function readText(source: unknown, key: string): string | undefined {
+  const value = record(source)?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
  * A number that can be stored and drawn with. Infinities and `NaN` are refused for the
  * reason `optionalNumber` refuses them on the way in: they travel through JSON as `null`
  * or arrive from a hand-made body, and either one puts a card at `NaN` on the canvas.
@@ -47,6 +60,16 @@ export function readNullableString(source: unknown, key: string): string | null 
   const value = record(source)?.[key];
   if (value === null) return null;
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * The {@link readNullableString} of numbers: `null` is a value, `undefined` a refusal.
+ * `card.width` is the field that needs it — null is a card following `ui.defaultCardWidth`.
+ */
+export function readNullableFiniteNumber(source: unknown, key: string): number | null | undefined {
+  const value = record(source)?.[key];
+  if (value === null) return null;
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 /**

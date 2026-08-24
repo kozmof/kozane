@@ -7,7 +7,7 @@ import {
   type TaskspaceMarker,
 } from "../../lib/taskspace-marker.js";
 import { readTaskspaceMarker } from "./taskspace-marker.js";
-import { resolveTaskspacePath } from "../../lib/taskspace-path.js";
+import { resolveTaskspacePath } from "../../lib/server/taskspace-path.js";
 
 export { resolveTaskspacePath };
 

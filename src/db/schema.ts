@@ -9,6 +9,12 @@ import {
   check,
 } from "drizzle-orm/sqlite-core";
 import { v7 as uuidv7 } from "uuid";
+import { PATH_KINDS } from "../lib/constants.js";
+
+// Re-exported so `PathKind` still reads as a property of the column it types, for the
+// callers that reach for it through the schema. Defined in `lib/constants` because
+// `resolveTaskspacePath` needs it too and must not import the schema to get it.
+export { PATH_KINDS, type PathKind } from "../lib/constants.js";
 
 export const projectTable = sqliteTable(
   "project",
@@ -114,9 +120,6 @@ export const scopeTable = sqliteTable(
     uniqueIndex("scope_name_unique").on(t.name),
   ],
 );
-
-export const PATH_KINDS = ["project_relative", "absolute"] as const;
-export type PathKind = (typeof PATH_KINDS)[number];
 
 export const taskspaceTable = sqliteTable(
   "taskspace",
