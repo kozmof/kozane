@@ -22,18 +22,35 @@
 
   let highlightedId = $state<string | null>(null);
   let panelEl: HTMLDivElement = $state()!;
-  let rowEls: Record<string, HTMLButtonElement> = {};
+  /**
+   * The row buttons in the DOM, by warp id — read when the highlight moves, to scroll the
+   * row into view. Recorded through an action rather than `bind:this` into a property: the
+   * map is deliberately not `$state` (nothing renders from it), which is exactly what
+   * `bind:this` on a member warns about, and the action's teardown drops the ids of rows
+   * that have gone rather than leaving them behind to be pruned.
+   */
+  const rowEls: Record<string, HTMLButtonElement> = {};
+
+  function row(node: HTMLButtonElement, id: string) {
+    rowEls[id] = node;
+    return {
+      destroy() {
+        delete rowEls[id];
+      },
+    };
+  }
 
   // Rows come and go while the palette is open — removing a warp is done from here. The
-  // bindings of rows that have gone are dropped rather than kept for the life of the panel,
-  // and the panel takes the keyboard back whenever focus has fallen outside it: clicking a
-  // remove button focuses that button, and removing the row unmounts it, which drops focus
-  // to <body> — where neither this panel's handler nor the page's, held off while the
-  // palette is open, would ever see another key. The same run on open is what puts the
-  // keyboard on the panel in the first place, rather than on the canvas behind it.
+  // panel takes the keyboard back whenever focus has fallen outside it: clicking a remove
+  // button focuses that button, and removing the row unmounts it, which drops focus to
+  // <body> — where neither this panel's handler nor the page's, held off while the palette
+  // is open, would ever see another key. The same run on open is what puts the keyboard on
+  // the panel in the first place, rather than on the canvas behind it.
   $effect(() => {
-    const live = new Set(entries.map(({ id }) => id));
-    for (const id of Object.keys(rowEls)) if (!live.has(id)) delete rowEls[id];
+    // `entries` is read for the dependency alone — nothing here is computed from it. The
+    // check has to run again every time a row comes or goes, not only when the panel opens.
+    // oxlint-disable-next-line no-unused-expressions
+    entries.length;
     if (panelEl && !panelEl.contains(document.activeElement)) panelEl.focus();
   });
 
@@ -147,7 +164,7 @@
               onmouseenter={() => (highlightedId = entry.id)}
             >
               <button
-                bind:this={rowEls[entry.id]}
+                use:row={entry.id}
                 role="option"
                 aria-selected={isHighlighted}
                 class={css({

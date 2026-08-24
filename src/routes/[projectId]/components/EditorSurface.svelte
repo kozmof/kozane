@@ -52,8 +52,21 @@
   /**
    * The line elements currently in the DOM, by line number. Not reactive: the measurer
    * reads it when an event asks a question, never during rendering.
+   *
+   * Filled by the `lineEl` action below rather than by `bind:this` into a member, which is
+   * what Svelte warns about on a plain object — and the action's teardown removes the entry,
+   * so a line scrolled out of the window leaves nothing behind for the measurer to find.
    */
   const lineEls: Record<number, HTMLDivElement | undefined> = {};
+
+  function lineEl(node: HTMLDivElement, lineNumber: number) {
+    lineEls[lineNumber] = node;
+    return {
+      destroy() {
+        delete lineEls[lineNumber];
+      },
+    };
+  }
 
   /**
    * Text the IME is still composing. Held here and drawn into the line rather than
@@ -505,7 +518,7 @@
     <!-- Text: only the window, absolutely positioned by line number. -->
     {#each lines as line (line.lineNumber)}
       <div
-        bind:this={lineEls[line.lineNumber]}
+        use:lineEl={line.lineNumber}
         class={lineClass}
         data-line={line.lineNumber}
         style:top={`${line.lineNumber * LINE_HEIGHT + PAD_Y}px`}

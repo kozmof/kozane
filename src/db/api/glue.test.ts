@@ -12,6 +12,7 @@ import { addBundle } from "./bundle.js";
 import { addCard } from "./card.js";
 import { getGlueRelsByCards, getGlueRelsByProject, glueCards, unglueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
+import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 import { addLayer } from "./layer.js";
 
 async function setup() {
@@ -126,21 +127,21 @@ describe("glueCards over the insert batch size", () => {
   // `INSERT_CHUNK_MAX` is 200 rows, so a group larger than that is the case a single
   // statement used to cover and `chunked` now splits. Every other bulk insert here was
   // already chunked; this one was the outlier.
+  //
+  // The cards are seeded in one statement rather than added one at a time: `addCard` is two
+  // round trips per card — the insert and the default-layer lookup — and a fixture of this
+  // size built that way ran the test past its 10s timeout on CI while saying nothing about
+  // what is being tested, which is only that a group spanning batches ends up in one group.
+  const groupSize = INSERT_CHUNK_MAX * 2 + 50;
+
   it("glues a group spanning several insert batches into one glue group", async () => {
     const db = await createTestDB();
-    const projectId = await addProject({ db, name: "P" });
-    await addLayer({ db, projectId, name: "Base", isDefault: true });
-    const bundleId = await addBundle({ db, projectId, name: "B" });
-
-    const cardIds: string[] = [];
-    for (let i = 0; i < 450; i += 1) {
-      cardIds.push(await addCard({ db, bundleId, content: `card ${i}` }));
-    }
+    const { cardIds } = await projectWithCards(db, "P", groupSize);
 
     const glueId = await glueCards({ db, cardIds });
 
     const rels = await getGlueRelsByCards({ db, cardIds });
-    expect(rels).toHaveLength(450);
+    expect(rels).toHaveLength(groupSize);
     // One group, not one per batch.
     expect(new Set(rels.map((rel) => rel.glueId))).toEqual(new Set([glueId]));
     expect(new Set(rels.map((rel) => rel.cardId))).toEqual(new Set(cardIds));
