@@ -154,3 +154,15 @@ export const TASKSPACE_SSG_TOTAL_BYTES_MAX = 20 * 1024 * 1024;
  * a user's request.
  */
 export const TASKSPACE_SSG_DEPTH_MAX = 64;
+
+/**
+ * How many entries — files, directories, and skipped files alike — one taskspace may
+ * contribute to a static export in total. {@link TASKSPACE_SSG_TOTAL_BYTES_MAX} bounds only
+ * what is read, and a name costs nothing to produce but is still shipped: a taskspace
+ * pointed at an ordinary checkout holds a `node_modules` of a few hundred thousand entries,
+ * which is a name-only tree of tens of megabytes on top of the content budget, walked with
+ * an `lstat` apiece and baked into every project page of the export. This is what makes the
+ * advertised ceiling a ceiling on the payload rather than only on the file content within
+ * it. A directory cut off here says so, the same as one cut off by any other limit.
+ */
+export const TASKSPACE_SSG_NODES_MAX = 50_000;

@@ -3,7 +3,8 @@ import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import TaskspaceTree from "./TaskspaceTree.svelte";
 import { TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
-import { TASKSPACE_DIR_ENTRIES_MAX } from "$lib/constants";
+import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
+import type { TaskspaceFileTree } from "$lib/types";
 
 const TS = "taskspace-1";
 
@@ -93,6 +94,50 @@ describe("TaskspaceTree", () => {
   it("shows the reason a listing failed", async () => {
     await mount({ other: { entries: [] } });
     expect(screen.getByText("Directory not found")).toBeTruthy();
+  });
+
+  /**
+   * A static export's directory can be cut off for reasons a live listing has no equivalent
+   * of, and every one of them leaves the same empty row — so a directory the export never
+   * walked into would otherwise read as a folder with nothing in it, which is the one thing
+   * it is not.
+   */
+  describe("a directory of a static export cut off by a limit", () => {
+    async function mountStatic(root: TaskspaceFileTree["root"]) {
+      const ctx = {
+        fetcher: vi.fn() as never,
+        projectId: "project-1",
+        staticFiles: { [TS]: { root } },
+      };
+      const tree = new TaskspaceTreeState();
+      await tree.toggle(ctx, TS, "");
+      render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "" } });
+    }
+
+    it("says a directory was too deep to walk, rather than calling it empty", async () => {
+      await mountStatic({ kind: "directory", name: "", children: [], truncated: "depth" });
+
+      expect(screen.queryByText("Empty")).toBeNull();
+      expect(
+        screen.getByText(
+          `Nested deeper than ${TASKSPACE_SSG_DEPTH_MAX} levels — not included in this export`,
+        ),
+      ).toBeTruthy();
+    });
+
+    it("says a directory was past the export's size limit", async () => {
+      await mountStatic({ kind: "directory", name: "", children: [], truncated: "nodes" });
+
+      expect(screen.queryByText("Empty")).toBeNull();
+      expect(screen.getByText("Past this export's size limit — not included")).toBeTruthy();
+    });
+
+    it("says a directory could not be read", async () => {
+      await mountStatic({ kind: "directory", name: "", children: [], truncated: "unreadable" });
+
+      expect(screen.queryByText("Empty")).toBeNull();
+      expect(screen.getByText("Could not be read")).toBeTruthy();
+    });
   });
 });
 

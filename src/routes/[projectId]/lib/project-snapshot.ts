@@ -93,8 +93,25 @@ export async function loadProjectSnapshot({
     includeScopes ? getScopeRelsByProject({ db, projectId }) : Promise.resolve([]),
   ]);
 
-  // Built from `taskspaces` before their `path` is nulled below — a static export's own
-  // file walk needs the real directory the same way the live `/file` endpoint does, and
+  // Which taskspaces this snapshot may name at all. The panel lists a taskspace under its
+  // scope and nowhere else, so one with no `scopeId` — the default for `kozane taskspace
+  // create`, and for every row made without one — is unreachable in the UI, as is one whose
+  // scope this project does not carry; `getTaskspacesInProject` returns both, along with
+  // rows assigned to no project at all.
+  //
+  // On the live board that is a row nothing draws, and it keeps being sent: the board is
+  // behind the workspace API key showing the user their own workspace, the same reason it
+  // is sent real paths. In an export it is the name of a directory — and, below, that
+  // directory's contents — published for a taskspace the site itself never mentions, which
+  // is the hazard the note on `includeScopes` gives for filtering here rather than in the
+  // panel. An export therefore carries the taskspaces it draws and no others.
+  const drawnScopes = new Set(scopes.map(({ id }) => id));
+  const namedTaskspaces = includeScopedFiles
+    ? taskspaces.filter(({ scopeId }) => scopeId !== null && drawnScopes.has(scopeId))
+    : taskspaces;
+
+  // Built from the taskspace rows before their `path` is nulled below — a static export's
+  // own file walk needs the real directory the same way the live `/file` endpoint does, and
   // this is the one place both a database row and the workspace root it resolves against
   // are already in hand.
   let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
@@ -106,7 +123,7 @@ export async function loadProjectSnapshot({
     const root = getWorkspaceRoot();
     if (root) {
       taskspaceFiles = {};
-      for (const taskspace of taskspaces) {
+      for (const taskspace of namedTaskspaces) {
         if (!taskspace.path) continue;
         const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
         taskspaceFiles[taskspace.id] = buildTaskspaceFileTree(baseDir);
@@ -123,7 +140,7 @@ export async function loadProjectSnapshot({
     scopes,
     scopeRels,
     glueRels,
-    taskspaces: taskspaces.map(
+    taskspaces: namedTaskspaces.map(
       ({ id, name, scopeId, path, pathKind }) =>
         ({
           id,

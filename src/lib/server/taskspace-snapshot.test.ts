@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -46,7 +46,7 @@ describe("buildTaskspaceFileTree", () => {
       {
         kind: "directory",
         name: "src",
-        truncated: false,
+        truncated: null,
         children: [{ kind: "file", name: "app.ts", content: "export {}\n", size: 10 }],
       },
     ]);
@@ -110,7 +110,7 @@ describe("buildTaskspaceFileTree", () => {
     expect(byName["c.txt"]).toMatchObject({ kind: "file-skipped", reason: "budget" });
   });
 
-  it("stops recursing past the depth guard, marking the cut-off directory truncated", () => {
+  it("stops recursing past the depth guard, marking the cut-off directory truncated by depth", () => {
     let cursor = dir;
     for (let i = 0; i <= TASKSPACE_SSG_DEPTH_MAX + 2; i++) {
       cursor = join(cursor, `d${i}`);
@@ -127,7 +127,91 @@ describe("buildTaskspaceFileTree", () => {
       node = node.children[0];
       guard++;
     }
-    expect(node.truncated).toBe(true);
+    expect(node.truncated).toBe("depth");
     expect(node.children).toEqual([]);
+  });
+
+  /**
+   * The walk has to be as forgiving of a directory it cannot read as it already is of a
+   * file: an export builds from rows written whenever the taskspace was created, against a
+   * disk that has moved on. A single unreadable directory that threw from here would take
+   * the whole prerender down with it — every project page, not just the subtree it could
+   * not read.
+   */
+  // Nothing is unreadable to root, so the denial this rests on does not happen there.
+  it.skipIf(process.getuid?.() === 0)(
+    "skips a directory it cannot read rather than failing the export",
+    () => {
+      mkdirSync(join(dir, "src"), { recursive: true });
+      writeFileSync(join(dir, "src", "app.ts"), "export {}\n");
+      mkdirSync(join(dir, "locked"), { recursive: true });
+      writeFileSync(join(dir, "locked", "secret.txt"), "shh\n");
+      chmodSync(join(dir, "locked"), 0o000);
+
+      let tree;
+      try {
+        tree = buildTaskspaceFileTree(dir);
+      } finally {
+        chmodSync(join(dir, "locked"), 0o755);
+      }
+
+      const byName = Object.fromEntries(tree.root.children.map((entry) => [entry.name, entry]));
+      expect(byName["locked"]).toEqual({
+        kind: "directory",
+        name: "locked",
+        children: [],
+        truncated: "unreadable",
+      });
+      // The rest of the taskspace is still there: one unreadable directory costs that
+      // directory and nothing else.
+      expect(byName["src"]).toMatchObject({
+        children: [{ kind: "file", name: "app.ts", content: "export {}\n", size: 10 }],
+      });
+    },
+  );
+
+  it("answers with an unreadable root rather than throwing when the taskspace directory is gone", () => {
+    const tree = buildTaskspaceFileTree(join(dir, "was-here"));
+
+    expect(tree.root).toEqual({
+      kind: "directory",
+      name: "",
+      children: [],
+      truncated: "unreadable",
+    });
+  });
+
+  /**
+   * The byte budget bounds what is read, not what is listed, and a name is free to produce
+   * but still shipped in the page data — so without this the export of a taskspace pointed
+   * at a checkout with a `node_modules` in it is unbounded in entries however small its
+   * files are. The limit is passed here rather than reached for real: what matters is that
+   * the walk stops on it and says which limit stopped it.
+   */
+  it("stops the walk once the tree's entry budget is spent, marking the cut-off directory", () => {
+    for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) writeFileSync(join(dir, name), "x");
+
+    const tree = buildTaskspaceFileTree(dir, { nodes: 2 });
+
+    expect(names(tree.root.children)).toEqual(["a.txt", "b.txt"]);
+    expect(tree.root.truncated).toBe("nodes");
+  });
+
+  it("counts entries across the whole tree, not per directory", () => {
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(join(dir, "src", "one.ts"), "1");
+    writeFileSync(join(dir, "src", "two.ts"), "2");
+    writeFileSync(join(dir, "zz.txt"), "z");
+
+    // Three entries to spend on a tree of four: `src`, then its two files, then nothing
+    // left for the sibling that sorts after it.
+    const tree = buildTaskspaceFileTree(dir, { nodes: 3 });
+
+    expect(names(tree.root.children)).toEqual(["src"]);
+    expect(tree.root.truncated).toBe("nodes");
+    const src = tree.root.children[0];
+    expect(src).toMatchObject({ kind: "directory", truncated: null });
+    if (src.kind !== "directory") throw new Error("expected a directory");
+    expect(names(src.children)).toEqual(["one.ts", "two.ts"]);
   });
 });

@@ -115,7 +115,7 @@ describe("ScopeSidebar taskspaces", () => {
               root: {
                 kind: "directory",
                 name: "",
-                truncated: false,
+                truncated: null,
                 children: [{ kind: "file", name: "README.md", content: "hi\n", size: 3 }],
               },
             },

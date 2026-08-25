@@ -207,7 +207,14 @@ describe("loadProjectSnapshot", () => {
     it("embeds a taskspace's files, content inline, when includeScopedFiles is true", async () => {
       const db = await createTestDB();
       const { projectId } = await project(db);
-      const taskspaceId = await addTaskspace({ db, projectId, name: "demo", path: "demo" });
+      const scopeId = await addScope({ db, name: "work" });
+      const taskspaceId = await addTaskspace({
+        db,
+        scopeId,
+        projectId,
+        name: "demo",
+        path: "demo",
+      });
 
       const exported = await loadProjectSnapshot({
         db,
@@ -221,10 +228,54 @@ describe("loadProjectSnapshot", () => {
         root: {
           kind: "directory",
           name: "",
-          truncated: false,
+          truncated: null,
           children: [{ kind: "file", name: "README.md", content: "hello\n", size: 6 }],
         },
       });
+    });
+
+    /**
+     * The panel lists a taskspace under a scope and nowhere else, so a taskspace with no
+     * scope — what `kozane taskspace create` makes by default — is unreachable in the
+     * exported UI. Carrying it anyway would publish a local directory's name, and its whole
+     * contents, for a taskspace the site never so much as mentions, readable straight out of
+     * the page data by anyone who looks: the same reason scopes themselves are filtered
+     * server-side rather than hidden client-side.
+     */
+    it("leaves a taskspace that belongs to no scope, and so is never drawn, out of the export entirely", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      const scopeId = await addScope({ db, name: "work" });
+      const drawn = await addTaskspace({ db, scopeId, projectId, name: "drawn", path: "demo" });
+      await addTaskspace({ db, projectId, name: "unscoped", path: "demo" }); // no `scopeId`
+
+      const exported = await loadProjectSnapshot({
+        db,
+        projectId,
+        includeTaskspacePaths: false,
+        includeScopes: true,
+        includeScopedFiles: true,
+      });
+
+      expect(exported?.snapshot.taskspaces.map(({ id }) => id)).toEqual([drawn]);
+      expect(Object.keys(exported!.snapshot.taskspaceFiles!)).toEqual([drawn]);
+      expect(JSON.stringify(exported?.snapshot)).not.toContain("unscoped");
+    });
+
+    /**
+     * The board is not an export: it is behind the workspace API key, showing the user the
+     * workspace they are working in, which is why it is sent real paths in the first place.
+     * Filtering it to what the panel happens to draw today would be a different decision
+     * from the one above, and not this one's to make.
+     */
+    it("still names every taskspace to the live board, scope or no scope", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      await addTaskspace({ db, projectId, name: "unscoped", path: "demo" });
+
+      const loaded = await load(db, projectId);
+
+      expect(loaded?.snapshot.taskspaces.map(({ name }) => name)).toEqual(["unscoped"]);
     });
 
     it("builds no file tree for a taskspace that has no directory, even when asked to", async () => {

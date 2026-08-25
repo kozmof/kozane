@@ -130,7 +130,30 @@ export by design, because that is what is being published.
 Filesystem paths are not. The machine-specific workspace path is stripped, and
 taskspace paths are redacted from the page data the export bakes in, so the
 directories a workspace was worked in are not served to whoever opens the site.
-Taskspaces therefore do not appear in a static export at all.
+By default taskspaces do not appear in a static export at all: a plain `kozane
+net ssg generate` carries no scopes, no taskspace names, and no files.
+
+`--include-scoped-files` is the exception, and it publishes real file contents:
+
+```sh
+kozane net ssg generate --out ./site --include-scoped-files
+```
+
+The export then carries the scopes each project draws, the names of the
+taskspaces under those scopes, and a read-only copy of each of those taskspaces'
+files, contents inline. A taskspace that belongs to no scope is not drawn by the
+board, so it is left out of the export entirely — neither its name nor a byte of
+it goes out. Everything else about the file boundary is the same as the live
+server's, because the same code reads it: dot-entries are never included, so
+`.git`, `.env`, and `.taskspace.json` stay out; symlinks are listed but never
+followed; a file over 1 MB or one that is not valid UTF-8 is listed by name with
+its contents withheld, as is anything past the 20 MB and 50,000-entry ceiling
+each taskspace is exported within.
+
+What that leaves is a judgment only you can make: these are your working
+directories, published in full to whoever opens the site, with no key in front of
+them. Use the flag only on a workspace whose taskspace files you would publish
+deliberately.
 
 ## Taskspace files
 
@@ -176,7 +199,9 @@ init`, any local user or process that can reach the port can rewrite those
   with `kozane api key generate` if that is not what you want.
 
 A static export has neither: no server to ask, and taskspace paths are stripped
-from it, so no taskspace appears at all.
+from it. Nothing in an export can be written, and nothing can be read from it
+that was not baked in at build time — by default no taskspace at all, and with
+`--include-scoped-files` exactly the files described above.
 
 ## Where each rule lives
 

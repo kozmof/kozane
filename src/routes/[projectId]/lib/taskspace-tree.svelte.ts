@@ -1,4 +1,4 @@
-import type { TaskspaceEntry, TaskspaceFileTree } from "$lib/types";
+import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
 import { failureMessage, fetchTaskspaceFiles } from "./project-api.js";
 import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
 
@@ -6,12 +6,13 @@ import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
 export type TaskspaceNode = {
   /** Null until the directory has been read once. */
   entries: TaskspaceEntry[] | null;
-  truncated: boolean;
+  /** Why the listing is not all there, or null when it is. */
+  truncated: TaskspaceTruncation | null;
   loading: boolean;
   error: string | null;
 };
 
-const EMPTY_NODE: TaskspaceNode = { entries: null, truncated: false, loading: false, error: null };
+const EMPTY_NODE: TaskspaceNode = { entries: null, truncated: null, loading: false, error: null };
 
 export type TaskspaceTreeContext = {
   fetcher: typeof fetch;
@@ -106,7 +107,7 @@ export class TaskspaceTreeState {
       this.nodes[key] =
         node?.kind === "directory"
           ? { ...staticDirectoryEntries(node), loading: false, error: null }
-          : { entries: [], truncated: false, loading: false, error: "Directory not found" };
+          : { entries: [], truncated: null, loading: false, error: "Directory not found" };
       return;
     }
 
@@ -124,7 +125,8 @@ export class TaskspaceTreeState {
       const body = await res.json();
       this.nodes[key] = {
         entries: Array.isArray(body?.entries) ? body.entries : [],
-        truncated: body?.truncated === true,
+        // A live listing has only ever the one reason to be cut off.
+        truncated: body?.truncated === true ? "entries" : null,
         loading: false,
         error: null,
       };

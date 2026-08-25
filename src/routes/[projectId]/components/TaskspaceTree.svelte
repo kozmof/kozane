@@ -1,6 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import { TASKSPACE_DIR_ENTRIES_MAX } from "$lib/constants";
+  import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
+  import type { TaskspaceTruncation } from "$lib/types";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
@@ -34,6 +35,21 @@
 
   function childPath(name: string): string {
     return path ? `${path}/${name}` : name;
+  }
+
+  // Each limit in its own words: told only that a directory was "truncated", a reader has
+  // no way to tell a folder with more files in it from one this export never walked into.
+  function truncationNote(reason: TaskspaceTruncation): string {
+    switch (reason) {
+      case "entries":
+        return `First ${TASKSPACE_DIR_ENTRIES_MAX} entries only`;
+      case "depth":
+        return `Nested deeper than ${TASKSPACE_SSG_DEPTH_MAX} levels — not included in this export`;
+      case "nodes":
+        return "Past this export's size limit — not included";
+      case "unreadable":
+        return "Could not be read";
+    }
   }
 
   const rowBase = css({
@@ -78,7 +94,9 @@
 {:else if node.loading && !node.entries}
   <div class={noteClass} style:padding-left={`${indent}px`}>Loading…</div>
 {:else if node.entries}
-  {#if node.entries.length === 0}
+  <!-- Only a directory that really is empty says so: one cut off by a limit comes back with
+       no rows too, and the note below is what happened to it. -->
+  {#if node.entries.length === 0 && !node.truncated}
     <div class={noteClass} style:padding-left={`${indent}px`}>Empty</div>
   {/if}
   {#each node.entries as entry (entry.name)}
@@ -124,8 +142,6 @@
     {/if}
   {/each}
   {#if node.truncated}
-    <div class={noteClass} style:padding-left={`${indent}px`}>
-      First {TASKSPACE_DIR_ENTRIES_MAX} entries only
-    </div>
+    <div class={noteClass} style:padding-left={`${indent}px`}>{truncationNote(node.truncated)}</div>
   {/if}
 {/if}

@@ -67,7 +67,7 @@ describe("TaskspaceTreeState", () => {
 
     await tree.toggle(context(fetcher as never), TS, "");
 
-    expect(tree.node(TS, "").truncated).toBe(true);
+    expect(tree.node(TS, "").truncated).toBe("entries");
   });
 
   it("re-reads every open directory on refresh", async () => {
@@ -152,9 +152,7 @@ describe("TaskspaceTreeState", () => {
       await tree.toggle(ctx, TS, "");
 
       expect(fetcher).toHaveBeenCalledTimes(1);
-      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual([
-        "should-not-be-fetched",
-      ]);
+      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["should-not-be-fetched"]);
     });
 
     it("reads a directory from the embedded tree instead of fetching, once it has one for this taskspace", async () => {
@@ -163,9 +161,9 @@ describe("TaskspaceTreeState", () => {
           root: {
             kind: "directory",
             name: "",
-            truncated: false,
+            truncated: null,
             children: [
-              { kind: "directory", name: "src", children: [], truncated: false },
+              { kind: "directory", name: "src", children: [], truncated: null },
               { kind: "file", name: "README.md", content: "hi\n", size: 3 },
               { kind: "file-skipped", name: "big.log", reason: "too-large", size: 2_000_000 },
             ],
@@ -190,12 +188,12 @@ describe("TaskspaceTreeState", () => {
           root: {
             kind: "directory",
             name: "",
-            truncated: false,
+            truncated: null,
             children: [
               {
                 kind: "directory",
                 name: "src",
-                truncated: false,
+                truncated: null,
                 children: [{ kind: "file", name: "app.ts", content: "export {}\n", size: 10 }],
               },
             ],
@@ -214,7 +212,9 @@ describe("TaskspaceTreeState", () => {
     // entry in the map at all — that must fall back the same as an empty map does, not
     // throw or silently show nothing.
     it("falls back to fetching for a taskspace absent from the static map", async () => {
-      const { fetcher, ctx } = staticContext({ "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: false } } });
+      const { fetcher, ctx } = staticContext({
+        "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: null } },
+      });
       const tree = new TaskspaceTreeState();
 
       await tree.toggle(ctx, TS, "");

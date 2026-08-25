@@ -241,7 +241,10 @@ describe("EditorSession", () => {
 
   describe("with an embedded static tree", () => {
     function staticCtx(staticFiles: Record<string, TaskspaceFileTree>, fetcher = fetcherFor()) {
-      return { fetcher: fetcher.fetcher, ctx: { fetcher: fetcher.fetcher, projectId: "p-1", staticFiles } };
+      return {
+        fetcher: fetcher.fetcher,
+        ctx: { fetcher: fetcher.fetcher, projectId: "p-1", staticFiles },
+      };
     }
 
     // The default an export built without `--include-scoped-files` relies on: no entry for
@@ -263,7 +266,7 @@ describe("EditorSession", () => {
           root: {
             kind: "directory",
             name: "",
-            truncated: false,
+            truncated: null,
             children: [{ kind: "file", name: REF.path, content: "from the export\n", size: 16 }],
           },
         },
@@ -284,7 +287,7 @@ describe("EditorSession", () => {
           root: {
             kind: "directory",
             name: "",
-            truncated: false,
+            truncated: null,
             children: [
               { kind: "file-skipped", name: REF.path, reason: "too-large", size: 2_000_000 },
             ],
@@ -303,7 +306,7 @@ describe("EditorSession", () => {
     it("reports a missing path in the embedded tree without fetching", async () => {
       const { fetcher, ctx } = staticCtx({
         [REF.taskspaceId]: {
-          root: { kind: "directory", name: "", truncated: false, children: [] },
+          root: { kind: "directory", name: "", truncated: null, children: [] },
         },
       });
       const s = new EditorSession();

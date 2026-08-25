@@ -1,16 +1,36 @@
-import { TASKSPACE_SSG_DEPTH_MAX, TASKSPACE_SSG_TOTAL_BYTES_MAX } from "../constants.js";
-import type { TaskspaceFileNode, TaskspaceFileTree } from "../types.js";
-import { listTaskspaceDirectory, readTaskspaceFile, TaskspaceFilesError } from "./taskspace-files.js";
+import {
+  TASKSPACE_SSG_DEPTH_MAX,
+  TASKSPACE_SSG_NODES_MAX,
+  TASKSPACE_SSG_TOTAL_BYTES_MAX,
+} from "../constants.js";
+import type { TaskspaceFileNode, TaskspaceFileTree, TaskspaceTruncation } from "../types.js";
+import {
+  listTaskspaceDirectory,
+  readTaskspaceFile,
+  TaskspaceFilesError,
+} from "./taskspace-files.js";
 
 type DirectoryNode = Extract<TaskspaceFileNode, { kind: "directory" }>;
 
 /**
- * Bytes left to embed in this taskspace's export, shared by reference across the whole
- * walk. A running total rather than a size computed up front: the live boundary functions
- * this reuses read one file at a time, so the only way to know a budget is exceeded is to
- * have been spending it as the walk goes.
+ * What is left to spend on this taskspace's export, shared by reference across the whole
+ * walk: bytes of file content, and entries of tree. Running totals rather than sizes
+ * computed up front — the live boundary functions this reuses read one directory and one
+ * file at a time, so the only way to know a budget is exceeded is to have been spending it
+ * as the walk goes.
+ *
+ * The two run out differently on purpose. Out of bytes, the walk carries on and lists what
+ * it finds by name, so the tree still shows what is there; out of entries, there is nothing
+ * left to say a name in, and the walk stops.
  */
-type Budget = { remaining: number };
+type Budget = { remaining: number; nodes: number };
+
+/**
+ * Ceilings for one call, each defaulting to the constant it is named after. Overridable so
+ * a test can reach a limit without putting fifty thousand entries on disk to do it — the
+ * export itself has no reason to pass either, and does not.
+ */
+type BuildLimits = { bytes?: number; nodes?: number };
 
 function buildFileNode(
   baseDir: string,
@@ -48,38 +68,72 @@ function buildDirectoryNode(
 ): DirectoryNode {
   // A backstop against a pathological real directory structure, not a limit anyone
   // browsing a normal project tree should ever reach. What is left unread here is still
-  // reported as truncated, the same as a directory cut off by the entry-count cap.
-  if (depth > TASKSPACE_SSG_DEPTH_MAX) return { kind: "directory", name, children: [], truncated: true };
+  // reported as truncated, the same as a directory cut off by any other limit — under its
+  // own reason, so the panel does not call a directory this stopped at "empty".
+  if (depth > TASKSPACE_SSG_DEPTH_MAX)
+    return { kind: "directory", name, children: [], truncated: "depth" };
 
-  const listing = listTaskspaceDirectory({ baseDir, subPath });
-  const children: TaskspaceFileNode[] = listing.entries.map((entry) => {
+  let listing;
+  try {
+    listing = listTaskspaceDirectory({ baseDir, subPath });
+  } catch {
+    // The same degrade-and-carry-on `buildFileNode` does, for the same reasons — a
+    // directory the build user cannot read, or one gone since the listing that named it —
+    // plus the taskspace root itself no longer resolving, which reaches this as the first
+    // call of the walk. An export skips the subtree it could not read and says so; it does
+    // not fail the whole prerender over one directory, which is what letting a
+    // `TaskspaceFilesError` past here would do.
+    return { kind: "directory", name, children: [], truncated: "unreadable" };
+  }
+
+  const children: TaskspaceFileNode[] = [];
+  let truncated: TaskspaceTruncation | null = listing.truncated ? "entries" : null;
+  for (const entry of listing.entries) {
+    if (budget.nodes <= 0) {
+      truncated = "nodes";
+      break;
+    }
+    budget.nodes -= 1;
     const childPath = subPath ? `${subPath}/${entry.name}` : entry.name;
     switch (entry.kind) {
       case "directory":
-        return buildDirectoryNode(baseDir, childPath, entry.name, budget, depth + 1);
+        children.push(buildDirectoryNode(baseDir, childPath, entry.name, budget, depth + 1));
+        break;
       case "file":
-        return buildFileNode(baseDir, childPath, entry.name, entry.size, budget);
+        children.push(buildFileNode(baseDir, childPath, entry.name, entry.size, budget));
+        break;
       default:
         // A symlink is reported as itself and never followed, for the same reason the live
         // listing draws it that way rather than expanding it.
-        return { kind: entry.kind, name: entry.name };
+        children.push({ kind: entry.kind, name: entry.name });
     }
-  });
+  }
 
-  return { kind: "directory", name, children, truncated: listing.truncated };
+  return { kind: "directory", name, children, truncated };
 }
 
 /**
  * Everything `kozane net ssg generate --include-scoped-files` bakes in for one taskspace:
- * its whole tree, file contents inline, within {@link TASKSPACE_SSG_TOTAL_BYTES_MAX} total.
+ * its whole tree, file contents inline, within {@link TASKSPACE_SSG_TOTAL_BYTES_MAX} of
+ * content across at most {@link TASKSPACE_SSG_NODES_MAX} entries.
  *
  * Built entirely on top of {@link listTaskspaceDirectory} and {@link readTaskspaceFile} —
  * the same boundary the live `/files` and `/file` endpoints hold a request to — so a static
  * export can walk no further into a taskspace than a browser tab already could, and every
  * rule that applies to a live read (dot-entries hidden, symlinks not followed, traversal
  * refused, the per-file size cap) applies here without being restated.
+ *
+ * Never throws: a taskspace whose directory has been deleted, moved, or made unreadable
+ * since the row naming it was written comes back as an empty root marked `"unreadable"`,
+ * because one such taskspace must not take the export down with it.
  */
-export function buildTaskspaceFileTree(baseDir: string): TaskspaceFileTree {
-  const budget: Budget = { remaining: TASKSPACE_SSG_TOTAL_BYTES_MAX };
+export function buildTaskspaceFileTree(
+  baseDir: string,
+  limits: BuildLimits = {},
+): TaskspaceFileTree {
+  const budget: Budget = {
+    remaining: limits.bytes ?? TASKSPACE_SSG_TOTAL_BYTES_MAX,
+    nodes: limits.nodes ?? TASKSPACE_SSG_NODES_MAX,
+  };
   return { root: buildDirectoryNode(baseDir, "", "", budget, 0) };
 }
