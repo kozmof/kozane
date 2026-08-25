@@ -1,6 +1,6 @@
 import type { AnyDB } from "$db/client";
 import type { Project } from "$db/api/types";
-import type { ProjectDataSnapshot, TaskspaceSummary } from "$lib/types";
+import type { ProjectDataSnapshot, TaskspaceFileTree, TaskspaceSummary } from "$lib/types";
 import { getProject } from "$db/api/project";
 import { getAllBundles } from "$db/api/bundle";
 import { getAllLayers } from "$db/api/layer";
@@ -10,6 +10,9 @@ import { getCardDataByBundles } from "$db/api/card";
 import { getGlueRelsByProject } from "$db/api/glue";
 import { getScopeRelsByProject } from "$db/api/scope-rel";
 import { getTaskspacesInProject } from "$db/api/taskspace";
+import { getWorkspaceRoot } from "$db/internal/config";
+import { resolveTaskspacePath } from "$lib/server/taskspace-path";
+import { buildTaskspaceFileTree } from "$lib/server/taskspace-snapshot";
 import { cardsWithGlueIds } from "./project-page.js";
 
 type LoadProjectSnapshot = {
@@ -25,6 +28,24 @@ type LoadProjectSnapshot = {
    * content is the point of an export while the local paths behind it are not.
    */
   includeTaskspacePaths: boolean;
+  /**
+   * Whether scopes, scope relations, and taskspace summaries are fetched at all. The live
+   * board always passes `true` — it has always shown scopes, independent of any export
+   * flag. A static export passes `false` unless built with `--include-scoped-files`: scope
+   * and taskspace organization is local-workspace detail the same as a taskspace's `path`,
+   * and page data baked into a publishable export is readable via view-source regardless of
+   * what the UI renders, so leaving it out has to happen here rather than only client-side.
+   */
+  includeScopes: boolean;
+  /**
+   * Whether each taskspace's file tree is walked and embedded, content inline, via
+   * {@link buildTaskspaceFileTree}. Only ever `true` for a static export built with
+   * `--include-scoped-files` — the live board reads files on demand through the real
+   * `/taskspaces/:id/file(s)` endpoints and must not pay for a full recursive disk walk on
+   * every page load or once-a-second snapshot poll. Implies `includeScopes`: a file tree
+   * keyed by taskspace id is meaningless without the taskspaces themselves.
+   */
+  includeScopedFiles: boolean;
 };
 
 /**
@@ -44,6 +65,8 @@ export async function loadProjectSnapshot({
   db,
   projectId,
   includeTaskspacePaths,
+  includeScopes,
+  includeScopedFiles,
 }: LoadProjectSnapshot): Promise<{ project: Project; snapshot: ProjectDataSnapshot } | null> {
   const project = await getProject({ db, projectId });
   if (!project) return null;
@@ -52,8 +75,8 @@ export async function loadProjectSnapshot({
     getAllBundles({ db, projectId }),
     getAllLayers({ db, projectId }),
     getAllWarps({ db, projectId }),
-    getScopesInProject({ db, projectId }),
-    getTaskspacesInProject({ db, projectId }),
+    includeScopes ? getScopesInProject({ db, projectId }) : Promise.resolve([]),
+    includeScopes ? getTaskspacesInProject({ db, projectId }) : Promise.resolve([]),
   ]);
 
   // Still sequential, though the data dependency that made it so is gone: the two reads
@@ -67,8 +90,25 @@ export async function loadProjectSnapshot({
   const cards = await getCardDataByBundles({ db, bundleIds: bundles.map(({ id }) => id) });
   const [glueRels, scopeRels] = await Promise.all([
     getGlueRelsByProject({ db, projectId }),
-    getScopeRelsByProject({ db, projectId }),
+    includeScopes ? getScopeRelsByProject({ db, projectId }) : Promise.resolve([]),
   ]);
+
+  // Built from `taskspaces` before their `path` is nulled below — a static export's own
+  // file walk needs the real directory the same way the live `/file` endpoint does, and
+  // this is the one place both a database row and the workspace root it resolves against
+  // are already in hand.
+  let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
+  if (includeScopedFiles) {
+    const root = getWorkspaceRoot();
+    if (root) {
+      taskspaceFiles = {};
+      for (const taskspace of taskspaces) {
+        if (!taskspace.path) continue;
+        const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+        taskspaceFiles[taskspace.id] = buildTaskspaceFileTree(baseDir);
+      }
+    }
+  }
 
   const snapshot = {
     project: { id: project.id },
@@ -89,6 +129,7 @@ export async function loadProjectSnapshot({
           pathKind,
         }) satisfies TaskspaceSummary,
     ),
+    ...(taskspaceFiles ? { taskspaceFiles } : {}),
   } satisfies ProjectDataSnapshot;
 
   // The whole project row alongside the snapshot: the page draws its name, while the

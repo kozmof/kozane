@@ -11,6 +11,9 @@ import { loadWarpDirectory } from "$lib/server/warp-directory";
 // so it hides all editing affordances and the live-sync poll.
 export const prerender = process.env.KOZANE_SSG === "1";
 const readonly = process.env.KOZANE_READONLY === "1";
+// `kozane net ssg generate --include-scoped-files`: opt-in, because it bakes scope/
+// taskspace organization and taskspace file contents into a payload built to be published.
+const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
 
 export const entries: EntryGenerator = async () => {
   // Only touch the database when actually building the static export. A normal
@@ -28,7 +31,16 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   // The same read `/api/snapshot` makes, so the board this page opens on and the board the
   // poll keeps it at are assembled by one piece of code rather than two.
   const [loaded, allProjects, warpDirectory] = await Promise.all([
-    loadProjectSnapshot({ db, projectId, includeTaskspacePaths: !prerender }),
+    loadProjectSnapshot({
+      db,
+      projectId,
+      includeTaskspacePaths: !prerender,
+      // The live board has always shown scopes; a static export shows them only when
+      // built with `--include-scoped-files`, which is the same flag that also decides
+      // whether file contents are baked in — see the note on `includeScopedFiles`.
+      includeScopes: !prerender || includeScopedFiles,
+      includeScopedFiles: prerender && includeScopedFiles,
+    }),
     getAllProjects({ db }),
     // The other projects' warps, for the Shift+arrow palette. Baked into a static export
     // too, which is why the palette works there without an endpoint to call. Independent

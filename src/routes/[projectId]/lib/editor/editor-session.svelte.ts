@@ -1,7 +1,22 @@
+import type { TaskspaceFileTree } from "$lib/types";
 import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../project-api.js";
+import { findStaticNode } from "../taskspace-static.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
-export type EditorSessionContext = { fetcher: typeof fetch; projectId: string };
+export type EditorSessionContext = {
+  fetcher: typeof fetch;
+  projectId: string;
+  /** A static export's embedded taskspace trees — see {@link TaskspaceTreeContext}. */
+  staticFiles?: Record<string, TaskspaceFileTree>;
+};
+
+/** Why a static export has no content to show for a file that is otherwise there. */
+const SKIP_REASON_MESSAGE: Record<"too-large" | "not-text" | "budget" | "unreadable", string> = {
+  "too-large": "This file is too large to open.",
+  "not-text": "This file is not text and cannot be opened.",
+  budget: "This export's size budget ran out before reaching this file.",
+  unreadable: "This file could not be read when the export was built.",
+};
 
 /** Which file an editor is open on. */
 export type OpenFileRef = {
@@ -54,6 +69,16 @@ export class EditorSession {
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
     this.#reset();
     this.file = ref;
+
+    const staticTree = ctx.staticFiles?.[ref.taskspaceId];
+    if (staticTree) {
+      const node = findStaticNode(staticTree, ref.path);
+      if (node?.kind === "file") this.#adopt(node.content, null);
+      else if (node?.kind === "file-skipped") this.error = SKIP_REASON_MESSAGE[node.reason];
+      else this.error = "File not found";
+      return;
+    }
+
     this.loading = true;
 
     try {

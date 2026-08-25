@@ -17,6 +17,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
 type SsgOptions = {
   out?: string;
   base?: string;
+  includeScopedFiles?: boolean;
 };
 
 // GitHub Pages serves project sites under /<repo>/, so links need a base path.
@@ -48,6 +49,11 @@ export async function ssg(options: SsgOptions): Promise<void> {
   console.log(`Kozane workspace: ${config.name}`);
   console.log(`Database: ${join(root, ".kozane", "kozane.db")}`);
   console.log(base ? `Base path: ${base}` : "Base path: / (site root)");
+  console.log(
+    options.includeScopedFiles
+      ? "Scopes and taskspace files: included (read-only)"
+      : "Scopes and taskspace files: excluded (pass --include-scoped-files to include them)",
+  );
   console.log("\nBuilding static read-only site...\n");
 
   const exitCode = await new Promise<number>((resolvePromise) => {
@@ -58,6 +64,7 @@ export async function ssg(options: SsgOptions): Promise<void> {
         KOZANE_SSG: "1",
         KOZANE_READONLY: "1",
         KOZANE_SSG_BASE: base,
+        KOZANE_SSG_INCLUDE_SCOPED_FILES: options.includeScopedFiles ? "1" : "",
         DATABASE_URL: dbURL,
         KOZANE_WORKSPACE_ROOT: resolve(root),
       },

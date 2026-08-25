@@ -67,6 +67,10 @@ ssgCommand
   .description("Export the workspace as a static, read-only site (for GitHub Pages, etc.)")
   .option("--out <dir>", "Output directory (default: ./site)")
   .option("--base <path>", "Base path when hosted under a subdirectory, e.g. /kozane")
+  .option(
+    "--include-scoped-files",
+    "Include scopes, taskspaces, and their files (read-only) in the export",
+  )
   .action((opts) => ssg(opts));
 
 ssgCommand

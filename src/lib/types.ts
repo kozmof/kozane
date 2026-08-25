@@ -59,6 +59,37 @@ export interface TaskspaceListing {
 }
 
 /**
+ * One entry of a taskspace's file tree as `kozane net ssg generate --include-scoped-files`
+ * bakes it into a static export. The counterpart to {@link TaskspaceEntry} for a listing
+ * read once at build time rather than per directory on demand: a directory carries its
+ * children inline, and a file carries its content inline — there is no further request the
+ * static page could make to fetch either.
+ *
+ * A file too large, not valid UTF-8 text, or past the taskspace's total byte budget is
+ * `file-skipped` rather than omitted outright, so the tree still shows it was there and why
+ * nothing came back for it — the same reasons the live editor already answers with, plus
+ * `"budget"` for the export-only total-size ceiling.
+ */
+export type TaskspaceFileNode =
+  | { kind: "directory"; name: string; children: TaskspaceFileNode[]; truncated: boolean }
+  | { kind: "file"; name: string; content: string; size: number }
+  | {
+      kind: "file-skipped";
+      name: string;
+      /** `"unreadable"` covers the same rare, permission/race cases the live editor answers
+       *  with 403/404 for — the file was there when its directory was listed but not when
+       *  the export went to read it. */
+      reason: "too-large" | "not-text" | "budget" | "unreadable";
+      size: number | null;
+    }
+  | { kind: "symlink" | "other"; name: string };
+
+/** One taskspace's file tree, rooted at the taskspace directory itself. */
+export interface TaskspaceFileTree {
+  root: Extract<TaskspaceFileNode, { kind: "directory" }>;
+}
+
+/**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and
  * the client reloads into it, so the two cannot drift into different shapes.
  *
@@ -82,6 +113,12 @@ export interface ProjectDataSnapshot {
   glueRels: GlueRel[];
   /** Likewise narrowed: this project's taskspaces, plus the ones assigned to no project. */
   taskspaces: TaskspaceSummary[];
+  /**
+   * Present only in a static export built with `--include-scoped-files`: one file tree per
+   * taskspace that had a resolvable path, keyed by taskspace id. Absent everywhere else —
+   * the live board reads files on demand through the real endpoints and never needs this.
+   */
+  taskspaceFiles?: Record<string, TaskspaceFileTree>;
 }
 
 export type { Bundle, Layer, Scope, ScopeRel, GlueRel, Warp } from "../db/api/types.js";

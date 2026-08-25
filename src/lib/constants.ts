@@ -134,3 +134,23 @@ export const TASKSPACE_DIR_ENTRIES_MAX = 500;
  * back as a corrupted file.
  */
 export const TASKSPACE_FILE_BYTES_MAX = 1_048_576;
+
+/**
+ * How many bytes of file content one taskspace may contribute to a static export in total,
+ * across every file baked in by `kozane net ssg generate --include-scoped-files`. Unlike
+ * the live panel, which reads one file at a time on demand, an export embeds everything up
+ * front into a payload meant to be committed and published — so a taskspace pointed at a
+ * large checkout needs a ceiling on the whole tree, not just on each file within it. Files
+ * beyond the budget are still listed by name, with content withheld rather than the walk
+ * simply stopping partway through the tree.
+ */
+export const TASKSPACE_SSG_TOTAL_BYTES_MAX = 20 * 1024 * 1024;
+
+/**
+ * How many directories deep a static export will walk into one taskspace. Not a UX limit —
+ * a real project tree is expected to run deeper than this — but a finite backstop against a
+ * pathological real (non-symlink) directory structure, since the export walk, unlike the
+ * live panel, recurses through an entire taskspace in one pass rather than one directory at
+ * a user's request.
+ */
+export const TASKSPACE_SSG_DEPTH_MAX = 64;

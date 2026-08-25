@@ -45,8 +45,11 @@
     onRemoveFromScope: (scopeId: string) => void;
     onCreateTaskspace: () => void;
     /**
-     * Opens one file of one taskspace in the editor. Absent in a static export, which has
-     * no endpoint to read a file with, and the tree rows stay inert there.
+     * Opens one file of one taskspace in the editor. Absent in a static export that has no
+     * endpoint to read a file with and no embedded tree to read one from instead — a plain
+     * export, or one built without `--include-scoped-files`. When `treeContext` carries an
+     * embedded tree for a taskspace, this stays wired up even though the export is
+     * read-only: browsing and opening are allowed, saving never is.
      */
     onOpenFile?: (taskspaceId: string, taskspaceName: string, path: string) => void;
     // Read-only export: keep scope filtering, hide create/delete/membership controls.
@@ -221,21 +224,19 @@
         {/if}
 
         {#if active}
-          {@const scopeTaskspaces = taskspaces.filter((taskspace) => taskspace.scopeId === scope.id && taskspace.path !== null)}
+          {@const scopeTaskspaces = taskspaces.filter((taskspace) => taskspace.scopeId === scope.id && (taskspace.path !== null || treeContext.staticFiles?.[taskspace.id] !== undefined))}
           {#if scopeTaskspaces.length > 0}
             <div class={css({ borderTop: "1px solid token(colors.neutral.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
               {#each scopeTaskspaces as taskspace (taskspace.id)}
                 {@const expanded = taskspaceTree.isExpanded(taskspace.id, "")}
+                <!-- Live, or a static export with an embedded tree for this one (built with
+                     `--include-scoped-files`). A plain export has neither a server to ask
+                     nor a tree to read instead, so its taskspaces stay the plain label they
+                     always were. -->
+                {@const browsable = !readonly || treeContext.staticFiles?.[taskspace.id] !== undefined}
                 <div class={css({ display: "flex", flexDirection: "column", gap: "1px" })}>
                   <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .taskspace-refresh": { opacity: "1" } })}>
-                    <!-- A static export has no server to ask, and its taskspaces carry no
-                         path to ask about, so the row stays the plain label it always was. -->
-                    {#if readonly}
-                      <div class={taskspaceRowClass}>
-                        {@render taskspaceIcon()}
-                        <span class={taskspaceNameClass}>{taskspace.name}</span>
-                      </div>
-                    {:else}
+                    {#if browsable}
                       <button
                         class={cx(taskspaceRowClass, taskspaceRowButtonClass)}
                         onclick={() => taskspaceTree.toggle(treeContext, taskspace.id, "")}
@@ -244,16 +245,21 @@
                         <TreeArrow {expanded} />
                         <span class={taskspaceNameClass}>{taskspace.name}</span>
                       </button>
-                      {#if expanded}
+                      {#if expanded && !readonly}
                         <button
                           class={cx("taskspace-refresh", taskspaceRefreshClass)}
                           title="Re-read this taskspace from disk"
                           onclick={(e) => { e.stopPropagation(); taskspaceTree.refresh(treeContext, taskspace.id); }}
                         >⟳</button>
                       {/if}
+                    {:else}
+                      <div class={taskspaceRowClass}>
+                        {@render taskspaceIcon()}
+                        <span class={taskspaceNameClass}>{taskspace.name}</span>
+                      </div>
                     {/if}
                   </div>
-                  {#if expanded && !readonly}
+                  {#if expanded && browsable}
                     <TaskspaceTree
                       tree={taskspaceTree}
                       ctx={treeContext}

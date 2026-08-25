@@ -33,7 +33,13 @@ async function project(db: DB, name = "P") {
 }
 
 const load = (db: DB, projectId: string) =>
-  loadProjectSnapshot({ db, projectId, includeTaskspacePaths: true });
+  loadProjectSnapshot({
+    db,
+    projectId,
+    includeTaskspacePaths: true,
+    includeScopes: true,
+    includeScopedFiles: false,
+  });
 
 describe("loadProjectSnapshot", () => {
   it("answers null for a project that does not exist", async () => {
@@ -109,9 +115,33 @@ describe("loadProjectSnapshot", () => {
       db,
       projectId,
       includeTaskspacePaths: false,
+      includeScopes: true,
+      includeScopedFiles: false,
     });
 
     expect(exported?.snapshot.taskspaces.every(({ path }) => path === null)).toBe(true);
+  });
+
+  it("omits scopes, scope relations, and taskspaces entirely when the caller asks it to", async () => {
+    const db = await createTestDB();
+    const { projectId, bundleId } = await project(db);
+    const scopeId = await addScope({ db, name: "S" });
+    const cardId = await addCard({ db, bundleId, content: "one" });
+    await addScopeRel({ db, scopeId, cardId });
+
+    const exported = await loadProjectSnapshot({
+      db,
+      projectId,
+      includeTaskspacePaths: false,
+      includeScopes: false,
+      includeScopedFiles: false,
+    });
+
+    expect(exported?.snapshot.scopes).toEqual([]);
+    expect(exported?.snapshot.scopeRels).toEqual([]);
+    expect(exported?.snapshot.taskspaces).toEqual([]);
+    // Cards themselves are unaffected — leaving scopes out is about organization, not content.
+    expect(exported?.snapshot.cards).toHaveLength(1);
   });
 
   // The pair this function exists to keep identical: what the page load hands the board, and

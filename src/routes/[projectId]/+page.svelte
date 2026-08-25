@@ -51,6 +51,10 @@
   // Static exports (kozane net ssg generate) are read-only: no mutation endpoints exist, so all
   // editing affordances and the live-sync poll are disabled. Build-wide and constant.
   const readonly = untrack(() => data.readonly);
+  // Present only in a static export built with `--include-scoped-files`. Read-only browsing
+  // and file-opening stay live wherever a taskspace has one of these; without it, a readonly
+  // taskspace falls back to the plain, non-expandable label it always was.
+  const staticFiles = untrack(() => data.taskspaceFiles);
 
   // ── Reactive project state ────────────────────────────────────
   const s = new ProjectState();
@@ -591,7 +595,7 @@
     scopeRels={s.scopeRels}
     taskspaces={s.taskspaces}
     taskspaceTree={s.taskspaceTree}
-    treeContext={{ fetcher: s.fetcher, projectId: s.projectId }}
+    treeContext={{ fetcher: s.fetcher, projectId: s.projectId, staticFiles }}
     selectedCards={s.selection.selectedCards}
     bind:activeScope={s.sidebar.activeScope}
     bind:newScopeName={s.sidebar.newScopeName}
@@ -601,19 +605,19 @@
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
     onCreateTaskspace={actions.handleCreateTaskspace}
-    onOpenFile={readonly
-      ? undefined
-      : (taskspaceId, taskspaceName, path) =>
+    onOpenFile={!readonly || staticFiles
+      ? (taskspaceId, taskspaceName, path) =>
           editor.open(
-            { fetcher: s.fetcher, projectId: s.projectId },
+            { fetcher: s.fetcher, projectId: s.projectId, staticFiles },
             { taskspaceId, taskspaceName, path },
-          )}
+          )
+      : undefined}
     {readonly}
   />
 
   <FileEditor
     session={editor}
-    ctx={{ fetcher: s.fetcher, projectId: s.projectId }}
+    ctx={{ fetcher: s.fetcher, projectId: s.projectId, staticFiles }}
     vimMode={data.uiConfig.editorVimMode}
     {readonly}
     bind:width={editorWidth}

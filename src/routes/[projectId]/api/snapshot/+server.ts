@@ -37,6 +37,8 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
     db: locals.db,
     projectId: params.projectId,
     includeTaskspacePaths: true,
+    includeScopes: true,
+    includeScopedFiles: false,
   });
   if (!loaded) throw error(404, "Project not found");
 

@@ -1,5 +1,6 @@
-import type { TaskspaceEntry } from "$lib/types";
+import type { TaskspaceEntry, TaskspaceFileTree } from "$lib/types";
 import { failureMessage, fetchTaskspaceFiles } from "./project-api.js";
+import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
 
 /** What is known about one directory of one taskspace. */
 export type TaskspaceNode = {
@@ -12,7 +13,16 @@ export type TaskspaceNode = {
 
 const EMPTY_NODE: TaskspaceNode = { entries: null, truncated: false, loading: false, error: null };
 
-export type TaskspaceTreeContext = { fetcher: typeof fetch; projectId: string };
+export type TaskspaceTreeContext = {
+  fetcher: typeof fetch;
+  projectId: string;
+  /**
+   * A static export's embedded taskspace trees, keyed by taskspace id. When a taskspace has
+   * one, its directories are read from here instead of the live `/files` endpoint — a
+   * static export has no server behind it to ask.
+   */
+  staticFiles?: Record<string, TaskspaceFileTree>;
+};
 
 export function nodeKey(taskspaceId: string, path: string): string {
   return `${taskspaceId}:${path}`;
@@ -89,6 +99,16 @@ export class TaskspaceTreeState {
     if (current?.loading) return;
     // A directory already read stays as it is until a refresh asks for it again.
     if (!force && current?.entries) return;
+
+    const staticTree = ctx.staticFiles?.[taskspaceId];
+    if (staticTree) {
+      const node = findStaticNode(staticTree, path);
+      this.nodes[key] =
+        node?.kind === "directory"
+          ? { ...staticDirectoryEntries(node), loading: false, error: null }
+          : { entries: [], truncated: false, loading: false, error: "Directory not found" };
+      return;
+    }
 
     // The rows already on screen are left in place while the re-read is in flight, so a
     // refresh does not blank the tree out and reflow everything under it.

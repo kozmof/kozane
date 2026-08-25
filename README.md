@@ -138,6 +138,14 @@ kozane net ssg generate --out ./site --base /kozane
 
 The output directory includes a `.nojekyll` file so GitHub Pages serves SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages for it. Static export requires the source build toolchain, so run it from a cloned repository after `pnpm install`.
 
+By default, the export includes only the card board — no scopes, no taskspaces. Pass `--include-scoped-files` to also bake in scopes, taskspace names, and a read-only, browsable copy of each taskspace's files:
+
+```sh
+kozane net ssg generate --out ./site --include-scoped-files
+```
+
+This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Each taskspace is capped at 20MB of embedded content; files beyond that, along with any oversized (>1MB) or non-text file, are still listed by name but open with an explanation instead of their contents. Dotfiles and symlinks are never included, the same as in the live file panel.
+
 Preview it over HTTP, not by opening the files directly.
 
 ```sh
