@@ -3,11 +3,7 @@ import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:f
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import {
-  TASKSPACE_FILE_BYTES_MAX,
-  TASKSPACE_SSG_DEPTH_MAX,
-  TASKSPACE_SSG_TOTAL_BYTES_MAX,
-} from "../constants.js";
+import { TASKSPACE_FILE_BYTES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "../constants.js";
 import { buildTaskspaceFileTree } from "./taskspace-snapshot.js";
 
 function names(children: ReturnType<typeof buildTaskspaceFileTree>["root"]["children"]) {
@@ -94,20 +90,34 @@ describe("buildTaskspaceFileTree", () => {
   });
 
   it("stops embedding content once the total per-taskspace budget runs out, but keeps listing names", () => {
-    // Two moderate files spend part of the budget; the third is sized to blow past what is
-    // left of it — checked from the listing's reported size, before any file is opened, so
-    // it is skipped for running out of budget rather than for its own (unrelated) size.
-    const chunk = "y".repeat(900_000);
+    // Two files spend most of a lowered budget; the third is sized to blow past what is left
+    // of it while staying far under the per-file cap, so the budget is the only limit it
+    // meets — checked from the listing's reported size, before the file is ever opened.
+    const chunk = "y".repeat(400);
     writeFileSync(join(dir, "a.txt"), chunk);
     writeFileSync(join(dir, "b.txt"), chunk);
-    writeFileSync(join(dir, "c.txt"), "z".repeat(TASKSPACE_SSG_TOTAL_BYTES_MAX));
+    writeFileSync(join(dir, "c.txt"), chunk);
 
-    const tree = buildTaskspaceFileTree(dir);
+    const tree = buildTaskspaceFileTree(dir, { bytes: 1000 });
 
     const byName = Object.fromEntries(tree.root.children.map((entry) => [entry.name, entry]));
     expect(byName["a.txt"]).toMatchObject({ kind: "file" });
     expect(byName["b.txt"]).toMatchObject({ kind: "file" });
     expect(byName["c.txt"]).toMatchObject({ kind: "file-skipped", reason: "budget" });
+  });
+
+  it("blames the per-file cap, not the budget, for a file that is over both", () => {
+    // The reader is told why a file is not there, so the reason has to be the one that
+    // actually decided it: this file is withheld at any budget, and saying the export ran
+    // out of room would suggest a bigger budget could have carried it.
+    const oversized = "x".repeat(TASKSPACE_FILE_BYTES_MAX + 1);
+    writeFileSync(join(dir, "big.log"), oversized);
+
+    const tree = buildTaskspaceFileTree(dir, { bytes: 100 });
+
+    expect(tree.root.children).toEqual([
+      { kind: "file-skipped", name: "big.log", reason: "too-large", size: oversized.length },
+    ]);
   });
 
   it("stops recursing past the depth guard, marking the cut-off directory truncated by depth", () => {

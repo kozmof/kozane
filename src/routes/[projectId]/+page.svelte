@@ -54,7 +54,11 @@
   // Present only in a static export built with `--include-scoped-files`. Read-only browsing
   // and file-opening stay live wherever a taskspace has one of these; without it, a readonly
   // taskspace falls back to the plain, non-expandable label it always was.
-  const staticFiles = untrack(() => data.taskspaceFiles);
+  // Derived, not captured the way `readonly` above is: these trees belong to one project and
+  // are keyed by its taskspace ids, and warping in from another project reuses this component.
+  // Holding on to the project we happened to land on would leave every later project matching
+  // nothing here — and in an export, where `path` is null, with no listable taskspaces at all.
+  const staticFiles = $derived(data.taskspaceFiles);
 
   // ── Reactive project state ────────────────────────────────────
   const s = new ProjectState();

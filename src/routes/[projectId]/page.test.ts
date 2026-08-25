@@ -1682,3 +1682,65 @@ describe("Squash", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("Scoped-file export", () => {
+  // What `--include-scoped-files` bakes into an export: a tree per taskspace, and taskspace
+  // rows whose `path` is null, because a published page has no local directory to name.
+  function exportData(suffix: string) {
+    const taskspaceId = `taskspace-${suffix}`;
+    return {
+      ...data,
+      readonly: true,
+      project: { id: `project-${suffix}`, name: `Project ${suffix}`, isDefault: false },
+      cards: [],
+      warps: [],
+      warpDirectory: [],
+      scopes: [{ id: `scope-${suffix}`, name: `Scope ${suffix}` }],
+      taskspaces: [
+        {
+          id: taskspaceId,
+          name: `taskspace-in-${suffix}`,
+          scopeId: `scope-${suffix}`,
+          path: null,
+          pathKind: "project_relative" as const,
+        },
+      ],
+      taskspaceFiles: {
+        [taskspaceId]: {
+          root: {
+            kind: "directory" as const,
+            name: "",
+            truncated: null,
+            children: [
+              { kind: "file" as const, name: `${suffix}.md`, content: `# ${suffix}`, size: 8 },
+            ],
+          },
+        },
+      },
+    };
+  }
+
+  it("browses the arriving project's files after warping, not the one it was opened on", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const first = exportData("a");
+    const { rerender } = render(ProjectPage, {
+      props: { data: first, params: { projectId: "project-a" }, form: null },
+    });
+
+    // Warping between projects reuses this component. The embedded trees are keyed by
+    // taskspace id and belong to one project, so holding the ones the page opened on
+    // would leave the arriving project's taskspaces matching nothing — and with `path`
+    // null in an export, matching nothing is what decides they are not listed at all.
+    const second = exportData("b");
+    await rerender({ data: second, params: { projectId: "project-b" }, form: null });
+
+    await fireEvent.click(screen.getByRole("button", { name: /Scope b/ }));
+    const row = screen.getByRole("button", { name: "taskspace-in-b" });
+    expect(row).toBeInTheDocument();
+
+    // And it is the arriving project's tree behind the row, not a leftover.
+    await fireEvent.click(row);
+    expect(await screen.findByText("b.md")).toBeInTheDocument();
+    expect(screen.queryByText("a.md")).not.toBeInTheDocument();
+  });
+});

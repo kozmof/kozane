@@ -1,4 +1,5 @@
 import {
+  TASKSPACE_FILE_BYTES_MAX,
   TASKSPACE_SSG_DEPTH_MAX,
   TASKSPACE_SSG_NODES_MAX,
   TASKSPACE_SSG_TOTAL_BYTES_MAX,
@@ -39,6 +40,13 @@ function buildFileNode(
   size: number | null,
   budget: Budget,
 ): TaskspaceFileNode {
+  // The per-file cap is asked about first, and deliberately: a file over it is withheld at
+  // any budget, so reporting a low budget for it would name a limit that is not the one
+  // keeping it out. Below the cap, the budget is the honest answer — and settling it here
+  // also spares a read of a file that is only going to be refused.
+  if (size !== null && size > TASKSPACE_FILE_BYTES_MAX) {
+    return { kind: "file-skipped", name, reason: "too-large", size };
+  }
   if (size !== null && size > budget.remaining) {
     return { kind: "file-skipped", name, reason: "budget", size };
   }
