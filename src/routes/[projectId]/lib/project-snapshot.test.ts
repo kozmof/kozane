@@ -1,12 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
 import { addBundle } from "$db/api/bundle.js";
 import { addCard } from "$db/api/card.js";
 import { addLayer } from "$db/api/layer.js";
 import { addProject } from "$db/api/project.js";
 import { addScope } from "$db/api/scope.js";
 import { addScopeRel } from "$db/api/scope-rel.js";
+import { addTaskspace } from "$db/api/taskspace.js";
 import { glueCards } from "$db/api/glue.js";
 import type { DB } from "$db/tx.js";
+import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 import { createTestDB } from "../../../test-utils/db.js";
 import { loadProjectSnapshot } from "./project-snapshot.js";
 import { readProjectSnapshot } from "./snapshot-reader.js";
@@ -142,6 +148,121 @@ describe("loadProjectSnapshot", () => {
     expect(exported?.snapshot.taskspaces).toEqual([]);
     // Cards themselves are unaffected — leaving scopes out is about organization, not content.
     expect(exported?.snapshot.cards).toHaveLength(1);
+  });
+
+  // `includeScopedFiles` is the one flag that reaches out to the real filesystem, so it
+  // gets a real taskspace directory to point at rather than a bare database row — the
+  // question these tests answer is whether a file on disk ends up in the export, which a
+  // taskspace record with no directory behind it cannot exercise either way.
+  describe("with a taskspace directory on disk", () => {
+    let tmpRoot: string;
+    let taskspaceDir: string;
+    let prevEnv: string | undefined;
+
+    beforeEach(() => {
+      tmpRoot = join(tmpdir(), `kozane-snapshot-test-${randomUUID()}`);
+      taskspaceDir = join(tmpRoot, "demo");
+      mkdirSync(join(tmpRoot, ".kozane"), { recursive: true });
+      writeFileSync(join(tmpRoot, ".kozane", "config.json"), JSON.stringify({ name: "test" }));
+      mkdirSync(taskspaceDir, { recursive: true });
+      writeFileSync(join(taskspaceDir, "README.md"), "hello\n");
+
+      prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
+      process.env.KOZANE_WORKSPACE_ROOT = tmpRoot;
+      _resetWorkspaceRootForTest();
+    });
+
+    afterEach(() => {
+      if (prevEnv === undefined) delete process.env.KOZANE_WORKSPACE_ROOT;
+      else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
+      _resetWorkspaceRootForTest();
+      rmSync(tmpRoot, { recursive: true, force: true });
+    });
+
+    /**
+     * The core guarantee behind `--include-scoped-files` being opt-in: a taskspace with a
+     * real, readable directory must not leak a byte of it into the export unless the
+     * caller asked for file contents specifically, even when scopes and taskspace names
+     * themselves are included. Scope visibility and file contents are two different
+     * questions, and only the second one touches the filesystem.
+     */
+    it("never reads taskspace files from disk when includeScopedFiles is false", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      await addTaskspace({ db, projectId, name: "demo", path: "demo" });
+
+      const exported = await loadProjectSnapshot({
+        db,
+        projectId,
+        includeTaskspacePaths: false,
+        includeScopes: true,
+        includeScopedFiles: false,
+      });
+
+      expect(exported?.snapshot.taskspaces).toHaveLength(1);
+      expect(exported?.snapshot.taskspaceFiles).toBeUndefined();
+      expect(JSON.stringify(exported?.snapshot)).not.toContain("hello");
+    });
+
+    it("embeds a taskspace's files, content inline, when includeScopedFiles is true", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      const taskspaceId = await addTaskspace({ db, projectId, name: "demo", path: "demo" });
+
+      const exported = await loadProjectSnapshot({
+        db,
+        projectId,
+        includeTaskspacePaths: false,
+        includeScopes: true,
+        includeScopedFiles: true,
+      });
+
+      expect(exported?.snapshot.taskspaceFiles?.[taskspaceId]).toEqual({
+        root: {
+          kind: "directory",
+          name: "",
+          truncated: false,
+          children: [{ kind: "file", name: "README.md", content: "hello\n", size: 6 }],
+        },
+      });
+    });
+
+    it("builds no file tree for a taskspace that has no directory, even when asked to", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      await addTaskspace({ db, projectId, name: "no-dir" }); // no `path`
+
+      const exported = await loadProjectSnapshot({
+        db,
+        projectId,
+        includeTaskspacePaths: false,
+        includeScopes: true,
+        includeScopedFiles: true,
+      });
+
+      expect(exported?.snapshot.taskspaceFiles).toEqual({});
+    });
+
+    // The documented invariant on `includeScopedFiles` — "implies includeScopes" — held as
+    // code, not only as a comment: a caller that asks for file contents without also asking
+    // for the taskspaces themselves gets neither, rather than an orphaned `taskspaceFiles`
+    // map keyed by ids the rest of the snapshot never named.
+    it("builds no file tree at all when includeScopes is false, regardless of includeScopedFiles", async () => {
+      const db = await createTestDB();
+      const { projectId } = await project(db);
+      await addTaskspace({ db, projectId, name: "demo", path: "demo" });
+
+      const exported = await loadProjectSnapshot({
+        db,
+        projectId,
+        includeTaskspacePaths: false,
+        includeScopes: false,
+        includeScopedFiles: true,
+      });
+
+      expect(exported?.snapshot.taskspaces).toEqual([]);
+      expect(exported?.snapshot.taskspaceFiles).toBeUndefined();
+    });
   });
 
   // The pair this function exists to keep identical: what the page load hands the board, and

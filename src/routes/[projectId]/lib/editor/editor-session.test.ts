@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { TaskspaceFileTree } from "$lib/types";
 import { EditorSession } from "./editor-session.svelte.js";
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
@@ -236,6 +237,83 @@ describe("EditorSession", () => {
     expect(dispose).toHaveBeenCalled();
     expect(s.doc).not.toBe(first);
     expect(s.doc?.text()).toBe("b\n");
+  });
+
+  describe("with an embedded static tree", () => {
+    function staticCtx(staticFiles: Record<string, TaskspaceFileTree>, fetcher = fetcherFor()) {
+      return { fetcher: fetcher.fetcher, ctx: { fetcher: fetcher.fetcher, projectId: "p-1", staticFiles } };
+    }
+
+    // The default an export built without `--include-scoped-files` relies on: no entry for
+    // this taskspace means the live endpoint is asked, the same as if `staticFiles` were
+    // never set at all.
+    it("still fetches when the context carries no static tree for this taskspace", async () => {
+      const { fetcher, ctx } = staticCtx({});
+      const s = new EditorSession();
+
+      await s.open(ctx, REF);
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(s.doc?.text()).toBe("hello\n");
+    });
+
+    it("opens a file's content from the embedded tree without fetching", async () => {
+      const { fetcher, ctx } = staticCtx({
+        [REF.taskspaceId]: {
+          root: {
+            kind: "directory",
+            name: "",
+            truncated: false,
+            children: [{ kind: "file", name: REF.path, content: "from the export\n", size: 16 }],
+          },
+        },
+      });
+      const s = new EditorSession();
+
+      await s.open(ctx, REF);
+
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(s.doc?.text()).toBe("from the export\n");
+      expect(s.loading).toBe(false);
+      expect(s.error).toBeNull();
+    });
+
+    it("reports a skipped file's reason instead of fetching", async () => {
+      const { fetcher, ctx } = staticCtx({
+        [REF.taskspaceId]: {
+          root: {
+            kind: "directory",
+            name: "",
+            truncated: false,
+            children: [
+              { kind: "file-skipped", name: REF.path, reason: "too-large", size: 2_000_000 },
+            ],
+          },
+        },
+      });
+      const s = new EditorSession();
+
+      await s.open(ctx, REF);
+
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(s.doc).toBeNull();
+      expect(s.error).toBe("This file is too large to open.");
+    });
+
+    it("reports a missing path in the embedded tree without fetching", async () => {
+      const { fetcher, ctx } = staticCtx({
+        [REF.taskspaceId]: {
+          root: { kind: "directory", name: "", truncated: false, children: [] },
+        },
+      });
+      const s = new EditorSession();
+
+      await s.open(ctx, REF);
+
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(s.doc).toBeNull();
+      expect(s.error).toBe("File not found");
+    });
   });
 
   it("puts the caret back at the start for each file opened", async () => {

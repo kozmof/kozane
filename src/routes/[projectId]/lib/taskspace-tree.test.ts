@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import type { TaskspaceFileTree } from "$lib/types";
 import { TaskspaceTreeState, nodeKey } from "./taskspace-tree.svelte.js";
 
 const TS = "taskspace-1";
@@ -132,5 +133,93 @@ describe("TaskspaceTreeState", () => {
 
     expect(tree.expanded.size).toBe(0);
     expect(tree.nodes).toEqual({});
+  });
+
+  describe("with an embedded static tree", () => {
+    function staticContext(
+      staticFiles: Record<string, TaskspaceFileTree>,
+      fetcher = fetcherFor(listing(["should-not-be-fetched"])),
+    ) {
+      return { fetcher, ctx: { fetcher: fetcher as never, projectId: "project-1", staticFiles } };
+    }
+
+    // The behavior an export built without `--include-scoped-files` relies on: a taskspace
+    // with no embedded tree must fall back to a live request, never invent an empty answer.
+    it("still fetches when the context carries no static tree at all", async () => {
+      const { fetcher, ctx } = staticContext({});
+      const tree = new TaskspaceTreeState();
+
+      await tree.toggle(ctx, TS, "");
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual([
+        "should-not-be-fetched",
+      ]);
+    });
+
+    it("reads a directory from the embedded tree instead of fetching, once it has one for this taskspace", async () => {
+      const { fetcher, ctx } = staticContext({
+        [TS]: {
+          root: {
+            kind: "directory",
+            name: "",
+            truncated: false,
+            children: [
+              { kind: "directory", name: "src", children: [], truncated: false },
+              { kind: "file", name: "README.md", content: "hi\n", size: 3 },
+              { kind: "file-skipped", name: "big.log", reason: "too-large", size: 2_000_000 },
+            ],
+          },
+        },
+      });
+      const tree = new TaskspaceTreeState();
+
+      await tree.toggle(ctx, TS, "");
+
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(tree.node(TS, "").entries).toEqual([
+        { name: "src", kind: "directory", size: null, modifiedAt: null },
+        { name: "README.md", kind: "file", size: 3, modifiedAt: null },
+        { name: "big.log", kind: "file", size: 2_000_000, modifiedAt: null },
+      ]);
+    });
+
+    it("reads a nested directory from the embedded tree by path", async () => {
+      const { fetcher, ctx } = staticContext({
+        [TS]: {
+          root: {
+            kind: "directory",
+            name: "",
+            truncated: false,
+            children: [
+              {
+                kind: "directory",
+                name: "src",
+                truncated: false,
+                children: [{ kind: "file", name: "app.ts", content: "export {}\n", size: 10 }],
+              },
+            ],
+          },
+        },
+      });
+      const tree = new TaskspaceTreeState();
+
+      await tree.toggle(ctx, TS, "src");
+
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(tree.node(TS, "src").entries?.map(({ name }) => name)).toEqual(["app.ts"]);
+    });
+
+    // A taskspace without a resolvable path at build time (or a scopes-only export) has no
+    // entry in the map at all — that must fall back the same as an empty map does, not
+    // throw or silently show nothing.
+    it("falls back to fetching for a taskspace absent from the static map", async () => {
+      const { fetcher, ctx } = staticContext({ "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: false } } });
+      const tree = new TaskspaceTreeState();
+
+      await tree.toggle(ctx, TS, "");
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    });
   });
 });

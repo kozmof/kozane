@@ -98,7 +98,11 @@ export async function loadProjectSnapshot({
   // this is the one place both a database row and the workspace root it resolves against
   // are already in hand.
   let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
-  if (includeScopedFiles) {
+  // `includeScopes` too, not just relying on `taskspaces` already being `[]` when it is
+  // false: a file tree keyed by taskspace id is meaningless without the taskspaces
+  // themselves, and this keeps that true of the code rather than of an incidental empty
+  // loop — an export must never carry file contents its caller did not also ask to name.
+  if (includeScopedFiles && includeScopes) {
     const root = getWorkspaceRoot();
     if (root) {
       taskspaceFiles = {};

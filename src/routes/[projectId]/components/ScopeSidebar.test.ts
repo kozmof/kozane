@@ -79,4 +79,71 @@ describe("ScopeSidebar taskspaces", () => {
     expect(screen.queryByRole("button", { name: /demo/ })).toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
   });
+
+  // The shape a real export actually ships for a taskspace with no directory to embed:
+  // `path` is nulled (see `loadProjectSnapshot`) and `treeContext` carries no tree for it —
+  // no id in `staticFiles` at all, the same as when the flag was never passed and there is
+  // no `staticFiles` object to begin with. There is nothing to browse either way, so the
+  // row does not render, the same as a taskspace with no directory has always been dropped
+  // from this panel in the live app.
+  it("does not render a taskspace row when the export has no path and no embedded tree for it", async () => {
+    const { fetcher } = mount({
+      readonly: true,
+      taskspaces: [{ ...TASKSPACE, path: null }],
+    });
+
+    expect(screen.queryByText("demo")).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("browses and opens a file from an embedded tree in a read-only export, without ever fetching", async () => {
+    const fetcher = vi.fn(async () => listingResponse(["should-not-be-fetched"]));
+    const onOpenFile = vi.fn();
+    render(ScopeSidebar, {
+      props: {
+        visible: true,
+        panelWidth: 240,
+        scopes: [SCOPE],
+        scopeRels: [],
+        taskspaces: [{ ...TASKSPACE, path: null }],
+        taskspaceTree: new TaskspaceTreeState(),
+        treeContext: {
+          fetcher: fetcher as never,
+          projectId: "project-1",
+          staticFiles: {
+            [TASKSPACE.id]: {
+              root: {
+                kind: "directory",
+                name: "",
+                truncated: false,
+                children: [{ kind: "file", name: "README.md", content: "hi\n", size: 3 }],
+              },
+            },
+          },
+        },
+        selectedCards: new Set<string>(),
+        activeScope: SCOPE.id,
+        newScopeName: "",
+        newWcName: "",
+        onCreateScope: () => {},
+        onDeleteScope: () => {},
+        onAddToScope: () => {},
+        onRemoveFromScope: () => {},
+        onCreateTaskspace: () => {},
+        onOpenFile,
+        readonly: true,
+      },
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /demo/ }));
+    expect(await screen.findByText("README.md")).toBeTruthy();
+    expect(fetcher).not.toHaveBeenCalled();
+
+    // Save-adjacent affordances stay hidden even though browsing is live: there is no disk
+    // behind a static export to re-read from.
+    expect(screen.queryByTitle("Re-read this taskspace from disk")).toBeNull();
+
+    await userEvent.click(screen.getByText("README.md"));
+    expect(onOpenFile).toHaveBeenCalledWith(TASKSPACE.id, TASKSPACE.name, "README.md");
+  });
 });
