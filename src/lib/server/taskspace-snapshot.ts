@@ -145,3 +145,50 @@ export function buildTaskspaceFileTree(
   };
   return { root: buildDirectoryNode(baseDir, "", "", budget, 0) };
 }
+
+/**
+ * Trees already walked in this process, by the directory they were walked from. Only ever
+ * written by {@link buildTaskspaceFileTreeOnce}, so nothing populates it outside a static
+ * export.
+ */
+const treesByBaseDir = new Map<string, TaskspaceFileTree>();
+
+/**
+ * {@link buildTaskspaceFileTree}, but walking each directory once however many pages of an
+ * export end up carrying it.
+ *
+ * A taskspace with no `project_id` is unplaced rather than another project's, so every
+ * project's board draws it (see `getTaskspacesInProject`) and every project's page therefore
+ * embeds its files. Walked afresh per page, one such taskspace over a workspace of five
+ * projects is five full recursive passes over the same unchanged directory — up to five
+ * times {@link TASKSPACE_SSG_NODES_MAX} `lstat` calls and five reads of every file — to
+ * produce five trees that cannot differ, because a prerender reads a filesystem nobody is
+ * writing to. Two taskspace rows pointed at the same directory collapse the same way, which
+ * is why this is keyed by the resolved path rather than by taskspace id.
+ *
+ * Callers share one tree object rather than each getting their own. Nothing mutates a tree
+ * after it is built, and each page serializes its own copy into its own output, so what is
+ * shared is the walk and the memory holding the result — not anything a page could change
+ * out from under another.
+ *
+ * Deliberately a separate entry point rather than caching inside `buildTaskspaceFileTree`:
+ * caching there would make a second call answer about a directory as it used to be, which is
+ * wrong for every caller reading a filesystem still being written to — the live server if it
+ * ever walks one, and the tests that write a file and walk again to see it.
+ */
+export function buildTaskspaceFileTreeOnce(baseDir: string): TaskspaceFileTree {
+  const cached = treesByBaseDir.get(baseDir);
+  if (cached) return cached;
+
+  const tree = buildTaskspaceFileTree(baseDir);
+  treesByBaseDir.set(baseDir, tree);
+  return tree;
+}
+
+/**
+ * Forgets every memoized tree. For tests, which walk a temporary directory, delete it, and
+ * walk a fresh one at a path the first may well have used — a build runs once and exits.
+ */
+export function clearTaskspaceFileTreeCache(): void {
+  treesByBaseDir.clear();
+}

@@ -12,7 +12,7 @@ import { getScopeRelsByProject } from "$db/api/scope-rel";
 import { getTaskspacesInProject } from "$db/api/taskspace";
 import { getWorkspaceRoot } from "$db/internal/config";
 import { resolveTaskspacePath } from "$lib/server/taskspace-path";
-import { buildTaskspaceFileTree } from "$lib/server/taskspace-snapshot";
+import { buildTaskspaceFileTreeOnce } from "$lib/server/taskspace-snapshot";
 import { cardsWithGlueIds } from "./project-page.js";
 
 type LoadProjectSnapshot = {
@@ -39,7 +39,7 @@ type LoadProjectSnapshot = {
   includeScopes: boolean;
   /**
    * Whether each taskspace's file tree is walked and embedded, content inline, via
-   * {@link buildTaskspaceFileTree}. Only ever `true` for a static export built with
+   * {@link buildTaskspaceFileTreeOnce}. Only ever `true` for a static export built with
    * `--include-scoped-files` — the live board reads files on demand through the real
    * `/taskspaces/:id/file(s)` endpoints and must not pay for a full recursive disk walk on
    * every page load or once-a-second snapshot poll. Implies `includeScopes`: a file tree
@@ -114,6 +114,12 @@ export async function loadProjectSnapshot({
   // own file walk needs the real directory the same way the live `/file` endpoint does, and
   // this is the one place both a database row and the workspace root it resolves against
   // are already in hand.
+  //
+  // `buildTaskspaceFileTreeOnce`, not `buildTaskspaceFileTree`: a prerender calls this once
+  // per project, and an unplaced taskspace is drawn by every project's board, so the same
+  // directory is asked about once per project page. Its files still go into each of those
+  // pages — that is what makes them browsable there — but the disk is walked for the first
+  // one only. See the note on that function.
   let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
   // `includeScopes` too, not just relying on `taskspaces` already being `[]` when it is
   // false: a file tree keyed by taskspace id is meaningless without the taskspaces
@@ -126,7 +132,7 @@ export async function loadProjectSnapshot({
       for (const taskspace of namedTaskspaces) {
         if (!taskspace.path) continue;
         const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
-        taskspaceFiles[taskspace.id] = buildTaskspaceFileTree(baseDir);
+        taskspaceFiles[taskspace.id] = buildTaskspaceFileTreeOnce(baseDir);
       }
     }
   }

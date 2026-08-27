@@ -4,7 +4,11 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { TASKSPACE_FILE_BYTES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "../constants.js";
-import { buildTaskspaceFileTree } from "./taskspace-snapshot.js";
+import {
+  buildTaskspaceFileTree,
+  buildTaskspaceFileTreeOnce,
+  clearTaskspaceFileTreeCache,
+} from "./taskspace-snapshot.js";
 
 function names(children: ReturnType<typeof buildTaskspaceFileTree>["root"]["children"]) {
   return children.map((child) => child.name);
@@ -223,5 +227,72 @@ describe("buildTaskspaceFileTree", () => {
     expect(src).toMatchObject({ kind: "directory", truncated: null });
     if (src.kind !== "directory") throw new Error("expected a directory");
     expect(names(src.children)).toEqual(["one.ts", "two.ts"]);
+  });
+});
+
+describe("buildTaskspaceFileTreeOnce", () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = join(tmpdir(), `kozane-taskspace-memo-test-${randomUUID()}`);
+    mkdirSync(dir, { recursive: true });
+    clearTaskspaceFileTreeCache();
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+    clearTaskspaceFileTreeCache();
+  });
+
+  it("walks a directory once and hands the same tree back for it", () => {
+    writeFileSync(join(dir, "README.md"), "hello\n");
+
+    const first = buildTaskspaceFileTreeOnce(dir);
+    const second = buildTaskspaceFileTreeOnce(dir);
+
+    // The identity check is the point: an export asking about one unplaced taskspace from
+    // every project page must not pay for the walk more than once.
+    expect(second).toBe(first);
+  });
+
+  /**
+   * The behaviour a prerender depends on and a live reader must not get. Nothing writes to
+   * the filesystem during a build, so answering from the first walk is answering correctly;
+   * the uncached entry point is what any caller reading a directory still being written to
+   * has to use, and this pins the difference between the two rather than leaving it to the
+   * comment that explains it.
+   */
+  it("does not notice a write that lands after the first walk, unlike the uncached walk", () => {
+    writeFileSync(join(dir, "README.md"), "hello\n");
+    buildTaskspaceFileTreeOnce(dir);
+
+    writeFileSync(join(dir, "LATER.md"), "later\n");
+
+    expect(names(buildTaskspaceFileTreeOnce(dir).root.children)).toEqual(["README.md"]);
+    expect(names(buildTaskspaceFileTree(dir).root.children)).toEqual(["LATER.md", "README.md"]);
+  });
+
+  it("keeps separate directories apart", () => {
+    const other = join(tmpdir(), `kozane-taskspace-memo-test-${randomUUID()}`);
+    mkdirSync(other, { recursive: true });
+    try {
+      writeFileSync(join(dir, "a.txt"), "a");
+      writeFileSync(join(other, "b.txt"), "b");
+
+      expect(names(buildTaskspaceFileTreeOnce(dir).root.children)).toEqual(["a.txt"]);
+      expect(names(buildTaskspaceFileTreeOnce(other).root.children)).toEqual(["b.txt"]);
+    } finally {
+      rmSync(other, { recursive: true, force: true });
+    }
+  });
+
+  it("forgets everything once the cache is cleared", () => {
+    writeFileSync(join(dir, "a.txt"), "a");
+    buildTaskspaceFileTreeOnce(dir);
+
+    clearTaskspaceFileTreeCache();
+    writeFileSync(join(dir, "b.txt"), "b");
+
+    expect(names(buildTaskspaceFileTreeOnce(dir).root.children)).toEqual(["a.txt", "b.txt"]);
   });
 });
