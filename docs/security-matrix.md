@@ -146,9 +146,17 @@ board, so it is left out of the export entirely — neither its name nor a byte 
 it goes out. Everything else about the file boundary is the same as the live
 server's, because the same code reads it: dot-entries are never included, so
 `.git`, `.env`, and `.taskspace.json` stay out; symlinks are listed but never
-followed; a file over 1 MB or one that is not valid UTF-8 is listed by name with
-its contents withheld, as is anything past the 20 MB and 50,000-entry ceiling
-each taskspace is exported within.
+followed; a file over 1 MB or one that is not valid UTF-8 is listed by name
+with its contents withheld, as is a file past the 20 MB of content each taskspace
+is exported within.
+
+The other two ceilings drop what they stop at rather than naming it. Past 50,000
+entries per taskspace, or more than 64 directories deep, the walk stops and marks
+the directory it stopped in as truncated — so the enclosing directory is in the
+export saying it is not all there, but the entries beyond the cut are not in it
+at all, not even by name. Read an export as a floor on what went out, not a
+census: what is there is there, and what a truncated directory was holding is
+answered only by the working copy.
 
 What that leaves is a judgment only you can make: these are your working
 directories, published in full to whoever opens the site, with no key in front of

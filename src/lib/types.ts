@@ -59,6 +59,16 @@ export interface TaskspaceListing {
 }
 
 /**
+ * Why a directory is not all there, or null when it is. Every limit the export walk stops
+ * at is a distinct one, because a directory that ran past the entry cap, one that sat
+ * deeper than the walk goes, one that arrived after the tree's total entry budget was
+ * spent, and one that could not be read at all are four different things to be told — and
+ * the first three all leave a node that would otherwise be indistinguishable from a
+ * genuinely empty directory. A live listing only ever reaches the entry cap.
+ */
+export type TaskspaceTruncation = "entries" | "depth" | "nodes" | "unreadable";
+
+/**
  * One entry of a taskspace's file tree as `kozane net ssg generate --include-scoped-files`
  * bakes it into a static export. The counterpart to {@link TaskspaceEntry} for a listing
  * read once at build time rather than per directory on demand: a directory carries its
@@ -70,16 +80,6 @@ export interface TaskspaceListing {
  * nothing came back for it — the same reasons the live editor already answers with, plus
  * `"budget"` for the export-only total-size ceiling.
  */
-/**
- * Why a directory is not all there, or null when it is. Every limit the export walk stops
- * at is a distinct one, because a directory that ran past the entry cap, one that sat
- * deeper than the walk goes, one that arrived after the tree's total entry budget was
- * spent, and one that could not be read at all are four different things to be told — and
- * the first three all leave a node that would otherwise be indistinguishable from a
- * genuinely empty directory. A live listing only ever reaches the entry cap.
- */
-export type TaskspaceTruncation = "entries" | "depth" | "nodes" | "unreadable";
-
 export type TaskspaceFileNode =
   | {
       kind: "directory";

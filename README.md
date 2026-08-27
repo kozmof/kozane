@@ -146,6 +146,8 @@ kozane net ssg generate --out ./site --include-scoped-files
 
 This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported — those are the ones a board draws — so a taskspace you haven't put in a scope stays off the export entirely. Each exported taskspace is capped at 20MB of embedded content and 50,000 entries; files beyond the content cap, along with any oversized (>1MB) or non-text file, are still listed by name but open with an explanation instead of their contents, and a directory past the entry cap is marked as not included. Dotfiles are never included and symlinks are listed but never followed, the same as in the live file panel. A taskspace pointed at a large checkout will hit these limits — `node_modules` and its like are not excluded, only dotfiles are.
 
+Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a project is drawn on every project's board, so its files are embedded in every project's page: across five projects, a 20MB taskspace is 100MB of export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a project if you do not want it published board-wide.
+
 Preview it over HTTP, not by opening the files directly.
 
 ```sh
