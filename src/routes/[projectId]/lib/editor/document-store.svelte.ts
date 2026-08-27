@@ -64,12 +64,20 @@ export function sameCaret(a: Caret, b: Caret): boolean {
  * underneath.
  *
  * Every caret this class hands out or accepts sits on a UTF-8 code-point boundary, which
- * Reed 3 requires of the offsets an edit names and enforces by throwing `RangeError`. A
+ * Reed requires of the offsets an edit names and enforces by throwing `RangeError`. A
  * column counts UTF-16 code units, so the two disagree exactly on characters outside the
  * BMP — an emoji is one character, two columns wide — and a caret stepped one column at a
  * time lands between the halves of one. {@link clamp}, {@link columnBefore} and
- * {@link columnAfter} are what keep that from reaching a dispatch: before Reed 3 the same
- * caret inserted text into the middle of a code point and left mojibake behind.
+ * {@link columnAfter} are what keep such a column from reaching a dispatch.
+ *
+ * Which half it is pulled to is this class's own choice, and since Reed 3.1 that is all the
+ * snapping decides. `rendering.lineColumnToPosition` used to hand back the offset such a
+ * column encoded to, inside the code point and rejected by the next dispatch; it now
+ * resolves a column inside a character to a boundary itself, snapping *forward* to the end
+ * of that character. This class snaps backward, to the start — the half a click on the
+ * character was aimed at, and the side {@link clamp} and the render layer already agree on.
+ * So the snap stays, and a column that escapes it is now a caret on the far side of an
+ * emoji rather than an editor taken down by a keystroke.
  */
 export class EditorDocument {
   #store: ReedStore;
@@ -193,10 +201,12 @@ export class EditorDocument {
 
   #byteOffset({ line, column }: Caret): number {
     // Snapped again here, where every caret this class turns into an offset passes, rather
-    // than trusted from the caller: a column that names half a character converts to an
-    // offset inside a code point, and Reed 3 throws a `RangeError` on an edit that carries
-    // one. Thrown out of a keystroke handler that would take the editor down, so the last
-    // word on the invariant belongs at the conversion rather than at each of its callers.
+    // than trusted from the caller. Reed 3.1 accepts the unsnapped column — it resolves one
+    // naming half a character to that character's end — but that is the far side from where
+    // this class puts a caret, so an insert at the column naming the second half of an emoji
+    // would land after the emoji rather than before it. Snapping at the one place a caret
+    // becomes an offset keeps the last word on the invariant here rather than at each of
+    // the callers.
     const offset = rendering.lineColumnToPosition(
       this.state,
       line,

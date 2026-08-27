@@ -417,12 +417,37 @@ describe("EditorDocument", () => {
       expect(at).toEqual({ line: 0, column: 1 });
     });
 
-    it("edits at a caret inside a character rather than throwing", () => {
+    it("edits at a caret inside a character at that character's start", () => {
       const d = doc(line);
-      // Reed 3 answers a byte offset inside a code point with a RangeError, which out of a
-      // keystroke handler would take the editor down with it.
+      // Reed resolves column 2 to the *end* of the emoji, so an insert that reached it
+      // unsnapped would land after the emoji and not throw doing it. The text is what says
+      // which of the two sides was taken; before Reed 3.1 the same column produced an
+      // offset inside the code point and a RangeError out of the keystroke handler.
       expect(() => d.insert({ line: 0, column: 2 }, "X")).not.toThrow();
       expect(d.text()).toBe("aX😀b\n");
+    });
+
+    it("ends a deletion at the start of the character its column landed in", () => {
+      const d = doc(line);
+      d.delete({ line: 0, column: 0 }, { line: 0, column: 2 });
+      // "😀b\n", not "b\n": snapping the end column forward would take the emoji with it.
+      expect(d.text()).toBe("😀b\n");
+    });
+
+    it("keeps a range that starts inside a character covering that character", () => {
+      const d = doc(line);
+      // Reed resolves column 2 and column 3 alike to the emoji's end, so a range built from
+      // the pair unsnapped is empty and the edit silently does nothing at all. Snapping the
+      // leading side backward — what Reed's own docs ask a caret UI to do — is what leaves
+      // this a deletion of the emoji rather than a no-op.
+      d.delete({ line: 0, column: 2 }, { line: 0, column: 3 });
+      expect(d.text()).toBe("ab\n");
+    });
+
+    it("replaces a character named by a range that starts inside it", () => {
+      const d = doc(line);
+      d.replace({ line: 0, column: 2 }, { line: 0, column: 3 }, "Z");
+      expect(d.text()).toBe("aZb\n");
     });
 
     it("reads a span whose ends were named inside a character", () => {
