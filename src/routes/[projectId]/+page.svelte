@@ -199,24 +199,66 @@
     focusWarp(target.id);
     tick().then(() => {
       canvasComponent.centerOn(target.posX, target.posY);
-      clearWarpQuery();
+      clearQuery("warp");
     });
   }
 
   /**
-   * Drops the `?warp=` the jump arrived with, so panning away and reloading does not snap
-   * back to it. Only that parameter: anything else on the URL belongs to whoever put it
-   * there. Best-effort: the URL is cosmetic here, and a router that is not ready yet is
+   * Drops the parameters an arrival was directed by, so panning away and reloading does not
+   * snap back to them. Only the ones named: anything else on the URL belongs to whoever put
+   * it there. Best-effort: the URL is cosmetic here, and a router that is not ready yet is
    * not worth an error banner.
    */
-  function clearWarpQuery() {
+  function clearQuery(...names: string[]) {
     const url = new URL(page.url);
-    url.searchParams.delete("warp");
+    for (const name of names) url.searchParams.delete(name);
     try {
       replaceState(`${url.pathname}${url.search}`, {});
     } catch {
       // Ignored: see above.
     }
+  }
+
+  /**
+   * The card named by `?card=`, which is how the tag index says which hit was clicked. Null
+   * when the id is absent or names a card this project does not have — a tag page left open
+   * while the card was deleted elsewhere.
+   */
+  function cardFromUrl() {
+    if (!browser) return null;
+    const cardId = page.url.searchParams.get("card");
+    return cardId ? (s.cards.find(({ id }) => id === cardId) ?? null) : null;
+  }
+
+  /**
+   * Opens what `?card=` and `?taskspace=&path=` name: the board centred on one card, or the
+   * editor on one taskspace file. Both are how a tag hit gets back to the thing it was found
+   * in, and both drop their parameters once they have been acted on, the same as `?warp=`.
+   */
+  function openFromUrl() {
+    if (!browser) return;
+
+    const card = cardFromUrl();
+    if (card) {
+      tick().then(() => {
+        canvasComponent.centerOn(card.posX, card.posY);
+        clearQuery("card");
+      });
+    }
+
+    const taskspaceId = page.url.searchParams.get("taskspace");
+    const path = page.url.searchParams.get("path");
+    // A static export can open a file only where its contents were baked in; without them
+    // there is nothing to read and no endpoint to read it from, so the link is left inert
+    // rather than opening an editor on an error.
+    if (!taskspaceId || !path || (readonly && !staticFiles)) return;
+    const taskspace = s.taskspaces.find(({ id }) => id === taskspaceId);
+    if (!taskspace) return;
+    editor.open(
+      { fetcher: s.fetcher, projectId: s.projectId, staticFiles },
+      { taskspaceId, taskspaceName: taskspace.name, path },
+    );
+    clearQuery("taskspace", "path");
   }
 
   // Remember the layer being worked on, so a reload comes back to it instead of to Base.
@@ -228,7 +270,9 @@
   if (initialWarp) untrack(() => focusWarp(initialWarp.id));
 
   onMount(() => {
-    if (initialWarp) clearWarpQuery();
+    if (initialWarp) clearQuery("warp");
+    // After the warp landing above, so a link carrying both ends on the card it named.
+    openFromUrl();
   });
 
   // Keep this long-lived page in sync with writes made by the CLI or another tab.
@@ -525,6 +569,8 @@
       onPositionActivityStart={() => positionActivity.begin()}
       onPositionActivityEnd={() => positionActivity.end()}
       onError={(msg) => (s.lastError = msg)}
+      tagHref={(tag) =>
+        `${base}/tags?projectId=${data.project.id}&tag=${encodeURIComponent(tag)}`}
       {readonly}
     />
 

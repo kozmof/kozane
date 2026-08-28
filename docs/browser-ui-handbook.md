@@ -371,6 +371,61 @@ closing the panel. Saving stays on `Ctrl+S` in both modes.
 A static export made with `kozane net ssg generate` has no server to read a file
 from, so the rows stay inert there and clicking one does nothing.
 
+## Tags
+
+A tag is a word you write inside a card, opened with an apostrophe: `'perf`. It gathers
+that card with everything else carrying the same tag — including taskspace files, since a
+tag is just text and a file is too.
+
+Subcategorize with colons. `'perf:cache` sits under `'perf`, and `'perf` gathers it: pick
+the parent to see everything beneath it, or the child to narrow down. There is nothing to
+set up first. A tag exists because someone wrote it, and stops existing when the last text
+holding it is edited or deleted.
+
+An apostrophe is ordinary punctuation too, so `don't` is a word and `'quoted'` is a quoted
+word — neither becomes a tag. A tag opens after a space or at the start of a line, and a
+closing apostrophe cancels it. Levels take letters, digits, `-`, and `_`, up to 64
+characters each and 8 levels deep; past either, it is not treated as a tag at all. `'Perf`
+and `'perf` are the same tag.
+
+Tags in a card's text are drawn as links. Click one to open the tag index.
+
+### The tag index
+
+The tag index lives at `/tags`, and the tags on your cards are the way in. It has two
+halves: the tree of every tag on the left, with a count of the cards and files each one
+gathers, and the selected tag's hits on the right. `?tag=` says which tag is open, so any
+view of the page is a link you can send.
+
+It reaches the whole workspace. Unlike a board, which draws one project, the index gathers
+every project's cards and every taskspace at once — a tag lives in the text rather than in
+a table, so nothing stops the same one being used on two boards. The row of project names
+in the top right narrows it: "All projects" is the whole workspace, and picking one adds
+`?projectId=<id>` to the URL and reduces the tree to that project's cards and the
+taskspaces its board draws. The narrowing sticks as you browse the tree. A tag link in a
+card opens the index already narrowed to that card's project.
+
+- Cards show their text and bundle, and their project when you are looking across the
+  whole workspace. Click one to go to that card's board with the view centered on it.
+- Files show the path, the line number, and the line the tag is on. Click one to open it in
+  the file editor.
+
+Counts are of distinct cards and files. A card carrying `'perf` twice is one card, and it
+appears once in the list, labelled with each tag it matched.
+
+Taskspace files are read when you open the page, within the same limits the taskspace panel
+works under: dot-entries like `.git` and `.env` are never read, symlinks are never
+followed, and a file that is not text or is over 1 MB is skipped. Files that have not
+changed since the last read are not read again, so coming back to the page is quick. A
+taskspace too large to read in full says so at the bottom of the list, rather than leaving
+you to think a tag is missing.
+
+A static export made with `kozane net ssg generate` carries one tag index for the whole
+workspace, covering the cards on every exported board, and both the tag and the project
+narrowing keep working there. Tags in taskspace files are left out unless the export was
+built with `--include-scoped-files`, because a file hit names a path inside the workspace
+and quotes a line of that file.
+
 ## Card footers
 
 Toggle footers with the `f` key. A footer shows, when relevant, the glue-group

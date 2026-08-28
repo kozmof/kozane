@@ -186,6 +186,15 @@ nothing else. Symlinks are listed but never followed.
 anything that is not a regular file are refused, as is a file over 1 MB or one
 that is not valid UTF-8.
 
+**Scanning for tags** walks a taskspace and reads the text files in it, to gather
+the tags written inside them for the tag index page and `kozane tag list|show`.
+It reaches nothing a read does not: the walk is built on the same listing and
+reading described here, so dot-entries are not scanned, symlinks are not
+followed, and a file that is not UTF-8 text or is over 1 MB is passed over. What
+it returns for each hit is a path, a line number, and that one line — not the
+file. The walk is bounded by its own byte, entry, and depth budgets, and says
+when it stopped at one.
+
 **Writing** replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path
 containing a dot-entry. The write is atomic — a temporary file, then a rename —
@@ -211,6 +220,13 @@ from it. Nothing in an export can be written, and nothing can be read from it
 that was not baked in at build time — by default no taskspace at all, and with
 `--include-scoped-files` exactly the files described above.
 
+The tag index page follows the same rule, and has to: a file hit carries a path
+inside the workspace and a line of that file's content, and page data baked into
+an export is readable by view-source however the page draws it. So a plain export
+carries only the tags written on cards, and a tag written solely in a taskspace
+file does not appear in it at all. With `--include-scoped-files`, file hits are
+baked in alongside the files themselves.
+
 ## Where each rule lives
 
 - Host and key checks at startup — `src/cli/commands/open.ts`
@@ -218,4 +234,5 @@ that was not baked in at build time — by default no taskspace at all, and with
 - Loopback, TLS, and rate-limit helpers — `src/lib/server/security.ts`
 - Login page and `next` guard — `src/routes/login/` and `src/lib/server/login.ts`
 - Taskspace listing, read, and write boundary — `src/lib/server/taskspace-files.ts`
+- Taskspace tag scan, on top of that boundary — `src/lib/server/taskspace-tags.ts`
 - Atomic file replacement — `src/lib/server/atomic-write.ts`

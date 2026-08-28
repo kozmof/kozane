@@ -47,6 +47,36 @@ then a case-insensitive one, then a short ID.
 Deleting a layer does not delete its cards. They move to the project's default layer. The
 default layer cannot be deleted.
 
+### Tags
+
+A tag is a word written inside a card or a taskspace file, opened with an apostrophe:
+`'perf`. It subcategorizes with colons — `'perf:cache`, `'perf:cache:invalidation` — and a
+tag gathers everything beneath it, so `'perf` finds cards and files written `'perf:cache`.
+
+Tags are the one label a card and a file can share, because both are just text. Nothing is
+created to make a tag exist and nothing is deleted to remove one: a tag is in the workspace
+for exactly as long as some text holds it. There is no tag table, and no command that adds
+or removes a tag — `tag list` and `tag show` only read.
+
+A tag is not confined to a project, for the same reason: nothing stops the same one being
+written on two boards. The browser's tag index at `/tags` gathers the whole workspace by
+default and narrows to a project with `?projectId=<id>`. The CLI is the other way round —
+`tag list` and `tag show` read one project, the workspace default unless `--project` names
+another — because a command run inside a workspace is usually asking about the project it
+is working in.
+
+An apostrophe is also ordinary punctuation, so two rules keep writing from becoming
+tagging. A tag opens at a word boundary, which leaves `don't` and `x'foo` alone, and a
+closing apostrophe cancels it, which leaves `'quoted'` as text. A level may hold letters,
+digits, `-`, and `_`; it may not exceed 64 characters, and a tag may not exceed 8 levels.
+Something past either limit is not a tag at all rather than a tag cut short. Tags are
+matched case-insensitively, so `'Perf` and `'perf` are one tag.
+
+Taskspace files are read on demand, within the same boundary the browser's file panel holds:
+dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a
+file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
+full is reported as such rather than quietly half-read.
+
 ### Warps
 
 A warp is a saved place on a project's canvas, a point the browser UI moves the view to
@@ -752,6 +782,55 @@ Each row includes the card's short ID, bundle, position, distance, and content.
 
 ---
 
+### `kozane tag list`
+
+Lists every tag in a project as a tree, with how many cards and files each one gathers.
+
+```bash
+kozane tag list [--project <projectId>]
+```
+
+A count is of distinct cards and files, not of occurrences: a card written
+`'perf:cache and 'perf` is one card under `'perf`. A parent's count includes everything
+under it, so `'perf` counts what `'perf:cache` holds as well.
+
+```bash
+kozane tag list
+'perf  1 card, 1 file
+  'cache  1 card, 1 file
+```
+
+Taskspace files are read as part of this. A taskspace that could not be read in full is
+named afterwards, so a tag missing from the list is not read as a tag nobody wrote.
+
+---
+
+### `kozane tag show <tag>`
+
+Lists the cards and taskspace files under a tag, subcategories included.
+
+```bash
+kozane tag show <tag> [--project <projectId>] [--no-files]
+```
+
+The tag may be given with or without its sigil — `kozane tag show perf` and
+`kozane tag show \'perf` are the same request — because most shells eat an unescaped
+apostrophe. `--no-files` lists cards alone and skips the disk walk entirely.
+
+Each card row carries its short ID, the tags it matched by, and its text. Each file row
+carries the path and line, the tags matched, and the line the tag sits on. A card found
+under two tags is one row naming both.
+
+```bash
+kozane tag show perf
+Cards:
+  4a6f1fb  'perf 'perf:cache  caching work 'perf:cache and 'perf
+Files:
+  README.md:3  'perf:cache  See 'perf:cache for the plan.
+```
+
+---
+
 ### `kozane db status`
 
 Shows the current database migration status.
@@ -1207,6 +1286,7 @@ CLI:
   kozane scope list [--project] / add / delete
   kozane layer list / add / rename / move / delete
   kozane card add / squash / show / list / layer / nearest
+  kozane tag list / show
   kozane db status / migrate / export / import / restore
   kozane taskspace list [--project] / scan / create
 
@@ -1218,6 +1298,7 @@ UI (SvelteKit):
   warps, including the cross-project warp list
   scope builder
   taskspace creation
+  tag index page
 
 Filesystem:
   .taskspace.json marker

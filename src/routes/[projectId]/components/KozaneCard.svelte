@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
   import type { CardWithGlue, BundleWithColor } from "$lib/types";
-  import { linkify } from "$lib/linkify";
+  import { segmentText } from "$lib/text-segments";
 
   interface Props {
     card: CardWithGlue;
@@ -18,6 +18,13 @@
     fontFamily: string;
     /** Armed by the resize shortcut: draws the handle that drags the right edge. */
     isResizing?: boolean;
+    /**
+     * Where a tag written in the card text links to. The card knows a tag when it sees one
+     * but not which project's index to send it to, so the link is built by the caller that
+     * does. Omitted, tags are still marked but are not links — which is what a component
+     * test, and any caller without a router, gets.
+     */
+    tagHref?: (tag: string) => string;
     onCardMouseDown: (e: MouseEvent) => void;
     onCardClick: (e: MouseEvent) => void;
     onCardDblClick: () => void;
@@ -38,6 +45,7 @@
     fontSize,
     fontFamily,
     isResizing = false,
+    tagHref,
     onCardMouseDown,
     onCardClick,
     onCardDblClick,
@@ -100,7 +108,7 @@
     style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
   >
     {#if card.content}
-      {#each linkify(card.content) as part}
+      {#each segmentText(card.content) as part}
         {#if part.href}
           <!-- Stop propagation so following a link doesn't start a card drag or selection. -->
           <a
@@ -111,6 +119,16 @@
             onclick={(e) => e.stopPropagation()}
             class={css({ color: "select.accent", textDecoration: "underline" })}
           >{part.text}</a>
+        {:else if part.tag && tagHref}
+          <!-- Same propagation stop as a URL, for the same reason. -->
+          <a
+            href={tagHref(part.tag)}
+            onmousedown={(e) => e.stopPropagation()}
+            onclick={(e) => e.stopPropagation()}
+            class={css({ color: "select.accent", textDecoration: "none", _hover: { textDecoration: "underline" } })}
+          >{part.text}</a>
+        {:else if part.tag}
+          <span class={css({ color: "select.accent" })}>{part.text}</span>
         {:else}{part.text}{/if}
       {/each}
     {:else}Empty card…{/if}

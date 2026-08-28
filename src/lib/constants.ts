@@ -125,6 +125,34 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
  */
 export const TASKSPACE_DIR_ENTRIES_MAX = 500;
 
+/** The character that opens a tag. See `lib/tag.ts` for the grammar it starts. */
+export const TAG_SIGIL = "'";
+
+/**
+ * How long one level of a tag may be, in characters. A candidate with a longer level is not
+ * a tag at all rather than a tag cut short — see the note on rejection in `lib/tag.ts`.
+ *
+ * It is a real limit rather than a formality, and Japanese is why. English prose ends a tag
+ * at the next space, so a runaway one is unusual; 日本語 is written without spaces, so
+ * `'分類` followed by the rest of a sentence runs to the next punctuation mark, and this is
+ * what stops that from becoming a tag nobody meant to write. Kozane is built on the kozane
+ * method, so that is not an edge case here.
+ */
+export const TAG_SEGMENT_CHARS_MAX = 64;
+
+/**
+ * How many levels deep a tag may go: `'foo:bar:baz` is three. Subcategories are for
+ * narrowing a subject, and a tag past this is a path being kept in a card rather than a
+ * category — the same judgement {@link TAG_SEGMENT_CHARS_MAX} makes about length.
+ */
+export const TAG_LEVELS_MAX = 8;
+
+/**
+ * How much of the line a tag sits on is kept as its excerpt. Enough to recognize the hit in
+ * a list, not enough to make a tag index a second copy of every card and file it points at.
+ */
+export const TAG_EXCERPT_CHARS_MAX = 200;
+
 /**
  * How large a file the editor will open, in bytes. The panel reads a file whole and hands
  * it to a piece table held in the tab, so the ceiling is what one browser tab can hold a
@@ -166,3 +194,31 @@ export const TASKSPACE_SSG_DEPTH_MAX = 64;
  * it. A directory cut off here says so, the same as one cut off by any other limit.
  */
 export const TASKSPACE_SSG_NODES_MAX = 50_000;
+
+/**
+ * How many bytes of file content one tag scan will read from one taskspace. The counterpart
+ * to {@link TASKSPACE_SSG_TOTAL_BYTES_MAX} for a walk that happens while someone waits,
+ * rather than once at build time, so it is set lower: a tag index is worth a moment, not a
+ * pass over a checkout. Files past the budget are reported as skipped rather than silently
+ * carrying no tags, because "no tags in this file" and "this file was never read" are
+ * different answers and only one of them is true.
+ *
+ * The cache is what keeps this from being paid twice — see `scanTaskspaceTags`. It bounds
+ * the first scan of a taskspace, and an unchanged file is never re-read after it.
+ */
+export const TAG_SCAN_TOTAL_BYTES_MAX = 8 * 1024 * 1024;
+
+/**
+ * How many entries one tag scan will walk into one taskspace. The same argument
+ * {@link TASKSPACE_SSG_NODES_MAX} makes — a name costs an `lstat` to produce even when
+ * nothing is read from it, and an ordinary checkout holds a `node_modules` of a few hundred
+ * thousand — against a walk a page load is waiting on.
+ */
+export const TAG_SCAN_NODES_MAX = 20_000;
+
+/**
+ * How many directories deep a tag scan will walk. A backstop against a pathological real
+ * directory structure, exactly as {@link TASKSPACE_SSG_DEPTH_MAX} is, and the same value:
+ * the two walks go equally deep because they walk the same kind of tree.
+ */
+export const TAG_SCAN_DEPTH_MAX = TASKSPACE_SSG_DEPTH_MAX;

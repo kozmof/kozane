@@ -63,6 +63,7 @@
     onPositionActivityStart,
     onPositionActivityEnd,
     onError,
+    tagHref,
     readonly = false,
   }: {
     cards: CardWithGlue[];
@@ -106,6 +107,8 @@
     onPositionActivityStart: () => void;
     onPositionActivityEnd: () => void;
     onError: (message: string) => void;
+    /** Passed to each card, which draws a tag in its text as a link to it. See `KozaneCard`. */
+    tagHref?: (tag: string) => string;
     // Read-only export: keep pan/zoom, disable card drag, selection, and compose.
     readonly?: boolean;
   } = $props();
@@ -789,6 +792,7 @@
               {fontSize}
               {fontFamily}
               isResizing={selection.resizingCardId === card.id}
+              {tagHref}
               onCardMouseDown={(e) => handleCardMouseDown(e, card.id)}
               onCardClick={(e) => handleCardClick(e, card.id)}
               onCardDblClick={() => handleCardDblClick(card.id)}

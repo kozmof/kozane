@@ -105,6 +105,32 @@ export interface TaskspaceFileTree {
 }
 
 /**
+ * Where a tag was written. The two things a workspace holds text in, and the only place the
+ * card path and the file path differ at all: one grammar reads both (`scanTagLines` in
+ * `lib/tag.ts`), and each caller wraps what comes back in the source it knows.
+ *
+ * Identity, and nothing a row already holds. A card's bundle, position, and layer are
+ * columns of `card`, so a reader that wants them joins by `cardId` against cards it has
+ * already got — the board keeps every one of them in its snapshot. Copying them in here
+ * would put a second, staler copy of those columns behind every occurrence of every tag.
+ *
+ * A file is the other case rather than the same duplication: nothing anywhere holds a row
+ * for one, so the taskspace, the path within it, and the line *are* its identity.
+ */
+export type TagSource =
+  | { kind: "card"; cardId: string }
+  | { kind: "file"; taskspaceId: string; path: string; line: number };
+
+/** One tag, once, where it was written. */
+export interface TagHit {
+  /** Normalized and whole: `foo:bar:baz`, without the sigil. See `normalizeTag`. */
+  tag: string;
+  source: TagSource;
+  /** The line the tag sits on, trimmed and capped. Enough to recognize the hit by. */
+  excerpt: string;
+}
+
+/**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and
  * the client reloads into it, so the two cannot drift into different shapes.
  *

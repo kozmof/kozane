@@ -92,6 +92,34 @@ kozane layer move Sketches down
 
 A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
+## Tagging
+
+Write a tag anywhere in a card and it gathers that card with everything else carrying it —
+taskspace files included, since a tag is just text and a file is too. A tag opens with an
+apostrophe and subcategorizes with colons:
+
+```sh
+kozane card add "caching work 'perf:cache"
+```
+
+`'perf` gathers everything under it, so it finds that card and anything written
+`'perf:cache` or `'perf:cache:invalidation`:
+
+```sh
+kozane tag list          # every tag in the project, as a tree, with counts
+kozane tag show perf     # the cards and files under it, subcategories included
+```
+
+Nothing is created to make a tag exist. It is in the workspace for as long as some text
+holds it, and gone once that text is. Ordinary punctuation stays punctuation: `don't` is a
+word and `'quoted'` is a quoted word, and neither becomes a tag.
+
+In the browser, tags in card text are links to the tag index at `/tags`, which lists every
+tag in the workspace and what each one gathers. Add `?projectId=<id>` to narrow it to one
+project; without it, the index reaches across every project at once — which nothing else in
+the UI does, and which is the point of a label that lives in the text rather than in a
+table.
+
 ## Seeing across projects
 
 A board shows the scopes and taskspaces its own project uses, plus any not yet claimed by a project. A scope another project alone is working in stays off it. The CLI is the workspace-wide view:

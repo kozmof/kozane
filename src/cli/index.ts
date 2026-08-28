@@ -22,6 +22,7 @@ import {
   cardSquash,
 } from "./commands/card.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
+import { tagList, tagShow } from "./commands/tag.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
 import {
@@ -150,6 +151,21 @@ scope
   .command("delete <id>")
   .description("Delete a scope by ID or short ID")
   .action((id) => scopeDelete(id));
+
+const tag = program.command("tag").description("Tags written in cards and taskspace files");
+
+tag
+  .command("list")
+  .description("List every tag in a project, with what each one gathers")
+  .option("--project <projectId>", "Project to read (default: the workspace default)")
+  .action((opts) => tagList(opts));
+
+tag
+  .command("show <tag>")
+  .description("List the cards and files under a tag, subcategories included")
+  .option("--project <projectId>", "Project to read (default: the workspace default)")
+  .option("--no-files", "Skip taskspace files and list only cards")
+  .action((name, opts) => tagShow(name, opts));
 
 const layer = program.command("layer").description("Layer management");
 
