@@ -138,9 +138,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   /**
    * `?files=0` skips the taskspace walk, the way `kozane tag show --no-files` does.
    *
-   * A tag is just text, so a taskspace holding source code tags every quoted string literal
-   * in it — `from 'drizzle-orm'` gathers under `'drizzle-orm`. That is the deliberate side of
-   * the grammar to err on (see `lib/tag.ts`), but the terminal had the only way to say "cards
+   * A tag is just text, so a taskspace holding source code gathers under the first word of
+   * every multi-word quoted string in it — `echo 'hello world'` under `'hello`, and
+   * `it('does a thing', …)` under `'does`. (A one-word literal such as `from 'drizzle-orm'`
+   * is cancelled by the closing quote and yields nothing.) That is the deliberate side of the
+   * grammar to err on (see `lib/tag.ts`), but the terminal had the only way to say "cards
    * only" and the page had none, which left the one place the noise is most visible with no
    * answer to it.
    *
@@ -173,15 +175,16 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const shownCardIds = [
     ...new Set(hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : []))),
   ];
-  // `flatMap` over an explicitly optional read, rather than `map(...).filter(Boolean)`. Every
-  // card carrying a hit has an entry — `getCardTagHits` writes one before it writes the hit —
-  // but `Record<string, string>` says a lookup cannot miss when it can, and `filter(Boolean)`
-  // narrows nothing, so the one thing standing between an absent entry and
-  // `getAllBundles({ projectId: undefined })` was a filter the types could not see.
+  // `flatMap` over an optional read, rather than `map(...).filter(Boolean)`. Every card
+  // carrying a hit has an entry — `getCardTagHits` writes one before it writes the hit — but
+  // a lookup can still miss, and `filter(Boolean)` narrows nothing, so the one thing standing
+  // between an absent entry and `getAllBundles({ projectId: undefined })` would be a filter
+  // the types could not see. `CardTagHits.cardProjects` says the value is optional now, so
+  // this is the type being followed rather than an annotation working around it.
   const shownProjects = [
     ...new Set(
       shownCardIds.flatMap((cardId) => {
-        const projectId: string | undefined = index.cardProjects[cardId];
+        const projectId = index.cardProjects[cardId];
         return projectId ? [projectId] : [];
       }),
     ),

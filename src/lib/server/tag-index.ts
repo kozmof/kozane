@@ -39,7 +39,7 @@ export type TagIndex = {
    *  was written in, and `hit.source.kind` is the only thing that separates them. */
   hits: TagHit[];
   /** Which project each card carrying a hit belongs to. See `CardTagHits`. */
-  cardProjects: Record<string, string>;
+  cardProjects: Record<string, string | undefined>;
   /**
    * Every taskspace this gather walked, by id — not every taskspace there is.
    *
@@ -171,7 +171,12 @@ export async function loadTagIndex({
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
     // truncation names a taskspace too, and the page has to be able to name it back.
     taskspaces[taskspace.id] = { name: taskspace.name, projectId: taskspace.projectId };
-    hits.push(...scan.hits);
+    // Appended rather than spread as arguments. `push(...scan.hits)` passes one argument per
+    // hit, and an engine's argument limit is reached somewhere past a hundred thousand of
+    // them — so a taskspace holding enough tags took the page down with
+    // `RangeError: Maximum call stack size exceeded` rather than answering. `TAG_SCAN_HITS_MAX`
+    // now bounds a scan well below that, and this does not depend on it staying there.
+    for (const hit of scan.hits) hits.push(hit);
     if (scan.truncated.length > 0)
       truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
   }

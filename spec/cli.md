@@ -89,10 +89,11 @@ draws, and what the index gathers, because both read the same grammar.
 
 The cancelling rule reaches one word and no further, so `'a phrase'` still gathers under
 `'a`, and so do `'til` and `'90s`. In a source file the same rule means a multi-word quoted
-string opens a tag: `from 'drizzle-orm'` gathers under `'drizzle-orm`. That is the deliberate
-side to err on — a tag nobody meant is one row to ignore, a tag swallowed is a card that
-cannot be found — and it is bounded by what the scan walks rather than by a second grammar
-for files.
+string opens a tag under its first word: `echo 'hello world'` gathers under `'hello`, and
+`it('does a thing', …)` under `'does`. A one-word literal is cancelled like any other quoted
+word, so `from 'drizzle-orm'` gathers nothing at all. That is the deliberate side to err
+on — a tag nobody meant is one row to ignore, a tag swallowed is a card that cannot be
+found — and it is bounded by what the scan walks rather than by a second grammar for files.
 
 Both front ends can put the file half down entirely: `tag show --no-files` and, in the
 browser, `?files=0` on the tag index. Each skips the disk walk rather than hiding what it

@@ -261,6 +261,32 @@ export const TAG_SCAN_WORKSPACE_BYTES_MAX = 4 * TAG_SCAN_TOTAL_BYTES_MAX;
 export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
 
 /**
+ * How many hits one taskspace's scan will gather before it stops.
+ *
+ * The third budget, and the one the other two do not imply. Bytes and entries bound what is
+ * *read*; neither bounds what reading produces, and the ratio between them is not fixed —
+ * a line of prose yields no hit, while a line reading `'a` yields one per three bytes. So
+ * {@link TAG_SCAN_TOTAL_BYTES_MAX} of such lines is some millions of hits out of a budget
+ * that was doing exactly what it was set to do.
+ *
+ * That is not a hypothetical shape. It is what a generated file, a fixture of test data, or
+ * a minified bundle that escaped {@link TAG_SCAN_SKIP_DIRS} looks like, and the cost of it
+ * was not a slow page: the hits of every taskspace are gathered into one array, so a few
+ * million of them exhausted memory, and the array was spread into that gather as arguments —
+ * which throws `RangeError: Maximum call stack size exceeded` somewhere past a hundred
+ * thousand or so. A budget that is spent honestly took the page down.
+ *
+ * Reported as a truncation like any other ceiling, rather than silently cutting the list.
+ * The tag *tree* is built from these hits, so a scan that stopped here has undercounted
+ * every tag in that taskspace, and the reader has to be told that the numbers beside them
+ * are a floor.
+ *
+ * Set well above what a taskspace of notes reaches — a hit is a tag someone wrote, and a
+ * hundred thousand of them is already a taskspace no one is reading tag by tag.
+ */
+export const TAG_SCAN_HITS_MAX = 100_000;
+
+/**
  * Directory names a tag scan does not walk into, at any depth.
  *
  * The same kind of rule as skipping dot-entries, and it earns its place the same way: these
@@ -347,5 +373,12 @@ export const TAG_CACHE_DIRS_MAX = 64;
  * signal that {@code ?files=0} or a narrower project is the answer rather than a bigger
  * ceiling. Set well above what a realistic workspace reaches: {@link TAG_CACHE_SCOPES_MAX}
  * scopes at the megabyte a scope is reckoned at still fits several times over.
+ *
+ * Checked when the file is written as well as when it is read, and the write side is what
+ * makes "pays a cold read every time" true rather than "pays a cold read *and* a wasted
+ * write every time". Read alone, the ceiling refuses a file that the very next gather
+ * serializes and lays down again — megabytes through `JSON.stringify` and out to disk, once
+ * per page load, to produce a file this build has already decided it will never read. A
+ * cache too large to be read is not a cache, so it is not written either.
  */
 export const TAG_CACHE_BYTES_MAX = 64 * 1024 * 1024;

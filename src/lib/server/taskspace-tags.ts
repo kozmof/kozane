@@ -1,6 +1,7 @@
 import {
   TAG_CACHE_DIRS_MAX,
   TAG_SCAN_DEPTH_MAX,
+  TAG_SCAN_HITS_MAX,
   TAG_SCAN_NODES_MAX,
   TAG_SCAN_SKIP_DIRS,
   TAG_SCAN_TOTAL_BYTES_MAX,
@@ -41,7 +42,7 @@ type Budget = { remaining: number; nodes: number };
 
 /** What one taskspace's walk may spend, each defaulting to the constant it is named after.
  *  Overridable so a test can reach a limit without putting twenty thousand entries on disk. */
-export type TaskspaceScanLimits = { bytes?: number; nodes?: number; depth?: number };
+export type TaskspaceScanLimits = { bytes?: number; nodes?: number; depth?: number; hits?: number };
 
 /** What a whole gather may spend, across every taskspace in it. See {@link ScanPool}. */
 export type GatherScanLimits = { workspaceBytes?: number; workspaceNodes?: number };
@@ -144,8 +145,12 @@ const fileCache = new Map<string, Map<string, CachedFile>>();
  * costs a re-read the next time it is scanned, and nothing else.
  */
 function dirEntries(baseDir: string): Map<string, CachedFile> {
+  // Only where the map can have grown. Eviction walks every key, and this is called once per
+  // file parsed, so running it for a directory already held was a pass over the whole cache
+  // per file for a map whose size had not changed.
+  const known = fileCache.has(baseDir);
   const entries = touchOrCreate(fileCache, baseDir, () => new Map<string, CachedFile>());
-  evict(fileCache, TAG_CACHE_DIRS_MAX);
+  if (!known) evict(fileCache, TAG_CACHE_DIRS_MAX);
   return entries;
 }
 
@@ -188,13 +193,23 @@ export function exportTaskspaceTagCache(baseDir: string): Record<string, CachedF
  * every entry is still checked against the file's current signature before it is used, so
  * seeding a wrong or ancient entry costs one re-read and never a wrong answer. Existing
  * entries win, being at worst as old as these and at best fresher.
+ *
+ * Seeding nothing creates nothing, which is the same distinction {@link touchDir} keeps and
+ * for the same reason. A store holding `{}` for a directory — what a taskspace scanned and
+ * found empty of readable files writes — would otherwise create an empty record here, and if
+ * that directory has since been deleted or made unreadable the walk creates no record of its
+ * own, so {@link exportTaskspaceTagCache} would answer `{}` rather than `undefined` and the
+ * caller would keep the entry instead of dropping it. An empty record is cheap; a record
+ * that says "scanned, and empty" about a directory nothing could scan is not.
  */
 export function importTaskspaceTagCache(
   baseDir: string,
   entries: Record<string, CachedFile>,
 ): void {
+  const incoming = Object.entries(entries);
+  if (incoming.length === 0) return;
   const existing = dirEntries(baseDir);
-  for (const [subPath, entry] of Object.entries(entries)) {
+  for (const [subPath, entry] of incoming) {
     if (!existing.has(subPath)) existing.set(subPath, entry);
   }
 }
@@ -264,6 +279,9 @@ type Scan = {
   taskspaceId: string;
   budget: Budget;
   depthMax: number;
+  /** How many hits this walk will carry. See `TAG_SCAN_HITS_MAX`: the byte budget bounds
+   *  what is read and says nothing about how many tags reading it produces. */
+  hitsMax: number;
   hits: TagHit[];
   truncated: Set<TagScanTruncation>;
   /** Every file path the walk reached, whether or not it read one. What {@link pruneStale}
@@ -303,6 +321,14 @@ function walk(scan: Scan, subPath: string, depth: number): void {
       scan.truncated.add("nodes");
       return;
     }
+    // Full, so there is nothing left for the rest of the tree to be read *into*. Returning
+    // unwinds the same way the nodes budget does — each enclosing loop meets this on its
+    // next entry — and stops the walk from spending bytes and syscalls producing hits that
+    // would only be dropped.
+    if (scan.hits.length >= scan.hitsMax) {
+      scan.truncated.add("hits");
+      return;
+    }
     scan.budget.nodes -= 1;
     const childPath = subPath ? `${subPath}/${entry.name}` : entry.name;
 
@@ -325,6 +351,13 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     if (found.parsed) scan.parsed = true;
     const taskspaceId = scan.taskspaceId;
     for (const { tag, line, excerpt } of found.hits) {
+      // Here as well as at the top of the loop, so the ceiling is exact rather than
+      // per-file: one generated file can hold more tags on its own than the whole scan
+      // carries, and checking only between files would let it through in full.
+      if (scan.hits.length >= scan.hitsMax) {
+        scan.truncated.add("hits");
+        break;
+      }
       scan.hits.push({
         tag,
         source: { kind: "file", taskspaceId, path: childPath, line },
@@ -389,6 +422,7 @@ export function scanTaskspaceTags(
     taskspaceId,
     budget: { remaining: bytes, nodes },
     depthMax: limits.depth ?? TAG_SCAN_DEPTH_MAX,
+    hitsMax: limits.hits ?? TAG_SCAN_HITS_MAX,
     hits: [],
     truncated: new Set(),
     seen: new Set(),

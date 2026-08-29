@@ -52,8 +52,12 @@ export function scanUrls(text: string): UrlSpan[] {
 
   for (const match of text.matchAll(URL_RE)) {
     const url = match[0].replace(TRAILING_PUNCTUATION, "");
-    // Nothing left once the punctuation went. Nothing to link and nothing to exclude, and
-    // an empty span would be a zero-width region every offset test has to special-case.
+    // Unreachable as {@link URL_RE} stands, and kept for what it guards rather than for what
+    // it catches: every match opens with a scheme and `/` is not trailing punctuation, so the
+    // trim cannot consume a match whole. A zero-width span would be a region every offset
+    // test downstream has to special-case, which is a cost paid in `lib/tag.ts` and
+    // `lib/text-segments.ts` rather than here — so the one line that makes it impossible
+    // stays, against a pattern that is one day looser than this one.
     if (url) spans.push({ url, index: match.index });
   }
   return spans;

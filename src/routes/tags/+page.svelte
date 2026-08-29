@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import type { Snippet } from "svelte";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
@@ -292,11 +293,52 @@
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
   });
+
+  /**
+   * The two row shapes, and the part that is only true of a row you can follow.
+   *
+   * Split because a row does not always have somewhere to go: `cardHref` and `fileHref` both
+   * return null where the data names no board, and an `<a>` given no `href` is not a link —
+   * it cannot be focused, clicked, or reached from the keyboard. Drawn as one anyway, it kept
+   * the border that lifts on hover and the pointer that goes with it, so the only rows on the
+   * page that do nothing were also the ones that most looked like they would.
+   *
+   * So the hover lift lives here, on the shape that is actually a link, and a row without a
+   * destination is drawn as a plain `<div>` that says what it found and stays still.
+   */
+  const linkableRowClass = css({
+    textDecoration: "none",
+    transition: "border-color 0.1s",
+    _hover: { borderColor: "neutral.muted" },
+  });
+  const rowSurface = {
+    background: "ink.white",
+    border: "1px solid token(colors.neutral.border)",
+    borderRadius: "2px",
+  } as const;
+  const cardRowClass = css({ ...rowSurface, display: "block", padding: "10px 14px" });
+  const fileRowClass = css({
+    ...rowSurface,
+    display: "flex",
+    gap: "12px",
+    alignItems: "baseline",
+    padding: "6px 14px",
+  });
 </script>
 
 <svelte:head>
   <title>{selectedProject ? `Tags · ${selectedProject.name}` : "Tags"}</title>
 </svelte:head>
+
+{#snippet hitRow(href: string | null, shape: string, body: Snippet)}
+  {#if href}
+    <a {href} class="{shape} {linkableRowClass}">{@render body()}</a>
+  {:else}
+    <!-- No board to send this row to — see `cardHref` and `fileHref`. It still says what was
+         found, which is the half of a row that does not depend on being able to follow it. -->
+    <div class={shape}>{@render body()}</div>
+  {/if}
+{/snippet}
 
 {#snippet branch(nodes: TagNode[], depth: number)}
   <ul class={css({ listStyle: "none", margin: "0", padding: "0" })}>
@@ -450,19 +492,7 @@
                 {@const cardId = source.cardId}
                 {@const bundle = data.bundles[data.cardBundleIds[cardId]]}
                 <li>
-                  <a
-                    href={cardHref(cardId)}
-                    class={css({
-                      display: "block",
-                      padding: "10px 14px",
-                      background: "ink.white",
-                      border: "1px solid token(colors.neutral.border)",
-                      borderRadius: "2px",
-                      textDecoration: "none",
-                      transition: "border-color 0.1s",
-                      _hover: { borderColor: "neutral.muted" },
-                    })}
-                  >
+                  {#snippet cardBody()}
                     <span class={excerptClass}>{hits[0].excerpt}</span>
                     <span
                       class={css({
@@ -488,7 +518,8 @@
                       {/if}
                       <span class={css({ fontFamily: "mono" })}>{taggedWith(hits).join(" ")}</span>
                     </span>
-                  </a>
+                  {/snippet}
+                  {@render hitRow(cardHref(cardId), cardRowClass, cardBody)}
                 </li>
               {/each}
             </ul>
@@ -510,21 +541,7 @@
             >
               {#each rows as { key, source, hits } (key)}
                 <li>
-                  <a
-                    href={fileHref(taskspaceId, source.path)}
-                    class={css({
-                      display: "flex",
-                      gap: "12px",
-                      alignItems: "baseline",
-                      padding: "6px 14px",
-                      background: "ink.white",
-                      border: "1px solid token(colors.neutral.border)",
-                      borderRadius: "2px",
-                      textDecoration: "none",
-                      transition: "border-color 0.1s",
-                      _hover: { borderColor: "neutral.muted" },
-                    })}
-                  >
+                  {#snippet fileBody()}
                     <span
                       class={css({
                         fontFamily: "mono",
@@ -536,7 +553,8 @@
                       {source.path}:{source.line}
                     </span>
                     <span class={excerptClass}>{hits[0].excerpt}</span>
-                  </a>
+                  {/snippet}
+                  {@render hitRow(fileHref(taskspaceId, source.path), fileRowClass, fileBody)}
                 </li>
               {/each}
             </ul>

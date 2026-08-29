@@ -148,6 +148,11 @@ export interface TagHit {
  * Each is a distinct thing to be told. A file that ran past the budget and one that could
  * not be read at all both produce no tags, and neither is "there are no tags in this file".
  *
+ * `"hits"` is the one that is not about a file at all. The others say a file was not read;
+ * this says reading went fine and produced more tags than one taskspace's scan will carry —
+ * see `TAG_SCAN_HITS_MAX`. It is the only reason that makes the *counts* a floor rather than
+ * the list, since the tree is built from the hits that were kept.
+ *
  * `"too-large"` is the third of those, and was folded into `"unreadable"` until it turned
  * out to be the one a user meets: a file over the per-file cap is refused before it is
  * opened, which is not a failure of any kind, and telling someone their files "could not be
@@ -166,6 +171,7 @@ export type TagScanTruncation =
   | "depth"
   | "nodes"
   | "budget"
+  | "hits"
   | "too-large"
   | "unreadable";
 

@@ -59,9 +59,15 @@ import { scanUrls, type UrlSpan } from "./urls.js";
  * ## What that costs in a file, which is a decision and not an oversight
  *
  * The rules above were weighed against prose, and a taskspace file is often not prose. In
- * source code `'…'` is a string delimiter, so a multi-token literal opens a tag the closing
- * rule never cancels: `from 'drizzle-orm'` yields `drizzle-orm`, and `echo 'hello world'`
- * yields `hello`. Scanned across a working tree that is real noise, and it is left in rather
+ * source code `'…'` is a string delimiter, and the closing rule reaches exactly the literals
+ * that fit in one token: `from 'drizzle-orm'` and `import x from 'y'` yield nothing, because
+ * the closing quote sits where a word character would have to be. What gets through is the
+ * multi-token literal, which yields its *first* word and only that — `echo 'hello world'`
+ * yields `hello`, and `it('does a thing', …)` yields `does`. So the noise is narrower than
+ * "every quoted string in the file", and is drawn from a vocabulary of sentence openers
+ * rather than of identifiers.
+ *
+ * Scanned across a working tree that is still real noise, and it is left in rather
  * than legislated away here, because every rule that would remove it — matching quotes across
  * a line, knowing which files are code, requiring two characters — either swallows tags
  * someone wrote or makes the grammar answer differently depending on where the text was
@@ -105,8 +111,23 @@ const TAG_RE = new RegExp(
 
 /**
  * A tag as it is compared and indexed: lowercased, so `'Foo` and `'foo` are one tag, and
- * NFC-normalized, so two spellings of the same accented or Japanese text do not become two
- * tags in the index over a difference nothing renders.
+ * NFC-normalized, so a composed and a decomposed spelling of the same accented or Japanese
+ * text do not become two tags in the index over a difference nothing renders — `é` written
+ * as one code point and as `e` plus a combining acute, or a kana and its dakuten.
+ *
+ * NFC and not NFKC, which is the compatibility form, and the difference is visible in
+ * exactly the script this limit was set for. NFC folds nothing about *width*: `'Ｆｏｏ` and
+ * `'Foo` are two tags here, and so are `'ｱｲｳ` and `'アイウ`, though a Japanese IME will
+ * produce either half of each pair depending on how it was left. NFKC would fold both, and
+ * is not used because it does not stop there — it also flattens `①` to `1`, `㍿` to five
+ * kana, and every ligature and superscript to its parts, so tags that are genuinely
+ * different characters would be merged along with the ones that are genuinely the same.
+ *
+ * That is a real cost, not a dismissed one: someone who types a tag fullwidth once and
+ * halfwidth the next time gets two rows in the index and no hint that they are the same
+ * tag. It is accepted here because the alternative is a normalization that merges tags on a
+ * rule no one can predict from looking at them. If the width case turns out to be the one
+ * people meet, the answer is a width fold of its own rather than NFKC.
  *
  * Lowercased *then* normalized, in that order and not the reverse. Case folding is not
  * guaranteed to preserve normal form — a handful of characters lower onto sequences that are
@@ -609,6 +630,7 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
   depth: "some directories sit deeper than the scan goes",
   nodes: "it holds more files and directories than one scan visits",
   budget: "some files were larger than the scan had budget left for",
+  hits: "it holds more tags than one scan gathers, so the counts above are a floor",
   "too-large": "some files are larger than one file may be to be read at all",
   unreadable: "some files could not be read",
 };

@@ -15,8 +15,15 @@ export type CardTagHits = {
    * card already has. It is returned at all because the index gathers across projects, and
    * a hit then has to be able to say which board it came from — the join is already made
    * here, so making it again in the caller would be a second query for a column in hand.
+   *
+   * The value is optional, and saying so is the point. Every card carrying a hit has an
+   * entry — the loop below writes one before it writes the hit — but `Record<string, string>`
+   * promises that a lookup *cannot* miss, and both readers of this already know it can: one
+   * arrives through a cache file that may have been written by another build, and the page's
+   * copy is narrowed to the cards actually being shown. Each had a hand-written
+   * `string | undefined` annotation to work around the type; the type now says it.
    */
-  cardProjects: Record<string, string>;
+  cardProjects: Record<string, string | undefined>;
 };
 
 /**

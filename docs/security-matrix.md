@@ -194,8 +194,10 @@ followed, and a file that is not UTF-8 text or is over 1 MB is passed over. What
 it returns for each hit is a path, a line number, and that one line — not the
 file. The walk is bounded by its own byte, entry, and depth budgets — per
 taskspace, and again across a whole gather, so a workspace of many taskspaces
-costs no more to read than a workspace of a few — and says when it stopped at
-one. It also does not descend into generated or vendored
+costs no more to read than a workspace of a few — and by a ceiling on how many
+tags one taskspace may yield, since a file can hold far more tags per byte read
+than any byte budget implies. It says when it stopped at any of them. It also
+does not descend into generated or vendored
 directories — `node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
 `vendor`, `bower_components`, `__pycache__` — which narrows what is read further
 still, in the same direction as every other rule here.

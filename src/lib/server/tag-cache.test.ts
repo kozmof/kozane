@@ -80,13 +80,60 @@ describe("readTagCache / writeTagCache", () => {
    * The read is `readFileSync` and `JSON.parse` on the path a page load waits on, so a cache
    * that has grown past the ceiling is refused *before* it is opened — reading it in order to
    * decide would be the whole of the cost this avoids.
+   *
+   * Laid down directly rather than through `writeTagCache`, which refuses to produce one. A
+   * file this size can still arrive — from another build, or from a workspace whose ceiling
+   * was larger — and that is the case this half of the rule answers.
    */
   it("answers with nothing for a cache grown past what is worth reading", () => {
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
-    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }));
+    const oversized = cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } });
+    writeFileSync(tagCachePath(root), JSON.stringify(oversized));
 
     expect(statSync(tagCachePath(root)).size).toBeGreaterThan(TAG_CACHE_BYTES_MAX);
     expect(readTagCache(root)).toBeNull();
+  });
+
+  /**
+   * The write side of the same ceiling, and the half that was missing.
+   *
+   * Refused on the read alone, a cache this size is rebuilt, serialized, and laid down again
+   * on every single gather — megabytes through `JSON.stringify` and out to disk, once per
+   * page load, to produce a file this build has already decided it will never read back.
+   */
+  it("does not write a cache too large to be read back", () => {
+    const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
+
+    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }));
+
+    expect(() => statSync(tagCachePath(root))).toThrow();
+  });
+
+  /** And it does not destroy the cache already there in the attempt: the write is refused
+   *  outright, so what a smaller gather left behind is still readable. */
+  it("leaves an existing cache alone when the new one is too large to write", () => {
+    writeTagCache(root, cache({ db: "small" }));
+    const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
+
+    writeTagCache(
+      root,
+      cache({ db: "huge", scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }),
+    );
+
+    expect(readTagCache(root)?.db).toBe("small");
+  });
+
+  /** Measured in bytes, not in UTF-16 code units. An excerpt of Japanese is one unit and
+   *  three bytes a character, so a cache of it sits under the ceiling by `length` and over it
+   *  by what `readTagCache` will `stat`. */
+  it("measures the ceiling in bytes, so a multibyte cache under it by length is refused", () => {
+    // Two thirds of the ceiling in characters is twice the ceiling in UTF-8 bytes.
+    const japanese = "あ".repeat(Math.floor((TAG_CACHE_BYTES_MAX * 2) / 3));
+    expect(japanese.length).toBeLessThan(TAG_CACHE_BYTES_MAX);
+
+    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: japanese } } } }));
+
+    expect(() => statSync(tagCachePath(root))).toThrow();
   });
 
   it("answers with nothing for a truncated file rather than throwing", () => {

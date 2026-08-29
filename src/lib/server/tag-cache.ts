@@ -199,9 +199,23 @@ export function readTagCache(root: string): TagCache | null {
  */
 export function writeTagCache(root: string, cache: TagCache): void {
   try {
-    writeFileAtomic(tagCachePath(root), JSON.stringify(cache));
+    const serialized = JSON.stringify(cache);
+    // Not written if it could not be read back. `readTagCache` refuses a file past this
+    // ceiling, so laying one down produces a file this build has already decided to ignore
+    // — and then re-serializes and re-writes it on every gather, paying megabytes of
+    // `stringify` and a disk write per page load for a cache nothing will ever read. A
+    // workspace this size pays a cold read; it should not also pay a hot write.
+    //
+    // In bytes rather than in `length`, which counts UTF-16 code units: an excerpt of
+    // Japanese is three bytes a character and one unit, so the two disagree by a factor of
+    // three on exactly the content this cache is full of — and it is the byte count that
+    // `readTagCache` will `stat`.
+    if (Buffer.byteLength(serialized) > TAG_CACHE_BYTES_MAX) return;
+    writeFileAtomic(tagCachePath(root), serialized);
   } catch {
-    // Ignored: see above.
+    // Ignored: see above. `JSON.stringify` is inside the try for the same reason the write
+    // is — a gather large enough to exceed the engine's maximum string length throws here,
+    // and that is a cache that cannot be written, not a page that cannot be served.
   }
 }
 

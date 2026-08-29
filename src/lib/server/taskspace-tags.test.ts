@@ -197,6 +197,54 @@ describe("scanTaskspaceTags", () => {
 
       expect(scan(dir).truncated.sort()).toEqual(["too-large", "unreadable"]);
     });
+
+    /**
+     * The ceiling the other budgets do not imply. Bytes and entries bound what is *read*, and
+     * the number of tags that reading produces is not a fixed fraction of either: a file of
+     * `'a` lines yields a hit every three bytes, so a byte budget spent exactly as intended
+     * can still produce millions of them.
+     *
+     * That was not a slow page. The hits of every taskspace are gathered into one array, and
+     * they were spread into it as arguments — which passes one argument per hit and throws
+     * `RangeError: Maximum call stack size exceeded` somewhere past a hundred thousand. The
+     * append is fixed too; this is what keeps the array from being that size in the first
+     * place.
+     */
+    it("stops at the hit ceiling and says so", () => {
+      write(join(dir, "many.md"), Array.from({ length: 20 }, (_, i) => `'t${i}`).join("\n"));
+
+      const result = scan(dir, { hits: 5 });
+      expect(result.hits).toHaveLength(5);
+      expect(result.truncated).toEqual(["hits"]);
+    });
+
+    /** Exact rather than per-file. One generated file can hold more tags on its own than the
+     *  whole scan carries, so checking only between files would let it through in full. */
+    it("holds the ceiling exactly, within a single file", () => {
+      write(join(dir, "one.md"), Array.from({ length: 500 }, (_, i) => `'t${i}`).join("\n"));
+
+      expect(scan(dir, { hits: 3 }).hits).toHaveLength(3);
+    });
+
+    /** Once full there is nowhere for the rest of the tree to be read into, so the walk stops
+     *  rather than spending bytes and syscalls on hits that would only be dropped. */
+    it("stops walking once it is full", () => {
+      write(join(dir, "a.md"), "'one\n'two");
+      write(join(dir, "b.md"), `'three ${"x".repeat(500)}`);
+
+      const result = scan(dir, { hits: 2, bytes: 1000 });
+      expect(tagsOf(result.hits)).toEqual(["one", "two"]);
+      // `b.md` was never opened: the budget still holds what only `a.md` spent.
+      expect(result.truncated).toEqual(["hits"]);
+    });
+
+    it("does not report the ceiling for a taskspace that sits under it", () => {
+      write(join(dir, "notes.md"), "'one\n'two");
+
+      const result = scan(dir, { hits: 5 });
+      expect(tagsOf(result.hits)).toEqual(["one", "two"]);
+      expect(result.truncated).toEqual([]);
+    });
   });
 
   describe("the cache", () => {
