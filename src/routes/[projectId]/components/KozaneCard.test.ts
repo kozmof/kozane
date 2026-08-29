@@ -197,4 +197,94 @@ describe("KozaneCard", () => {
     // press would move the card instead of widening it.
     expect(onCardMouseDown).not.toHaveBeenCalled();
   });
+
+  /**
+   * What a card does with the text it is given, beyond drawing it: a URL becomes an anchor
+   * and a tag becomes a link to the index. Both are `segmentText`'s reading of the content,
+   * which the tag index gathers by too — so these are also where a card is checked to draw
+   * exactly what the index would find in it.
+   */
+  describe("text segments", () => {
+    const withContent = (content: string, overrides: Record<string, unknown> = {}) =>
+      makeProps({ card: { ...makeProps().card, content }, ...overrides });
+
+    it("draws a tag as a link to where the caller sends it", () => {
+      render(KozaneCard, {
+        props: withContent("caching work 'perf:cache", {
+          tagHref: (tag: string) => `/tags?tag=${tag}`,
+        }),
+      });
+
+      const link = screen.getByRole("link", { name: "'perf:cache" });
+      expect(link).toHaveAttribute("href", "/tags?tag=perf:cache");
+    });
+
+    /**
+     * The card knows a tag when it sees one but not which project's index to send it to, so
+     * a caller with no router — a component test, a static context — still gets the tag
+     * marked rather than a link to nowhere.
+     */
+    it("marks a tag without linking it when there is nowhere to link to", () => {
+      render(KozaneCard, { props: withContent("caching work 'perf") });
+
+      expect(screen.getByText("'perf")).toBeInTheDocument();
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("draws the tag as it was typed and links it as it is indexed", () => {
+      render(KozaneCard, {
+        props: withContent("about 'Perf", { tagHref: (tag: string) => `/tags?tag=${tag}` }),
+      });
+
+      // The text is what the writer typed; the link is the normalized tag, which is the one
+      // the index is keyed by. A card that drew `'perf` would be rewriting the card.
+      expect(screen.getByRole("link", { name: "'Perf" })).toHaveAttribute("href", "/tags?tag=perf");
+    });
+
+    it("leaves prose apostrophes as prose", () => {
+      render(KozaneCard, {
+        props: withContent("don't tag this, and 'quoted' stays text", {
+          tagHref: (tag: string) => `/tags?tag=${tag}`,
+        }),
+      });
+
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("draws a url with an apostrophe in it as one link and no tag", () => {
+      render(KozaneCard, {
+        props: withContent("see http://example.com/('foo) after", {
+          tagHref: (tag: string) => `/tags?tag=${tag}`,
+        }),
+      });
+
+      // The grammar cuts a URL out before looking for tags, so the address is a link and
+      // nothing inside it is one. This is the case where the card and the index disagreed.
+      const links = screen.getAllByRole("link");
+      expect(links).toHaveLength(1);
+      // The closing paren is sentence punctuation rather than part of the address, so the
+      // span stops before it — and the apostrophe inside the span still opens nothing.
+      expect(links[0]).toHaveAttribute("href", "http://example.com/('foo");
+    });
+
+    it("does not start a card drag when a tag is followed", async () => {
+      const user = userEvent.setup();
+      const onCardMouseDown = vi.fn();
+      const onCardClick = vi.fn();
+      render(KozaneCard, {
+        props: withContent("about 'perf", {
+          tagHref: (tag: string) => `/tags?tag=${tag}`,
+          onCardMouseDown,
+          onCardClick,
+        }),
+      });
+
+      await user.click(screen.getByRole("link", { name: "'perf" }));
+
+      // Same propagation stop a URL carries: following the link must not move the card or
+      // change what is selected on the board being left behind.
+      expect(onCardMouseDown).not.toHaveBeenCalled();
+      expect(onCardClick).not.toHaveBeenCalled();
+    });
+  });
 });

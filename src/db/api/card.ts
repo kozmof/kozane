@@ -5,7 +5,7 @@ import type { AnyDB } from "../client.js";
 import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import type { CardData } from "../../lib/types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
-import { chunked } from "../../lib/constants.js";
+import { BATCH_MAX, chunked } from "../../lib/constants.js";
 import { assertFound, columnCount } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
@@ -260,18 +260,22 @@ type GetCardBundleNames = NeedsDB & { cardIds: string[] };
 /**
  * The bundle each of `cardIds` is in.
  *
- * In {@link chunked} statements, one bound parameter per id, for the reason that helper
- * gives about the writers: an `IN` list is subject to the same variable ceiling an `INSERT`
- * is, and every caller but one hands this a handful of ids. The one that does not is the tag
- * index's static export, which is built before anyone has chosen a tag and so asks about
- * every tagged card in the workspace at once.
+ * In {@link chunked} statements, because an `IN` list is subject to the same SQLite variable
+ * ceiling an `INSERT` is. Every caller but one hands this a handful of ids; the one that does
+ * not is the tag index's static export, which is built before anyone has chosen a tag and so
+ * asks about every tagged card in the workspace at once.
+ *
+ * Batched at {@link BATCH_MAX} rather than at `chunked`'s default, and the difference is a
+ * factor of ten in round trips. That default is `INSERT_CHUNK_MAX`, which is a *row*
+ * count for a multi-row `INSERT`, where every column of every row binds a parameter — here
+ * each id binds one, which is the case `BATCH_MAX` is the budget for.
  */
 export async function getCardBundleNames({
   db,
   cardIds,
 }: GetCardBundleNames): Promise<{ cardId: string; bundleId: string; bundleName: string }[]> {
   const rows: { cardId: string; bundleId: string; bundleName: string }[] = [];
-  for (const batch of chunked(cardIds)) {
+  for (const batch of chunked(cardIds, { size: BATCH_MAX })) {
     rows.push(
       ...(await db
         .select({

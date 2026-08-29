@@ -128,6 +128,8 @@ export function splitTag(tag: string): string[] {
 /**
  * Whether `tag` is `query` or sits under it. Prefix by level, not by character, which is the
  * whole point of subcategories: `foo` gathers `foo:bar:baz`, and does not gather `foobar`.
+ *
+ * `tag` must already be normalized; `query` need not be. See {@link tagMatcher}.
  */
 export function tagMatches(query: string, tag: string): boolean {
   return tagMatcher(query)(tag);
@@ -135,17 +137,22 @@ export function tagMatches(query: string, tag: string): boolean {
 
 /**
  * {@link tagMatches} with the query normalized once, for the callers that ask it of every hit
- * in a workspace — the index page's filter, the CLI's, and the server's. Normalizing inside
- * the predicate meant folding and composing the same query string once per hit, which is the
- * one place on this path where a hit count turns into real work for no answer.
+ * in a workspace — the index page's filter, the CLI's, and the server's.
+ *
+ * Only the query is normalized, and the asymmetry is the point rather than an oversight.
+ * Every tag this is asked about came out of {@link normalizeTag} at the moment it was
+ * matched — that is the only way a tag string is ever made, on either path — so folding and
+ * composing it again is work with no answer in it, once per hit per gather. The query is the
+ * one string that arrives from outside: a URL, a CLI argument, a person typing.
+ *
+ * So: `query` is whatever was asked for, `tag` is a normalized tag. That precondition is what
+ * pays for the loop, and it is why {@link tagMatches} states it too — the two must agree, or
+ * a caller reaching for the convenient one would get a different answer than the loop does.
  */
 export function tagMatcher(query: string): (tag: string) => boolean {
   const q = normalizeTag(query);
   const prefix = `${q}:`;
-  return (tag) => {
-    const t = normalizeTag(tag);
-    return t === q || t.startsWith(prefix);
-  };
+  return (tag) => tag === q || tag.startsWith(prefix);
 }
 
 /** One tag found in a text, and exactly where it sits in it. */
@@ -364,20 +371,34 @@ export interface CappedHits<T extends { source: TagSource }> {
  * for one. Two ceilings cannot starve each other.
  *
  * Both the live page and a static export cap through here, so the server's list and the
- * browser's come out the same. See `TAG_HITS_SHOWN_MAX`.
+ * browser's come out the same. See `TAG_HITS_SHOWN_MAX`. The terminal caps through it too:
+ * `kozane tag show` prints the same two lists.
+ *
+ * One pass, keeping and counting together, rather than two `filter`s and two `slice`s. The
+ * point of a ceiling is that the answer is small however large the question is, and building
+ * two full arrays of everything that matched in order to throw away all but the first two
+ * hundred of each spent the whole of what the cap was there to avoid.
  */
 export function capHitsByKind<T extends { source: TagSource }>(
   hits: T[],
   max: number,
 ): CappedHits<T> {
-  const cards = hits.filter(isCardHit);
-  const files = hits.filter(isFileHit);
-  return {
-    cards: cards.slice(0, max),
-    files: files.slice(0, max),
-    cardTotal: cards.length,
-    fileTotal: files.length,
-  };
+  const cards: TagHitOf<T, "card">[] = [];
+  const files: TagHitOf<T, "file">[] = [];
+  let cardTotal = 0;
+  let fileTotal = 0;
+
+  for (const hit of hits) {
+    if (isCardHit(hit)) {
+      cardTotal += 1;
+      if (cards.length < max) cards.push(hit);
+    } else if (isFileHit(hit)) {
+      fileTotal += 1;
+      if (files.length < max) files.push(hit);
+    }
+  }
+
+  return { cards, files, cardTotal, fileTotal };
 }
 
 /**
@@ -552,6 +573,7 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
   depth: "some directories sit deeper than the scan goes",
   nodes: "it holds more files and directories than one scan visits",
   budget: "some files were larger than the scan had budget left for",
+  "too-large": "some files are larger than one file may be to be read at all",
   unreadable: "some files could not be read",
 };
 

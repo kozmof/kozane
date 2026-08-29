@@ -141,8 +141,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const shownCardIds = [
     ...new Set(hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : []))),
   ];
+  // `flatMap` over an explicitly optional read, rather than `map(...).filter(Boolean)`. Every
+  // card carrying a hit has an entry — `getCardTagHits` writes one before it writes the hit —
+  // but `Record<string, string>` says a lookup cannot miss when it can, and `filter(Boolean)`
+  // narrows nothing, so the one thing standing between an absent entry and
+  // `getAllBundles({ projectId: undefined })` was a filter the types could not see.
   const shownProjects = [
-    ...new Set(shownCardIds.map((cardId) => index.cardProjects[cardId]).filter(Boolean)),
+    ...new Set(
+      shownCardIds.flatMap((cardId) => {
+        const projectId: string | undefined = index.cardProjects[cardId];
+        return projectId ? [projectId] : [];
+      }),
+    ),
   ];
   // Both read the cards being shown and neither reads the other, so they go together — the
   // last round trip of the load rather than the last two.

@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { TAG_CACHE_DIRS_MAX, TAG_CACHE_SCOPES_MAX } from "../constants.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { fileSignature } from "./file-signature.js";
+import { evictRecord, setLast } from "./lru.js";
+import { exportTaskspaceTagCache, importTaskspaceTagCache } from "./taskspace-tags.js";
+import type { CardTagHits } from "../../db/api/tag.js";
+import type { TagLineHit } from "../tag.js";
 import type { CachedFile } from "./taskspace-tags.js";
 import type { TagHit } from "../types.js";
 
@@ -25,8 +30,15 @@ export function tagCachePath(root: string): string {
   return join(root, ".kozane", TAG_CACHE_FILE);
 }
 
-/** One scope's card hits, as `getCardTagHits` returned them. */
-export type CachedCardHits = { hits: TagHit[]; cardProjects: Record<string, string> };
+/**
+ * One scope's card hits, as `getCardTagHits` returned them — the return type itself, rather
+ * than a record of the same two fields written out again here.
+ *
+ * The same reason {@link CachedFileEntry} below is a re-export: this is stored and read back
+ * as exactly what that query produced, so a field added to `CardTagHits` must either be
+ * stored too or be a deliberate omission, and a structural copy would have made it neither.
+ */
+export type CachedCardHits = CardTagHits;
 
 /**
  * One file's tags, against the identity of the bytes they were parsed from — re-exported
@@ -98,7 +110,10 @@ function isTagHit(value: unknown): value is TagHit {
         typeof source.line === "number";
 }
 
-function isTagLineHit(value: unknown): boolean {
+/** A predicate rather than a `boolean`, as {@link isTagHit} is: the `every` below is the only
+ *  thing that establishes what a cached file's `hits` hold, so it should be what narrows
+ *  them. */
+function isTagLineHit(value: unknown): value is TagLineHit {
   return (
     isRecord(value) &&
     typeof value.tag === "string" &&
@@ -107,13 +122,13 @@ function isTagLineHit(value: unknown): boolean {
   );
 }
 
-const isCachedCardHits = (value: unknown): boolean =>
+const isCachedCardHits = (value: unknown): value is CachedCardHits =>
   isRecord(value) &&
   Array.isArray(value.hits) &&
   value.hits.every(isTagHit) &&
   everyValue(value.cardProjects, (id) => typeof id === "string");
 
-const isCachedFile = (value: unknown): boolean =>
+const isCachedFile = (value: unknown): value is CachedFileEntry =>
   isRecord(value) &&
   typeof value.signature === "string" &&
   Array.isArray(value.hits) &&
@@ -158,8 +173,15 @@ export function readTagCache(root: string): TagCache | null {
 
 /**
  * Writes the cache, atomically. Best-effort: a workspace on a read-only filesystem, or two
- * processes finishing a gather at once, must not fail the page that was being served — the
- * loser of such a race simply did work that will be done again.
+ * processes finishing a gather at once, must not fail the page that was being served.
+ *
+ * Atomic per write, and deliberately nothing more. The read-modify-write around it is not:
+ * a `kozane tag list` finishing between this server's read and its write replaces the file
+ * wholesale, so the scope entry the CLI never knew about is gone — not merely re-derived
+ * later, but absent from the file until something gathers that scope again. That is a cost
+ * of a cold read for whoever asks next, and it is the reason a lock is not worth having
+ * here: nothing durable is lost, because nothing in this file is a record of anything. Every
+ * part of it is checked against the thing it came from before it is believed.
  */
 export function writeTagCache(root: string, cache: TagCache): void {
   try {
@@ -167,4 +189,142 @@ export function writeTagCache(root: string, cache: TagCache): void {
   } catch {
     // Ignored: see above.
   }
+}
+
+/** How a scope is named in the cache file. `*` is the gather across the whole workspace,
+ *  which is a different set from any one project's and so a different entry. */
+export const scopeKey = (projectId?: string) => projectId ?? "*";
+
+export type SaveCache = {
+  scope: string;
+  cards: CachedCardHits;
+  /** The taskspace directories this gather walked, each with whether its scan learned
+   *  anything — which decides between re-exporting its entries and keeping the stored ones. */
+  scanned?: { baseDir: string; changed: boolean }[];
+  /** Every taskspace directory in the workspace, when this gather saw them all — which is
+   *  only a gather that named no project. Absent, no directory is presumed gone. */
+  live?: Set<string>;
+  /** Whether any scan read or dropped something. See `TaskspaceTagScan.changed`. */
+  changed: boolean;
+};
+
+/**
+ * The persisted gather, opened once per `loadTagIndex` call.
+ *
+ * Reading the file is the only I/O this does up front. What it hands back is checked before
+ * use — card hits against the database's signature, file entries against each file's own —
+ * so a cache that has fallen behind costs a re-gather and never a wrong answer.
+ *
+ * Here rather than in `tag-index.ts`, where it was. This is the cache's policy — what is kept
+ * fresh, what is evicted and in what order, and when writing is worth doing — and it is
+ * longer than the gather it was wrapped around, which left that module's one exported
+ * function reading as a footnote to it. The two modules now divide as their names say: this
+ * one owns the file, its shape, and its rules; `tag-index.ts` owns reading a workspace.
+ */
+export function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
+  const signature = databaseSignature(dbUrl);
+  // No signature means nothing to validate card hits against — an in-memory database, or one
+  // that is not a local file. Rather than cache what cannot be checked, do not cache.
+  if (!signature) return null;
+
+  const existing = readTagCache(root);
+  // Card hits are kept only while the database is byte-for-byte the one they came from. File
+  // entries are not thrown away with them: they answer to their own files, and a card written
+  // in the browser says nothing about what is on disk.
+  const fresh = existing?.db === signature;
+  const files = existing?.files ?? {};
+
+  return {
+    cards: (scope: string): CachedCardHits | null =>
+      fresh ? (existing?.scopes[scope] ?? null) : null,
+
+    seedFiles: (baseDir: string) => {
+      const entries = files[baseDir];
+      if (entries) importTaskspaceTagCache(baseDir, entries);
+    },
+
+    save: ({ scope, cards, scanned = [], live, changed }: SaveCache) => {
+      // A copy, because what is read from is what is compared against below: `unchangedFrom`
+      // asks whether the record about to be written is the one already on disk, and it could
+      // not if this had been built by editing that one.
+      const scopes = fresh ? { ...existing?.scopes } : {};
+      // Re-set rather than merely set, so a scope looked at again moves to the end: that is
+      // what makes insertion order visit order, and the eviction below oldest-out.
+      setLast(scopes, scope, cards);
+      evictRecord(scopes, TAG_CACHE_SCOPES_MAX);
+
+      const nextFiles: TagCache["files"] = {};
+      for (const [baseDir, entries] of Object.entries(files)) {
+        // A gather that saw every taskspace in the workspace knows which directories are
+        // still taskspaces, so one that is not among them is gone and its entries go with
+        // it. A gather narrowed to one project knows nothing about the others' and keeps
+        // them — the bound below is what answers for that case.
+        if (live && !live.has(baseDir)) continue;
+        nextFiles[baseDir] = entries;
+      }
+      for (const { baseDir, changed: moved } of scanned) {
+        // The entries this process holds, but only where they can differ from what is
+        // already stored. Exporting rebuilds the record, and a fresh object of identical
+        // contents is what would make the no-op check below fail and write anyway.
+        const kept = nextFiles[baseDir];
+        const entries = moved || !kept ? exportTaskspaceTagCache(baseDir) : kept;
+        // Re-set even when it was already there, so a directory looked at again moves to the
+        // end of the insertion order the eviction below reads as least-recently-used.
+        if (entries) setLast(nextFiles, baseDir, entries);
+        else delete nextFiles[baseDir];
+      }
+      evictRecord(nextFiles, TAG_CACHE_DIRS_MAX);
+
+      // Nothing new to say. The gather answered from the file it would be rewriting, so
+      // writing it back would serialize a megabyte and replace the file with itself — once
+      // per page load, and once per `kozane tag` invocation. The `builtAt` stamp is the only
+      // thing that would differ, and nothing reads it.
+      if (!changed && unchangedFrom(existing, scope, cards, scopes, nextFiles)) return;
+
+      writeTagCache(root, {
+        version: TAG_CACHE_VERSION,
+        // The signature read *before* the gather, deliberately, and never a fresher one. A
+        // write that lands mid-gather leaves hits that are neither the old state nor quite
+        // the new one; stamping what the database looks like now would declare them current
+        // and serve them until the next write. Stamping what it looked like when they were
+        // taken means the next load finds a mismatch and gathers again — one wasted gather
+        // instead of a wrong answer that persists.
+        db: signature,
+        builtAt: new Date().toISOString(),
+        scopes,
+        files: nextFiles,
+      });
+    },
+  };
+}
+
+/**
+ * Whether the file on disk already says exactly this.
+ *
+ * Deliberately shallow, and it can be: `changed` has already ruled out the two ways the
+ * *contents* move — a re-queried card set and a re-read or pruned file. What is left for this
+ * to catch is the bookkeeping around them. Identity is the right test for the values, because
+ * every one of them came out of `existing` moments ago and was put back unchanged; a key
+ * comparison catches an eviction or a first visit that rearranged the maps without altering
+ * anything in them.
+ */
+function unchangedFrom(
+  existing: TagCache | null,
+  scope: string,
+  cards: CachedCardHits,
+  scopes: TagCache["scopes"],
+  files: TagCache["files"],
+): boolean {
+  if (!existing || existing.scopes[scope] !== cards) return false;
+  return sameOrder(existing.scopes, scopes) && sameOrder(existing.files, files);
+}
+
+/** Same keys, in the same order, each holding the very same value. Order counts because it is
+ *  what both evictions above read as least-recently-used. */
+function sameOrder(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = Object.keys(a);
+  const next = Object.keys(b);
+  return (
+    keys.length === next.length && keys.every((key, i) => next[i] === key && a[key] === b[key])
+  );
 }

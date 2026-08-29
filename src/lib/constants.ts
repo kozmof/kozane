@@ -300,3 +300,27 @@ export const TAG_SCAN_SKIP_DIRS: readonly string[] = [
  * the two walks go equally deep because they walk the same kind of tree.
  */
 export const TAG_SCAN_DEPTH_MAX = TASKSPACE_SSG_DEPTH_MAX;
+
+/**
+ * How many scopes a gathered tag index keeps. A workspace has few projects and the index is
+ * looked at one scope at a time, so this is a backstop against a file that grows forever
+ * rather than a limit anyone reaches: at a realistic size one scope is around a megabyte.
+ */
+export const TAG_CACHE_SCOPES_MAX = 16;
+
+/**
+ * How many taskspace directories a gathered tag index keeps parsed files for — in this
+ * process and in the file on disk alike.
+ *
+ * One number for both, because they hold the same directories: a memory ceiling below the
+ * file's would mean re-importing on every scan what was evicted from one but kept in the
+ * other. It was two constants in two modules, each with a comment saying it had to equal the
+ * other, which is a convention rather than a guarantee.
+ *
+ * The precise cleanup is neither of them: a gather across the whole workspace knows every
+ * taskspace there is and drops what is not among them. This bounds the case that cannot do
+ * that — a workspace only ever looked at one project at a time, or a long-lived `kozane open`
+ * against taskspaces that come and go — and is set well above the number anyone has, so that
+ * eviction is the exception rather than the rhythm.
+ */
+export const TAG_CACHE_DIRS_MAX = 64;

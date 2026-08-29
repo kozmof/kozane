@@ -311,8 +311,18 @@ describe("tagMatches", () => {
     expect(tagMatches("foo:bar", "foo")).toBe(false);
   });
 
-  it("ignores case on either side", () => {
-    expect(tagMatches("FOO", "foo:Bar")).toBe(true);
+  it("folds the case of the query, which is the side that comes from outside", () => {
+    expect(tagMatches("FOO", "foo:bar")).toBe(true);
+  });
+
+  /**
+   * The other side is a precondition rather than a courtesy, and this says so out loud: a
+   * tag reaches here having been through `normalizeTag` at the moment it was matched, which
+   * is what lets the filter behind every gather skip folding and composing once per hit.
+   */
+  it("takes the tag as already normalized", () => {
+    expect(tagMatches("foo", normalizeTag("Foo:bar"))).toBe(true);
+    expect(tagMatches("foo", "Foo:bar")).toBe(false);
   });
 });
 

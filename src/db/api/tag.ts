@@ -19,6 +19,20 @@ export type CardTagHits = {
   cardProjects: Record<string, string>;
 };
 
+/**
+ * The sigil, checked to be safe inside a `LIKE` pattern — which is where the prefilter below
+ * puts it, and where `%` and `_` are wildcards rather than characters.
+ *
+ * A type rather than a runtime guard, so the failure is a build that does not compile rather
+ * than a query that quietly stops narrowing. `TAG_SIGIL` is presented in `lib/constants.ts`
+ * as *the* character the grammar opens with; a sigil of `_` would turn the prefilter into
+ * "every card holding at least one character" and every test would still pass, because a
+ * prefilter that is too generous is invisible from the outside — it costs a scan, not an
+ * answer. Anything else needs an `ESCAPE` clause here before the constant changes.
+ */
+type NotLikeWildcard<T extends string> = T extends "%" | "_" ? never : T;
+const SIGIL_PATTERN: NotLikeWildcard<typeof TAG_SIGIL> = TAG_SIGIL;
+
 type GetCardTagHits = NeedsDB & {
   /** Narrows to one project. Omitted, every card in the workspace is read — which is what
    *  the tag index does when no project is selected. */
@@ -43,7 +57,7 @@ export async function getCardTagHits({ db, projectId }: GetCardTagHits): Promise
   // A card with no apostrophe cannot hold a tag, so SQLite drops it before any of it crosses
   // into JavaScript to be parsed. Necessary rather than sufficient — `don't` comes back and
   // finds nothing — which is the right way round for a prefilter.
-  const holdsSigil = like(cardTable.content, `%${TAG_SIGIL}%`);
+  const holdsSigil = like(cardTable.content, `%${SIGIL_PATTERN}%`);
   const where: SQL | undefined = projectId
     ? and(holdsSigil, eq(bundleTable.projectId, projectId))
     : holdsSigil;

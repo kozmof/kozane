@@ -1584,6 +1584,143 @@ describe("Warps", () => {
       expect(canvasOf(container).scrollLeft).toBe(1000);
     });
   });
+
+  /**
+   * How a hit on the tag index gets back to the thing it was found in: `?card=` for a card,
+   * `?taskspace=&path=` for a line of a taskspace file. Both are acted on once and then
+   * dropped from the URL, the same as `?warp=`, so panning away and reloading does not snap
+   * back to them.
+   */
+  describe("landing from the tag index", () => {
+    const visit = (url: string) => (page.url = new URL(url) as typeof page.url);
+
+    // Around the centre the stubbed canvas metrics produce, so centring on it is visible.
+    const target = { ...data.cards[0], id: "card-far", content: "Gamma", posX: 1800, posY: 1000 };
+    const withTarget = { cards: [...data.cards, target] };
+
+    // The module mock is shared by every test in this file, so what an earlier one recorded
+    // would otherwise count as a call made here — and "the url was left alone" is exactly the
+    // assertion that cannot tell the difference.
+    beforeEach(() => {
+      vi.mocked(replaceState).mockClear();
+    });
+
+    afterEach(() => {
+      visit("http://localhost/project-1");
+    });
+
+    it("centres on the card the url names and selects it", async () => {
+      visit("http://localhost/project-1?card=card-far");
+      vi.stubGlobal("fetch", vi.fn());
+
+      const { container } = renderPage(withTarget);
+
+      await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1400));
+      expect(canvasOf(container).scrollTop).toBe(700);
+      // Selected as well as centred: the middle of a dense board is not a mark, so the pan
+      // alone would not say *which* card the tag matched.
+      expect(screen.getByRole("button", { name: "Card: Gamma" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+
+    it("drops the card it landed on from the query and leaves the rest alone", async () => {
+      visit("http://localhost/project-1?card=card-far&scope=reading");
+      vi.stubGlobal("fetch", vi.fn());
+
+      renderPage(withTarget);
+
+      await waitFor(() =>
+        expect(replaceState).toHaveBeenCalledWith("/project-1?scope=reading", {}),
+      );
+    });
+
+    it("opens in the middle of the board when the card is gone", async () => {
+      // A tag page left open while the card it listed was deleted from another tab.
+      visit("http://localhost/project-1?card=deleted-elsewhere");
+      vi.stubGlobal("fetch", vi.fn());
+
+      const { container } = renderPage(withTarget);
+
+      expect(canvasOf(container).scrollLeft).toBe(1000);
+      // Nothing was acted on, so nothing is dropped and the URL is left as it was found.
+      expect(replaceState).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `data.taskspaces` is empty above, so its element type is `never` and a taskspace
+     * cannot be handed to `renderPage`. Built as a whole object instead, which is what the
+     * scoped-file suite below does for the same reason.
+     */
+    const withTaskspace = (overrides: Record<string, unknown> = {}) => ({
+      ...data,
+      ...withTarget,
+      taskspaces: [
+        {
+          id: "taskspace-1",
+          name: "notes",
+          scopeId: "scope-1",
+          path: "notes",
+          pathKind: "project_relative" as const,
+        },
+      ],
+      ...overrides,
+    });
+
+    it("centres on a card and opens a file when the url names both", async () => {
+      visit("http://localhost/project-1?card=card-far&taskspace=taskspace-1&path=notes%2Ftodo.md");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ content: "See 'perf here.", signature: "sig-1" }),
+        }),
+      );
+
+      const { container } = render(ProjectPage, {
+        props: { data: withTaskspace(), params: { projectId: "project-1" }, form: null },
+      });
+
+      expect(await screen.findByLabelText("Editing notes/todo.md")).toBeInTheDocument();
+      await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1400));
+      // Both were acted on, so both are dropped — in one call, which is what keeps the two
+      // from clearing a URL the other had already replaced.
+      expect(replaceState).toHaveBeenCalledWith("/project-1", {});
+    });
+
+    it("leaves a file link inert in an export that carries no files", async () => {
+      visit("http://localhost/project-1?taskspace=taskspace-1&path=notes%2Ftodo.md");
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+
+      render(ProjectPage, {
+        props: {
+          // An export's taskspace rows carry no local path, and without
+          // `--include-scoped-files` no baked tree either.
+          data: withTaskspace({
+            readonly: true,
+            taskspaces: [
+              {
+                id: "taskspace-1",
+                name: "notes",
+                scopeId: "scope-1",
+                path: null,
+                pathKind: "project_relative" as const,
+              },
+            ],
+          }),
+          params: { projectId: "project-1" },
+          form: null,
+        },
+      });
+
+      // Without the baked-in contents there is nothing to read and no endpoint to read it
+      // from, so the editor must not open on an error rather than on a file.
+      expect(screen.queryByLabelText("Editing notes/todo.md")).not.toBeInTheDocument();
+      expect(fetch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe("Squash", () => {

@@ -135,10 +135,19 @@
     }));
   });
 
-  const taskspaceName = (id: string) =>
-    data.taskspaces.find((taskspace) => taskspace.id === id)?.name || "taskspace";
+  /**
+   * Names by id, built once rather than searched per row. Both were a linear `find` called
+   * from inside an `{#each}` — one per file group and one per card row — so drawing a tag
+   * with two hundred cards on it walked the project list two hundred times. Nothing anyone
+   * would have measured at this size; it is a shape worth not having on the page that exists
+   * to draw a lot of rows at once.
+   */
+  const taskspaceNames = $derived(new Map(data.taskspaces.map(({ id, name }) => [id, name])));
+  const projectNames = $derived(new Map(data.projects.map(({ id, name }) => [id, name])));
+
+  const taskspaceName = (id: string) => taskspaceNames.get(id) || "taskspace";
   const projectName = (id: string | null | undefined) =>
-    data.projects.find((project) => project.id === id)?.name ?? "";
+    (id !== null && id !== undefined ? projectNames.get(id) : undefined) ?? "";
 
   /** The workspace default, which is where an unplaced taskspace's file is opened: it is on
    *  every board, so no one of them is more its own than another. */

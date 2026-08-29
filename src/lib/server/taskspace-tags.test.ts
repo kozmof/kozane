@@ -185,8 +185,17 @@ describe("scanTaskspaceTags", () => {
 
       const result = scan(dir, { bytes: 2 * 1024 * 1024 });
       expect(tagsOf(result.hits)).toEqual(["mine"]);
-      // Named as unreadable, which it is, rather than swallowing the budget silently.
-      expect(result.truncated).toEqual(["unreadable"]);
+      // Named for what it is rather than swallowing the budget silently — and named
+      // separately from a file that could not be read, because declining to open a file
+      // this large is not a failure and must not be reported to the reader as one.
+      expect(result.truncated).toEqual(["too-large"]);
+    });
+
+    it("tells a file too large to open apart from one that could not be read", () => {
+      writeFileSync(join(dir, "big.bin"), Buffer.alloc(2 * 1024 * 1024, 0x41));
+      writeFileSync(join(dir, "binary.bin"), Buffer.from([0x00, 0x01, 0x02]));
+
+      expect(scan(dir).truncated.sort()).toEqual(["too-large", "unreadable"]);
     });
   });
 

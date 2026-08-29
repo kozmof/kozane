@@ -58,6 +58,13 @@ created to make a tag exist and nothing is deleted to remove one: a tag is in th
 for exactly as long as some text holds it. There is no tag table, and no command that adds
 or removes a tag — `tag list` and `tag show` only read.
 
+That is an invariant and not merely how it works today. A stored index would have to be
+rewritten inside every transaction that writes a card's text — `card add`, `card edit`,
+`card squash`, the board's own writes, `db import` — and the first writer to forget would
+leave an index disagreeing with the cards, with nothing able to say so. Derived on read, a
+tag exists exactly as long as the text holding it does. Any future command that appears to
+name tags directly has to be a way of editing text, not a second place tags are kept.
+
 A tag is not confined to a project, for the same reason: nothing stops the same one being
 written on two boards. The browser's tag index at `/tags` gathers the whole workspace by
 default and narrows to a project with `?projectId=<id>`. The CLI is the other way round —
@@ -90,7 +97,13 @@ for files.
 Taskspace files are read on demand, within the same boundary the browser's file panel holds:
 dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a
 file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
-full is reported as such rather than quietly half-read.
+full is reported as such rather than quietly half-read, and each reason is reported as
+itself: a file larger than one file may be is not described as one that could not be read.
+
+`tag show` prints at most 200 card hits and at most 200 file hits, the same two ceilings the
+browser's index draws, and says so when it has cut a list. The two are separate because the
+hits arrive cards first, so one ceiling across both would print no files at all for a tag
+written on hundreds of cards. The counts in `tag list` are always of everything.
 
 Generated and vendored directories are not walked, at any depth: `node_modules`,
 `bower_components`, `vendor`, `build`, `dist`, `out`, `target`, `coverage`, and

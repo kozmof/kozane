@@ -148,13 +148,26 @@ export interface TagHit {
  * Each is a distinct thing to be told. A file that ran past the budget and one that could
  * not be read at all both produce no tags, and neither is "there are no tags in this file".
  *
+ * `"too-large"` is the third of those, and was folded into `"unreadable"` until it turned
+ * out to be the one a user meets: a file over the per-file cap is refused before it is
+ * opened, which is not a failure of any kind, and telling someone their files "could not be
+ * read" because one log sits beside their notes describes a broken taskspace rather than a
+ * working one. The same distinction `TaskspaceFileNode` already draws between `"too-large"`
+ * and `"unreadable"` for the export walk.
+ *
  * Here rather than beside the walk that produces it, which is where it was. Both things that
  * print one are far from that walk — `kozane tag list` and the tag index page — and the
  * page cannot reach a module built on `node:fs` at all. A shared vocabulary needs a home
  * both ends can import, and `truncationReasons` in `lib/tag.ts` is the wording that goes
  * with it.
  */
-export type TagScanTruncation = "entries" | "depth" | "nodes" | "budget" | "unreadable";
+export type TagScanTruncation =
+  | "entries"
+  | "depth"
+  | "nodes"
+  | "budget"
+  | "too-large"
+  | "unreadable";
 
 /**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and

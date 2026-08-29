@@ -2,16 +2,17 @@ import { getAllCards } from "../../db/api/card.js";
 import { getAllBundles } from "../../db/api/bundle.js";
 import {
   buildTagTree,
+  capHitsByKind,
   groupHitRows,
-  isCardHit,
-  isFileHit,
   normalizeTag,
   taggedWith,
   tagMatcher,
   truncationReasons,
+  type CappedHits,
   type TagCounts,
   type TagNode,
 } from "../../lib/tag.js";
+import { TAG_HITS_SHOWN_MAX } from "../../lib/constants.js";
 import { loadTagIndex, type TagIndexTruncation } from "../../lib/server/tag-index.js";
 import type { DB } from "../../db/tx.js";
 import type { TagHit } from "../../lib/types.js";
@@ -97,10 +98,26 @@ function warnTruncated(truncated: TagIndexTruncation[]): void {
 }
 
 /**
+ * Says which of a list is being printed, when it is not all of it. The page's wording for
+ * the same cut, in a sentence rather than a paragraph.
+ */
+function cappedNote(shown: number, total: number, noun: string): void {
+  if (shown < total) console.log(`  … showing the first ${shown} of ${total} ${noun}.`);
+}
+
+/**
  * What one tag gathers: the cards it is written on and the taskspace files it appears in.
  *
  * A tag gathers its subcategories, so `kozane tag show foo` includes everything written
  * `'foo:bar:baz` — the same rule the index page filters by, via the same `tagMatches`.
+ *
+ * Capped at {@link TAG_HITS_SHOWN_MAX} per kind, through the same `capHitsByKind` the page
+ * caps with. It was uncapped, on the reasoning that a terminal can be piped to `less` — but
+ * the ceiling is not there to protect the screen. A tag written in a shared header comment
+ * reaches every file carrying that header, and forty thousand lines is not a more useful
+ * answer than two hundred that says how many there were. Per kind for the reason the page
+ * gives: the hits arrive cards first, so one ceiling across both would print no files at all
+ * for a much-tagged card set.
  */
 export async function tagShow(tag: string, options: TagShowOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
@@ -127,14 +144,18 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
       return;
     }
 
-    await printCardHits(db, projectId, matching);
-    printFileHits(matching);
+    const shown = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
+    await printCardHits(db, projectId, shown);
+    printFileHits(shown);
     warnTruncated(truncated);
   });
 }
 
-async function printCardHits(db: DB, projectId: string, hits: TagHit[]): Promise<void> {
-  const cardHits = hits.filter(isCardHit);
+async function printCardHits(
+  db: DB,
+  projectId: string,
+  { cards: cardHits, cardTotal }: CappedHits<TagHit>,
+): Promise<void> {
   if (cardHits.length === 0) return;
 
   // Short ids are drawn against every card of the project, so the id printed for a card is
@@ -153,10 +174,12 @@ async function printCardHits(db: DB, projectId: string, hits: TagHit[]): Promise
     const id = shortIds.get(source.cardId) ?? source.cardId;
     console.log(`  ${id}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`);
   }
+  // Of hits rather than of the rows above, which is what was cut: the cap is applied before
+  // the grouping, so a card carrying the tag twice is one row out of two hits.
+  cappedNote(cardHits.length, cardTotal, "card hits");
 }
 
-function printFileHits(hits: TagHit[]): void {
-  const fileHits = hits.filter(isFileHit);
+function printFileHits({ files: fileHits, fileTotal }: CappedHits<TagHit>): void {
   if (fileHits.length === 0) return;
 
   console.log("Files:");
@@ -167,4 +190,5 @@ function printFileHits(hits: TagHit[]): void {
       `  ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
     );
   }
+  cappedNote(fileHits.length, fileTotal, "file hits");
 }

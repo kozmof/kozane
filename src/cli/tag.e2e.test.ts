@@ -116,6 +116,20 @@ describe("tag CLI flow", () => {
     expect(cli(root, "tag", "show", "perf", "--no-files")).toContain("No cards or files");
   }, 30_000);
 
+  it("caps a much-used tag and says what it is showing part of", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    // Past TAG_HITS_SHOWN_MAX, on lines of one file, so each is its own row.
+    const lines = Array.from({ length: 205 }, (_, i) => `line ${i} 'everywhere`).join("\n");
+    writeFileSync(join(root, "notes", "README.md"), `${lines}\n`);
+
+    const output = cli(root, "tag", "show", "everywhere");
+
+    expect(output).toContain("showing the first 200 of 205 file hits");
+    expect(output.split("\n").filter((line) => line.includes("README.md:"))).toHaveLength(200);
+  }, 30_000);
+
   it("lists a card found under two tags once", () => {
     const root = tempWorkspace();
     cli(root, "init");
