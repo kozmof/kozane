@@ -17,6 +17,7 @@ import {
   writeTagCache,
   TAG_CACHE_VERSION,
   type CachedCardHits,
+  type TagCache,
 } from "./tag-cache.js";
 
 /** What one taskspace could not tell us, and which one it was. Empty for a taskspace read
@@ -89,6 +90,19 @@ const scopeKey = (projectId?: string) => projectId ?? "*";
 const SCOPES_MAX = 16;
 
 /**
+ * How many taskspace directories the cache file keeps entries for. The same backstop
+ * {@link SCOPES_MAX} is, for the other half of the file, and it was missing: `files` only
+ * ever gained keys, so a taskspace deleted, renamed, or re-pathed left its every parsed file
+ * in `tag-index.json` for good.
+ *
+ * The precise cleanup is the one below — a gather across the whole workspace knows every
+ * taskspace there is and drops what is not among them. This bounds the case that cannot do
+ * that, a workspace only ever looked at one project at a time, and is set well above the
+ * number of taskspaces anyone has so that eviction is the exception rather than the rhythm.
+ */
+const FILE_DIRS_MAX = 64;
+
+/**
  * The persisted gather, opened once per `loadTagIndex` call.
  *
  * Reading the file is the only I/O this does up front. What it hands back is checked before
@@ -117,7 +131,7 @@ function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
       if (entries) importTaskspaceTagCache(baseDir, entries);
     },
 
-    save: (scope: string, cards: CachedCardHits, scanned: string[] = []) => {
+    save: ({ scope, cards, scanned = [], live, changed }: SaveCache) => {
       const scopes = fresh ? { ...existing?.scopes } : {};
       // Deleted before it is set, so a scope looked at again moves to the end rather than
       // keeping the position it first took. That is what makes insertion order visit order.
@@ -126,11 +140,33 @@ function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
       // Oldest out: what goes is the scope nobody has looked at for longest.
       for (const stale of Object.keys(scopes).slice(0, -SCOPES_MAX)) delete scopes[stale];
 
-      const nextFiles = { ...files };
-      for (const baseDir of scanned) {
-        const entries = exportTaskspaceTagCache(baseDir);
+      const nextFiles: TagCache["files"] = {};
+      for (const [baseDir, entries] of Object.entries(files)) {
+        // A gather that saw every taskspace in the workspace knows which directories are
+        // still taskspaces, so one that is not among them is gone and its entries go with
+        // it. A gather narrowed to one project knows nothing about the others' and keeps
+        // them — the bound below is what answers for that case.
+        if (live && !live.has(baseDir)) continue;
+        nextFiles[baseDir] = entries;
+      }
+      for (const { baseDir, changed: moved } of scanned) {
+        // Re-set even when it was already there, so a directory looked at again moves to the
+        // end of the insertion order the eviction below reads as least-recently-used.
+        const kept = nextFiles[baseDir];
+        delete nextFiles[baseDir];
+        // The entries this process holds, but only where they can differ from what is
+        // already stored. Exporting rebuilds the record, and a fresh object of identical
+        // contents is what would make the no-op check below fail and write anyway.
+        const entries = moved || !kept ? exportTaskspaceTagCache(baseDir) : kept;
         if (entries) nextFiles[baseDir] = entries;
       }
+      for (const stale of Object.keys(nextFiles).slice(0, -FILE_DIRS_MAX)) delete nextFiles[stale];
+
+      // Nothing new to say. The gather answered from the file it would be rewriting, so
+      // writing it back would serialize a megabyte and replace the file with itself — once
+      // per page load, and once per `kozane tag` invocation. The `builtAt` stamp is the only
+      // thing that would differ, and nothing reads it.
+      if (!changed && unchangedFrom(existing, scope, cards, scopes, nextFiles)) return;
 
       writeTagCache(root, {
         version: TAG_CACHE_VERSION,
@@ -147,6 +183,50 @@ function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
       });
     },
   };
+}
+
+type SaveCache = {
+  scope: string;
+  cards: CachedCardHits;
+  /** The taskspace directories this gather walked, each with whether its scan learned
+   *  anything — which decides between re-exporting its entries and keeping the stored ones. */
+  scanned?: { baseDir: string; changed: boolean }[];
+  /** Every taskspace directory in the workspace, when this gather saw them all — which is
+   *  only a gather that named no project. Absent, no directory is presumed gone. */
+  live?: Set<string>;
+  /** Whether any scan read or dropped something. See `TaskspaceTagScan.changed`. */
+  changed: boolean;
+};
+
+/**
+ * Whether the file on disk already says exactly this.
+ *
+ * Deliberately shallow, and it can be: `changed` has already ruled out the two ways the
+ * *contents* move — a re-queried card set and a re-read or pruned file. What is left for this
+ * to catch is the bookkeeping around them. Identity is the right test for the values, because
+ * every one of them came out of `existing` moments ago and was put back unchanged; a key
+ * comparison catches an eviction or a first visit that rearranged the maps without altering
+ * anything in them.
+ */
+function unchangedFrom(
+  existing: TagCache | null,
+  scope: string,
+  cards: CachedCardHits,
+  scopes: TagCache["scopes"],
+  files: TagCache["files"],
+): boolean {
+  if (!existing || existing.scopes[scope] !== cards) return false;
+  return sameOrder(existing.scopes, scopes) && sameOrder(existing.files, files);
+}
+
+/** Same keys, in the same order, each holding the very same value. Order counts because it is
+ *  what both evictions above read as least-recently-used. */
+function sameOrder(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const keys = Object.keys(a);
+  const next = Object.keys(b);
+  return (
+    keys.length === next.length && keys.every((key, i) => next[i] === key && a[key] === b[key])
+  );
 }
 
 /**
@@ -172,8 +252,12 @@ export async function loadTagIndex({
   cache,
 }: LoadTagIndex): Promise<TagIndex> {
   const store = cache ? openTagCache(cache) : null;
+  const scope = scopeKey(projectId);
 
-  const cards = store?.cards(scopeKey(projectId)) ?? (await getCardTagHits({ db, projectId }));
+  const stored = store?.cards(scope);
+  const cards = stored ?? (await getCardTagHits({ db, projectId }));
+  // A card set that had to be queried is a card set the stored file does not hold.
+  let changed = !stored;
   const hits = [...cards.hits];
   const { cardProjects } = cards;
   const taskspaceProjects: Record<string, string | null> = {};
@@ -182,7 +266,7 @@ export async function loadTagIndex({
   // No workspace root means no directory to resolve a taskspace against. The cards are still
   // a complete answer about cards, so the index is served rather than refused.
   if (!includeFiles || !root) {
-    store?.save(scopeKey(projectId), cards);
+    store?.save({ scope, cards, changed });
     return { hits, cardProjects, taskspaceProjects, truncated };
   }
 
@@ -190,7 +274,7 @@ export async function loadTagIndex({
     ? await getTaskspacesInProject({ db, projectId })
     : await getAllTaskspaces({ db });
 
-  const scanned: string[] = [];
+  const scanned: { baseDir: string; changed: boolean }[] = [];
   for (const taskspace of taskspaces) {
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
@@ -199,7 +283,8 @@ export async function loadTagIndex({
     // this only decides whether an unchanged file is re-read or merely re-stat'ed.
     store?.seedFiles(baseDir);
     const scan = scanTaskspaceTags(baseDir, taskspace.id, limits);
-    scanned.push(baseDir);
+    scanned.push({ baseDir, changed: scan.changed });
+    changed ||= scan.changed;
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
     // truncation names a taskspace too, and the page has to be able to name it back.
     taskspaceProjects[taskspace.id] = taskspace.projectId;
@@ -208,6 +293,14 @@ export async function loadTagIndex({
       truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
   }
 
-  store?.save(scopeKey(projectId), cards, scanned);
+  store?.save({
+    scope,
+    cards,
+    scanned,
+    changed,
+    // Only a gather across the whole workspace read every taskspace there is, so only it can
+    // tell a stored directory that is gone from one that simply belongs to another project.
+    ...(projectId ? {} : { live: new Set(scanned.map(({ baseDir }) => baseDir)) }),
+  });
   return { hits, cardProjects, taskspaceProjects, truncated };
 }

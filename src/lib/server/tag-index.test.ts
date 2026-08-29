@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -8,7 +8,7 @@ import { addProject } from "../../db/api/project.js";
 import { addBundle } from "../../db/api/bundle.js";
 import { addLayer } from "../../db/api/layer.js";
 import { addCard, updateCard } from "../../db/api/card.js";
-import { addTaskspace } from "../../db/api/taskspace.js";
+import { addTaskspace, deleteTaskspace } from "../../db/api/taskspace.js";
 import { clearTaskspaceTagCache } from "./taskspace-tags.js";
 import { readTagCache, tagCachePath, writeTagCache } from "./tag-cache.js";
 import { loadTagIndex } from "./tag-index.js";
@@ -309,6 +309,75 @@ describe("loadTagIndex", () => {
       utimesSync(join(root, "notes", "notes.md"), later, later);
 
       expect(tags((await gather(db, cache)).hits)).toEqual(["after"]);
+    });
+
+    /**
+     * The gather that answers entirely from the file it would be rewriting has nothing to
+     * write, and writing anyway meant serializing the whole cache and replacing the file with
+     * itself on every page load and every `kozane tag` run.
+     */
+    it("leaves the file alone when the gather learned nothing", async () => {
+      const { db, projectId, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+      await seedTaskspace(db, projectId, "notes", "'docs\n");
+      await gather(db, cache);
+
+      const before = statSync(tagCachePath(root)).mtimeMs;
+      const stamp = readTagCache(root)!.builtAt;
+      await gather(db, cache);
+
+      expect(readTagCache(root)!.builtAt).toBe(stamp);
+      expect(statSync(tagCachePath(root)).mtimeMs).toBe(before);
+    });
+
+    it("writes again as soon as a file under it changes", async () => {
+      const { db, projectId, cache } = await cachedSetup();
+      await seedTaskspace(db, projectId, "notes", "'before\n");
+      await gather(db, cache);
+      const stamp = readTagCache(root)!.builtAt;
+
+      const later = new Date(Date.now() + 60_000);
+      writeFileSync(join(root, "notes", "notes.md"), "'after\n");
+      utimesSync(join(root, "notes", "notes.md"), later, later);
+      await gather(db, cache);
+
+      expect(readTagCache(root)!.builtAt).not.toBe(stamp);
+      expect(tags((await gather(db, cache)).hits)).toEqual(["after"]);
+    });
+
+    /**
+     * `files` only ever gained keys, so a taskspace deleted or re-pathed left every file it
+     * had parsed in the cache for good. A gather across the whole workspace has seen every
+     * taskspace there is, which is what lets it tell one that is gone from one it did not
+     * happen to look at.
+     */
+    it("drops the stored files of a taskspace that is no longer one", async () => {
+      const { db, projectId, cache } = await cachedSetup();
+      const taskspaceId = await seedTaskspace(db, projectId, "notes", "'docs\n");
+      await gather(db, cache);
+      expect(Object.keys(readTagCache(root)!.files)).toEqual([join(root, "notes")]);
+
+      await deleteTaskspace({ db, taskspaceId });
+      clearTaskspaceTagCache();
+      await gather(db, cache);
+
+      expect(readTagCache(root)!.files).toEqual({});
+    });
+
+    /** A gather narrowed to one project has not seen the other projects' taskspaces, so it
+     *  must not read their absence from its own list as their deletion. */
+    it("keeps another project's stored files when narrowed to one project", async () => {
+      const { db, projectId, cache } = await cachedSetup();
+      const otherId = await addProject({ db, name: "Other" });
+      await seedTaskspace(db, projectId, "mine", "'mine\n");
+      await seedTaskspace(db, otherId, "theirs", "'theirs\n");
+      await gather(db, cache);
+
+      await loadTagIndex({ db, projectId, includeFiles: true, root, cache });
+
+      expect(Object.keys(readTagCache(root)!.files).sort()).toEqual(
+        [join(root, "mine"), join(root, "theirs")].sort(),
+      );
     });
 
     it("rebuilds silently from a corrupt cache file", async () => {

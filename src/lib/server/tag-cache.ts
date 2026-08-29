@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFileAtomic } from "./atomic-write.js";
 import { fileSignature } from "./file-signature.js";
-import type { TagLineHit } from "../tag.js";
+import type { CachedFile } from "./taskspace-tags.js";
 import type { TagHit } from "../types.js";
 
 /**
@@ -28,10 +28,16 @@ export function tagCachePath(root: string): string {
 /** One scope's card hits, as `getCardTagHits` returned them. */
 export type CachedCardHits = { hits: TagHit[]; cardProjects: Record<string, string> };
 
-/** One file's tags, against the identity of the bytes they were parsed from. The same
- *  `mtime:size` signature `taskspace-tags.ts` already validates its in-process cache by, so
- *  the two cannot disagree about what counts as unchanged. */
-export type CachedFileEntry = { signature: string; hits: TagLineHit[] };
+/**
+ * One file's tags, against the identity of the bytes they were parsed from — re-exported
+ * from `taskspace-tags.ts` rather than declared again here.
+ *
+ * The two modules hand these entries back and forth through `importTaskspaceTagCache` and
+ * `exportTaskspaceTagCache`, so they have to agree about the shape; declaring it twice meant
+ * nothing but a convention made them, and a field added on one side would have type-checked
+ * on both.
+ */
+export type CachedFileEntry = CachedFile;
 
 export type TagCache = {
   version: number;
