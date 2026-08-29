@@ -168,9 +168,12 @@
   });
   const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
   const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
+  /** The card's own text, and the line a file's tag sits on. It is what the panel is for, so
+   *  it is drawn in the colour body text is drawn in everywhere else — the surrounding
+   *  metadata is what stays quiet. */
   const excerptClass = css({
     fontSize: "12.5px",
-    color: "neutral.muted",
+    color: "ink.black",
     fontFamily: "mono",
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
