@@ -32,6 +32,37 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true });
 });
 
+/**
+ * The shape `TAG_CACHE_VERSION` is the version *of*, written out by hand.
+ *
+ * `satisfies` rather than a type annotation, and that is the whole point of it being here: a
+ * field added to `TagCache` is missing from this literal and a field removed from it is
+ * excess here, and both are compile errors — so the shape cannot change without someone
+ * arriving at this line and deciding whether the version has to move with it. The version was
+ * a number nothing held to anything: bumping it was a convention, and a build that changed
+ * the shape and forgot would read last version's file back as if it were this one's.
+ *
+ * The value is pinned too, so the diff that changes the shape also shows the bump.
+ */
+it("pins the shape the cache version is the version of", () => {
+  const shape = {
+    version: 1,
+    db: "ino:mtime:size|",
+    builtAt: "2026-01-01T00:00:00.000Z",
+    scopes: { "*": { hits: [], cardProjects: {} } },
+    files: { "/ws/notes": { "a.md": { signature: "t:1", hits: [] } } },
+  } satisfies TagCache;
+
+  expect(TAG_CACHE_VERSION).toBe(shape.version);
+  expect(readTagCacheOf(shape)).toEqual(shape);
+});
+
+/** Round-trips a cache through the file, which is the only way the validator is reached. */
+function readTagCacheOf(value: TagCache): TagCache | null {
+  writeTagCache(root, value);
+  return readTagCache(root);
+}
+
 describe("readTagCache / writeTagCache", () => {
   it("reads back what was written", () => {
     const written = cache({ scopes: { p1: { hits: [], cardProjects: { c1: "p1" } } } });

@@ -46,8 +46,16 @@ export function touchOrCreate<K, V>(map: Map<K, V>, key: K, make: () => V): V {
   return value;
 }
 
-/** Drops all but the last `max` entries — the ones least recently touched. */
+/**
+ * Drops all but the last `max` entries — the ones least recently touched.
+ *
+ * `max <= 0` clears the map, which is what "keep none of them" means. Spelled out because
+ * `slice(0, -max)` does not mean it: `-0` is `0`, so the negative-offset form quietly becomes
+ * `slice(0, 0)` and keeps *everything* — a ceiling of zero that evicts nothing is the one
+ * value where this function would do the opposite of what it was asked.
+ */
 export function evict<K, V>(map: Map<K, V>, max: number): void {
+  if (max <= 0) return map.clear();
   for (const key of [...map.keys()].slice(0, -max)) map.delete(key);
 }
 
@@ -65,7 +73,8 @@ export function setLast<V>(entries: Record<string, V>, key: string, value: V): v
   entries[key] = value;
 }
 
-/** {@link evict} for such a record, in place. */
+/** {@link evict} for such a record, in place — including its answer for `max <= 0`. */
 export function evictRecord(entries: Record<string, unknown>, max: number): void {
-  for (const key of Object.keys(entries).slice(0, -max)) delete entries[key];
+  const keys = Object.keys(entries);
+  for (const key of max <= 0 ? keys : keys.slice(0, -max)) delete entries[key];
 }

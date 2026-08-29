@@ -274,7 +274,10 @@ type Scan = {
   parsed: boolean;
 };
 
-const skipDirs = new Set(TAG_SCAN_SKIP_DIRS);
+// `Set<string>` explicitly: `TAG_SCAN_SKIP_DIRS` is `as const`, so the names stay a literal
+// union for anything that wants to enumerate them, and inferring that union here would leave
+// a set that cannot be asked about an arbitrary directory name.
+const skipDirs = new Set<string>(TAG_SCAN_SKIP_DIRS);
 
 function walk(scan: Scan, subPath: string, depth: number): void {
   if (depth > scan.depthMax) {

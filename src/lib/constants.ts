@@ -282,7 +282,7 @@ export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
  * much want tagged), it varies per repository, and honouring it means a parser and a
  * precedence order for a scan that is meant to be cheap.
  */
-export const TAG_SCAN_SKIP_DIRS: readonly string[] = [
+export const TAG_SCAN_SKIP_DIRS = [
   "node_modules",
   "bower_components",
   "vendor",
@@ -292,7 +292,7 @@ export const TAG_SCAN_SKIP_DIRS: readonly string[] = [
   "target",
   "coverage",
   "__pycache__",
-];
+] as const;
 
 /**
  * How many directories deep a tag scan will walk. A backstop against a pathological real
