@@ -114,11 +114,11 @@ Nothing is created to make a tag exist. It is in the workspace for as long as so
 holds it, and gone once that text is. Ordinary punctuation stays punctuation: `don't` is a
 word and `'quoted'` is a quoted word, and neither becomes a tag.
 
-In the browser, tags in card text are links to the tag index at `/tags`, which lists every
-tag in the workspace and what each one gathers. Add `?projectId=<id>` to narrow it to one
-project; without it, the index reaches across every project at once — which nothing else in
-the UI does, and which is the point of a label that lives in the text rather than in a
-table.
+In the browser, the tag index is at `/tags`, linked from the project list and from every
+tag written on a card. It lists every tag in the workspace and what each one gathers. Add
+`?projectId=<id>` to narrow it to one project; without it, the index reaches across every
+project at once — which nothing else in the UI does, and which is the point of a label that
+lives in the text rather than in a table.
 
 ## Seeing across projects
 

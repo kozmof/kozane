@@ -244,6 +244,25 @@ export function hitRowKey(source: TagSource): string {
 }
 
 /**
+ * A hit narrowed to the source it came from, so the caller that has already decided it is
+ * listing cards gets `source.cardId` rather than a union it has to narrow again.
+ *
+ * Predicates rather than `hit.source.kind === "card"` written at each `filter`, because a
+ * bare comparison does not narrow the array it filters: every caller then re-narrowed inside
+ * the loop with a `continue` that could never fire, and read the identity it wanted off
+ * whatever else was to hand. See {@link groupHitRows}.
+ */
+export type TagHitOf<T, K extends TagSource["kind"]> = T & {
+  source: Extract<TagSource, { kind: K }>;
+};
+
+export const isCardHit = <T extends { source: TagSource }>(hit: T): hit is TagHitOf<T, "card"> =>
+  hit.source.kind === "card";
+
+export const isFileHit = <T extends { source: TagSource }>(hit: T): hit is TagHitOf<T, "file"> =>
+  hit.source.kind === "file";
+
+/**
  * How many cards and how many files a tag holds. Distinct ones, per {@link sourceKey},
  * rather than a count of hits.
  *
@@ -352,6 +371,23 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
 }
 
 /**
+ * One row of a tag listing: the hits drawn on it, and the one source they share.
+ *
+ * `source` beside `key` rather than only `key`, and that is the whole point of the shape. The
+ * key is `card:<id>`, which is a string, and so is the card id it is built from — so a caller
+ * that read the identity of a row off its key type-checked, linked to `/card:<id>`, and
+ * looked its bundle up under a key nothing holds. The row now carries the thing itself, and
+ * the key is only ever what an `{#each}` or a `Map` is keyed by.
+ */
+export interface TagHitRow<T extends { source: TagSource }> {
+  /** {@link hitRowKey}. Unique among the rows of one listing, and nothing else. */
+  key: string;
+  /** What this row is: the card to open, or the file and line to go and look at. */
+  source: T["source"];
+  hits: T[];
+}
+
+/**
  * Hits gathered under whatever identifies the row they will be drawn on, in first-seen order
  * — which is the order the underlying read produced, so the terminal and the page list them
  * the same way.
@@ -359,16 +395,19 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
  * Keyed by {@link hitRowKey} rather than by a key function each caller passes. The parameter
  * was the only thing the two copies of this had in common, and it was the part they could
  * have got wrong: one row per card, one row per line of a file.
+ *
+ * Handed a list narrowed by {@link isCardHit} or {@link isFileHit}, every row's `source` is
+ * narrowed with it, so drawing one needs no `kind` check at all.
  */
-export function groupHitRows<T extends { source: TagSource }>(hits: T[]): [string, T[]][] {
-  const groups = new Map<string, T[]>();
+export function groupHitRows<T extends { source: TagSource }>(hits: T[]): TagHitRow<T>[] {
+  const rows = new Map<string, TagHitRow<T>>();
   for (const hit of hits) {
     const key = hitRowKey(hit.source);
-    const existing = groups.get(key);
-    if (existing) existing.push(hit);
-    else groups.set(key, [hit]);
+    const existing = rows.get(key);
+    if (existing) existing.hits.push(hit);
+    else rows.set(key, { key, source: hit.source, hits: [hit] });
   }
-  return [...groups];
+  return [...rows.values()];
 }
 
 /**

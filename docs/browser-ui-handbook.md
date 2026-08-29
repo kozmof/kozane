@@ -397,10 +397,11 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 
 ### The tag index
 
-The tag index lives at `/tags`, and the tags on your cards are the way in. It has two
-halves: the tree of every tag on the left, with a count of the cards and files each one
-gathers, and the selected tag's hits on the right. `?tag=` says which tag is open, so any
-view of the page is a link you can send.
+The tag index lives at `/tags`. There are two ways in: the "Tags" link on the project
+list, which opens it on the whole workspace, and any tag on a card, which opens it on that
+tag. It has two halves: the tree of every tag on the left, with a count of the cards and
+files each one gathers, and the selected tag's hits on the right. `?tag=` says which tag is
+open, so any view of the page is a link you can send.
 
 It reaches the whole workspace by default. Unlike a board, which draws one project, the
 index gathers every project's cards and every taskspace at once — a tag lives in the text

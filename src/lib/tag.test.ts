@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildTagTree,
   groupHitRows,
+  isCardHit,
+  isFileHit,
   normalizeTag,
   scanTagLines,
   splitTag,
@@ -161,7 +163,21 @@ describe("groupHitRows", () => {
   it("puts every hit on one card in one row", () => {
     const rows = groupHitRows([cardHit("c1", "perf"), cardHit("c1", "perf:cache")]);
     expect(rows).toHaveLength(1);
-    expect(rows[0][1]).toHaveLength(2);
+    expect(rows[0].hits).toHaveLength(2);
+  });
+
+  // The row has to carry the card, not only a key built from it: a caller reading the
+  // identity of a row off its key gets `card:c1`, which is a string like an id is a string
+  // and so links to a board that does not exist.
+  it("carries the source a row is, beside the key it is drawn under", () => {
+    const [row] = groupHitRows([cardHit("c1", "perf")]);
+    expect(row.key).toBe("card:c1");
+    expect(row.source).toEqual({ kind: "card", cardId: "c1" });
+  });
+
+  it("carries the file and line for a file row", () => {
+    const [row] = groupHitRows([fileHit("a.md", 9, "perf")]);
+    expect(row.source).toEqual({ kind: "file", taskspaceId: "t1", path: "a.md", line: 9 });
   });
 
   it("gives each line of a file its own row, since each is somewhere to go", () => {
@@ -174,7 +190,13 @@ describe("groupHitRows", () => {
 
   it("keeps first-seen order, which is the order the read produced", () => {
     const rows = groupHitRows([cardHit("c2", "a"), cardHit("c1", "b"), cardHit("c2", "c")]);
-    expect(rows.map(([key]) => key)).toEqual(["card:c2", "card:c1"]);
+    expect(rows.map(({ key }) => key)).toEqual(["card:c2", "card:c1"]);
+  });
+
+  it("narrows a filtered list to the source its rows are", () => {
+    const hits = [cardHit("c1", "perf"), fileHit("a.md", 1, "perf")];
+    expect(groupHitRows(hits.filter(isCardHit)).map(({ source }) => source.cardId)).toEqual(["c1"]);
+    expect(groupHitRows(hits.filter(isFileHit)).map(({ source }) => source.path)).toEqual(["a.md"]);
   });
 
   it("names each distinct tag once, sigil and all, in one order", () => {

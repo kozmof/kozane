@@ -198,6 +198,15 @@ directories — `node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
 `vendor`, `bower_components`, `__pycache__` — which narrows what is read further
 still, in the same direction as every other rule here.
 
+What that scan gathered is kept in `.kozane/tag-index.json` so the next page load
+does not repeat it, and the lines it quotes are kept with it. That is a file
+inside the workspace holding excerpts of files that may sit outside it — a
+taskspace created with `kozane taskspace create --dir <path>` can point anywhere
+the server user can read. It is a cache and never a record: deleting it costs one
+slow load, and it is rebuilt from the files themselves. Treat it as you would the
+taskspaces it summarizes, and keep it out of source control if their contents
+should not be there either.
+
 **Writing** replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path
 containing a dot-entry. The write is atomic — a temporary file, then a rename —

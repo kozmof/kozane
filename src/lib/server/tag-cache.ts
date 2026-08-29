@@ -76,20 +76,71 @@ export function databaseSignature(dbUrl: string): string | null {
   return `${main}|${fileSignature(`${path}-wal`) ?? ""}`;
 }
 
-/** Whether `value` is shaped like the cache this build writes. Structural rather than deep:
- *  the file is this program's own, written whole by an atomic rename, so what this has to
- *  catch is a foreign or older file — not a crafted one, which is as trusted as the database
- *  sitting beside it. */
-function isTagCache(value: unknown): value is TagCache {
-  if (typeof value !== "object" || value === null) return false;
-  const cache = value as Partial<TagCache>;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/** Whether every value of a record satisfies `each`. An empty record passes, which is what a
+ *  workspace with nothing cached yet writes. */
+function everyValue(value: unknown, each: (entry: unknown) => boolean): boolean {
+  return isRecord(value) && Object.values(value).every(each);
+}
+
+function isTagHit(value: unknown): value is TagHit {
+  if (!isRecord(value)) return false;
+  if (typeof value.tag !== "string" || typeof value.excerpt !== "string") return false;
+  const source = value.source;
+  if (!isRecord(source)) return false;
+  return source.kind === "card"
+    ? typeof source.cardId === "string"
+    : source.kind === "file" &&
+        typeof source.taskspaceId === "string" &&
+        typeof source.path === "string" &&
+        typeof source.line === "number";
+}
+
+function isTagLineHit(value: unknown): boolean {
   return (
-    cache.version === TAG_CACHE_VERSION &&
-    typeof cache.db === "string" &&
-    typeof cache.scopes === "object" &&
-    cache.scopes !== null &&
-    typeof cache.files === "object" &&
-    cache.files !== null
+    isRecord(value) &&
+    typeof value.tag === "string" &&
+    typeof value.line === "number" &&
+    typeof value.excerpt === "string"
+  );
+}
+
+const isCachedCardHits = (value: unknown): boolean =>
+  isRecord(value) &&
+  Array.isArray(value.hits) &&
+  value.hits.every(isTagHit) &&
+  everyValue(value.cardProjects, (id) => typeof id === "string");
+
+const isCachedFile = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value.signature === "string" &&
+  Array.isArray(value.hits) &&
+  value.hits.every(isTagLineHit);
+
+/**
+ * Whether `value` is the cache this build writes — every field of it, down to each hit.
+ *
+ * Deep, and it has to be. Checking only the top level was enough to catch a foreign or older
+ * file, which is what a cache written whole by an atomic rename can normally go wrong as; but
+ * anything that got past it went straight into `loadTagIndex`, which spreads `hits` and reads
+ * `source.kind` off each one. A file that was plausible at the top and wrong underneath —
+ * hand-edited, or truncated and then repaired by something — therefore threw a `TypeError`
+ * out of a page load and a `kozane tag` run, and kept throwing until someone deleted it. The
+ * promise this module makes is that any doubt costs a rebuild and never an error, so the
+ * doubt has to be looked for everywhere the answer is later trusted.
+ *
+ * The cost is a pass over data `JSON.parse` has just walked anyway — two `typeof`s a hit,
+ * against a rebuild that reads every card in the workspace and re-parses every file.
+ */
+function isTagCache(value: unknown): value is TagCache {
+  if (!isRecord(value)) return false;
+  return (
+    value.version === TAG_CACHE_VERSION &&
+    typeof value.db === "string" &&
+    everyValue(value.scopes, isCachedCardHits) &&
+    everyValue(value.files, (entries) => everyValue(entries, isCachedFile))
   );
 }
 

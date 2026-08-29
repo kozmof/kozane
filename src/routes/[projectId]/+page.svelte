@@ -261,7 +261,17 @@
       );
       acted.push("taskspace", "path");
     }
-    if (card) acted.push("card");
+    if (card) {
+      // Selected as well as centred, which is what says *which* card the tag matched: the
+      // pan puts it in the middle of a board that may be dense, and the middle of the screen
+      // is not a mark. The same thing `focusWarp` does for `?warp=`, in this page's other
+      // vocabulary. Not in a read-only export, where nothing clears a selection again.
+      if (!readonly) {
+        s.selection.selectedCards = new Set([card.id]);
+        s.selection.primarySelectedId = card.id;
+      }
+      acted.push("card");
+    }
     if (acted.length > 0) clearQuery(...acted);
 
     // The pan is the one part that has to wait for the canvas to exist. It changes nothing on

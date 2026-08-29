@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -385,6 +385,18 @@ describe("loadTagIndex", () => {
       await addCard({ db, bundleId, content: "'perf" });
       await gather(db, cache);
       writeFileSync(tagCachePath(root), "{ not json");
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
+    });
+
+    /** Not json is the easy corruption. This is the one that got through: the top of the file
+     *  says everything a reader checked, and the scope under it holds nothing to gather. */
+    it("rebuilds from a cache file that is plausible at the top and wrong underneath", async () => {
+      const { db, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+      await gather(db, cache);
+      const stored = JSON.parse(readFileSync(tagCachePath(root), "utf-8"));
+      writeFileSync(tagCachePath(root), JSON.stringify({ ...stored, scopes: { "*": {} } }));
 
       expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
     });

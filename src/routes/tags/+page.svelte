@@ -7,11 +7,14 @@
   import {
     buildTagTree,
     groupHitRows,
+    isCardHit,
+    isFileHit,
     normalizeTag,
     taggedWith,
     tagMatcher,
     tagMatches,
     type TagCounts,
+    type TagHitOf,
     type TagNode,
   } from "$lib/tag";
   import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
@@ -89,20 +92,23 @@
    * for `'perf` twice, and two rows would read as two cards. What counts as a row is
    * `groupHitRows` in `$lib/tag`, which the terminal groups by too.
    */
-  const cardRows = $derived(groupHitRows(shownHits.filter((hit) => hit.source.kind === "card")));
+  const cardRows = $derived(groupHitRows(shownHits.filter(isCardHit)));
 
   /** File hits gathered under the taskspace they were found in, so a path is read against
    *  the directory it is relative to rather than on its own — and within that, one row per
    *  line, since each is somewhere to go and look. */
   const fileRowsByTaskspace = $derived.by(() => {
-    const byTaskspace = new Map<string, TagHit[]>();
+    const byTaskspace = new Map<string, TagHitOf<TagHit, "file">[]>();
     for (const hit of shownHits) {
-      if (hit.source.kind !== "file") continue;
+      if (!isFileHit(hit)) continue;
       const existing = byTaskspace.get(hit.source.taskspaceId);
       if (existing) existing.push(hit);
       else byTaskspace.set(hit.source.taskspaceId, [hit]);
     }
-    return [...byTaskspace].map(([id, hits]) => [id, groupHitRows(hits)] as const);
+    return [...byTaskspace].map(([taskspaceId, hits]) => ({
+      taskspaceId,
+      rows: groupHitRows(hits),
+    }));
   });
 
   const taskspaceName = (id: string) =>
@@ -165,6 +171,15 @@
   });
   const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
   const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
+  /** The taskspace a group of file rows was found in. Quiet, like the rest of the metadata
+   *  around a hit — it says what the paths beneath it are relative to, and nothing more. */
+  const taskspaceHeadingClass = css({
+    fontSize: "11px",
+    fontWeight: "400",
+    fontFamily: "mono",
+    color: "neutral.muted",
+    marginBottom: "6px",
+  });
   /** The card's own text, and the line a file's tag sits on. It is what the panel is for, so
    *  it is drawn in the colour body text is drawn in everywhere else — the surrounding
    *  metadata is what stays quiet. */
@@ -308,7 +323,8 @@
                 marginBottom: "28px",
               })}
             >
-              {#each cardRows as [cardId, hits] (cardId)}
+              {#each cardRows as { key, source, hits } (key)}
+                {@const cardId = source.cardId}
                 {@const bundle = data.bundles[data.cardBundleIds[cardId]]}
                 <li>
                   <a
@@ -355,7 +371,11 @@
             </ul>
           {/if}
 
-          {#each fileRowsByTaskspace as [taskspaceId, rows] (taskspaceId)}
+          {#each fileRowsByTaskspace as { taskspaceId, rows } (taskspaceId)}
+            <!-- Named, because the paths below are relative to this taskspace and read as
+                 nothing on their own: two taskspaces holding a `notes/todo.md` draw two
+                 identical rows otherwise. -->
+            <h3 class={taskspaceHeadingClass}>{taskspaceName(taskspaceId)}</h3>
             <ul
               class={css({
                 listStyle: "none",
@@ -365,39 +385,36 @@
                 marginBottom: "28px",
               })}
             >
-              {#each rows as [place, hits] (place)}
-                {@const source = hits[0].source}
-                {#if source.kind === "file"}
-                  <li>
-                    <a
-                      href={fileHref(taskspaceId, source.path)}
+              {#each rows as { key, source, hits } (key)}
+                <li>
+                  <a
+                    href={fileHref(taskspaceId, source.path)}
+                    class={css({
+                      display: "flex",
+                      gap: "12px",
+                      alignItems: "baseline",
+                      padding: "6px 14px",
+                      background: "ink.white",
+                      border: "1px solid token(colors.neutral.border)",
+                      borderRadius: "2px",
+                      textDecoration: "none",
+                      transition: "border-color 0.1s",
+                      _hover: { borderColor: "neutral.muted" },
+                    })}
+                  >
+                    <span
                       class={css({
-                        display: "flex",
-                        gap: "12px",
-                        alignItems: "baseline",
-                        padding: "6px 14px",
-                        background: "ink.white",
-                        border: "1px solid token(colors.neutral.border)",
-                        borderRadius: "2px",
-                        textDecoration: "none",
-                        transition: "border-color 0.1s",
-                        _hover: { borderColor: "neutral.muted" },
+                        fontFamily: "mono",
+                        fontSize: "11.5px",
+                        color: "neutral.muted",
+                        flexShrink: "0",
                       })}
                     >
-                      <span
-                        class={css({
-                          fontFamily: "mono",
-                          fontSize: "11.5px",
-                          color: "neutral.muted",
-                          flexShrink: "0",
-                        })}
-                      >
-                        {source.path}:{source.line}
-                      </span>
-                      <span class={excerptClass}>{hits[0].excerpt}</span>
-                    </a>
-                  </li>
-                {/if}
+                      {source.path}:{source.line}
+                    </span>
+                    <span class={excerptClass}>{hits[0].excerpt}</span>
+                  </a>
+                </li>
               {/each}
             </ul>
           {/each}

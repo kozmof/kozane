@@ -10,9 +10,35 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "neutral.muted", marginBottom: "24px" })}>
-    {data.workspaceRoot ?? "Kozane"}
-  </h1>
+  <!-- The way in to the tag index. A tag written on a card links to it, but that is only a
+       way in once there is a tag to click and only ever to that one tag; the index reaches
+       across every project, which is what makes this page — the one thing above them all —
+       where it belongs. -->
+  <div
+    class={css({
+      display: "flex",
+      alignItems: "baseline",
+      justifyContent: "space-between",
+      gap: "16px",
+      marginBottom: "24px",
+    })}
+  >
+    <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "neutral.muted" })}>
+      {data.workspaceRoot ?? "Kozane"}
+    </h1>
+    <a
+      href="{base}/tags"
+      class={css({
+        fontSize: "12px",
+        fontFamily: "mono",
+        color: "neutral.muted",
+        textDecoration: "none",
+        _hover: { color: "ink.black" },
+      })}
+    >
+      Tags →
+    </a>
+  </div>
 
   {#if data.projects.length === 0}
     {#if data.readonly}

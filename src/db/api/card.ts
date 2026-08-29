@@ -257,20 +257,33 @@ export async function addCards({ db, bundleId, layerId, cards }: AddCards): Prom
 // ── Project-scoped transactional operations (verify ownership before mutating) ─
 
 type GetCardBundleNames = NeedsDB & { cardIds: string[] };
+/**
+ * The bundle each of `cardIds` is in.
+ *
+ * In {@link chunked} statements, one bound parameter per id, for the reason that helper
+ * gives about the writers: an `IN` list is subject to the same variable ceiling an `INSERT`
+ * is, and every caller but one hands this a handful of ids. The one that does not is the tag
+ * index's static export, which is built before anyone has chosen a tag and so asks about
+ * every tagged card in the workspace at once.
+ */
 export async function getCardBundleNames({
   db,
   cardIds,
 }: GetCardBundleNames): Promise<{ cardId: string; bundleId: string; bundleName: string }[]> {
-  if (cardIds.length === 0) return [];
-  const rows = await db
-    .select({
-      cardId: cardTable.id,
-      bundleId: bundleTable.id,
-      bundleName: bundleTable.name,
-    })
-    .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .where(inArray(cardTable.id, cardIds));
+  const rows: { cardId: string; bundleId: string; bundleName: string }[] = [];
+  for (const batch of chunked(cardIds)) {
+    rows.push(
+      ...(await db
+        .select({
+          cardId: cardTable.id,
+          bundleId: bundleTable.id,
+          bundleName: bundleTable.name,
+        })
+        .from(cardTable)
+        .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+        .where(inArray(cardTable.id, batch))),
+    );
+  }
   return rows;
 }
 

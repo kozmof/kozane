@@ -63,6 +63,56 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)).toBeNull();
   });
 
+  // The shape that used to get through: right at the top, wrong underneath, and dereferenced
+  // by `loadTagIndex` the moment it was trusted.
+  it("answers with nothing for a scope holding no hits to spread", () => {
+    writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes: { "*": {} } as never })));
+
+    expect(readTagCache(root)).toBeNull();
+  });
+
+  it("answers with nothing for a hit that names no source", () => {
+    const scopes = { "*": { hits: [{ tag: "perf", excerpt: "" }], cardProjects: {} } };
+
+    writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes } as never)));
+
+    expect(readTagCache(root)).toBeNull();
+  });
+
+  it("answers with nothing for a file entry with no signature to check", () => {
+    const files = { "/ws/task": { "a.md": { hits: [] } } };
+
+    writeFileSync(tagCachePath(root), JSON.stringify(cache({ files } as never)));
+
+    expect(readTagCache(root)).toBeNull();
+  });
+
+  it("reads back a cache holding real hits of both kinds", () => {
+    const written = cache({
+      scopes: {
+        "*": {
+          hits: [
+            { tag: "perf", source: { kind: "card", cardId: "c1" }, excerpt: "a" },
+            {
+              tag: "perf",
+              source: { kind: "file", taskspaceId: "t1", path: "a.md", line: 3 },
+              excerpt: "b",
+            },
+          ],
+          cardProjects: { c1: "p1" },
+        },
+      },
+      files: {
+        "/ws/task": {
+          "a.md": { signature: "t:1", hits: [{ tag: "perf", line: 3, excerpt: "b" }] },
+        },
+      },
+    });
+    writeTagCache(root, written);
+
+    expect(readTagCache(root)).toEqual(written);
+  });
+
   it("does not throw when the cache cannot be written", () => {
     // No `.kozane` to write into, which is what a workspace mid-deletion looks like.
     const gone = join(tmpdir(), `kozane-tag-cache-missing-${randomUUID()}`);

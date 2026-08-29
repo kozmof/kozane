@@ -4,13 +4,15 @@ import { getTaskspacesInProject } from "../../db/api/taskspace.js";
 import {
   buildTagTree,
   groupHitRows,
+  isCardHit,
+  isFileHit,
   normalizeTag,
   taggedWith,
   tagMatcher,
   type TagCounts,
   type TagNode,
 } from "../../lib/tag.js";
-import { loadTagIndex } from "../../lib/server/tag-index.js";
+import { loadTagIndex, type TagIndexTruncation } from "../../lib/server/tag-index.js";
 import type { DB } from "../../db/tx.js";
 import type { TagHit } from "../../lib/types.js";
 import { resolveProjectId } from "../lib/project-selection.js";
@@ -81,7 +83,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
 async function warnTruncated(
   db: DB,
   projectId: string,
-  truncated: { taskspaceId: string; reasons: string[] }[],
+  truncated: TagIndexTruncation[],
 ): Promise<void> {
   if (truncated.length === 0) return;
   const taskspaces = await getTaskspacesInProject({ db, projectId });
@@ -131,7 +133,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
 }
 
 async function printCardHits(db: DB, projectId: string, hits: TagHit[]): Promise<void> {
-  const cardHits = hits.filter((hit) => hit.source.kind === "card");
+  const cardHits = hits.filter(isCardHit);
   if (cardHits.length === 0) return;
 
   // Short ids are drawn against every card of the project, so the id printed for a card is
@@ -146,24 +148,20 @@ async function printCardHits(db: DB, projectId: string, hits: TagHit[]): Promise
   // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
   // for the terminal and the index page alike. A card written `'perf:cache and 'perf` matches
   // a search for `perf` twice, and printing it twice says the tag is on two cards.
-  for (const [, rows] of groupHitRows(cardHits)) {
-    const { source } = rows[0];
-    if (source.kind !== "card") continue;
+  for (const { source, hits: rows } of groupHitRows(cardHits)) {
     const id = shortIds.get(source.cardId) ?? source.cardId;
     console.log(`  ${id}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`);
   }
 }
 
 function printFileHits(hits: TagHit[]): void {
-  const fileHits = hits.filter((hit) => hit.source.kind === "file");
+  const fileHits = hits.filter(isFileHit);
   if (fileHits.length === 0) return;
 
   console.log("Files:");
   // Grouped by the line, not by the file: a file may carry the tag in several places, and
   // each is somewhere to go and look. Two tags on one line are still one row.
-  for (const [, rows] of groupHitRows(fileHits)) {
-    const { source } = rows[0];
-    if (source.kind !== "file") continue;
+  for (const { source, hits: rows } of groupHitRows(fileHits)) {
     console.log(
       `  ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
     );

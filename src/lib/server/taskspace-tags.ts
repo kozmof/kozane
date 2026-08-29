@@ -87,6 +87,11 @@ export type TaskspaceTagScan = {
  * wrong is a stale entry rather than a wrong answer anywhere durable: the tag index is
  * rebuilt from it, not trusted as a record. If it ever needs closing, `fileSignature` closes
  * both halves for one extra `stat` per file.
+ *
+ * A file whose `modifiedAt` is null has no signature at all, and so is never cached and never
+ * answered from the cache — see {@link fileTagHits}. Composing one out of the null read as a
+ * signature like any other, so every such file in a taskspace shared the one key `null:0` and
+ * the first of them answered for all the rest.
  */
 export type CachedFile = { signature: string; hits: TagLineHit[] };
 
@@ -153,9 +158,12 @@ function fileTagHits(
   budget: Budget,
 ): FileTags {
   const size = entry.size ?? 0;
-  const signature = `${entry.modifiedAt}:${size}`;
+  // Null when the listing could not say when the file was last written, which leaves nothing
+  // to tell one version of it from another. Such a file is read every time rather than
+  // sharing a made-up key with every other file in the same position.
+  const signature = entry.modifiedAt === null ? null : `${entry.modifiedAt}:${size}`;
   const cached = fileCache.get(baseDir)?.get(subPath);
-  if (cached?.signature === signature) return { hits: cached.hits };
+  if (signature !== null && cached?.signature === signature) return { hits: cached.hits };
 
   // Refused here rather than by the read below, because the read is not what it would cost.
   // `readTaskspaceFile` turns a file past the per-file cap away without opening it, so
@@ -182,9 +190,11 @@ function fileTagHits(
     return { skipped: "unreadable" };
   }
 
-  const entries = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
-  entries.set(subPath, { signature, hits });
-  fileCache.set(baseDir, entries);
+  if (signature !== null) {
+    const entries = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
+    entries.set(subPath, { signature, hits });
+    fileCache.set(baseDir, entries);
+  }
   return { hits, parsed: true };
 }
 
