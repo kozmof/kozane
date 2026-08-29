@@ -384,10 +384,12 @@ holding it is edited or deleted.
 
 An apostrophe is ordinary punctuation too, so `don't` is a word and `'quoted'` is a quoted
 word — neither becomes a tag. A tag opens after a space or at the start of a line, and a
-closing apostrophe cancels it. An apostrophe inside a link is part of the address, so
-`https://example.com/it's/fine` is one link and no tag. Levels take letters, digits, `-`,
-and `_`, up to 64 characters each and 8 levels deep; past either, it is not treated as a tag
-at all. `'Perf` and `'perf` are the same tag.
+closing apostrophe cancels it. A link is an address rather than text, so
+`https://example.com/it's/fine` is one link and no tag — and a tag written against a link
+stops where it starts, which makes `'todo:https://example.com` the tag `'todo` and
+`'https://example.com` no tag rather than the tag `'https`. Levels take letters, digits,
+`-`, and `_`, up to 64 characters each and 8 levels deep; past either, it is not treated as
+a tag at all. `'Perf` and `'perf` are the same tag.
 
 The cancelling rule reaches one word, so an apostrophe opening something longer is still a
 tag: `'a phrase'` gathers under `'a`, and so do `'til` and `'90s`. The rule errs this way on

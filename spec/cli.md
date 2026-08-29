@@ -67,13 +67,18 @@ is working in.
 
 An apostrophe is also ordinary punctuation, so three rules keep writing from becoming
 tagging. A tag opens at a word boundary, which leaves `don't` and `x'foo` alone; a
-closing apostrophe cancels it, which leaves `'quoted'` as text; and an apostrophe inside an
-http(s) URL belongs to the address, which leaves `https://example.com/it's/fine` as one
-link. The URL rule is part of the grammar rather than of the browser, so a tag is read the
-same way in a card, in a file, and on screen. A level may hold letters,
+closing apostrophe cancels it, which leaves `'quoted'` as text; and an http(s) URL is an
+address rather than text, which leaves `https://example.com/it's/fine` as one link. The URL
+rule is part of the grammar rather than of the browser, so a tag is read the same way in a
+card, in a file, and on screen. A level may hold letters,
 digits, `-`, and `_`; it may not exceed 64 characters, and a tag may not exceed 8 levels.
 Something past either limit is not a tag at all rather than a tag cut short. Tags are
 matched case-insensitively, so `'Perf` and `'perf` are one tag.
+
+A URL is a boundary as well as an exclusion, so a tag written hard against one ends where
+the address begins: `'todo:https://example.com/issue/1` is the tag `'todo`, and
+`'https://example.com` is no tag at all rather than the tag `'https`. That is what a card
+draws, and what the index gathers, because both read the same grammar.
 
 The cancelling rule reaches one word and no further, so `'a phrase'` still gathers under
 `'a`, and so do `'til` and `'90s`. In a source file the same rule means a multi-word quoted

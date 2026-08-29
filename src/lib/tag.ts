@@ -5,7 +5,7 @@ import {
   TAG_SIGIL,
 } from "./constants.js";
 import type { TagHit, TagScanTruncation, TagSource } from "./types.js";
-import { inUrlSpan, scanUrls, type UrlSpan } from "./urls.js";
+import { scanUrls, type UrlSpan } from "./urls.js";
 
 /**
  * The tag grammar, in one place, for every caller: a card's text, a taskspace file's text,
@@ -32,11 +32,23 @@ import { inUrlSpan, scanUrls, type UrlSpan } from "./urls.js";
  * - **A URL is an address, not text.** An apostrophe inside `http://…` opens nothing, so
  *   `http://example.com/('foo)` is one link rather than a link and a tag. Unlike the two
  *   rules above this one is not in the pattern — it cannot be, since the pattern is asked
- *   about one candidate at a time and a URL is a span around it — so both scanners below
- *   drop a match that lands inside one. It is a rule of the grammar rather than of the
- *   renderer, deliberately: `lib/text-segments.ts` already had to know where URLs were in
- *   order to draw them as anchors, and when only it knew, a card was gathered under a tag
- *   the card itself did not draw. See `lib/urls.ts`.
+ *   about one candidate at a time and a URL is a span around it. A URL's characters are
+ *   therefore *cut out* before the pattern is asked anything: `scanTagMatches` below reads
+ *   the gaps between the spans `lib/urls.ts` finds, each as its own text, so an address is
+ *   not merely stepped over but is not there to be read.
+ *
+ *   Cut rather than stepped over, and the difference is the whole of the rule. Testing where
+ *   a match *started* let a candidate that began outside a URL and ran into one through, so
+ *   `see 'http://example.com'` gathered the tag `http` and `'todo:https://example.com`
+ *   gathered `todo:https` — neither of which the card drew, because the renderer had always
+ *   cut. The junk tag existed only in the index, and `'todo`, the one the writer meant,
+ *   only on the card. Cutting is what the renderer was already doing; doing it here too is
+ *   what makes the two one decision rather than two that nearly agree.
+ *
+ *   It is a rule of the grammar rather than of the renderer, deliberately:
+ *   `lib/text-segments.ts` already had to know where URLs were in order to draw them as
+ *   anchors, and when only it knew, a card was gathered under a tag the card itself did not
+ *   draw. See `lib/urls.ts`.
  *
  * The second rule reaches one token, and deliberately: `'a phrase'` still tags `a`, because
  * deciding otherwise means scanning ahead for a closing quote that may be on another line,
@@ -154,22 +166,58 @@ export interface TagPosition {
  * either of which can change a string's length, so looking the normalized tag back up in the
  * original is arithmetic that is right until it is quietly wrong. The regex already knows
  * where it matched.
+ *
+ * `urls` is taken rather than found again where the caller has already found them —
+ * `lib/text-segments.ts` needs the very same spans to draw its anchors — so one text is
+ * scanned for URLs once and the anchor and the cut come out of the one list. Omitted, they
+ * are found here, which is what every other caller does.
  */
-export function scanTagPositions(text: string): TagPosition[] {
-  const positions: TagPosition[] = [];
-  if (!text.includes(TAG_SIGIL)) return positions;
+export function scanTagPositions(text: string, urls?: UrlSpan[]): TagPosition[] {
+  // A text with no sigil holds no tag, and this is the cheapest way to know it. The URL scan
+  // goes with it, so a card of prose — the common case — pays one substring search.
+  if (!text.includes(TAG_SIGIL)) return [];
+  return scanTagMatches(text, urls ?? scanUrls(text));
+}
 
-  // Found once for the whole text, not once per candidate, and lazily: a text with a sigil
-  // but no tag in it never asks. See the URL rule in the module note above.
-  let urls: UrlSpan[] | null = null;
-  for (const match of text.matchAll(TAG_RE)) {
-    urls ??= scanUrls(text);
-    if (inUrlSpan(urls, match.index)) continue;
-    positions.push({
-      tag: normalizeTag(match[1]),
-      index: match.index,
-      length: match[0].length,
-    });
+/**
+ * The one scanner, which every reading of a text goes through: the index's, the terminal's,
+ * and the card's.
+ *
+ * A URL is cut out rather than stepped over. The text is split at the spans `urls` names and
+ * each gap is matched as its own text, so the pattern is never shown an address at all — and
+ * a candidate running *into* one stops at its edge. `'todo:https://x.com` is the tag `todo`,
+ * matched in the gap `'todo:`; `see 'http://x.com'` is no tag, because its gap is `see '` and
+ * nothing follows the sigil. See the URL rule in the module note.
+ *
+ * Offsets are into `text` as given, not into the gap a match was found in: a renderer cuts
+ * the original around them.
+ */
+function scanTagMatches(text: string, urls: UrlSpan[]): TagPosition[] {
+  const positions: TagPosition[] = [];
+
+  // The gaps between the spans, in order. `scanUrls` returns disjoint spans in ascending
+  // order — `matchAll` cannot overlap and trimming only shortens one — so one pass builds
+  // them, and a text holding no URL is the single gap of the whole text.
+  const gaps: [number, number][] = [];
+  let start = 0;
+  for (const { url, index } of urls) {
+    if (index > start) gaps.push([start, index]);
+    start = index + url.length;
+  }
+  if (start < text.length) gaps.push([start, text.length]);
+
+  for (const [from, to] of gaps) {
+    // Sliced rather than matched in place from a bounded `lastIndex`, because the lookbehind
+    // has to read a gap's first character as the start of a text — it is the start of one,
+    // what precedes it being an address rather than prose. Matching in place would let the
+    // last character of a URL open a tag on the far side of the cut.
+    for (const match of text.slice(from, to).matchAll(TAG_RE)) {
+      positions.push({
+        tag: normalizeTag(match[1]),
+        index: from + match.index,
+        length: match[0].length,
+      });
+    }
   }
   return positions;
 }
@@ -229,14 +277,10 @@ export function scanTagLines(text: string): TagLineHit[] {
     if (!line.includes(TAG_SIGIL)) continue;
 
     let excerpt: string | null = null;
-    let urls: UrlSpan[] | null = null;
     const seen = new Set<string>();
-    for (const match of line.matchAll(TAG_RE)) {
-      // Lazily, and per line: the walk is handed whole files, and a line carrying an
-      // apostrophe but no tag — by far the common one — never pays for this.
-      urls ??= scanUrls(line);
-      if (inUrlSpan(urls, match.index)) continue;
-      const tag = normalizeTag(match[1]);
+    // Through the same scanner the card draws from, over one line rather than a whole text.
+    // A line is a text like any other, which is what keeps the two readings one reading.
+    for (const { tag } of scanTagPositions(line)) {
       if (seen.has(tag)) continue;
       seen.add(tag);
       excerpt ??= excerptOf(line);

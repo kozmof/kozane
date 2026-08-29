@@ -146,6 +146,35 @@ describe("scanTagLines", () => {
     it("finds a tag on a line whose URL comes after it", () => {
       expect(tags("'foo at https://example.com")).toEqual(["foo"]);
     });
+
+    /**
+     * A URL ends whatever was being written into it, because its characters are cut out
+     * before the pattern sees them rather than merely skipped once it has matched.
+     *
+     * Skipping tested where a match *began*, which let a candidate that opened in prose and
+     * ran into an address through whole: the tag reached past the `://` and took part of the
+     * host with it. Both cases below were real, and both produced a tag the card did not draw
+     * — the renderer having always cut.
+     */
+    it("ends a tag at the URL it runs into, rather than reading through it", () => {
+      expect(tags("'todo:https://example.com/issue/1")).toEqual(["todo"]);
+      expect(tags("notes 'refhttps://x.com")).toEqual(["ref"]);
+    });
+
+    /** The other half of the same rule: with nothing but the sigil left in front of the
+     *  address, there is no tag at all. Quoting a URL used to put `http` in the tree of every
+     *  workspace where anyone did it. */
+    it("reads a quoted URL as no tag, not as 'http", () => {
+      expect(tags("see 'http://example.com'")).toEqual([]);
+      expect(tags("read 'https://docs.example.com later")).toEqual([]);
+    });
+
+    /** A URL is a boundary, not a joiner: what follows one starts a text of its own, and an
+     *  apostrophe there opens a tag only if the characters between say it may. */
+    it("does not let a URL's last character open a tag after it", () => {
+      expect(tags("(https://x.com)'foo")).toEqual([]);
+      expect(tags("https://x.com/'foo")).toEqual([]);
+    });
   });
 
   describe("limits", () => {

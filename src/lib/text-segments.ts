@@ -13,49 +13,45 @@ export interface TextSegment {
   tag?: string;
 }
 
+/** One thing to be drawn as itself rather than as plain text, and where it sits. */
+type Span = { index: number; length: number; text: string; href?: string; tag?: string };
+
 /**
- * Tag segments within one run of plain text.
+ * A card's text, cut into what it is made of.
  *
- * The tags come from `scanTagPositions`, which is the same grammar the tag index gathers by,
- * so a tag drawn on a card and a tag the index finds are one decision rather than two. A
- * card highlighting something the index did not gather — or gathering something it did not
- * highlight — is exactly the disagreement nobody thinks to check for.
+ * Both kinds of span come from one scan of one text: `scanUrls` finds the addresses, and
+ * `scanTagPositions` is handed those very spans so the tags it finds are the tags the index
+ * gathers — the grammar cuts URLs out, so nothing it returns can overlap one, and the two
+ * lists merge by position without a rule for what to do when they collide.
+ *
+ * It used to cut at the URLs first and re-scan each remaining piece for tags, which is where
+ * the two readings of a card diverged: a piece's first character looked like the start of a
+ * text to the segmenter and like the middle of one to the index, so `see 'http://x.com'` was
+ * drawn with no tag and gathered under `http`. The cut belongs to the grammar now, and this
+ * asks it rather than repeating it. See the URL rule in `lib/tag.ts`.
  */
-function tagSegments(text: string): TextSegment[] {
-  const positions = scanTagPositions(text);
-  if (positions.length === 0) return text ? [{ text }] : [];
+export function segmentText(text: string): TextSegment[] {
+  const urls = scanUrls(text);
+  const spans: Span[] = [
+    ...urls.map(({ url, index }) => ({ index, length: url.length, text: url, href: url })),
+    ...scanTagPositions(text, urls).map(({ tag, index, length }) => ({
+      index,
+      length,
+      text: text.slice(index, index + length),
+      tag,
+    })),
+  ].sort((a, b) => a.index - b.index);
 
   const segments: TextSegment[] = [];
   let cursor = 0;
-
-  for (const { tag, index, length } of positions) {
+  for (const { index, length, text: span, href, tag } of spans) {
+    // Trailing punctuation is not part of a URL, so the characters between one span and the
+    // next fall through here as plain text — which is where "see http://x.com. 'foo" gets
+    // its period back.
     if (index > cursor) segments.push({ text: text.slice(cursor, index) });
-    segments.push({ text: text.slice(index, index + length), tag });
+    segments.push(href ? { text: span, href } : { text: span, tag });
     cursor = index + length;
   }
-
   if (cursor < text.length) segments.push({ text: text.slice(cursor) });
-  return segments;
-}
-
-export function segmentText(text: string): TextSegment[] {
-  const segments: TextSegment[] = [];
-  let lastIndex = 0;
-
-  // URLs first, and tags only within what is left. A URL may hold an apostrophe, and a path
-  // inside one is not a tag someone wrote — matching tags first would break the link around
-  // it. The other order costs nothing, because the grammar does not read a tag inside a URL
-  // either: `scanUrls` is where both this and `scanTagPositions` get their spans, so the
-  // segment drawn as a link and the span the grammar steps over are one decision.
-  for (const { url, index: start } of scanUrls(text)) {
-    if (start > lastIndex) segments.push(...tagSegments(text.slice(lastIndex, start)));
-    segments.push({ text: url, href: url });
-    // Trailing punctuation is not part of the URL, so the characters between here and the
-    // next span fall through to the plain-text slice below — where "see http://x.com. 'foo"
-    // still finds its tag.
-    lastIndex = start + url.length;
-  }
-
-  if (lastIndex < text.length) segments.push(...tagSegments(text.slice(lastIndex)));
   return segments;
 }

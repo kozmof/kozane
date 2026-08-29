@@ -111,7 +111,13 @@ describe("segmentText", () => {
  * They were two. The segmenter matched URLs first and looked for tags only in what was left,
  * while `scanTagLines` read the whole line — so an address holding `('` gathered a card
  * under a tag the card itself did not draw, which is the one disagreement nobody would think
- * to go looking for. Both now step over the spans `lib/urls.ts` finds.
+ * to go looking for. Both now read through the one scanner in `lib/tag.ts`.
+ *
+ * Sharing `lib/urls.ts` was not by itself enough, and the cases below say so: the segmenter
+ * *cut* at the spans while the grammar only asked whether a match had begun inside one, so a
+ * tag running into an address parted them again. This suite had the right idea and the wrong
+ * corpus — every case here put whitespace between the tag and the URL, which is the one shape
+ * that could not fail. The adjacency cases are the ones that did.
  *
  * Compared as sets: a tag written twice on a line is one hit in the index and two segments on
  * the card, which is each side doing its own job.
@@ -131,6 +137,17 @@ describe("agreement with what the index gathers", () => {
     "'foo at https://example.com and 'bar after",
     "'foo\nsecond line 'bar\n'foo again",
     "from 'drizzle-orm' and 'perf:cache",
+    // A tag written hard against a URL, which is where the two readings used to part: the
+    // segmenter cut at the address and the grammar read straight through it.
+    "'todo:https://example.com/issue/1",
+    "see 'http://example.com'",
+    "read 'https://docs.example.com later",
+    "notes 'refhttps://x.com",
+    "'a:https://x.com 'b",
+    "https://x.com'foo",
+    "https://x.com/'foo",
+    "(https://x.com)'foo",
+    "'foo(https://x.com)'bar",
   ];
 
   it.each(cases)("draws exactly what it gathers: %j", (text) => {
