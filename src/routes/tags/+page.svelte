@@ -150,8 +150,11 @@
    *  link opens the tree down to it rather than showing a collapsed root. */
   const isOpen = (node: TagNode) => !!selectedTag && tagMatches(node.tag, selectedTag);
 
+  /** Cards are the bare number — they are what a board is made of, so the noun says nothing
+   *  a reader of a tag tree does not already assume. Files keep theirs, which is what marks
+   *  them out as the other kind of hit. */
   const countLabel = ({ cards, files }: { cards: number; files: number }) =>
-    [cards ? `${cards} card${cards === 1 ? "" : "s"}` : "", files ? `${files} file${files === 1 ? "" : "s"}` : ""]
+    [cards ? `${cards}` : "", files ? `${files} file${files === 1 ? "" : "s"}` : ""]
       .filter(Boolean)
       .join(", ");
 
