@@ -4,7 +4,7 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { buildTagTree, normalizeTag, tagMatches, type TagNode } from "$lib/tag";
+  import { buildTagTree, normalizeTag, tagMatches, type TagCounts, type TagNode } from "$lib/tag";
   import type { TagHit } from "$lib/types";
 
   let { data }: PageProps = $props();
@@ -150,13 +150,10 @@
    *  link opens the tree down to it rather than showing a collapsed root. */
   const isOpen = (node: TagNode) => !!selectedTag && tagMatches(node.tag, selectedTag);
 
-  /** Cards are the bare number — they are what a board is made of, so the noun says nothing
-   *  a reader of a tag tree does not already assume. Files keep theirs, which is what marks
-   *  them out as the other kind of hit. */
-  const countLabel = ({ cards, files }: { cards: number; files: number }) =>
-    [cards ? `${cards}` : "", files ? `${files} file${files === 1 ? "" : "s"}` : ""]
-      .filter(Boolean)
-      .join(", ");
+  /** One number: what selecting this tag would put in the panel. Cards and files were drawn
+   *  apart, which left the question the tree is actually read for — how much is under this
+   *  tag — as a sum for the reader to do. Which kind each hit is, the panel says row by row. */
+  const countLabel = ({ cards, files }: TagCounts) => `${cards + files}`;
 
   const rowClass = css({
     display: "flex",
