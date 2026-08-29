@@ -1,6 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { TAG_CACHE_DIRS_MAX, TAG_CACHE_SCOPES_MAX } from "../constants.js";
+import { TAG_CACHE_BYTES_MAX, TAG_CACHE_DIRS_MAX, TAG_CACHE_SCOPES_MAX } from "../constants.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { fileSignature } from "./file-signature.js";
 import { evictRecord, setLast } from "./lru.js";
@@ -159,11 +159,25 @@ function isTagCache(value: unknown): value is TagCache {
   );
 }
 
-/** The cache as it stands, or null when there is not a usable one. Never throws. */
+/**
+ * The cache as it stands, or null when there is not a usable one. Never throws.
+ *
+ * Size is checked before the file is opened, and it is the one check that cannot be made
+ * after: this runs on the path a page load waits on, so a cache grown past
+ * {@link TAG_CACHE_BYTES_MAX} is refused for costing more to read than the gather it saves —
+ * a `readFileSync` and a `JSON.parse` that block this process throughout. Reading it and
+ * then deciding would be the whole cost, followed by throwing the result away.
+ *
+ * One extra `stat` of a file about to be read anyway, against a rebuild that queries every
+ * card in the workspace and re-parses every taskspace file. See {@link TAG_CACHE_BYTES_MAX}
+ * for why the answer is to rebuild rather than to trim.
+ */
 export function readTagCache(root: string): TagCache | null {
+  const path = tagCachePath(root);
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(tagCachePath(root), "utf-8"));
+    if (statSync(path).size > TAG_CACHE_BYTES_MAX) return null;
+    parsed = JSON.parse(readFileSync(path, "utf-8"));
   } catch {
     // Absent, unreadable, or not JSON. All three mean the same thing here: gather afresh.
     return null;

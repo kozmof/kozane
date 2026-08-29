@@ -446,12 +446,17 @@ running out of budget before reaching the files you work on. A `.gitignore` is d
 not consulted: what you would rather not commit and what you would rather not tag are
 different questions, and notes and drafts are often on the wrong side of it.
 
-One tag's list shows at most 200 cards and at most 200 file lines. The two limits are
+One tag's list shows at most 200 card hits and at most 200 file hits. The two limits are
 separate on purpose: a tag written on thousands of cards would otherwise use up a single
 limit before the files were reached, and the list would look as though the tag were in no
 file at all. The count beside the tag in the tree is always the true one, so a shortened
 list says which part of it you are looking at; pick a subcategory to narrow down to the rest.
 `kozane tag show` holds the same two ceilings and says the same thing when it cuts a list.
+
+The limits count hits rather than rows, and the notice says so, because a card carrying a
+tag twice is two hits and one row. So a cut list can show slightly fewer rows than the
+number it names — the count in the tree, which is of cards and files, is the one to read
+for how much is under a tag.
 
 A static export made with `kozane net ssg generate` carries one tag index for the whole
 workspace, covering the cards on every exported board, and both the tag and the project

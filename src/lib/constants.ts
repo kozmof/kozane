@@ -324,3 +324,28 @@ export const TAG_CACHE_SCOPES_MAX = 16;
  * eviction is the exception rather than the rhythm.
  */
 export const TAG_CACHE_DIRS_MAX = 64;
+
+/**
+ * How large the gathered tag index on disk may be before it is ignored and rebuilt.
+ *
+ * The one ceiling the cache did not have. {@link TAG_CACHE_SCOPES_MAX} and
+ * {@link TAG_CACHE_DIRS_MAX} bound how many entries it keeps and neither bounds how large
+ * one is: a scope holds every tagged card in the workspace with a line of each, and a
+ * directory holds every parsed file with the tags of each, so the file's size follows the
+ * workspace's rather than anything set here.
+ *
+ * It has to be bounded because of where it is read. `readTagCache` is `readFileSync` and
+ * `JSON.parse` on the path a page load and a `kozane tag` run wait on — the same synchronous
+ * blocking {@link TAG_SCAN_WORKSPACE_BYTES_MAX} exists to bound for the walk, which was
+ * bounded while the read of what the walk produced was not. A cache large enough to cost
+ * more to read than the gather it saves is worse than no cache.
+ *
+ * Ignored and rebuilt rather than trimmed, because trimming means deciding which scope or
+ * which directory to drop while holding the parsed file this is trying to avoid parsing.
+ * Rebuilding writes a smaller file only if the workspace has shrunk, so a workspace that is
+ * genuinely this size pays a cold read every time — which is the honest outcome, and the
+ * signal that {@code ?files=0} or a narrower project is the answer rather than a bigger
+ * ceiling. Set well above what a realistic workspace reaches: {@link TAG_CACHE_SCOPES_MAX}
+ * scopes at the megabyte a scope is reckoned at still fits several times over.
+ */
+export const TAG_CACHE_BYTES_MAX = 64 * 1024 * 1024;

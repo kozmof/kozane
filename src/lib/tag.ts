@@ -549,6 +549,42 @@ export function groupHitRows<T extends { source: TagSource }>(hits: T[]): TagHit
   return [...rows.values()];
 }
 
+/** One taskspace's file rows, under the taskspace they are relative to. */
+export interface TaskspaceHitGroup<T extends { source: TagSource }> {
+  taskspaceId: string;
+  rows: TagHitRow<TagHitOf<T, "file">>[];
+}
+
+/**
+ * File hits gathered under the taskspace each was found in, in first-seen order, and grouped
+ * into rows within it.
+ *
+ * Here for the reason {@link groupHitRows} and {@link hitRowKey} are, and it is the same
+ * reason a third time: a path is relative to a taskspace and says nothing on its own — two
+ * taskspaces holding a `notes/todo.md` draw two identical rows otherwise — so both listings
+ * head their file rows this way, and each had written the grouping out. Two copies of "what
+ * is one taskspace's worth of rows" is two chances to answer it differently, in the one place
+ * where being wrong looks exactly like being right.
+ *
+ * Taskspace first and row second, in that order and not the reverse: {@link hitRowKey} is
+ * unique across a whole listing, so grouping by row first would produce rows that then have
+ * to be re-split by taskspace, and a row can only belong to one.
+ */
+export function groupHitsByTaskspace<T extends { source: TagSource }>(
+  hits: TagHitOf<T, "file">[],
+): TaskspaceHitGroup<T>[] {
+  const byTaskspace = new Map<string, TagHitOf<T, "file">[]>();
+  for (const hit of hits) {
+    const existing = byTaskspace.get(hit.source.taskspaceId);
+    if (existing) existing.push(hit);
+    else byTaskspace.set(hit.source.taskspaceId, [hit]);
+  }
+  return [...byTaskspace].map(([taskspaceId, group]) => ({
+    taskspaceId,
+    rows: groupHitRows(group),
+  }));
+}
+
 /**
  * The distinct tags a row matched by, sigil and all, sorted — so a card found under both
  * `'perf` and `'perf:cache` says which, in one order rather than in whichever the hits
@@ -584,7 +620,15 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
  * dressing: these cross a serialization boundary — the loader's return becomes the page's
  * `data` — so a reason added on the server and deployed against an older page would
  * otherwise draw `undefined` into the sentence.
+ *
+ * Read through a partial view of the table, so that fallback is something the types agree
+ * can happen. Declared total above and read as partial here, deliberately, because the two
+ * ends want opposite things: a new member of {@link TagScanTruncation} must be a compile
+ * error at the table, which only a total record gives, while the lookup is of a value that
+ * may have come from a build this one does not share a union with — where a total record
+ * says the `??` is dead code and invites its removal.
  */
 export function truncationReasons(reasons: TagScanTruncation[]): string {
-  return reasons.map((reason) => TRUNCATION_LABELS[reason] ?? reason).join("; ");
+  const labels: Partial<Record<TagScanTruncation, string>> = TRUNCATION_LABELS;
+  return reasons.map((reason) => labels[reason] ?? reason).join("; ");
 }

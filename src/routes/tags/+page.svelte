@@ -8,13 +8,13 @@
     buildTagTree,
     capHitsByKind,
     groupHitRows,
+    groupHitsByTaskspace,
     normalizeTag,
     taggedWith,
     tagMatcher,
     tagMatches,
     truncationReasons,
     type TagCounts,
-    type TagHitOf,
     type TagNode,
   } from "$lib/tag";
   import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
@@ -107,13 +107,19 @@
    * The tree's count is of the whole thing, so a cut list has to say it is one or the two
    * numbers read as a disagreement. Per kind because the caps are: "the first 200 of 900"
    * over a list that also holds files would be a second disagreement in place of the first.
+   *
+   * Counted in *hits*, and said so — the word is what makes the number true rather than a
+   * third disagreement. The cap is applied before `groupHitRows`, so a card carrying `'perf`
+   * and `'perf:cache` is two of what is counted here, one row below, and one card in the
+   * tree beside it; calling that "cards" made the notice contradict both. `kozane tag show`
+   * says "card hits" for exactly this reason, and now says it in the same words.
    */
   const cappedNotice = $derived.by(() => {
     const parts = [];
     if (shown.cards.length < cardTotal)
-      parts.push(`${shown.cards.length} of ${cardTotal} cards`);
+      parts.push(`${shown.cards.length} of ${cardTotal} card hits`);
     if (shown.files.length < fileTotal)
-      parts.push(`${shown.files.length} of ${fileTotal} lines`);
+      parts.push(`${shown.files.length} of ${fileTotal} file hits`);
     return parts.length > 0
       ? `Showing the first ${parts.join(", and the first ")}. Narrow with a subcategory to see the rest.`
       : null;
@@ -149,19 +155,9 @@
 
   /** File hits gathered under the taskspace they were found in, so a path is read against
    *  the directory it is relative to rather than on its own — and within that, one row per
-   *  line, since each is somewhere to go and look. */
-  const fileRowsByTaskspace = $derived.by(() => {
-    const byTaskspace = new Map<string, TagHitOf<TagHit, "file">[]>();
-    for (const hit of shown.files) {
-      const existing = byTaskspace.get(hit.source.taskspaceId);
-      if (existing) existing.push(hit);
-      else byTaskspace.set(hit.source.taskspaceId, [hit]);
-    }
-    return [...byTaskspace].map(([taskspaceId, hits]) => ({
-      taskspaceId,
-      rows: groupHitRows(hits),
-    }));
-  });
+   *  line, since each is somewhere to go and look. `groupHitsByTaskspace` in `$lib/tag`,
+   *  which `kozane tag show` heads its file rows with too. */
+  const fileRowsByTaskspace = $derived(groupHitsByTaskspace(shown.files));
 
   /**
    * Project names by id, built once rather than searched per row. It was a linear `find`
@@ -247,6 +243,23 @@
    *  tag — as a sum for the reader to do. Which kind each hit is, the panel says row by row. */
   const countLabel = ({ cards, files }: TagCounts) => `${cards + files}`;
 
+  /**
+   * The same count in words, for a reader who cannot see the column it is drawn in.
+   *
+   * Spelled out per kind rather than as the bare sum above, because the two audiences are in
+   * different positions: the column is read down and its unit is obvious from the panel
+   * beside it, while a row read aloud is read alone. That is the same judgement
+   * `countLabel` in `cli/commands/tag.ts` makes for the terminal, and it lands on the same
+   * wording — `1 card, 2 files` — because it is the same question about the same counts.
+   */
+  const countDescription = ({ cards, files }: TagCounts) =>
+    [
+      cards ? `${cards} card${cards === 1 ? "" : "s"}` : "",
+      files ? `${files} file${files === 1 ? "" : "s"}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
+
   const rowClass = css({
     display: "flex",
     alignItems: "baseline",
@@ -289,13 +302,22 @@
   <ul class={css({ listStyle: "none", margin: "0", padding: "0" })}>
     {#each nodes as node (node.tag)}
       <li>
+        <!-- `aria-current` rather than the weight and background alone, which is the whole
+             of what said "this one" before: a screen reader was given a tree of identical
+             rows, and the project nav in the header above marks its selection this way
+             already. -->
         <a
           href={tagHref(node.tag)}
+          aria-current={selectedTag === node.tag ? "page" : undefined}
           style="padding-left: {8 + depth * 14}px"
           class="{rowClass} {selectedTag === node.tag ? activeRowClass : ''}"
         >
           <span class={css({ fontFamily: "mono" })}>{node.name}</span>
-          <span class={countClass}>{countLabel(node.total)}</span>
+          <!-- The number is drawn bare, which reads as "perf 12" with nothing to say what
+               12 is. The unit is given to a reader that cannot see the column it sits in,
+               and hidden from one that can. -->
+          <span class={countClass} aria-hidden="true">{countLabel(node.total)}</span>
+          <span class={css({ srOnly: true })}>{countDescription(node.total)}</span>
         </a>
         {#if node.children.length > 0 && (depth === 0 || isOpen(node))}
           {@render branch(node.children, depth + 1)}

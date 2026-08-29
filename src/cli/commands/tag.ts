@@ -3,13 +3,13 @@ import {
   buildTagTree,
   capHitsByKind,
   groupHitRows,
+  groupHitsByTaskspace,
   normalizeTag,
   taggedWith,
   tagMatcher,
   truncationReasons,
   type CappedHits,
   type TagCounts,
-  type TagHitOf,
   type TagNode,
 } from "../../lib/tag.js";
 import { TAG_HITS_SHOWN_MAX } from "../../lib/constants.js";
@@ -196,8 +196,9 @@ async function printCardHits(
  * Grouped by taskspace first, because a path is relative to one and says nothing on its own:
  * a project draws its own taskspaces *and* every unplaced one, so `README.md:2` printed bare
  * was two indistinguishable rows for two different files as soon as a workspace had a second
- * taskspace. The tag index page had always headed its file rows this way; this is the same
- * grouping, in the terminal's shape.
+ * taskspace. The tag index page heads its file rows the same way, through the same
+ * `groupHitsByTaskspace` — only the drawing below differs, which is the whole of what the
+ * terminal and the page are entitled to disagree about.
  *
  * Within a taskspace, grouped by the line rather than by the file: a file may carry the tag
  * in several places, and each is somewhere to go and look. Two tags on one line are still one
@@ -209,17 +210,10 @@ function printFileHits(
 ): void {
   if (fileHits.length === 0) return;
 
-  const byTaskspace = new Map<string, TagHitOf<TagHit, "file">[]>();
-  for (const hit of fileHits) {
-    const existing = byTaskspace.get(hit.source.taskspaceId);
-    if (existing) existing.push(hit);
-    else byTaskspace.set(hit.source.taskspaceId, [hit]);
-  }
-
   console.log("Files:");
-  for (const [taskspaceId, hits] of byTaskspace) {
+  for (const { taskspaceId, rows: taskspaceRows } of groupHitsByTaskspace(fileHits)) {
     console.log(`  ${nameOf(taskspaces, taskspaceId)}:`);
-    for (const { source, hits: rows } of groupHitRows(hits)) {
+    for (const { source, hits: rows } of taskspaceRows) {
       console.log(
         `    ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
       );

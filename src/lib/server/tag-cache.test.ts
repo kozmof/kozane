@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync, utimesSync } from "node:fs";
+import { mkdirSync, rmSync, statSync, writeFileSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
+import { TAG_CACHE_BYTES_MAX } from "../constants.js";
 import {
   databaseSignature,
   readTagCache,
@@ -72,6 +73,19 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   it("answers with nothing when there is no cache file", () => {
+    expect(readTagCache(root)).toBeNull();
+  });
+
+  /**
+   * The read is `readFileSync` and `JSON.parse` on the path a page load waits on, so a cache
+   * that has grown past the ceiling is refused *before* it is opened — reading it in order to
+   * decide would be the whole of the cost this avoids.
+   */
+  it("answers with nothing for a cache grown past what is worth reading", () => {
+    const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
+    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }));
+
+    expect(statSync(tagCachePath(root)).size).toBeGreaterThan(TAG_CACHE_BYTES_MAX);
     expect(readTagCache(root)).toBeNull();
   });
 

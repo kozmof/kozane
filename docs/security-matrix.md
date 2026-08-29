@@ -205,9 +205,10 @@ does not repeat it, and the lines it quotes are kept with it. That is a file
 inside the workspace holding excerpts of files that may sit outside it — a
 taskspace created with `kozane taskspace create --dir <path>` can point anywhere
 the server user can read. It is a cache and never a record: deleting it costs one
-slow load, and it is rebuilt from the files themselves. Treat it as you would the
-taskspaces it summarizes, and keep it out of source control if their contents
-should not be there either.
+slow load, and it is rebuilt from the files themselves. Past 64 MB it is ignored
+and rebuilt rather than read, since reading it happens while a page load waits.
+Treat it as you would the taskspaces it summarizes, and keep it out of source
+control if their contents should not be there either.
 
 **Writing** replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path

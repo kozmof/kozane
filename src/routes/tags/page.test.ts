@@ -106,7 +106,7 @@ describe("tag index page", () => {
 
     draw(hits, { cardTotal: 240 });
 
-    expect(screen.getByText(/Showing the first 2 of 240 cards/)).toBeTruthy();
+    expect(screen.getByText(/Showing the first 2 of 240 card hits/)).toBeTruthy();
   });
 
   /**
@@ -119,13 +119,35 @@ describe("tag index page", () => {
 
     draw(hits, { cardTotal: 240, fileTotal: 900 });
 
-    expect(screen.getByText(/first 1 of 240 cards, and the first 1 of 900 lines/)).toBeTruthy();
+    expect(
+      screen.getByText(/first 1 of 240 card hits, and the first 1 of 900 file hits/),
+    ).toBeTruthy();
   });
 
   it("says nothing about a cap when nothing was cut", () => {
     draw([cardHit("c1", "perf", "one")]);
 
     expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  /**
+   * The notice counts hits, and has to say so. The cap is applied before the rows are
+   * grouped, so a card carrying two matching tags is two of what the notice counts, one row
+   * on the page, and one card in the tree beside it — three numbers that only agree once the
+   * notice names its unit. Calling them "cards" made it contradict the two things drawn
+   * either side of it. `kozane tag show` prints "card hits" for the same reason.
+   */
+  it("counts the notice in hits, which is what was capped, and names them as hits", () => {
+    const hits = [
+      cardHit("c1", "perf", "caching work"),
+      cardHit("c1", "perf:cache", "caching work"),
+    ];
+
+    draw(hits, { cardTotal: 240 });
+
+    // Two hits, one row.
+    expect(screen.getAllByText("caching work")).toHaveLength(1);
+    expect(screen.getByText(/Showing the first 2 of 240 card hits/)).toBeTruthy();
   });
 
   /**
@@ -182,6 +204,28 @@ describe("tag index page", () => {
    * while the card moved, or a narrowed record that did not name it. A row that draws
    * `/undefined?card=…` looks right and goes nowhere.
    */
+  /**
+   * The tree marks its selection with a background and a weight, which is nothing to a
+   * reader who cannot see it — and the project nav in the same header already says
+   * `aria-current`, so the page was answering the same question two ways.
+   */
+  it("marks the selected tag in the tree as the current one", () => {
+    draw([cardHit("c1", "perf", "one"), cardHit("c2", "docs", "two")], { tag: "perf" });
+
+    const rows = screen.getAllByRole("link").filter((el) => el.textContent?.includes("perf"));
+    const current = rows.filter((el) => el.getAttribute("aria-current") === "page");
+
+    expect(current).toHaveLength(1);
+    expect(current[0].getAttribute("href")).toBe("/tags?tag=perf");
+  });
+
+  /** The count is drawn as a bare number in a column, which reads as "perf 3" alone. */
+  it("says what a tag's count counts, for a reader who cannot see the column", () => {
+    draw([cardHit("c1", "perf", "one"), fileHit("t1", "notes/todo.md", 3, "perf")]);
+
+    expect(screen.getByText("1 card, 1 file")).toBeTruthy();
+  });
+
   it("draws no link for a card whose project it was not told", () => {
     draw([cardHit("c9", "perf", "orphaned")], { cardProjects: {} });
 

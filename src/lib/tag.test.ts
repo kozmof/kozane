@@ -3,6 +3,7 @@ import {
   buildTagTree,
   capHitsByKind,
   groupHitRows,
+  groupHitsByTaskspace,
   isCardHit,
   isFileHit,
   normalizeTag,
@@ -281,6 +282,70 @@ describe("groupHitRows", () => {
       "'perf",
       "'perf:cache",
     ]);
+  });
+});
+
+/**
+ * The grouping both listings head their file rows with. A path is relative to a taskspace
+ * and says nothing on its own, so drawing one bare is two identical rows for two different
+ * files as soon as a workspace has a second taskspace — which is why neither the terminal
+ * nor the page may be the only one to know this.
+ */
+describe("groupHitsByTaskspace", () => {
+  const hitIn = (taskspaceId: string, path: string, line: number, tag = "perf"): TagHit => ({
+    tag,
+    source: { kind: "file", taskspaceId, path, line },
+    excerpt: "",
+  });
+
+  const grouped = (hits: TagHit[]) => groupHitsByTaskspace(hits.filter(isFileHit));
+
+  it("puts each taskspace's rows under it", () => {
+    const groups = grouped([hitIn("t1", "a.md", 1), hitIn("t2", "a.md", 1)]);
+
+    expect(groups.map(({ taskspaceId }) => taskspaceId)).toEqual(["t1", "t2"]);
+    expect(groups.map(({ rows }) => rows.length)).toEqual([1, 1]);
+  });
+
+  it("keeps one taskspace's hits together however they were interleaved", () => {
+    const groups = grouped([
+      hitIn("t1", "a.md", 1),
+      hitIn("t2", "b.md", 1),
+      hitIn("t1", "c.md", 1),
+    ]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0].rows.map(({ source }) => source.path)).toEqual(["a.md", "c.md"]);
+  });
+
+  it("keeps first-seen order, which is the order the gather produced", () => {
+    const groups = grouped([hitIn("t2", "a.md", 1), hitIn("t1", "a.md", 1)]);
+
+    expect(groups.map(({ taskspaceId }) => taskspaceId)).toEqual(["t2", "t1"]);
+  });
+
+  it("groups into rows within a taskspace, one per line", () => {
+    const [group] = grouped([
+      hitIn("t1", "a.md", 1, "perf"),
+      hitIn("t1", "a.md", 1, "docs"),
+      hitIn("t1", "a.md", 9, "perf"),
+    ]);
+
+    expect(group.rows).toHaveLength(2);
+    expect(group.rows[0].hits).toHaveLength(2);
+  });
+
+  /** The same path in two taskspaces is two different files, which is the whole reason the
+   *  grouping exists — and `hitRowKey` keeps their rows apart as well. */
+  it("does not merge the same path in two taskspaces", () => {
+    const groups = grouped([hitIn("t1", "notes/todo.md", 3), hitIn("t2", "notes/todo.md", 3)]);
+
+    expect(groups).toHaveLength(2);
+    expect(groups[0].rows[0].key).not.toBe(groups[1].rows[0].key);
+  });
+
+  it("gives nothing for no hits", () => {
+    expect(grouped([])).toEqual([]);
   });
 });
 
