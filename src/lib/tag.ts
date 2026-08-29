@@ -4,7 +4,8 @@ import {
   TAG_SEGMENT_CHARS_MAX,
   TAG_SIGIL,
 } from "./constants.js";
-import type { TagHit, TagSource } from "./types.js";
+import type { TagHit, TagScanTruncation, TagSource } from "./types.js";
+import { inUrlSpan, scanUrls, type UrlSpan } from "./urls.js";
 
 /**
  * The tag grammar, in one place, for every caller: a card's text, a taskspace file's text,
@@ -22,12 +23,20 @@ import type { TagHit, TagSource } from "./types.js";
  * segment   [\p{L}\p{N}_-]+
  * ```
  *
- * The sigil is an apostrophe, which ordinary prose also uses, so two rules keep writing from
- * becoming tagging:
+ * The sigil is an apostrophe, which ordinary prose also uses, so three rules keep writing
+ * from becoming tagging:
  *
  * - **A word boundary opens it.** `don't` and `x'foo` are words with an apostrophe in them,
  *   not tags.
  * - **A closing apostrophe cancels it.** `'quoted'` is a quoted word, so it is left as text.
+ * - **A URL is an address, not text.** An apostrophe inside `http://…` opens nothing, so
+ *   `http://example.com/('foo)` is one link rather than a link and a tag. Unlike the two
+ *   rules above this one is not in the pattern — it cannot be, since the pattern is asked
+ *   about one candidate at a time and a URL is a span around it — so both scanners below
+ *   drop a match that lands inside one. It is a rule of the grammar rather than of the
+ *   renderer, deliberately: `lib/text-segments.ts` already had to know where URLs were in
+ *   order to draw them as anchors, and when only it knew, a card was gathered under a tag
+ *   the card itself did not draw. See `lib/urls.ts`.
  *
  * The second rule reaches one token, and deliberately: `'a phrase'` still tags `a`, because
  * deciding otherwise means scanning ahead for a closing quote that may be on another line,
@@ -150,7 +159,12 @@ export function scanTagPositions(text: string): TagPosition[] {
   const positions: TagPosition[] = [];
   if (!text.includes(TAG_SIGIL)) return positions;
 
+  // Found once for the whole text, not once per candidate, and lazily: a text with a sigil
+  // but no tag in it never asks. See the URL rule in the module note above.
+  let urls: UrlSpan[] | null = null;
   for (const match of text.matchAll(TAG_RE)) {
+    urls ??= scanUrls(text);
+    if (inUrlSpan(urls, match.index)) continue;
     positions.push({
       tag: normalizeTag(match[1]),
       index: match.index,
@@ -170,10 +184,27 @@ export interface TagLineHit {
   excerpt: string;
 }
 
+/**
+ * The line, trimmed, and cut to {@link TAG_EXCERPT_CHARS_MAX} — by character rather than by
+ * UTF-16 code unit.
+ *
+ * `slice` cuts by code unit, which splits an astral character in half and leaves an unpaired
+ * surrogate at the end of the excerpt. That is not a passing display problem: the excerpt is
+ * written into `.kozane/tag-index.json` and read back from it, and every renderer draws the
+ * half character as `�`. Astral characters are not exotic on this path — the grammar takes
+ * Japanese and the length limits exist partly for it, and emoji sit in the same notes.
+ *
+ * The code-unit length is checked first, and settles it for nearly every line: a string can
+ * only hold fewer characters than code units, so one short of the limit by that measure is
+ * short of it by either, and the spread never happens.
+ */
 function excerptOf(line: string): string {
   const trimmed = line.trim();
-  return trimmed.length > TAG_EXCERPT_CHARS_MAX
-    ? `${trimmed.slice(0, TAG_EXCERPT_CHARS_MAX)}…`
+  if (trimmed.length <= TAG_EXCERPT_CHARS_MAX) return trimmed;
+
+  const characters = [...trimmed];
+  return characters.length > TAG_EXCERPT_CHARS_MAX
+    ? `${characters.slice(0, TAG_EXCERPT_CHARS_MAX).join("")}…`
     : trimmed;
 }
 
@@ -198,8 +229,13 @@ export function scanTagLines(text: string): TagLineHit[] {
     if (!line.includes(TAG_SIGIL)) continue;
 
     let excerpt: string | null = null;
+    let urls: UrlSpan[] | null = null;
     const seen = new Set<string>();
     for (const match of line.matchAll(TAG_RE)) {
+      // Lazily, and per line: the walk is handed whole files, and a line carrying an
+      // apostrophe but no tag — by far the common one — never pays for this.
+      urls ??= scanUrls(line);
+      if (inUrlSpan(urls, match.index)) continue;
       const tag = normalizeTag(match[1]);
       if (seen.has(tag)) continue;
       seen.add(tag);
@@ -261,6 +297,44 @@ export const isCardHit = <T extends { source: TagSource }>(hit: T): hit is TagHi
 
 export const isFileHit = <T extends { source: TagSource }>(hit: T): hit is TagHitOf<T, "file"> =>
   hit.source.kind === "file";
+
+/** One tag's hits, split by the two things they can have been written in and each side cut
+ *  to a ceiling, with what each side was cut down from. */
+export interface CappedHits<T extends { source: TagSource }> {
+  cards: TagHitOf<T, "card">[];
+  files: TagHitOf<T, "file">[];
+  /** How many there were before the cut. The tree beside the list counts every hit, so a
+   *  list that shows fewer has to be able to say what it is a part of. */
+  cardTotal: number;
+  fileTotal: number;
+}
+
+/**
+ * A tag's hits, capped per kind.
+ *
+ * Per kind, and that is the whole reason this exists rather than a `slice` at each caller.
+ * `loadTagIndex` returns every card hit before any file hit, so one cap laid across the two
+ * spent itself on cards: a tag written on more cards than the ceiling listed *no files at
+ * all*, and the panel said only that it was showing the first two hundred of three hundred
+ * — which reads as "there are no files under this tag" to the one person who came looking
+ * for one. Two ceilings cannot starve each other.
+ *
+ * Both the live page and a static export cap through here, so the server's list and the
+ * browser's come out the same. See `TAG_HITS_SHOWN_MAX`.
+ */
+export function capHitsByKind<T extends { source: TagSource }>(
+  hits: T[],
+  max: number,
+): CappedHits<T> {
+  const cards = hits.filter(isCardHit);
+  const files = hits.filter(isFileHit);
+  return {
+    cards: cards.slice(0, max),
+    files: files.slice(0, max),
+    cardTotal: cards.length,
+    fileTotal: files.length,
+  };
+}
 
 /**
  * How many cards and how many files a tag holds. Distinct ones, per {@link sourceKey},
@@ -417,4 +491,34 @@ export function groupHitRows<T extends { source: TagSource }>(hits: T[]): TagHit
  */
 export function taggedWith(hits: { tag: string }[]): string[] {
   return [...new Set(hits.map(({ tag }) => `${TAG_SIGIL}${tag}`))].sort();
+}
+
+/**
+ * What each reason a scan stopped short says to the person reading it.
+ *
+ * The vocabulary in {@link TagScanTruncation} names the budget that ran out, which is what
+ * the scanner needs to say and not what a reader needs to hear: both places that print one —
+ * the tag index panel and `kozane tag list` — put it on screen unchanged, so a user was told
+ * their notes directory "was not read in full (budget, unreadable)". Here for the same
+ * reason the row grouping is: the terminal and the page say the same thing about the same
+ * taskspace, so they say it in the same words.
+ */
+const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
+  entries: "a directory held more entries than one scan lists",
+  depth: "some directories sit deeper than the scan goes",
+  nodes: "it holds more files and directories than one scan visits",
+  budget: "some files were larger than the scan had budget left for",
+  unreadable: "some files could not be read",
+};
+
+/**
+ * Those labels, joined, for a taskspace that stopped at several.
+ *
+ * Falls back to the raw reason for a value not in the table above. That is not defensive
+ * dressing: these cross a serialization boundary — the loader's return becomes the page's
+ * `data` — so a reason added on the server and deployed against an older page would
+ * otherwise draw `undefined` into the sentence.
+ */
+export function truncationReasons(reasons: TagScanTruncation[]): string {
+  return reasons.map((reason) => TRUNCATION_LABELS[reason] ?? reason).join("; ");
 }

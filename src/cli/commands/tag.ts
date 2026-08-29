@@ -1,6 +1,5 @@
 import { getAllCards } from "../../db/api/card.js";
 import { getAllBundles } from "../../db/api/bundle.js";
-import { getTaskspacesInProject } from "../../db/api/taskspace.js";
 import {
   buildTagTree,
   groupHitRows,
@@ -9,6 +8,7 @@ import {
   normalizeTag,
   taggedWith,
   tagMatcher,
+  truncationReasons,
   type TagCounts,
   type TagNode,
 } from "../../lib/tag.js";
@@ -65,7 +65,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
       projectId,
       includeFiles: true,
       root,
-      cache: { root, dbUrl },
+      cache: { dbUrl },
     });
 
     const tree = buildTagTree(hits);
@@ -74,23 +74,24 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
       return;
     }
     printTree(tree);
-    await warnTruncated(db, projectId, truncated);
+    warnTruncated(truncated);
   });
 }
 
-/** Says which taskspaces were not read in full, so a tag missing from the list above is not
- *  read as a tag nobody wrote. */
-async function warnTruncated(
-  db: DB,
-  projectId: string,
-  truncated: TagIndexTruncation[],
-): Promise<void> {
-  if (truncated.length === 0) return;
-  const taskspaces = await getTaskspacesInProject({ db, projectId });
-  const nameById = new Map(taskspaces.map((taskspace) => [taskspace.id, taskspace.name]));
-  for (const { taskspaceId, reasons } of truncated) {
+/**
+ * Says which taskspaces were not read in full, so a tag missing from the list above is not
+ * read as a tag nobody wrote.
+ *
+ * Names and wording both come from elsewhere now. The name rides on the truncation, from the
+ * taskspace row the walk already read — this had been fetching every taskspace in the
+ * project again to turn an id back into a name. The wording is `truncationReasons`, shared
+ * with the tag index page, because the two say the same thing about the same taskspace and
+ * the scanner's own vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
+ */
+function warnTruncated(truncated: TagIndexTruncation[]): void {
+  for (const { taskspaceId, taskspaceName, reasons } of truncated) {
     console.log(
-      `Note: ${nameById.get(taskspaceId) || taskspaceId} was not read in full (${reasons.join(", ")}).`,
+      `Note: ${taskspaceName || taskspaceId} was not read in full — ${truncationReasons(reasons)}.`,
     );
   }
 }
@@ -116,7 +117,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
       projectId,
       includeFiles,
       root,
-      cache: { root, dbUrl },
+      cache: { dbUrl },
     });
 
     const matches = tagMatcher(query);
@@ -128,7 +129,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
 
     await printCardHits(db, projectId, matching);
     printFileHits(matching);
-    await warnTruncated(db, projectId, truncated);
+    warnTruncated(truncated);
   });
 }
 

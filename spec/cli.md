@@ -65,9 +65,12 @@ default and narrows to a project with `?projectId=<id>`. The CLI is the other wa
 another — because a command run inside a workspace is usually asking about the project it
 is working in.
 
-An apostrophe is also ordinary punctuation, so two rules keep writing from becoming
-tagging. A tag opens at a word boundary, which leaves `don't` and `x'foo` alone, and a
-closing apostrophe cancels it, which leaves `'quoted'` as text. A level may hold letters,
+An apostrophe is also ordinary punctuation, so three rules keep writing from becoming
+tagging. A tag opens at a word boundary, which leaves `don't` and `x'foo` alone; a
+closing apostrophe cancels it, which leaves `'quoted'` as text; and an apostrophe inside an
+http(s) URL belongs to the address, which leaves `https://example.com/it's/fine` as one
+link. The URL rule is part of the grammar rather than of the browser, so a tag is read the
+same way in a card, in a file, and on screen. A level may hold letters,
 digits, `-`, and `_`; it may not exceed 64 characters, and a tag may not exceed 8 levels.
 Something past either limit is not a tag at all rather than a tag cut short. Tags are
 matched case-insensitively, so `'Perf` and `'perf` are one tag.
@@ -816,7 +819,12 @@ kozane tag list
 ```
 
 Taskspace files are read as part of this. A taskspace that could not be read in full is
-named afterwards, so a tag missing from the list is not read as a tag nobody wrote.
+named afterwards, in the same words the browser's tag index uses, so a tag missing from the
+list is not read as a tag nobody wrote:
+
+```
+Note: notes was not read in full — some files were larger than the scan had budget left for.
+```
 
 The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
 and re-read every file to reach the answer the first one reached. Nothing is trusted from it

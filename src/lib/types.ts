@@ -139,6 +139,24 @@ export interface TagHit {
 }
 
 /**
+ * Why a tag scan is not the whole taskspace. Its own vocabulary rather than
+ * `TaskspaceTruncation`, which enumerates the limits the *export walk* stops at: the tag
+ * walk has a reason that one does not — `"budget"`, a file left unread because the scan's
+ * byte ceiling was already spent — and the export has nodes to hang a per-file reason on
+ * where this has only the one answer for the whole taskspace.
+ *
+ * Each is a distinct thing to be told. A file that ran past the budget and one that could
+ * not be read at all both produce no tags, and neither is "there are no tags in this file".
+ *
+ * Here rather than beside the walk that produces it, which is where it was. Both things that
+ * print one are far from that walk — `kozane tag list` and the tag index page — and the
+ * page cannot reach a module built on `node:fs` at all. A shared vocabulary needs a home
+ * both ends can import, and `truncationReasons` in `lib/tag.ts` is the wording that goes
+ * with it.
+ */
+export type TagScanTruncation = "entries" | "depth" | "nodes" | "budget" | "unreadable";
+
+/**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and
  * the client reloads into it, so the two cannot drift into different shapes.
  *

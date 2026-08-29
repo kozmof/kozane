@@ -131,7 +131,7 @@ describe("loadTagIndex", () => {
       root,
     });
 
-    expect(truncated).toEqual([{ taskspaceId, reasons: ["unreadable"] }]);
+    expect(truncated).toEqual([{ taskspaceId, taskspaceName: "notes", reasons: ["unreadable"] }]);
   });
 
   describe("across the workspace", () => {
@@ -203,12 +203,12 @@ describe("loadTagIndex", () => {
       const projectId = await addProject({ db, name: "P" });
       await addLayer({ db, projectId, name: "Base", isDefault: true });
       const bundleId = await addBundle({ db, projectId, name: "B" });
-      return { db, projectId, bundleId, cache: { root, dbUrl } };
+      return { db, projectId, bundleId, cache: { dbUrl } };
     }
 
     const gather = (db: Awaited<ReturnType<typeof createTestDB>>, cache: TagCacheLocation) =>
       loadTagIndex({ db, includeFiles: true, root, cache });
-    type TagCacheLocation = { root: string; dbUrl: string };
+    type TagCacheLocation = { dbUrl: string };
 
     it("writes a cache, and does not when it was not asked to", async () => {
       const { db, bundleId } = await cachedSetup();
@@ -217,7 +217,7 @@ describe("loadTagIndex", () => {
       await loadTagIndex({ db, includeFiles: true, root });
       expect(readTagCache(root)).toBeNull();
 
-      await loadTagIndex({ db, includeFiles: true, root, cache: { root, dbUrl } });
+      await loadTagIndex({ db, includeFiles: true, root, cache: { dbUrl } });
       expect(readTagCache(root)?.scopes["*"].hits.map(({ tag }) => tag)).toEqual(["perf"]);
     });
 
@@ -409,7 +409,7 @@ describe("loadTagIndex", () => {
         db,
         includeFiles: true,
         root,
-        cache: { root, dbUrl: ":memory:" },
+        cache: { dbUrl: ":memory:" },
       });
 
       expect(readTagCache(root)).toBeNull();

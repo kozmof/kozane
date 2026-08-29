@@ -2,14 +2,13 @@ import type { AnyDB } from "../../db/client.js";
 import { getCardTagHits } from "../../db/api/tag.js";
 import { getAllTaskspaces, getTaskspacesInProject } from "../../db/api/taskspace.js";
 import { getWorkspaceRoot } from "../../db/internal/config.js";
-import type { TagHit } from "../types.js";
+import type { TagHit, TagScanTruncation } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
 import {
   exportTaskspaceTagCache,
   importTaskspaceTagCache,
   scanTaskspaceTags,
   type ScanLimits,
-  type TagScanTruncation,
 } from "./taskspace-tags.js";
 import {
   databaseSignature,
@@ -20,9 +19,21 @@ import {
   type TagCache,
 } from "./tag-cache.js";
 
-/** What one taskspace could not tell us, and which one it was. Empty for a taskspace read
- *  whole, and absent from the list entirely rather than present with nothing to say. */
-export type TagIndexTruncation = { taskspaceId: string; reasons: TagScanTruncation[] };
+/**
+ * What one taskspace could not tell us, and which one it was. Empty for a taskspace read
+ * whole, and absent from the list entirely rather than present with nothing to say.
+ *
+ * The name is carried rather than left to be looked up. Both callers have to name the
+ * taskspace back to the reader — a warning naming an id says nothing — and each was fetching
+ * the taskspace rows a second time to do it, from the very read this walked. The static
+ * export has a further reason: it publishes no taskspace list at all, so a page that could
+ * only join a name from one would have had nothing to say.
+ */
+export type TagIndexTruncation = {
+  taskspaceId: string;
+  taskspaceName: string;
+  reasons: TagScanTruncation[];
+};
 
 export type TagIndex = {
   /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
@@ -69,13 +80,19 @@ type LoadTagIndex = {
   /** Passed through to each taskspace scan. For tests; nothing in the app sets it. */
   limits?: ScanLimits;
   /**
-   * Where to keep the gather between calls, and the database to validate it against.
+   * The database to validate a persisted gather against, where the gather is to be kept at
+   * all.
    *
    * Opt-in rather than automatic. The page and the CLI pass it; a caller that says nothing
    * gathers afresh, which is what the existing tests do and what any caller wanting a
    * guaranteed-cold read can rely on.
+   *
+   * The directory it is kept in is `root` above, and is deliberately not repeated here. It
+   * was, and that made two workspace roots on one call with nothing to hold them together:
+   * a caller could seed this process's file entries from one workspace's cache while walking
+   * another's taskspaces, and both fields would type-check.
    */
-  cache?: { root: string; dbUrl: string };
+  cache?: { dbUrl: string };
 };
 
 /** How a scope is named in the cache file. `*` is the gather across the whole workspace,
@@ -251,7 +268,10 @@ export async function loadTagIndex({
   limits,
   cache,
 }: LoadTagIndex): Promise<TagIndex> {
-  const store = cache ? openTagCache(cache) : null;
+  // No root, nowhere to keep it. That is the same condition the file walk below stops at,
+  // and reading it off one value is what keeps the cache and the walk talking about one
+  // workspace.
+  const store = cache && root ? openTagCache({ root, dbUrl: cache.dbUrl }) : null;
   const scope = scopeKey(projectId);
 
   const stored = store?.cards(scope);
@@ -290,7 +310,11 @@ export async function loadTagIndex({
     taskspaceProjects[taskspace.id] = taskspace.projectId;
     hits.push(...scan.hits);
     if (scan.truncated.length > 0)
-      truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
+      truncated.push({
+        taskspaceId: taskspace.id,
+        taskspaceName: taskspace.name,
+        reasons: scan.truncated,
+      });
   }
 
   store?.save({

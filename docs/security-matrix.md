@@ -239,6 +239,12 @@ carries only the tags written on cards, and a tag written solely in a taskspace
 file does not appear in it at all. With `--include-scoped-files`, file hits are
 baked in alongside the files themselves.
 
+The taskspaces themselves are named under the same flag and not otherwise. A
+taskspace's name is the name of a directory on the machine the workspace was
+built on, so an export that mentions no taskspace must not carry a list of them
+either — the rule is the board's, and the tag index holds it because it publishes
+the same kind of page.
+
 ## Where each rule lives
 
 - Host and key checks at startup — `src/cli/commands/open.ts`

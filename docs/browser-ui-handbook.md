@@ -384,9 +384,10 @@ holding it is edited or deleted.
 
 An apostrophe is ordinary punctuation too, so `don't` is a word and `'quoted'` is a quoted
 word — neither becomes a tag. A tag opens after a space or at the start of a line, and a
-closing apostrophe cancels it. Levels take letters, digits, `-`, and `_`, up to 64
-characters each and 8 levels deep; past either, it is not treated as a tag at all. `'Perf`
-and `'perf` are the same tag.
+closing apostrophe cancels it. An apostrophe inside a link is part of the address, so
+`https://example.com/it's/fine` is one link and no tag. Levels take letters, digits, `-`,
+and `_`, up to 64 characters each and 8 levels deep; past either, it is not treated as a tag
+at all. `'Perf` and `'perf` are the same tag.
 
 The cancelling rule reaches one word, so an apostrophe opening something longer is still a
 tag: `'a phrase'` gathers under `'a`, and so do `'til` and `'90s`. The rule errs this way on
@@ -435,15 +436,19 @@ running out of budget before reaching the files you work on. A `.gitignore` is d
 not consulted: what you would rather not commit and what you would rather not tag are
 different questions, and notes and drafts are often on the wrong side of it.
 
-One tag's list shows at most 200 rows. The count beside the tag in the tree is always the
-true one, so a capped list says which part of it you are looking at; pick a subcategory to
-narrow down to the rest.
+One tag's list shows at most 200 cards and at most 200 file lines. The two limits are
+separate on purpose: a tag written on thousands of cards would otherwise use up a single
+limit before the files were reached, and the list would look as though the tag were in no
+file at all. The count beside the tag in the tree is always the true one, so a shortened
+list says which part of it you are looking at; pick a subcategory to narrow down to the rest.
 
 A static export made with `kozane net ssg generate` carries one tag index for the whole
 workspace, covering the cards on every exported board, and both the tag and the project
 narrowing keep working there. Tags in taskspace files are left out unless the export was
 built with `--include-scoped-files`, because a file hit names a path inside the workspace
-and quotes a line of that file.
+and quotes a line of that file. The same flag governs whether the export names your
+taskspaces at all — without it, an exported tag index mentions no taskspace, the same as an
+exported board does not.
 
 ## Card footers
 

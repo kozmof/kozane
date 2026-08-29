@@ -6,7 +6,7 @@ import {
   TASKSPACE_FILE_BYTES_MAX,
 } from "../constants.js";
 import { scanTagLines, type TagLineHit } from "../tag.js";
-import type { TagHit } from "../types.js";
+import type { TagHit, TagScanTruncation } from "../types.js";
 import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js";
 
 /**
@@ -38,18 +38,6 @@ type Budget = { remaining: number; nodes: number };
 /** Ceilings for one call, each defaulting to the constant it is named after. Overridable so a
  *  test can reach a limit without putting twenty thousand entries on disk to do it. */
 export type ScanLimits = { bytes?: number; nodes?: number; depth?: number };
-
-/**
- * Why a scan is not the whole taskspace. Its own vocabulary rather than
- * `TaskspaceTruncation`, which enumerates the limits the *export walk* stops at: this
- * walk has a reason that one does not — `"budget"`, a file left unread because the scan's
- * byte ceiling was already spent — and the export has nodes to hang a per-file reason on
- * where this has only the one answer for the whole taskspace.
- *
- * Each is a distinct thing to be told. A file that ran past the budget and one that could
- * not be read at all both produce no tags, and neither is "there are no tags in this file".
- */
-export type TagScanTruncation = "entries" | "depth" | "nodes" | "budget" | "unreadable";
 
 export type TaskspaceTagScan = {
   hits: TagHit[];

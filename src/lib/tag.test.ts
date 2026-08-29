@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildTagTree,
+  capHitsByKind,
   groupHitRows,
   isCardHit,
   isFileHit,
@@ -10,6 +11,7 @@ import {
   taggedWith,
   tagMatcher,
   tagMatches,
+  truncationReasons,
 } from "./tag";
 import { TAG_EXCERPT_CHARS_MAX, TAG_LEVELS_MAX, TAG_SEGMENT_CHARS_MAX } from "./constants";
 import type { TagHit } from "./types";
@@ -92,12 +94,58 @@ describe("scanTagLines", () => {
     expect(excerpt.endsWith("…")).toBe(true);
   });
 
+  /**
+   * Cut by character, not by UTF-16 code unit. Slicing by unit through an astral character
+   * leaves half of one at the end, and the excerpt is not transient — it is written into
+   * `.kozane/tag-index.json` and read back — so the half character is drawn as `�` from then
+   * on. The emoji is placed to straddle the cut exactly.
+   */
+  it("cuts a long excerpt without splitting a character in half", () => {
+    // The emoji is the 200th character and the 200th and 201st code units, so a cut by unit
+    // lands inside it and a cut by character lands after it.
+    const line = `'foo ${"x".repeat(TAG_EXCERPT_CHARS_MAX - 6)}\u{1F600}${"y".repeat(20)}`;
+    const { excerpt } = scanTagLines(line)[0];
+
+    expect([...excerpt]).toHaveLength(TAG_EXCERPT_CHARS_MAX + 1);
+    expect(excerpt.endsWith("\u{1F600}…")).toBe(true);
+  });
+
   it("finds nothing in text without a sigil", () => {
     expect(tags("nothing to see here")).toEqual([]);
   });
 
   it("returns nothing for empty input", () => {
     expect(scanTagLines("")).toEqual([]);
+  });
+
+  /**
+   * A URL is an address, not text someone wrote a tag in. The bracket cases are the ones
+   * that matter: the pattern opens a tag after `(` or `[`, both of which are legal inside a
+   * URL, so without the span rule an address gathered a card under a tag the card did not
+   * draw — the renderer having always treated the URL as one piece.
+   */
+  describe("URLs", () => {
+    it("leaves an apostrophe inside a URL alone", () => {
+      expect(tags("see https://example.com/it's/fine")).toEqual([]);
+    });
+
+    it("leaves one opened after a bracket inside a URL alone", () => {
+      expect(tags("see https://example.com/('foo)")).toEqual([]);
+    });
+
+    it("still finds a tag written beside a URL", () => {
+      expect(tags("see https://example.com 'foo")).toEqual(["foo"]);
+    });
+
+    /** Trailing punctuation is not part of the URL, on either side of the grammar, so a tag
+     *  after the sentence's full stop is still a tag. */
+    it("still finds a tag after a URL that ended a sentence", () => {
+      expect(tags("see https://example.com. 'foo")).toEqual(["foo"]);
+    });
+
+    it("finds a tag on a line whose URL comes after it", () => {
+      expect(tags("'foo at https://example.com")).toEqual(["foo"]);
+    });
   });
 
   describe("limits", () => {
@@ -333,5 +381,71 @@ describe("buildTagTree", () => {
       ];
       expect(buildTagTree(both)[0].total.files).toBe(2);
     });
+  });
+});
+
+describe("capHitsByKind", () => {
+  const cardHit = (cardId: string): TagHit => ({
+    tag: "perf",
+    source: { kind: "card", cardId },
+    excerpt: "",
+  });
+  const fileHit = (line: number): TagHit => ({
+    tag: "perf",
+    source: { kind: "file", taskspaceId: "t1", path: "a.md", line },
+    excerpt: "",
+  });
+
+  const cards = (n: number) => Array.from({ length: n }, (_, i) => cardHit(`c${i}`));
+  const files = (n: number) => Array.from({ length: n }, (_, i) => fileHit(i + 1));
+
+  it("splits the two kinds apart", () => {
+    const capped = capHitsByKind([cardHit("c1"), fileHit(1)], 10);
+
+    expect(capped.cards.map(({ source }) => source.cardId)).toEqual(["c1"]);
+    expect(capped.files.map(({ source }) => source.line)).toEqual([1]);
+  });
+
+  /**
+   * The bug this exists for. `loadTagIndex` returns every card hit before any file hit, so a
+   * single ceiling laid across the list was spent on cards before the files were reached: a
+   * tag on more cards than the ceiling listed no files at all, and the panel said only that
+   * it was showing part of a list — which reads as "there are no files under this tag".
+   */
+  it("does not let one kind spend the other's ceiling", () => {
+    const capped = capHitsByKind([...cards(5), ...files(3)], 4);
+
+    expect(capped.cards).toHaveLength(4);
+    expect(capped.files).toHaveLength(3);
+  });
+
+  it("counts what each side was cut down from", () => {
+    const capped = capHitsByKind([...cards(5), ...files(9)], 4);
+
+    expect(capped.cardTotal).toBe(5);
+    expect(capped.fileTotal).toBe(9);
+  });
+
+  it("keeps the order the gather produced", () => {
+    const capped = capHitsByKind([...cards(3)], 2);
+
+    expect(capped.cards.map(({ source }) => source.cardId)).toEqual(["c0", "c1"]);
+  });
+});
+
+describe("truncationReasons", () => {
+  it("says what a reason means rather than naming the budget it was", () => {
+    expect(truncationReasons(["budget"])).toMatch(/budget left for/);
+    expect(truncationReasons(["budget"])).not.toBe("budget");
+  });
+
+  it("joins several", () => {
+    expect(truncationReasons(["depth", "unreadable"]).split("; ")).toHaveLength(2);
+  });
+
+  /** These cross a serialization boundary — the loader's return becomes the page's data — so
+   *  a reason the drawing end does not know must not become `undefined` in a sentence. */
+  it("falls back to the reason itself for one it does not know", () => {
+    expect(truncationReasons(["quota" as never])).toBe("quota");
   });
 });

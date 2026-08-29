@@ -1,4 +1,5 @@
 import { scanTagPositions } from "./tag.js";
+import { scanUrls } from "./urls.js";
 
 // Splits text into plain, link, and tag segments so callers can render URLs as real anchors
 // and tags as real links without injecting raw HTML (keeping Svelte's auto-escaping). Only
@@ -11,9 +12,6 @@ export interface TextSegment {
    *  the tag as it was written, sigil and all, so a card reads as it was typed. */
   tag?: string;
 }
-
-const URL_RE = /https?:\/\/[^\s<]+/g;
-const TRAILING_PUNCTUATION = /[.,:;!?"')\]}]+$/;
 
 /**
  * Tag segments within one run of plain text.
@@ -46,14 +44,15 @@ export function segmentText(text: string): TextSegment[] {
 
   // URLs first, and tags only within what is left. A URL may hold an apostrophe, and a path
   // inside one is not a tag someone wrote — matching tags first would break the link around
-  // it. The other order costs nothing, because a tag is never part of a URL.
-  for (const match of text.matchAll(URL_RE)) {
-    const start = match.index;
-    // Drop trailing punctuation so "see http://x.com." excludes the period; the
-    // trimmed characters fall through to the next plain-text slice below.
-    const url = match[0].replace(TRAILING_PUNCTUATION, "");
+  // it. The other order costs nothing, because the grammar does not read a tag inside a URL
+  // either: `scanUrls` is where both this and `scanTagPositions` get their spans, so the
+  // segment drawn as a link and the span the grammar steps over are one decision.
+  for (const { url, index: start } of scanUrls(text)) {
     if (start > lastIndex) segments.push(...tagSegments(text.slice(lastIndex, start)));
     segments.push({ text: url, href: url });
+    // Trailing punctuation is not part of the URL, so the characters between here and the
+    // next span fall through to the plain-text slice below — where "see http://x.com. 'foo"
+    // still finds its tag.
     lastIndex = start + url.length;
   }
 

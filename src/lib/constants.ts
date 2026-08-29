@@ -154,13 +154,19 @@ export const TAG_LEVELS_MAX = 8;
 export const TAG_EXCERPT_CHARS_MAX = 200;
 
 /**
- * How many hits one tag's panel draws, in the browser and in a static export alike.
+ * How many hits of *each kind* one tag's panel draws, in the browser and in a static export
+ * alike: at most this many cards, and at most this many file lines.
  *
  * Every other walk on the tag path is bounded and this one has to be too, for the reason the
  * scan budgets give: a tag written in a header comment reaches every file carrying that
  * header, and a page that answers with forty thousand rows is not a more useful answer than
  * one that answers with two hundred and says there are more. The tree above it still counts
  * every hit, so the number beside a tag is the true one — this bounds only what is listed.
+ *
+ * A ceiling per kind rather than one over the list as a whole, because the list is not a
+ * mixture: `loadTagIndex` returns every card hit before any file hit, so a single ceiling was
+ * spent on cards before the files were reached and a much-tagged card set hid the files
+ * completely. `capHitsByKind` in `lib/tag.ts` is where both ends apply it.
  */
 export const TAG_HITS_SHOWN_MAX = 200;
 

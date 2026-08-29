@@ -7,7 +7,7 @@ import { getAllTaskspaces } from "$db/api/taskspace";
 import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
-import { buildTagTree, normalizeTag, tagMatcher } from "$lib/tag";
+import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "$lib/tag";
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
 import type { TagHit } from "$lib/types";
@@ -23,19 +23,31 @@ export const prerender = process.env.KOZANE_SSG === "1";
 const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
 
 /**
+ * Whether this page may name the workspace's taskspaces at all.
+ *
+ * The same rule the board holds, and it has to be the same one: `loadProjectSnapshot` gates
+ * its taskspaces behind `includeScopes`, which an export only sets with
+ * `--include-scoped-files`, because a taskspace's *name* is the name of a directory on
+ * someone's machine and an export is published. This page was reading `getAllTaskspaces`
+ * unconditionally and shipping every one of them, which contradicted that rule and
+ * `docs/security-matrix.md` with it — and shipped nothing useful either, since a plain
+ * export has no file hits for a name to label.
+ */
+const includeTaskspaces = !prerender || includeScopedFiles;
+
+/**
  * Where the gather is kept between requests, or nothing when it cannot be.
  *
  * Nothing during a prerender: an export is built once, in a temporary place, and would only
  * leave a cache file behind for a workspace it is not serving. Nothing either when there is
  * no workspace root or no database URL to validate against — see `openTagCache`, which
- * refuses to cache what it cannot check.
+ * refuses to cache what it cannot check. The root is `loadTagIndex`'s own; only the database
+ * to validate against is named here.
  */
-function cacheLocation(): { cache: { root: string; dbUrl: string } } | null {
-  if (prerender) return null;
-  const root = getWorkspaceRoot();
-  if (!root) return null;
+function cacheLocation(): { cache: { dbUrl: string } } | null {
+  if (prerender || !getWorkspaceRoot()) return null;
   try {
-    return { cache: { root, dbUrl: getDBURL() } };
+    return { cache: { dbUrl: getDBURL() } };
   } catch {
     return null;
   }
@@ -49,17 +61,25 @@ function cacheLocation(): { cache: { root: string; dbUrl: string } } | null {
  * The `TAG_HITS_SHOWN_MAX` cap is applied to what one tag shows, and so only on the live
  * path: an export is baked before anyone has chosen a tag, and capping the whole set there
  * would drop hits the browser had not yet had the chance to filter down to. The page applies
- * the same cap after it has filtered, so both arrive at a list of the same length.
+ * the same cap through the same `capHitsByKind` after it has filtered, so both arrive at the
+ * same list.
  */
-function selectHits(hits: TagHit[], tag: string | null): { hits: TagHit[]; total: number | null } {
+function selectHits(
+  hits: TagHit[],
+  tag: string | null,
+): { hits: TagHit[]; cardTotal: number | null; fileTotal: number | null } {
   // Nothing filtered and nothing capped yet, and so nothing to report a total against: the
   // browser does both, and is the only thing in a position to count.
-  if (prerender) return { hits, total: null };
-  if (!tag) return { hits: [], total: 0 };
+  if (prerender) return { hits, cardTotal: null, fileTotal: null };
+  if (!tag) return { hits: [], cardTotal: 0, fileTotal: 0 };
 
   const matches = tagMatcher(tag);
   const matching = hits.filter((hit) => matches(hit.tag));
-  return { hits: matching.slice(0, TAG_HITS_SHOWN_MAX), total: matching.length };
+  // Per kind, not across the list: `loadTagIndex` returns every card hit before any file
+  // hit, so one cap over the whole of it listed no files at all for a tag written on more
+  // cards than the ceiling. See `capHitsByKind`.
+  const { cards, files, cardTotal, fileTotal } = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
+  return { hits: [...cards, ...files], cardTotal, fileTotal };
 }
 
 /**
@@ -109,10 +129,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       ...cacheLocation(),
     }),
     getAllProjects({ db }),
-    getAllTaskspaces({ db }),
+    includeTaskspaces ? getAllTaskspaces({ db }) : Promise.resolve([]),
   ]);
 
-  const { hits, total: hitTotal } = selectHits(index.hits, tag);
+  const { hits, cardTotal, fileTotal } = selectHits(index.hits, tag);
   const shownCardIds = [
     ...new Set(hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : []))),
   ];
@@ -130,9 +150,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     tree: buildTagTree(index.hits),
     tag,
     hits,
-    /** How many hits the tag gathers, against the at-most-`TAG_HITS_SHOWN_MAX` above. Null
-     *  in an export, where the browser filters and so does its own counting. */
-    hitTotal,
+    /** How many hits of each kind the tag gathers, against the at-most-`TAG_HITS_SHOWN_MAX`
+     *  of each above. Null in an export, where the browser filters and so does its own
+     *  counting. Two numbers because there are two ceilings — one total could not say which
+     *  of the two lists had been cut. */
+    cardTotal,
+    fileTotal,
     truncated: index.truncated,
     cardProjects: index.cardProjects,
     taskspaceProjects: index.taskspaceProjects,
@@ -141,6 +164,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // `TagSource` — so they are joined here, for the hits actually being shown.
     cardBundleIds: Object.fromEntries(cardBundles.map((row) => [row.cardId, row.bundleId])),
     bundles: await bundlesForProjects(db, shownProjects),
+    // Empty in a plain export — see `includeTaskspaces`. Nothing on the page needs it there:
+    // the only rows a name labels are file rows, which such an export does not carry, and a
+    // truncation carries the name it has to say.
     taskspaces: taskspaces.map(({ id, name, projectId }) => ({ id, name, projectId })),
   };
 };

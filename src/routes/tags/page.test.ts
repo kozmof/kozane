@@ -30,7 +30,8 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
     tree: buildTagTree(hits),
     tag: "perf",
     hits,
-    hitTotal: hits.length,
+    cardTotal: hits.filter(({ source }) => source.kind === "card").length,
+    fileTotal: hits.filter(({ source }) => source.kind === "file").length,
     truncated: [],
     cardProjects: { c1: "p1", c2: "p1" },
     taskspaceProjects: { t1: "p1", t2: "p1" },
@@ -102,16 +103,42 @@ describe("tag index page", () => {
   it("says which part of a capped list is being shown", () => {
     const hits = [cardHit("c1", "perf", "one"), cardHit("c2", "perf", "two")];
 
-    draw(hits, { hitTotal: 240 });
+    draw(hits, { cardTotal: 240 });
 
-    expect(screen.getByText(/Showing the first 2 of 240/)).toBeTruthy();
+    expect(screen.getByText(/Showing the first 2 of 240 cards/)).toBeTruthy();
   });
 
-  it("says a taskspace it could not read in full, by name", () => {
+  /**
+   * The two ceilings are separate, so the notice has to be too. One number over a list
+   * holding both kinds cannot say which of them was cut, and the reader is looking for one
+   * of them in particular.
+   */
+  it("says what was cut from each kind, not one number over both", () => {
+    const hits = [cardHit("c1", "perf", "one"), fileHit("t1", "notes/todo.md", 3, "perf")];
+
+    draw(hits, { cardTotal: 240, fileTotal: 900 });
+
+    expect(screen.getByText(/first 1 of 240 cards, and the first 1 of 900 lines/)).toBeTruthy();
+  });
+
+  it("says nothing about a cap when nothing was cut", () => {
+    draw([cardHit("c1", "perf", "one")]);
+
+    expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  /**
+   * The name comes with the truncation rather than being joined from the taskspace list,
+   * which a static export does not publish — and the reasons are put into words rather than
+   * printed as the scanner's own vocabulary.
+   */
+  it("says a taskspace it could not read in full, by name and in words", () => {
     draw([cardHit("c1", "perf", "one")], {
-      truncated: [{ taskspaceId: "t1", reasons: ["budget"] }],
+      truncated: [{ taskspaceId: "t1", taskspaceName: "Notes", reasons: ["budget"] }],
+      taskspaces: [],
     });
 
-    expect(screen.getByText(/Notes was not read in full \(budget\)/)).toBeTruthy();
+    expect(screen.getByText(/Notes was not read in full/)).toBeTruthy();
+    expect(screen.getByText(/larger than the scan had budget left for/)).toBeTruthy();
   });
 });

@@ -6,13 +6,13 @@
   import { page } from "$app/state";
   import {
     buildTagTree,
+    capHitsByKind,
     groupHitRows,
-    isCardHit,
-    isFileHit,
     normalizeTag,
     taggedWith,
     tagMatcher,
     tagMatches,
+    truncationReasons,
     type TagCounts,
     type TagHitOf,
     type TagNode,
@@ -68,14 +68,39 @@
   });
 
   /**
-   * Capped the same way and to the same number the server caps by, so an export and the live
-   * page list alike. Already short of it on the live page, which capped before sending.
+   * Capped by the same function and to the same number the server caps by, so an export and
+   * the live page list alike. Already short of it on the live page, which capped before
+   * sending — this is the real cut only in an export, where every hit was baked in.
+   *
+   * Per kind, which matters here for the same reason it matters there: the hits arrive cards
+   * first, so one ceiling across both would let a much-used tag's cards push its files off
+   * the page entirely. See `capHitsByKind`.
    */
-  const shownHits = $derived(matchingHits.slice(0, TAG_HITS_SHOWN_MAX));
+  const shown = $derived(capHitsByKind(matchingHits, TAG_HITS_SHOWN_MAX));
+  const shownCount = $derived(shown.cards.length + shown.files.length);
 
-  /** What the list above is a part of. The server counted it before capping; in an export
-   *  nothing was capped before the filter just above, so the count is taken from that. */
-  const hitTotal = $derived(data.hitTotal ?? matchingHits.length);
+  /** What each list below is a part of. The server counted before capping; in an export
+   *  nothing was capped before the filter just above, so the counts are taken from that. */
+  const cardTotal = $derived(data.cardTotal ?? shown.cardTotal);
+  const fileTotal = $derived(data.fileTotal ?? shown.fileTotal);
+
+  /**
+   * What is not being shown, said per kind, or nothing when everything is.
+   *
+   * The tree's count is of the whole thing, so a cut list has to say it is one or the two
+   * numbers read as a disagreement. Per kind because the caps are: "the first 200 of 900"
+   * over a list that also holds files would be a second disagreement in place of the first.
+   */
+  const cappedNotice = $derived.by(() => {
+    const parts = [];
+    if (shown.cards.length < cardTotal)
+      parts.push(`${shown.cards.length} of ${cardTotal} cards`);
+    if (shown.files.length < fileTotal)
+      parts.push(`${shown.files.length} of ${fileTotal} lines`);
+    return parts.length > 0
+      ? `Showing the first ${parts.join(", and the first ")}. Narrow with a subcategory to see the rest.`
+      : null;
+  });
 
   /**
    * The tree, narrowed the same way. Only a static export ever has anything to narrow: the
@@ -92,15 +117,14 @@
    * for `'perf` twice, and two rows would read as two cards. What counts as a row is
    * `groupHitRows` in `$lib/tag`, which the terminal groups by too.
    */
-  const cardRows = $derived(groupHitRows(shownHits.filter(isCardHit)));
+  const cardRows = $derived(groupHitRows(shown.cards));
 
   /** File hits gathered under the taskspace they were found in, so a path is read against
    *  the directory it is relative to rather than on its own — and within that, one row per
    *  line, since each is somewhere to go and look. */
   const fileRowsByTaskspace = $derived.by(() => {
     const byTaskspace = new Map<string, TagHitOf<TagHit, "file">[]>();
-    for (const hit of shownHits) {
-      if (!isFileHit(hit)) continue;
+    for (const hit of shown.files) {
       const existing = byTaskspace.get(hit.source.taskspaceId);
       if (existing) existing.push(hit);
       else byTaskspace.set(hit.source.taskspaceId, [hit]);
@@ -300,16 +324,13 @@
             '{selectedTag}
           </h2>
 
-          {#if shownHits.length === 0}
+          {#if shownCount === 0}
             <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>Nothing under this tag.</p>
-          {:else if hitTotal > shownHits.length}
-            <!-- The tree's count is of the whole thing, so a capped list has to say it is
-                 one, or the two numbers read as a disagreement. -->
+          {:else if cappedNotice}
             <p
               class={css({ color: "neutral.subtle", fontSize: "12px", marginBottom: "12px" })}
             >
-              Showing the first {shownHits.length} of {hitTotal}. Narrow with a subcategory to
-              see the rest.
+              {cappedNotice}
             </p>
           {/if}
 
@@ -420,9 +441,12 @@
           {/each}
         {/if}
 
-        {#each data.truncated as { taskspaceId, reasons } (taskspaceId)}
+        <!-- The name rides on the truncation rather than being looked up here: a static
+             export names no taskspaces at all, so there would be nothing to look it up in.
+             The reasons are put into words by the same helper the terminal uses. -->
+        {#each data.truncated as { taskspaceId, taskspaceName: name, reasons } (taskspaceId)}
           <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
-            {taskspaceName(taskspaceId)} was not read in full ({reasons.join(", ")}), so a tag
+            {name || taskspaceId} was not read in full — {truncationReasons(reasons)}, so a tag
             written in it may be missing here.
           </p>
         {/each}

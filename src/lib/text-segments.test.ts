@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { segmentText } from "./text-segments";
+import { scanTagLines } from "./tag";
 
 describe("segmentText", () => {
   it("returns a single plain segment when there is no URL", () => {
@@ -100,5 +101,39 @@ describe("segmentText", () => {
         { text: "'foo", tag: "foo" },
       ]);
     });
+  });
+});
+
+/**
+ * The invariant the shared grammar exists to hold: what the index gathers from a card and
+ * what the card draws as a tag are one decision, not two that happen to agree.
+ *
+ * They were two. The segmenter matched URLs first and looked for tags only in what was left,
+ * while `scanTagLines` read the whole line — so an address holding `('` gathered a card
+ * under a tag the card itself did not draw, which is the one disagreement nobody would think
+ * to go looking for. Both now step over the spans `lib/urls.ts` finds.
+ *
+ * Compared as sets: a tag written twice on a line is one hit in the index and two segments on
+ * the card, which is each side doing its own job.
+ */
+describe("agreement with what the index gathers", () => {
+  const drawn = (text: string) =>
+    [...new Set(segmentText(text).flatMap(({ tag }) => (tag ? [tag] : [])))].sort();
+  const gathered = (text: string) => [...new Set(scanTagLines(text).map(({ tag }) => tag))].sort();
+
+  const cases = [
+    "plain 'foo text",
+    "don't 'quoted' 'til '90s",
+    "see https://example.com/('foo)",
+    "see https://example.com/it's/fine",
+    "see https://example.com 'foo",
+    "see https://example.com. 'foo",
+    "'foo at https://example.com and 'bar after",
+    "'foo\nsecond line 'bar\n'foo again",
+    "from 'drizzle-orm' and 'perf:cache",
+  ];
+
+  it.each(cases)("draws exactly what it gathers: %j", (text) => {
+    expect(drawn(text)).toEqual(gathered(text));
   });
 });
