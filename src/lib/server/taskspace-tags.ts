@@ -3,6 +3,8 @@ import {
   TAG_SCAN_NODES_MAX,
   TAG_SCAN_SKIP_DIRS,
   TAG_SCAN_TOTAL_BYTES_MAX,
+  TAG_SCAN_WORKSPACE_BYTES_MAX,
+  TAG_SCAN_WORKSPACE_NODES_MAX,
   TASKSPACE_FILE_BYTES_MAX,
 } from "../constants.js";
 import { scanTagLines, type TagLineHit } from "../tag.js";
@@ -36,8 +38,33 @@ import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js"
 type Budget = { remaining: number; nodes: number };
 
 /** Ceilings for one call, each defaulting to the constant it is named after. Overridable so a
- *  test can reach a limit without putting twenty thousand entries on disk to do it. */
-export type ScanLimits = { bytes?: number; nodes?: number; depth?: number };
+ *  test can reach a limit without putting twenty thousand entries on disk to do it. The
+ *  `workspace*` pair bounds a whole gather rather than one taskspace; see {@link ScanPool}. */
+export type ScanLimits = {
+  bytes?: number;
+  nodes?: number;
+  depth?: number;
+  workspaceBytes?: number;
+  workspaceNodes?: number;
+};
+
+/**
+ * What is left to spend across a whole gather — one pool, passed to every taskspace in it.
+ *
+ * Mutable and shared, for the reason {@link Budget} is: what a taskspace costs is only known
+ * once it has been walked, so the loop can subtract but cannot divide up front. A taskspace
+ * takes the smaller of its own ceiling and what is left here, which is what keeps the first
+ * one in the list from spending the gather on itself.
+ *
+ * See {@link TAG_SCAN_WORKSPACE_BYTES_MAX} for why a per-taskspace ceiling was not enough on
+ * its own.
+ */
+export type ScanPool = { bytes: number; nodes: number };
+
+export const createScanPool = (limits: ScanLimits = {}): ScanPool => ({
+  bytes: limits.workspaceBytes ?? TAG_SCAN_WORKSPACE_BYTES_MAX,
+  nodes: limits.workspaceNodes ?? TAG_SCAN_WORKSPACE_NODES_MAX,
+});
 
 export type TaskspaceTagScan = {
   hits: TagHit[];
@@ -93,6 +120,58 @@ export type CachedFile = { signature: string; hits: TagLineHit[] };
  */
 const fileCache = new Map<string, Map<string, CachedFile>>();
 
+/**
+ * How many taskspace directories this process keeps entries for.
+ *
+ * The counterpart to `FILE_DIRS_MAX` in `tag-index.ts`, which bounds the same thing on disk,
+ * and it was missing here: the map only ever gained directories. Pruning is per directory —
+ * {@link pruneStale} drops files that are gone from one that was walked — so a taskspace
+ * deleted, re-pathed, or simply not looked at again kept every file it had ever parsed for
+ * the life of the server. A long-lived `kozane open` therefore grew without bound over a
+ * workspace whose taskspaces come and go.
+ *
+ * The same number the disk file keeps, deliberately: the two hold the same directories, and
+ * a memory ceiling below the file's would mean re-importing on every scan what was evicted
+ * here but kept there.
+ */
+const FILE_CACHE_DIRS_MAX = 64;
+
+/**
+ * One directory's entries, created on first sight, and moved to the end of the map either
+ * way — which is what makes insertion order least-recently-used.
+ *
+ * Eviction happens here rather than on a timer because here is where the map grows. The
+ * directory just touched is never the one evicted, since it is at the end; an evicted one
+ * costs a re-read the next time it is scanned, and nothing else.
+ */
+function dirEntries(baseDir: string): Map<string, CachedFile> {
+  const existing = fileCache.get(baseDir);
+  // Deleted before it is set, so a directory looked at again moves to the end rather than
+  // keeping the position it first took. The same device `openTagCache` uses for the file.
+  if (existing) fileCache.delete(baseDir);
+  const entries = existing ?? new Map<string, CachedFile>();
+  fileCache.set(baseDir, entries);
+  for (const stale of [...fileCache.keys()].slice(0, -FILE_CACHE_DIRS_MAX)) fileCache.delete(stale);
+  return entries;
+}
+
+/**
+ * Marks a directory as the most recently used, without creating one for a directory this
+ * process does not hold.
+ *
+ * Separate from {@link dirEntries} because a scan that answers entirely from the cache writes
+ * nothing, and so would never touch the map that is about to evict it — the taskspace nobody
+ * has edited is exactly the one worth keeping. Creating on the way past instead would leave
+ * an empty record for a taskspace whose directory could not even be listed, and
+ * {@link exportTaskspaceTagCache} would then report it as scanned-and-empty.
+ */
+function touchDir(baseDir: string): void {
+  const entries = fileCache.get(baseDir);
+  if (!entries) return;
+  fileCache.delete(baseDir);
+  fileCache.set(baseDir, entries);
+}
+
 /** Forgets every cached file. For tests, which write a temporary directory, delete it, and
  *  write a fresh one at a path the first may well have used — the same reason
  *  `clearTaskspaceFileTreeCache` exists. */
@@ -125,11 +204,10 @@ export function importTaskspaceTagCache(
   baseDir: string,
   entries: Record<string, CachedFile>,
 ): void {
-  const existing = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
+  const existing = dirEntries(baseDir);
   for (const [subPath, entry] of Object.entries(entries)) {
     if (!existing.has(subPath)) existing.set(subPath, entry);
   }
-  fileCache.set(baseDir, existing);
 }
 
 type FileTags =
@@ -178,11 +256,7 @@ function fileTagHits(
     return { skipped: "unreadable" };
   }
 
-  if (signature !== null) {
-    const entries = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
-    entries.set(subPath, { signature, hits });
-    fileCache.set(baseDir, entries);
-  }
+  if (signature !== null) dirEntries(baseDir).set(subPath, { signature, hits });
   return { hits, parsed: true };
 }
 
@@ -300,14 +374,23 @@ export function scanTaskspaceTags(
   baseDir: string,
   taskspaceId: string,
   limits: ScanLimits = {},
+  pool?: ScanPool,
 ): TaskspaceTagScan {
+  // Before the walk, so that a taskspace answered entirely from the cache — which writes
+  // nothing, and so touches the map nowhere else — is still the most recently used.
+  touchDir(baseDir);
+
+  // The smaller of this taskspace's own ceiling and what the gather has left. Both bind: one
+  // taskspace cannot cost more than its share, and the taskspaces together cannot cost more
+  // than the page. A pool run down to nothing leaves a scan that reads no file and reports
+  // `"budget"`, which is the true answer — those files were not read.
+  const bytes = Math.min(limits.bytes ?? TAG_SCAN_TOTAL_BYTES_MAX, pool?.bytes ?? Infinity);
+  const nodes = Math.min(limits.nodes ?? TAG_SCAN_NODES_MAX, pool?.nodes ?? Infinity);
+
   const scan: Scan = {
     baseDir,
     taskspaceId,
-    budget: {
-      remaining: limits.bytes ?? TAG_SCAN_TOTAL_BYTES_MAX,
-      nodes: limits.nodes ?? TAG_SCAN_NODES_MAX,
-    },
+    budget: { remaining: bytes, nodes },
     depthMax: limits.depth ?? TAG_SCAN_DEPTH_MAX,
     hits: [],
     truncated: new Set(),
@@ -316,6 +399,14 @@ export function scanTaskspaceTags(
   };
 
   walk(scan, "", 0);
+
+  // What this taskspace actually spent, not what it was allowed. A cache hit is charged for
+  // nothing, so a warm gather leaves the pool untouched and a workspace being read again and
+  // again never runs into this ceiling at all.
+  if (pool) {
+    pool.bytes -= bytes - scan.budget.remaining;
+    pool.nodes -= nodes - scan.budget.nodes;
+  }
 
   const complete = scan.truncated.size === 0;
   const pruned = complete && pruneStale(baseDir, scan.seen);

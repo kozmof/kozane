@@ -5,6 +5,7 @@ import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit, TagScanTruncation } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
 import {
+  createScanPool,
   exportTaskspaceTagCache,
   importTaskspaceTagCache,
   scanTaskspaceTags,
@@ -295,6 +296,13 @@ export async function loadTagIndex({
     : await getAllTaskspaces({ db });
 
   const scanned: { baseDir: string; changed: boolean }[] = [];
+  // One budget for the whole loop, on top of each taskspace's own. The walk below is
+  // synchronous — `listTaskspaceDirectory` and `readTaskspaceFile` are `readdirSync` and
+  // `readFileSync` — so while it runs this process serves nothing else, not even the board's
+  // poll. A per-taskspace ceiling bounds what any one of them costs and says nothing about
+  // what a workspace of a dozen costs; this is that second bound. See
+  // `TAG_SCAN_WORKSPACE_BYTES_MAX`.
+  const pool = createScanPool(limits);
   for (const taskspace of taskspaces) {
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
@@ -302,7 +310,7 @@ export async function loadTagIndex({
     // the walk asks about them. The walk still happens and still checks every signature —
     // this only decides whether an unchanged file is re-read or merely re-stat'ed.
     store?.seedFiles(baseDir);
-    const scan = scanTaskspaceTags(baseDir, taskspace.id, limits);
+    const scan = scanTaskspaceTags(baseDir, taskspace.id, limits, pool);
     scanned.push({ baseDir, changed: scan.changed });
     changed ||= scan.changed;
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a

@@ -289,5 +289,100 @@ describe("scanTaskspaceTags", () => {
         rmSync(other, { recursive: true, force: true });
       }
     });
+
+    /**
+     * The map is bounded by directory, as the file it mirrors is.
+     *
+     * It was not, and pruning does not cover this: `pruneStale` drops files that are gone
+     * from a directory it walked, and says nothing about a directory nobody walks again. So a
+     * taskspace deleted or re-pathed left every file it had ever parsed in memory for the
+     * life of the server, and a long-running `kozane open` grew with every one of them.
+     */
+    describe("its bound on directories", () => {
+      /** One directory per scan, each holding one file, so the only thing varying is how many
+       *  directories the map has been asked to hold. */
+      const scanFresh = (base: string, n: number) => {
+        const path = join(base, `ts-${n}`);
+        mkdirSync(path, { recursive: true });
+        write(join(path, "notes.md"), `'tag${n}`);
+        scan(path);
+        return path;
+      };
+
+      it("forgets the least recently scanned taskspace once it holds too many", () => {
+        const first = scanFresh(dir, 0);
+        expect(exportTaskspaceTagCache(first)).toBeDefined();
+
+        // One past the ceiling, counting the one above. `FILE_CACHE_DIRS_MAX` is not exported
+        // — it is the module's own business — so this reaches it by scanning past it.
+        for (let n = 1; n <= 64; n++) scanFresh(dir, n);
+
+        expect(exportTaskspaceTagCache(first)).toBeUndefined();
+        expect(exportTaskspaceTagCache(join(dir, "ts-64"))).toBeDefined();
+      });
+
+      it("keeps a taskspace that is still being looked at, however old it is", () => {
+        const first = scanFresh(dir, 0);
+
+        for (let n = 1; n <= 64; n++) {
+          scanFresh(dir, n);
+          // Answered entirely from the cache, so nothing is written and nothing is parsed —
+          // which is exactly the scan that would not have marked it as used, and exactly the
+          // taskspace worth keeping.
+          scan(first);
+        }
+
+        expect(exportTaskspaceTagCache(first)).toBeDefined();
+      });
+    });
+  });
+
+  /**
+   * The ceiling across a whole gather, on top of each taskspace's own. Without it a workspace
+   * of a dozen taskspaces cost a dozen times the per-taskspace budget on one page load, and
+   * the walk is synchronous, so the server answered nothing else while it ran.
+   */
+  describe("the shared pool", () => {
+    it("spends from the pool, and reports the taskspace that found it empty", () => {
+      const other = join(tmpdir(), `kozane-taskspace-tags-pool-${randomUUID()}`);
+      mkdirSync(other, { recursive: true });
+      try {
+        write(join(dir, "notes.md"), "'first");
+        write(join(other, "notes.md"), "'second");
+
+        // Enough for the first taskspace's file and nothing after it.
+        const pool = { bytes: 8, nodes: 100 };
+        expect(tagsOf(scanTaskspaceTags(dir, TASKSPACE_ID, {}, pool).hits)).toEqual(["first"]);
+
+        const starved = scanTaskspaceTags(other, "ts-2", {}, pool);
+        expect(starved.hits).toEqual([]);
+        expect(starved.truncated).toEqual(["budget"]);
+      } finally {
+        rmSync(other, { recursive: true, force: true });
+      }
+    });
+
+    it("charges the pool nothing for a file answered from the cache", () => {
+      write(join(dir, "notes.md"), "'first");
+      scan(dir);
+
+      const pool = { bytes: 0, nodes: 100 };
+      const warm = scanTaskspaceTags(dir, TASKSPACE_ID, {}, pool);
+
+      expect(tagsOf(warm.hits)).toEqual(["first"]);
+      expect(warm.truncated).toEqual([]);
+      expect(pool.bytes).toBe(0);
+    });
+
+    it("lets a taskspace spend no more than its own ceiling, however full the pool", () => {
+      write(join(dir, "notes.md"), "'first and some more text to pay for");
+
+      const pool = { bytes: 1_000_000, nodes: 100 };
+      const scanned = scanTaskspaceTags(dir, TASKSPACE_ID, { bytes: 4 }, pool);
+
+      expect(scanned.truncated).toEqual(["budget"]);
+      // Only what the taskspace's own ceiling allowed can have come out of the pool.
+      expect(pool.bytes).toBeGreaterThanOrEqual(1_000_000 - 4);
+    });
   });
 });

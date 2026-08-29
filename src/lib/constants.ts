@@ -237,6 +237,30 @@ export const TAG_SCAN_TOTAL_BYTES_MAX = 8 * 1024 * 1024;
 export const TAG_SCAN_NODES_MAX = 20_000;
 
 /**
+ * How many bytes of file content one *gather* will read, across every taskspace in it.
+ *
+ * {@link TAG_SCAN_TOTAL_BYTES_MAX} bounds one taskspace and this bounds the loop over them,
+ * which was unbounded: a workspace with twelve taskspaces could spend twelve times the
+ * per-taskspace ceiling on one page load, and the walk behind it is synchronous, so the
+ * server does nothing else — not even the board's poll — until it ends. A ceiling per
+ * taskspace says how much any one of them may cost; only a ceiling across them says how much
+ * the page may.
+ *
+ * Both apply, and the smaller of the two binds: a taskspace never reads more than its own
+ * ceiling however much of the pool is left, so the first taskspace in the list cannot spend
+ * the gather on itself and leave the rest reported as unread.
+ *
+ * Set to four taskspaces at their full ceiling, which is more than a gather that finds
+ * anything actually costs — a cache hit is free, so this bounds the cold read and not the
+ * rhythm of a workspace being used.
+ */
+export const TAG_SCAN_WORKSPACE_BYTES_MAX = 4 * TAG_SCAN_TOTAL_BYTES_MAX;
+
+/** How many entries one gather will walk, across every taskspace in it. The counterpart to
+ *  {@link TAG_SCAN_WORKSPACE_BYTES_MAX} for the other budget, and set the same way. */
+export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
+
+/**
  * Directory names a tag scan does not walk into, at any depth.
  *
  * The same kind of rule as skipping dot-entries, and it earns its place the same way: these

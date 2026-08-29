@@ -188,6 +188,33 @@ describe("loadTagIndex", () => {
 
       expect(taskspaceProjects).toHaveProperty(taskspaceId);
     });
+
+    /**
+     * One budget for the loop, not one per taskspace.
+     *
+     * There was only the per-taskspace ceiling, so what a gather cost was that ceiling times
+     * however many taskspaces a workspace had — unbounded from the page's point of view, and
+     * spent inside a synchronous walk that the server does nothing else during. The taskspace
+     * that finds the pool empty says so, which is the same promise every other limit here
+     * makes: a taskspace half-read is never reported as a taskspace holding no tags.
+     */
+    it("bounds what one gather costs across every taskspace in it", async () => {
+      const { db, projectId } = await setup();
+      await seedTaskspace(db, projectId, "a-notes", "'first\n");
+      await seedTaskspace(db, projectId, "b-notes", "'second\n");
+
+      const { hits, truncated } = await loadTagIndex({
+        db,
+        includeFiles: true,
+        root,
+        // Enough for the first taskspace's file and nothing after it.
+        limits: { workspaceBytes: 8 },
+      });
+
+      expect(tags(hits)).toEqual(["first"]);
+      expect(truncated.map(({ taskspaceName }) => taskspaceName)).toEqual(["b-notes"]);
+      expect(truncated[0].reasons).toEqual(["budget"]);
+    });
   });
 
   describe("with a persisted cache", () => {
