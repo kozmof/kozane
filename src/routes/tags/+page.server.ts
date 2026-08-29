@@ -94,11 +94,16 @@ async function bundlesForProjects(
   db: AnyDB,
   projectIds: string[],
 ): Promise<Record<string, { name: string; dot: string }>> {
+  // Read together rather than one project after the next. Nothing here depends on anything
+  // else here — each project's palette is assigned within its own bundles — and gathering
+  // across a workspace asks about as many projects as it has.
+  const palettes = await Promise.all(
+    projectIds.map(async (projectId) => applyPalette(await getAllBundles({ db, projectId }))),
+  );
+
   const byBundle: Record<string, { name: string; dot: string }> = {};
-  for (const projectId of projectIds) {
-    for (const bundle of applyPalette(await getAllBundles({ db, projectId }))) {
-      byBundle[bundle.id] = { name: bundle.name, dot: bundle.dot };
-    }
+  for (const bundles of palettes) {
+    for (const bundle of bundles) byBundle[bundle.id] = { name: bundle.name, dot: bundle.dot };
   }
   return byBundle;
 }
@@ -139,7 +144,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const shownProjects = [
     ...new Set(shownCardIds.map((cardId) => index.cardProjects[cardId]).filter(Boolean)),
   ];
-  const cardBundles = await getCardBundleNames({ db, cardIds: shownCardIds });
+  // Both read the cards being shown and neither reads the other, so they go together — the
+  // last round trip of the load rather than the last two.
+  const [cardBundles, bundles] = await Promise.all([
+    getCardBundleNames({ db, cardIds: shownCardIds }),
+    bundlesForProjects(db, shownProjects),
+  ]);
 
   return {
     projectId: requestedProject,
@@ -163,7 +173,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // sits in, are both things a hit deliberately does not carry — see the note on
     // `TagSource` — so they are joined here, for the hits actually being shown.
     cardBundleIds: Object.fromEntries(cardBundles.map((row) => [row.cardId, row.bundleId])),
-    bundles: await bundlesForProjects(db, shownProjects),
+    bundles,
     // Empty in a plain export — see `includeTaskspaces`. Nothing on the page needs it there:
     // the only rows a name labels are file rows, which such an export does not carry, and a
     // truncation carries the name it has to say.
