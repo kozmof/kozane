@@ -4,7 +4,20 @@ import { getAllTaskspaces, getTaskspacesInProject } from "../../db/api/taskspace
 import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
-import { scanTaskspaceTags, type ScanLimits, type TagScanTruncation } from "./taskspace-tags.js";
+import {
+  exportTaskspaceTagCache,
+  importTaskspaceTagCache,
+  scanTaskspaceTags,
+  type ScanLimits,
+  type TagScanTruncation,
+} from "./taskspace-tags.js";
+import {
+  databaseSignature,
+  readTagCache,
+  writeTagCache,
+  TAG_CACHE_VERSION,
+  type CachedCardHits,
+} from "./tag-cache.js";
 
 /** What one taskspace could not tell us, and which one it was. Empty for a taskspace read
  *  whole, and absent from the list entirely rather than present with nothing to say. */
@@ -54,7 +67,87 @@ type LoadTagIndex = {
   root?: string | null;
   /** Passed through to each taskspace scan. For tests; nothing in the app sets it. */
   limits?: ScanLimits;
+  /**
+   * Where to keep the gather between calls, and the database to validate it against.
+   *
+   * Opt-in rather than automatic. The page and the CLI pass it; a caller that says nothing
+   * gathers afresh, which is what the existing tests do and what any caller wanting a
+   * guaranteed-cold read can rely on.
+   */
+  cache?: { root: string; dbUrl: string };
 };
+
+/** How a scope is named in the cache file. `*` is the gather across the whole workspace,
+ *  which is a different set from any one project's and so a different entry. */
+const scopeKey = (projectId?: string) => projectId ?? "*";
+
+/**
+ * How many scopes the cache file keeps. A workspace has few projects and the index is looked
+ * at one scope at a time, so this is a backstop against a file that grows forever rather than
+ * a limit anyone reaches: at a realistic size one scope is around a megabyte.
+ */
+const SCOPES_MAX = 16;
+
+/**
+ * The persisted gather, opened once per `loadTagIndex` call.
+ *
+ * Reading the file is the only I/O this does up front. What it hands back is checked before
+ * use — card hits against the database's signature, file entries against each file's own —
+ * so a cache that has fallen behind costs a re-gather and never a wrong answer.
+ */
+function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
+  const signature = databaseSignature(dbUrl);
+  // No signature means nothing to validate card hits against — an in-memory database, or one
+  // that is not a local file. Rather than cache what cannot be checked, do not cache.
+  if (!signature) return null;
+
+  const existing = readTagCache(root);
+  // Card hits are kept only while the database is byte-for-byte the one they came from. File
+  // entries are not thrown away with them: they answer to their own files, and a card written
+  // in the browser says nothing about what is on disk.
+  const fresh = existing?.db === signature;
+  const files = existing?.files ?? {};
+
+  return {
+    cards: (scope: string): CachedCardHits | null =>
+      fresh ? (existing?.scopes[scope] ?? null) : null,
+
+    seedFiles: (baseDir: string) => {
+      const entries = files[baseDir];
+      if (entries) importTaskspaceTagCache(baseDir, entries);
+    },
+
+    save: (scope: string, cards: CachedCardHits, scanned: string[] = []) => {
+      const scopes = fresh ? { ...existing?.scopes } : {};
+      // Deleted before it is set, so a scope looked at again moves to the end rather than
+      // keeping the position it first took. That is what makes insertion order visit order.
+      delete scopes[scope];
+      scopes[scope] = cards;
+      // Oldest out: what goes is the scope nobody has looked at for longest.
+      for (const stale of Object.keys(scopes).slice(0, -SCOPES_MAX)) delete scopes[stale];
+
+      const nextFiles = { ...files };
+      for (const baseDir of scanned) {
+        const entries = exportTaskspaceTagCache(baseDir);
+        if (entries) nextFiles[baseDir] = entries;
+      }
+
+      writeTagCache(root, {
+        version: TAG_CACHE_VERSION,
+        // The signature read *before* the gather, deliberately, and never a fresher one. A
+        // write that lands mid-gather leaves hits that are neither the old state nor quite
+        // the new one; stamping what the database looks like now would declare them current
+        // and serve them until the next write. Stamping what it looked like when they were
+        // taken means the next load finds a mismatch and gathers again — one wasted gather
+        // instead of a wrong answer that persists.
+        db: signature,
+        builtAt: new Date().toISOString(),
+        scopes,
+        files: nextFiles,
+      });
+    },
+  };
+}
 
 /**
  * Every tag in a workspace, or in one project of it: the ones on cards and the ones in
@@ -76,22 +169,37 @@ export async function loadTagIndex({
   includeFiles,
   root = getWorkspaceRoot(),
   limits,
+  cache,
 }: LoadTagIndex): Promise<TagIndex> {
-  const { hits, cardProjects } = await getCardTagHits({ db, projectId });
+  const store = cache ? openTagCache(cache) : null;
+
+  const cards = store?.cards(scopeKey(projectId)) ?? (await getCardTagHits({ db, projectId }));
+  const hits = [...cards.hits];
+  const { cardProjects } = cards;
   const taskspaceProjects: Record<string, string | null> = {};
   const truncated: TagIndexTruncation[] = [];
+
   // No workspace root means no directory to resolve a taskspace against. The cards are still
   // a complete answer about cards, so the index is served rather than refused.
-  if (!includeFiles || !root) return { hits, cardProjects, taskspaceProjects, truncated };
+  if (!includeFiles || !root) {
+    store?.save(scopeKey(projectId), cards);
+    return { hits, cardProjects, taskspaceProjects, truncated };
+  }
 
   const taskspaces = projectId
     ? await getTaskspacesInProject({ db, projectId })
     : await getAllTaskspaces({ db });
 
+  const scanned: string[] = [];
   for (const taskspace of taskspaces) {
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+    // Before the scan, so the files this taskspace parsed last time are already in hand when
+    // the walk asks about them. The walk still happens and still checks every signature —
+    // this only decides whether an unchanged file is re-read or merely re-stat'ed.
+    store?.seedFiles(baseDir);
     const scan = scanTaskspaceTags(baseDir, taskspace.id, limits);
+    scanned.push(baseDir);
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
     // truncation names a taskspace too, and the page has to be able to name it back.
     taskspaceProjects[taskspace.id] = taskspace.projectId;
@@ -100,5 +208,6 @@ export async function loadTagIndex({
       truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
   }
 
+  store?.save(scopeKey(projectId), cards, scanned);
   return { hits, cardProjects, taskspaceProjects, truncated };
 }

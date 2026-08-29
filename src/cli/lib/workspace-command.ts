@@ -23,6 +23,13 @@ export type WorkspaceCommandContext = {
    */
   root: string;
   config: WorkspaceConfig;
+  /**
+   * The database this command opened, as {@link commandDbUrl} resolved it — which is the
+   * temporary database of a running `kozane open --memory` when there is one, and the
+   * workspace's own otherwise. Handed over rather than left to be resolved a second time,
+   * so a caller that needs to identify the database it is reading identifies *that* one.
+   */
+  dbUrl: string;
 };
 
 export type WorkspaceCommandOptions = {
@@ -64,7 +71,7 @@ export async function runWorkspaceCommand<T>(
     const url = commandDbUrl(root);
     if (requireMigrations) await requireCurrentMigrations(url, "this command can run");
     const db = await createDb(url);
-    return await run({ db, root, config });
+    return await run({ db, root, config, dbUrl: url });
   } catch (error) {
     fail(error);
   }

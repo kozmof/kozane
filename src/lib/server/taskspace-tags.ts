@@ -62,20 +62,55 @@ export type TaskspaceTagScan = {
  * indistinguishable. Out of reach of a person editing a file, which is what this is for. If
  * it ever needs closing, `fileSignature` closes it for one extra `stat` per file.
  */
-type CachedFile = { signature: string; hits: TagLineHit[] };
+export type CachedFile = { signature: string; hits: TagLineHit[] };
 
 /**
- * Files parsed in this process, by their real path. Lives for the life of the server: the
- * entries are small — a path, a signature, and the tags of one file — and a taskspace whose
- * files are re-read on every visit is the cost this exists to remove.
+ * Files parsed in this process: taskspace directory, then path within it. Lives for the life
+ * of the server — the entries are small, a path, a signature, and the tags of one file, and a
+ * taskspace whose files are re-read on every visit is the cost this exists to remove.
+ *
+ * Nested rather than keyed by a joined string so that one taskspace's entries can be handed
+ * out and taken back whole; see {@link exportTaskspaceTagCache}.
  */
-const fileCache = new Map<string, CachedFile>();
+const fileCache = new Map<string, Map<string, CachedFile>>();
 
 /** Forgets every cached file. For tests, which write a temporary directory, delete it, and
  *  write a fresh one at a path the first may well have used — the same reason
  *  `clearTaskspaceFileTreeCache` exists. */
 export function clearTaskspaceTagCache(): void {
   fileCache.clear();
+}
+
+/**
+ * One taskspace's parsed files, for a caller that keeps them somewhere this process cannot
+ * reach — `tag-cache.ts` writes them to disk, so the next process starts warm instead of
+ * re-reading every file to learn what it already knew.
+ *
+ * Undefined for a directory nothing has scanned, which is different from one scanned and
+ * found empty.
+ */
+export function exportTaskspaceTagCache(baseDir: string): Record<string, CachedFile> | undefined {
+  const entries = fileCache.get(baseDir);
+  return entries ? Object.fromEntries(entries) : undefined;
+}
+
+/**
+ * Seeds one taskspace's files from such a store.
+ *
+ * Safe against a store that has gone stale in the meantime, and not by being careful here:
+ * every entry is still checked against the file's current signature before it is used, so
+ * seeding a wrong or ancient entry costs one re-read and never a wrong answer. Existing
+ * entries win, being at worst as old as these and at best fresher.
+ */
+export function importTaskspaceTagCache(
+  baseDir: string,
+  entries: Record<string, CachedFile>,
+): void {
+  const existing = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
+  for (const [subPath, entry] of Object.entries(entries)) {
+    if (!existing.has(subPath)) existing.set(subPath, entry);
+  }
+  fileCache.set(baseDir, existing);
 }
 
 type FileTags =
@@ -90,8 +125,7 @@ function fileTagHits(
   budget: Budget,
   size: number,
 ): FileTags {
-  const key = `${baseDir}\0${subPath}`;
-  const cached = fileCache.get(key);
+  const cached = fileCache.get(baseDir)?.get(subPath);
   if (cached?.signature === signature) return { hits: cached.hits };
 
   // Charged before the read rather than after, so a file the budget cannot afford is not
@@ -112,7 +146,9 @@ function fileTagHits(
     return { skipped: "unreadable" };
   }
 
-  fileCache.set(key, { signature, hits });
+  const entries = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
+  entries.set(subPath, { signature, hits });
+  fileCache.set(baseDir, entries);
   return { hits };
 }
 

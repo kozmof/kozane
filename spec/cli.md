@@ -170,6 +170,7 @@ pnpm build:cli            # compile to dist/
   .kozane/
     config.json           # project config
     kozane.db             # SQLite database
+    tag-index.json        # cached tag gather, rebuilt when stale, safe to delete
     backups/              # database backups created before migrations/imports
 ```
 
@@ -802,6 +803,12 @@ kozane tag list
 
 Taskspace files are read as part of this. A taskspace that could not be read in full is
 named afterwards, so a tag missing from the list is not read as a tag nobody wrote.
+
+The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
+and re-read every file to reach the answer the first one reached. Nothing is trusted from it
+unchecked: card hits are used only while the database is byte-for-byte the one they came
+from, and a file's tags only while that file's size and modification time are unchanged.
+Anything else is gathered again. Deleting the file costs one slow run.
 
 ---
 

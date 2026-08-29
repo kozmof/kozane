@@ -10,8 +10,13 @@ import { join, resolve } from "path";
 import { randomUUID } from "crypto";
 import { onTestFinished } from "vitest";
 
-export async function createTestDB(): Promise<DB> {
-  const dbPath = join(tmpdir(), `kozane-test-${randomUUID()}.db`);
+/**
+ * `dbPath` is for the tests that have to *identify* the database rather than merely use it —
+ * the tag cache validates itself against the database file's signature, so its tests need one
+ * at a path they chose. Everything else takes the temporary default and never looks.
+ */
+export async function createTestDB(dbPath?: string): Promise<DB> {
+  dbPath ??= join(tmpdir(), `kozane-test-${randomUUID()}.db`);
   const client = createClient({ url: `file:${dbPath}` });
   const db = drizzle(client, { schema }) as unknown as DB;
   await migrate(db, { migrationsFolder: resolve("drizzle") });

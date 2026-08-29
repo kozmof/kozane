@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -7,9 +7,10 @@ import { createTestDB } from "../../test-utils/db.js";
 import { addProject } from "../../db/api/project.js";
 import { addBundle } from "../../db/api/bundle.js";
 import { addLayer } from "../../db/api/layer.js";
-import { addCard } from "../../db/api/card.js";
+import { addCard, updateCard } from "../../db/api/card.js";
 import { addTaskspace } from "../../db/api/taskspace.js";
 import { clearTaskspaceTagCache } from "./taskspace-tags.js";
+import { readTagCache, tagCachePath, writeTagCache } from "./tag-cache.js";
 import { loadTagIndex } from "./tag-index.js";
 
 /** The tags found, sorted, so a test says what was gathered rather than in what order. */
@@ -186,6 +187,151 @@ describe("loadTagIndex", () => {
       const { taskspaceProjects } = await loadTagIndex({ db, includeFiles: true, root });
 
       expect(taskspaceProjects).toHaveProperty(taskspaceId);
+    });
+  });
+
+  describe("with a persisted cache", () => {
+    let dbUrl: string;
+
+    /** A workspace whose database sits where a real one would, so the cache can identify it
+     *  by signature the way it does in a live workspace. */
+    async function cachedSetup() {
+      mkdirSync(join(root, ".kozane"), { recursive: true });
+      const dbPath = join(root, ".kozane", "kozane.db");
+      dbUrl = `file:${dbPath}`;
+      const db = await createTestDB(dbPath);
+      const projectId = await addProject({ db, name: "P" });
+      await addLayer({ db, projectId, name: "Base", isDefault: true });
+      const bundleId = await addBundle({ db, projectId, name: "B" });
+      return { db, projectId, bundleId, cache: { root, dbUrl } };
+    }
+
+    const gather = (db: Awaited<ReturnType<typeof createTestDB>>, cache: TagCacheLocation) =>
+      loadTagIndex({ db, includeFiles: true, root, cache });
+    type TagCacheLocation = { root: string; dbUrl: string };
+
+    it("writes a cache, and does not when it was not asked to", async () => {
+      const { db, bundleId } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+
+      await loadTagIndex({ db, includeFiles: true, root });
+      expect(readTagCache(root)).toBeNull();
+
+      await loadTagIndex({ db, includeFiles: true, root, cache: { root, dbUrl } });
+      expect(readTagCache(root)?.scopes["*"].hits.map(({ tag }) => tag)).toEqual(["perf"]);
+    });
+
+    /**
+     * Reuse is proved by planting an answer only the cache could give. Rewriting the stored
+     * hits and seeing them come back says the card query did not run — where re-querying and
+     * getting the same tags would have proved nothing at all.
+     */
+    it("uses the stored card hits rather than querying again", async () => {
+      const { db, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+      await gather(db, cache);
+
+      const planted = readTagCache(root)!;
+      planted.scopes["*"] = {
+        hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
+        cardProjects: { c1: "p" },
+      };
+      writeTagCache(root, planted);
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["planted"]);
+    });
+
+    it("re-queries once the database has changed", async () => {
+      const { db, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+      await gather(db, cache);
+
+      const planted = readTagCache(root)!;
+      planted.scopes["*"] = {
+        hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
+        cardProjects: { c1: "p" },
+      };
+      writeTagCache(root, planted);
+      await addCard({ db, bundleId, content: "'second" });
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["perf", "second"]);
+    });
+
+    /** The case a stored build time compared with `>` would wave through, and the reason the
+     *  cache stores a signature instead. */
+    it("re-queries after an edit that changes neither the card count nor the length", async () => {
+      const { db, bundleId, cache } = await cachedSetup();
+      const cardId = await addCard({ db, bundleId, content: "'perf" });
+      expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
+
+      await updateCard({ db, cardId, bundleId, content: "'perg" });
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["perg"]);
+    });
+
+    it("keeps each scope apart", async () => {
+      const { db, projectId, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+
+      await loadTagIndex({ db, includeFiles: true, root, cache });
+      await loadTagIndex({ db, projectId, includeFiles: true, root, cache });
+
+      expect(Object.keys(readTagCache(root)!.scopes).sort()).toEqual(["*", projectId].sort());
+    });
+
+    /**
+     * The cross-process case: a fresh process has an empty in-process file cache, so what it
+     * knows about a file it can only have got from disk. Planting an answer proves it came
+     * from there rather than from a re-read.
+     */
+    it("starts a new process warm from the file entries on disk", async () => {
+      const { db, projectId, cache } = await cachedSetup();
+      await seedTaskspace(db, projectId, "notes", "'ondisk\n");
+      await gather(db, cache);
+
+      const planted = readTagCache(root)!;
+      const dir = join(root, "notes");
+      planted.files[dir]["notes.md"].hits = [{ tag: "planted", line: 1, excerpt: "planted" }];
+      writeTagCache(root, planted);
+      clearTaskspaceTagCache(); // as a new process would start
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["planted"]);
+    });
+
+    it("re-reads a file that changed since it was stored", async () => {
+      const { db, projectId, cache } = await cachedSetup();
+      await seedTaskspace(db, projectId, "notes", "'before\n");
+      await gather(db, cache);
+      clearTaskspaceTagCache();
+
+      const later = new Date(Date.now() + 60_000);
+      writeFileSync(join(root, "notes", "notes.md"), "'after\n");
+      utimesSync(join(root, "notes", "notes.md"), later, later);
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["after"]);
+    });
+
+    it("rebuilds silently from a corrupt cache file", async () => {
+      const { db, bundleId, cache } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+      await gather(db, cache);
+      writeFileSync(tagCachePath(root), "{ not json");
+
+      expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
+    });
+
+    it("does not cache a database it cannot identify", async () => {
+      const { db, bundleId } = await cachedSetup();
+      await addCard({ db, bundleId, content: "'perf" });
+
+      await loadTagIndex({
+        db,
+        includeFiles: true,
+        root,
+        cache: { root, dbUrl: ":memory:" },
+      });
+
+      expect(readTagCache(root)).toBeNull();
     });
   });
 });

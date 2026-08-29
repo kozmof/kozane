@@ -5,6 +5,7 @@ import { getAllBundles } from "$db/api/bundle";
 import { getCardBundleNames } from "$db/api/card";
 import { getAllTaskspaces } from "$db/api/taskspace";
 import type { AnyDB } from "$db/client";
+import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { buildTagTree, normalizeTag, tagMatches } from "$lib/tag";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
@@ -19,6 +20,25 @@ export const prerender = process.env.KOZANE_SSG === "1";
 // all — the same opt-in that governs the taskspace panel. Card tags are board content and
 // go out with the rest of it.
 const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
+
+/**
+ * Where the gather is kept between requests, or nothing when it cannot be.
+ *
+ * Nothing during a prerender: an export is built once, in a temporary place, and would only
+ * leave a cache file behind for a workspace it is not serving. Nothing either when there is
+ * no workspace root or no database URL to validate against — see `openTagCache`, which
+ * refuses to cache what it cannot check.
+ */
+function cacheLocation(): { cache: { root: string; dbUrl: string } } | null {
+  if (prerender) return null;
+  const root = getWorkspaceRoot();
+  if (!root) return null;
+  try {
+    return { cache: { root, dbUrl: getDBURL() } };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A prerendered page has no query string to read, so a static export bakes every hit and the
@@ -71,6 +91,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       db,
       ...(requestedProject ? { projectId: requestedProject } : {}),
       includeFiles: !prerender || includeScopedFiles,
+      // Kept between requests, so clicking from one tag to the next does not re-run the card
+      // query and re-read every taskspace file to produce the set it just produced. Skipped
+      // where there is no workspace to keep it in, which is a prerender building an export.
+      ...cacheLocation(),
     }),
     getAllProjects({ db }),
     getAllTaskspaces({ db }),

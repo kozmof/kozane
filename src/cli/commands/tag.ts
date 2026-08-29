@@ -42,13 +42,17 @@ function printTree(nodes: TagNode[], depth = 0): void {
  * the browser cannot come to different conclusions about what a tag holds.
  */
 export async function tagList(options: TagOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db, root }) => {
+  await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
     const projectId = await resolveProjectId(db, options.project);
+    // The cache matters most here. A command runs in a process that exits, so without one
+    // every invocation re-queries every card and re-reads every taskspace file to learn what
+    // the last invocation already worked out.
     const { hits, truncated } = await loadTagIndex({
       db,
       projectId,
       includeFiles: true,
       root,
+      cache: { root, dbUrl },
     });
 
     const tree = buildTagTree(hits);
@@ -85,7 +89,7 @@ async function warnTruncated(
  * `'foo:bar:baz` — the same rule the index page filters by, via the same `tagMatches`.
  */
 export async function tagShow(tag: string, options: TagShowOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db, root }) => {
+  await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
     // The sigil is optional here: `kozane tag show 'foo` is what someone reading a card
     // would type, and most shells eat the quote unless it is escaped — so both forms work.
     const query = normalizeTag(tag.replace(/^'/, ""));
@@ -94,7 +98,13 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const projectId = await resolveProjectId(db, options.project);
     // `--no-files` is commander's spelling of a `--files` that defaults to true.
     const includeFiles = options.files !== false;
-    const { hits, truncated } = await loadTagIndex({ db, projectId, includeFiles, root });
+    const { hits, truncated } = await loadTagIndex({
+      db,
+      projectId,
+      includeFiles,
+      root,
+      cache: { root, dbUrl },
+    });
 
     const matching = hits.filter((hit) => tagMatches(query, hit.tag));
     if (matching.length === 0) {
