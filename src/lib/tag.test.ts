@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { buildTagTree, normalizeTag, scanTagLines, splitTag, tagMatches } from "./tag";
+import {
+  buildTagTree,
+  groupHitRows,
+  normalizeTag,
+  scanTagLines,
+  splitTag,
+  taggedWith,
+  tagMatcher,
+  tagMatches,
+} from "./tag";
 import { TAG_EXCERPT_CHARS_MAX, TAG_LEVELS_MAX, TAG_SEGMENT_CHARS_MAX } from "./constants";
 import type { TagHit } from "./types";
 
@@ -127,6 +136,52 @@ describe("normalizeTag", () => {
 
   it("folds the two spellings of a composed character together", () => {
     expect(normalizeTag("é")).toBe(normalizeTag("é"));
+  });
+});
+
+describe("tagMatcher", () => {
+  it("answers as tagMatches does, with the query read once", () => {
+    const matches = tagMatcher("Foo");
+    expect([matches("foo"), matches("foo:bar"), matches("foobar")]).toEqual([true, true, false]);
+  });
+});
+
+describe("groupHitRows", () => {
+  const cardHit = (cardId: string, tag: string): TagHit => ({
+    tag,
+    source: { kind: "card", cardId },
+    excerpt: "",
+  });
+  const fileHit = (path: string, line: number, tag: string): TagHit => ({
+    tag,
+    source: { kind: "file", taskspaceId: "t1", path, line },
+    excerpt: "",
+  });
+
+  it("puts every hit on one card in one row", () => {
+    const rows = groupHitRows([cardHit("c1", "perf"), cardHit("c1", "perf:cache")]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0][1]).toHaveLength(2);
+  });
+
+  it("gives each line of a file its own row, since each is somewhere to go", () => {
+    expect(groupHitRows([fileHit("a.md", 1, "perf"), fileHit("a.md", 9, "perf")])).toHaveLength(2);
+  });
+
+  it("keeps two tags on one line in one row", () => {
+    expect(groupHitRows([fileHit("a.md", 1, "perf"), fileHit("a.md", 1, "docs")])).toHaveLength(1);
+  });
+
+  it("keeps first-seen order, which is the order the read produced", () => {
+    const rows = groupHitRows([cardHit("c2", "a"), cardHit("c1", "b"), cardHit("c2", "c")]);
+    expect(rows.map(([key]) => key)).toEqual(["card:c2", "card:c1"]);
+  });
+
+  it("names each distinct tag once, sigil and all, in one order", () => {
+    expect(taggedWith([cardHit("c1", "perf:cache"), cardHit("c1", "perf")])).toEqual([
+      "'perf",
+      "'perf:cache",
+    ]);
   });
 });
 

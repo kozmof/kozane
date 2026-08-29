@@ -116,6 +116,14 @@ export interface TaskspaceFileTree {
  *
  * A file is the other case rather than the same duplication: nothing anywhere holds a row
  * for one, so the taskspace, the path within it, and the line *are* its identity.
+ *
+ * That is also why only one of the two carries a `line`, though `scanTagLines` computes it
+ * for both. A file hit is a place to go and look, and the line is half of where; a card hit
+ * opens the card, which is one place however many of its lines carry the tag — a line number
+ * there would be a field every reader has to decide to ignore. What the line was needed for
+ * is already kept: `excerpt` is that line, so a card matched deep in its text shows the text
+ * that matched rather than its opening words. `hitRowKey` in `lib/tag.ts` is where the two
+ * grains meet, and is the only place that needs to know they differ.
  */
 export type TagSource =
   | { kind: "card"; cardId: string }

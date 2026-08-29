@@ -7,7 +7,7 @@ import { getAllTaskspaces } from "$db/api/taskspace";
 import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
-import { buildTagTree, normalizeTag, tagMatches } from "$lib/tag";
+import { buildTagTree, normalizeTag, tagMatcher } from "$lib/tag";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
 import type { TagHit } from "$lib/types";
 
@@ -47,7 +47,9 @@ function cacheLocation(): { cache: { root: string; dbUrl: string } } | null {
  */
 function selectHits(hits: TagHit[], tag: string | null): TagHit[] {
   if (prerender) return hits;
-  return tag ? hits.filter((hit) => tagMatches(tag, hit.tag)) : [];
+  if (!tag) return [];
+  const matches = tagMatcher(tag);
+  return hits.filter((hit) => matches(hit.tag));
 }
 
 /**

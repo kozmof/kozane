@@ -4,7 +4,16 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { buildTagTree, normalizeTag, tagMatches, type TagCounts, type TagNode } from "$lib/tag";
+  import {
+    buildTagTree,
+    groupHitRows,
+    normalizeTag,
+    taggedWith,
+    tagMatcher,
+    tagMatches,
+    type TagCounts,
+    type TagNode,
+  } from "$lib/tag";
   import type { TagHit } from "$lib/types";
 
   let { data }: PageProps = $props();
@@ -48,11 +57,11 @@
    * set — and is the real selection in a static export, where every hit of every project was
    * baked in. One path rather than a branch that only one of the two ever takes.
    */
-  const shownHits = $derived(
-    selectedTag
-      ? data.hits.filter((hit) => tagMatches(selectedTag, hit.tag) && inSelectedProject(hit))
-      : [],
-  );
+  const shownHits = $derived.by(() => {
+    if (!selectedTag) return [];
+    const matches = tagMatcher(selectedTag);
+    return data.hits.filter((hit) => matches(hit.tag) && inSelectedProject(hit));
+  });
 
   /**
    * The tree, narrowed the same way. Only a static export ever has anything to narrow: the
@@ -64,49 +73,26 @@
       : data.tree,
   );
 
-  /** Hits gathered by whatever identifies the row they are drawn on, in first-seen order. */
-  function groupHits(hits: TagHit[], key: (hit: TagHit) => string): [string, TagHit[]][] {
-    const groups = new Map<string, TagHit[]>();
-    for (const hit of hits) {
-      const existing = groups.get(key(hit));
-      if (existing) existing.push(hit);
-      else groups.set(key(hit), [hit]);
-    }
-    return [...groups];
-  }
-
   /**
    * One row per card, not per hit. A card written `'perf:cache and 'perf` matches a search
-   * for `'perf` twice, and two rows would read as two cards.
+   * for `'perf` twice, and two rows would read as two cards. What counts as a row is
+   * `groupHitRows` in `$lib/tag`, which the terminal groups by too.
    */
-  const cardRows = $derived(
-    groupHits(
-      shownHits.filter((hit) => hit.source.kind === "card"),
-      (hit) => (hit.source.kind === "card" ? hit.source.cardId : ""),
-    ),
-  );
+  const cardRows = $derived(groupHitRows(shownHits.filter((hit) => hit.source.kind === "card")));
 
   /** File hits gathered under the taskspace they were found in, so a path is read against
    *  the directory it is relative to rather than on its own — and within that, one row per
    *  line, since each is somewhere to go and look. */
-  const fileRowsByTaskspace = $derived(
-    groupHits(
-      shownHits.filter((hit) => hit.source.kind === "file"),
-      (hit) => (hit.source.kind === "file" ? hit.source.taskspaceId : ""),
-    ).map(
-      ([taskspaceId, hits]) =>
-        [
-          taskspaceId,
-          groupHits(hits, (hit) =>
-            hit.source.kind === "file" ? `${hit.source.path}:${hit.source.line}` : "",
-          ),
-        ] as const,
-    ),
-  );
-
-  /** The distinct tags a row matched by, so a card found under two of them says which. */
-  const taggedWith = (hits: TagHit[]) =>
-    [...new Set(hits.map(({ tag }) => tag))].sort().map((tag) => `'${tag}`);
+  const fileRowsByTaskspace = $derived.by(() => {
+    const byTaskspace = new Map<string, TagHit[]>();
+    for (const hit of shownHits) {
+      if (hit.source.kind !== "file") continue;
+      const existing = byTaskspace.get(hit.source.taskspaceId);
+      if (existing) existing.push(hit);
+      else byTaskspace.set(hit.source.taskspaceId, [hit]);
+    }
+    return [...byTaskspace].map(([id, hits]) => [id, groupHitRows(hits)] as const);
+  });
 
   const taskspaceName = (id: string) =>
     data.taskspaces.find((taskspace) => taskspace.id === id)?.name || "taskspace";

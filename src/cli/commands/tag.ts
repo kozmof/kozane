@@ -3,8 +3,10 @@ import { getAllBundles } from "../../db/api/bundle.js";
 import { getTaskspacesInProject } from "../../db/api/taskspace.js";
 import {
   buildTagTree,
+  groupHitRows,
   normalizeTag,
-  tagMatches,
+  taggedWith,
+  tagMatcher,
   type TagCounts,
   type TagNode,
 } from "../../lib/tag.js";
@@ -18,6 +20,15 @@ import { runWorkspaceCommand } from "../lib/workspace-command.js";
 export type TagOptions = { project?: string };
 export type TagShowOptions = TagOptions & { files?: boolean };
 
+/**
+ * What a node gathers, spelled out — `1 card, 2 files`.
+ *
+ * Deliberately not what the tag index page prints, which is the bare total. The page draws
+ * its tree in a narrow column beside the hits, where a number is all that fits and the panel
+ * beside it says which kind each row is; a terminal line has room, and `kozane tag list`
+ * prints no panel afterwards to say so. Same counts from the same `TagCounts` either way —
+ * only the wording differs, and it differs because the space does.
+ */
 const countLabel = ({ cards, files }: TagCounts): string =>
   [
     cards ? `${cards} card${cards === 1 ? "" : "s"}` : "",
@@ -106,7 +117,8 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
       cache: { root, dbUrl },
     });
 
-    const matching = hits.filter((hit) => tagMatches(query, hit.tag));
+    const matches = tagMatcher(query);
+    const matching = hits.filter((hit) => matches(hit.tag));
     if (matching.length === 0) {
       console.log(`No cards or files under '${query}.`);
       return;
@@ -131,30 +143,15 @@ async function printCardHits(db: DB, projectId: string, hits: TagHit[]): Promise
   const shortIds = shortIdMap(cards.map((card) => card.id));
 
   console.log("Cards:");
-  // One row per card, not per hit. A card written `'perf:cache and 'perf` matches a search
-  // for `perf` twice, and printing it twice says the tag is on two cards.
-  for (const [cardId, rows] of groupHits(cardHits, (hit) =>
-    hit.source.kind === "card" ? hit.source.cardId : "",
-  )) {
-    console.log(`  ${shortIds.get(cardId) ?? cardId}  ${taggedWith(rows)}  ${rows[0].excerpt}`);
+  // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
+  // for the terminal and the index page alike. A card written `'perf:cache and 'perf` matches
+  // a search for `perf` twice, and printing it twice says the tag is on two cards.
+  for (const [, rows] of groupHitRows(cardHits)) {
+    const { source } = rows[0];
+    if (source.kind !== "card") continue;
+    const id = shortIds.get(source.cardId) ?? source.cardId;
+    console.log(`  ${id}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`);
   }
-}
-
-/** Hits gathered by whatever identifies the row they will be printed on, in first-seen
- *  order — which is the order the underlying read produced. */
-function groupHits(hits: TagHit[], key: (hit: TagHit) => string): [string, TagHit[]][] {
-  const groups = new Map<string, TagHit[]>();
-  for (const hit of hits) {
-    const existing = groups.get(key(hit));
-    if (existing) existing.push(hit);
-    else groups.set(key(hit), [hit]);
-  }
-  return [...groups];
-}
-
-/** The distinct tags a row matched by, so a card found under two of them says which. */
-function taggedWith(hits: TagHit[]): string {
-  return [...new Set(hits.map(({ tag }) => `'${tag}`))].sort().join(" ");
 }
 
 function printFileHits(hits: TagHit[]): void {
@@ -164,11 +161,11 @@ function printFileHits(hits: TagHit[]): void {
   console.log("Files:");
   // Grouped by the line, not by the file: a file may carry the tag in several places, and
   // each is somewhere to go and look. Two tags on one line are still one row.
-  for (const [, rows] of groupHits(fileHits, (hit) =>
-    hit.source.kind === "file" ? `${hit.source.path}:${hit.source.line}` : "",
-  )) {
+  for (const [, rows] of groupHitRows(fileHits)) {
     const { source } = rows[0];
     if (source.kind !== "file") continue;
-    console.log(`  ${source.path}:${source.line}  ${taggedWith(rows)}  ${rows[0].excerpt}`);
+    console.log(
+      `  ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
+    );
   }
 }

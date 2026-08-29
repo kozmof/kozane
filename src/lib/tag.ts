@@ -8,9 +8,11 @@ import type { TagHit, TagSource } from "./types.js";
 
 /**
  * The tag grammar, in one place, for every caller: a card's text, a taskspace file's text,
- * the CLI, and the browser. A leaf module like `linkify.ts` — nothing here reaches the
- * database or the filesystem, which is what lets `src/cli` (built by `tsc`), the server, and
- * the board all read tags by the same rules rather than by three that agree for now.
+ * the CLI, and the browser. A leaf module — nothing here reaches the database or the
+ * filesystem, which is what lets `src/cli` (built by `tsc`), the server, and the board all
+ * read tags by the same rules rather than by three that agree for now. The presentation
+ * helpers at the foot of the file are here for the same reason: the terminal and the page
+ * draw the same rows, so they group and label them with the same code.
  *
  * A tag is `'foo`, and subcategorizes as `'foo:bar:baz`:
  *
@@ -85,10 +87,16 @@ const TAG_RE = new RegExp(
  * NFC-normalized, so two spellings of the same accented or Japanese text do not become two
  * tags in the index over a difference nothing renders.
  *
+ * Lowercased *then* normalized, in that order and not the reverse. Case folding is not
+ * guaranteed to preserve normal form — a handful of characters lower onto sequences that are
+ * no longer NFC — so composing last is what actually makes the result an NFC string, which is
+ * the whole property an index key is wanted for. Both sides of every comparison come through
+ * here, so the two orders agree wherever they agree; this one is right where they do not.
+ *
  * What was actually typed is not lost — every hit carries the line it sits on.
  */
 export function normalizeTag(tag: string): string {
-  return tag.normalize("NFC").toLowerCase();
+  return tag.toLowerCase().normalize("NFC");
 }
 
 /** The levels of a tag, outermost first: `foo:bar:baz` is `["foo", "bar", "baz"]`. */
@@ -101,9 +109,22 @@ export function splitTag(tag: string): string[] {
  * whole point of subcategories: `foo` gathers `foo:bar:baz`, and does not gather `foobar`.
  */
 export function tagMatches(query: string, tag: string): boolean {
+  return tagMatcher(query)(tag);
+}
+
+/**
+ * {@link tagMatches} with the query normalized once, for the callers that ask it of every hit
+ * in a workspace — the index page's filter, the CLI's, and the server's. Normalizing inside
+ * the predicate meant folding and composing the same query string once per hit, which is the
+ * one place on this path where a hit count turns into real work for no answer.
+ */
+export function tagMatcher(query: string): (tag: string) => boolean {
   const q = normalizeTag(query);
-  const t = normalizeTag(tag);
-  return t === q || t.startsWith(`${q}:`);
+  const prefix = `${q}:`;
+  return (tag) => {
+    const t = normalizeTag(tag);
+    return t === q || t.startsWith(prefix);
+  };
 }
 
 /** One tag found in a text, and exactly where it sits in it. */
@@ -194,11 +215,32 @@ export function scanTagLines(text: string): TagLineHit[] {
  * The thing a hit was found in, as a key: the card, or the file, whichever tag matched and
  * wherever in it. Two tags on one card are one card, and two tags on two lines of one file
  * are one file — which is what "3 cards" on the index has to mean to be worth reading.
+ *
+ * Paired with {@link hitRowKey}, which is the same idea at a different grain. The two are
+ * deliberately not one function: this one answers "how many things is this?", and a file is
+ * one thing however many of its lines carry the tag.
  */
 export function sourceKey(source: TagSource): string {
   return source.kind === "card"
     ? `card:${source.cardId}`
     : `file:${source.taskspaceId}:${source.path}`;
+}
+
+/**
+ * The row a hit is drawn on, as a key. What {@link sourceKey} is for counting, this is for
+ * listing, and the grain differs by source because what a reader would go and look at does:
+ * a card is one place to open however many of its lines carry the tag, while each line of a
+ * file is its own place to go.
+ *
+ * Here rather than in the two callers that need it. The terminal and the index page list the
+ * same hits, and each had written this out — including the `kind === "file" ? … : ""` that a
+ * narrowed union needs — which is two chances to group by different things and no way to
+ * notice.
+ */
+export function hitRowKey(source: TagSource): string {
+  return source.kind === "card"
+    ? `card:${source.cardId}`
+    : `file:${source.taskspaceId}:${source.path}:${source.line}`;
 }
 
 /**
@@ -231,26 +273,29 @@ export interface TagNode {
  * than numbers, because a distinct count cannot be arrived at by adding: the same card
  * reaches a node once per tag it carries, and reaches an ancestor once per descendant tag
  * as well.
+ *
+ * One set per kind, so counting is `size` rather than a walk that re-reads the `card:` prefix
+ * off keys {@link sourceKey} wrote — a coupling between two functions that had no way to be
+ * kept true, for a count the shape of the data already knows.
  */
+type Tally = { cards: Set<string>; files: Set<string> };
+
 type MutableNode = Omit<TagNode, "children" | "own" | "total"> & {
   children: Map<string, MutableNode>;
-  own: Set<string>;
-  total: Set<string>;
+  own: Tally;
+  total: Tally;
 };
 
+const emptyTally = (): Tally => ({ cards: new Set(), files: new Set() });
+
 function emptyNode(tag: string, name: string): MutableNode {
-  return { tag, name, children: new Map(), own: new Set(), total: new Set() };
+  return { tag, name, children: new Map(), own: emptyTally(), total: emptyTally() };
 }
 
-function countKeys(keys: Set<string>): TagCounts {
-  let cards = 0;
-  let files = 0;
-  for (const key of keys) {
-    if (key.startsWith("card:")) cards++;
-    else files++;
-  }
-  return { cards, files };
-}
+const countKeys = ({ cards, files }: Tally): TagCounts => ({
+  cards: cards.size,
+  files: files.size,
+});
 
 // Names differing only in case would otherwise order arbitrarily between runs, the same
 // concern `compareEntries` in `lib/server/taskspace-files.ts` settles the same way.
@@ -285,6 +330,7 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
 
   for (const hit of hits) {
     const key = sourceKey(hit.source);
+    const kind = hit.source.kind === "card" ? "cards" : "files";
     const levels = splitTag(hit.tag);
     let siblings = roots;
     let path = "";
@@ -296,11 +342,40 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
         node = emptyNode(path, level);
         siblings.set(level, node);
       }
-      node.total.add(key);
-      if (depth === levels.length - 1) node.own.add(key);
+      node.total[kind].add(key);
+      if (depth === levels.length - 1) node.own[kind].add(key);
       siblings = node.children;
     }
   }
 
   return freezeNodes(roots.values());
+}
+
+/**
+ * Hits gathered under whatever identifies the row they will be drawn on, in first-seen order
+ * — which is the order the underlying read produced, so the terminal and the page list them
+ * the same way.
+ *
+ * Keyed by {@link hitRowKey} rather than by a key function each caller passes. The parameter
+ * was the only thing the two copies of this had in common, and it was the part they could
+ * have got wrong: one row per card, one row per line of a file.
+ */
+export function groupHitRows<T extends { source: TagSource }>(hits: T[]): [string, T[]][] {
+  const groups = new Map<string, T[]>();
+  for (const hit of hits) {
+    const key = hitRowKey(hit.source);
+    const existing = groups.get(key);
+    if (existing) existing.push(hit);
+    else groups.set(key, [hit]);
+  }
+  return [...groups];
+}
+
+/**
+ * The distinct tags a row matched by, sigil and all, sorted — so a card found under both
+ * `'perf` and `'perf:cache` says which, in one order rather than in whichever the hits
+ * happened to arrive in.
+ */
+export function taggedWith(hits: { tag: string }[]): string[] {
+  return [...new Set(hits.map(({ tag }) => `${TAG_SIGIL}${tag}`))].sort();
 }
