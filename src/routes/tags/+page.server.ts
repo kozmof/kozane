@@ -3,7 +3,6 @@ import { error } from "@sveltejs/kit";
 import { getAllProjects, getProject } from "$db/api/project";
 import { getAllBundles } from "$db/api/bundle";
 import { getCardBundleNames } from "$db/api/card";
-import { getAllTaskspaces } from "$db/api/taskspace";
 import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
@@ -20,20 +19,17 @@ export const prerender = process.env.KOZANE_SSG === "1";
 // of that file, so an export carries file tags only when it was built to carry files at
 // all — the same opt-in that governs the taskspace panel. Card tags are board content and
 // go out with the rest of it.
+// The same flag governs whether the export may *name* a taskspace at all, for the reason
+// `loadProjectSnapshot` gates its taskspaces behind `includeScopes`: a taskspace's name is
+// the name of a directory on someone's machine, and an export is published. This page was
+// reading `getAllTaskspaces` unconditionally and shipping every one of them, which
+// contradicted that and `docs/security-matrix.md` with it — and shipped nothing usable
+// either, since a plain export carries no file hit for a name to label.
+//
+// It is no longer a second condition here, which is the point: `loadTagIndex` returns the
+// taskspaces it walked, and an export that scans no file walks none. See
+// `TagIndex.taskspaces`.
 const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
-
-/**
- * Whether this page may name the workspace's taskspaces at all.
- *
- * The same rule the board holds, and it has to be the same one: `loadProjectSnapshot` gates
- * its taskspaces behind `includeScopes`, which an export only sets with
- * `--include-scoped-files`, because a taskspace's *name* is the name of a directory on
- * someone's machine and an export is published. This page was reading `getAllTaskspaces`
- * unconditionally and shipping every one of them, which contradicted that rule and
- * `docs/security-matrix.md` with it — and shipped nothing useful either, since a plain
- * export has no file hits for a name to label.
- */
-const includeTaskspaces = !prerender || includeScopedFiles;
 
 /**
  * Where the gather is kept between requests, or nothing when it cannot be.
@@ -83,6 +79,27 @@ function selectHits(
 }
 
 /**
+ * A lookup record cut to the keys actually named by what is being sent.
+ *
+ * The two records below are keyed by every tagged card and every walked taskspace in the
+ * workspace, while `hits` is capped at a few hundred — so a workspace with thousands of
+ * tagged cards shipped a map of all of them to label at most two hundred. The export is the
+ * one case that needs them whole: it bakes every hit and the browser does the filtering, so
+ * it cannot know in advance which keys it will need.
+ *
+ * A key with no entry is dropped rather than carried as `undefined`, which is what
+ * `JSON.stringify` would do with it anyway.
+ */
+function narrow<T>(record: Record<string, T>, keys: Iterable<string>): Record<string, T> {
+  const kept: Record<string, T> = {};
+  for (const key of keys) {
+    const value = record[key];
+    if (value !== undefined) kept[key] = value;
+  }
+  return kept;
+}
+
+/**
  * Bundle names and colours for the cards being shown, keyed by bundle.
  *
  * Per project, because the palette is assigned by position within a project's own bundles —
@@ -118,23 +135,38 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const requestedTag = prerender ? null : url.searchParams.get("tag");
   const tag = requestedTag ? normalizeTag(requestedTag) : null;
 
+  /**
+   * `?files=0` skips the taskspace walk, the way `kozane tag show --no-files` does.
+   *
+   * A tag is just text, so a taskspace holding source code tags every quoted string literal
+   * in it — `from 'drizzle-orm'` gathers under `'drizzle-orm`. That is the deliberate side of
+   * the grammar to err on (see `lib/tag.ts`), but the terminal had the only way to say "cards
+   * only" and the page had none, which left the one place the noise is most visible with no
+   * answer to it.
+   *
+   * On the live path it is a gate on the *gather*, so asking for cards alone also skips the
+   * disk walk rather than merely hiding what it found. A prerender has no query to read, so
+   * an export bakes whatever it was built with and the page filters the baked hits instead —
+   * the same split every other parameter on this page is read by.
+   */
+  const includeFiles = prerender ? includeScopedFiles : url.searchParams.get("files") !== "0";
+
   // Checked rather than passed through: a `?projectId=` naming nothing would otherwise
   // quietly gather nothing at all and read as a workspace with no tags in it.
   if (requestedProject && !(await getProject({ db, projectId: requestedProject })))
     throw error(404, "Project not found");
 
-  const [index, projects, taskspaces] = await Promise.all([
+  const [index, projects] = await Promise.all([
     loadTagIndex({
       db,
       ...(requestedProject ? { projectId: requestedProject } : {}),
-      includeFiles: !prerender || includeScopedFiles,
+      includeFiles,
       // Kept between requests, so clicking from one tag to the next does not re-run the card
       // query and re-read every taskspace file to produce the set it just produced. Skipped
       // where there is no workspace to keep it in, which is a prerender building an export.
       ...cacheLocation(),
     }),
     getAllProjects({ db }),
-    includeTaskspaces ? getAllTaskspaces({ db }) : Promise.resolve([]),
   ]);
 
   const { hits, cardTotal, fileTotal } = selectHits(index.hits, tag);
@@ -161,8 +193,25 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     bundlesForProjects(db, shownProjects),
   ]);
 
+  // Only what the rows being sent actually name, except in an export — see `narrow`. The
+  // taskspaces are those the file rows sit in, plus any the gather has a warning to give
+  // about, since that warning names one.
+  const shownTaskspaceIds = new Set([
+    ...hits.flatMap((hit) => (hit.source.kind === "file" ? [hit.source.taskspaceId] : [])),
+    ...index.truncated.map(({ taskspaceId }) => taskspaceId),
+  ]);
+
   return {
     projectId: requestedProject,
+    /** Whether this gather read taskspace files. */
+    files: includeFiles,
+    /**
+     * Whether asking for them is a question this page can answer at all — false only in a
+     * plain export, which holds no file hit however the URL asks. It is what decides whether
+     * the page offers the control, because a control that cannot change the answer reads as
+     * one that is broken.
+     */
+    filesAvailable: !prerender || includeScopedFiles,
     // Named so the page can title itself and offer the way back to a board.
     projects: projects.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
     // Built from every hit, always: the tree is this page's index, and one narrowed to the
@@ -177,16 +226,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     cardTotal,
     fileTotal,
     truncated: index.truncated,
-    cardProjects: index.cardProjects,
-    taskspaceProjects: index.taskspaceProjects,
+    cardProjects: prerender ? index.cardProjects : narrow(index.cardProjects, shownCardIds),
     // For labelling hits. Which bundle a card is in, and the name of the taskspace a file
     // sits in, are both things a hit deliberately does not carry — see the note on
     // `TagSource` — so they are joined here, for the hits actually being shown.
     cardBundleIds: Object.fromEntries(cardBundles.map((row) => [row.cardId, row.bundleId])),
     bundles,
-    // Empty in a plain export — see `includeTaskspaces`. Nothing on the page needs it there:
-    // the only rows a name labels are file rows, which such an export does not carry, and a
-    // truncation carries the name it has to say.
-    taskspaces: taskspaces.map(({ id, name, projectId }) => ({ id, name, projectId })),
+    // Empty in a plain export, because such an export walks no taskspace and so has none to
+    // name. Nothing on the page needs it there either: the only rows a name labels are file
+    // rows, which such an export does not carry.
+    taskspaces: prerender ? index.taskspaces : narrow(index.taskspaces, shownTaskspaceIds),
   };
 };

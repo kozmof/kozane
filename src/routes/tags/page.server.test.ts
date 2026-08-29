@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { addProject } from "$db/api/project";
 import { addBundle } from "$db/api/bundle";
 import { addLayer } from "$db/api/layer";
@@ -35,9 +38,11 @@ const run = (db: DB, query = "") =>
     hits: { tag: string }[];
     cardTotal: number | null;
     fileTotal: number | null;
-    taskspaces: { id: string }[];
+    taskspaces: Record<string, { name: string; projectId: string | null }>;
     tree: { tag: string }[];
     projectId: string | null;
+    files: boolean;
+    cardProjects: Record<string, string>;
     bundles: Record<string, { name: string }>;
     cardBundleIds: Record<string, string>;
   }>;
@@ -133,6 +138,37 @@ describe("GET /tags", () => {
     expect(data.cardBundleIds[cardId]).toBe(bundleId);
     expect(data.bundles[bundleId].name).toBe("B");
   });
+
+  /**
+   * The lookup records are keyed by every tagged card in the workspace and the list by at
+   * most a couple of hundred, so sending them whole meant sending a map of thousands to
+   * label a page of two hundred. An export is the exception and is covered below: it bakes
+   * every hit and cannot know which keys the browser will end up needing.
+   */
+  it("sends the project of the cards it is showing, and not of the others", async () => {
+    const { db, bundleId } = await setup();
+    const shown = await addCard({ db, bundleId, content: "'perf" });
+    const other = await addCard({ db, bundleId, content: "'unrelated" });
+
+    const data = await run(db, "?tag=perf");
+
+    expect(data.cardProjects).toHaveProperty(shown);
+    expect(data.cardProjects).not.toHaveProperty(other);
+  });
+
+  /**
+   * `?files=0` is `kozane tag show --no-files`, and is a gate on the gather rather than on
+   * what is drawn: asking for cards alone skips the taskspace walk instead of hiding what it
+   * found. There is no workspace root in this process, so what it is asserted by here is the
+   * flag reaching the page — `lib/server/tag-index.test.ts` is where the walk itself is.
+   */
+  it("says whether it read files, and is told not to by the URL", async () => {
+    const { db, bundleId } = await setup();
+    await addCard({ db, bundleId, content: "'perf" });
+
+    expect((await run(db, "?tag=perf")).files).toBe(true);
+    expect((await run(db, "?tag=perf&files=0")).files).toBe(false);
+  });
 });
 
 /**
@@ -140,18 +176,27 @@ describe("GET /tags", () => {
  * reached by re-importing the module under that environment rather than by a parameter.
  */
 describe("as a static export", () => {
-  afterEach(() => {
+  /** Workspace roots written to disk by the tests below, removed whichever way one ends. */
+  const roots: string[] = [];
+
+  afterEach(async () => {
     vi.unstubAllEnvs();
     vi.resetModules();
+    (await import("$db/internal/config"))._resetWorkspaceRootForTest();
+    for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
   });
 
   async function loadUnderSsg(db: DB, env: Record<string, string> = {}) {
     vi.stubEnv("KOZANE_SSG", "1");
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     vi.resetModules();
+    // The root is resolved once and cached for the process, so a test that sets one has to
+    // drop what an earlier one resolved. Imported from the module graph this call is about
+    // to rebuild, hence inside rather than at the top of the file.
+    (await import("$db/internal/config"))._resetWorkspaceRootForTest();
     const { load } = await import("./+page.server.js");
     return (await load({ locals: { db }, url: new URL("http://localhost/tags") } as never)) as {
-      taskspaces: { id: string }[];
+      taskspaces: Record<string, { name: string; projectId: string | null }>;
       hits: unknown[];
     };
   }
@@ -162,21 +207,40 @@ describe("as a static export", () => {
    * shipping `getAllTaskspaces` unconditionally, which contradicted it and
    * `docs/security-matrix.md` with it — and shipped nothing usable either, since a plain
    * export carries no file hits for a name to label.
+   *
+   * It is no longer a rule the page states: the names it publishes are the taskspaces the
+   * gather walked, and a plain export walks none. The two tests below are the two halves of
+   * that, and both are now about the walk rather than about a separate condition.
    */
   it("names no taskspaces at all", async () => {
     const { db, projectId } = await setup();
     await addTaskspace({ db, projectId, name: "client-work", path: "client-work" });
 
-    expect((await loadUnderSsg(db)).taskspaces).toEqual([]);
+    expect((await loadUnderSsg(db)).taskspaces).toEqual({});
   });
 
   it("names them once the export was built to carry files", async () => {
+    const root = mkdtempSync(join(tmpdir(), "kozane-tags-ssg-"));
+    roots.push(root);
+    mkdirSync(join(root, ".kozane"), { recursive: true });
+    writeFileSync(join(root, ".kozane", "config.json"), "{}");
+    mkdirSync(join(root, "client-work"), { recursive: true });
+    writeFileSync(join(root, "client-work", "notes.md"), "'perf in a file\n");
+
     const { db, projectId } = await setup();
-    await addTaskspace({ db, projectId, name: "client-work", path: "client-work" });
+    const taskspaceId = await addTaskspace({
+      db,
+      projectId,
+      name: "client-work",
+      path: "client-work",
+    });
 
-    const data = await loadUnderSsg(db, { KOZANE_SSG_INCLUDE_SCOPED_FILES: "1" });
+    const data = await loadUnderSsg(db, {
+      KOZANE_SSG_INCLUDE_SCOPED_FILES: "1",
+      KOZANE_WORKSPACE_ROOT: root,
+    });
 
-    expect(data.taskspaces.map(({ id }) => id)).toHaveLength(1);
+    expect(data.taskspaces[taskspaceId]).toEqual({ name: "client-work", projectId });
   });
 
   /** An export has no query string, so it bakes every hit and the browser selects. */

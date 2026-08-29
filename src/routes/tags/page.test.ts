@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { cleanup, render, screen } from "@testing-library/svelte";
 import TagsPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
@@ -34,13 +34,14 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
     fileTotal: hits.filter(({ source }) => source.kind === "file").length,
     truncated: [],
     cardProjects: { c1: "p1", c2: "p1" },
-    taskspaceProjects: { t1: "p1", t2: "p1" },
+    files: true,
+    filesAvailable: true,
+    taskspaces: {
+      t1: { name: "Notes", projectId: "p1" },
+      t2: { name: "Drafts", projectId: "p1" },
+    },
     cardBundleIds: { c1: "b1", c2: "b1" },
     bundles: { b1: { name: "General", dot: "#abc" } },
-    taskspaces: [
-      { id: "t1", name: "Notes", projectId: "p1" },
-      { id: "t2", name: "Drafts", projectId: "p1" },
-    ],
     ...over,
   };
 }
@@ -128,17 +129,62 @@ describe("tag index page", () => {
   });
 
   /**
-   * The name comes with the truncation rather than being joined from the taskspace list,
-   * which a static export does not publish — and the reasons are put into words rather than
-   * printed as the scanner's own vocabulary.
+   * The name is joined from the taskspaces the gather walked, which is where a truncated one
+   * always is — and the reasons are put into words rather than printed as the scanner's own
+   * vocabulary.
    */
   it("says a taskspace it could not read in full, by name and in words", () => {
     draw([cardHit("c1", "perf", "one")], {
-      truncated: [{ taskspaceId: "t1", taskspaceName: "Notes", reasons: ["budget"] }],
-      taskspaces: [],
+      truncated: [{ taskspaceId: "t1", reasons: ["budget"] }],
     });
 
     expect(screen.getByText(/Notes was not read in full/)).toBeTruthy();
     expect(screen.getByText(/larger than the scan had budget left for/)).toBeTruthy();
+  });
+
+  /**
+   * `?files=0` is a gate on the gather, so on the live page there are no file hits to hide
+   * and the control is only a way back. In an export the hits were baked before anyone could
+   * ask, so the same flag is the real cut — which is the case drawn here.
+   */
+  it("lists cards alone when files are turned off, and offers the way back", () => {
+    draw([cardHit("c1", "perf", "a card"), fileHit("t1", "notes/todo.md", 3, "perf")], {
+      cardTotal: null,
+      fileTotal: null,
+    });
+
+    expect(screen.getByText("a card")).toBeTruthy();
+    expect(screen.getByText("Cards only")).toBeTruthy();
+
+    cleanup();
+    draw([cardHit("c1", "perf", "a card"), fileHit("t1", "notes/todo.md", 3, "perf")], {
+      cardTotal: null,
+      fileTotal: null,
+      files: false,
+    });
+
+    expect(screen.getByText("a card")).toBeTruthy();
+    expect(screen.queryByText("notes/todo.md:3")).toBeNull();
+    expect(screen.getByText("Include files")).toBeTruthy();
+  });
+
+  /** A plain export holds no file hit however the URL asks, so a control that could not
+   *  change the answer is not drawn at all. */
+  it("does not offer the files control where there are no files to be had", () => {
+    draw([cardHit("c1", "perf", "a card")], { files: false, filesAvailable: false });
+
+    expect(screen.queryByText("Include files")).toBeNull();
+    expect(screen.queryByText("Cards only")).toBeNull();
+  });
+
+  /**
+   * `Record<string, string>` says the lookup cannot miss when it can — a tag page left open
+   * while the card moved, or a narrowed record that did not name it. A row that draws
+   * `/undefined?card=…` looks right and goes nowhere.
+   */
+  it("draws no link for a card whose project it was not told", () => {
+    draw([cardHit("c9", "perf", "orphaned")], { cardProjects: {} });
+
+    expect(hrefOf("orphaned")).toBeNull();
   });
 });

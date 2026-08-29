@@ -1,5 +1,4 @@
-import { getAllCards } from "../../db/api/card.js";
-import { getAllBundles } from "../../db/api/bundle.js";
+import { getProjectCardIds } from "../../db/api/card.js";
 import {
   buildTagTree,
   capHitsByKind,
@@ -10,10 +9,15 @@ import {
   truncationReasons,
   type CappedHits,
   type TagCounts,
+  type TagHitOf,
   type TagNode,
 } from "../../lib/tag.js";
 import { TAG_HITS_SHOWN_MAX } from "../../lib/constants.js";
-import { loadTagIndex, type TagIndexTruncation } from "../../lib/server/tag-index.js";
+import {
+  loadTagIndex,
+  type TagIndexTaskspace,
+  type TagIndexTruncation,
+} from "../../lib/server/tag-index.js";
 import type { DB } from "../../db/tx.js";
 import type { TagHit } from "../../lib/types.js";
 import { resolveProjectId } from "../lib/project-selection.js";
@@ -61,7 +65,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
     // The cache matters most here. A command runs in a process that exits, so without one
     // every invocation re-queries every card and re-reads every taskspace file to learn what
     // the last invocation already worked out.
-    const { hits, truncated } = await loadTagIndex({
+    const { hits, truncated, taskspaces } = await loadTagIndex({
       db,
       projectId,
       includeFiles: true,
@@ -75,24 +79,33 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
       return;
     }
     printTree(tree);
-    warnTruncated(truncated);
+    warnTruncated(truncated, taskspaces);
   });
 }
+
+/** What to call a taskspace the gather walked, falling back to its id. Every id printed came
+ *  out of that same gather, so the fallback is for a row the walk somehow did not record
+ *  rather than for one it never saw. */
+const nameOf = (taskspaces: Record<string, TagIndexTaskspace>, id: string): string =>
+  taskspaces[id]?.name || id;
 
 /**
  * Says which taskspaces were not read in full, so a tag missing from the list above is not
  * read as a tag nobody wrote.
  *
- * Names and wording both come from elsewhere now. The name rides on the truncation, from the
- * taskspace row the walk already read — this had been fetching every taskspace in the
- * project again to turn an id back into a name. The wording is `truncationReasons`, shared
- * with the tag index page, because the two say the same thing about the same taskspace and
- * the scanner's own vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
+ * Names and wording both come from elsewhere. The name is joined from the gather's own record
+ * of what it walked — this had been fetching every taskspace in the project again to turn an
+ * id back into a name. The wording is `truncationReasons`, shared with the tag index page,
+ * because the two say the same thing about the same taskspace and the scanner's own
+ * vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
  */
-function warnTruncated(truncated: TagIndexTruncation[]): void {
-  for (const { taskspaceId, taskspaceName, reasons } of truncated) {
+function warnTruncated(
+  truncated: TagIndexTruncation[],
+  taskspaces: Record<string, TagIndexTaskspace>,
+): void {
+  for (const { taskspaceId, reasons } of truncated) {
     console.log(
-      `Note: ${taskspaceName || taskspaceId} was not read in full — ${truncationReasons(reasons)}.`,
+      `Note: ${nameOf(taskspaces, taskspaceId)} was not read in full — ${truncationReasons(reasons)}.`,
     );
   }
 }
@@ -129,7 +142,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const projectId = await resolveProjectId(db, options.project);
     // `--no-files` is commander's spelling of a `--files` that defaults to true.
     const includeFiles = options.files !== false;
-    const { hits, truncated } = await loadTagIndex({
+    const { hits, truncated, taskspaces } = await loadTagIndex({
       db,
       projectId,
       includeFiles,
@@ -146,8 +159,8 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
 
     const shown = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
     await printCardHits(db, projectId, shown);
-    printFileHits(shown);
-    warnTruncated(truncated);
+    printFileHits(shown, taskspaces);
+    warnTruncated(truncated, taskspaces);
   });
 }
 
@@ -159,12 +172,10 @@ async function printCardHits(
   if (cardHits.length === 0) return;
 
   // Short ids are drawn against every card of the project, so the id printed for a card is
-  // the one `kozane card show` takes, whichever tag was asked for.
-  const bundles = await getAllBundles({ db, projectId });
-  const cards = (
-    await Promise.all(bundles.map((bundle) => getAllCards({ db, bundleId: bundle.id })))
-  ).flat();
-  const shortIds = shortIdMap(cards.map((card) => card.id));
+  // the one `kozane card show` takes, whichever tag was asked for. Ids alone, in one
+  // statement: this was a bundle read followed by a card read per bundle, which is a round
+  // trip per bundle and the full text of every card in the project, to number them.
+  const shortIds = shortIdMap(await getProjectCardIds(db, projectId));
 
   console.log("Cards:");
   // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
@@ -179,16 +190,40 @@ async function printCardHits(
   cappedNote(cardHits.length, cardTotal, "card hits");
 }
 
-function printFileHits({ files: fileHits, fileTotal }: CappedHits<TagHit>): void {
+/**
+ * The file rows, under the taskspace each was found in.
+ *
+ * Grouped by taskspace first, because a path is relative to one and says nothing on its own:
+ * a project draws its own taskspaces *and* every unplaced one, so `README.md:2` printed bare
+ * was two indistinguishable rows for two different files as soon as a workspace had a second
+ * taskspace. The tag index page had always headed its file rows this way; this is the same
+ * grouping, in the terminal's shape.
+ *
+ * Within a taskspace, grouped by the line rather than by the file: a file may carry the tag
+ * in several places, and each is somewhere to go and look. Two tags on one line are still one
+ * row.
+ */
+function printFileHits(
+  { files: fileHits, fileTotal }: CappedHits<TagHit>,
+  taskspaces: Record<string, TagIndexTaskspace>,
+): void {
   if (fileHits.length === 0) return;
 
+  const byTaskspace = new Map<string, TagHitOf<TagHit, "file">[]>();
+  for (const hit of fileHits) {
+    const existing = byTaskspace.get(hit.source.taskspaceId);
+    if (existing) existing.push(hit);
+    else byTaskspace.set(hit.source.taskspaceId, [hit]);
+  }
+
   console.log("Files:");
-  // Grouped by the line, not by the file: a file may carry the tag in several places, and
-  // each is somewhere to go and look. Two tags on one line are still one row.
-  for (const { source, hits: rows } of groupHitRows(fileHits)) {
-    console.log(
-      `  ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
-    );
+  for (const [taskspaceId, hits] of byTaskspace) {
+    console.log(`  ${nameOf(taskspaces, taskspaceId)}:`);
+    for (const { source, hits: rows } of groupHitRows(hits)) {
+      console.log(
+        `    ${source.path}:${source.line}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`,
+      );
+    }
   }
   cappedNote(fileHits.length, fileTotal, "file hits");
 }

@@ -11,17 +11,28 @@ import { openTagCache, scopeKey } from "./tag-cache.js";
  * What one taskspace could not tell us, and which one it was. Empty for a taskspace read
  * whole, and absent from the list entirely rather than present with nothing to say.
  *
- * The name is carried rather than left to be looked up. Both callers have to name the
- * taskspace back to the reader — a warning naming an id says nothing — and each was fetching
- * the taskspace rows a second time to do it, from the very read this walked. The static
- * export has a further reason: it publishes no taskspace list at all, so a page that could
- * only join a name from one would have had nothing to say.
+ * The id alone, because {@link TagIndex.taskspaces} names it. It carried a `taskspaceName`
+ * of its own until the index started carrying every walked taskspace: a truncation can only
+ * be raised about a taskspace this gather walked, and a walked taskspace is in that record,
+ * so the name was a second copy of an entry the same return value already held.
  */
 export type TagIndexTruncation = {
   taskspaceId: string;
-  taskspaceName: string;
   reasons: TagScanTruncation[];
 };
+
+/**
+ * A taskspace this gather walked: what to call it, and which board it belongs to.
+ *
+ * Both, together, because both are joined against the same id and by the same callers — the
+ * terminal and the page each label a file row with the name and send it back to a board with
+ * the project. Two records keyed alike would be two chances to hold one and not the other.
+ *
+ * `projectId` is null for a taskspace belonging to no project. Null is not missing data: an
+ * unplaced taskspace is drawn on every board (see `getTaskspacesInProject`), so a hit in one
+ * has no single board to be sent back to.
+ */
+export type TagIndexTaskspace = { name: string; projectId: string | null };
 
 export type TagIndex = {
   /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
@@ -30,11 +41,19 @@ export type TagIndex = {
   /** Which project each card carrying a hit belongs to. See `CardTagHits`. */
   cardProjects: Record<string, string>;
   /**
-   * Which project each taskspace carrying a hit belongs to, or null for one belonging to
-   * none. Null is not missing data: an unplaced taskspace is drawn on every board (see
-   * `getTaskspacesInProject`), so a hit in one has no single board to be sent back to.
+   * Every taskspace this gather walked, by id — not every taskspace there is.
+   *
+   * The set the gather looked at is exactly the set a reader of it needs to name: a file hit
+   * can only have come from one of these, and so can a truncation. Both callers were joining
+   * a name from a taskspace list of their own, which is a second read of rows this already
+   * had in hand — and the page's list was the whole workspace's, so it published the names of
+   * taskspaces its own answer never mentioned.
+   *
+   * Empty when no file was scanned at all, which is what `includeFiles: false` means. That is
+   * what keeps a static export from naming a taskspace it carries no hit from, without the
+   * page needing a second rule to say so.
    */
-  taskspaceProjects: Record<string, string | null>;
+  taskspaces: Record<string, TagIndexTaskspace>;
   truncated: TagIndexTruncation[];
 };
 
@@ -117,17 +136,17 @@ export async function loadTagIndex({
   let changed = !stored;
   const hits = [...cards.hits];
   const { cardProjects } = cards;
-  const taskspaceProjects: Record<string, string | null> = {};
+  const taskspaces: Record<string, TagIndexTaskspace> = {};
   const truncated: TagIndexTruncation[] = [];
 
   // No workspace root means no directory to resolve a taskspace against. The cards are still
   // a complete answer about cards, so the index is served rather than refused.
   if (!includeFiles || !root) {
     store?.save({ scope, cards, changed });
-    return { hits, cardProjects, taskspaceProjects, truncated };
+    return { hits, cardProjects, taskspaces, truncated };
   }
 
-  const taskspaces = projectId
+  const rows = projectId
     ? await getTaskspacesInProject({ db, projectId })
     : await getAllTaskspaces({ db });
 
@@ -139,7 +158,7 @@ export async function loadTagIndex({
   // what a workspace of a dozen costs; this is that second bound. See
   // `TAG_SCAN_WORKSPACE_BYTES_MAX`.
   const pool = createScanPool(limits);
-  for (const taskspace of taskspaces) {
+  for (const taskspace of rows) {
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
     // Before the scan, so the files this taskspace parsed last time are already in hand when
@@ -151,14 +170,10 @@ export async function loadTagIndex({
     changed ||= scan.changed;
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
     // truncation names a taskspace too, and the page has to be able to name it back.
-    taskspaceProjects[taskspace.id] = taskspace.projectId;
+    taskspaces[taskspace.id] = { name: taskspace.name, projectId: taskspace.projectId };
     hits.push(...scan.hits);
     if (scan.truncated.length > 0)
-      truncated.push({
-        taskspaceId: taskspace.id,
-        taskspaceName: taskspace.name,
-        reasons: scan.truncated,
-      });
+      truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
   }
 
   store?.save({
@@ -170,5 +185,5 @@ export async function loadTagIndex({
     // tell a stored directory that is gone from one that simply belongs to another project.
     ...(projectId ? {} : { live: new Set(scanned.map(({ baseDir }) => baseDir)) }),
   });
-  return { hits, cardProjects, taskspaceProjects, truncated };
+  return { hits, cardProjects, taskspaces, truncated };
 }

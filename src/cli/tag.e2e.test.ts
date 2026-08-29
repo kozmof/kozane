@@ -130,6 +130,29 @@ describe("tag CLI flow", () => {
     expect(output.split("\n").filter((line) => line.includes("README.md:"))).toHaveLength(200);
   }, 30_000);
 
+  /**
+   * A path is relative to a taskspace and says nothing on its own. The index page had always
+   * headed its file rows with the taskspace they were found in; the terminal printed the bare
+   * path, so two taskspaces each holding a `README.md` drew two rows nothing could tell
+   * apart — and a project draws every unplaced taskspace as well as its own, so a second one
+   * is not an unusual workspace.
+   */
+  it("says which taskspace a file row was found in", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    cli(root, "taskspace", "create", "drafts", "--no-scope");
+    writeFileSync(join(root, "notes", "README.md"), "See 'perf here.\n");
+    writeFileSync(join(root, "drafts", "README.md"), "Also 'perf here.\n");
+
+    const output = cli(root, "tag", "show", "perf");
+
+    expect(output).toContain("notes:");
+    expect(output).toContain("drafts:");
+    // Both rows are still drawn — the heading tells them apart rather than merging them.
+    expect(output.split("\n").filter((line) => line.includes("README.md:1"))).toHaveLength(2);
+  }, 30_000);
+
   it("lists a card found under two tags once", () => {
     const root = tempWorkspace();
     cli(root, "init");

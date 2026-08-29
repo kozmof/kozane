@@ -94,6 +94,11 @@ side to err on — a tag nobody meant is one row to ignore, a tag swallowed is a
 cannot be found — and it is bounded by what the scan walks rather than by a second grammar
 for files.
 
+Both front ends can put the file half down entirely: `tag show --no-files` and, in the
+browser, `?files=0` on the tag index. Each skips the disk walk rather than hiding what it
+found, which is the answer for a taskspace that is a source checkout — the tags written on
+cards are still gathered.
+
 Taskspace files are read on demand, within the same boundary the browser's file panel holds:
 dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a
 file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
@@ -868,12 +873,18 @@ Each card row carries its short ID, the tags it matched by, and its text. Each f
 carries the path and line, the tags matched, and the line the tag sits on. A card found
 under two tags is one row naming both.
 
+File rows are grouped under the taskspace they were found in, because a path is relative to
+one and says nothing on its own — a project draws its own taskspaces and every unplaced one,
+so two `README.md`s in one listing is an ordinary workspace rather than an unusual one. The
+browser's tag index heads its file rows the same way.
+
 ```bash
 kozane tag show perf
 Cards:
   4a6f1fb  'perf 'perf:cache  caching work 'perf:cache and 'perf
 Files:
-  README.md:3  'perf:cache  See 'perf:cache for the plan.
+  notes:
+    README.md:3  'perf:cache  See 'perf:cache for the plan.
 ```
 
 ---

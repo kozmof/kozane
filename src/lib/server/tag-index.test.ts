@@ -131,7 +131,7 @@ describe("loadTagIndex", () => {
       root,
     });
 
-    expect(truncated).toEqual([{ taskspaceId, taskspaceName: "notes", reasons: ["unreadable"] }]);
+    expect(truncated).toEqual([{ taskspaceId, reasons: ["unreadable"] }]);
   });
 
   describe("across the workspace", () => {
@@ -161,32 +161,32 @@ describe("loadTagIndex", () => {
       const cardId = await addCard({ db, bundleId, content: "'mine" });
       const taskspaceId = await seedTaskspace(db, projectId, "mine-notes", "'mine:file\n");
 
-      const { cardProjects, taskspaceProjects } = await loadTagIndex({
+      const { cardProjects, taskspaces } = await loadTagIndex({
         db,
         includeFiles: true,
         root,
       });
 
       expect(cardProjects[cardId]).toBe(projectId);
-      expect(taskspaceProjects[taskspaceId]).toBe(projectId);
+      expect(taskspaces[taskspaceId]).toEqual({ name: "mine-notes", projectId });
     });
 
     it("reports a taskspace belonging to no project as belonging to none", async () => {
       const { db } = await setup();
       const taskspaceId = await seedTaskspace(db, undefined, "loose", "'unplaced\n");
 
-      const { taskspaceProjects } = await loadTagIndex({ db, includeFiles: true, root });
+      const { taskspaces } = await loadTagIndex({ db, includeFiles: true, root });
 
-      expect(taskspaceProjects[taskspaceId]).toBeNull();
+      expect(taskspaces[taskspaceId]).toEqual({ name: "loose", projectId: null });
     });
 
     it("names a taskspace it looked at even when it held no tags", async () => {
       const { db, projectId } = await setup();
       const taskspaceId = await seedTaskspace(db, projectId, "empty", "nothing here\n");
 
-      const { taskspaceProjects } = await loadTagIndex({ db, includeFiles: true, root });
+      const { taskspaces } = await loadTagIndex({ db, includeFiles: true, root });
 
-      expect(taskspaceProjects).toHaveProperty(taskspaceId);
+      expect(taskspaces).toHaveProperty(taskspaceId);
     });
 
     /**
@@ -203,7 +203,7 @@ describe("loadTagIndex", () => {
       await seedTaskspace(db, projectId, "a-notes", "'first\n");
       await seedTaskspace(db, projectId, "b-notes", "'second\n");
 
-      const { hits, truncated } = await loadTagIndex({
+      const { hits, truncated, taskspaces } = await loadTagIndex({
         db,
         includeFiles: true,
         root,
@@ -212,7 +212,9 @@ describe("loadTagIndex", () => {
       });
 
       expect(tags(hits)).toEqual(["first"]);
-      expect(truncated.map(({ taskspaceName }) => taskspaceName)).toEqual(["b-notes"]);
+      // Named through the record of what was walked, which a truncated taskspace is always
+      // in — it was walked, that is how it came to be truncated.
+      expect(truncated.map(({ taskspaceId }) => taskspaces[taskspaceId].name)).toEqual(["b-notes"]);
       expect(truncated[0].reasons).toEqual(["budget"]);
     });
   });

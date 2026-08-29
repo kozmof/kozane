@@ -39,6 +39,18 @@
     data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
   );
 
+  /**
+   * Whether taskspace files are part of the answer. `?files=0` says they are not.
+   *
+   * Read the same way `selectedTag` is, and filtered below for the same reason: on the live
+   * page the server already skipped the walk, so there is nothing to filter out and this is a
+   * no-op; in a static export the hits were baked before anyone could ask, so this is the
+   * real cut. One path rather than a branch only one of the two ever takes.
+   */
+  const showFiles = $derived(
+    data.files && (!browser || page.url.searchParams.get("files") !== "0"),
+  );
+
   const selectedProject = $derived(
     data.projects.find(({ id }) => id === selectedProjectId) ?? null,
   );
@@ -52,7 +64,7 @@
   function inSelectedProject(hit: TagHit): boolean {
     if (!selectedProjectId) return true;
     if (hit.source.kind === "card") return data.cardProjects[hit.source.cardId] === selectedProjectId;
-    const owner = data.taskspaceProjects[hit.source.taskspaceId];
+    const owner = data.taskspaces[hit.source.taskspaceId]?.projectId;
     return owner === selectedProjectId || owner === null;
   }
 
@@ -64,7 +76,12 @@
   const matchingHits = $derived.by(() => {
     if (!selectedTag) return [];
     const matches = tagMatcher(selectedTag);
-    return data.hits.filter((hit) => matches(hit.tag) && inSelectedProject(hit));
+    return data.hits.filter(
+      (hit) =>
+        matches(hit.tag) &&
+        inSelectedProject(hit) &&
+        (showFiles || hit.source.kind === "card"),
+    );
   });
 
   /**
@@ -103,12 +120,23 @@
   });
 
   /**
-   * The tree, narrowed the same way. Only a static export ever has anything to narrow: the
-   * live server built the tree from the project it was asked about.
+   * The tree, narrowed the same way the panel is, so the count beside a tag is a count of
+   * what selecting it would list.
+   *
+   * Only a static export ever has anything to narrow, and each half says why: the live server
+   * built the tree from the project it was asked about, and skipped the taskspace walk
+   * outright when asked for cards alone — so on that path both of these are false and the
+   * tree it sent is already the right one.
    */
+  const narrowsProject = $derived(selectedProjectId !== null && data.projectId === null);
+  const narrowsFiles = $derived(!showFiles && data.files);
   const tree = $derived(
-    selectedProjectId && data.projectId === null
-      ? buildTagTree(data.hits.filter(inSelectedProject))
+    narrowsProject || narrowsFiles
+      ? buildTagTree(
+          data.hits.filter(
+            (hit) => inSelectedProject(hit) && (showFiles || hit.source.kind === "card"),
+          ),
+        )
       : data.tree,
   );
 
@@ -136,16 +164,17 @@
   });
 
   /**
-   * Names by id, built once rather than searched per row. Both were a linear `find` called
-   * from inside an `{#each}` — one per file group and one per card row — so drawing a tag
-   * with two hundred cards on it walked the project list two hundred times. Nothing anyone
-   * would have measured at this size; it is a shape worth not having on the page that exists
-   * to draw a lot of rows at once.
+   * Project names by id, built once rather than searched per row. It was a linear `find`
+   * called from inside an `{#each}`, so drawing a tag with two hundred cards on it walked the
+   * project list two hundred times. Nothing anyone would have measured at this size; it is a
+   * shape worth not having on the page that exists to draw a lot of rows at once.
+   *
+   * Taskspaces need no map of their own: the loader sends them as a record already keyed by
+   * id, which is what `TagIndex.taskspaces` is.
    */
-  const taskspaceNames = $derived(new Map(data.taskspaces.map(({ id, name }) => [id, name])));
   const projectNames = $derived(new Map(data.projects.map(({ id, name }) => [id, name])));
 
-  const taskspaceName = (id: string) => taskspaceNames.get(id) || "taskspace";
+  const taskspaceName = (id: string) => data.taskspaces[id]?.name || "taskspace";
   const projectName = (id: string | null | undefined) =>
     (id !== null && id !== undefined ? projectNames.get(id) : undefined) ?? "";
 
@@ -171,16 +200,43 @@
     return query ? `${base}/tags?${query}` : `${base}/tags`;
   };
 
-  /** A board link needs a board. A card names its own project; a file names its taskspace's,
-   *  falling back to the selected one and then to the default for an unplaced taskspace. */
-  const cardHref = (cardId: string) => `${base}/${data.cardProjects[cardId]}?card=${cardId}`;
+  /**
+   * A board link needs a board. A card names its own project; a file names its taskspace's,
+   * falling back to the selected one and then to the default for an unplaced taskspace.
+   *
+   * Null where there is no board to name, and the card case can reach that too — the loader
+   * takes the same care over this lookup, because `Record<string, string>` says it cannot
+   * miss when it can. A card whose project is not among the data drew `/undefined?card=…`,
+   * which is a row that looks right and goes nowhere.
+   */
+  const cardHref = (cardId: string) => {
+    const projectId = data.cardProjects[cardId];
+    return projectId ? `${base}/${projectId}?card=${cardId}` : null;
+  };
   const fileHref = (taskspaceId: string, path: string) => {
     const projectId =
-      data.taskspaceProjects[taskspaceId] ?? selectedProjectId ?? defaultProjectId;
+      data.taskspaces[taskspaceId]?.projectId ?? selectedProjectId ?? defaultProjectId;
     return projectId
       ? `${base}/${projectId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
       : null;
   };
+
+  /**
+   * The way to ask for cards alone, and back again. `?files=0`, which the server reads as a
+   * gate on the gather itself — see `+page.server.ts`.
+   *
+   * Offered only where there is something to turn off. A workspace with no taskspace, and a
+   * plain static export, both answer about cards whatever this said, so a control that
+   * changed nothing would be a control that looks broken.
+   */
+  const filesToggleHref = $derived.by(() => {
+    const params = new URLSearchParams();
+    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (selectedTag) params.set("tag", selectedTag);
+    if (showFiles) params.set("files", "0");
+    const query = params.toString();
+    return query ? `${base}/tags?${query}` : `${base}/tags`;
+  });
 
   /** A node is open while the selected tag is inside it, so arriving on `'foo:bar:baz` by
    *  link opens the tree down to it rather than showing a collapsed root. */
@@ -285,6 +341,21 @@
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
     >
+      <!-- Cards alone, or cards and taskspace files. A taskspace of source code tags every
+           quoted string literal in it, so the index over one is mostly noise; this is the
+           way to put it down without giving up the tags written on cards. -->
+      {#if data.filesAvailable}
+        <a
+          href={filesToggleHref}
+          class={css({
+            textDecoration: "none",
+            color: "neutral.subtle",
+            _hover: { color: "ink.black" },
+          })}
+        >
+          {showFiles ? "Cards only" : "Include files"}
+        </a>
+      {/if}
       {#each data.projects as project (project.id)}
         {@const selected = selectedProjectId === project.id}
         <a
@@ -450,13 +521,14 @@
           {/each}
         {/if}
 
-        <!-- The name rides on the truncation rather than being looked up here: a static
-             export names no taskspaces at all, so there would be nothing to look it up in.
-             The reasons are put into words by the same helper the terminal uses. -->
-        {#each data.truncated as { taskspaceId, taskspaceName: name, reasons } (taskspaceId)}
+        <!-- The name is joined from the gather's own record of what it walked, which is
+             guaranteed to hold it: a truncation can only be raised about a taskspace this
+             gather walked. The reasons are put into words by the same helper the terminal
+             uses. -->
+        {#each data.truncated as { taskspaceId, reasons } (taskspaceId)}
           <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
-            {name || taskspaceId} was not read in full — {truncationReasons(reasons)}, so a tag
-            written in it may be missing here.
+            {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}, so
+            a tag written in it may be missing here.
           </p>
         {/each}
       </section>

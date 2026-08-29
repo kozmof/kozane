@@ -118,7 +118,8 @@ In the browser, the tag index is at `/tags`, linked from the project list and fr
 tag written on a card. It lists every tag in the workspace and what each one gathers. Add
 `?projectId=<id>` to narrow it to one project; without it, the index reaches across every
 project at once — which nothing else in the UI does, and which is the point of a label that
-lives in the text rather than in a table.
+lives in the text rather than in a table. `?files=0`, or the "Cards only" link on the page,
+leaves taskspace files out — the same switch as `--no-files` above.
 
 ## Seeing across projects
 

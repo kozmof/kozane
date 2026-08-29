@@ -32,6 +32,27 @@ export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]
   return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
 }
 
+/**
+ * The ids of every card in a project, and nothing else about them.
+ *
+ * For the callers that want a project's cards only in order to number them —
+ * {@link shortIdMap} draws its short ids against the whole project, so the id printed for a
+ * card is the one `kozane card show` takes whichever command printed it. That is the entire
+ * requirement, and reading the rows to meet it read every card's `content` as well.
+ *
+ * One statement, in place of the `getAllBundles` then `getAllCards`-per-bundle that
+ * `kozane tag show` was doing: a project of thirty bundles cost thirty-one round trips and
+ * came back with the text of every card in it, to build a map of ids.
+ */
+export async function getProjectCardIds(db: AnyDB, projectId: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: cardTable.id })
+    .from(cardTable)
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .where(eq(bundleTable.projectId, projectId));
+  return rows.map(({ id }) => id);
+}
+
 type GetCardsByBundles = NeedsDB & { bundleIds: string[] };
 export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): Promise<Card[]> {
   if (bundleIds.length === 0) return [];

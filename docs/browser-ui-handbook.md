@@ -416,6 +416,14 @@ picking the one already selected clears it again and goes back to the whole work
 narrowing sticks as you browse the tree. A tag link in a card opens the index already
 narrowed to that card's project.
 
+**Cards only**, beside the project names, puts the taskspace files down and leaves the tags
+written on cards. It adds `?files=0` to the URL and skips the disk walk rather than hiding
+what it found, so it is also the quickest the page gets. It is the answer for a taskspace
+that is a source checkout: a tag is just text, so every quoted string literal in one is a
+tag — `from 'drizzle-orm'` gathers under `'drizzle-orm` — and the tree over such a taskspace
+is mostly that. **Include files** puts them back. `kozane tag show --no-files` is the same
+switch in the terminal.
+
 - Cards show their text and bundle, and their project when you are looking across the
   whole workspace. Click one to go to that card's board with the view centered on it.
 - Files show the path, the line number, and the line the tag is on. Click one to open it in
