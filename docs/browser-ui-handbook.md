@@ -397,13 +397,15 @@ halves: the tree of every tag on the left, with a count of the cards and files e
 gathers, and the selected tag's hits on the right. `?tag=` says which tag is open, so any
 view of the page is a link you can send.
 
-It reaches the whole workspace. Unlike a board, which draws one project, the index gathers
-every project's cards and every taskspace at once — a tag lives in the text rather than in
-a table, so nothing stops the same one being used on two boards. The row of project names
-in the top right narrows it: "All projects" is the whole workspace, and picking one adds
-`?projectId=<id>` to the URL and reduces the tree to that project's cards and the
-taskspaces its board draws. The narrowing sticks as you browse the tree. A tag link in a
-card opens the index already narrowed to that card's project.
+It reaches the whole workspace by default. Unlike a board, which draws one project, the
+index gathers every project's cards and every taskspace at once — a tag lives in the text
+rather than in a table, so nothing stops the same one being used on two boards.
+
+The row of project names in the top right narrows it. Picking one adds `?projectId=<id>` to
+the URL and reduces the tree to that project's cards and the taskspaces its board draws;
+picking the one already selected clears it again and goes back to the whole workspace. The
+narrowing sticks as you browse the tree. A tag link in a card opens the index already
+narrowed to that card's project.
 
 - Cards show their text and bundle, and their project when you are looking across the
   whole workspace. Click one to go to that card's board with the view centered on it.

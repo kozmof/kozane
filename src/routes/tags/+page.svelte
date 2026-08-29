@@ -233,26 +233,26 @@
       ← {selectedProject ? selectedProject.name : "Projects"}
     </a>
 
-    <!-- Which project the index is narrowed to, and the way to change it. The whole
-         workspace is a real choice rather than a fallback, so it is a row of its own. -->
+    <!-- Which project the index is narrowed to, and the way to change it. Picking the
+         project already selected clears the narrowing, which is the way back to the whole
+         workspace now that it has no row of its own. -->
     <nav
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
     >
-      {#each [{ id: null, name: "All projects" }, ...data.projects] as scope (scope.id ?? "all")}
+      {#each data.projects as project (project.id)}
+        {@const selected = selectedProjectId === project.id}
         <a
-          href={projectHref(scope.id)}
-          aria-current={selectedProjectId === scope.id ? "page" : undefined}
+          href={projectHref(selected ? null : project.id)}
+          aria-current={selected ? "page" : undefined}
           class={css({
             textDecoration: "none",
             color: "neutral.subtle",
             _hover: { color: "ink.black" },
           })}
-          style={selectedProjectId === scope.id
-            ? "color: var(--colors-ink-black); font-weight: 600"
-            : ""}
+          style={selected ? "color: var(--colors-ink-black); font-weight: 600" : ""}
         >
-          {scope.name}
+          {project.name}
         </a>
       {/each}
     </nav>
