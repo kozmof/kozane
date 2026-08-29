@@ -1,4 +1,10 @@
-import { TAG_SCAN_DEPTH_MAX, TAG_SCAN_NODES_MAX, TAG_SCAN_TOTAL_BYTES_MAX } from "../constants.js";
+import {
+  TAG_SCAN_DEPTH_MAX,
+  TAG_SCAN_NODES_MAX,
+  TAG_SCAN_SKIP_DIRS,
+  TAG_SCAN_TOTAL_BYTES_MAX,
+  TASKSPACE_FILE_BYTES_MAX,
+} from "../constants.js";
 import { scanTagLines, type TagLineHit } from "../tag.js";
 import type { TagHit } from "../types.js";
 import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js";
@@ -17,6 +23,11 @@ import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js"
  * recursed into, so a `.git` and an `.env` are not scanned; symlinks reported and never
  * followed, so the walk cannot leave the taskspace; the 1 MB per-file cap; and strict UTF-8,
  * so a binary is refused rather than parsed as if it were text.
+ *
+ * One rule is this walk's own, because it is the only one that reads a whole tree at once
+ * rather than the directory a user asked for: {@link TAG_SCAN_SKIP_DIRS} is not descended
+ * into. See the note there for what that is worth — without it a working tree's generated
+ * output spends the budget before the walk reaches anything anyone wrote.
  */
 
 /** What is left to spend on this scan. The same running-totals shape, and the same reasoning,
@@ -48,6 +59,14 @@ export type TaskspaceTagScan = {
    * not there when it may well be.
    */
   truncated: TagScanTruncation[];
+  /**
+   * Whether this scan learned anything the cache did not already hold — a file read for the
+   * first time or read again after a change, or a stale entry dropped.
+   *
+   * False is the ordinary case for a taskspace nobody has touched, and is what lets
+   * `loadTagIndex` skip rewriting a cache file that would come back byte-for-byte the same.
+   */
+  changed: boolean;
 };
 
 /**
@@ -57,10 +76,17 @@ export type TaskspaceTagScan = {
  * revalidating a file costs no syscall of its own: a scan of an untouched tree is all walk
  * and no reads, and only a file that actually changed is read and parsed again.
  *
- * The same gap `fileSignature` documents for its own mtime-and-size half applies, minus the
- * inode: two writes of the same length inside one filesystem timestamp tick are
- * indistinguishable. Out of reach of a person editing a file, which is what this is for. If
- * it ever needs closing, `fileSignature` closes it for one extra `stat` per file.
+ * Weaker than `fileSignature` in two ways, both from taking what the listing already has
+ * rather than paying for a `stat` of its own. There is no inode, so a file *replaced* by
+ * rename — which is how editors and Kozane's own writers save — is caught by its mtime rather
+ * than outright. And `modifiedAt` is an ISO string, so the resolution is a millisecond where
+ * `fileSignature` reports nanoseconds. Two writes of the same length inside one millisecond
+ * are therefore indistinguishable here.
+ *
+ * Out of reach of a person editing a file, which is what this is for, and the cost of being
+ * wrong is a stale entry rather than a wrong answer anywhere durable: the tag index is
+ * rebuilt from it, not trusted as a record. If it ever needs closing, `fileSignature` closes
+ * both halves for one extra `stat` per file.
  */
 export type CachedFile = { signature: string; hits: TagLineHit[] };
 
@@ -114,19 +140,29 @@ export function importTaskspaceTagCache(
 }
 
 type FileTags =
-  | { hits: TagLineHit[] }
+  /** `parsed` when these bytes were read and scanned just now, rather than answered from the
+   *  cache. Only the caller's `changed` flag reads it. */
+  | { hits: TagLineHit[]; parsed?: boolean }
   | { skipped: Extract<TagScanTruncation, "budget" | "unreadable"> };
 
 /** One file's tags, from the cache when the bytes have not changed since they were parsed. */
 function fileTagHits(
   baseDir: string,
   subPath: string,
-  signature: string,
+  entry: { size: number | null; modifiedAt: string | null },
   budget: Budget,
-  size: number,
 ): FileTags {
+  const size = entry.size ?? 0;
+  const signature = `${entry.modifiedAt}:${size}`;
   const cached = fileCache.get(baseDir)?.get(subPath);
   if (cached?.signature === signature) return { hits: cached.hits };
+
+  // Refused here rather than by the read below, because the read is not what it would cost.
+  // `readTaskspaceFile` turns a file past the per-file cap away without opening it, so
+  // charging for one and *then* being refused spends budget on bytes nobody ever looked at —
+  // and a single large asset beside the notes was enough to spend the whole of it and leave
+  // the text files after it reported as `"budget"`.
+  if (size > TASKSPACE_FILE_BYTES_MAX) return { skipped: "unreadable" };
 
   // Charged before the read rather than after, so a file the budget cannot afford is not
   // read at all. A cache hit above is deliberately free: those bytes were paid for once,
@@ -139,72 +175,120 @@ function fileTagHits(
   try {
     hits = scanTagLines(readTaskspaceFile({ baseDir, subPath }).content);
   } catch {
-    // A file too large, not UTF-8 text, unreadable, or gone since the listing named it. The
-    // listing that named it ran moments earlier and is not a lease on what is still there —
-    // the same degrade-and-carry-on `buildFileNode` does, and for the same reasons. Not
-    // cached: a file that could not be read has no signature worth remembering.
+    // Not UTF-8 text, unreadable, or gone since the listing named it. The listing that named
+    // it ran moments earlier and is not a lease on what is still there — the same
+    // degrade-and-carry-on `buildFileNode` does, and for the same reasons. Not cached: a file
+    // that could not be read has no signature worth remembering.
     return { skipped: "unreadable" };
   }
 
   const entries = fileCache.get(baseDir) ?? new Map<string, CachedFile>();
   entries.set(subPath, { signature, hits });
   fileCache.set(baseDir, entries);
-  return { hits };
+  return { hits, parsed: true };
 }
 
-function walk(
-  baseDir: string,
-  taskspaceId: string,
-  subPath: string,
-  budget: Budget,
-  depth: number,
-  depthMax: number,
-  hits: TagHit[],
-  truncated: Set<TagScanTruncation>,
-): void {
-  if (depth > depthMax) {
-    truncated.add("depth");
+/**
+ * One walk's running state. A record rather than eight positional parameters, which is what
+ * this was: four of them were numbers, two of those were a depth and a depth ceiling next to
+ * each other, and a call could be got wrong without a type error to say so.
+ */
+type Scan = {
+  baseDir: string;
+  taskspaceId: string;
+  budget: Budget;
+  depthMax: number;
+  hits: TagHit[];
+  truncated: Set<TagScanTruncation>;
+  /** Every file path the walk reached, whether or not it read one. What {@link pruneStale}
+   *  measures a complete walk against to find entries for files that are no longer there. */
+  seen: Set<string>;
+  /** Whether this walk read a file it did not already hold. What decides whether there is
+   *  anything new to persist — see `openTagCache` in `tag-index.ts`. */
+  parsed: boolean;
+};
+
+const skipDirs = new Set(TAG_SCAN_SKIP_DIRS);
+
+function walk(scan: Scan, subPath: string, depth: number): void {
+  if (depth > scan.depthMax) {
+    scan.truncated.add("depth");
     return;
   }
 
   let listing;
   try {
-    listing = listTaskspaceDirectory({ baseDir, subPath });
+    listing = listTaskspaceDirectory({ baseDir: scan.baseDir, subPath });
   } catch {
     // A directory the server user cannot read, one gone since it was named, or — reaching
     // this as the first call of the walk — a taskspace whose directory has been deleted or
     // moved since the row naming it was written. One such taskspace must not take a page
     // load down with it, so it is reported and skipped.
-    truncated.add("unreadable");
+    scan.truncated.add("unreadable");
     return;
   }
-  if (listing.truncated) truncated.add("entries");
+  if (listing.truncated) scan.truncated.add("entries");
 
   for (const entry of listing.entries) {
-    if (budget.nodes <= 0) {
-      truncated.add("nodes");
+    if (scan.budget.nodes <= 0) {
+      scan.truncated.add("nodes");
       return;
     }
-    budget.nodes -= 1;
+    scan.budget.nodes -= 1;
     const childPath = subPath ? `${subPath}/${entry.name}` : entry.name;
 
     if (entry.kind === "directory") {
-      walk(baseDir, taskspaceId, childPath, budget, depth + 1, depthMax, hits, truncated);
+      // Not a truncation, the same as a dot-entry is not: this is the tree as this scan
+      // defines it, not a tree it ran out of room to finish. See TAG_SCAN_SKIP_DIRS.
+      if (skipDirs.has(entry.name)) continue;
+      walk(scan, childPath, depth + 1);
       continue;
     }
     // A symlink is not followed, and nothing else is a file to read.
     if (entry.kind !== "file") continue;
 
-    const signature = `${entry.modifiedAt}:${entry.size}`;
-    const found = fileTagHits(baseDir, childPath, signature, budget, entry.size ?? 0);
+    scan.seen.add(childPath);
+    const found = fileTagHits(scan.baseDir, childPath, entry, scan.budget);
     if ("skipped" in found) {
-      truncated.add(found.skipped);
+      scan.truncated.add(found.skipped);
       continue;
     }
+    if (found.parsed) scan.parsed = true;
+    const taskspaceId = scan.taskspaceId;
     for (const { tag, line, excerpt } of found.hits) {
-      hits.push({ tag, source: { kind: "file", taskspaceId, path: childPath, line }, excerpt });
+      scan.hits.push({
+        tag,
+        source: { kind: "file", taskspaceId, path: childPath, line },
+        excerpt,
+      });
     }
   }
+}
+
+/**
+ * Forgets cached files this walk did not reach.
+ *
+ * Only for a walk that finished, which is what the `truncated` guard in the caller is for: a
+ * scan that stopped at a budget did not reach directories that are still there, and treating
+ * "not seen" as "no longer there" would throw away good entries and re-read them next time —
+ * the opposite of what the cache is for.
+ *
+ * Without this the map only ever grew. A file renamed, deleted, or moved left its entry
+ * behind for the life of the process, and `exportTaskspaceTagCache` wrote every one of them
+ * to disk, so a long-lived server against a working tree accumulated the tags of every file
+ * that had ever been there.
+ */
+function pruneStale(baseDir: string, seen: Set<string>): boolean {
+  const entries = fileCache.get(baseDir);
+  if (!entries) return false;
+
+  let pruned = false;
+  for (const subPath of entries.keys()) {
+    if (seen.has(subPath)) continue;
+    entries.delete(subPath);
+    pruned = true;
+  }
+  return pruned;
 }
 
 /**
@@ -219,14 +303,24 @@ export function scanTaskspaceTags(
   taskspaceId: string,
   limits: ScanLimits = {},
 ): TaskspaceTagScan {
-  const budget: Budget = {
-    remaining: limits.bytes ?? TAG_SCAN_TOTAL_BYTES_MAX,
-    nodes: limits.nodes ?? TAG_SCAN_NODES_MAX,
+  const scan: Scan = {
+    baseDir,
+    taskspaceId,
+    budget: {
+      remaining: limits.bytes ?? TAG_SCAN_TOTAL_BYTES_MAX,
+      nodes: limits.nodes ?? TAG_SCAN_NODES_MAX,
+    },
+    depthMax: limits.depth ?? TAG_SCAN_DEPTH_MAX,
+    hits: [],
+    truncated: new Set(),
+    seen: new Set(),
+    parsed: false,
   };
-  const hits: TagHit[] = [];
-  const truncated = new Set<TagScanTruncation>();
 
-  walk(baseDir, taskspaceId, "", budget, 0, limits.depth ?? TAG_SCAN_DEPTH_MAX, hits, truncated);
+  walk(scan, "", 0);
 
-  return { hits, truncated: [...truncated] };
+  const complete = scan.truncated.size === 0;
+  const pruned = complete && pruneStale(baseDir, scan.seen);
+
+  return { hits: scan.hits, truncated: [...scan.truncated], changed: scan.parsed || pruned };
 }

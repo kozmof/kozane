@@ -193,7 +193,10 @@ reading described here, so dot-entries are not scanned, symlinks are not
 followed, and a file that is not UTF-8 text or is over 1 MB is passed over. What
 it returns for each hit is a path, a line number, and that one line — not the
 file. The walk is bounded by its own byte, entry, and depth budgets, and says
-when it stopped at one.
+when it stopped at one. It also does not descend into generated or vendored
+directories — `node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
+`vendor`, `bower_components`, `__pycache__` — which narrows what is read further
+still, in the same direction as every other rule here.
 
 **Writing** replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path

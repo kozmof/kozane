@@ -72,10 +72,24 @@ digits, `-`, and `_`; it may not exceed 64 characters, and a tag may not exceed 
 Something past either limit is not a tag at all rather than a tag cut short. Tags are
 matched case-insensitively, so `'Perf` and `'perf` are one tag.
 
+The cancelling rule reaches one word and no further, so `'a phrase'` still gathers under
+`'a`, and so do `'til` and `'90s`. In a source file the same rule means a multi-word quoted
+string opens a tag: `from 'drizzle-orm'` gathers under `'drizzle-orm`. That is the deliberate
+side to err on — a tag nobody meant is one row to ignore, a tag swallowed is a card that
+cannot be found — and it is bounded by what the scan walks rather than by a second grammar
+for files.
+
 Taskspace files are read on demand, within the same boundary the browser's file panel holds:
 dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a
 file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
 full is reported as such rather than quietly half-read.
+
+Generated and vendored directories are not walked, at any depth: `node_modules`,
+`bower_components`, `vendor`, `build`, `dist`, `out`, `target`, `coverage`, and
+`__pycache__`. They are not reported as a truncation, because a taskspace read to the end of
+everything the scan covers *was* read in full — they are simply outside it, as dot-entries
+are. A `.gitignore` is not consulted: it answers a different question, varies per repository,
+and routinely covers notes someone would want tagged.
 
 ### Warps
 

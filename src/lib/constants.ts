@@ -211,10 +211,47 @@ export const TAG_SCAN_TOTAL_BYTES_MAX = 8 * 1024 * 1024;
 /**
  * How many entries one tag scan will walk into one taskspace. The same argument
  * {@link TASKSPACE_SSG_NODES_MAX} makes — a name costs an `lstat` to produce even when
- * nothing is read from it, and an ordinary checkout holds a `node_modules` of a few hundred
- * thousand — against a walk a page load is waiting on.
+ * nothing is read from it — against a walk a page load is waiting on.
+ *
+ * A backstop rather than the limit that usually binds. {@link TAG_SCAN_SKIP_DIRS} keeps the
+ * walk out of the directories that hold hundreds of thousands of entries, so what is left is
+ * a working tree, and a working tree runs out of bytes long before it runs out of names.
  */
 export const TAG_SCAN_NODES_MAX = 20_000;
+
+/**
+ * Directory names a tag scan does not walk into, at any depth.
+ *
+ * The same kind of rule as skipping dot-entries, and it earns its place the same way: these
+ * hold generated or vendored output, not text anyone wrote a tag in, and they are big enough
+ * to spend the whole of {@link TAG_SCAN_TOTAL_BYTES_MAX} before the walk reaches the working
+ * tree. Measured on Kozane's own checkout, `build`, `coverage`, and `dist` took 6.5 MB of the
+ * 8 MB budget and the scan ran out partway through `src` — so the tags a user actually wrote
+ * were the ones that went missing, and the tags gathered were mostly quoted string literals
+ * out of compiled JavaScript.
+ *
+ * Not reported as a truncation, for the same reason a dot-entry is not: a taskspace read to
+ * the end of everything this scans *was* read in full, and warning about it on every page
+ * would make the warning meaningless. What this excludes is documented instead — in
+ * `docs/browser-ui-handbook.md`, `docs/security-matrix.md`, and `spec/cli.md`.
+ *
+ * Names rather than patterns, and a short list rather than a thorough one. A `.gitignore`
+ * would be the thorough answer and is deliberately not consulted: it is a different question
+ * (what should not be committed, which routinely includes notes and drafts someone would very
+ * much want tagged), it varies per repository, and honouring it means a parser and a
+ * precedence order for a scan that is meant to be cheap.
+ */
+export const TAG_SCAN_SKIP_DIRS: readonly string[] = [
+  "node_modules",
+  "bower_components",
+  "vendor",
+  "build",
+  "dist",
+  "out",
+  "target",
+  "coverage",
+  "__pycache__",
+];
 
 /**
  * How many directories deep a tag scan will walk. A backstop against a pathological real

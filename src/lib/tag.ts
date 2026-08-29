@@ -32,6 +32,24 @@ import type { TagHit, TagSource } from "./types.js";
  * or may be an apostrophe in a word, and guessing wrong in either direction is worse than
  * the small amount of noise this leaves. A tag nobody meant is one row in the index; a tag
  * silently swallowed is a card that cannot be found.
+ *
+ * ## What that costs in a file, which is a decision and not an oversight
+ *
+ * The rules above were weighed against prose, and a taskspace file is often not prose. In
+ * source code `'…'` is a string delimiter, so a multi-token literal opens a tag the closing
+ * rule never cancels: `from 'drizzle-orm'` yields `drizzle-orm`, and `echo 'hello world'`
+ * yields `hello`. Scanned across a working tree that is real noise, and it is left in rather
+ * than legislated away here, because every rule that would remove it — matching quotes across
+ * a line, knowing which files are code, requiring two characters — either swallows tags
+ * someone wrote or makes the grammar answer differently depending on where the text was
+ * found, and one grammar for both sources is the property this module exists to hold.
+ *
+ * It is bounded on the other side instead, where the cost actually arises: the file scan does
+ * not walk `node_modules`, `build`, `dist`, or the rest of `TAG_SCAN_SKIP_DIRS` in
+ * `lib/constants.ts`, where compiled and vendored code lives and where nearly all of this
+ * noise was measured.
+ * A quoted literal in hand-written source still becomes a tag; it sits in the tree unread,
+ * next to the tags that were meant.
  */
 
 // Bounded rather than `+` on purpose, and it does two jobs. It enforces

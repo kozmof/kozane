@@ -388,6 +388,11 @@ closing apostrophe cancels it. Levels take letters, digits, `-`, and `_`, up to 
 characters each and 8 levels deep; past either, it is not treated as a tag at all. `'Perf`
 and `'perf` are the same tag.
 
+The cancelling rule reaches one word, so an apostrophe opening something longer is still a
+tag: `'a phrase'` gathers under `'a`, and so do `'til` and `'90s`. The rule errs this way on
+purpose — a tag nobody meant is one row you can ignore, while a tag quietly swallowed is a
+card you cannot find.
+
 Tags in a card's text are drawn as links. Click one to open the tag index.
 
 ### The tag index
@@ -421,6 +426,13 @@ followed, and a file that is not text or is over 1 MB is skipped. Files that hav
 changed since the last read are not read again, so coming back to the page is quick. A
 taskspace too large to read in full says so at the bottom of the list, rather than leaving
 you to think a tag is missing.
+
+Generated and vendored directories are left out as well — `node_modules`, `build`, `dist`,
+`out`, `target`, `coverage`, `vendor`, `bower_components`, and `__pycache__`, at any depth.
+They hold no text anyone wrote a tag in, and they are large enough that scanning them means
+running out of budget before reaching the files you work on. A `.gitignore` is deliberately
+not consulted: what you would rather not commit and what you would rather not tag are
+different questions, and notes and drafts are often on the wrong side of it.
 
 A static export made with `kozane net ssg generate` carries one tag index for the whole
 workspace, covering the cards on every exported board, and both the tag and the project
