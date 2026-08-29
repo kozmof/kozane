@@ -238,27 +238,35 @@
   function openFromUrl() {
     if (!browser) return;
 
+    // Everything the URL is read for is read here, before anything is acted on, and every
+    // parameter that was acted on is dropped in one call at the end. Acting and clearing were
+    // interleaved, which left the card's clear reading `page.url` inside a `tick` — after the
+    // file's clear had already replaced it — and made the two correct only in that order.
     const card = cardFromUrl();
-    if (card) {
-      tick().then(() => {
-        canvasComponent.centerOn(card.posX, card.posY);
-        clearQuery("card");
-      });
-    }
-
     const taskspaceId = page.url.searchParams.get("taskspace");
     const path = page.url.searchParams.get("path");
     // A static export can open a file only where its contents were baked in; without them
     // there is nothing to read and no endpoint to read it from, so the link is left inert
     // rather than opening an editor on an error.
-    if (!taskspaceId || !path || (readonly && !staticFiles)) return;
-    const taskspace = s.taskspaces.find(({ id }) => id === taskspaceId);
-    if (!taskspace) return;
-    editor.open(
-      { fetcher: s.fetcher, projectId: s.projectId, staticFiles },
-      { taskspaceId, taskspaceName: taskspace.name, path },
-    );
-    clearQuery("taskspace", "path");
+    const taskspace =
+      taskspaceId && path && !(readonly && !staticFiles)
+        ? (s.taskspaces.find(({ id }) => id === taskspaceId) ?? null)
+        : null;
+
+    const acted: string[] = [];
+    if (taskspace && path) {
+      editor.open(
+        { fetcher: s.fetcher, projectId: s.projectId, staticFiles },
+        { taskspaceId: taskspace.id, taskspaceName: taskspace.name, path },
+      );
+      acted.push("taskspace", "path");
+    }
+    if (card) acted.push("card");
+    if (acted.length > 0) clearQuery(...acted);
+
+    // The pan is the one part that has to wait for the canvas to exist. It changes nothing on
+    // the URL, so it is free to happen after the clear above.
+    if (card) tick().then(() => canvasComponent.centerOn(card.posX, card.posY));
   }
 
   // Remember the layer being worked on, so a reload comes back to it instead of to Base.
