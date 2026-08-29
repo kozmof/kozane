@@ -8,6 +8,7 @@ import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { buildTagTree, normalizeTag, tagMatcher } from "$lib/tag";
+import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
 import type { TagHit } from "$lib/types";
 
@@ -44,12 +45,21 @@ function cacheLocation(): { cache: { root: string; dbUrl: string } } | null {
  * A prerendered page has no query string to read, so a static export bakes every hit and the
  * page selects among them in the browser. The live page filters here instead, so opening one
  * tag of a large workspace sends one tag's hits rather than all of them.
+ *
+ * The `TAG_HITS_SHOWN_MAX` cap is applied to what one tag shows, and so only on the live
+ * path: an export is baked before anyone has chosen a tag, and capping the whole set there
+ * would drop hits the browser had not yet had the chance to filter down to. The page applies
+ * the same cap after it has filtered, so both arrive at a list of the same length.
  */
-function selectHits(hits: TagHit[], tag: string | null): TagHit[] {
-  if (prerender) return hits;
-  if (!tag) return [];
+function selectHits(hits: TagHit[], tag: string | null): { hits: TagHit[]; total: number | null } {
+  // Nothing filtered and nothing capped yet, and so nothing to report a total against: the
+  // browser does both, and is the only thing in a position to count.
+  if (prerender) return { hits, total: null };
+  if (!tag) return { hits: [], total: 0 };
+
   const matches = tagMatcher(tag);
-  return hits.filter((hit) => matches(hit.tag));
+  const matching = hits.filter((hit) => matches(hit.tag));
+  return { hits: matching.slice(0, TAG_HITS_SHOWN_MAX), total: matching.length };
 }
 
 /**
@@ -102,7 +112,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     getAllTaskspaces({ db }),
   ]);
 
-  const hits = selectHits(index.hits, tag);
+  const { hits, total: hitTotal } = selectHits(index.hits, tag);
   const shownCardIds = [
     ...new Set(hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : []))),
   ];
@@ -120,6 +130,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     tree: buildTagTree(index.hits),
     tag,
     hits,
+    /** How many hits the tag gathers, against the at-most-`TAG_HITS_SHOWN_MAX` above. Null
+     *  in an export, where the browser filters and so does its own counting. */
+    hitTotal,
     truncated: index.truncated,
     cardProjects: index.cardProjects,
     taskspaceProjects: index.taskspaceProjects,

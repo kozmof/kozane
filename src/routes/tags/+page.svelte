@@ -14,6 +14,7 @@
     type TagCounts,
     type TagNode,
   } from "$lib/tag";
+  import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
   import type { TagHit } from "$lib/types";
 
   let { data }: PageProps = $props();
@@ -57,11 +58,21 @@
    * set — and is the real selection in a static export, where every hit of every project was
    * baked in. One path rather than a branch that only one of the two ever takes.
    */
-  const shownHits = $derived.by(() => {
+  const matchingHits = $derived.by(() => {
     if (!selectedTag) return [];
     const matches = tagMatcher(selectedTag);
     return data.hits.filter((hit) => matches(hit.tag) && inSelectedProject(hit));
   });
+
+  /**
+   * Capped the same way and to the same number the server caps by, so an export and the live
+   * page list alike. Already short of it on the live page, which capped before sending.
+   */
+  const shownHits = $derived(matchingHits.slice(0, TAG_HITS_SHOWN_MAX));
+
+  /** What the list above is a part of. The server counted it before capping; in an export
+   *  nothing was capped before the filter just above, so the count is taken from that. */
+  const hitTotal = $derived(data.hitTotal ?? matchingHits.length);
 
   /**
    * The tree, narrowed the same way. Only a static export ever has anything to narrow: the
@@ -276,6 +287,15 @@
 
           {#if shownHits.length === 0}
             <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>Nothing under this tag.</p>
+          {:else if hitTotal > shownHits.length}
+            <!-- The tree's count is of the whole thing, so a capped list has to say it is
+                 one, or the two numbers read as a disagreement. -->
+            <p
+              class={css({ color: "neutral.subtle", fontSize: "12px", marginBottom: "12px" })}
+            >
+              Showing the first {shownHits.length} of {hitTotal}. Narrow with a subcategory to
+              see the rest.
+            </p>
           {/if}
 
           {#if cardRows.length > 0}

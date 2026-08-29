@@ -154,6 +154,17 @@ export const TAG_LEVELS_MAX = 8;
 export const TAG_EXCERPT_CHARS_MAX = 200;
 
 /**
+ * How many hits one tag's panel draws, in the browser and in a static export alike.
+ *
+ * Every other walk on the tag path is bounded and this one has to be too, for the reason the
+ * scan budgets give: a tag written in a header comment reaches every file carrying that
+ * header, and a page that answers with forty thousand rows is not a more useful answer than
+ * one that answers with two hundred and says there are more. The tree above it still counts
+ * every hit, so the number beside a tag is the true one — this bounds only what is listed.
+ */
+export const TAG_HITS_SHOWN_MAX = 200;
+
+/**
  * How large a file the editor will open, in bytes. The panel reads a file whole and hands
  * it to a piece table held in the tab, so the ceiling is what one browser tab can hold a
  * document in comfortably rather than what the disk can produce. A taskspace is an

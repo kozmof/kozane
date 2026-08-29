@@ -434,6 +434,10 @@ running out of budget before reaching the files you work on. A `.gitignore` is d
 not consulted: what you would rather not commit and what you would rather not tag are
 different questions, and notes and drafts are often on the wrong side of it.
 
+One tag's list shows at most 200 rows. The count beside the tag in the tree is always the
+true one, so a capped list says which part of it you are looking at; pick a subcategory to
+narrow down to the rest.
+
 A static export made with `kozane net ssg generate` carries one tag index for the whole
 workspace, covering the cards on every exported board, and both the tag and the project
 narrowing keep working there. Tags in taskspace files are left out unless the export was
