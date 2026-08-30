@@ -789,8 +789,8 @@ layer is stacked above the cards already there.
 Lists project cards or dynamically lists cards associated with a taskspace.
 
 ```bash
-kozane card list [--project <projectId>] [--bundle <bundleId>]
-kozane card list --taskspace <path>
+kozane card list [--project <projectId>] [--bundle <bundleId>] [--sort <key>] [--reverse]
+kozane card list --taskspace <path> [--sort <key>] [--reverse]
 ```
 
 When the current directory contains `.taskspace.json`, running `kozane card list`
@@ -814,6 +814,45 @@ kozane card list --taskspace ./my-taskspace/.taskspace.json
 ```
 
 The taskspace form cannot be combined with `--project` or `--bundle`.
+
+#### Sorting
+
+Without `--sort`, cards are listed in the order the database returns them, which is not
+an order the command promises to keep. `--sort <key>` takes one of three keys and applies
+to every form of the command, the taskspace forms included:
+
+| Key       | Order                                               |
+| --------- | --------------------------------------------------- |
+| `created` | Oldest card first.                                  |
+| `updated` | Least recently rewritten first.                     |
+| `gap`     | Shortest interval between the two timestamps first. |
+
+Cards with equal values are ordered by ID. `--reverse` flips the whole listing, ties
+included, and is refused without `--sort` — there is no defined order to reverse.
+
+**Only a change to a card's text counts as updating it.** Moving a card across the board,
+resizing it, restacking it, or moving it to another bundle or layer leaves both timestamps
+as they were. So `gap` measures how long a card stood before it was rewritten, not how
+recently it was rearranged; a card never edited since it was added has a gap of `0s`.
+
+`--sort` adds the value it ordered by as a column between the position and the text: an
+ISO timestamp to the second for `created` and `updated`, and the interval in its largest
+whole unit for `gap` (`0s`, `45s`, `12m`, `3h`, `5d`). Without `--sort` the line is
+unchanged.
+
+```bash
+kozane card list --sort created
+kozane card list --sort updated --reverse
+kozane card list --sort gap
+```
+
+```
+d981fa1  General  (0, 0)  0s  A card added and left alone
+15a6537  General  (40, 0)  28d  A card reconsidered a month later
+```
+
+Cards created before this option existed carry the timestamp of the migration that added
+the columns, so they read as never since edited until their text is next changed.
 
 ---
 
@@ -980,10 +1019,12 @@ Behavior:
 
 - Requires migrations to be current.
 - Writes to `file` if given, otherwise prints to stdout.
-- Writes export format version 5. Older files can still be imported: version 2
+- Writes export format version 6. Older files can still be imported: version 2
   (exported before projects had a default flag) comes back with every project
   non-default, version 3 (before layers) gets a rebuilt default layer per project,
-  and version 4 (before warps) comes back with no warps.
+  version 4 (before warps) comes back with no warps, and version 5 (before the
+  card timestamps) comes back with every card created at the moment of the import
+  and never since edited.
 
 Output (to file):
 

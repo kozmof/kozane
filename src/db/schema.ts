@@ -190,6 +190,23 @@ export const cardTable = sqliteTable(
      * widening every card is still one line of config rather than a pass over the table.
      */
     width: integer(),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+    /**
+     * When the card's *text* last changed, and nothing else about it. A card dragged across
+     * the board, resized, restacked, or moved to another bundle or layer keeps the timestamp
+     * it had — which is why `updateProjectCardPositions` and the `reassign*` writers do not
+     * touch this column, and only `updateCard`'s content branch does.
+     *
+     * The board sends a position PATCH per drag. Were those to count, `updated_at` would
+     * read "last moved" for most cards, and the interval `kozane card list --sort gap`
+     * reports — how long a card stood before it was rewritten — would be reset by arranging
+     * the board rather than by thinking on it.
+     */
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
   },
   (t) => [
     // Read on every page load and on every snapshot poll, by `getCardsByBundles`: the board

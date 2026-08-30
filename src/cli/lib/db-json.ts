@@ -3,7 +3,7 @@ import { v7 as uuidv7 } from "uuid";
 import { chunked, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 5;
+const EXPORT_VERSION = 6;
 // Version 2 predates `project.is_default` (migration 0003). Such a file is still
 // importable; every project comes back non-default, which is what version 2 recorded.
 const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
@@ -62,6 +62,8 @@ export const TABLES = [
       "pos_y",
       "z_index",
       "width",
+      "created_at",
+      "updated_at",
     ],
     orderBy: ["id"],
   },
@@ -183,6 +185,25 @@ function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
   // Versions before 5 predate warps (migration 0006). There is nothing to rebuild: a
   // workspace exported then simply had none.
   if (version < 5) tables.warp ??= [];
+  // Versions before 6 predate the card timestamps (migration 0011). The dump records no
+  // history for these cards, so they are filled the way that migration fills the rows
+  // already in a database: both columns at the moment of the import, which reads as created
+  // now and never since edited.
+  if (version < 6) upgradeCardTimestamps(tables);
+}
+
+/**
+ * Fills `card.created_at` / `card.updated_at` on a dump taken before they existed. Written
+ * in seconds, matching `integer({ mode: "timestamp" })` and the `unixepoch()` the migration
+ * uses. A row that somehow carries a value already keeps it, so a newer export mislabelled
+ * with an older version number is not overwritten.
+ */
+function upgradeCardTimestamps(tables: Partial<TableRows>): void {
+  const now = Math.floor(Date.now() / 1000);
+  for (const card of tables.card ?? []) {
+    card.created_at ??= now;
+    card.updated_at ??= now;
+  }
 }
 
 /**

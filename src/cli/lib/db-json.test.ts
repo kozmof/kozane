@@ -219,6 +219,35 @@ describe("db JSON export/import", () => {
     expect((await exportDbJson(targetUrl)).tables.warp).toEqual([]);
   });
 
+  it("imports a version 5 export, which predates the card timestamps", async () => {
+    const sourceUrl = await migratedDbUrl("v5-source.db");
+    const targetUrl = await migratedDbUrl("v5-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const legacy = {
+      ...dump,
+      version: 5,
+      tables: {
+        ...dump.tables,
+        card: dump.tables.card.map(
+          ({ created_at: _createdAt, updated_at: _updatedAt, ...card }) => card,
+        ),
+      },
+    };
+
+    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ card: 2 });
+
+    // A dump carrying no history is filled the way migration 0011 fills the rows already in
+    // a database: both columns at the moment of the import, which reads as created now and
+    // never since edited, so `kozane card list --sort gap` reports `0s` for these cards.
+    const importedAt = Math.floor(Date.now() / 1000);
+    for (const card of (await exportDbJson(targetUrl)).tables.card) {
+      expect(card.created_at).toBe(card.updated_at);
+      expect(card.created_at).toBeGreaterThan(importedAt - 600);
+    }
+  });
+
   it("rejects an export version this build cannot read", async () => {
     const dbUrl = await migratedDbUrl("future.db");
     const dump = { ...(await exportDbJson(dbUrl)), version: 99 };

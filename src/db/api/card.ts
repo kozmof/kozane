@@ -368,7 +368,7 @@ type UpdateCard = NeedsDB & {
 type CardUpdate = Partial<
   Pick<
     typeof cardTable.$inferInsert,
-    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId"
+    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId" | "updatedAt"
   >
 >;
 
@@ -385,7 +385,15 @@ export async function updateCard({
   width,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
-  if (content !== undefined) fields.content = content;
+  // The one write that touches `updatedAt`, and only on this branch. The rest of what this
+  // function can change — where the card sits, how wide it is drawn, which bundle or layer
+  // holds it — is arrangement rather than revision, and leaves the timestamp alone. See the
+  // column's own note in `schema.ts`, and `updateProjectCardPositions` below, which writes
+  // positions by the hundred and likewise does not bump it.
+  if (content !== undefined) {
+    fields.content = content;
+    fields.updatedAt = new Date();
+  }
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;
   if (zIndex !== undefined) fields.zIndex = zIndex;

@@ -44,7 +44,7 @@ describe("getMigrationStatus", () => {
     if (status.state !== "missing") return;
     expect(status.pendingCount).toBeGreaterThan(0);
     // The newest migration in drizzle/: update this when another one is generated.
-    expect(status.latest?.tag).toBe("0010_card_scope_rel_indexes");
+    expect(status.latest?.tag).toBe("0011_card_timestamps");
   });
 
   it("reports current after migrations are applied", async () => {

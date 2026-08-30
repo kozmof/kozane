@@ -56,8 +56,8 @@ export async function seedCards(
     WITH RECURSIVE seq(n) AS (
       SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < ${count}
     )
-    INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index)
-    SELECT ${prefix} || '-' || n, ${bundleId}, ${layerId}, 'card ' || n, 0, 0, 0 FROM seq
+    INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index, created_at, updated_at)
+    SELECT ${prefix} || '-' || n, ${bundleId}, ${layerId}, 'card ' || n, 0, 0, 0, unixepoch(), unixepoch() FROM seq
   `);
   return Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`);
 }

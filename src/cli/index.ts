@@ -21,6 +21,7 @@ import {
   cardShow,
   cardSquash,
 } from "./commands/card.js";
+import { CARD_SORT_KEYS, isCardSortKey, type CardSortKey } from "./lib/card-sort.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { tagList, tagShow } from "./commands/tag.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
@@ -37,6 +38,12 @@ function integer(value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) throw new InvalidArgumentError("Must be an integer.");
   return parsed;
+}
+
+function cardSortKey(value: string): CardSortKey {
+  if (!isCardSortKey(value))
+    throw new InvalidArgumentError(`Must be one of: ${CARD_SORT_KEYS.join(", ")}.`);
+  return value;
 }
 
 program.name("kozane").description("Local card-based thinking workspace").version(_version);
@@ -307,6 +314,12 @@ const cardListCommand = card
   .option("--project <projectId>", "Project ID or short ID whose cards to list")
   .option("--bundle <bundleId>", "Only list cards in this bundle ID or short ID")
   .option("--taskspace <path>", "Taskspace directory or .taskspace.json path")
+  .option(
+    "--sort <key>",
+    "Order by created, updated, or gap (the interval between the two)",
+    cardSortKey,
+  )
+  .option("--reverse", "Reverse the --sort order")
   .action((opts) => cardList(opts));
 
 cardListCommand.addHelpText(
@@ -321,10 +334,24 @@ Taskspace behavior:
   scope members. A no-scope or deleted-scope taskspace lists cards associated
   directly with that taskspace and prints a status notice.
 
+Sorting:
+  --sort created  oldest card first
+  --sort updated  least recently rewritten first
+  --sort gap      shortest interval between the two first
+
+  Only a change to a card's text counts as updating it. Moving a card across the
+  board, resizing it, restacking it, or moving it to another bundle or layer
+  leaves both timestamps as they were, so --sort gap measures how long a card
+  stood before it was rewritten rather than how recently it was rearranged.
+
+  --sort adds the value it ordered by as a column, and --reverse flips the order.
+
 Examples:
   kozane card list
   kozane card list --taskspace ./draft
   kozane card list --taskspace ./draft/.taskspace.json
+  kozane card list --sort updated --reverse
+  kozane card list --sort gap
 `,
 );
 

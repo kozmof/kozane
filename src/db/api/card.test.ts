@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { eq } from "drizzle-orm";
 import { createTestDB } from "../../test-utils/db.js";
+import { cardTable } from "../schema.js";
+import type { DB } from "../tx.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 import {
@@ -652,5 +655,109 @@ describe("reassignCardsToLayer", () => {
     expect(await getCard({ db, bundleId, cardId: card })).toMatchObject({
       layerId: before!.layerId,
     });
+  });
+});
+
+/**
+ * The rule `kozane card list --sort` rests on: `updated_at` follows a card's text and
+ * nothing else about it. The board sends a position PATCH per drag, so were arranging the
+ * board to count as updating, the interval between the two timestamps would measure how
+ * recently a card was tidied rather than how long it stood before being rewritten.
+ *
+ * Backdated rather than slept on: the columns are stored to the second, so a card added
+ * and edited inside the same second has the same timestamp either way. Setting a known
+ * past value is what makes "did this move" answerable at all.
+ */
+describe("card timestamps", () => {
+  const LONG_AGO = new Date("2020-01-01T00:00:00Z");
+
+  async function backdate(db: DB, cardId: string): Promise<void> {
+    await db
+      .update(cardTable)
+      .set({ createdAt: LONG_AGO, updatedAt: LONG_AGO })
+      .where(eq(cardTable.id, cardId));
+  }
+
+  it("stamps a new card as created and updated together", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.createdAt).toBeInstanceOf(Date);
+    expect(card?.updatedAt.getTime()).toBe(card?.createdAt.getTime());
+  });
+
+  it("stamps every card of a batch insert", async () => {
+    const { db, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const ids = await addCards({
+      db,
+      bundleId,
+      layerId,
+      cards: [
+        { content: "first", posX: 0, posY: 0 },
+        { content: "second", posX: 0, posY: 0 },
+      ],
+    });
+    for (const cardId of ids) {
+      const card = await getCard({ db, bundleId, cardId });
+      expect(card?.updatedAt.getTime()).toBe(card?.createdAt.getTime());
+    }
+  });
+
+  it("moves updatedAt when the content changes, and leaves createdAt where it was", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Old" });
+    await backdate(db, cardId);
+
+    await updateCard({ db, cardId, bundleId, content: "New" });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.createdAt.getTime()).toBe(LONG_AGO.getTime());
+    expect(card?.updatedAt.getTime()).toBeGreaterThan(LONG_AGO.getTime());
+  });
+
+  it("leaves updatedAt alone for a card that was only moved, resized, or restacked", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await backdate(db, cardId);
+
+    await updateCard({ db, cardId, bundleId, posX: 300, posY: 400 });
+    await updateCard({ db, cardId, bundleId, width: 360 });
+    await updateCard({ db, cardId, bundleId, zIndex: 7 });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.posX).toBe(300);
+    expect(card?.updatedAt.getTime()).toBe(LONG_AGO.getTime());
+  });
+
+  it("leaves updatedAt alone for a card dragged through updateProjectCardPositions", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await backdate(db, cardId);
+
+    await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [{ cardId, posX: 120, posY: 240 }],
+    });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.posX).toBe(120);
+    expect(card?.updatedAt.getTime()).toBe(LONG_AGO.getTime());
+  });
+
+  it("leaves updatedAt alone for a card moved to another bundle or layer", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Hi" });
+    await backdate(db, cardId);
+    const otherBundleId = await addBundle({ db, projectId, name: "Other" });
+    const { id: otherLayerId } = await addLayer({ db, projectId, name: "Draft" });
+
+    await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId: otherLayerId });
+    await reassignCardsToBundle({ db, projectId, cardIds: [cardId], bundleId: otherBundleId });
+
+    const card = await getCard({ db, bundleId: otherBundleId, cardId });
+    expect(card?.layerId).toBe(otherLayerId);
+    expect(card?.updatedAt.getTime()).toBe(LONG_AGO.getTime());
   });
 });

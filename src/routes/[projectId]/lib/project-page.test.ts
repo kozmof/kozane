@@ -36,6 +36,16 @@ import {
 import { ARROW_KEYS } from "../../../lib/constants.js";
 import type { Card, GlueRel } from "$db/api/types.js";
 
+/**
+ * The geometry these fixtures exercise reads no timestamp, so every card carries the same
+ * one: a card's position and stacking are what this file is about, and `updatedAt` follows
+ * a card's text rather than where it sits.
+ */
+const stamped = {
+  createdAt: new Date("2026-01-01T00:00:00Z"),
+  updatedAt: new Date("2026-01-01T00:00:00Z"),
+};
+
 const cards: Card[] = [
   {
     id: "card-1",
@@ -47,6 +57,7 @@ const cards: Card[] = [
     posY: 48,
     zIndex: 0,
     width: null,
+    ...stamped,
   },
   {
     id: "card-2",
@@ -58,6 +69,7 @@ const cards: Card[] = [
     posY: 96,
     zIndex: 0,
     width: null,
+    ...stamped,
   },
   {
     id: "card-3",
@@ -69,6 +81,7 @@ const cards: Card[] = [
     posY: 144,
     zIndex: 0,
     width: null,
+    ...stamped,
   },
 ];
 
