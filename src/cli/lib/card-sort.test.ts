@@ -68,6 +68,15 @@ describe("sortCards", () => {
     expect(ids(sortCards([lower, upper], "created"))).toEqual(["B", "a"]);
   });
 
+  it("orders a backwards interval where it prints, not ahead of everything", () => {
+    // Only a hand-edited database or a doctored import holds `updated_at` before
+    // `created_at`. It prints `0s`, so it has to sort among the other `0s` cards rather
+    // than ahead of them on a negative nobody can see — the id is then what separates them.
+    const backwards = card("d", "2026-03-01T00:00:00Z", "2026-01-01T00:00:00Z");
+    expect(sortColumn(backwards, "gap")).toBe("0s");
+    expect(ids(sortCards([a, backwards, c], "gap"))).toEqual(["c", "d", "a"]);
+  });
+
   it("leaves the caller's array alone", () => {
     const cards = [c, a, b];
     sortCards(cards, "created");

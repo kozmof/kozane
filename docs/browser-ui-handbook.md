@@ -202,6 +202,10 @@ long piece can overlap the one below it until you drag it. Every piece inherits
 the card's bundle, layer, and width, and joins every scope the card was in. The
 pieces are left selected, so the next action applies to all of them at once.
 
+What the pieces do not inherit is the card's history: each is a new card, created
+when you squashed it. `kozane card list --sort created` lists them as written
+today, whatever the card they came out of had stood since.
+
 "Squash" is greyed out for a card whose text has nothing to split on: squashing
 it would replace the card with a copy under a new ID for no gain. A card in a
 glue group can still be squashed — the card leaves the group on its way out, and

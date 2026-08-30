@@ -45,8 +45,6 @@ type ListedCard = {
   posY: number;
 };
 type DistanceListedCard = ListedCard & { distance: number };
-/** What `card list` selects: the columns `--sort` orders by ride along with the rest. */
-type TimedListedCard = ListedCard & CardTimes;
 
 async function resolveBundleId(db: DB, projectId: string, requestedId?: string): Promise<string> {
   if (requestedId) {
@@ -86,17 +84,22 @@ async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
 }
 
 /**
- * Prints one line per card, adding a distance column when the cards carry one and a time
- * column when a sort key asked for one.
+ * Prints one line per card, with one extra column between the position and the text when
+ * the caller passes something to fill it: the distance for `card nearest`, the value it
+ * ordered by for `card list --sort`.
  *
- * A listing nobody sorted prints exactly what it printed before either column existed:
- * `<id>  <bundle>  (<x>, <y>)  <text>`. The extra column is what the caller asked to be
- * ordered by, and appears only because they asked.
+ * A listing that asked for neither prints exactly what it printed before either column
+ * existed: `<id>  <bundle>  (<x>, <y>)  <text>`.
+ *
+ * The column arrives as a function of the card rather than as a flag this reads a field
+ * for, so it is the caller's card shape that decides what can be printed: a column reading
+ * `createdAt` cannot be handed cards that carry no timestamps, which asking for a sort key
+ * beside a loosely-typed union of card shapes allowed.
  */
-async function printCards(
+async function printCards<T extends ListedCard>(
   db: DB,
-  cards: (ListedCard | DistanceListedCard | TimedListedCard)[],
-  sort?: CardSortKey,
+  cards: T[],
+  column?: (card: T) => string,
 ): Promise<void> {
   if (cards.length === 0) {
     console.log("No cards found.");
@@ -105,14 +108,9 @@ async function printCards(
   const allCards = await db.select({ id: cardTable.id }).from(cardTable);
   const shortIds = shortIdMap(allCards.map(({ id }) => id));
   for (const card of cards) {
-    const column =
-      sort && "createdAt" in card
-        ? `${sortColumn(card, sort)}  `
-        : "distance" in card
-          ? `${card.distance.toFixed(2)}  `
-          : "";
+    const extra = column ? `${column(card)}  ` : "";
     console.log(
-      `${shortIds.get(card.id) ?? card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${column}${card.content.replace(/\r?\n/g, " ")}`,
+      `${shortIds.get(card.id) ?? card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${extra}${card.content.replace(/\r?\n/g, " ")}`,
     );
   }
 }
@@ -333,29 +331,37 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(eq(bundleTable.projectId, origin.projectId));
-    const sorted = cards
+    // The id breaks equal distances the same way `sortCards` breaks equal timestamps, and
+    // for the same reason: `localeCompare` orders by the locale the CLI happens to run in,
+    // so two cards the same distance away could swap places between machines.
+    const sorted: DistanceListedCard[] = cards
       .map((card) => ({
         ...card,
         distance: Math.hypot(card.posX - origin.posX, card.posY - origin.posY),
       }))
-      .sort((a, b) => a.distance - b.distance || a.id.localeCompare(b.id));
-    await printCards(db, sorted);
+      .sort((a, b) => a.distance - b.distance || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    await printCards(db, sorted, (card) => card.distance.toFixed(2));
   });
 }
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
+  // Ahead of `runWorkspaceCommand`, because these two say nothing about the workspace:
+  // `kozane card list --reverse` run outside one is a malformed command wherever it was
+  // typed, and should say so rather than report the missing workspace it never got to.
+  const { sort, reverse } = options;
+  if (options.taskspace && (options.project || options.bundle))
+    throw new Error("--taskspace cannot be combined with --project or --bundle.");
+  // Without a key there is no order to reverse: the unsorted listing comes back in
+  // whatever order SQLite hands the rows over, which is not an order anything promises.
+  if (reverse && !sort) throw new Error("--reverse requires --sort.");
+
+  // Both applied on every path below, so listing from a taskspace directory sorts the same
+  // way — and prints the same column — as listing a project does.
+  const ordered = <T extends CardTimes>(cards: T[]): T[] =>
+    sort ? sortCards(cards, sort, reverse) : cards;
+  const timeColumn = sort ? (card: CardTimes) => sortColumn(card, sort) : undefined;
+
   await runWorkspaceCommand(async ({ db }) => {
-    if (options.taskspace && (options.project || options.bundle))
-      throw new Error("--taskspace cannot be combined with --project or --bundle.");
-    // Without a key there is no order to reverse: the unsorted listing comes back in
-    // whatever order SQLite hands the rows over, which is not an order anything promises.
-    if (options.reverse && !options.sort) throw new Error("--reverse requires --sort.");
-
-    // Applied on every path below, so listing from a taskspace directory sorts the same way
-    // listing a project does.
-    const ordered = <T extends CardTimes>(cards: T[]): T[] =>
-      options.sort ? sortCards(cards, options.sort, options.reverse) : cards;
-
     const locatedMarker =
       options.taskspace || (!options.project && !options.bundle)
         ? readTaskspaceMarker(options.taskspace)
@@ -376,7 +382,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
         await printCards(
           db,
           ordered(scopedCards.map((card) => ({ ...card, bundle: card.bundleName }))),
-          options.sort,
+          timeColumn,
         );
       } else {
         console.warn(
@@ -395,7 +401,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
           .from(cardTable)
           .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
           .where(eq(cardTable.taskspaceId, taskspace.id));
-        await printCards(db, ordered(taskspaceCards), options.sort);
+        await printCards(db, ordered(taskspaceCards), timeColumn);
       }
       return;
     }
@@ -419,6 +425,6 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(and(...conditions));
-    await printCards(db, ordered(cards), options.sort);
+    await printCards(db, ordered(cards), timeColumn);
   });
 }

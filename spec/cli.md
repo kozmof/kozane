@@ -752,7 +752,9 @@ cat foo.txt | kozane card squash --project eb155d6 --scope e3ee90b
 ```
 
 All generated cards and their optional scope memberships are committed in one
-transaction, so an error does not leave a partially created set.
+transaction, so an error does not leave a partially created set. Every generated card
+is new, and is created and last-updated at the moment the command runs — which is what
+`kozane card list --sort` reads.
 
 ---
 
@@ -858,6 +860,11 @@ d981fa1  General  (0, 0)  0s  A card added and left alone
 
 Cards created before this option existed carry the timestamp of the migration that added
 the columns, so they read as never since edited until their text is next changed.
+
+Squashing a card replaces it with one new card per piece, on the board and through
+`kozane card squash` alike. The pieces are created when the squash ran, not when the text
+was first written, so a card thought about for a month and then squashed leaves pieces that
+read as created today with a gap of `0s`.
 
 ---
 

@@ -398,30 +398,44 @@ export async function updateCard({
 
   const where = and(eq(cardTable.id, cardId), eq(cardTable.bundleId, bundleId));
 
+  // `updatedAt` follows a card's text and nothing else. The rest of what this function can
+  // change — where the card sits, how wide it is drawn, which bundle or layer holds it — is
+  // arrangement rather than revision, and leaves the timestamp alone. See the column's own
+  // note in `schema.ts`, and `updateProjectCardPositions` below, which writes positions by
+  // the hundred and likewise does not bump it.
+  //
+  // Such an update has nothing to read and nothing to decide, so it stays the single
+  // statement it has always been rather than paying for a transaction to wrap it: the board
+  // sends one of these per resize and per restack.
+  if (content === undefined) {
+    const updated = await db
+      .update(cardTable)
+      .set(fields)
+      .where(where)
+      .returning({ id: cardTable.id });
+    assertFound(updated, `Card cardId=${cardId}`);
+    return;
+  }
+
   return withTx(db, async (tx) => {
-    // `updatedAt` follows a card's text and nothing else. The rest of what this function can
-    // change — where the card sits, how wide it is drawn, which bundle or layer holds it —
-    // is arrangement rather than revision, and leaves the timestamp alone. See the column's
-    // own note in `schema.ts`, and `updateProjectCardPositions` below, which writes positions
-    // by the hundred and likewise does not bump it.
-    //
     // Text that arrives unchanged is not a revision either, so the card is read and compared
     // rather than the caller trusted to have compared first: the board's composer sends the
     // textarea's contents on every save, edited or not, and a card re-saved untouched must
-    // not lengthen the interval `kozane card list --sort gap` reports. The read and the write
-    // share this transaction so a concurrent save cannot land between them and leave the
-    // timestamp deciding on text neither of them ended up storing.
+    // not lengthen the interval `kozane card list --sort gap` reports.
+    //
+    // The read and the write share a transaction so that the pair cannot half-happen: the
+    // BEGIN is deferred, so a competing writer that commits in between makes the upgrade to
+    // a write lock fail and this whole call raise, rather than the timestamp being decided
+    // on text neither statement ended up storing. Loud, and not silently wrong.
     //
     // A missing card reads as no change, and the update below then matches nothing and
     // raises through `assertFound` exactly as it did before.
-    if (content !== undefined) {
-      const current = await tx
-        .select({ content: cardTable.content })
-        .from(cardTable)
-        .where(where)
-        .get();
-      if (current !== undefined && current.content !== content) fields.updatedAt = new Date();
-    }
+    const current = await tx
+      .select({ content: cardTable.content })
+      .from(cardTable)
+      .where(where)
+      .get();
+    if (current !== undefined && current.content !== content) fields.updatedAt = new Date();
 
     const updated = await tx
       .update(cardTable)

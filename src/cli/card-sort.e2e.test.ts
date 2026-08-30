@@ -90,14 +90,40 @@ async function withDb(
  * most recently, `untouched` was added last and never edited, and `reconsidered` sits
  * between them by both timestamps while holding much the longest interval.
  *
+ * Each card's id is its text, so a failure names the card it is about, and the ids order
+ * the same way `sortCards` breaks a tie on them.
+ */
+const THREE_CARDS = [
+  { content: "oldest", created: "2026-01-01T00:00:00Z", updated: "2026-04-01T00:00:00Z" },
+  { content: "reconsidered", created: "2026-02-01T00:00:00Z", updated: "2026-03-01T00:00:00Z" },
+  { content: "untouched", created: "2026-03-01T00:00:00Z", updated: "2026-03-01T00:00:00Z" },
+] as const;
+
+/** The three orders `THREE_CARDS` produces, as `card list` prints them. */
+const BY_CREATED = [
+  "2026-01-01T00:00:00Z  oldest",
+  "2026-02-01T00:00:00Z  reconsidered",
+  "2026-03-01T00:00:00Z  untouched",
+];
+const BY_UPDATED = [
+  "2026-03-01T00:00:00Z  reconsidered",
+  "2026-03-01T00:00:00Z  untouched",
+  "2026-04-01T00:00:00Z  oldest",
+];
+const BY_GAP = ["0s  untouched", "28d  reconsidered", "90d  oldest"];
+
+/**
+ * Writes `THREE_CARDS` into an initialised workspace, optionally tied to a taskspace.
+ *
  * Inserted directly rather than through `kozane card add`. Each CLI call here is a `node
  * --import tsx` spawn of several seconds, and the histories these cards need would have to
  * be written over the top of whatever `card add` stamped anyway — so the spawns would buy
  * nothing but the flakiness of a test that starts eight processes. What the command under
- * test reads is the table, and this puts the table in a known state.
+ * test reads is the table, and this puts the table in a known state. `taskspace_id` is
+ * written the same way for the same reason: the CLI has no command that sets it, since a
+ * card is tied to a taskspace by the board rather than from a terminal.
  */
-async function seedThreeCards(root: string): Promise<void> {
-  cli(root, "init");
+async function seedThreeCards(root: string, taskspaceId: string | null = null): Promise<void> {
   await withDb(root, async (client) => {
     const [bundle, layer] = await Promise.all([
       client.execute("SELECT id FROM bundle LIMIT 1"),
@@ -106,22 +132,48 @@ async function seedThreeCards(root: string): Promise<void> {
     const bundleId = bundle.rows[0].id as string;
     const layerId = layer.rows[0].id as string;
     await client.batch(
-      [
-        { content: "oldest", created: "2026-01-01T00:00:00Z", updated: "2026-04-01T00:00:00Z" },
-        {
-          content: "reconsidered",
-          created: "2026-02-01T00:00:00Z",
-          updated: "2026-03-01T00:00:00Z",
-        },
-        { content: "untouched", created: "2026-03-01T00:00:00Z", updated: "2026-03-01T00:00:00Z" },
-      ].map(({ content, created, updated }) => ({
-        sql: `INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index, created_at, updated_at)
-              VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?)`,
-        args: [content, bundleId, layerId, content, seconds(created), seconds(updated)],
+      THREE_CARDS.map(({ content, created, updated }) => ({
+        sql: `INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, z_index, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
+        args: [
+          content,
+          bundleId,
+          layerId,
+          taskspaceId,
+          content,
+          seconds(created),
+          seconds(updated),
+        ],
       })),
       "write",
     );
   });
+}
+
+/** Puts every card of the workspace in one scope, which is what a scoped taskspace lists. */
+async function addEveryCardToScope(root: string, scopeId: string): Promise<void> {
+  await withDb(root, async (client) => {
+    await client.execute({
+      sql: "INSERT INTO scope_rel (scope_id, card_id) SELECT ?, id FROM card",
+      args: [scopeId],
+    });
+  });
+}
+
+/**
+ * The id of the one row in `table`, read from the database rather than from what the
+ * command printed: the CLI prints short ids, which resolve as arguments but are not what
+ * a foreign key wants.
+ */
+async function onlyId(root: string, table: "scope" | "taskspace"): Promise<string> {
+  let id = "";
+  await withDb(root, async (client) => {
+    const rows = await client.execute(`SELECT id FROM ${table}`);
+    if (rows.rows.length !== 1)
+      throw new Error(`Expected one ${table} row, found ${rows.rows.length}`);
+    id = rows.rows[0].id as string;
+  });
+  return id;
 }
 
 afterEach(() => {
@@ -131,40 +183,65 @@ afterEach(() => {
 describe("kozane card list --sort", () => {
   it("orders by each key, and reverses", async () => {
     const root = tempWorkspace();
+    cli(root, "init");
     await seedThreeCards(root);
 
-    expect(listed(root, "--sort", "created")).toEqual([
-      "2026-01-01T00:00:00Z  oldest",
-      "2026-02-01T00:00:00Z  reconsidered",
-      "2026-03-01T00:00:00Z  untouched",
-    ]);
-    expect(listed(root, "--sort", "updated")).toEqual([
-      "2026-03-01T00:00:00Z  reconsidered",
-      "2026-03-01T00:00:00Z  untouched",
-      "2026-04-01T00:00:00Z  oldest",
-    ]);
+    expect(listed(root, "--sort", "created")).toEqual(BY_CREATED);
+    expect(listed(root, "--sort", "updated")).toEqual(BY_UPDATED);
     // Neither of the orders above: the card never edited comes first and the one that stood
     // longest before being rewritten comes last.
-    expect(listed(root, "--sort", "gap")).toEqual([
-      "0s  untouched",
-      "28d  reconsidered",
-      "90d  oldest",
-    ]);
-    expect(listed(root, "--sort", "gap", "--reverse")).toEqual([
-      "90d  oldest",
-      "28d  reconsidered",
-      "0s  untouched",
-    ]);
+    expect(listed(root, "--sort", "gap")).toEqual(BY_GAP);
+    expect(listed(root, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
   }, 90_000);
 
   it("prints the listing unchanged when no sort is asked for", async () => {
     const root = tempWorkspace();
+    cli(root, "init");
     await seedThreeCards(root);
 
     // No time column: `<id>  <bundle>  (<x>, <y>)  <text>` is what it has always printed,
     // and what everything parsing this output expects.
     expect(listed(root).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
   }, 90_000);
+
+  /**
+   * The scope path: `card list` run in a taskspace directory lists that taskspace's scope
+   * members, through a different query from the project listing — one that selects the card
+   * columns wholesale rather than naming them. It has to sort and print identically, which
+   * is the claim `ordered` and `timeColumn` in `cardList` are there to make true.
+   */
+  it("sorts a scoped taskspace listing the way it sorts a project listing", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "scope", "add", "Sort scope");
+    const scopeId = await onlyId(root, "scope");
+    await seedThreeCards(root);
+    await addEveryCardToScope(root, scopeId);
+    cli(root, "taskspace", "create", "reading", "--scope", scopeId);
+    const taskspaceDir = join(root, "reading");
+
+    expect(listed(taskspaceDir, "--sort", "gap")).toEqual(BY_GAP);
+    expect(listed(taskspaceDir, "--sort", "created", "--reverse")).toEqual(
+      [...BY_CREATED].reverse(),
+    );
+    // And the column is still absent when nothing asked for it.
+    expect(listed(taskspaceDir).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
+  }, 120_000);
+
+  /**
+   * The third path: a taskspace with no scope lists the cards tied directly to it, and says
+   * so on stderr. Sorted by the same comparator, out of a third query.
+   */
+  it("sorts the cards tied directly to a taskspace that has no scope", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "loose", "--no-scope");
+    await seedThreeCards(root, await onlyId(root, "taskspace"));
+    const taskspaceDir = join(root, "loose");
+
+    expect(listed(taskspaceDir, "--sort", "updated")).toEqual(BY_UPDATED);
+    expect(listed(taskspaceDir, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
+  }, 120_000);
 
   it("refuses an unknown key and a --reverse with nothing to reverse", () => {
     const root = tempWorkspace();
@@ -174,6 +251,18 @@ describe("kozane card list --sort", () => {
       status: 1,
       stderr: expect.stringContaining("Must be one of: created, updated, gap."),
     });
+    expect(runCli(root, "card", "list", "--reverse")).toMatchObject({
+      status: 1,
+      stderr: expect.stringContaining("--reverse requires --sort."),
+    });
+  }, 60_000);
+
+  it("names the malformed argument outside a workspace, rather than the missing workspace", () => {
+    // Nothing about `--reverse` alone depends on there being a workspace to list, so the
+    // command is refused where it is typed rather than after a workspace lookup that was
+    // never going to make it valid.
+    const root = tempWorkspace();
+
     expect(runCli(root, "card", "list", "--reverse")).toMatchObject({
       status: 1,
       stderr: expect.stringContaining("--reverse requires --sort."),
