@@ -20,8 +20,8 @@ export default defineConfig({
           neutral: {
             border: { value: "#e6e6e6" },
             dim: { value: "#cccccc" },
-            muted: { value: "#adadad" },
-            subtle: { value: "#979797" },
+            muted: { value: "#6d6d6d" },
+            subtle: { value: "#646464" },
             bg: { value: "#e2e2e2" },
             faded: { value: "#b4b4b4" },
             placeholder: { value: "#b4b4b4" },
