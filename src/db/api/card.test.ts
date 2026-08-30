@@ -563,9 +563,9 @@ describe("cardsInProject", () => {
 describe("reassignCardsToBundle", () => {
   it("accepts an empty cardIds array", async () => {
     const { db, projectId, bundleId } = await setup();
-    await expect(
-      reassignCardsToBundle({ db, projectId, cardIds: [], bundleId }),
-    ).resolves.toEqual({ ok: true });
+    await expect(reassignCardsToBundle({ db, projectId, cardIds: [], bundleId })).resolves.toEqual({
+      ok: true,
+    });
   });
 
   it("reassigns cards to the target bundle", async () => {
@@ -642,7 +642,6 @@ describe("reassignCardsToLayer", () => {
 
     const result = await reassignCardsToLayer({ db, projectId, cardIds: [c1, c2], layerId });
     expect(result.ok).toBe(true);
-
 
     expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ layerId });
     expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ layerId });
