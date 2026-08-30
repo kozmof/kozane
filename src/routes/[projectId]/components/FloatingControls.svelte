@@ -38,11 +38,11 @@
 >
   <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
     {#if sidebarsVisible}
-      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-neutral-subtle)" />
+      <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-neutral-secondary)" />
       <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-neutral-icon)" />
     {:else}
       <rect x="0" y="0" width="4" height="10" rx="1" fill="var(--colors-neutral-icon)" />
-      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-neutral-subtle)" />
+      <rect x="5.5" y="0" width="8.5" height="10" rx="1" fill="var(--colors-neutral-secondary)" />
     {/if}
   </svg>
 </button>
