@@ -10,6 +10,9 @@ export default defineConfig({
         colors: {
           ink: {
             black: { value: "#1c1c1c" },
+            // Between black and content: dark enough to read as a filled state, short of the
+            // full-black weight that made the focused scope row heavier than the board.
+            charcoal: { value: "#222222" },
             light: { value: "#f1f1f1" },
             lighter: { value: "#f2f2f2" },
             canvas: { value: "#ececec" },
@@ -46,6 +49,8 @@ export default defineConfig({
           },
           state: {
             error: { value: "oklch(30% 0.18 18)" },
+            // The same signal read against ink.black — the dark `error` vanishes there.
+            errorBright: { value: "oklch(70% 0.17 18)" },
           },
         },
         fonts: {

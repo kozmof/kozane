@@ -58,6 +58,7 @@
 
   const flex1Class = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
   const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", flexShrink: "0" });
+  const countFocusedClass = css({ color: "neutral.faded" });
 
   const sideBtnBase = css({
     display: "flex",
@@ -67,7 +68,6 @@
     width: "100%",
     background: "transparent",
     border: "none",
-    borderRadius: "2px",
     cursor: "pointer",
     textAlign: "left",
     fontSize: "12.5px",
@@ -76,10 +76,42 @@
     whiteSpace: "nowrap",
     overflow: "hidden",
   });
-  const sideBtnActiveClass = css({ backgroundColor: "neutral.bg" });
+  // Focusing a scope dims every card outside it on the canvas, so the row that did it is
+  // inverted rather than merely tinted: at a tint the board looked filtered with nothing on
+  // the panel obviously accountable for it.
+  // Deliberately square: the card around this row rounds to 2px over a 1px border, so it
+  // clips its children to a 1px inner radius. A fill carrying its own 2px curve pulls away
+  // from that clip and leaves the panel showing through as a dot in each corner — visible
+  // only once the row is filled, which is why the radius sat here harmlessly for so long.
+  const sideBtnFocusedClass = css({ backgroundColor: "ink.charcoal", color: "ink.light" });
 
-  function sideBtn(active: boolean) {
-    return cx(sideBtnBase, active && sideBtnActiveClass);
+  function sideBtn(focused: boolean) {
+    return cx(sideBtnBase, focused && sideBtnFocusedClass);
+  }
+
+  const scopeDeleteBase = css({
+    position: "absolute",
+    right: "6px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "18px",
+    height: "18px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    borderRadius: "2px",
+    fontSize: "13px",
+    opacity: "0",
+    transition: "opacity 0.12s, color 0.12s",
+  });
+  const scopeDeleteClass = css({ color: "neutral.subtle", "&:hover": { color: "state.error" } });
+  const scopeDeleteFocusedClass = css({ color: "neutral.faded", "&:hover": { color: "state.errorBright" } });
+
+  function scopeDelete(focused: boolean) {
+    return cx("scope-delete", scopeDeleteBase, focused ? scopeDeleteFocusedClass : scopeDeleteClass);
   }
 
   const taskspaceRowClass = css({
@@ -126,6 +158,27 @@
   });
 </script>
 
+{#snippet scopeIcon()}
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+    <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
+    <path d="M3 5h4M3 3.5h2" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" stroke-linecap="round" />
+  </svg>
+{/snippet}
+
+<!-- Only ever drawn on the focused row, where the fill is ink.black, so it is stroked in
+     the row colour rather than the dim grey the resting icon uses. -->
+{#snippet eyeIcon()}
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+    <path
+      d="M0.7 5C2.15 2.75 3.6 1.95 5 1.95S7.85 2.75 9.3 5C7.85 7.25 6.4 8.05 5 8.05S2.15 7.25 0.7 5Z"
+      stroke="currentColor"
+      stroke-width="1.1"
+      stroke-linejoin="round"
+    />
+    <circle cx="5" cy="5" r="1.3" fill="currentColor" />
+  </svg>
+{/snippet}
+
 {#snippet taskspaceIcon()}
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
     <rect x="1" y="2.5" width="8" height="6" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
@@ -151,47 +204,28 @@
       {@const active = activeScope === scope.id}
       <div class={cx(
         css({ borderRadius: "2px", overflow: "hidden", border: "1px solid transparent" }),
-        active && css({ borderColor: "neutral.scroll" }),
+        active && css({ borderColor: "ink.charcoal" }),
       )}>
         <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .scope-delete": { opacity: "1" } })}>
           <button
             class={cx(sideBtn(active), css({ paddingRight: "28px" }))}
+            aria-pressed={active}
             onclick={() => (activeScope = active ? null : scope.id)}
           >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
-              <path d="M3 5h4M3 3.5h2" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" stroke-linecap="round" />
-            </svg>
+            <!-- The eye is the state, not decoration: this is the scope the board is
+                 currently being looked at through. -->
+            {#if active}{@render eyeIcon()}{:else}{@render scopeIcon()}{/if}
             <span class={flex1Class}>{scope.name}</span>
             <!-- This project's cards in the scope, not the scope's total: scopeRels is
                  built from this project's cards. A shared scope reads differently on each
                  board, which is the number each board can act on. -->
-            <span class={countClass}>
+            <span class={cx(countClass, active && countFocusedClass)}>
               {scopeRels.filter((r) => r.scopeId === scope.id).length}
             </span>
           </button>
           {#if !readonly}
           <button
-            class={cx("scope-delete", css({
-              position: "absolute",
-              right: "6px",
-              top: "50%",
-              transform: "translateY(-50%)",
-              width: "18px",
-              height: "18px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              borderRadius: "2px",
-              fontSize: "13px",
-              color: "neutral.subtle",
-              opacity: "0",
-              transition: "opacity 0.12s, color 0.12s",
-              "&:hover": { color: "state.error" },
-            }))}
+            class={scopeDelete(active)}
             title="Delete scope"
             onclick={(e) => { e.stopPropagation(); onDeleteScope(scope.id); }}
           >×</button>
@@ -207,7 +241,9 @@
               backgroundColor: allInScope ? "neutral.faded" : "ink.black",
               color: allInScope ? "ink.secondary" : "ink.light",
               border: "none",
-              borderTop: "1px solid token(colors.neutral.dim)",
+              // Both blocks are dark once the scope is focused, so the usual dim rule would
+              // read as a bright bar between them; the seam only has to out-light both fills.
+              borderTop: active ? "1px solid token(colors.neutral.muted)" : "1px solid token(colors.neutral.dim)",
               cursor: "pointer",
               fontSize: "11px",
               fontFamily: "inherit",
