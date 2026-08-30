@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
-import { runWorkspaceCommand } from "../lib/workspace-command.js";
+import { fail, runWorkspaceCommand } from "../lib/workspace-command.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard, addCards, reassignCardsToLayer } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
@@ -12,7 +12,13 @@ import {
 } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
-import { sortCards, sortColumn, type CardSortKey, type CardTimes } from "../lib/card-sort.js";
+import {
+  compareIds,
+  sortCards,
+  sortColumn,
+  type CardSortKey,
+  type CardTimes,
+} from "../lib/card-sort.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
@@ -37,14 +43,18 @@ type CardAddOptions = Omit<CardOptions, "taskspace"> & {
 };
 type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
 
-type ListedCard = {
+/** What {@link printCards} needs of a card: the fields every listing prints. */
+type PrintableCard = {
   id: string;
   bundle: string;
   content: string;
   posX: number;
   posY: number;
 };
-type DistanceListedCard = ListedCard & { distance: number };
+/** What `card list` selects on every one of its three paths — printable, plus what `--sort` reads. */
+type ListedCard = PrintableCard & CardTimes;
+/** What `card nearest` prints: printable, plus the distance it ordered by. */
+type NearestCard = PrintableCard & { distance: number };
 
 async function resolveBundleId(db: DB, projectId: string, requestedId?: string): Promise<string> {
   if (requestedId) {
@@ -96,7 +106,7 @@ async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
  * `createdAt` cannot be handed cards that carry no timestamps, which asking for a sort key
  * beside a loosely-typed union of card shapes allowed.
  */
-async function printCards<T extends ListedCard>(
+async function printCards<T extends PrintableCard>(
   db: DB,
   cards: T[],
   column?: (card: T) => string,
@@ -331,15 +341,14 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(eq(bundleTable.projectId, origin.projectId));
-    // The id breaks equal distances the same way `sortCards` breaks equal timestamps, and
-    // for the same reason: `localeCompare` orders by the locale the CLI happens to run in,
-    // so two cards the same distance away could swap places between machines.
-    const sorted: DistanceListedCard[] = cards
+    // Equal distances are broken by `compareIds`, which is what `sortCards` breaks equal
+    // timestamps with: the reason it is not `localeCompare` is written there once.
+    const sorted: NearestCard[] = cards
       .map((card) => ({
         ...card,
         distance: Math.hypot(card.posX - origin.posX, card.posY - origin.posY),
       }))
-      .sort((a, b) => a.distance - b.distance || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      .sort((a, b) => a.distance - b.distance || compareIds(a.id, b.id));
     await printCards(db, sorted, (card) => card.distance.toFixed(2));
   });
 }
@@ -348,16 +357,21 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
   // Ahead of `runWorkspaceCommand`, because these two say nothing about the workspace:
   // `kozane card list --reverse` run outside one is a malformed command wherever it was
   // typed, and should say so rather than report the missing workspace it never got to.
+  //
+  // Reported through `fail` rather than thrown, because outside `runWorkspaceCommand` there
+  // is nothing to catch them: commander does not await this action, so a throw from here
+  // reaches the user as an unhandled rejection and a stack trace instead of the one-line
+  // `Error: ...` every other refusal from this file prints.
   const { sort, reverse } = options;
   if (options.taskspace && (options.project || options.bundle))
-    throw new Error("--taskspace cannot be combined with --project or --bundle.");
+    fail(new Error("--taskspace cannot be combined with --project or --bundle."));
   // Without a key there is no order to reverse: the unsorted listing comes back in
   // whatever order SQLite hands the rows over, which is not an order anything promises.
-  if (reverse && !sort) throw new Error("--reverse requires --sort.");
+  if (reverse && !sort) fail(new Error("--reverse requires --sort."));
 
   // Both applied on every path below, so listing from a taskspace directory sorts the same
   // way — and prints the same column — as listing a project does.
-  const ordered = <T extends CardTimes>(cards: T[]): T[] =>
+  const ordered = <T extends ListedCard>(cards: T[]): T[] =>
     sort ? sortCards(cards, sort, reverse) : cards;
   const timeColumn = sort ? (card: CardTimes) => sortColumn(card, sort) : undefined;
 

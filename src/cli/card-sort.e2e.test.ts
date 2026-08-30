@@ -243,18 +243,38 @@ describe("kozane card list --sort", () => {
     expect(listed(taskspaceDir, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
   }, 120_000);
 
+  /**
+   * The whole of stderr, not a substring of it.
+   *
+   * These two refusals are raised before `runWorkspaceCommand`, which is the one place the
+   * CLI turns a throw into a one-line message and an exit code. A throw from outside it
+   * reaches the user as an unhandled rejection: the message is still in there, so an
+   * assertion that merely looked for the message would pass on a stack trace naming a line
+   * of `card.ts`. Matching the whole stream is what tells the two apart.
+   */
+  function refusal(root: string, ...args: string[]): string {
+    const result = runCli(root, ...args);
+    expect(result.status).toBe(1);
+    return result.stderr.trim();
+  }
+
   it("refuses an unknown key and a --reverse with nothing to reverse", () => {
     const root = tempWorkspace();
     cli(root, "init");
 
-    expect(runCli(root, "card", "list", "--sort", "bogus")).toMatchObject({
-      status: 1,
-      stderr: expect.stringContaining("Must be one of: created, updated, gap."),
-    });
-    expect(runCli(root, "card", "list", "--reverse")).toMatchObject({
-      status: 1,
-      stderr: expect.stringContaining("--reverse requires --sort."),
-    });
+    expect(refusal(root, "card", "list", "--sort", "bogus")).toContain(
+      "Must be one of: created, updated, gap.",
+    );
+    expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
+  }, 60_000);
+
+  it("refuses a --taskspace combined with --project the same way", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(refusal(root, "card", "list", "--taskspace", ".", "--project", "abc")).toBe(
+      "Error: --taskspace cannot be combined with --project or --bundle.",
+    );
   }, 60_000);
 
   it("names the malformed argument outside a workspace, rather than the missing workspace", () => {
@@ -263,10 +283,7 @@ describe("kozane card list --sort", () => {
     // never going to make it valid.
     const root = tempWorkspace();
 
-    expect(runCli(root, "card", "list", "--reverse")).toMatchObject({
-      status: 1,
-      stderr: expect.stringContaining("--reverse requires --sort."),
-    });
+    expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
   }, 60_000);
 
   it("backfills cards that predate the timestamp columns", async () => {
@@ -309,5 +326,37 @@ describe("kozane card list --sort", () => {
     const [line] = listed(root, "--sort", "created");
     const createdAt = new Date(line.split("  ")[0]);
     expect(createdAt.getTime()).toBeGreaterThan(Date.now() - 10 * 60_000);
+  }, 90_000);
+
+  /**
+   * The one way a card can carry a history it never had. Migration 0011 had to give both
+   * columns a literal `DEFAULT 0` to add them NOT NULL, and SQLite cannot drop a column
+   * default afterwards — so an `INSERT INTO card` naming neither column succeeds at the
+   * epoch instead of failing. Nothing in the app writes such a row; hand-written SQL against
+   * the workspace database does, and `doctor` is where that should be visible.
+   */
+  it("reports a card left at the epoch by an insert that named neither column", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(cli(root, "doctor")).toContain("✓  Card timestamps written");
+
+    await withDb(root, async (client) => {
+      const [bundle, layer] = await Promise.all([
+        client.execute("SELECT id FROM bundle LIMIT 1"),
+        client.execute("SELECT id FROM layer LIMIT 1"),
+      ]);
+      await client.execute({
+        sql: `INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index)
+              VALUES ('epoch', ?, ?, 'inserted by hand', 0, 0, 0)`,
+        args: [bundle.rows[0].id, layer.rows[0].id],
+      });
+    });
+
+    const result = runCli(root, "doctor");
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("✗  Card timestamps written — 1 card stamped at the epoch");
+    // And the listing it warns about does read 1970, which is what makes it worth reporting.
+    expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
   }, 90_000);
 });

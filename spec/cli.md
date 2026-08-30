@@ -443,6 +443,7 @@ Checks (in order):
 | `config.json` valid           | parses as valid JSON with expected shape           |
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
 | DB migrations current         | migration status is `current`                      |
+| Card timestamps written       | no card carries an epoch timestamp                 |
 | Port available                | configured port not already in use                 |
 
 Exit code `0` if all checks pass, `1` otherwise.
@@ -455,11 +456,19 @@ Output:
   ✓  config.json valid
   ✓  kozane.db readable/writable
   ✓  DB migrations current
+  ✓  Card timestamps written
   ✓  Port 17173 available
 ```
 
 A failed `config.json valid` check points at `kozane doctor config`, which reports what
 is actually wrong. `doctor` itself keeps running through a broken config.
+
+`Card timestamps written` runs only when the migrations are current, since it reads columns
+that migration 0011 adds. It counts cards whose `created_at` or `updated_at` is the epoch,
+which is what a hand-written `INSERT INTO card` naming neither column leaves behind — the
+columns carry a `DEFAULT 0` that SQLite will not let the schema drop. Every insert the app
+makes writes both, so a non-zero count means the database was edited by hand and
+`kozane card list --sort` will report those cards as 1970.
 
 ---
 
@@ -860,6 +869,12 @@ d981fa1  General  (0, 0)  0s  A card added and left alone
 
 Cards created before this option existed carry the timestamp of the migration that added
 the columns, so they read as never since edited until their text is next changed.
+
+Both timestamps are read by the CLI only. The board is not sent them and cannot order or
+display by them, and `kozane net ssg generate` output does not contain them.
+
+A card whose timestamps were never written — which only a hand-written `INSERT INTO card`
+naming neither column can produce — is reported by `kozane doctor` and lists as `1970`.
 
 Squashing a card replaces it with one new card per piece, on the board and through
 `kozane card squash` alike. The pieces are created when the squash ran, not when the text

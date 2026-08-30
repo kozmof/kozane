@@ -350,9 +350,7 @@ export async function reassignLayerCards({
   await db.update(cardTable).set({ layerId: toLayerId }).where(eq(cardTable.layerId, fromLayerId));
 }
 
-type UpdateCard = {
-  // `DB` rather than `AnyDB`, like every other writer here that opens a transaction.
-  db: DB;
+type UpdateCard = NeedsDB & {
   cardId: string;
   bundleId: string;
   newBundleId?: string;
@@ -370,9 +368,36 @@ type UpdateCard = {
 type CardUpdate = Partial<
   Pick<
     typeof cardTable.$inferInsert,
-    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId" | "updatedAt"
+    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId"
   >
->;
+> & {
+  /**
+   * An expression rather than a `Date`, because whether this column moves at all is decided
+   * by the row being written — see {@link contentUpdatedAt}.
+   */
+  updatedAt?: SQL;
+};
+
+/**
+ * What to write to `updated_at` alongside a new `content`: the moment, but only if the text
+ * actually changes, and otherwise the value the row already holds.
+ *
+ * The comparison is in the statement rather than in a read before it. Text that arrives
+ * unchanged is not a revision — the board's composer sends the textarea's contents on every
+ * save, edited or not, and a card re-saved untouched must not lengthen the interval `kozane
+ * card list --sort gap` reports — so something has to compare it. Comparing in the `SET`
+ * clause makes the compare and the write one statement: no transaction to wrap them in, no
+ * second round trip on a path the board takes on every save, and no window in which a
+ * competing writer can leave the timestamp decided on text neither statement stored.
+ *
+ * SQLite evaluates a `SET` expression against the pre-update row, so `card.content` here is
+ * the text being replaced. `<>` needs no null guard: the column is NOT NULL. `unixepoch()`
+ * returns seconds, which is what `integer({ mode: "timestamp" })` stores and what migration
+ * 0011 wrote.
+ */
+function contentUpdatedAt(content: string): SQL {
+  return sql`CASE WHEN ${cardTable.content} <> ${content} THEN unixepoch() ELSE ${cardTable.updatedAt} END`;
+}
 
 export async function updateCard({
   db,
@@ -387,7 +412,15 @@ export async function updateCard({
   width,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
-  if (content !== undefined) fields.content = content;
+  // `updatedAt` follows a card's text and nothing else. The rest of what this function can
+  // change — where the card sits, how wide it is drawn, which bundle or layer holds it — is
+  // arrangement rather than revision, and leaves the timestamp alone. See the column's own
+  // note in `schema.ts`, and `updateProjectCardPositions` below, which writes positions by
+  // the hundred and likewise does not bump it.
+  if (content !== undefined) {
+    fields.content = content;
+    fields.updatedAt = contentUpdatedAt(content);
+  }
   if (posX !== undefined) fields.posX = posX;
   if (posY !== undefined) fields.posY = posY;
   if (zIndex !== undefined) fields.zIndex = zIndex;
@@ -396,54 +429,12 @@ export async function updateCard({
   if (layerId !== undefined) fields.layerId = layerId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
 
-  const where = and(eq(cardTable.id, cardId), eq(cardTable.bundleId, bundleId));
-
-  // `updatedAt` follows a card's text and nothing else. The rest of what this function can
-  // change — where the card sits, how wide it is drawn, which bundle or layer holds it — is
-  // arrangement rather than revision, and leaves the timestamp alone. See the column's own
-  // note in `schema.ts`, and `updateProjectCardPositions` below, which writes positions by
-  // the hundred and likewise does not bump it.
-  //
-  // Such an update has nothing to read and nothing to decide, so it stays the single
-  // statement it has always been rather than paying for a transaction to wrap it: the board
-  // sends one of these per resize and per restack.
-  if (content === undefined) {
-    const updated = await db
-      .update(cardTable)
-      .set(fields)
-      .where(where)
-      .returning({ id: cardTable.id });
-    assertFound(updated, `Card cardId=${cardId}`);
-    return;
-  }
-
-  return withTx(db, async (tx) => {
-    // Text that arrives unchanged is not a revision either, so the card is read and compared
-    // rather than the caller trusted to have compared first: the board's composer sends the
-    // textarea's contents on every save, edited or not, and a card re-saved untouched must
-    // not lengthen the interval `kozane card list --sort gap` reports.
-    //
-    // The read and the write share a transaction so that the pair cannot half-happen: the
-    // BEGIN is deferred, so a competing writer that commits in between makes the upgrade to
-    // a write lock fail and this whole call raise, rather than the timestamp being decided
-    // on text neither statement ended up storing. Loud, and not silently wrong.
-    //
-    // A missing card reads as no change, and the update below then matches nothing and
-    // raises through `assertFound` exactly as it did before.
-    const current = await tx
-      .select({ content: cardTable.content })
-      .from(cardTable)
-      .where(where)
-      .get();
-    if (current !== undefined && current.content !== content) fields.updatedAt = new Date();
-
-    const updated = await tx
-      .update(cardTable)
-      .set(fields)
-      .where(where)
-      .returning({ id: cardTable.id });
-    assertFound(updated, `Card cardId=${cardId}`);
-  });
+  const updated = await db
+    .update(cardTable)
+    .set(fields)
+    .where(and(eq(cardTable.id, cardId), eq(cardTable.bundleId, bundleId)))
+    .returning({ id: cardTable.id });
+  assertFound(updated, `Card cardId=${cardId}`);
 }
 
 export type CardPositionUpdate = {

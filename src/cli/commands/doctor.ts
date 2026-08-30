@@ -1,6 +1,9 @@
 import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createConnection } from "node:net";
+import { count, eq, or } from "drizzle-orm";
+import { createDb } from "../../db/client.js";
+import { cardTable } from "../../db/schema.js";
 import { findWorkspaceRoot } from "../../db/internal/config.js";
 import {
   KOZANE_DIR,
@@ -16,6 +19,34 @@ import { getMigrationStatus } from "../lib/db.js";
 import { diagnoseConfig } from "../lib/config-diagnostics.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
+
+/**
+ * The value a card lands on when its timestamps are not written at all.
+ *
+ * Migration 0011 had to give `created_at` and `updated_at` a literal `DEFAULT 0` in order to
+ * add them NOT NULL to a table with rows in it, and SQLite cannot drop a column default
+ * afterwards. So an `INSERT INTO card` that names neither column succeeds and lands the row
+ * at the epoch rather than failing — the one way a card can carry a history it never had.
+ * Nothing in the app writes such a row: inserts go through `cardTable`'s `$defaultFn` and
+ * `db import` names both columns. What reaches here is hand-written SQL against the
+ * workspace database, and `kozane card list --sort created` would report it as 1970.
+ */
+const CARD_TIMESTAMP_EPOCH = new Date(0);
+
+/** How many cards carry {@link CARD_TIMESTAMP_EPOCH} in either column. */
+async function epochStampedCards(url: string): Promise<number> {
+  const db = await createDb(url);
+  const [row] = await db
+    .select({ total: count() })
+    .from(cardTable)
+    .where(
+      or(
+        eq(cardTable.createdAt, CARD_TIMESTAMP_EPOCH),
+        eq(cardTable.updatedAt, CARD_TIMESTAMP_EPOCH),
+      ),
+    );
+  return row?.total ?? 0;
+}
 
 function check(label: string, ok: boolean, detail?: string): Check {
   return { label, ok, detail };
@@ -101,8 +132,8 @@ export async function doctor(): Promise<void> {
   );
 
   // 6. DB migration status
+  let migrationOk = false;
   if (dbOk) {
-    let migrationOk = false;
     let detail: string | undefined;
     try {
       const status = await getMigrationStatus(dbUrl(resolve(root)));
@@ -123,7 +154,27 @@ export async function doctor(): Promise<void> {
     checks.push(check("DB migrations current", migrationOk, detail));
   }
 
-  // 7. Port available
+  // 7. Card timestamps written rather than defaulted. Only once the migrations are current,
+  // because before 0011 has run there are no columns to read — a workspace that needs
+  // migrating is already reported by the check above, and asking this of it would report the
+  // same problem a second time in a more confusing way.
+  if (dbOk && migrationOk) {
+    let stampOk = false;
+    let detail: string | undefined;
+    try {
+      const stale = await epochStampedCards(dbUrl(resolve(root)));
+      stampOk = stale === 0;
+      if (stale > 0)
+        detail =
+          `${plural(stale, "card")} stamped at the epoch, likely inserted by hand; ` +
+          "kozane card list --sort created reports them as 1970";
+    } catch (e) {
+      detail = e instanceof Error ? e.message : String(e);
+    }
+    checks.push(check("Card timestamps written", stampOk, detail));
+  }
+
+  // 8. Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);
