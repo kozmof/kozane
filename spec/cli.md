@@ -105,6 +105,14 @@ dot-entries such as `.git` and `.env` are never read, symlinks are never followe
 file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
 full is reported as such rather than quietly half-read, and each reason is reported as
 itself: a file larger than one file may be is not described as one that could not be read.
+A reason that is about particular files names a few of them, since "some files could not be
+read" describes a taskspace with one bad file and one that is wholly unreadable identically
+and gives neither reader anywhere to look.
+
+The cards are bounded too, at a hundred thousand hits for one gather, and say so the same
+way. It is not a ceiling a workspace of notes comes near; it is there because the tags on
+cards and the tags in files fill the same list, and a list that has been cut without saying
+so makes every count taken from it read as exact when it is a floor.
 
 `tag show` prints at most 200 card hits and at most 200 file hits, the same two ceilings the
 browser's index draws, and says so when it has cut a list. The two are separate because the
@@ -112,8 +120,8 @@ hits arrive cards first, so one ceiling across both would print no files at all 
 written on hundreds of cards. The counts in `tag list` are always of everything.
 
 Generated and vendored directories are not walked, at any depth: `node_modules`,
-`bower_components`, `vendor`, `build`, `dist`, `out`, `target`, `coverage`, and
-`__pycache__`. They are not reported as a truncation, because a taskspace read to the end of
+`bower_components`, `vendor`, `build`, `dist`, `out`, `target`, `coverage`, `__pycache__`,
+and `tmp`. They are not reported as a truncation, because a taskspace read to the end of
 everything the scan covers *was* read in full — they are simply outside it, as dot-entries
 are. A `.gitignore` is not consulted: it answers a different question, varies per repository,
 and routinely covers notes someone would want tagged.
@@ -847,8 +855,10 @@ named afterwards, in the same words the browser's tag index uses, so a tag missi
 list is not read as a tag nobody wrote:
 
 ```
-Note: notes was not read in full — some files were larger than the scan had budget left for.
+Note: notes was not read in full — some files were larger than the scan had budget left for (for example media/talk.mp4, logs/).
 ```
+
+A path ending in `/` is a directory that could not be listed rather than a file of that name.
 
 The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
 and re-read every file to reach the answer the first one reached. Nothing is trusted from it

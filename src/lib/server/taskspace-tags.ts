@@ -5,6 +5,7 @@ import {
   TAG_SCAN_NODES_MAX,
   TAG_SCAN_SKIP_DIRS,
   TAG_SCAN_TOTAL_BYTES_MAX,
+  TAG_SCAN_TRUNCATED_PATHS_MAX,
   TAG_SCAN_WORKSPACE_BYTES_MAX,
   TAG_SCAN_WORKSPACE_NODES_MAX,
   TASKSPACE_FILE_BYTES_MAX,
@@ -85,6 +86,22 @@ export type TaskspaceTagScan = {
    * not there when it may well be.
    */
   truncated: TagScanTruncation[];
+  /**
+   * A few of the paths behind {@link TaskspaceTagScan.truncated}, relative to the taskspace,
+   * or empty where the scan read everything.
+   *
+   * Because a reason on its own is not somewhere to look. "Some files could not be read" is
+   * true of a taskspace with one permission-denied file and of one that is entirely
+   * inaccessible, and a reader told the first has no way to find the file and no reason to
+   * believe the rest of the answer. A directory is named with a trailing `/`, so a path that
+   * could not be listed is not read as a file of that name.
+   *
+   * A sample, capped at {@link TAG_SCAN_TRUNCATED_PATHS_MAX}, and never the whole set — see
+   * `noteTruncatedPath`. Not every reason has a path: `nodes`, `depth`, and `hits` are
+   * ceilings on the walk rather than facts about a file, so a scan that stopped only at those
+   * names nothing.
+   */
+  paths: string[];
   /**
    * Whether this scan learned anything the cache did not already hold — a file read for the
    * first time or read again after a change, or a stale entry dropped.
@@ -285,12 +302,40 @@ type Scan = {
   hits: TagHit[];
   truncated: Set<TagScanTruncation>;
   /** Every file path the walk reached, whether or not it read one. What {@link pruneStale}
-   *  measures a complete walk against to find entries for files that are no longer there. */
+   *  measures a completed directory against to find entries for files that are no longer
+   *  there. */
   seen: Set<string>;
+  /**
+   * The directories this walk listed to the end, by path within the taskspace — `""` for the
+   * taskspace root.
+   *
+   * Per directory rather than one flag for the whole walk, and that is the whole of what
+   * makes pruning work on a large taskspace. A directory is here when its listing succeeded,
+   * was not itself cut short, and its every entry was visited; nothing about what happened
+   * *below* it bears on that, since a child that stopped at a budget still leaves this
+   * directory's own entries fully enumerated. So "not seen, and its directory was completed"
+   * means gone, which is the only thing {@link pruneStale} needs to be true.
+   */
+  completed: Set<string>;
+  /** The first few paths behind {@link Scan.truncated}, for a reader who has to go and find
+   *  the file the scan is complaining about. See {@link TaskspaceTagScan.paths}. */
+  paths: string[];
   /** Whether this walk read a file it did not already hold. What decides whether there is
    *  anything new to persist — see `openTagCache` in `tag-index.ts`. */
   parsed: boolean;
 };
+
+/**
+ * Records a path the scan stopped at, up to {@link TAG_SCAN_TRUNCATED_PATHS_MAX} of them.
+ *
+ * A sample and not a list: the point is to give the reader somewhere to look, and a taskspace
+ * with ten thousand unreadable files does not become clearer for naming all of them — it
+ * becomes a truncation notice that is itself too large to read, carried through the cache and
+ * out to the page.
+ */
+function noteTruncatedPath(scan: Scan, path: string): void {
+  if (scan.paths.length < TAG_SCAN_TRUNCATED_PATHS_MAX) scan.paths.push(path);
+}
 
 // `Set<string>` explicitly: `TAG_SCAN_SKIP_DIRS` is `as const`, so the names stay a literal
 // union for anything that wants to enumerate them, and inferring that union here would leave
@@ -312,9 +357,18 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     // moved since the row naming it was written. One such taskspace must not take a page
     // load down with it, so it is reported and skipped.
     scan.truncated.add("unreadable");
+    // The directory itself, which is what could not be read here — every other path noted is
+    // a file. Named as a directory so the reader is not sent looking for a file of that name.
+    noteTruncatedPath(scan, `${subPath || "."}/`);
     return;
   }
-  if (listing.truncated) scan.truncated.add("entries");
+  // Cut short, so its entries are not all here and nothing below may conclude that a file it
+  // did not see is gone. That is why this returns short of the `completed` mark at the foot
+  // rather than merely recording a reason.
+  if (listing.truncated) {
+    scan.truncated.add("entries");
+    noteTruncatedPath(scan, `${subPath || "."}/`);
+  }
 
   for (const entry of listing.entries) {
     if (scan.budget.nodes <= 0) {
@@ -346,6 +400,7 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     const found = fileTagHits(scan.baseDir, childPath, entry, scan.budget);
     if ("skipped" in found) {
       scan.truncated.add(found.skipped);
+      noteTruncatedPath(scan, childPath);
       continue;
     }
     if (found.parsed) scan.parsed = true;
@@ -365,28 +420,55 @@ function walk(scan: Scan, subPath: string, depth: number): void {
       });
     }
   }
+
+  // Every entry visited and the listing was whole, so this directory holds exactly the files
+  // named in `seen` under it. Reached only by falling out of the loop: every ceiling above
+  // returns instead, which is what keeps a directory the walk abandoned partway out of the
+  // set. A `listing.truncated` above has already returned for the same reason.
+  if (!listing.truncated) scan.completed.add(subPath);
+}
+
+/** The directory a path within a taskspace sits in — `""` for one at the root, matching how
+ *  {@link Scan.completed} names the root the walk starts at. */
+function parentDir(subPath: string): string {
+  const cut = subPath.lastIndexOf("/");
+  return cut === -1 ? "" : subPath.slice(0, cut);
 }
 
 /**
- * Forgets cached files this walk did not reach.
+ * Forgets cached files the walk did not reach, in the directories it listed to the end.
  *
- * Only for a walk that finished, which is what the `truncated` guard in the caller is for: a
- * scan that stopped at a budget did not reach directories that are still there, and treating
- * "not seen" as "no longer there" would throw away good entries and re-read them next time —
- * the opposite of what the cache is for.
+ * Per directory rather than per walk, which is the difference between pruning usually and
+ * pruning almost never. The guard was one flag for the whole scan — a truncation anywhere
+ * meant nothing anywhere was pruned — and its reasoning was right about the danger and wrong
+ * about the scope: a scan that stopped at a budget did not reach directories that are still
+ * there, so treating "not seen" as "gone" would throw away good entries. But that only ever
+ * applied to the directories it did not finish. A taskspace large enough to hit a ceiling is
+ * exactly the one whose entries most need dropping, and it was the one that never dropped
+ * any: on Kozane's own checkout every scan reports a truncation, so every scan skipped this
+ * entirely and the map grew with each renamed file for the life of the process — the
+ * unbounded growth this function exists to prevent, reintroduced by its own guard.
+ *
+ * {@link Scan.completed} is what makes the narrower question answerable, and the two
+ * conditions together are exact: a file whose directory was enumerated in full and which was
+ * not among what that enumeration named is not there any more.
  *
  * Without this the map only ever grew. A file renamed, deleted, or moved left its entry
  * behind for the life of the process, and `exportTaskspaceTagCache` wrote every one of them
  * to disk, so a long-lived server against a working tree accumulated the tags of every file
  * that had ever been there.
  */
-function pruneStale(baseDir: string, seen: Set<string>): boolean {
+function pruneStale(baseDir: string, seen: Set<string>, completed: Set<string>): boolean {
   const entries = fileCache.get(baseDir);
   if (!entries) return false;
 
   let pruned = false;
   for (const subPath of entries.keys()) {
     if (seen.has(subPath)) continue;
+    // Not seen, but nothing here established that anyone looked: the directory it sits in was
+    // never listed, or was listed and cut short. Its entry is kept, which costs one stale
+    // record and never a re-read of a file that is still there.
+    if (!completed.has(parentDir(subPath))) continue;
     entries.delete(subPath);
     pruned = true;
   }
@@ -426,6 +508,8 @@ export function scanTaskspaceTags(
     hits: [],
     truncated: new Set(),
     seen: new Set(),
+    completed: new Set(),
+    paths: [],
     parsed: false,
   };
 
@@ -439,8 +523,12 @@ export function scanTaskspaceTags(
     pool.nodes -= nodes - scan.budget.nodes;
   }
 
-  const complete = scan.truncated.size === 0;
-  const pruned = complete && pruneStale(baseDir, scan.seen);
+  const pruned = pruneStale(baseDir, scan.seen, scan.completed);
 
-  return { hits: scan.hits, truncated: [...scan.truncated], changed: scan.parsed || pruned };
+  return {
+    hits: scan.hits,
+    truncated: [...scan.truncated],
+    paths: scan.paths,
+    changed: scan.parsed || pruned,
+  };
 }

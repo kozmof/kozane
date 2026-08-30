@@ -437,10 +437,14 @@ works under: dot-entries like `.git` and `.env` are never read, symlinks are nev
 followed, and a file that is not text or is over 1 MB is skipped. Files that have not
 changed since the last read are not read again, so coming back to the page is quick. A
 taskspace too large to read in full says so at the bottom of the list, rather than leaving
-you to think a tag is missing.
+you to think a tag is missing. When the reason is about particular files it names a few of
+them, so you can go and look; a name ending in `/` is a directory that could not be listed.
+The cards have a ceiling of their own — a hundred thousand hits for one gather — and it is
+reported in the same place, for the same reason.
 
 Generated and vendored directories are left out as well — `node_modules`, `build`, `dist`,
-`out`, `target`, `coverage`, `vendor`, `bower_components`, and `__pycache__`, at any depth.
+`out`, `target`, `coverage`, `vendor`, `bower_components`, `__pycache__`, and `tmp`, at any
+depth.
 They hold no text anyone wrote a tag in, and they are large enough that scanning them means
 running out of budget before reaching the files you work on. A `.gitignore` is deliberately
 not consulted: what you would rather not commit and what you would rather not tag are

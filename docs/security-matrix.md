@@ -199,7 +199,7 @@ tags one taskspace may yield, since a file can hold far more tags per byte read
 than any byte budget implies. It says when it stopped at any of them. It also
 does not descend into generated or vendored
 directories — `node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
-`vendor`, `bower_components`, `__pycache__` — which narrows what is read further
+`vendor`, `bower_components`, `__pycache__`, `tmp` — which narrows what is read further
 still, in the same direction as every other rule here.
 
 What that scan gathered is kept in `.kozane/tag-index.json` so the next page load
@@ -207,10 +207,17 @@ does not repeat it, and the lines it quotes are kept with it. That is a file
 inside the workspace holding excerpts of files that may sit outside it — a
 taskspace created with `kozane taskspace create --dir <path>` can point anywhere
 the server user can read. It is a cache and never a record: deleting it costs one
-slow load, and it is rebuilt from the files themselves. Past 64 MB it is ignored
+slow load, and it is rebuilt from the files themselves. Past 16 MB it is ignored
 and rebuilt rather than read, since reading it happens while a page load waits.
-Treat it as you would the taskspaces it summarizes, and keep it out of source
-control if their contents should not be there either.
+Treat it as you would the taskspaces it summarizes.
+
+`kozane init` writes a `.gitignore` inside `.kozane/` that ignores the whole
+directory, so a workspace created inside a checkout does not commit this cache —
+nor the API key or this machine's runtime state, which live beside it. It is one
+file inside the workspace directory rather than a line appended to the
+repository's own `.gitignore`, so removing the workspace removes it too. A
+workspace that predates this, or one whose directory was created by hand, does
+not have it; add it if the repository is shared.
 
 **Writing** replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path

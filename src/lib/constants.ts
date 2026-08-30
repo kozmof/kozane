@@ -287,6 +287,37 @@ export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
 export const TAG_SCAN_HITS_MAX = 100_000;
 
 /**
+ * How many hits one gather takes from the cards of a workspace before it stops.
+ *
+ * {@link TAG_SCAN_HITS_MAX} for the other source, and it was missing — the file walk was
+ * bounded three ways over and the card query was bounded not at all, though both ends fill
+ * the same array, are serialized into the same cache file, and are sent to the same page. A
+ * card is bounded in length by `ui.contentMax` and a workspace is bounded in cards by nothing
+ * whatever, so "every tagged card in the workspace" is not a quantity this code knows.
+ *
+ * The asymmetry was easy to miss because the failures differ. The file side fell over loudly
+ * — `RangeError` out of a spread, recorded above — while the card side merely grows: a
+ * larger array, a larger tree built from it, a larger payload, and a cache file that
+ * eventually crosses {@link TAG_CACHE_BYTES_MAX} and is silently never written again, so the
+ * workspace pays a cold gather on every page load with nothing saying why.
+ *
+ * Set to the same number as the file side, since it answers the same question about the same
+ * array. A hit is a tag someone wrote, and a hundred thousand of them is past the point where
+ * a person is reading an index tag by tag.
+ */
+export const TAG_CARD_HITS_MAX = 100_000;
+
+/**
+ * How many of the paths behind a taskspace's truncation are carried with it.
+ *
+ * A sample, because the reason alone leaves the reader nowhere to look, and the whole set
+ * would be a notice too large to read — carried through the cache and out to the page, for a
+ * taskspace whose every file is unreadable. Enough to recognize the shape of the problem: one
+ * stray video beside the notes reads differently from five files under the same directory.
+ */
+export const TAG_SCAN_TRUNCATED_PATHS_MAX = 5;
+
+/**
  * Directory names a tag scan does not walk into, at any depth.
  *
  * The same kind of rule as skipping dot-entries, and it earns its place the same way: these
@@ -318,6 +349,12 @@ export const TAG_SCAN_SKIP_DIRS = [
   "target",
   "coverage",
   "__pycache__",
+  // Scratch output rather than a build product, and it earns its place the same way: measured
+  // on Kozane's own checkout, `tmp` was the directory that blew the entry cap and made every
+  // scan of the repository report itself as not read in full. Dot-named scratch directories
+  // (`.cache`, `.svelte-kit`, `.venv`) need no entry here — `listTaskspaceDirectory` never
+  // returns a dot-entry, so the walk cannot reach one to begin with.
+  "tmp",
 ] as const;
 
 /**
@@ -371,8 +408,17 @@ export const TAG_CACHE_DIRS_MAX = 64;
  * Rebuilding writes a smaller file only if the workspace has shrunk, so a workspace that is
  * genuinely this size pays a cold read every time — which is the honest outcome, and the
  * signal that {@code ?files=0} or a narrower project is the answer rather than a bigger
- * ceiling. Set well above what a realistic workspace reaches: {@link TAG_CACHE_SCOPES_MAX}
- * scopes at the megabyte a scope is reckoned at still fits several times over.
+ * ceiling.
+ *
+ * Set above what a realistic workspace reaches and no further, which is a smaller number than
+ * it looks: {@link TAG_CACHE_SCOPES_MAX} scopes at the megabyte a scope is reckoned at is
+ * sixteen, and this is that with room to spare. It was four times higher, on the reasoning
+ * that a ceiling should be generous — but generosity is the wrong direction for this one.
+ * Every byte under it is a byte that may be read synchronously while a page load waits, so
+ * the ceiling *is* the worst case it permits, and setting it far above the workspaces that
+ * exist only widens the window in which the cache costs more than the gather it replaces.
+ * A workspace that genuinely exceeds this is told the truth by paying a cold read, and that
+ * is a better answer than a hundred-millisecond stall on every navigation.
  *
  * Checked when the file is written as well as when it is read, and the write side is what
  * makes "pays a cold read every time" true rather than "pays a cold read *and* a wasted
@@ -381,4 +427,4 @@ export const TAG_CACHE_DIRS_MAX = 64;
  * per page load, to produce a file this build has already decided it will never read. A
  * cache too large to be read is not a cache, so it is not written either.
  */
-export const TAG_CACHE_BYTES_MAX = 64 * 1024 * 1024;
+export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;

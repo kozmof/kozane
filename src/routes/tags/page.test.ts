@@ -33,6 +33,7 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
     cardTotal: hits.filter(({ source }) => source.kind === "card").length,
     fileTotal: hits.filter(({ source }) => source.kind === "file").length,
     truncated: [],
+    cardsTruncated: false,
     cardProjects: { c1: "p1", c2: "p1" },
     files: true,
     filesAvailable: true,
@@ -162,6 +163,47 @@ describe("tag index page", () => {
 
     expect(screen.getByText(/Notes was not read in full/)).toBeTruthy();
     expect(screen.getByText(/larger than the scan had budget left for/)).toBeTruthy();
+  });
+
+  /**
+   * A reason on its own says something is wrong and not where, which is the half a reader can
+   * act on. A directory carries its trailing slash through, so "the taskspace itself" does not
+   * read as a file called `.`.
+   */
+  it("names a few of the files behind a truncation", () => {
+    draw([cardHit("c1", "perf", "one")], {
+      truncated: [
+        { taskspaceId: "t1", reasons: ["too-large"], paths: ["media/talk.mp4", "logs/"] },
+      ],
+    });
+
+    expect(screen.getByText(/for example media\/talk\.mp4, logs\//)).toBeTruthy();
+  });
+
+  /**
+   * The case above without the field, which is what a static export built before it existed
+   * carries. The notice loses its paths and keeps everything else — it must not take the page
+   * down, which is what reading `.length` off an absent array did. See `truncationPaths`.
+   */
+  it("draws a truncation from an older export, which carries no paths", () => {
+    draw([cardHit("c1", "perf", "one")], {
+      truncated: [{ taskspaceId: "t1", reasons: ["budget"] }],
+    });
+
+    expect(screen.getByText(/Notes was not read in full/)).toBeTruthy();
+    expect(screen.queryByText(/for example/)).toBeNull();
+  });
+
+  /**
+   * The card side has a ceiling of its own, and it is drawn beside the taskspace notices
+   * rather than instead of them: to a reader whose tag is missing, "not every card was read"
+   * and "not every file was read" are the same fact about the same gather.
+   */
+  it("says when the cards themselves were not read in full", () => {
+    draw([cardHit("c1", "perf", "one")], { cardsTruncated: true });
+
+    expect(screen.getByText(/The cards were not read in full/)).toBeTruthy();
+    expect(screen.getByText(/counts above are a floor/)).toBeTruthy();
   });
 
   /**

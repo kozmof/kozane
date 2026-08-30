@@ -8,6 +8,8 @@ import {
   taggedWith,
   tagMatcher,
   truncationReasons,
+  truncationPaths,
+  CARDS_TRUNCATED_LABEL,
   type CappedHits,
   type TagCounts,
   type TagNode,
@@ -65,7 +67,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
     // The cache matters most here. A command runs in a process that exits, so without one
     // every invocation re-queries every card and re-reads every taskspace file to learn what
     // the last invocation already worked out.
-    const { hits, truncated, taskspaces } = await loadTagIndex({
+    const { hits, truncated, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
       projectId,
       includeFiles: true,
@@ -79,7 +81,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
       return;
     }
     printTree(tree);
-    warnTruncated(truncated, taskspaces);
+    warnTruncated(truncated, taskspaces, cardsTruncated);
   });
 }
 
@@ -90,22 +92,30 @@ const nameOf = (taskspaces: Record<string, TagIndexTaskspace>, id: string): stri
   taskspaces[id]?.name || id;
 
 /**
- * Says which taskspaces were not read in full, so a tag missing from the list above is not
- * read as a tag nobody wrote.
+ * Says what was not read in full — the cards, and each taskspace — so a tag missing from the
+ * list above is not read as a tag nobody wrote.
  *
  * Names and wording both come from elsewhere. The name is joined from the gather's own record
  * of what it walked — this had been fetching every taskspace in the project again to turn an
- * id back into a name. The wording is `truncationReasons`, shared with the tag index page,
- * because the two say the same thing about the same taskspace and the scanner's own
- * vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
+ * id back into a name. The wording is `truncationReasons` and `CARDS_TRUNCATED_LABEL`, shared
+ * with the tag index page, because the two say the same thing about the same gather and the
+ * scanner's own vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
+ *
+ * A reason now arrives with a sample of the paths behind it, which is the half a reader can
+ * act on: `truncationPaths` turns "some files could not be read" into a place to go and look.
  */
 function warnTruncated(
   truncated: TagIndexTruncation[],
   taskspaces: Record<string, TagIndexTaskspace>,
+  cardsTruncated: boolean,
 ): void {
-  for (const { taskspaceId, reasons } of truncated) {
+  // First, because it is about the cards printed above and every taskspace note below is
+  // about files. To a reader whose tag is missing the two are one fact — part of the
+  // workspace was not read — so neither is worth printing without the other.
+  if (cardsTruncated) console.log(`Note: ${CARDS_TRUNCATED_LABEL}.`);
+  for (const { taskspaceId, reasons, paths } of truncated) {
     console.log(
-      `Note: ${nameOf(taskspaces, taskspaceId)} was not read in full — ${truncationReasons(reasons)}.`,
+      `Note: ${nameOf(taskspaces, taskspaceId)} was not read in full — ${truncationReasons(reasons)}${truncationPaths(paths)}.`,
     );
   }
 }
@@ -142,7 +152,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const projectId = await resolveProjectId(db, options.project);
     // `--no-files` is commander's spelling of a `--files` that defaults to true.
     const includeFiles = options.files !== false;
-    const { hits, truncated, taskspaces } = await loadTagIndex({
+    const { hits, truncated, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
       projectId,
       includeFiles,
@@ -160,7 +170,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const shown = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
     await printCardHits(db, projectId, shown);
     printFileHits(shown, taskspaces);
-    warnTruncated(truncated, taskspaces);
+    warnTruncated(truncated, taskspaces, cardsTruncated);
   });
 }
 

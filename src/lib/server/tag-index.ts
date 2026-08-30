@@ -5,7 +5,7 @@ import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit, TagScanTruncation } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
 import { createScanPool, scanTaskspaceTags, type ScanLimits } from "./taskspace-tags.js";
-import { openTagCache, scopeKey } from "./tag-cache.js";
+import { openTagCache } from "./tag-cache.js";
 
 /**
  * What one taskspace could not tell us, and which one it was. Empty for a taskspace read
@@ -19,6 +19,9 @@ import { openTagCache, scopeKey } from "./tag-cache.js";
 export type TagIndexTruncation = {
   taskspaceId: string;
   reasons: TagScanTruncation[];
+  /** A few of the paths the reasons are about, relative to the taskspace, or empty where
+   *  none of them names a file. See `TaskspaceTagScan.paths`. */
+  paths: string[];
 };
 
 /**
@@ -55,6 +58,17 @@ export type TagIndex = {
    */
   taskspaces: Record<string, TagIndexTaskspace>;
   truncated: TagIndexTruncation[];
+  /**
+   * Whether the card side stopped at {@link TAG_CARD_HITS_MAX}, so the hits above hold a
+   * prefix of the workspace's card tags rather than all of them.
+   *
+   * Apart from {@link TagIndex.truncated}, which is per taskspace and carries the walk's own
+   * vocabulary of reasons. There is one card query per gather and one ceiling for it to
+   * reach, so this is the whole of what there is to say about it. Both are printed together
+   * by every reader, because to someone looking at a tag that is missing they are the same
+   * fact: part of the workspace was not read.
+   */
+  cardsTruncated: boolean;
 };
 
 type LoadTagIndex = {
@@ -127,10 +141,12 @@ export async function loadTagIndex({
   // No root, nowhere to keep it. That is the same condition the file walk below stops at,
   // and reading it off one value is what keeps the cache and the walk talking about one
   // workspace.
-  const store = cache && root ? openTagCache({ root, dbUrl: cache.dbUrl }) : null;
-  const scope = scopeKey(projectId);
+  const store =
+    cache && root
+      ? openTagCache({ root, dbUrl: cache.dbUrl, ...(projectId && { projectId }) })
+      : null;
 
-  const stored = store?.cards(scope);
+  const stored = store?.cards();
   const cards = stored ?? (await getCardTagHits({ db, projectId }));
   // A card set that had to be queried is a card set the stored file does not hold.
   let changed = !stored;
@@ -142,8 +158,8 @@ export async function loadTagIndex({
   // No workspace root means no directory to resolve a taskspace against. The cards are still
   // a complete answer about cards, so the index is served rather than refused.
   if (!includeFiles || !root) {
-    store?.save({ scope, cards, changed });
-    return { hits, cardProjects, taskspaces, truncated };
+    store?.save({ cards, changed });
+    return { hits, cardProjects, taskspaces, truncated, cardsTruncated: cards.truncated };
   }
 
   const rows = projectId
@@ -178,17 +194,13 @@ export async function loadTagIndex({
     // now bounds a scan well below that, and this does not depend on it staying there.
     for (const hit of scan.hits) hits.push(hit);
     if (scan.truncated.length > 0)
-      truncated.push({ taskspaceId: taskspace.id, reasons: scan.truncated });
+      truncated.push({
+        taskspaceId: taskspace.id,
+        reasons: scan.truncated,
+        paths: scan.paths,
+      });
   }
 
-  store?.save({
-    scope,
-    cards,
-    scanned,
-    changed,
-    // Only a gather across the whole workspace read every taskspace there is, so only it can
-    // tell a stored directory that is gone from one that simply belongs to another project.
-    ...(projectId ? {} : { live: new Set(scanned.map(({ baseDir }) => baseDir)) }),
-  });
-  return { hits, cardProjects, taskspaces, truncated };
+  store?.save({ cards, scanned, changed });
+  return { hits, cardProjects, taskspaces, truncated, cardsTruncated: cards.truncated };
 }

@@ -229,6 +229,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     cardTotal,
     fileTotal,
     truncated: index.truncated,
+    /** Whether the card side stopped at its own ceiling. Beside `truncated` rather than
+     *  inside it, and drawn beside it too: to a reader whose tag is missing, "not every card
+     *  was read" and "not every file was read" are one fact. See `TagIndex.cardsTruncated`. */
+    cardsTruncated: index.cardsTruncated,
     cardProjects: prerender ? index.cardProjects : narrow(index.cardProjects, shownCardIds),
     // For labelling hits. Which bundle a card is in, and the name of the taskspace a file
     // sits in, are both things a hit deliberately does not carry — see the note on

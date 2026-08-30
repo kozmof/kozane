@@ -23,7 +23,7 @@ import type { TagHit } from "../types.js";
 
 /** Bumped when the shape below changes. A file carrying any other value is ignored, which is
  *  what lets the shape change without a migration or a stale-format bug. */
-export const TAG_CACHE_VERSION = 1;
+export const TAG_CACHE_VERSION = 2;
 export const TAG_CACHE_FILE = "tag-index.json";
 
 export function tagCachePath(root: string): string {
@@ -126,7 +126,12 @@ const isCachedCardHits = (value: unknown): value is CachedCardHits =>
   isRecord(value) &&
   Array.isArray(value.hits) &&
   value.hits.every(isTagHit) &&
-  everyValue(value.cardProjects, (id) => typeof id === "string");
+  everyValue(value.cardProjects, (id) => typeof id === "string") &&
+  // Required rather than defaulted, which is what the version above is for. A file written
+  // before this field existed carries a complete-looking hit list that was in fact cut, and
+  // reading it as `truncated: false` would restore the exact silence the field was added to
+  // end — for as long as the database signature stayed fresh.
+  typeof value.truncated === "boolean";
 
 const isCachedFile = (value: unknown): value is CachedFileEntry =>
   isRecord(value) &&
@@ -224,14 +229,10 @@ export function writeTagCache(root: string, cache: TagCache): void {
 export const scopeKey = (projectId?: string) => projectId ?? "*";
 
 export type SaveCache = {
-  scope: string;
   cards: CachedCardHits;
   /** The taskspace directories this gather walked, each with whether its scan learned
    *  anything — which decides between re-exporting its entries and keeping the stored ones. */
   scanned?: { baseDir: string; changed: boolean }[];
-  /** Every taskspace directory in the workspace, when this gather saw them all — which is
-   *  only a gather that named no project. Absent, no directory is presumed gone. */
-  live?: Set<string>;
   /** Whether any scan read or dropped something. See `TaskspaceTagScan.changed`. */
   changed: boolean;
 };
@@ -249,7 +250,27 @@ export type SaveCache = {
  * function reading as a footnote to it. The two modules now divide as their names say: this
  * one owns the file, its shape, and its rules; `tag-index.ts` owns reading a workspace.
  */
-export function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
+export function openTagCache({
+  root,
+  dbUrl,
+  projectId,
+}: {
+  root: string;
+  dbUrl: string;
+  /**
+   * The project this gather is narrowed to, or omitted for one across the whole workspace.
+   *
+   * Taken once, here, rather than handed to each call below — which is what makes the scope
+   * key and the eviction rule that depends on it one decision instead of two that have to
+   * agree. `save` used to be given a scope string and, separately, the set of directories it
+   * was allowed to presume complete; the caller built the second with
+   * `...(projectId ? {} : { live })` and the two type-checked in every combination, including
+   * the one that tells a workspace-wide store that a project's taskspaces are all there are.
+   * Neither is passed now: both are derived from this.
+   */
+  projectId?: string;
+}) {
+  const scope = scopeKey(projectId);
   const signature = databaseSignature(dbUrl);
   // No signature means nothing to validate card hits against — an in-memory database, or one
   // that is not a local file. Rather than cache what cannot be checked, do not cache.
@@ -263,15 +284,19 @@ export function openTagCache({ root, dbUrl }: { root: string; dbUrl: string }) {
   const files = existing?.files ?? {};
 
   return {
-    cards: (scope: string): CachedCardHits | null =>
-      fresh ? (existing?.scopes[scope] ?? null) : null,
+    cards: (): CachedCardHits | null => (fresh ? (existing?.scopes[scope] ?? null) : null),
 
     seedFiles: (baseDir: string) => {
       const entries = files[baseDir];
       if (entries) importTaskspaceTagCache(baseDir, entries);
     },
 
-    save: ({ scope, cards, scanned = [], live, changed }: SaveCache) => {
+    save: ({ cards, scanned = [], changed }: SaveCache) => {
+      // Only a gather across the whole workspace read every taskspace there is, so only it
+      // can tell a stored directory that is gone from one that simply belongs to another
+      // project. Derived from the project this store was opened for rather than passed in
+      // beside the scope — see the note there.
+      const live = projectId ? null : new Set(scanned.map(({ baseDir }) => baseDir));
       // A copy, because what is read from is what is compared against below: `unchangedFrom`
       // asks whether the record about to be written is the one already on disk, and it could
       // not if this had been built by editing that one.

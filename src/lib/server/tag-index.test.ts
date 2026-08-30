@@ -131,7 +131,10 @@ describe("loadTagIndex", () => {
       root,
     });
 
-    expect(truncated).toEqual([{ taskspaceId, reasons: ["unreadable"] }]);
+    // The taskspace root is what could not be listed, so the path naming it is `./` — enough
+    // for the reader to tell "this taskspace is gone" from "one file in it is unreadable",
+    // which is the distinction the reason alone cannot draw.
+    expect(truncated).toEqual([{ taskspaceId, reasons: ["unreadable"], paths: ["./"] }]);
   });
 
   describe("across the workspace", () => {
@@ -264,6 +267,7 @@ describe("loadTagIndex", () => {
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
         cardProjects: { c1: "p" },
+        truncated: false,
       };
       writeTagCache(root, planted);
 
@@ -279,6 +283,7 @@ describe("loadTagIndex", () => {
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
         cardProjects: { c1: "p" },
+        truncated: false,
       };
       writeTagCache(root, planted);
       await addCard({ db, bundleId, content: "'second" });

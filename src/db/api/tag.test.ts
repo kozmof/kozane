@@ -27,7 +27,11 @@ const sorted = (tags: string[]) => [...tags].sort();
 describe("getCardTagHits", () => {
   it("finds nothing in a project with no cards", async () => {
     const { db, projectId } = await setup();
-    expect(await getCardTagHits({ db, projectId })).toEqual({ hits: [], cardProjects: {} });
+    expect(await getCardTagHits({ db, projectId })).toEqual({
+      hits: [],
+      cardProjects: {},
+      truncated: false,
+    });
   });
 
   it("returns a hit naming the card it came from", async () => {
@@ -43,6 +47,7 @@ describe("getCardTagHits", () => {
         },
       ],
       cardProjects: { [cardId]: projectId },
+      truncated: false,
     });
   });
 
@@ -118,5 +123,41 @@ describe("getCardTagHits", () => {
 
     const { hits } = await getCardTagHits({ db, projectId });
     expect(hits.map(({ tag }) => tag)).toEqual(["perf", "perf"]);
+  });
+
+  /**
+   * The card side has a ceiling of its own, and had none for a long while: the file walk was
+   * bounded three ways over and this was bounded not at all, though both fill the same array,
+   * are written to the same cache file, and are sent to the same page.
+   */
+  describe("the hit ceiling", () => {
+    it("stops at the ceiling and says so", async () => {
+      const { db, projectId, bundleId } = await setup();
+      for (let i = 0; i < 4; i++) await addCard({ db, bundleId, content: `'tag${i}` });
+
+      const { hits, truncated } = await getCardTagHits({ db, projectId, hitsMax: 2 });
+
+      expect(hits).toHaveLength(2);
+      expect(truncated).toBe(true);
+    });
+
+    /** Exact rather than per card, the same as the file walk's: one card can hold more tags
+     *  on its own than the whole gather carries. */
+    it("holds the ceiling exactly, within a single card", async () => {
+      const { db, projectId, bundleId } = await setup();
+      await addCard({ db, bundleId, content: "'one\n'two\n'three" });
+
+      const { hits, truncated } = await getCardTagHits({ db, projectId, hitsMax: 2 });
+
+      expect(hits.map(({ tag }) => tag)).toEqual(["one", "two"]);
+      expect(truncated).toBe(true);
+    });
+
+    it("does not report a ceiling a gather sits under", async () => {
+      const { db, projectId, bundleId } = await setup();
+      await addCard({ db, bundleId, content: "'perf" });
+
+      expect((await getCardTagHits({ db, projectId, hitsMax: 2 })).truncated).toBe(false);
+    });
   });
 });

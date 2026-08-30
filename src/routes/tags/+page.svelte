@@ -15,6 +15,8 @@
     tagMatcher,
     tagMatches,
     truncationReasons,
+    truncationPaths,
+    CARDS_TRUNCATED_LABEL,
     type TagCounts,
     type TagNode,
   } from "$lib/tag";
@@ -561,14 +563,25 @@
           {/each}
         {/if}
 
+        <!-- Above the taskspace notes, because it is about the cards listed above and they
+             are about the files. Same words as `kozane tag list` prints, from the same
+             constant — see `CARDS_TRUNCATED_LABEL`. -->
+        {#if data.cardsTruncated}
+          <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
+            The cards were not read in full — {CARDS_TRUNCATED_LABEL}, so a tag written on one
+            may be missing here.
+          </p>
+        {/if}
+
         <!-- The name is joined from the gather's own record of what it walked, which is
              guaranteed to hold it: a truncation can only be raised about a taskspace this
              gather walked. The reasons are put into words by the same helper the terminal
-             uses. -->
-        {#each data.truncated as { taskspaceId, reasons } (taskspaceId)}
+             uses, and so are the paths behind them — which is the half a reader can act on. -->
+        {#each data.truncated as { taskspaceId, reasons, paths } (taskspaceId)}
           <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
-            {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}, so
-            a tag written in it may be missing here.
+            {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}{truncationPaths(
+              paths,
+            )}, so a tag written in it may be missing here.
           </p>
         {/each}
       </section>

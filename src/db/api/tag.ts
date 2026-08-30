@@ -3,7 +3,7 @@ import { bundleTable, cardTable } from "../schema.js";
 import type { NeedsDB } from "./types.js";
 import type { TagHit } from "../../lib/types.js";
 import { scanTagLines } from "../../lib/tag.js";
-import { TAG_SIGIL } from "../../lib/constants.js";
+import { TAG_CARD_HITS_MAX, TAG_SIGIL } from "../../lib/constants.js";
 
 export type CardTagHits = {
   hits: TagHit[];
@@ -24,6 +24,20 @@ export type CardTagHits = {
    * `string | undefined` annotation to work around the type; the type now says it.
    */
   cardProjects: Record<string, string | undefined>;
+  /**
+   * Whether {@link TAG_CARD_HITS_MAX} was reached, so `hits` is a prefix of what the cards
+   * hold rather than all of it.
+   *
+   * Reported for the reason the file walk reports its ceilings: a list that has been cut and
+   * does not say so cannot be told from a complete one, and every count taken from it — the
+   * tree beside the panel, the totals under it — then reads as exact when it is a floor.
+   *
+   * A plain boolean rather than a member of `TagScanTruncation`, which enumerates the limits
+   * a *taskspace walk* stops at and is reported per taskspace. There is one card query per
+   * gather and one ceiling for it to stop at, so a taskspace-shaped record would have no
+   * taskspace to name and no second reason to distinguish.
+   */
+  truncated: boolean;
 };
 
 /**
@@ -44,6 +58,10 @@ type GetCardTagHits = NeedsDB & {
   /** Narrows to one project. Omitted, every card in the workspace is read — which is what
    *  the tag index does when no project is selected. */
   projectId?: string;
+  /** How many hits to take before stopping, defaulting to {@link TAG_CARD_HITS_MAX}.
+   *  Overridable so a test can reach the ceiling without putting a hundred thousand tags in
+   *  the database, the same way `TaskspaceScanLimits` opens the file walk's. */
+  hitsMax?: number;
 };
 
 /**
@@ -60,7 +78,11 @@ type GetCardTagHits = NeedsDB & {
  * row and narrowed below to the rows that could possibly match, and it answers a page a user
  * has navigated to rather than the once-a-second board poll.
  */
-export async function getCardTagHits({ db, projectId }: GetCardTagHits): Promise<CardTagHits> {
+export async function getCardTagHits({
+  db,
+  projectId,
+  hitsMax = TAG_CARD_HITS_MAX,
+}: GetCardTagHits): Promise<CardTagHits> {
   // A card with no apostrophe cannot hold a tag, so SQLite drops it before any of it crosses
   // into JavaScript to be parsed. Necessary rather than sufficient — `don't` comes back and
   // finds nothing — which is the right way round for a prefilter.
@@ -77,14 +99,27 @@ export async function getCardTagHits({ db, projectId }: GetCardTagHits): Promise
 
   const hits: TagHit[] = [];
   const cardProjects: Record<string, string> = {};
+  let truncated = false;
   for (const row of rows) {
+    // Checked between cards and again between the hits of one, so the ceiling is exact rather
+    // than per card — the same reason the file walk checks in both places. A card is bounded
+    // in length by `ui.contentMax`, which a workspace may raise, so one card can hold more
+    // tags on its own than this carries.
+    if (hits.length >= hitsMax) {
+      truncated = true;
+      break;
+    }
     const found = scanTagLines(row.content);
     if (found.length === 0) continue;
     cardProjects[row.id] = row.projectId;
     for (const { tag, excerpt } of found) {
+      if (hits.length >= hitsMax) {
+        truncated = true;
+        break;
+      }
       hits.push({ tag, source: { kind: "card", cardId: row.id }, excerpt });
     }
   }
 
-  return { hits, cardProjects };
+  return { hits, cardProjects, truncated };
 }

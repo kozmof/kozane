@@ -9,6 +9,7 @@ import {
   scanTaskspaceTags,
 } from "./taskspace-tags.js";
 import type { TagHit } from "../types.js";
+import { TASKSPACE_DIR_ENTRIES_MAX } from "../constants.js";
 
 const TASKSPACE_ID = "ts-1";
 
@@ -53,12 +54,13 @@ describe("scanTaskspaceTags", () => {
         },
       ],
       truncated: [],
+      paths: [],
       changed: true,
     });
   });
 
   it("finds nothing in an empty taskspace", () => {
-    expect(scan(dir)).toEqual({ hits: [], truncated: [], changed: false });
+    expect(scan(dir)).toEqual({ hits: [], truncated: [], paths: [], changed: false });
   });
 
   it("recurses into subdirectories, and reports the path from the taskspace root", () => {
@@ -103,7 +105,14 @@ describe("scanTaskspaceTags", () => {
   it("reports a taskspace directory that is not there rather than throwing", () => {
     rmSync(dir, { recursive: true, force: true });
 
-    expect(scan(dir)).toEqual({ hits: [], truncated: ["unreadable"], changed: false });
+    // `./` and not a file name: the taskspace root itself is what could not be listed, and a
+    // trailing slash is how a path that names a directory says so.
+    expect(scan(dir)).toEqual({
+      hits: [],
+      truncated: ["unreadable"],
+      paths: ["./"],
+      changed: false,
+    });
   });
 
   it("passes over a file that is not UTF-8 text", () => {
@@ -133,6 +142,7 @@ describe("scanTaskspaceTags", () => {
         },
       ],
       truncated: [],
+      paths: [],
       changed: true,
     });
   });
@@ -331,6 +341,63 @@ describe("scanTaskspaceTags", () => {
       const truncated = scan(dir, { nodes: 1 });
       expect(truncated.truncated).toEqual(["nodes"]);
       expect(Object.keys(exportTaskspaceTagCache(dir) ?? {}).sort()).toEqual(["a.md", "b.md"]);
+    });
+
+    /**
+     * The other half of the rule above, and the half that was missing. The guard used to be
+     * one flag for the whole scan, so a truncation anywhere meant nothing anywhere was
+     * pruned — and a taskspace large enough to hit a ceiling is exactly the one whose stale
+     * entries most need dropping. It is per directory now: a file gone from a directory that
+     * *was* listed to the end is gone, whatever happened elsewhere in the tree.
+     */
+    it("forgets a file gone from a directory it listed, though the walk stopped elsewhere", () => {
+      mkdirSync(join(dir, "sub"));
+      write(join(dir, "notes.md"), "'one");
+      write(join(dir, "sub", "deep.md"), "'two");
+      scan(dir);
+      expect(Object.keys(exportTaskspaceTagCache(dir) ?? {}).sort()).toEqual([
+        "notes.md",
+        "sub/deep.md",
+      ]);
+
+      rmSync(join(dir, "notes.md"));
+      // `sub` sits deeper than this scan goes, so the walk truncates — while the root
+      // directory is still enumerated to the end.
+      const after = scan(dir, { depth: 0 });
+
+      expect(after.truncated).toEqual(["depth"]);
+      // `notes.md` was gone from a directory this walk listed in full, so it is dropped.
+      // `sub/deep.md` was never looked at, so nothing here says it is gone and it is kept.
+      expect(Object.keys(exportTaskspaceTagCache(dir) ?? {})).toEqual(["sub/deep.md"]);
+      expect(after.changed).toBe(true);
+    });
+
+    /**
+     * The subtler half of "listed to the end". This walk visits every entry it is handed and
+     * its loop runs to completion — but the listing itself was cut at
+     * {@link TASKSPACE_DIR_ENTRIES_MAX}, so the entries it was handed are not the directory.
+     * A file missing from a short listing may be perfectly well there, past the cut.
+     */
+    it("keeps entries for a directory whose listing was cut short", () => {
+      const sub = join(dir, "sub");
+      mkdirSync(sub);
+      // Two past the cap, so the listing is still truncated after one is removed below.
+      const names = Array.from(
+        { length: TASKSPACE_DIR_ENTRIES_MAX + 2 },
+        (_, i) => `f${String(i).padStart(4, "0")}.md`,
+      );
+      for (const name of names) write(join(sub, name), "'one");
+
+      expect(scan(dir).truncated).toContain("entries");
+      expect(exportTaskspaceTagCache(dir)).toHaveProperty(["sub/f0000.md"]);
+
+      rmSync(join(sub, names[0]));
+      const after = scan(dir);
+
+      expect(after.truncated).toContain("entries");
+      // Not seen this time, and nothing established it is gone: the listing it would have
+      // been named in stopped short of naming everything.
+      expect(exportTaskspaceTagCache(dir)).toHaveProperty(["sub/f0000.md"]);
     });
 
     it("keeps one taskspace's cache out of another's", () => {

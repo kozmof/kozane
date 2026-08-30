@@ -654,3 +654,35 @@ export function truncationReasons(reasons: TagScanTruncation[]): string {
   const labels: Partial<Record<TagScanTruncation, string>> = TRUNCATION_LABELS;
   return reasons.map((reason) => labels[reason] ?? reason).join("; ");
 }
+
+/**
+ * What the card side reaching its ceiling says to the person reading it.
+ *
+ * Here beside {@link TRUNCATION_LABELS} for the reason those are here: the terminal and the
+ * index page tell the reader the same thing about the same gather, so they tell it in the
+ * same words. Not a member of that table, because it is not one of the limits a taskspace
+ * walk stops at — see `CardTagHits.truncated`.
+ */
+export const CARDS_TRUNCATED_LABEL =
+  "more cards carry tags than one gather reads, so the counts above are a floor";
+
+/**
+ * A few paths behind a truncation, as a phrase, or empty where the reasons name no file.
+ *
+ * Beside the wording above for the same reason, and it is the half the reader actually acts
+ * on: "some files could not be read" describes a taskspace with one permission-denied file
+ * and one that is entirely inaccessible identically, and gives neither reader anywhere to go.
+ * A sample is enough — see `TAG_SCAN_TRUNCATED_PATHS_MAX` — so it says it is one, rather than
+ * reading as the complete list of what went wrong.
+ *
+ * Takes an absent list as an empty one, for the reason {@link truncationReasons} falls back to
+ * the raw reason: these cross a serialization boundary. A static export built before this
+ * field existed carries `truncated` entries without it, and the page reading that export is
+ * whatever build is serving it — so the one case the type cannot describe is exactly the one
+ * that reaches a user, as a page that renders nothing at all rather than a notice missing its
+ * paths.
+ */
+export function truncationPaths(paths: string[] | undefined): string {
+  if (!paths || paths.length === 0) return "";
+  return ` (for example ${paths.join(", ")})`;
+}

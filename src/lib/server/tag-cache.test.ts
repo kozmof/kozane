@@ -15,11 +15,19 @@ import {
 
 let root: string;
 
+/** One scope's stored card hits. Most cases care only about which cards it names — the size
+ *  ones pad `cardProjects` to reach a ceiling — so the rest of the shape is defaulted here. */
+const scope = (cardProjects: Record<string, string> = {}): TagCache["scopes"][string] => ({
+  hits: [],
+  cardProjects,
+  truncated: false,
+});
+
 const cache = (over: Partial<TagCache> = {}): TagCache => ({
   version: TAG_CACHE_VERSION,
   db: "sig",
   builtAt: new Date().toISOString(),
-  scopes: { "*": { hits: [], cardProjects: {} } },
+  scopes: { "*": scope() },
   files: {},
   ...over,
 });
@@ -47,10 +55,10 @@ afterEach(() => {
  */
 it("pins the shape the cache version is the version of", () => {
   const shape = {
-    version: 1,
+    version: 2,
     db: "ino:mtime:size|",
     builtAt: "2026-01-01T00:00:00.000Z",
-    scopes: { "*": { hits: [], cardProjects: {} } },
+    scopes: { "*": { hits: [], cardProjects: {}, truncated: false } },
     files: { "/ws/notes": { "a.md": { signature: "t:1", hits: [] } } },
   } satisfies TagCache;
 
@@ -66,7 +74,7 @@ function readTagCacheOf(value: TagCache): TagCache | null {
 
 describe("readTagCache / writeTagCache", () => {
   it("reads back what was written", () => {
-    const written = cache({ scopes: { p1: { hits: [], cardProjects: { c1: "p1" } } } });
+    const written = cache({ scopes: { p1: scope({ c1: "p1" }) } });
     writeTagCache(root, written);
 
     expect(readTagCache(root)).toEqual(written);
@@ -87,7 +95,7 @@ describe("readTagCache / writeTagCache", () => {
    */
   it("answers with nothing for a cache grown past what is worth reading", () => {
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
-    const oversized = cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } });
+    const oversized = cache({ scopes: { "*": scope({ c1: padding }) } });
     writeFileSync(tagCachePath(root), JSON.stringify(oversized));
 
     expect(statSync(tagCachePath(root)).size).toBeGreaterThan(TAG_CACHE_BYTES_MAX);
@@ -104,7 +112,7 @@ describe("readTagCache / writeTagCache", () => {
   it("does not write a cache too large to be read back", () => {
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
 
-    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }));
+    writeTagCache(root, cache({ scopes: { "*": scope({ c1: padding }) } }));
 
     expect(() => statSync(tagCachePath(root))).toThrow();
   });
@@ -115,10 +123,7 @@ describe("readTagCache / writeTagCache", () => {
     writeTagCache(root, cache({ db: "small" }));
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
 
-    writeTagCache(
-      root,
-      cache({ db: "huge", scopes: { "*": { hits: [], cardProjects: { c1: padding } } } }),
-    );
+    writeTagCache(root, cache({ db: "huge", scopes: { "*": scope({ c1: padding }) } }));
 
     expect(readTagCache(root)?.db).toBe("small");
   });
@@ -131,7 +136,7 @@ describe("readTagCache / writeTagCache", () => {
     const japanese = "あ".repeat(Math.floor((TAG_CACHE_BYTES_MAX * 2) / 3));
     expect(japanese.length).toBeLessThan(TAG_CACHE_BYTES_MAX);
 
-    writeTagCache(root, cache({ scopes: { "*": { hits: [], cardProjects: { c1: japanese } } } }));
+    writeTagCache(root, cache({ scopes: { "*": scope({ c1: japanese }) } }));
 
     expect(() => statSync(tagCachePath(root))).toThrow();
   });
@@ -171,6 +176,20 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)).toBeNull();
   });
 
+  /**
+   * A scope that does not say whether it was cut is one written before the field existed, and
+   * its hits are a complete-looking list that may in fact be a prefix. Required rather than
+   * defaulted to `false`, which would restore exactly the silence the field was added to end —
+   * for as long as the database signature stayed fresh.
+   */
+  it("answers with nothing for a scope that does not say whether it was cut", () => {
+    const scopes = { "*": { hits: [], cardProjects: {} } };
+
+    writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes } as never)));
+
+    expect(readTagCache(root)).toBeNull();
+  });
+
   it("answers with nothing for a file entry with no signature to check", () => {
     const files = { "/ws/task": { "a.md": { hits: [] } } };
 
@@ -192,6 +211,7 @@ describe("readTagCache / writeTagCache", () => {
             },
           ],
           cardProjects: { c1: "p1" },
+          truncated: false,
         },
       },
       files: {

@@ -46,6 +46,19 @@ afterEach(() => {
 });
 
 describe("database CLI flow", () => {
+  /**
+   * A workspace is very often initialized inside a checkout, and `.kozane/` holds an API key,
+   * this machine's runtime state, and a tag cache quoting lines out of every taskspace file
+   * scanned — including taskspaces pointed outside the repository with `--dir`. None of it
+   * belongs in source control, and the ignore file goes when the workspace does.
+   */
+  it("ignores its own directory, so a workspace inside a checkout is not committed", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    expect(readFileSync(join(root, ".kozane", ".gitignore"), "utf-8")).toContain("*");
+  }, 30_000);
+
   it("reports the initialized database as current", () => {
     const root = tempWorkspace();
     cli(root, "init");
