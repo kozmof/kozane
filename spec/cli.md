@@ -122,7 +122,7 @@ written on hundreds of cards. The counts in `tag list` are always of everything.
 Generated and vendored directories are not walked, at any depth: `node_modules`,
 `bower_components`, `vendor`, `build`, `dist`, `out`, `target`, `coverage`, `__pycache__`,
 and `tmp`. They are not reported as a truncation, because a taskspace read to the end of
-everything the scan covers *was* read in full — they are simply outside it, as dot-entries
+everything the scan covers _was_ read in full — they are simply outside it, as dot-entries
 are. A `.gitignore` is not consulted: it answers a different question, varies per repository,
 and routinely covers notes someone would want tagged.
 
