@@ -70,11 +70,17 @@ function selectHits(
   if (!tag) return { hits: [], cardTotal: 0, fileTotal: 0 };
 
   const matches = tagMatcher(tag);
-  const matching = hits.filter((hit) => matches(hit.tag));
   // Per kind, not across the list: `loadTagIndex` returns every card hit before any file
   // hit, so one cap over the whole of it listed no files at all for a tag written on more
   // cards than the ceiling. See `capHitsByKind`.
-  const { cards, files, cardTotal, fileTotal } = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
+  //
+  // The tag test goes in rather than being a `filter` before the cap, so the only arrays
+  // built here are the two capped ones. A workspace at the gather's own ceiling holds a
+  // hundred thousand hits, and selecting into a new array first meant a copy of however many
+  // of them one tag matched in order to keep two hundred of each kind.
+  const { cards, files, cardTotal, fileTotal } = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) =>
+    matches(hit.tag),
+  );
   return { hits: [...cards, ...files], cardTotal, fileTotal };
 }
 

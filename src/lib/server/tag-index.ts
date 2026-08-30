@@ -37,6 +37,13 @@ export type TagIndexTruncation = {
  */
 export type TagIndexTaskspace = { name: string; projectId: string | null };
 
+/**
+ * Those, by taskspace id — named once here rather than written out at each reader, so the
+ * optional value below is a property of the record instead of a convention three signatures
+ * have to keep. See {@link TagIndex.taskspaces}.
+ */
+export type TagIndexTaskspaces = Record<string, TagIndexTaskspace | undefined>;
+
 export type TagIndex = {
   /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
    *  was written in, and `hit.source.kind` is the only thing that separates them. */
@@ -55,8 +62,15 @@ export type TagIndex = {
    * Empty when no file was scanned at all, which is what `includeFiles: false` means. That is
    * what keeps a static export from naming a taskspace it carries no hit from, without the
    * page needing a second rule to say so.
+   *
+   * The value is optional for the reason `CardTagHits.cardProjects` is: every taskspace this
+   * gather walked has an entry, and a lookup can still miss — the page narrows this record to
+   * the taskspaces its rows name, and the live page and a static export reach it through
+   * different builds. Both readers already answer for a miss (`nameOf` here,
+   * `taskspaceName` on the page); a record of non-optional values was promising them
+   * something neither relied on.
    */
-  taskspaces: Record<string, TagIndexTaskspace>;
+  taskspaces: TagIndexTaskspaces;
   truncated: TagIndexTruncation[];
   /**
    * Whether the card side stopped at {@link TAG_CARD_HITS_MAX}, so the hits above hold a
@@ -173,7 +187,7 @@ export async function loadTagIndex({
   // poll. A per-taskspace ceiling bounds what any one of them costs and says nothing about
   // what a workspace of a dozen costs; this is that second bound. See
   // `TAG_SCAN_WORKSPACE_BYTES_MAX`.
-  const pool = createScanPool(limits);
+  const pool = createScanPool(limits?.gather);
   for (const taskspace of rows) {
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
@@ -181,7 +195,7 @@ export async function loadTagIndex({
     // the walk asks about them. The walk still happens and still checks every signature —
     // this only decides whether an unchanged file is re-read or merely re-stat'ed.
     store?.seedFiles(baseDir);
-    const scan = scanTaskspaceTags(baseDir, taskspace.id, limits, pool);
+    const scan = scanTaskspaceTags(baseDir, taskspace.id, limits?.taskspace, pool);
     scanned.push({ baseDir, changed: scan.changed });
     changed ||= scan.changed;
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a

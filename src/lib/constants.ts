@@ -308,6 +308,33 @@ export const TAG_SCAN_HITS_MAX = 100_000;
 export const TAG_CARD_HITS_MAX = 100_000;
 
 /**
+ * How many card rows one statement of the card gather brings back.
+ *
+ * {@link TAG_CARD_HITS_MAX} bounds what the gather *keeps*; this bounds what it holds in
+ * order to decide. The two are not the same ceiling and the gap between them was the whole
+ * of what was left unbounded: the query asked for every card in the workspace holding an
+ * apostrophe, materialized `content` for all of them, and only then counted hits in a loop
+ * — so a workspace past the hit ceiling read its way to that ceiling through every card
+ * anyway. The file side has always charged for a file's bytes *before* reading it; this is
+ * the same discipline on the other source.
+ *
+ * Read as pages keyed on the card id rather than as one statement with a row limit, because
+ * a row limit is the wrong ceiling to state: the prefilter is deliberately generous — a card
+ * reading `don't` comes back and yields nothing — so a cap on rows would stop the gather
+ * short of tags that are there, and report a truncation for a workspace that has none. Paging
+ * keeps the hit ceiling exact and bounds only how much is in hand at once.
+ *
+ * Keyed on the id, and not by offset: `card.id` is a uuidv7 primary key, so the index already
+ * orders it and each page costs a seek rather than a re-count of everything skipped.
+ *
+ * Sized against `ui.contentMax`, which is what one row can cost — a thousand rows of the
+ * 10,000-character default is a few tens of megabytes at worst and far less in practice,
+ * against a local statement per page that a workspace of any ordinary size runs once or
+ * twice.
+ */
+export const TAG_CARD_ROWS_PAGE = 1_000;
+
+/**
  * How many of the paths behind a taskspace's truncation are carried with it.
  *
  * A sample, because the reason alone leaves the reader nowhere to look, and the whole set

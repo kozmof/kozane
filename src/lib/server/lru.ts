@@ -67,6 +67,23 @@ export function evict<K, V>(map: Map<K, V>, max: number): void {
  * than keeping the position it first took. In place, like the two above: the caller owns the
  * record it is building, and a fresh copy per key would be a copy of everything kept so far,
  * once per key kept.
+ *
+ * ## The one kind of key this does not work for
+ *
+ * An object's keys are only in insertion order while none of them is an array index — a
+ * canonical non-negative integer below 2³²−1. Those come first and in numeric order however
+ * they were set, so `{"b": …}` then `{"2": …}` then `{"1": …}` enumerates `1, 2, b`. Written
+ * to JSON and read back the order is the same, because it is a property of the object rather
+ * than of the serialization.
+ *
+ * So a record keyed on integer-like strings would take these operations without complaint and
+ * evict in an order nobody chose — the least-recently-used entry kept and a fresh one dropped,
+ * with the file still valid and every test still passing. It is stated here rather than
+ * guarded because the guard would run on every key of every save, and because both callers are
+ * safe by construction rather than by luck: `tag-cache.ts` keys its scopes on a uuidv7 project
+ * id or the literal `*`, and its files on an absolute directory path. Neither can be an
+ * integer. A third caller keyed on something countable — a row number, a port, an index — is
+ * the case to look for.
  */
 export function setLast<V>(entries: Record<string, V>, key: string, value: V): void {
   delete entries[key];

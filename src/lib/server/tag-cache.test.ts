@@ -190,6 +190,16 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)).toBeNull();
   });
 
+  /** Every field of the shape, not only the ones something reads today: the predicate claims
+   *  the whole type, so it has to check the whole type. */
+  it("answers with nothing for a cache that does not say when it was built", () => {
+    const { builtAt: _dropped, ...rest } = cache();
+
+    writeFileSync(tagCachePath(root), JSON.stringify(rest));
+
+    expect(readTagCache(root)).toBeNull();
+  });
+
   it("answers with nothing for a file entry with no signature to check", () => {
     const files = { "/ws/task": { "a.md": { hits: [] } } };
 

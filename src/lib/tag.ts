@@ -399,10 +399,18 @@ export interface CappedHits<T extends { source: TagSource }> {
  * point of a ceiling is that the answer is small however large the question is, and building
  * two full arrays of everything that matched in order to throw away all but the first two
  * hundred of each spent the whole of what the cap was there to avoid.
+ *
+ * `keep` is that argument carried one step further back, to where it was still being spent.
+ * Every caller selects before it caps — a tag, a project, whether files count at all — and
+ * each was doing it with a `filter` into an array of everything that matched, which is the
+ * very allocation the paragraph above is about. Asked here, the selection happens inside the
+ * one pass and nothing larger than the two capped lists is ever built. Omitted, every hit is
+ * considered, which is what a caller with nothing to select by wants.
  */
 export function capHitsByKind<T extends { source: TagSource }>(
   hits: T[],
   max: number,
+  keep?: (hit: T) => boolean,
 ): CappedHits<T> {
   const cards: TagHitOf<T, "card">[] = [];
   const files: TagHitOf<T, "file">[] = [];
@@ -410,6 +418,7 @@ export function capHitsByKind<T extends { source: TagSource }>(
   let fileTotal = 0;
 
   for (const hit of hits) {
+    if (keep && !keep(hit)) continue;
     if (isCardHit(hit)) {
       cardTotal += 1;
       if (cards.length < max) cards.push(hit);
@@ -638,10 +647,17 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
 /**
  * Those labels, joined, for a taskspace that stopped at several.
  *
- * Falls back to the raw reason for a value not in the table above. That is not defensive
- * dressing: these cross a serialization boundary — the loader's return becomes the page's
- * `data` — so a reason added on the server and deployed against an older page would
- * otherwise draw `undefined` into the sentence.
+ * Falls back to a phrase for a value not in the table above. That is not defensive dressing:
+ * these cross a serialization boundary — the loader's return becomes the page's `data` — so a
+ * reason added on the server and deployed against an older page would otherwise draw
+ * `undefined` into the sentence.
+ *
+ * A phrase and not the reason itself, which is what it was. The whole purpose of the table is
+ * that the scanner's vocabulary is not the reader's: `budget` and `nodes` name the ceiling
+ * that ran out, and printing one of them raw is the exact sentence this function exists to
+ * stop — "your notes directory was not read in full (budget)". A reason this build has no
+ * wording for is a reason it cannot explain, and saying so is more use than showing the name
+ * of a limit the reader has no way to look up.
  *
  * Read through a partial view of the table, so that fallback is something the types agree
  * can happen. Declared total above and read as partial here, deliberately, because the two
@@ -652,8 +668,11 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
  */
 export function truncationReasons(reasons: TagScanTruncation[]): string {
   const labels: Partial<Record<TagScanTruncation, string>> = TRUNCATION_LABELS;
-  return reasons.map((reason) => labels[reason] ?? reason).join("; ");
+  return reasons.map((reason) => labels[reason] ?? UNKNOWN_TRUNCATION_LABEL).join("; ");
 }
+
+/** What is said about a reason this build has no wording for. See {@link truncationReasons}. */
+const UNKNOWN_TRUNCATION_LABEL = "some of it was not read, for a reason this page cannot name";
 
 /**
  * What the card side reaching its ceiling says to the person reading it.

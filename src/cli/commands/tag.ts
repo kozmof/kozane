@@ -17,7 +17,7 @@ import {
 import { TAG_HITS_SHOWN_MAX } from "../../lib/constants.js";
 import {
   loadTagIndex,
-  type TagIndexTaskspace,
+  type TagIndexTaskspaces,
   type TagIndexTruncation,
 } from "../../lib/server/tag-index.js";
 import type { DB } from "../../db/tx.js";
@@ -88,8 +88,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
 /** What to call a taskspace the gather walked, falling back to its id. Every id printed came
  *  out of that same gather, so the fallback is for a row the walk somehow did not record
  *  rather than for one it never saw. */
-const nameOf = (taskspaces: Record<string, TagIndexTaskspace>, id: string): string =>
-  taskspaces[id]?.name || id;
+const nameOf = (taskspaces: TagIndexTaskspaces, id: string): string => taskspaces[id]?.name || id;
 
 /**
  * Says what was not read in full — the cards, and each taskspace — so a tag missing from the
@@ -106,7 +105,7 @@ const nameOf = (taskspaces: Record<string, TagIndexTaskspace>, id: string): stri
  */
 function warnTruncated(
   truncated: TagIndexTruncation[],
-  taskspaces: Record<string, TagIndexTaskspace>,
+  taskspaces: TagIndexTaskspaces,
   cardsTruncated: boolean,
 ): void {
   // First, because it is about the cards printed above and every taskspace note below is
@@ -161,13 +160,15 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     });
 
     const matches = tagMatcher(query);
-    const matching = hits.filter((hit) => matches(hit.tag));
-    if (matching.length === 0) {
+    // Selected inside the cap rather than into an array first — see `capHitsByKind`. The
+    // totals it counts are of everything that matched, so the emptiness check below is the
+    // same question it was when there was a filtered array to ask it of.
+    const shown = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) => matches(hit.tag));
+    if (shown.cardTotal === 0 && shown.fileTotal === 0) {
       console.log(`No cards or files under '${query}.`);
       return;
     }
 
-    const shown = capHitsByKind(matching, TAG_HITS_SHOWN_MAX);
     await printCardHits(db, projectId, shown);
     printFileHits(shown, taskspaces);
     warnTruncated(truncated, taskspaces, cardsTruncated);
@@ -185,6 +186,12 @@ async function printCardHits(
   // the one `kozane card show` takes, whichever tag was asked for. Ids alone, in one
   // statement: this was a bundle read followed by a card read per bundle, which is a round
   // trip per bundle and the full text of every card in the project, to number them.
+  //
+  // Unbounded on purpose, which is worth saying where every neighbouring read is bounded.
+  // A short id is only unambiguous against the whole set it was drawn from, so numbering the
+  // at-most-`TAG_HITS_SHOWN_MAX` rows below against the cards that happen to carry this tag
+  // would print ids that `kozane card show` resolves to different cards — or to none. What is
+  // read is one id per card and nothing else, so the cost is a column rather than a corpus.
   const shortIds = shortIdMap(await getProjectCardIds(db, projectId));
 
   console.log("Cards:");
@@ -216,7 +223,7 @@ async function printCardHits(
  */
 function printFileHits(
   { files: fileHits, fileTotal }: CappedHits<TagHit>,
-  taskspaces: Record<string, TagIndexTaskspace>,
+  taskspaces: TagIndexTaskspaces,
 ): void {
   if (fileHits.length === 0) return;
 

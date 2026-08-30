@@ -56,9 +56,15 @@ export type GatherScanLimits = { workspaceBytes?: number; workspaceNodes?: numbe
  * Every field was optional and the two audiences were told apart only by a prefix, so
  * {@link createScanPool} silently ignored three of them and {@link scanTaskspaceTags}
  * silently ignored the other two — with nothing in either signature to say which it read.
- * Each now asks for the half it spends; passing the whole thing still satisfies both.
+ *
+ * A record of the two rather than their intersection, which is how this first split them.
+ * Intersected, the halves are named types and the fields are still one flat set: `{ bytes }`
+ * meant for the gather type-checks as the taskspace's and is spent as the taskspace's, which
+ * is the same silent misreading in a smaller costume — and the prefixes were all that told
+ * the two apart, so the one mistake worth catching was the one still available. Nested, a
+ * limit is in the half that spends it or it is a compile error.
  */
-export type ScanLimits = TaskspaceScanLimits & GatherScanLimits;
+export type ScanLimits = { taskspace?: TaskspaceScanLimits; gather?: GatherScanLimits };
 
 /**
  * What is left to spend across a whole gather — one pool, passed to every taskspace in it.

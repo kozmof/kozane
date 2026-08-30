@@ -159,6 +159,12 @@ function isTagCache(value: unknown): value is TagCache {
   return (
     value.version === TAG_CACHE_VERSION &&
     typeof value.db === "string" &&
+    // Checked though nothing reads it, which is the point. A predicate that returns
+    // `value is TagCache` while leaving one of that type's fields unexamined is a claim the
+    // code does not check, and the next reader of it — a diagnostic printing when the cache
+    // was built, say — would find `undefined` where the type promised a string. Every field
+    // or none; the cost is one `typeof`.
+    typeof value.builtAt === "string" &&
     everyValue(value.scopes, isCachedCardHits) &&
     everyValue(value.files, (entries) => everyValue(entries, isCachedFile))
   );

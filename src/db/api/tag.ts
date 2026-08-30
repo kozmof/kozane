@@ -1,9 +1,9 @@
-import { and, eq, like, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, like, type SQL } from "drizzle-orm";
 import { bundleTable, cardTable } from "../schema.js";
 import type { NeedsDB } from "./types.js";
 import type { TagHit } from "../../lib/types.js";
 import { scanTagLines } from "../../lib/tag.js";
-import { TAG_CARD_HITS_MAX, TAG_SIGIL } from "../../lib/constants.js";
+import { TAG_CARD_HITS_MAX, TAG_CARD_ROWS_PAGE, TAG_SIGIL } from "../../lib/constants.js";
 
 export type CardTagHits = {
   hits: TagHit[];
@@ -62,6 +62,10 @@ type GetCardTagHits = NeedsDB & {
    *  Overridable so a test can reach the ceiling without putting a hundred thousand tags in
    *  the database, the same way `TaskspaceScanLimits` opens the file walk's. */
   hitsMax?: number;
+  /** How many rows one page of the read brings back, defaulting to
+   *  {@link TAG_CARD_ROWS_PAGE}. Overridable for the same reason `hitsMax` is: a test that
+   *  has to cross a page boundary should not need a thousand cards to do it. */
+  rowsPage?: number;
 };
 
 /**
@@ -77,11 +81,17 @@ type GetCardTagHits = NeedsDB & {
  * What that costs is one scan of the cards in question. It is bounded by `contentMax` per
  * row and narrowed below to the rows that could possibly match, and it answers a page a user
  * has navigated to rather than the once-a-second board poll.
+ *
+ * Read a page at a time, so what the gather *holds* is bounded as well as what it keeps. See
+ * {@link TAG_CARD_ROWS_PAGE}: a single statement for the whole workspace brought back the
+ * text of every tagged card at once, which is the one read on this path that answered to no
+ * ceiling at all.
  */
 export async function getCardTagHits({
   db,
   projectId,
   hitsMax = TAG_CARD_HITS_MAX,
+  rowsPage = TAG_CARD_ROWS_PAGE,
 }: GetCardTagHits): Promise<CardTagHits> {
   // A card with no apostrophe cannot hold a tag, so SQLite drops it before any of it crosses
   // into JavaScript to be parsed. Necessary rather than sufficient — `don't` comes back and
@@ -91,34 +101,55 @@ export async function getCardTagHits({
     ? and(holdsSigil, eq(bundleTable.projectId, projectId))
     : holdsSigil;
 
-  const rows = await db
-    .select({ id: cardTable.id, content: cardTable.content, projectId: bundleTable.projectId })
-    .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .where(where);
-
   const hits: TagHit[] = [];
   const cardProjects: Record<string, string> = {};
   let truncated = false;
-  for (const row of rows) {
-    // Checked between cards and again between the hits of one, so the ceiling is exact rather
-    // than per card — the same reason the file walk checks in both places. A card is bounded
-    // in length by `ui.contentMax`, which a workspace may raise, so one card can hold more
-    // tags on its own than this carries.
-    if (hits.length >= hitsMax) {
-      truncated = true;
-      break;
-    }
-    const found = scanTagLines(row.content);
-    if (found.length === 0) continue;
-    cardProjects[row.id] = row.projectId;
-    for (const { tag, excerpt } of found) {
+  // Where the last page ended. Ordered by the same column it pages on, which is what makes
+  // "after this one" mean the next row rather than an arbitrary one — and what makes a hit
+  // list built over several statements the same list one statement would have built.
+  let after: string | undefined;
+
+  pages: for (;;) {
+    const rows = await db
+      .select({ id: cardTable.id, content: cardTable.content, projectId: bundleTable.projectId })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .where(after === undefined ? where : and(where, gt(cardTable.id, after)))
+      .orderBy(asc(cardTable.id))
+      .limit(rowsPage);
+    if (rows.length === 0) break;
+    after = rows[rows.length - 1].id;
+
+    for (const row of rows) {
+      // Checked between cards and again between the hits of one, so the ceiling is exact
+      // rather than per card — the same reason the file walk checks in both places. A card is
+      // bounded in length by `ui.contentMax`, which a workspace may raise, so one card can
+      // hold more tags on its own than this carries.
+      //
+      // Truncation is decided by a row that was read and not used, which is why this stays
+      // inside the page loop rather than becoming a "was there another page?" question: a
+      // gather whose last hit exactly fills the ceiling has read every card there was, and
+      // saying it was cut short would send the reader looking for tags that are all here.
       if (hits.length >= hitsMax) {
         truncated = true;
-        break;
+        break pages;
       }
-      hits.push({ tag, source: { kind: "card", cardId: row.id }, excerpt });
+      const found = scanTagLines(row.content);
+      if (found.length === 0) continue;
+      cardProjects[row.id] = row.projectId;
+      for (const { tag, excerpt } of found) {
+        if (hits.length >= hitsMax) {
+          truncated = true;
+          break pages;
+        }
+        hits.push({ tag, source: { kind: "card", cardId: row.id }, excerpt });
+      }
     }
+
+    // A short page is the last one. A full one may or may not be, so the next statement is
+    // what settles it — and comes back empty, which is one extra read of no rows against
+    // holding the whole workspace to find out.
+    if (rows.length < rowsPage) break;
   }
 
   return { hits, cardProjects, truncated };

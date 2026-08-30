@@ -211,13 +211,15 @@ describe("loadTagIndex", () => {
         includeFiles: true,
         root,
         // Enough for the first taskspace's file and nothing after it.
-        limits: { workspaceBytes: 8 },
+        limits: { gather: { workspaceBytes: 8 } },
       });
 
       expect(tags(hits)).toEqual(["first"]);
       // Named through the record of what was walked, which a truncated taskspace is always
       // in — it was walked, that is how it came to be truncated.
-      expect(truncated.map(({ taskspaceId }) => taskspaces[taskspaceId].name)).toEqual(["b-notes"]);
+      expect(truncated.map(({ taskspaceId }) => taskspaces[taskspaceId]?.name)).toEqual([
+        "b-notes",
+      ]);
       expect(truncated[0].reasons).toEqual(["budget"]);
     });
   });

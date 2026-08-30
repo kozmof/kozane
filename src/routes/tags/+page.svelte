@@ -72,31 +72,29 @@
   }
 
   /**
-   * Filtered again here, which is a no-op on the live page — the server sent exactly this
-   * set — and is the real selection in a static export, where every hit of every project was
-   * baked in. One path rather than a branch that only one of the two ever takes.
+   * Selected and capped in one pass, by the same function and to the same number the server
+   * caps by, so an export and the live page list alike.
+   *
+   * The selection is a no-op on the live page — the server sent exactly this set — and is the
+   * real one in a static export, where every hit of every project was baked in. One path
+   * rather than a branch that only one of the two ever takes.
+   *
+   * Handed to `capHitsByKind` rather than run as a `filter` before it, so an export holding
+   * the whole workspace's hits does not copy everything one tag matched in order to draw two
+   * hundred rows of each kind. Per kind, which matters here for the same reason it matters on
+   * the server: the hits arrive cards first, so one ceiling across both would let a much-used
+   * tag's cards push its files off the page entirely.
    */
-  const matchingHits = $derived.by(() => {
-    if (!selectedTag) return [];
+  const shown = $derived.by(() => {
+    if (!selectedTag) return capHitsByKind<TagHit>([], TAG_HITS_SHOWN_MAX);
     const matches = tagMatcher(selectedTag);
-    return data.hits.filter(
+    return capHitsByKind(
+      data.hits,
+      TAG_HITS_SHOWN_MAX,
       (hit) =>
-        matches(hit.tag) &&
-        inSelectedProject(hit) &&
-        (showFiles || hit.source.kind === "card"),
+        matches(hit.tag) && inSelectedProject(hit) && (showFiles || hit.source.kind === "card"),
     );
   });
-
-  /**
-   * Capped by the same function and to the same number the server caps by, so an export and
-   * the live page list alike. Already short of it on the live page, which capped before
-   * sending — this is the real cut only in an export, where every hit was baked in.
-   *
-   * Per kind, which matters here for the same reason it matters there: the hits arrive cards
-   * first, so one ceiling across both would let a much-used tag's cards push its files off
-   * the page entirely. See `capHitsByKind`.
-   */
-  const shown = $derived(capHitsByKind(matchingHits, TAG_HITS_SHOWN_MAX));
   const shownCount = $derived(shown.cards.length + shown.files.length);
 
   /** What each list below is a part of. The server counted before capping; in an export
@@ -492,7 +490,13 @@
             >
               {#each cardRows as { key, source, hits } (key)}
                 {@const cardId = source.cardId}
-                {@const bundle = data.bundles[data.cardBundleIds[cardId]]}
+                <!-- Two lookups that can each miss, and the second is indexed by the result
+                     of the first: a card whose bundle row was not among what the loader read
+                     would otherwise index `data.bundles` by `undefined`. The `{#if}` below
+                     already draws nothing for a missing bundle; this is what keeps the step
+                     between the two records from being the thing that decides it. -->
+                {@const bundleId = data.cardBundleIds[cardId]}
+                {@const bundle = bundleId ? data.bundles[bundleId] : undefined}
                 <li>
                   {#snippet cardBody()}
                     <span class={excerptClass}>{hits[0].excerpt}</span>

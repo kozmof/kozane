@@ -549,7 +549,13 @@ describe("truncationReasons", () => {
 
   /** These cross a serialization boundary — the loader's return becomes the page's data — so
    *  a reason the drawing end does not know must not become `undefined` in a sentence. */
-  it("falls back to the reason itself for one it does not know", () => {
-    expect(truncationReasons(["quota" as never])).toBe("quota");
+  it("says something a reader can use for a reason it does not know", () => {
+    const said = truncationReasons(["quota" as never]);
+
+    expect(said).not.toBe("quota");
+    expect(said).not.toContain("undefined");
+    // The fallback is a sentence about the taskspace, in the voice of the table above —
+    // naming the ceiling is the thing this whole table exists to stop.
+    expect(said).toMatch(/not read/);
   });
 });
