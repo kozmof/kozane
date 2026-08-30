@@ -163,15 +163,14 @@ describe("ScopeSidebar focus state", () => {
   });
 
   // The eye says the board is being looked at through this scope — cards outside it are
-  // dimmed on the canvas. The resting icon is the boxed scope glyph, which has no pupil.
-  it("swaps the scope glyph for an eye once the scope is focused", () => {
+  // dimmed on the canvas. Resting, the same eye is drawn shut: a bare lid, with no pupil to
+  // look with, which is what separates the two states.
+  it("opens the closed eye once the scope is focused", () => {
     mount({ activeScope: null });
     expect(scopeButton().querySelector("svg circle")).toBeNull();
-    expect(scopeButton().querySelector("svg rect")).toBeTruthy();
 
     cleanup();
     mount();
     expect(scopeButton().querySelector("svg circle")).toBeTruthy();
-    expect(scopeButton().querySelector("svg rect")).toBeNull();
   });
 });

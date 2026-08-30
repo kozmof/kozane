@@ -38,6 +38,7 @@
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
   import FloatingControls from "./components/FloatingControls.svelte";
   import LayerControl from "./components/LayerControl.svelte";
+  import ScopeControl from "./components/ScopeControl.svelte";
   import FloatingComposer from "./components/FloatingComposer.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
@@ -617,6 +618,8 @@
       onReorderLayers={actions.handleReorderLayers}
       {readonly}
     />
+
+    <ScopeControl scopes={s.scopes} bind:activeScope={s.sidebar.activeScope} />
 
     <FloatingControls
       {zoom}

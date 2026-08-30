@@ -158,24 +158,33 @@
   });
 </script>
 
-{#snippet scopeIcon()}
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-    <rect x="1" y="1" width="8" height="8" rx="1" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.2" />
-    <path d="M3 5h4M3 3.5h2" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" stroke-linecap="round" />
+<!-- A closed lid rather than a different object: the same eye, not looking through this
+     scope. One stroke carries far less weight than the filled open eye, so it is drawn at
+     neutral.iconDim to stay legible at 10px. -->
+{#snippet closedEyeIcon()}
+  <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style="flex-shrink:0">
+    <path
+      d="M1 5.8C3 8.6 4.9 9.7 7 9.7S11 8.6 13 5.8"
+      stroke="var(--colors-neutral-icon-dim)"
+      stroke-width="1.1"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    />
   </svg>
 {/snippet}
 
-<!-- Only ever drawn on the focused row, where the fill is ink.black, so it is stroked in
-     the row colour rather than the dim grey the resting icon uses. -->
+<!-- Only ever drawn on the focused row, where the fill is ink.charcoal, so it is stroked in
+     the row colour rather than the dim grey the resting icon uses. Same geometry as the
+     corner control, drawn smaller. -->
 {#snippet eyeIcon()}
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+  <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style="flex-shrink:0">
     <path
-      d="M0.7 5C2.15 2.75 3.6 1.95 5 1.95S7.85 2.75 9.3 5C7.85 7.25 6.4 8.05 5 8.05S2.15 7.25 0.7 5Z"
+      d="M1 7C3 4.2 4.9 3.1 7 3.1S11 4.2 13 7c-2 2.8-3.9 3.9-6 3.9S3 9.8 1 7Z"
       stroke="currentColor"
       stroke-width="1.1"
       stroke-linejoin="round"
     />
-    <circle cx="5" cy="5" r="1.3" fill="currentColor" />
+    <circle cx="7" cy="7" r="1.8" fill="currentColor" />
   </svg>
 {/snippet}
 
@@ -214,7 +223,7 @@
           >
             <!-- The eye is the state, not decoration: this is the scope the board is
                  currently being looked at through. -->
-            {#if active}{@render eyeIcon()}{:else}{@render scopeIcon()}{/if}
+            {#if active}{@render eyeIcon()}{:else}{@render closedEyeIcon()}{/if}
             <span class={flex1Class}>{scope.name}</span>
             <!-- This project's cards in the scope, not the scope's total: scopeRels is
                  built from this project's cards. A shared scope reads differently on each
