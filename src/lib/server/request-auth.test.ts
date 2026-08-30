@@ -10,14 +10,21 @@ type EventOptions = {
   headers?: HeadersInit;
   cookie?: string;
   client?: string;
+  method?: string;
 };
 
-function event({ url = "http://localhost/board", headers, cookie, client }: EventOptions = {}) {
+function event({
+  url = "http://localhost/board",
+  headers,
+  cookie,
+  client,
+  method,
+}: EventOptions = {}) {
   const cookies = new Map<string, string>();
   if (cookie) cookies.set(API_KEY_COOKIE, cookie);
   return {
     url: new URL(url),
-    request: new Request(url, { headers }),
+    request: new Request(url, { headers, method, ...(method === "POST" && { body: "{}" }) }),
     cookies: {
       get: (name: string) => cookies.get(name),
       serialize: (name: string, value: string) =>
@@ -103,6 +110,18 @@ describe("authenticateRequest", () => {
     const cookie = outcome.response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain(`${API_KEY_COOKIE}=${KEY.apiKey}`);
     expect(cookie).toContain("HttpOnly");
+  });
+
+  // The exchange answers 303, and a 303 turns the retry into a GET — so a POST that
+  // authenticated this way was answered with a redirect that dropped its body, and the write
+  // it carried never happened. Only `kozane open` ever puts a key in a URL, and that is a
+  // GET; anything else is authenticated and served, cookie or no cookie.
+  it("serves a non-GET carrying the key in the query rather than redirecting it", () => {
+    const outcome = authenticateRequest(
+      event({ url: `http://localhost/board?api_key=${KEY.apiKey}`, method: "POST" }),
+      KEY,
+    );
+    expect(outcome).toEqual({ kind: "pass" });
   });
 
   it("does not exchange a wrong key in the query", () => {

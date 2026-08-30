@@ -464,14 +464,20 @@ A failed `config.json valid` check points at `kozane doctor config`, which repor
 is actually wrong. `doctor` itself keeps running through a broken config.
 
 `Card timestamps valid` runs only when the migrations are current, since it reads columns
-that migration 0011 adds. It counts cards whose `created_at` or `updated_at` falls outside
+that migration 0011 adds. It reports cards whose `created_at` or `updated_at` falls outside
 the range a timestamp this app wrote can hold — at or before the epoch, or past the largest
 instant a date can represent. The epoch is what a hand-written `INSERT INTO card` naming
 neither column leaves behind, since the columns carry a `DEFAULT 0` that SQLite will not let
 the schema drop; a value beyond the date range is one only hand-written SQL can put there.
-Every insert the app makes writes both columns, so a non-zero count means the database was
+Every insert the app makes writes both columns, so any such card means the database was
 edited by hand and `kozane card list --sort` will report those cards as `1970` or
 `invalid`.
+
+The check names the cards it found, by short ID — up to five, then `and N more`:
+
+```
+  ✗  Card timestamps valid — 2 cards stamped outside what this app writes, likely inserted by hand: 6fd3a2b, 41c0e9d; kozane card list --sort reports them as 1970 or invalid
+```
 
 ---
 
@@ -765,8 +771,9 @@ cat foo.txt | kozane card squash --project eb155d6 --scope e3ee90b
 
 All generated cards and their optional scope memberships are committed in one
 transaction, so an error does not leave a partially created set. Every generated card
-is new, and is created and last-updated at the moment the command runs — which is what
-`kozane card list --sort` reads.
+is new, and is created and last-updated at the moment the command runs — the same moment
+for all of them, so `kozane card list --sort created` never splits one command's cards
+across a second.
 
 ---
 
@@ -904,7 +911,8 @@ naming neither column can produce — is reported by `kozane doctor` and lists a
 Squashing a card replaces it with one new card per piece, on the board and through
 `kozane card squash` alike. The pieces are created when the squash ran, not when the text
 was first written, so a card thought about for a month and then squashed leaves pieces that
-read as created today with a gap of `0s`.
+read as created today with a gap of `0s` — all of them at the one moment, however many
+pieces there were.
 
 ---
 

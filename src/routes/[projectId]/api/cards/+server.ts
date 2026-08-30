@@ -21,6 +21,7 @@ import {
   requireUniqueStrings,
   requireWithinBatchLimit,
 } from "../../lib/request.js";
+import { rejectBatch } from "../../lib/rejection.js";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
   const value = body.positions;
@@ -115,8 +116,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const positions = requirePositionUpdates(body);
 
-  if (!(await updateProjectCardPositions({ db, projectId, positions })))
-    throw error(400, "Some cards do not belong to this project");
+  const result = await updateProjectCardPositions({ db, projectId, positions });
+  if (!result.ok) rejectBatch(result.reason);
 
   return json({ ok: true });
 };
@@ -126,7 +127,7 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const { projectId } = params;
   const body = await readJsonObject(request);
   const cardIds = requireStringArray(body, "cardIds");
-  if (!(await deleteProjectCards({ db, projectId, cardIds })))
-    throw error(400, "Some cards do not belong to this project");
+  const result = await deleteProjectCards({ db, projectId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
   return json({ ok: true });
 };

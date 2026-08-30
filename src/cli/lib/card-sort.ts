@@ -10,6 +10,10 @@ import { compareIds } from "../../lib/order.js";
  * printed. One comparator over the finished list is one behaviour to document and to test;
  * three `ORDER BY` clauses would be three places for the orders to drift apart. It is the
  * same choice `cardNearest` makes for distance.
+ *
+ * The cost of that choice is that `--sort` holds a project's whole card list in the CLI
+ * process and sorts it there. It is the list `card list` was already holding in order to
+ * print it, so sorting adds no read; what it rules out is ever streaming the listing.
  */
 
 export const CARD_SORT_KEYS = ["created", "updated", "gap"] as const;
@@ -23,17 +27,58 @@ export type CardSortKey = (typeof CARD_SORT_KEYS)[number];
  * is a compile error here as well as in the queries. The import is type-only: this module
  * holds the ordering rules and reaches no database to apply them.
  */
-export type CardTimes = Pick<Card, "id" | "createdAt" | "updatedAt">;
+export type CardTimes = CardStamps & Pick<Card, "id">;
 
 /**
  * The two columns an order actually reads. {@link sortCards} needs the id as well, to break
  * a tie; nothing that only prints a value does — which is what lets `kozane card show
  * --times` render its lines through the same {@link sortColumn} the listing prints.
+ *
+ * {@link CardTimes} is written as this plus the id, rather than as a second `Pick` naming
+ * the same two columns again, so the relationship between them is the declaration rather
+ * than something a reader has to notice by comparing two lists.
  */
 export type CardStamps = Pick<Card, "createdAt" | "updatedAt">;
 
 export function isCardSortKey(value: unknown): value is CardSortKey {
   return (CARD_SORT_KEYS as readonly unknown[]).includes(value);
+}
+
+/**
+ * The range a card timestamp can hold and still name a moment this app could have written.
+ * Read here by {@link namesAMoment}, and by `kozane doctor`, which reports the rows outside
+ * it — one range rather than one per reader, so what a listing prints `invalid` for and what
+ * `doctor` reports cannot come to disagree.
+ *
+ * The two ends are two different rules, and both belong to the same column:
+ *
+ * - The low end is one second past the epoch, and is about the `DEFAULT 0` migration 0011
+ *   had to give both columns in order to add them NOT NULL to a table with rows in it.
+ *   SQLite cannot drop a column default afterwards, so an `INSERT INTO card` naming neither
+ *   column succeeds and lands the row at the epoch rather than failing. Such a row reads
+ *   perfectly well — as 1970 — which is why it is `doctor`'s business rather than
+ *   {@link sortColumn}'s.
+ * - The high end is the largest instant a `Date` can represent. Past it, or below the
+ *   matching negative, drizzle hands the column back as an Invalid Date: a card
+ *   {@link sortCards} can place — last, deliberately — but can print no time for.
+ *
+ * Nothing in the app writes a card outside this range: inserts stamp both columns from one
+ * moment (see `addCard`), and `db import` names both. What lands here is hand-written SQL.
+ */
+export const CARD_STAMP_EARLIEST = new Date(1_000);
+export const CARD_STAMP_LATEST = new Date(8_640_000_000_000_000);
+
+/**
+ * Whether a column drizzle handed back can be printed at all, which is the upper half of
+ * {@link CARD_STAMP_LATEST} asked of one value: every instant a `Date` can represent has a
+ * finite `getTime`, and the Invalid Date an out-of-range column becomes does not.
+ *
+ * Asked rather than assumed, because `toISOString` throws `RangeError: Invalid time value`
+ * on such a date — which used to leave `card list` printing one line of error in place of
+ * the whole listing.
+ */
+export function namesAMoment(at: Date): boolean {
+  return Number.isFinite(at.getTime());
 }
 
 /**
@@ -98,7 +143,7 @@ const ORDERS: Record<CardSortKey, CardOrder> = {
 };
 
 function iso(at: Date): string {
-  if (!Number.isFinite(at.getTime())) return UNREADABLE;
+  if (!namesAMoment(at)) return UNREADABLE;
   return at.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 

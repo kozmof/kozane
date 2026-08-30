@@ -358,6 +358,10 @@ describe("kozane card list --sort", () => {
     expect(result.stdout).toContain(
       "✗  Card timestamps valid — 1 card stamped outside what this app writes",
     );
+    // Named, not just counted: the check knows which row it found, and a report that made
+    // the reader go looking for it would be leaving the last step undone. The id is short,
+    // as everything else the CLI prints is.
+    expect(result.stdout).toContain("inserted by hand: epoch;");
     // And the listing it warns about does read 1970, which is what makes it worth reporting.
     expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
   }, 90_000);
@@ -401,6 +405,9 @@ describe("kozane card list --sort", () => {
     expect(result.stdout).toContain(
       "✗  Card timestamps valid — 1 card stamped outside what this app writes",
     );
+    // The other end of the range names its row too. `untouched` shortens to seven
+    // characters, which is what `shortIdMap` gives an id nothing else shares a prefix with.
+    expect(result.stdout).toContain("inserted by hand: untouch;");
   }, 90_000);
 });
 

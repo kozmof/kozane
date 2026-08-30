@@ -23,11 +23,16 @@ export function contentLimitIssue(content: string, contentMax: number): string |
 }
 export const NAME_MAX = 255;
 /**
- * How many ids one request may name. Every batch endpoint binds a parameter per id, and the
- * position and stacking updates bind several — SQLite refuses a statement past its variable
- * limit, and builds the whole thing in memory before finding out. This sits far enough
- * under that to leave room for the widest of those statements, and far enough above any
+ * How many ids one request may name. Every batch endpoint binds a parameter per id — SQLite
+ * refuses a statement past its variable limit, and builds the whole thing in memory before
+ * finding out. This sits far enough under that for a list of ids, and far enough above any
  * real selection that reaching it means something other than a user dragging cards.
+ *
+ * It is not what keeps the *writes* under that limit, and did not use to say so. The
+ * position and stacking updates bind several parameters per id, so a request at this size
+ * builds a statement several times as wide; they draw their own batch size from
+ * {@link STATEMENT_PARAMS_MAX} instead, which is computed from how wide each row of the
+ * statement actually is. This bounds what a request may *ask for*, and that is all.
  */
 export const BATCH_MAX = 2_000;
 /**
@@ -44,17 +49,26 @@ export const BATCH_MAX = 2_000;
 export const INSERT_CHUNK_MAX = 200;
 
 /**
- * How many bound parameters one INSERT may carry. {@link INSERT_CHUNK_MAX} is a row count,
- * which only stands in for this while every caller inserts a row of about the same width —
- * so this is the budget the row count was picked against, named so a wider table shrinks
- * its own batches instead of quietly spending more of it.
+ * How many bound parameters one statement may carry. {@link INSERT_CHUNK_MAX} is a row
+ * count, which only stands in for this while every caller writes a row of about the same
+ * width — so this is the budget the row count was picked against, named so a wider table
+ * shrinks its own batches instead of quietly spending more of it.
  *
  * SQLite's own ceiling is 32766 parameters per statement on any build Kozane runs against
  * (999 before 3.32, which predates the `node:sqlite` era entirely). Well under either, for
  * the reason {@link BATCH_MAX} gives: the statement is assembled in memory before SQLite
  * says whether it will take it.
+ *
+ * Named for the statement rather than for the INSERT it was introduced for, because the
+ * widest statements this app builds are not inserts. `updateProjectCardPositions` and
+ * `reassignCardsToLayer` write a column with a `CASE` per row, which binds the id and the
+ * value in every CASE and the id again in the WHERE — several times an insert's cost per
+ * row, on a list `BATCH_MAX` alone would let reach two thousand. They draw their batch size
+ * from here through {@link chunked} for the same reason the inserts do: so the guarantee is
+ * computed from the statement's actual width rather than asserted in a comment beside it and
+ * quietly outgrown the next time a column joins the CASE.
  */
-export const INSERT_PARAMS_MAX = 2_000;
+export const STATEMENT_PARAMS_MAX = 2_000;
 
 /**
  * Splits rows into statement-sized batches. Here rather than beside any one caller because
@@ -64,7 +78,7 @@ export const INSERT_PARAMS_MAX = 2_000;
  *
  * `columnsPerRow` is what keeps the batch honest for a table wider than the one this was
  * sized against: the batch is the smaller of {@link INSERT_CHUNK_MAX} rows and whatever
- * {@link INSERT_PARAMS_MAX} affords at that width, so a table that grows a column narrows
+ * {@link STATEMENT_PARAMS_MAX} affords at that width, so a table that grows a column narrows
  * its batches rather than widening its statements. Omitted, the row count stands alone, as
  * it did before — callers inserting a two-column relation row have nothing to gain from it.
  */
@@ -73,7 +87,7 @@ export function chunked<T>(
   { size = INSERT_CHUNK_MAX, columnsPerRow }: { size?: number; columnsPerRow?: number } = {},
 ): T[][] {
   const affordable = columnsPerRow
-    ? Math.max(1, Math.floor(INSERT_PARAMS_MAX / columnsPerRow))
+    ? Math.max(1, Math.floor(STATEMENT_PARAMS_MAX / columnsPerRow))
     : size;
   const batchSize = Math.min(size, affordable);
   const chunks: T[][] = [];

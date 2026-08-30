@@ -1,9 +1,30 @@
+/**
+ * The writes that span more than one of the sibling modules and have to land whole.
+ *
+ * That is the entire rule for what belongs here, and it is worth writing down because the
+ * name says how the module is built rather than what it is for — every function in it is
+ * composed of others, which describes half of `db/api` and is not why these eight sit
+ * together. What they share is an invariant no single-table module can hold: deleting a card
+ * must dissolve a glue group the deletion would leave with one member; squashing one must
+ * insert the pieces, carry the scope memberships over, and remove the original or none of
+ * it; deleting a bundle must move its cards before the cascade takes them.
+ *
+ * So each of these opens the transaction, and the modules it calls into take `AnyDB` and run
+ * inside it. The alternative — a card function reaching into glue, a bundle function reaching
+ * into card — is the import cycle this module exists instead of.
+ *
+ * A function belongs here when leaving it out would let a partial write be observed. A
+ * function that merely calls two others in sequence does not: it belongs beside whichever
+ * table it is about.
+ */
+
 import { withTx, type DB, type AnyDB } from "../tx.js";
 import {
   addCard,
+  newCardStamps,
   reassignBundleCards,
   reassignLayerCards,
-  cardsInProject,
+  cardsBelongToProject,
   getCardBundleNames,
   getCardLayerNames,
 } from "./card.js";
@@ -12,7 +33,13 @@ import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
-import { NotFoundError, DefaultBundleError, DefaultLayerError, columnCount } from "./utils.js";
+import {
+  NotFoundError,
+  DefaultBundleError,
+  DefaultLayerError,
+  columnCount,
+  type CardBatchResult,
+} from "./utils.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
 import type { Card } from "./types.js";
@@ -76,7 +103,7 @@ type DeleteProjectCards = { db: DB; projectId: string; cardIds: string[] };
 
 /**
  * Deletes cards after verifying every one belongs to projectId, dissolving any glue
- * group the removal would leave degenerate. Returns false if any card is not owned.
+ * group the removal would leave degenerate. Refuses if any card is not owned.
  *
  * The unglue step is not optional: deleting a card cascades its glue_rel row away
  * without going through glue.ts, which would strand the surviving partner of a
@@ -86,15 +113,15 @@ export async function deleteProjectCards({
   db,
   projectId,
   cardIds,
-}: DeleteProjectCards): Promise<boolean> {
-  if (cardIds.length === 0) return true;
+}: DeleteProjectCards): Promise<CardBatchResult> {
+  if (cardIds.length === 0) return { ok: true };
   const uniqueIds = [...new Set(cardIds)];
   return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, projectId, uniqueIds);
-    if (owned.length !== uniqueIds.length) return false;
-    await unglueCardsInTx(tx, uniqueIds);
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds: uniqueIds });
+    if (!owned.ok) return owned;
+    await unglueCardsInTx({ db: tx, cardIds: uniqueIds });
     await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
-    return true;
+    return { ok: true };
   });
 }
 
@@ -170,7 +197,12 @@ export async function squashProjectCard({
     );
 
     const cards: Card[] = [];
+    // One moment for every piece, so the listing cannot separate cards the same squash
+    // produced. See {@link newCardStamps}; `kozane card squash` gets the same through
+    // `addCards`.
+    const stamps = newCardStamps();
     const rows = contents.map((content, index) => ({
+      ...stamps,
       bundleId: source.bundleId,
       layerId: source.layerId,
       taskspaceId: source.taskspaceId,
@@ -197,7 +229,7 @@ export async function squashProjectCard({
     for (const batch of chunked(scopeRels))
       await tx.insert(scopeRelTable).values(batch).onConflictDoNothing();
 
-    await unglueCardsInTx(tx, [cardId]);
+    await unglueCardsInTx({ db: tx, cardIds: [cardId] });
     await tx.delete(cardTable).where(eq(cardTable.id, cardId));
 
     return { ok: true, cards };
@@ -253,18 +285,18 @@ async function remapCardsByName({
  * Moves cards from one project to another, preserving bundle and layer names.
  * For each unique source name, a matching bundle/layer is found in the target
  * project or created if absent. All updates are atomic.
- * Returns false if any card does not belong to sourceProjectId.
+ * Refuses if any card does not belong to sourceProjectId.
  */
 export async function moveCardsToProject({
   db,
   sourceProjectId,
   targetProjectId,
   cardIds,
-}: MoveCardsToProject): Promise<boolean> {
-  if (cardIds.length === 0) return true;
+}: MoveCardsToProject): Promise<CardBatchResult> {
+  if (cardIds.length === 0) return { ok: true };
   return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, sourceProjectId, cardIds);
-    if (owned.length !== cardIds.length) return false;
+    const owned = await cardsBelongToProject({ db: tx, projectId: sourceProjectId, cardIds });
+    if (!owned.ok) return owned;
 
     const cardBundles = await getCardBundleNames({ db: tx, cardIds });
     await remapCardsByName({
@@ -288,9 +320,9 @@ export async function moveCardsToProject({
 
     // Cards moved cross-project must leave their glue groups: a glue group
     // spanning two projects is never visible in the UI and leaves stale rows.
-    await unglueCardsInTx(tx, cardIds);
+    await unglueCardsInTx({ db: tx, cardIds });
 
-    return true;
+    return { ok: true };
   });
 }
 

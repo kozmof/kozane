@@ -1,5 +1,6 @@
 import { scopeTable, scopeRelTable, cardTable, bundleTable, taskspaceTable } from "../schema.js";
 import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import { union } from "drizzle-orm/sqlite-core";
 import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
@@ -105,30 +106,32 @@ export type ScopeProjectUsage = { scopeId: string; projectId: string };
  * row, and it is SQLite that collapses the other nineteen.
  */
 export async function getScopeProjectUsage({ db }: NeedsDB): Promise<ScopeProjectUsage[]> {
-  const fromCards = await db
-    .selectDistinct({ scopeId: scopeRelTable.scopeId, projectId: bundleTable.projectId })
+  const fromCards = db
+    .select({ scopeId: scopeRelTable.scopeId, projectId: bundleTable.projectId })
     .from(scopeRelTable)
     .innerJoin(cardTable, eq(cardTable.id, scopeRelTable.cardId))
     .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId));
 
   // Both columns are nullable on `taskspace`; a row missing either places nothing, so it
-  // is dropped by the WHERE rather than filtered back out here.
-  const fromTaskspaces = await db
-    .selectDistinct({ scopeId: taskspaceTable.scopeId, projectId: taskspaceTable.projectId })
+  // is dropped by the WHERE rather than filtered back out here. The casts are what the
+  // WHERE has already established and the column types cannot carry across it.
+  const fromTaskspaces = db
+    .select({
+      scopeId: sql<string>`${taskspaceTable.scopeId}`.as("scope_id"),
+      projectId: sql<string>`${taskspaceTable.projectId}`.as("project_id"),
+    })
     .from(taskspaceTable)
     .where(and(isNotNull(taskspaceTable.scopeId), isNotNull(taskspaceTable.projectId)));
 
-  // Each half is distinct within itself, but the two can still agree with each other: a
-  // project reaching one scope by both routes is one row, not two.
-  const pairs: ScopeProjectUsage[] = [
-    ...fromCards,
-    ...fromTaskspaces.map(({ scopeId, projectId }) => ({
-      scopeId: scopeId as string,
-      projectId: projectId as string,
-    })),
-  ];
-  // A scope reached by twenty cards of one project is one row here, not twenty.
-  return [...new Map(pairs.map((pair) => [`${pair.scopeId} ${pair.projectId}`, pair])).values()];
+  // `UNION`, not `UNION ALL`: it deduplicates across both halves at once, which is the whole
+  // of what the caller wants. Each half used to be a `SELECT DISTINCT` run as its own query,
+  // and the overlap between them — a project reaching one scope by both a card and a
+  // taskspace — was then collapsed here with a `Map` keyed by the two ids joined into a
+  // string. One statement is the shape the rest of this module argues for (see
+  // `getScopesInProject`): against a local file a round trip costs more than the set
+  // operation, and it makes the answer one consistent read rather than two a CLI write
+  // could land between.
+  return union(fromCards, fromTaskspaces);
 }
 
 type GetScope = NeedsDB & { scopeId: string };

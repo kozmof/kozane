@@ -7,7 +7,7 @@ import {
   CANVAS_H,
   CONTENT_MAX,
   INSERT_CHUNK_MAX,
-  INSERT_PARAMS_MAX,
+  STATEMENT_PARAMS_MAX,
 } from "./constants.js";
 import { DEFAULT_UI_CONFIG, UI_NUM_RANGES } from "./ui-config.js";
 
@@ -115,13 +115,13 @@ describe("chunked", () => {
   });
 
   it("narrows the batch when a row is too wide for the parameter budget", () => {
-    const columnsPerRow = INSERT_PARAMS_MAX / 50; // 50 rows' worth of parameters
+    const columnsPerRow = STATEMENT_PARAMS_MAX / 50; // 50 rows' worth of parameters
     const rows = Array.from({ length: 120 }, (_, i) => i);
     const chunks = chunked(rows, { columnsPerRow });
     expect(chunks[0]).toHaveLength(50);
     expect(chunks.flat()).toEqual(rows);
     for (const chunk of chunks)
-      expect(chunk.length * columnsPerRow).toBeLessThanOrEqual(INSERT_PARAMS_MAX);
+      expect(chunk.length * columnsPerRow).toBeLessThanOrEqual(STATEMENT_PARAMS_MAX);
   });
 
   it("keeps the row count as the ceiling for a narrow row", () => {
@@ -131,7 +131,7 @@ describe("chunked", () => {
   });
 
   it("never yields an empty batch, however wide the row", () => {
-    const chunks = chunked([1, 2, 3], { columnsPerRow: INSERT_PARAMS_MAX * 10 });
+    const chunks = chunked([1, 2, 3], { columnsPerRow: STATEMENT_PARAMS_MAX * 10 });
     expect(chunks).toEqual([[1], [2], [3]]);
   });
 });

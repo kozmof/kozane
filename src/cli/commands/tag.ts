@@ -192,7 +192,7 @@ async function printCardHits(
   // at-most-`TAG_HITS_SHOWN_MAX` rows below against the cards that happen to carry this tag
   // would print ids that `kozane card show` resolves to different cards — or to none. What is
   // read is one id per card and nothing else, so the cost is a column rather than a corpus.
-  const shortIds = shortIdMap(await getProjectCardIds(db, projectId));
+  const shortIds = shortIdMap(await getProjectCardIds({ db, projectId }));
 
   console.log("Cards:");
   // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once

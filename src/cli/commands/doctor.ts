@@ -2,8 +2,10 @@ import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createConnection } from "node:net";
 import { count, gt, lt, or } from "drizzle-orm";
-import { createDb } from "../../db/client.js";
+import { openDb } from "../../db/client.js";
 import { cardTable } from "../../db/schema.js";
+import { CARD_STAMP_EARLIEST, CARD_STAMP_LATEST } from "../lib/card-sort.js";
+import { shortIdMap } from "../lib/short-id.js";
 import { findWorkspaceRoot } from "../../db/internal/config.js";
 import {
   KOZANE_DIR,
@@ -21,39 +23,58 @@ import { diagnoseConfig } from "../lib/config-diagnostics.js";
 type Check = { label: string; ok: boolean; detail?: string };
 
 /**
- * The range a card timestamp can hold and still name a moment this app could have written.
- *
- * The low end is one second past the epoch. Migration 0011 had to give `created_at` and
- * `updated_at` a literal `DEFAULT 0` in order to add them NOT NULL to a table with rows in
- * it, and SQLite cannot drop a column default afterwards — so an `INSERT INTO card` that
- * names neither column succeeds and lands the row at the epoch rather than failing.
- *
- * The high end is the largest instant a `Date` can represent. Past it, or below the matching
- * negative, drizzle hands the column back as an Invalid Date: a card that
- * `kozane card list --sort` can order — last, deliberately — but can print no time for.
- *
- * Nothing in the app writes a card outside this range. Inserts go through the `$defaultFn`
- * on `cardTable` and `db import` names both columns, so what reaches here is hand-written
- * SQL against the workspace database.
+ * How many of the offending cards the check names before it stops counting them out. A
+ * workspace whose whole `card` table was inserted by hand has nothing to gain from a
+ * thousand ids on one line, and the ones it does print are enough to find the rest with.
  */
-const EARLIEST_CARD_STAMP = new Date(1_000);
-const LATEST_CARD_STAMP = new Date(8_640_000_000_000_000);
+const NAMED_BAD_STAMPS = 5;
 
-/** How many cards carry either column outside that range. */
-async function badlyStampedCards(url: string): Promise<number> {
-  const db = await createDb(url);
-  const [row] = await db
-    .select({ total: count() })
-    .from(cardTable)
-    .where(
-      or(
-        lt(cardTable.createdAt, EARLIEST_CARD_STAMP),
-        gt(cardTable.createdAt, LATEST_CARD_STAMP),
-        lt(cardTable.updatedAt, EARLIEST_CARD_STAMP),
-        gt(cardTable.updatedAt, LATEST_CARD_STAMP),
-      ),
+/** How many cards are stamped wrongly, and the short ids of the first few of them. */
+type BadStamps = { total: number; named: string[] };
+
+/**
+ * The cards carrying either timestamp outside {@link CARD_STAMP_EARLIEST}..{@link
+ * CARD_STAMP_LATEST} — the range the listing reads them by, imported rather than restated
+ * so this check and what `card list --sort` prints cannot come to disagree.
+ *
+ * Names rows as well as counting them: the count alone said a card was wrong and left
+ * finding it to the reader. Counted and named by two statements rather than one, so a
+ * workspace whose whole table was written by hand is still only {@link NAMED_BAD_STAMPS}
+ * rows to carry back — and still an exact count.
+ */
+async function badlyStampedCards(url: string): Promise<BadStamps> {
+  const { db, close } = await openDb(url);
+  try {
+    const outsideRange = or(
+      lt(cardTable.createdAt, CARD_STAMP_EARLIEST),
+      gt(cardTable.createdAt, CARD_STAMP_LATEST),
+      lt(cardTable.updatedAt, CARD_STAMP_EARLIEST),
+      gt(cardTable.updatedAt, CARD_STAMP_LATEST),
     );
-  return row?.total ?? 0;
+    const [counted] = await db.select({ total: count() }).from(cardTable).where(outsideRange);
+    const total = counted?.total ?? 0;
+    if (total === 0) return { total, named: [] };
+
+    const worst = await db
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .where(outsideRange)
+      .limit(NAMED_BAD_STAMPS);
+    // Every id in the workspace, and only once there is something to name with them:
+    // `shortIdMap` needs the whole set to know how short a prefix stays unambiguous, and a
+    // sound workspace should not pay for a second pass over `card` to be told it is sound.
+    const all = await db.select({ id: cardTable.id }).from(cardTable);
+    const shortIds = shortIdMap(all.map(({ id }) => id));
+    return { total, named: worst.map(({ id }) => shortIds.get(id) ?? id) };
+  } finally {
+    close();
+  }
+}
+
+/** `6fd3a2b, 41c0e9d and 3 more`, or as much of that as there is. */
+function nameSome({ total, named }: BadStamps): string {
+  const rest = total - named.length;
+  return rest > 0 ? `${named.join(", ")} and ${rest} more` : named.join(", ");
 }
 
 function check(label: string, ok: boolean, detail?: string): Check {
@@ -139,12 +160,17 @@ export async function doctor(): Promise<void> {
     check("kozane.db readable/writable", dbOk, dbOk ? undefined : "file missing or inaccessible"),
   );
 
+  // The workspace's own database, which is what both of the checks below read — not
+  // `commandDbUrl`, so that `doctor` run while `kozane open --memory` holds a temporary one
+  // still reports on the file the workspace keeps.
+  const workspaceDbUrl = dbUrl(resolve(root));
+
   // 6. DB migration status
   let migrationOk = false;
   if (dbOk) {
     let detail: string | undefined;
     try {
-      const status = await getMigrationStatus(dbUrl(resolve(root)));
+      const status = await getMigrationStatus(workspaceDbUrl);
       migrationOk = status.state === "current";
       if (status.state === "pending") {
         detail = `${status.pendingCount} pending; run kozane db migrate`;
@@ -171,12 +197,13 @@ export async function doctor(): Promise<void> {
     let stampOk = false;
     let detail: string | undefined;
     try {
-      const stale = await badlyStampedCards(dbUrl(resolve(root)));
-      stampOk = stale === 0;
-      if (stale > 0)
+      const stale = await badlyStampedCards(workspaceDbUrl);
+      stampOk = stale.total === 0;
+      if (stale.total > 0)
         detail =
-          `${plural(stale, "card")} stamped outside what this app writes, likely inserted ` +
-          "by hand; kozane card list --sort reports them as 1970 or invalid";
+          `${plural(stale.total, "card")} stamped outside what this app writes, likely ` +
+          `inserted by hand: ${nameSome(stale)}; kozane card list --sort reports them as ` +
+          "1970 or invalid";
     } catch (e) {
       detail = e instanceof Error ? e.message : String(e);
     }

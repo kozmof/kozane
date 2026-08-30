@@ -13,6 +13,38 @@ export function columnCount(table: Table): number {
   return Object.keys(getTableColumns(table)).length;
 }
 
+/**
+ * Why an operation over a batch of cards was refused, for the operations that refuse rather
+ * than throw.
+ *
+ * One vocabulary rather than one per function, because the callers are all HTTP routes and
+ * they all have the same job: turn the refusal into a message. It used to be a bare
+ * `boolean`, which left them two ways out and both were paid for:
+ *
+ * - Pre-check the destination outside the transaction so a specific message could be
+ *   written — `cards/bundle` and `cards/layer` each ran a `getBundle`/`getLayer` that the
+ *   transaction then ran again, and ran it *outside* the transaction, so the answer it gave
+ *   was already stale by the time the write took it.
+ * - Or write one message for every way it could fail. `DELETE .../scopes/:id/members`
+ *   answered "Some cards do not belong to this project" when what was missing was the
+ *   *scope*, which is not a card and not the project's.
+ *
+ * A reason carried out of the transaction that decided it removes both. Each function
+ * narrows this to the subset it can actually produce, so a route handling
+ * {@link CardBatchResult} cannot be handed a `"foreign-layer"` it has no wording for.
+ *
+ * `foreign-*` throughout, because that is what these all are: a named row that exists or
+ * does not, but either way is not this project's to act on. The distinction between the two
+ * is deliberately not drawn — this workspace's own CLI lists and moves cards across
+ * projects, so "it is elsewhere" and "it is nowhere" are the same answer to the only
+ * question a route asks, and drawing it would cost a second query on every refusal to
+ * produce a message no caller varies.
+ */
+export type BatchRejection = "foreign-cards" | "foreign-bundle" | "foreign-layer" | "foreign-scope";
+
+/** The refusal every batch operation whose only precondition is card ownership can give. */
+export type CardBatchResult = { ok: true } | { ok: false; reason: "foreign-cards" };
+
 export class NotFoundError extends Error {
   constructor(label: string) {
     super(`${label} not found`);

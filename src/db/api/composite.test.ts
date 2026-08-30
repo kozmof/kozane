@@ -31,24 +31,26 @@ async function setup() {
 }
 
 describe("deleteProjectCards", () => {
-  it("returns true for an empty cardIds array", async () => {
+  it("accepts an empty cardIds array", async () => {
     const { db, projectId } = await setup();
-    await expect(deleteProjectCards({ db, projectId, cardIds: [] })).resolves.toBe(true);
+    await expect(deleteProjectCards({ db, projectId, cardIds: [] })).resolves.toEqual({
+      ok: true,
+    });
   });
 
-  it("deletes all cards and returns true when all belong to the project", async () => {
+  it("deletes all cards when all belong to the project", async () => {
     const { db, projectId, bundleId } = await setup();
     const c1 = await addCard({ db, bundleId, content: "A" });
     const c2 = await addCard({ db, bundleId, content: "B" });
 
     const ok = await deleteProjectCards({ db, projectId, cardIds: [c1, c2] });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
     expect(await getCard({ db, bundleId, cardId: c2 })).toBeUndefined();
   });
 
-  it("returns false and does not delete when a card does not belong to the project", async () => {
+  it("names the cards, and deletes none, when one does not belong to the project", async () => {
     const { db, projectId, bundleId } = await setup();
     const ownCard = await addCard({ db, bundleId, content: "Mine" });
     const otherProjectId = await addProject({ db, name: "Other" });
@@ -58,7 +60,7 @@ describe("deleteProjectCards", () => {
 
     const ok = await deleteProjectCards({ db, projectId, cardIds: [ownCard, foreignCard] });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
     expect(await getCard({ db, bundleId, cardId: ownCard })).toBeDefined();
   });
 
@@ -289,11 +291,11 @@ describe("moveCardsToProject", () => {
     return { db, srcId, dstId, srcBundle };
   }
 
-  it("returns true for an empty cardIds array without touching the DB", async () => {
+  it("accepts an empty cardIds array without touching the DB", async () => {
     const { db, srcId, dstId } = await setupMove();
     await expect(
       moveCardsToProject({ db, sourceProjectId: srcId, targetProjectId: dstId, cardIds: [] }),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ ok: true });
   });
 
   it("moves a card to an existing same-name bundle in the target project", async () => {
@@ -308,7 +310,7 @@ describe("moveCardsToProject", () => {
       cardIds: [cardId],
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getCard({ db, bundleId: dstBundle, cardId })).toMatchObject({ content: "Hello" });
     expect(await getCard({ db, bundleId: srcBundle, cardId })).toBeUndefined();
   });
@@ -371,7 +373,7 @@ describe("moveCardsToProject", () => {
       cardIds: [cardId],
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     const dstBundles = await getAllBundles({ db, projectId: dstId });
     expect(dstBundles).toHaveLength(1);
     expect(dstBundles[0].name).toBe("General");
@@ -422,7 +424,7 @@ describe("moveCardsToProject", () => {
     expect(dstBundles).toHaveLength(1);
   });
 
-  it("returns false when any card does not belong to the source project", async () => {
+  it("names the cards when any does not belong to the source project", async () => {
     const { db, srcId, dstId, srcBundle } = await setupMove();
     const ownCard = await addCard({ db, bundleId: srcBundle, content: "Mine" });
     const otherId = await addProject({ db, name: "Third" });
@@ -437,7 +439,7 @@ describe("moveCardsToProject", () => {
       cardIds: [ownCard, foreignCard],
     });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
     // own card must remain in source (transaction rolled back)
     const rows = await getCardBundleNames({ db, cardIds: [ownCard] });
     expect(rows[0].bundleId).toBe(srcBundle);
@@ -523,6 +525,24 @@ describe("squashProjectCard", () => {
     }
     // In the order the text reads, above whatever the source sat above.
     expect(result.cards.map(({ zIndex }) => zIndex)).toEqual([4, 5]);
+  });
+
+  /**
+   * What the pieces do *not* inherit is the source card's history: each is a new card,
+   * created when the squash ran. They do share one moment with each other, so `kozane card
+   * list --sort created` cannot separate pieces of one squash by a second's drift.
+   */
+  it("stamps every piece as new, at one moment", async () => {
+    const { db, projectId, cardId } = await squashSetup();
+
+    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const moments = new Set(result.cards.map(({ createdAt }) => createdAt.getTime()));
+    expect(moments.size).toBe(1);
+    for (const card of result.cards)
+      expect(card.updatedAt.getTime()).toBe(card.createdAt.getTime());
   });
 
   it("gathers the pieces into every scope the card was in", async () => {

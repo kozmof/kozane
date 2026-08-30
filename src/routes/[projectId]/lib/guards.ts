@@ -3,7 +3,7 @@ import { bundleTable, cardTable } from "$db/schema";
 import { and, eq } from "drizzle-orm";
 import type { AnyDB } from "$db/client";
 import type { Card } from "$db/api/types";
-import { cardsInProject } from "$db/api/card";
+import { cardsBelongToProject } from "$db/api/card";
 
 /** Verifies a card belongs to the given project (via its bundle). Throws 404 if not found. */
 export async function requireCardInProject(
@@ -32,6 +32,5 @@ export async function allCardsBelongToProject(
   cardIds: string[],
 ): Promise<boolean> {
   if (cardIds.length === 0) return true;
-  const owned = await cardsInProject(db, projectId, cardIds);
-  return owned.length === cardIds.length;
+  return (await cardsBelongToProject({ db, projectId, cardIds })).ok;
 }

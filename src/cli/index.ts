@@ -22,6 +22,7 @@ import {
   cardSquash,
 } from "./commands/card.js";
 import { CARD_SORT_KEYS, isCardSortKey, type CardSortKey } from "./lib/card-sort.js";
+import { fail } from "./lib/workspace-command.js";
 import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
 import { tagList, tagShow } from "./commands/tag.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
@@ -321,7 +322,11 @@ const cardListCommand = card
     cardSortKey,
   )
   .option("--reverse", "Reverse the --sort order")
-  .action((opts) => cardList(opts));
+  // `.catch(fail)`, because `cardList` refuses a malformed combination of these options
+  // before it opens a workspace — outside the `runWorkspaceCommand` that reports every
+  // other refusal. `program.parse()` does not await an action, so without this the rejection
+  // would reach the user as an unhandled rejection and a stack trace.
+  .action((opts) => cardList(opts).catch(fail));
 
 cardListCommand.addHelpText(
   "after",

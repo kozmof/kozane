@@ -57,7 +57,7 @@ describe("POST /[projectId]/api/scopes/[scopeId]/members", () => {
     await expectHttpRejection(
       POST(event(db, projectId, scopeId, jsonRequest({ cardIds: [foreignCard] }))),
       400,
-      "Scope or cards not found in project",
+      "Some cards do not belong to this project",
     );
   });
 
@@ -67,7 +67,7 @@ describe("POST /[projectId]/api/scopes/[scopeId]/members", () => {
     await expectHttpRejection(
       POST(event(db, projectId, "nonexistent-scope", jsonRequest({ cardIds: [cardId] }))),
       400,
-      "Scope or cards not found in project",
+      "Scope not found",
     );
   });
 
@@ -116,7 +116,7 @@ describe("DELETE /[projectId]/api/scopes/[scopeId]/members", () => {
     await expectHttpRejection(
       DELETE(event(db, projectId, "nonexistent-scope", jsonRequest({ cardIds: [cardId] }))),
       400,
-      "Some cards do not belong to this project",
+      "Scope not found",
     );
   });
 });

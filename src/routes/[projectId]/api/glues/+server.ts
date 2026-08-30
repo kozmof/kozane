@@ -1,7 +1,8 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import { glueProjectCards, unglueProjectCards } from "$db/api/glue";
 import { readJsonObject, requireStringArray } from "../../lib/request.js";
+import { rejectBatch } from "../../lib/rejection.js";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -9,9 +10,9 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const cardIds = requireStringArray(body, "cardIds", 2);
 
-  const glueId = await glueProjectCards({ db, projectId, cardIds });
-  if (glueId === null) throw error(400, "Some cards do not belong to this project");
-  return json({ glueId });
+  const result = await glueProjectCards({ db, projectId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
+  return json({ glueId: result.glueId });
 };
 
 export const DELETE: RequestHandler = async ({ locals, params, request }) => {
@@ -20,7 +21,7 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const cardIds = requireStringArray(body, "cardIds");
 
-  const clearedCardIds = await unglueProjectCards({ db, projectId, cardIds });
-  if (clearedCardIds === null) throw error(400, "Some cards do not belong to this project");
-  return json({ ok: true, clearedCardIds });
+  const result = await unglueProjectCards({ db, projectId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
+  return json({ ok: true, clearedCardIds: result.clearedCardIds });
 };

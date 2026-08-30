@@ -77,7 +77,14 @@ export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFi
   // The key arrived in the URL, which is how `kozane open` hands it to the browser once.
   // Exchanged for the cookie and redirected to the same page without it, so the key stops
   // being in the address bar, in history, and in any referer the page goes on to send.
-  if (queryKey) {
+  //
+  // GET only, because the exchange is a 303 and a 303 turns the retry into a GET: a POST
+  // that authenticated by `?api_key=` was answered with a redirect that dropped its body,
+  // so the write it carried never happened and nothing said so. There is only one thing
+  // that ever puts a key in a URL — `kozane open` opening a browser at the board — and that
+  // is a GET. Any other method with a key in the query authenticates and is served, and
+  // simply gets no cookie out of it.
+  if (queryKey && event.request.method === "GET") {
     const cookie = event.cookies.serialize(
       API_KEY_COOKIE,
       configuredKey.apiKey,

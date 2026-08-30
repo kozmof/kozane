@@ -1,22 +1,21 @@
 import { bundleTable, cardTable, layerTable } from "../schema.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import type { AnyDB } from "../client.js";
-import type { NeedsDB, NeedsBundle, Card } from "./types.js";
+import type { NeedsDB, NeedsBundle, NeedsProject, NeedsProjectCards, Card } from "./types.js";
 import type { CardData } from "../../lib/types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { BATCH_MAX, chunked } from "../../lib/constants.js";
 import { compareIds } from "../../lib/order.js";
-import { assertFound, columnCount } from "./utils.js";
+import { assertFound, columnCount, type CardBatchResult } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 // ── Simple operations (no ownership check) ────────────────────────────────────
 
-export async function cardsInProject(
-  db: AnyDB,
-  projectId: string,
-  cardIds: string[],
-): Promise<string[]> {
+export async function cardsInProject({
+  db,
+  projectId,
+  cardIds,
+}: NeedsProjectCards): Promise<string[]> {
   if (cardIds.length === 0) return [];
   const rows = await db
     .select({ id: cardTable.id })
@@ -27,6 +26,26 @@ export async function cardsInProject(
     )
     .where(inArray(cardTable.id, cardIds));
   return rows.map((r) => r.id);
+}
+
+/**
+ * Whether every id names a card of this project, as the refusal a caller can return.
+ *
+ * The check five of these operations open with, written once. Each of them was spelling out
+ * the same `cardsInProject(...)` call and the same length comparison, and comparing against
+ * whichever of `cardIds` or a deduplicated copy of it the function happened to hold — which
+ * is a real difference: `inArray` collapses duplicates, so a list naming one card twice
+ * comes back one short and reads as unowned. Deduplicating here means a caller cannot get
+ * that wrong by forgetting to.
+ */
+export async function cardsBelongToProject({
+  db,
+  projectId,
+  cardIds,
+}: NeedsProjectCards): Promise<CardBatchResult> {
+  const wanted = [...new Set(cardIds)];
+  const owned = await cardsInProject({ db, projectId, cardIds: wanted });
+  return owned.length === wanted.length ? { ok: true } : { ok: false, reason: "foreign-cards" };
 }
 
 export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
@@ -45,7 +64,7 @@ export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]
  * `kozane tag show` was doing: a project of thirty bundles cost thirty-one round trips and
  * came back with the text of every card in it, to build a map of ids.
  */
-export async function getProjectCardIds(db: AnyDB, projectId: string): Promise<string[]> {
+export async function getProjectCardIds({ db, projectId }: NeedsProject): Promise<string[]> {
   const rows = await db
     .select({ id: cardTable.id })
     .from(cardTable)
@@ -200,7 +219,7 @@ export async function getCard({ db, bundleId, cardId }: GetCard): Promise<Card |
  * (created alongside its default bundle, and backfilled by migration 0005), so a
  * caller that does not care about layers still writes a valid `card.layer_id`.
  */
-export async function defaultLayerIdForBundle(db: AnyDB, bundleId: string): Promise<string> {
+export async function defaultLayerIdForBundle({ db, bundleId }: NeedsBundle): Promise<string> {
   const row = await db
     .select({ id: layerTable.id })
     .from(layerTable)
@@ -219,6 +238,25 @@ type AddCard = NeedsBundle & {
   posY?: number;
   zIndex?: number;
 };
+/**
+ * The two timestamps a new card is written with, both from one reading of the clock.
+ *
+ * Written rather than left to the `$defaultFn` on the column, which drizzle calls once per
+ * column per row. Two calls can straddle a second boundary, and the columns are stored to
+ * the second, so a card could be inserted already reading as rewritten a second after it
+ * was written — `kozane card list --sort gap` would report `1s` for a card nobody had
+ * touched. One `now` for both columns makes that unrepresentable rather than unlikely.
+ *
+ * Called once per batch by the writers that add many cards at once, for the same reason
+ * `db import` stamps a whole dump at one moment: `kozane card squash` and the board's
+ * squash turn one card into a hundred, and pieces that arrived together should not be
+ * separable in the listing by a second's drift they never had.
+ */
+export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
+  const now = new Date();
+  return { createdAt: now, updatedAt: now };
+}
+
 export async function addCard({
   db,
   bundleId,
@@ -232,8 +270,9 @@ export async function addCard({
   const [row] = await db
     .insert(cardTable)
     .values({
+      ...newCardStamps(),
       bundleId,
-      layerId: layerId ?? (await defaultLayerIdForBundle(db, bundleId)),
+      layerId: layerId ?? (await defaultLayerIdForBundle({ db, bundleId })),
       content,
       taskspaceId,
       ...(posX !== undefined && { posX }),
@@ -261,11 +300,15 @@ type AddCards = NeedsBundle & {
  */
 export async function addCards({ db, bundleId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
+  // Outside the loop: one moment for every card of this call, not one per chunk. See
+  // {@link newCardStamps} — a squash long enough to be split into several statements is
+  // exactly the case where per-chunk stamps would start to differ.
+  const stamps = newCardStamps();
   const ids: string[] = [];
   for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
       .insert(cardTable)
-      .values(batch.map((card) => ({ bundleId, layerId, ...card })))
+      .values(batch.map((card) => ({ ...stamps, bundleId, layerId, ...card })))
       .returning({ id: cardTable.id });
     ids.push(...rows.map(({ id }) => id));
   }
@@ -444,6 +487,31 @@ export type CardPositionUpdate = {
   posY: number;
 };
 
+/**
+ * How many bound parameters one row of a `CASE`-per-column update costs: the id and the
+ * value in each CASE, plus the id once more in the WHERE.
+ *
+ * Written as the arithmetic rather than as a number, so a third column joining the CASE
+ * narrows the batches by itself. That is the same guarantee `columnCount` gives the inserts,
+ * and the reason both go through {@link chunked}: the update used to be bounded only by
+ * `BATCH_MAX`, on the strength of a comment saying that left room for "the widest of those
+ * statements" — true at two columns and checked by nothing at three.
+ */
+function caseUpdateParamsPerRow(columns: number): number {
+  return 2 * columns + 1;
+}
+
+/**
+ * The rows of a CASE update, split so no one statement outgrows
+ * {@link STATEMENT_PARAMS_MAX} at the width its caller writes.
+ *
+ * Every caller runs the batches inside one transaction, so splitting the statement does not
+ * split the write: a drag of two thousand cards still lands whole or not at all.
+ */
+function caseUpdateBatches<T>(rows: T[], columns: number): T[][] {
+  return chunked(rows, { size: BATCH_MAX, columnsPerRow: caseUpdateParamsPerRow(columns) });
+}
+
 // Each CASE ends in an ELSE that writes the column back to itself, so a row matched by
 // the WHERE without a matching WHEN is left as it was. The two are built from the same
 // list and cannot diverge today; the ELSE is what keeps the failure mode of a future
@@ -474,26 +542,37 @@ export async function updateProjectCardPositions({
   db,
   projectId,
   positions,
-}: UpdateProjectCardPositions): Promise<boolean> {
-  if (positions.length === 0) return true;
+}: UpdateProjectCardPositions): Promise<CardBatchResult> {
+  if (positions.length === 0) return { ok: true };
   const unique = dedupePositions(positions);
 
   return withTx(db, async (tx) => {
     const cardIds = unique.map((p) => p.cardId);
-    const owned = await cardsInProject(tx, projectId, cardIds);
-    if (owned.length !== cardIds.length) return false;
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    if (!owned.ok) return owned;
 
-    const updated = await tx
-      .update(cardTable)
-      .set(buildPositionCaseWhen(unique))
-      .where(inArray(cardTable.id, cardIds))
-      .returning({ id: cardTable.id });
-    if (updated.length !== unique.length)
-      throw new Error(
-        `updateProjectCardPositions: expected ${unique.length} updates, got ${updated.length}`,
-      );
+    // Two columns written by CASE, so the batch is sized at that width; see
+    // `caseUpdateParamsPerRow`. The row count is asserted per batch, which is the same
+    // assertion it was as one statement — every batch is a disjoint set of ids, and they
+    // sum to `unique.length`.
+    for (const batch of caseUpdateBatches(unique, 2)) {
+      const updated = await tx
+        .update(cardTable)
+        .set(buildPositionCaseWhen(batch))
+        .where(
+          inArray(
+            cardTable.id,
+            batch.map(({ cardId }) => cardId),
+          ),
+        )
+        .returning({ id: cardTable.id });
+      if (updated.length !== batch.length)
+        throw new Error(
+          `updateProjectCardPositions: expected ${batch.length} updates, got ${updated.length}`,
+        );
+    }
 
-    return true;
+    return { ok: true };
   });
 }
 
@@ -505,7 +584,15 @@ type ReassignCardsToLayer = {
 };
 
 export type CardStacking = { cardId: string; zIndex: number };
-export type ReassignLayerResult = { ok: false } | { ok: true; stacking: CardStacking[] };
+/**
+ * Refused for one of two reasons, and they are different things to be told: the cards are
+ * not this project's, or the layer is not. The caller used to get a bare `{ ok: false }`
+ * and so could only name one of them — the route worked around that by looking the layer up
+ * itself first, outside the transaction that then looked it up again.
+ */
+export type ReassignLayerResult =
+  | { ok: true; stacking: CardStacking[] }
+  | { ok: false; reason: "foreign-cards" | "foreign-layer" };
 
 // Same shape as buildPositionCaseWhen, including the ELSE, and for the same reason.
 function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
@@ -535,15 +622,18 @@ export async function reassignCardsToLayer({
   if (cardIds.length === 0) return { ok: true, stacking: [] };
 
   return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, projectId, cardIds);
-    if (owned.length !== cardIds.length) return { ok: false };
-
+    // The destination first, then the cards — the order the routes used to impose from
+    // outside by pre-checking the layer, and the order their messages were written for: a
+    // request naming both a foreign layer and foreign cards is told about the layer.
     const layer = await tx
       .select({ id: layerTable.id })
       .from(layerTable)
       .where(and(eq(layerTable.id, layerId), eq(layerTable.projectId, projectId)))
       .get();
-    if (!layer) return { ok: false };
+    if (!layer) return { ok: false, reason: "foreign-layer" };
+
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    if (!owned.ok) return owned;
 
     const requested = await tx
       .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
@@ -566,15 +656,18 @@ export async function reassignCardsToLayer({
       .sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id))
       .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
 
-    await tx
-      .update(cardTable)
-      .set({ layerId, zIndex: buildZIndexCaseWhen(stacking) })
-      .where(
-        inArray(
-          cardTable.id,
-          stacking.map(({ cardId }) => cardId),
-        ),
-      );
+    // One column written by CASE — `layerId` is a plain value, the same for every row, and
+    // binds once per statement rather than once per row.
+    for (const batch of caseUpdateBatches(stacking, 1))
+      await tx
+        .update(cardTable)
+        .set({ layerId, zIndex: buildZIndexCaseWhen(batch) })
+        .where(
+          inArray(
+            cardTable.id,
+            batch.map(({ cardId }) => cardId),
+          ),
+        );
 
     return { ok: true, stacking };
   });
@@ -587,27 +680,33 @@ type ReassignCardsToBundle = {
   bundleId: string;
 };
 
+/** Refused the two ways {@link ReassignLayerResult} is, for the same reason. */
+export type ReassignBundleResult =
+  | { ok: true }
+  | { ok: false; reason: "foreign-cards" | "foreign-bundle" };
+
 export async function reassignCardsToBundle({
   db,
   projectId,
   cardIds,
   bundleId,
-}: ReassignCardsToBundle): Promise<boolean> {
-  if (cardIds.length === 0) return true;
+}: ReassignCardsToBundle): Promise<ReassignBundleResult> {
+  if (cardIds.length === 0) return { ok: true };
 
   return withTx(db, async (tx) => {
-    const owned = await cardsInProject(tx, projectId, cardIds);
-    if (owned.length !== cardIds.length) return false;
-
+    // Destination first, as in `reassignCardsToLayer`; see the note there.
     const bundle = await tx
       .select({ id: bundleTable.id })
       .from(bundleTable)
       .where(and(eq(bundleTable.id, bundleId), eq(bundleTable.projectId, projectId)))
       .get();
-    if (!bundle) return false;
+    if (!bundle) return { ok: false, reason: "foreign-bundle" };
+
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    if (!owned.ok) return owned;
 
     await tx.update(cardTable).set({ bundleId }).where(inArray(cardTable.id, cardIds));
 
-    return true;
+    return { ok: true };
   });
 }

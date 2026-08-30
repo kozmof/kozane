@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   CARD_SORT_KEYS,
+  CARD_STAMP_EARLIEST,
+  CARD_STAMP_LATEST,
   formatGap,
   isCardSortKey,
+  namesAMoment,
   sortCards,
   sortColumn,
+  type CardStamps,
   type CardTimes,
 } from "./card-sort.js";
 
@@ -162,7 +166,37 @@ describe("sortColumn", () => {
   });
 
   it("prints the largest date a listing can hold, which is readable", () => {
-    const far = { ...c, createdAt: new Date(8_640_000_000_000 * 1000) };
+    const far = { ...c, createdAt: CARD_STAMP_LATEST };
     expect(sortColumn(far, "created")).toBe("+275760-09-13T00:00:00Z");
+  });
+});
+
+/**
+ * The range `kozane doctor` reports against is the range this module reads by, and the two
+ * used to be written out separately — the same fact in two files, agreeing by inspection.
+ * These tie the boundary the check draws to the boundary the listing can actually print, so
+ * moving one without the other fails here rather than in a user's terminal.
+ */
+describe("what a card timestamp may hold", () => {
+  const stamps = (at: Date): CardStamps => ({ createdAt: at, updatedAt: at });
+
+  it("can print the last instant inside the range, and no instant past it", () => {
+    expect(namesAMoment(CARD_STAMP_LATEST)).toBe(true);
+    expect(sortColumn(stamps(CARD_STAMP_LATEST), "created")).not.toBe("invalid");
+
+    const past = new Date(CARD_STAMP_LATEST.getTime() + 1);
+    expect(namesAMoment(past)).toBe(false);
+    expect(sortColumn(stamps(past), "created")).toBe("invalid");
+    // The matching negative, which is the other way a hand-written integer leaves the range.
+    expect(namesAMoment(new Date(-CARD_STAMP_LATEST.getTime() - 1))).toBe(false);
+  });
+
+  it("draws its low end above the epoch a defaulted row lands on, not at readability", () => {
+    // The two ends are two rules. A row left at the epoch by an `INSERT` naming neither
+    // column reads perfectly well — as 1970 — so it is reported rather than printed
+    // `invalid`, and the low bound has to sit above it for the report to catch it.
+    expect(CARD_STAMP_EARLIEST.getTime()).toBeGreaterThan(0);
+    expect(namesAMoment(new Date(0))).toBe(true);
+    expect(sortColumn(stamps(new Date(0)), "created")).toBe("1970-01-01T00:00:00Z");
   });
 });

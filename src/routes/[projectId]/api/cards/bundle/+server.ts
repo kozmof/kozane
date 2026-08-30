@@ -1,18 +1,19 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
-import { getBundle } from "$db/api/bundle";
+import { json } from "@sveltejs/kit";
 import { reassignCardsToBundle } from "$db/api/card";
 import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
+import { rejectBatch } from "../../../lib/rejection.js";
 
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { projectId } = params;
   const body = await readJsonObject(request);
   const bundleId = requireString(body, "bundleId");
-  const bundle = await getBundle({ db, projectId, bundleId });
-  if (!bundle) throw error(400, "Bundle not found in project");
   const cardIds = requireStringArray(body, "cardIds");
-  if (!(await reassignCardsToBundle({ db, projectId, cardIds, bundleId })))
-    throw error(400, "Some cards do not belong to this project");
+  // No `getBundle` first: the transaction checks the bundle before it checks the cards, so
+  // the answer is the same one this used to pre-compute — and it is decided where the write
+  // happens rather than a query earlier.
+  const result = await reassignCardsToBundle({ db, projectId, cardIds, bundleId });
+  if (!result.ok) rejectBatch(result.reason);
   return json({ ok: true });
 };

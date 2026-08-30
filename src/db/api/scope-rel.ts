@@ -1,7 +1,8 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { bundleTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
 import type { NeedsDB, NeedsProject, NeedsScope, Card, ScopeRel } from "./types.js";
-import { assertFound } from "./utils.js";
+import { assertFound, columnCount } from "./utils.js";
+import { cardsBelongToProject } from "./card.js";
 import { withTx, type DB } from "../tx.js";
 import { chunked } from "../../lib/constants.js";
 
@@ -66,38 +67,48 @@ export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Prom
 }
 
 type AddScopeMembers = { db: DB; scopeId: string; projectId: string; cardIds: string[] };
-/** Bulk-adds cards to a scope. Returns false if the scope doesn't exist or any cardId doesn't belong to projectId. */
+
+/**
+ * Refused two ways, and a caller that could only be told "no" reported the wrong one. Both
+ * of these used to answer `false` for a missing scope and for foreign cards alike, and the
+ * DELETE route worded that as "Some cards do not belong to this project" — said of a
+ * request whose cards were perfectly fine and whose *scope* was the thing that did not
+ * exist.
+ */
+export type ScopeMemberResult =
+  | { ok: true }
+  | { ok: false; reason: "foreign-cards" | "foreign-scope" };
+
+/** Bulk-adds cards to a scope, after verifying the scope and every card belong here. */
 export async function addScopeMembers({
   db,
   scopeId,
   projectId,
   cardIds,
-}: AddScopeMembers): Promise<boolean> {
+}: AddScopeMembers): Promise<ScopeMemberResult> {
   return withTx(db, async (tx) => {
     const scope = await tx
       .select({ id: scopeTable.id })
       .from(scopeTable)
       .where(eq(scopeTable.id, scopeId))
       .get();
-    if (!scope) return false;
+    if (!scope) return { ok: false, reason: "foreign-scope" };
 
-    const found = await tx
-      .select({ id: cardTable.id })
-      .from(cardTable)
-      .innerJoin(
-        bundleTable,
-        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-      )
-      .where(inArray(cardTable.id, cardIds));
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    if (!owned.ok) return owned;
 
-    if (found.length !== cardIds.length) return false;
+    // Chunked, where this used to build one statement from every card the request named:
+    // two columns a row against `BATCH_MAX` ids is twice the parameter budget a single
+    // insert is allowed. `addScopeRels` beside it was already doing this.
+    for (const batch of chunked([...new Set(cardIds)], {
+      columnsPerRow: columnCount(scopeRelTable),
+    }))
+      await tx
+        .insert(scopeRelTable)
+        .values(batch.map((cardId) => ({ scopeId, cardId })))
+        .onConflictDoNothing();
 
-    await tx
-      .insert(scopeRelTable)
-      .values(found.map(({ id: cardId }) => ({ scopeId, cardId })))
-      .onConflictDoNothing();
-
-    return true;
+    return { ok: true };
   });
 }
 
@@ -118,34 +129,26 @@ type RemoveScopeMembersFromProject = {
   cardIds: string[];
   projectId: string;
 };
-/** Bulk-removes cards from a scope. Returns false if scope not found or any cardId doesn't belong to projectId. */
+/** Bulk-removes cards from a scope, after verifying the scope and every card belong here. */
 export async function removeScopeMembersFromProject({
   db,
   scopeId,
   projectId,
   cardIds,
-}: RemoveScopeMembersFromProject): Promise<boolean> {
+}: RemoveScopeMembersFromProject): Promise<ScopeMemberResult> {
   return withTx(db, async (tx) => {
     const scope = await tx
       .select({ id: scopeTable.id })
       .from(scopeTable)
       .where(eq(scopeTable.id, scopeId))
       .get();
-    if (!scope) return false;
+    if (!scope) return { ok: false, reason: "foreign-scope" };
 
-    const found = await tx
-      .select({ id: cardTable.id })
-      .from(cardTable)
-      .innerJoin(
-        bundleTable,
-        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-      )
-      .where(inArray(cardTable.id, cardIds));
-
-    if (found.length !== cardIds.length) return false;
+    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    if (!owned.ok) return owned;
 
     await removeScopeMembers({ db: tx, scopeId, cardIds });
-    return true;
+    return { ok: true };
   });
 }
 

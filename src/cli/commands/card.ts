@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
-import { fail, runWorkspaceCommand } from "../lib/workspace-command.js";
+import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import { addCard, addCards, reassignCardsToLayer } from "../../db/api/card.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
@@ -296,9 +296,16 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
  * `gap` is derived from the two above it rather than stored, and is listed all the same:
  * it is what `--sort gap` orders by, and a card is easier to find in that listing when the
  * command that shows one card names the same three things.
+ *
+ * The label column is measured from the keys rather than written down beside them, so a
+ * fourth order stays one entry in `CARD_SORT_KEYS` and does not also have to be a number
+ * corrected here.
  */
+const KEY_LABEL_WIDTH = Math.max(...CARD_SORT_KEYS.map((key) => key.length));
+
 function printCardTimes(card: CardStamps): void {
-  for (const key of CARD_SORT_KEYS) console.log(`${key.padEnd(7)}  ${sortColumn(card, key)}`);
+  for (const key of CARD_SORT_KEYS)
+    console.log(`${key.padEnd(KEY_LABEL_WIDTH)}  ${sortColumn(card, key)}`);
   // The text is what this command exists to print, so it is kept a block of its own.
   console.log("");
 }
@@ -385,16 +392,17 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
   // `kozane card list --reverse` run outside one is a malformed command wherever it was
   // typed, and should say so rather than report the missing workspace it never got to.
   //
-  // Reported through `fail` rather than thrown, because outside `runWorkspaceCommand` there
-  // is nothing to catch them: commander does not await this action, so a throw from here
-  // reaches the user as an unhandled rejection and a stack trace instead of the one-line
-  // `Error: ...` every other refusal from this file prints.
+  // Thrown, not exited on: commander does not await this action, so nothing here catches a
+  // rejection by itself — the `.catch(fail)` on the action in `index.ts` is what turns
+  // these into the one-line `Error: ...` and the exit code every other refusal from this
+  // file prints. That keeps the exit in the CLI's outermost layer and leaves this function
+  // callable — and its refusals assertable — without ending the process.
   const { sort, reverse } = options;
   if (options.taskspace && (options.project || options.bundle))
-    fail(new Error("--taskspace cannot be combined with --project or --bundle."));
+    throw new Error("--taskspace cannot be combined with --project or --bundle.");
   // Without a key there is no order to reverse: the unsorted listing comes back in
   // whatever order SQLite hands the rows over, which is not an order anything promises.
-  if (reverse && !sort) fail(new Error("--reverse requires --sort."));
+  if (reverse && !sort) throw new Error("--reverse requires --sort.");
 
   // Both applied on every path below, so listing from a taskspace directory sorts the same
   // way — and prints the same column — as listing a project does.

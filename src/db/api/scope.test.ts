@@ -329,6 +329,21 @@ describe("getScopeProjectUsage", () => {
     expect(await getScopeProjectUsage({ db: d })).toEqual([{ scopeId, projectId }]);
   });
 
+  // The overlap between the two halves, which used to be collapsed in JS after running
+  // them as separate queries and is now the UNION's job. A project that reaches one scope
+  // both ways is still one row.
+  it("reports a project reached by both a card and a taskspace once", async () => {
+    const d = await createTestDB();
+    const projectId = await addProject({ db: d, name: "P" });
+    await addLayer({ db: d, projectId, name: "Base", isDefault: true });
+    const bundleId = await addBundle({ db: d, projectId, name: "B" });
+    const scopeId = await addScope({ db: d, name: "S" });
+    await addScopeRel({ db: d, scopeId, cardId: await addCard({ db: d, bundleId, content: "a" }) });
+    await addTaskspace({ db: d, projectId, scopeId, name: "ws" });
+
+    expect(await getScopeProjectUsage({ db: d })).toEqual([{ scopeId, projectId }]);
+  });
+
   it("ignores a taskspace with no project and one with no scope", async () => {
     const d = await createTestDB();
     const projectId = await addProject({ db: d, name: "P" });

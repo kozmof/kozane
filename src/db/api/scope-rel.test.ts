@@ -140,16 +140,16 @@ describe("getCardsByScopeWithBundleName", () => {
 });
 
 describe("addScopeMembers", () => {
-  it("adds multiple cards at once and returns true", async () => {
+  it("adds multiple cards at once", async () => {
     const { db, bundleId, projectId, scopeId, cardId } = await setup();
     const c2 = await addCard({ db, bundleId, content: "Card B" });
     const ok = await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId, c2] });
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards.map((c) => c.id)).toEqual(expect.arrayContaining([cardId, c2]));
   });
 
-  it("returns false when a cardId does not belong to the project", async () => {
+  it("names the cards when a cardId does not belong to the project", async () => {
     const db = await createTestDB();
     const p1 = await addProject({ db, name: "P1" });
     await addLayer({ db, projectId: p1, name: "Base", isDefault: true });
@@ -162,16 +162,32 @@ describe("addScopeMembers", () => {
     const cardInP2 = await addCard({ db, bundleId: b2, content: "C2" });
     // Trying to add a card from p2 while claiming project p1
     const ok = await addScopeMembers({ db, scopeId, projectId: p1, cardIds: [cardInP1, cardInP2] });
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
   });
 
-  it("is idempotent — adding the same cards again returns true and does not duplicate", async () => {
+  it("is idempotent — adding the same cards again does not duplicate them", async () => {
     const { db, projectId, scopeId, cardId } = await setup();
     await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId] });
     const ok = await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId] });
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards).toHaveLength(1);
+  });
+});
+
+describe("scope membership refusals", () => {
+  // Both of these answered a bare `false` for a missing scope and for foreign cards alike,
+  // so the DELETE route told a caller its cards were foreign when the scope was what did not
+  // exist. The reason is now carried out of the transaction that decided it.
+  it("names the scope rather than the cards when the scope does not exist", async () => {
+    const { db, projectId, cardId } = await setup();
+
+    await expect(
+      addScopeMembers({ db, scopeId: "no-such-scope", projectId, cardIds: [cardId] }),
+    ).resolves.toEqual({ ok: false, reason: "foreign-scope" });
+    await expect(
+      removeScopeMembersFromProject({ db, scopeId: "no-such-scope", projectId, cardIds: [cardId] }),
+    ).resolves.toEqual({ ok: false, reason: "foreign-scope" });
   });
 });
 
@@ -217,7 +233,7 @@ describe("removeScopeMembersFromProject", () => {
       cardIds: [cardId, c2],
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
   });
 
@@ -237,7 +253,7 @@ describe("removeScopeMembersFromProject", () => {
       cardIds: [cardId, otherCardId],
     });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
     expect(await getScopeRelsByCards({ db, cardIds: [cardId, otherCardId] })).toHaveLength(2);
   });
 });

@@ -99,9 +99,15 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;
   const { projectId, cardId } = params;
 
-  // Kept for the 404: deleteProjectCards reports a missing card as a plain `false`.
-  await requireCardInProject(db, projectId, cardId);
-  await deleteProjectCards({ db, projectId, cardIds: [cardId] });
+  // One read rather than two. This used to call `requireCardInProject` first, purely to get
+  // the 404 that `deleteProjectCards` could not distinguish from any other refusal; the
+  // refusal now says which it is, and the only one this route can meet is the card's.
+  //
+  // 404 rather than the 400 the batch routes answer with, and that is the difference between
+  // the two shapes: here the card is the resource the URL names, so its absence is the
+  // status. A batch endpoint names no resource but the project, which exists.
+  const result = await deleteProjectCards({ db, projectId, cardIds: [cardId] });
+  if (!result.ok) throw error(404, "Card not found");
 
   return json({ ok: true });
 };

@@ -96,7 +96,7 @@ export async function deleteProject({ db, projectId }: DeleteProject): Promise<v
     await tx.delete(projectTable).where(eq(projectTable.id, projectId));
     // Groups the project did not empty entirely are left alone by the sweep, so a group
     // that somehow spans two projects keeps the members it still has.
-    await dissolveOrphanGlueGroupsInTx(tx, glueIds);
+    await dissolveOrphanGlueGroupsInTx({ db: tx, glueIds });
 
     if (project?.isDefault) {
       // Ordered so the workspace promotes the same project twice running. uuidv7 ids sort

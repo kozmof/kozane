@@ -198,10 +198,16 @@ export const cardTable = sqliteTable(
      * foreign_keys=OFF` that does nothing inside the migrator's transaction, cascading away
      * every `scope_rel` and `glue_rel` row. So the default stays.
      *
-     * `$defaultFn` is what actually fills these on every insert through this table, and
-     * `db import` names both columns. A raw `INSERT INTO card` that omits them takes the
-     * default and lands at the epoch instead of failing — so write them, as the fixtures in
-     * `test-utils/db.ts` and the `db-json` tests do.
+     * The writers name both columns themselves — `addCard` and `addCards` through
+     * `newCardStamps`, the board's squash likewise, `db import` from the dump — so that the
+     * two columns of one card, and every card of one batch, come from a single reading of
+     * the clock. `$defaultFn` below is the backstop for an insert that names neither, and
+     * is what keeps such an insert off the epoch; it is called once per column per row, so
+     * it is not the thing to lean on where the two values have to agree.
+     *
+     * A raw `INSERT INTO card` bypasses both and takes the `DEFAULT 0`, landing at the
+     * epoch instead of failing — so write them, as the fixtures in `test-utils/db.ts` and
+     * the `db-json` tests do. `kozane doctor` reports the rows that got it wrong.
      */
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()

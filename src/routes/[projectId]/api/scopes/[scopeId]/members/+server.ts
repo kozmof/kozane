@@ -1,7 +1,8 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import { addScopeMembers, removeScopeMembersFromProject } from "$db/api/scope-rel";
 import { readJsonObject, requireStringArray } from "../../../../lib/request.js";
+import { rejectBatch } from "../../../../lib/rejection.js";
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -9,8 +10,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const cardIds = requireStringArray(body, "cardIds");
 
-  const ok = await addScopeMembers({ db, scopeId, projectId, cardIds });
-  if (!ok) throw error(400, "Scope or cards not found in project");
+  const result = await addScopeMembers({ db, scopeId, projectId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
 
   return json({ ok: true });
 };
@@ -21,8 +22,8 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const cardIds = requireStringArray(body, "cardIds");
 
-  const ok = await removeScopeMembersFromProject({ db, scopeId, projectId, cardIds });
-  if (!ok) throw error(400, "Some cards do not belong to this project");
+  const result = await removeScopeMembersFromProject({ db, scopeId, projectId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
 
   return json({ ok: true });
 };

@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDB } from "../../test-utils/db.js";
+import { createTestDB, seedCards } from "../../test-utils/db.js";
 import { cardTable } from "../schema.js";
 import type { DB } from "../tx.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
-import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
+import { INSERT_CHUNK_MAX, STATEMENT_PARAMS_MAX } from "../../lib/constants.js";
 import {
   addCard,
   addCards,
@@ -36,14 +36,14 @@ async function setup() {
 describe("addCards", () => {
   it("returns nothing for an empty list, without touching the database", async () => {
     const { db, bundleId } = await setup();
-    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
     expect(await addCards({ db, bundleId, layerId, cards: [] })).toEqual([]);
     expect(await getAllCards({ db, bundleId })).toHaveLength(0);
   });
 
   it("stores each row's own content and position", async () => {
     const { db, bundleId } = await setup();
-    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
     const ids = await addCards({
       db,
       bundleId,
@@ -64,7 +64,7 @@ describe("addCards", () => {
   // squashed card reads — a caller filing them into a scope pairs them up by position.
   it("returns ids in the order the rows were given, across a chunk boundary", async () => {
     const { db, bundleId } = await setup();
-    const layerId = await defaultLayerIdForBundle(db, bundleId);
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
     const cards = Array.from({ length: INSERT_CHUNK_MAX + 25 }, (_, index) => ({
       content: `card ${index}`,
       posX: index,
@@ -396,12 +396,14 @@ describe("updateCard", () => {
 });
 
 describe("updateProjectCardPositions", () => {
-  it("returns true for an empty positions array", async () => {
+  it("accepts an empty positions array", async () => {
     const { db, projectId } = await setup();
-    await expect(updateProjectCardPositions({ db, projectId, positions: [] })).resolves.toBe(true);
+    await expect(updateProjectCardPositions({ db, projectId, positions: [] })).resolves.toEqual({
+      ok: true,
+    });
   });
 
-  it("updates positions and returns true when all cards belong to the project", async () => {
+  it("updates positions when all cards belong to the project", async () => {
     const { db, projectId, bundleId } = await setup();
     const c1 = await addCard({ db, bundleId, content: "A", posX: 0, posY: 0 });
     const c2 = await addCard({ db, bundleId, content: "B", posX: 0, posY: 0 });
@@ -415,12 +417,12 @@ describe("updateProjectCardPositions", () => {
       ],
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ posX: 10, posY: 20 });
     expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ posX: 30, posY: 40 });
   });
 
-  it("returns false when a card does not belong to the project", async () => {
+  it("names the cards when one does not belong to the project", async () => {
     const { db, projectId, bundleId } = await setup();
     const ownCard = await addCard({ db, bundleId, content: "Mine", posX: 0, posY: 0 });
     const otherProjectId = await addProject({ db, name: "Other" });
@@ -437,8 +439,66 @@ describe("updateProjectCardPositions", () => {
       ],
     });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
     expect(await getCard({ db, bundleId, cardId: ownCard })).toMatchObject({ posX: 0, posY: 0 });
+  });
+
+  /**
+   * A drag wide enough that one `CASE` statement could not carry it.
+   *
+   * The two CASEs and the WHERE bind five parameters per card, so a request at `BATCH_MAX`
+   * builds a statement of ten thousand — under SQLite's own ceiling today, and under it only
+   * because nobody has added a third column to the CASE. The batching is what makes that a
+   * property of the code rather than of a comment: enough positions to need several
+   * statements still land as one atomic write.
+   */
+  it("applies a drag too wide for one statement, in batches, atomically", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
+    // Comfortably past what one statement affords at five parameters per row.
+    const count = STATEMENT_PARAMS_MAX;
+    const cardIds = await seedCards(db, { bundleId, layerId, count, prefix: "drag" });
+
+    const result = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: cardIds.map((cardId, index) => ({ cardId, posX: index + 1, posY: index + 2 })),
+    });
+
+    expect(result).toEqual({ ok: true });
+    const first = await getCard({ db, bundleId, cardId: cardIds[0] });
+    const last = await getCard({ db, bundleId, cardId: cardIds[count - 1] });
+    expect(first).toMatchObject({ posX: 1, posY: 2 });
+    expect(last).toMatchObject({ posX: count, posY: count + 1 });
+  });
+
+  it("moves nothing when a foreign card sits in a drag spanning several batches", async () => {
+    const { db, projectId, bundleId } = await setup();
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
+    const cardIds = await seedCards(db, {
+      bundleId,
+      layerId,
+      count: STATEMENT_PARAMS_MAX,
+      prefix: "drag",
+    });
+    const otherProjectId = await addProject({ db, name: "Other" });
+    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
+    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
+    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+
+    const result = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [...cardIds, foreignCard].map((cardId, index) => ({
+        cardId,
+        posX: index + 1,
+        posY: index + 2,
+      })),
+    });
+
+    // Ownership is checked before the first batch runs, so no batch runs at all.
+    expect(result).toEqual({ ok: false, reason: "foreign-cards" });
+    expect(await getCard({ db, bundleId, cardId: cardIds[0] })).toMatchObject({ posX: 0, posY: 0 });
   });
 
   it("applies the last entry when a cardId is repeated", async () => {
@@ -454,7 +514,7 @@ describe("updateProjectCardPositions", () => {
       ],
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getCard({ db, bundleId, cardId })).toMatchObject({ posX: 30, posY: 40 });
   });
 });
@@ -496,19 +556,19 @@ describe("getCardBundleNames", () => {
 describe("cardsInProject", () => {
   it("returns empty array for empty cardIds", async () => {
     const { db, projectId } = await setup();
-    expect(await cardsInProject(db, projectId, [])).toEqual([]);
+    expect(await cardsInProject({ db, projectId, cardIds: [] })).toEqual([]);
   });
 });
 
 describe("reassignCardsToBundle", () => {
-  it("returns true for an empty cardIds array", async () => {
+  it("accepts an empty cardIds array", async () => {
     const { db, projectId, bundleId } = await setup();
-    await expect(reassignCardsToBundle({ db, projectId, cardIds: [], bundleId })).resolves.toBe(
-      true,
-    );
+    await expect(
+      reassignCardsToBundle({ db, projectId, cardIds: [], bundleId }),
+    ).resolves.toEqual({ ok: true });
   });
 
-  it("reassigns cards to the target bundle and returns true", async () => {
+  it("reassigns cards to the target bundle", async () => {
     const { db, projectId, bundleId } = await setup();
     const targetBundle = await addBundle({ db, projectId, name: "Target" });
     const c1 = await addCard({ db, bundleId, content: "A" });
@@ -521,13 +581,13 @@ describe("reassignCardsToBundle", () => {
       bundleId: targetBundle,
     });
 
-    expect(ok).toBe(true);
+    expect(ok).toEqual({ ok: true });
     expect(await getCard({ db, bundleId: targetBundle, cardId: c1 })).toBeDefined();
     expect(await getCard({ db, bundleId: targetBundle, cardId: c2 })).toBeDefined();
     expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
   });
 
-  it("returns false when a card does not belong to the project", async () => {
+  it("names the cards when one does not belong to the project", async () => {
     const { db, projectId } = await setup();
     const targetBundle = await addBundle({ db, projectId, name: "Target" });
     const otherProjectId = await addProject({ db, name: "Other" });
@@ -542,10 +602,10 @@ describe("reassignCardsToBundle", () => {
       bundleId: targetBundle,
     });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
   });
 
-  it("returns false when the target bundle does not belong to the project", async () => {
+  it("names the bundle when the target does not belong to the project", async () => {
     const { db, projectId, bundleId } = await setup();
     const c1 = await addCard({ db, bundleId, content: "A" });
     const otherProjectId = await addProject({ db, name: "Other" });
@@ -559,7 +619,7 @@ describe("reassignCardsToBundle", () => {
       bundleId: foreignBundle,
     });
 
-    expect(ok).toBe(false);
+    expect(ok).toEqual({ ok: false, reason: "foreign-bundle" });
     expect(await getCard({ db, bundleId, cardId: c1 })).toBeDefined();
   });
 });
@@ -582,6 +642,7 @@ describe("reassignCardsToLayer", () => {
 
     const result = await reassignCardsToLayer({ db, projectId, cardIds: [c1, c2], layerId });
     expect(result.ok).toBe(true);
+
 
     expect(await getCard({ db, bundleId, cardId: c1 })).toMatchObject({ layerId });
     expect(await getCard({ db, bundleId, cardId: c2 })).toMatchObject({ layerId });
@@ -634,7 +695,7 @@ describe("reassignCardsToLayer", () => {
 
     await expect(
       reassignCardsToLayer({ db, projectId, cardIds: [foreignCard], layerId }),
-    ).resolves.toEqual({ ok: false });
+    ).resolves.toEqual({ ok: false, reason: "foreign-cards" });
   });
 
   it("refuses when the target layer belongs to another project", async () => {
@@ -651,7 +712,7 @@ describe("reassignCardsToLayer", () => {
 
     await expect(
       reassignCardsToLayer({ db, projectId, cardIds: [card], layerId: foreignLayer }),
-    ).resolves.toEqual({ ok: false });
+    ).resolves.toEqual({ ok: false, reason: "foreign-layer" });
     expect(await getCard({ db, bundleId, cardId: card })).toMatchObject({
       layerId: before!.layerId,
     });
@@ -686,22 +747,34 @@ describe("card timestamps", () => {
     expect(card?.updatedAt.getTime()).toBe(card?.createdAt.getTime());
   });
 
-  it("stamps every card of a batch insert", async () => {
+  /**
+   * One moment for the whole call, not one reading of the clock per column per row.
+   * A batch big enough to be split into several statements takes real time to write, and
+   * cards that arrived together must not be separable in the listing by a second's drift
+   * they never had — the same rule `db import` follows for a whole dump.
+   *
+   * Sized past {@link INSERT_CHUNK_MAX} so more than one statement is involved, which is
+   * where per-chunk stamps would begin to differ.
+   */
+  it("stamps every card of a batch insert with the same moment", async () => {
     const { db, bundleId } = await setup();
-    const layerId = await defaultLayerIdForBundle(db, bundleId);
-    const ids = await addCards({
+    const layerId = await defaultLayerIdForBundle({ db, bundleId });
+    await addCards({
       db,
       bundleId,
       layerId,
-      cards: [
-        { content: "first", posX: 0, posY: 0 },
-        { content: "second", posX: 0, posY: 0 },
-      ],
+      cards: Array.from({ length: INSERT_CHUNK_MAX + 5 }, (_unused, index) => ({
+        content: `card ${index}`,
+        posX: 0,
+        posY: 0,
+      })),
     });
-    for (const cardId of ids) {
-      const card = await getCard({ db, bundleId, cardId });
-      expect(card?.updatedAt.getTime()).toBe(card?.createdAt.getTime());
-    }
+    const rows = await db
+      .select({ createdAt: cardTable.createdAt, updatedAt: cardTable.updatedAt })
+      .from(cardTable);
+    expect(rows).toHaveLength(INSERT_CHUNK_MAX + 5);
+    for (const row of rows) expect(row.updatedAt.getTime()).toBe(row.createdAt.getTime());
+    expect(new Set(rows.map(({ createdAt }) => createdAt.getTime())).size).toBe(1);
   });
 
   it("moves updatedAt when the content changes, and leaves createdAt where it was", async () => {
