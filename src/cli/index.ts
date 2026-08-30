@@ -296,7 +296,8 @@ card
 card
   .command("show <cardId>")
   .description("Show a card content by full or short ID")
-  .action((cardId) => cardShow(cardId));
+  .option("--times", "Print created, updated, and gap above the text")
+  .action((cardId, opts) => cardShow(cardId, opts));
 
 card
   .command("layer <cardId> <layer>")

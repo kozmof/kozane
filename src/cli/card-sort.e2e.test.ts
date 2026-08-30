@@ -339,7 +339,7 @@ describe("kozane card list --sort", () => {
     const root = tempWorkspace();
     cli(root, "init");
 
-    expect(cli(root, "doctor")).toContain("✓  Card timestamps written");
+    expect(cli(root, "doctor")).toContain("✓  Card timestamps valid");
 
     await withDb(root, async (client) => {
       const [bundle, layer] = await Promise.all([
@@ -355,8 +355,96 @@ describe("kozane card list --sort", () => {
 
     const result = runCli(root, "doctor");
     expect(result.status).toBe(1);
-    expect(result.stdout).toContain("✗  Card timestamps written — 1 card stamped at the epoch");
+    expect(result.stdout).toContain(
+      "✗  Card timestamps valid — 1 card stamped outside what this app writes",
+    );
     // And the listing it warns about does read 1970, which is what makes it worth reporting.
     expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
+  }, 90_000);
+
+  /**
+   * The other end of the same hole. The columns are plain integers, so a hand-written
+   * `INSERT` can put a number in them that no `Date` can represent — and `toISOString`
+   * throws `RangeError: Invalid time value` on such a date. That reached the user as one
+   * line of error in place of the listing: every sound card in the project hidden in order
+   * to report a problem with one of them.
+   */
+  it("lists a card whose timestamp no date can be read from, and reports it", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    await withDb(root, async (client) => {
+      await client.execute({
+        sql: "UPDATE card SET created_at = ?, updated_at = ? WHERE id = 'untouched'",
+        args: [9_000_000_000_000_000, 9_000_000_000_000_000],
+      });
+    });
+
+    // The whole listing still prints, and the card that cannot be placed is last and says so.
+    expect(listed(root, "--sort", "created")).toEqual([
+      "2026-01-01T00:00:00Z  oldest",
+      "2026-02-01T00:00:00Z  reconsidered",
+      "invalid  untouched",
+    ]);
+    // `gap` too, where the unreadable value would otherwise have read as an honest `0s`.
+    expect(listed(root, "--sort", "gap")).toEqual([
+      "28d  reconsidered",
+      "90d  oldest",
+      "invalid  untouched",
+    ]);
+    // Carried along by --reverse like every other tie, rather than pinned to the end.
+    expect(listed(root, "--sort", "created", "--reverse")[0]).toBe("invalid  untouched");
+
+    const result = runCli(root, "doctor");
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain(
+      "✗  Card timestamps valid — 1 card stamped outside what this app writes",
+    );
+  }, 90_000);
+});
+
+describe("kozane card show --times", () => {
+  it("prints the three values --sort orders by, above the text", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    expect(cli(root, "card", "show", "reconsidered", "--times")).toBe(
+      [
+        "created  2026-02-01T00:00:00Z",
+        "updated  2026-03-01T00:00:00Z",
+        "gap      28d",
+        "",
+        "reconsidered",
+        "",
+      ].join("\n"),
+    );
+  }, 90_000);
+
+  it("prints the text and nothing else without the flag", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+
+    // What `kozane card show x > f.txt` writes. A history printed by default would land in
+    // the file too, so the flag is the whole of the difference.
+    expect(cli(root, "card", "show", "reconsidered")).toBe("reconsidered\n");
+  }, 90_000);
+
+  it("says invalid for a timestamp no date can be read from, as the listing does", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    await seedThreeCards(root);
+    await withDb(root, async (client) => {
+      await client.execute({
+        sql: "UPDATE card SET created_at = ?, updated_at = ? WHERE id = 'oldest'",
+        args: [9_000_000_000_000_000, 9_000_000_000_000_000],
+      });
+    });
+
+    expect(cli(root, "card", "show", "oldest", "--times")).toBe(
+      ["created  invalid", "updated  invalid", "gap      invalid", "", "oldest", ""].join("\n"),
+    );
   }, 90_000);
 });

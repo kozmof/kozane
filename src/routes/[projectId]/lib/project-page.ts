@@ -1,6 +1,7 @@
 import type { GlueRel } from "$db/api/types.js";
 import type { CardData, CardWithGlue } from "$lib/types.js";
 import { clamp } from "$lib/constants.js";
+import { compareIds } from "$lib/order.js";
 import type { CardPositionUpdate } from "$db/api/card.js";
 export type { CardPositionUpdate as CardPositionPatch } from "$db/api/card.js";
 
@@ -59,11 +60,9 @@ export type StackedLayer<T> = { layer: T; rank: number; active: boolean; floatin
  * the layers is derived from, so nothing has to re-decide what "in order" means.
  */
 export function orderLayers<T extends { id: string; position: number }>(layers: T[]): T[] {
-  // Plain comparison rather than localeCompare: the tiebreak has to land the same way as
+  // `compareIds` rather than localeCompare: the tiebreak has to land the same way as
   // SQLite's binary `ORDER BY id`, whatever locale the browser happens to be in.
-  return [...layers].sort(
-    (a, b) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-  );
+  return [...layers].sort((a, b) => a.position - b.position || compareIds(a.id, b.id));
 }
 
 /**

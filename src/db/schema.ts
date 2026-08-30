@@ -226,7 +226,7 @@ export const cardTable = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (t) => [
-    // Read on every page load and on every snapshot poll, by `getCardsByBundles`: the board
+    // Read on every page load and on every snapshot poll, by `getCardDataByBundles`: the board
     // asks for the cards of this project's bundles once a second for as long as a tab is
     // open. Without it SQLite answers that with a full scan of `card`, the largest table
     // here, per poll per tab.

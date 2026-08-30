@@ -23,6 +23,18 @@ const b = card("b", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z"); // gap 28d
 const c = card("c", "2026-03-01T00:00:00Z", "2026-03-01T00:00:00Z"); // gap 0
 const ids = (cards: CardTimes[]): string[] => cards.map(({ id }) => id);
 
+/**
+ * A card whose columns hold an integer too large for a `Date` — which is what drizzle hands
+ * back for a row a hand-written `INSERT` put a nonsense number in, and what `kozane doctor`
+ * reports. Built the way the driver builds it, seconds times a thousand, rather than as a
+ * bare `new Date(NaN)`: the point is that this is reachable from the column.
+ */
+const unreadable: CardTimes = {
+  id: "u",
+  createdAt: new Date(9_000_000_000_000_000 * 1000),
+  updatedAt: new Date(9_000_000_000_000_000 * 1000),
+};
+
 describe("isCardSortKey", () => {
   it("accepts every key the CLI advertises", () => {
     for (const key of CARD_SORT_KEYS) expect(isCardSortKey(key)).toBe(true);
@@ -77,6 +89,31 @@ describe("sortCards", () => {
     expect(ids(sortCards([a, backwards, c], "gap"))).toEqual(["c", "d", "a"]);
   });
 
+  it("puts a timestamp that names no moment last, and first when reversed", () => {
+    // Last rather than wherever a NaN comparison happened to leave it: the card that cannot
+    // be placed is put where a reader will see it. `--reverse` carries it along like
+    // everything else, since the whole comparison is flipped.
+    expect(ids(sortCards([b, unreadable, a, c], "created"))).toEqual(["a", "b", "c", "u"]);
+    expect(ids(sortCards([b, unreadable, a, c], "created", true))).toEqual(["u", "c", "b", "a"]);
+    expect(ids(sortCards([b, unreadable, a, c], "gap"))).toEqual(["c", "a", "b", "u"]);
+  });
+
+  it("orders the same however the unreadable card arrives, so the comparator stays total", () => {
+    // NaN is neither less nor greater, so subtracting leaves two readable cards each
+    // comparing equal to the unreadable one while ordering against each other — an
+    // inconsistent comparator, whose result depends on the order the sort walked the array.
+    const expected = ["a", "b", "c", "u"];
+    expect(ids(sortCards([unreadable, a, b, c], "created"))).toEqual(expected);
+    expect(ids(sortCards([a, unreadable, b, c], "created"))).toEqual(expected);
+    expect(ids(sortCards([a, b, unreadable, c], "created"))).toEqual(expected);
+    expect(ids(sortCards([c, b, a, unreadable], "created"))).toEqual(expected);
+  });
+
+  it("keeps two unreadable cards apart by id", () => {
+    const other: CardTimes = { ...unreadable, id: "t" };
+    expect(ids(sortCards([unreadable, other], "created"))).toEqual(["t", "u"]);
+  });
+
   it("leaves the caller's array alone", () => {
     const cards = [c, a, b];
     sortCards(cards, "created");
@@ -98,6 +135,12 @@ describe("formatGap", () => {
     expect(formatGap(119 * 60_000)).toBe("1h");
     expect(formatGap(999)).toBe("0s");
   });
+
+  it("says so rather than reading 0s when the interval is not a number", () => {
+    // `0s` would claim the card was rewritten the second it was written.
+    expect(formatGap(Number.NaN)).toBe("invalid");
+    expect(formatGap(Number.POSITIVE_INFINITY)).toBe("invalid");
+  });
 });
 
 describe("sortColumn", () => {
@@ -109,5 +152,17 @@ describe("sortColumn", () => {
   it("prints the interval for gap", () => {
     expect(sortColumn(a, "gap")).toBe("1d");
     expect(sortColumn(c, "gap")).toBe("0s");
+  });
+
+  it("names a timestamp it cannot read rather than throwing on it", () => {
+    // `toISOString` throws `RangeError: Invalid time value` on such a date, which reached
+    // the user as one line of error in place of the whole listing — every sound card in the
+    // project hidden to report a problem with one of them.
+    for (const key of CARD_SORT_KEYS) expect(sortColumn(unreadable, key)).toBe("invalid");
+  });
+
+  it("prints the largest date a listing can hold, which is readable", () => {
+    const far = { ...c, createdAt: new Date(8_640_000_000_000 * 1000) };
+    expect(sortColumn(far, "created")).toBe("+275760-09-13T00:00:00Z");
   });
 });

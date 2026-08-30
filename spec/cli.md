@@ -443,7 +443,7 @@ Checks (in order):
 | `config.json` valid           | parses as valid JSON with expected shape           |
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
 | DB migrations current         | migration status is `current`                      |
-| Card timestamps written       | no card carries an epoch timestamp                 |
+| Card timestamps valid         | every card's timestamps name a moment              |
 | Port available                | configured port not already in use                 |
 
 Exit code `0` if all checks pass, `1` otherwise.
@@ -456,19 +456,22 @@ Output:
   ✓  config.json valid
   ✓  kozane.db readable/writable
   ✓  DB migrations current
-  ✓  Card timestamps written
+  ✓  Card timestamps valid
   ✓  Port 17173 available
 ```
 
 A failed `config.json valid` check points at `kozane doctor config`, which reports what
 is actually wrong. `doctor` itself keeps running through a broken config.
 
-`Card timestamps written` runs only when the migrations are current, since it reads columns
-that migration 0011 adds. It counts cards whose `created_at` or `updated_at` is the epoch,
-which is what a hand-written `INSERT INTO card` naming neither column leaves behind — the
-columns carry a `DEFAULT 0` that SQLite will not let the schema drop. Every insert the app
-makes writes both, so a non-zero count means the database was edited by hand and
-`kozane card list --sort` will report those cards as 1970.
+`Card timestamps valid` runs only when the migrations are current, since it reads columns
+that migration 0011 adds. It counts cards whose `created_at` or `updated_at` falls outside
+the range a timestamp this app wrote can hold — at or before the epoch, or past the largest
+instant a date can represent. The epoch is what a hand-written `INSERT INTO card` naming
+neither column leaves behind, since the columns carry a `DEFAULT 0` that SQLite will not let
+the schema drop; a value beyond the date range is one only hand-written SQL can put there.
+Every insert the app makes writes both columns, so a non-zero count means the database was
+edited by hand and `kozane card list --sort` will report those cards as `1970` or
+`invalid`.
 
 ---
 
@@ -774,7 +777,24 @@ Prints a card content by full or short ID. Line breaks are preserved.
 ```bash
 kozane card show <cardId>
 kozane card show 17b86d2
+kozane card show 17b86d2 --times
 ```
+
+`--times` prints the card's history above its text, as the three values
+`kozane card list --sort` orders by, followed by a blank line:
+
+```
+created  2026-02-01T00:00:00Z
+updated  2026-03-01T00:00:00Z
+gap      28d
+
+A card reconsidered a month later
+```
+
+Without the flag the output is the card's text and nothing else, so
+`kozane card show <cardId> > card.txt` writes the card rather than the card and a header.
+The same rules apply as in the listing: only a change to a card's text moves `updated`, and
+a timestamp that names no moment reads `invalid`.
 
 ---
 
@@ -869,6 +889,11 @@ d981fa1  General  (0, 0)  0s  A card added and left alone
 
 Cards created before this option existed carry the timestamp of the migration that added
 the columns, so they read as never since edited until their text is next changed.
+
+A card whose column holds a value no date can be read from prints `invalid` in place of the
+timestamp or interval, and sorts after every card that does name a moment — first, rather
+than last, under `--reverse`. The rest of the listing prints as it would have. Only
+hand-written SQL can put such a value in the column, and `kozane doctor` reports it.
 
 Both timestamps are read by the CLI only. The board is not sent them and cannot order or
 display by them, and `kozane net ssg generate` output does not contain them.

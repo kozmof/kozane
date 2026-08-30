@@ -6,6 +6,7 @@ import type { NeedsDB, NeedsBundle, Card } from "./types.js";
 import type { CardData } from "../../lib/types.js";
 import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
 import { BATCH_MAX, chunked } from "../../lib/constants.js";
+import { compareIds } from "../../lib/order.js";
 import { assertFound, columnCount } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
@@ -562,7 +563,7 @@ export async function reassignCardsToLayer({
     // Their order relative to each other is what the user arranged, so it is kept; the id
     // breaks ties the same way the rest of the app does.
     const stacking = [...arriving]
-      .sort((a, b) => a.zIndex - b.zIndex || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id))
       .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
 
     await tx

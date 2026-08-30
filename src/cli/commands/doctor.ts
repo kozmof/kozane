@@ -1,7 +1,7 @@
 import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { createConnection } from "node:net";
-import { count, eq, or } from "drizzle-orm";
+import { count, gt, lt, or } from "drizzle-orm";
 import { createDb } from "../../db/client.js";
 import { cardTable } from "../../db/schema.js";
 import { findWorkspaceRoot } from "../../db/internal/config.js";
@@ -21,28 +21,36 @@ import { diagnoseConfig } from "../lib/config-diagnostics.js";
 type Check = { label: string; ok: boolean; detail?: string };
 
 /**
- * The value a card lands on when its timestamps are not written at all.
+ * The range a card timestamp can hold and still name a moment this app could have written.
  *
- * Migration 0011 had to give `created_at` and `updated_at` a literal `DEFAULT 0` in order to
- * add them NOT NULL to a table with rows in it, and SQLite cannot drop a column default
- * afterwards. So an `INSERT INTO card` that names neither column succeeds and lands the row
- * at the epoch rather than failing — the one way a card can carry a history it never had.
- * Nothing in the app writes such a row: inserts go through `cardTable`'s `$defaultFn` and
- * `db import` names both columns. What reaches here is hand-written SQL against the
- * workspace database, and `kozane card list --sort created` would report it as 1970.
+ * The low end is one second past the epoch. Migration 0011 had to give `created_at` and
+ * `updated_at` a literal `DEFAULT 0` in order to add them NOT NULL to a table with rows in
+ * it, and SQLite cannot drop a column default afterwards — so an `INSERT INTO card` that
+ * names neither column succeeds and lands the row at the epoch rather than failing.
+ *
+ * The high end is the largest instant a `Date` can represent. Past it, or below the matching
+ * negative, drizzle hands the column back as an Invalid Date: a card that
+ * `kozane card list --sort` can order — last, deliberately — but can print no time for.
+ *
+ * Nothing in the app writes a card outside this range. Inserts go through the `$defaultFn`
+ * on `cardTable` and `db import` names both columns, so what reaches here is hand-written
+ * SQL against the workspace database.
  */
-const CARD_TIMESTAMP_EPOCH = new Date(0);
+const EARLIEST_CARD_STAMP = new Date(1_000);
+const LATEST_CARD_STAMP = new Date(8_640_000_000_000_000);
 
-/** How many cards carry {@link CARD_TIMESTAMP_EPOCH} in either column. */
-async function epochStampedCards(url: string): Promise<number> {
+/** How many cards carry either column outside that range. */
+async function badlyStampedCards(url: string): Promise<number> {
   const db = await createDb(url);
   const [row] = await db
     .select({ total: count() })
     .from(cardTable)
     .where(
       or(
-        eq(cardTable.createdAt, CARD_TIMESTAMP_EPOCH),
-        eq(cardTable.updatedAt, CARD_TIMESTAMP_EPOCH),
+        lt(cardTable.createdAt, EARLIEST_CARD_STAMP),
+        gt(cardTable.createdAt, LATEST_CARD_STAMP),
+        lt(cardTable.updatedAt, EARLIEST_CARD_STAMP),
+        gt(cardTable.updatedAt, LATEST_CARD_STAMP),
       ),
     );
   return row?.total ?? 0;
@@ -154,24 +162,25 @@ export async function doctor(): Promise<void> {
     checks.push(check("DB migrations current", migrationOk, detail));
   }
 
-  // 7. Card timestamps written rather than defaulted. Only once the migrations are current,
-  // because before 0011 has run there are no columns to read — a workspace that needs
-  // migrating is already reported by the check above, and asking this of it would report the
-  // same problem a second time in a more confusing way.
+  // 7. Card timestamps that name a moment, rather than defaulted or hand-edited past what a
+  // date can hold. Only once the migrations are current, because before 0011 has run there
+  // are no columns to read — a workspace that needs migrating is already reported by the
+  // check above, and asking this of it would report the same problem a second time in a more
+  // confusing way.
   if (dbOk && migrationOk) {
     let stampOk = false;
     let detail: string | undefined;
     try {
-      const stale = await epochStampedCards(dbUrl(resolve(root)));
+      const stale = await badlyStampedCards(dbUrl(resolve(root)));
       stampOk = stale === 0;
       if (stale > 0)
         detail =
-          `${plural(stale, "card")} stamped at the epoch, likely inserted by hand; ` +
-          "kozane card list --sort created reports them as 1970";
+          `${plural(stale, "card")} stamped outside what this app writes, likely inserted ` +
+          "by hand; kozane card list --sort reports them as 1970 or invalid";
     } catch (e) {
       detail = e instanceof Error ? e.message : String(e);
     }
-    checks.push(check("Card timestamps written", stampOk, detail));
+    checks.push(check("Card timestamps valid", stampOk, detail));
   }
 
   // 8. Port available

@@ -13,12 +13,14 @@ import {
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import {
-  compareIds,
+  CARD_SORT_KEYS,
   sortCards,
   sortColumn,
   type CardSortKey,
+  type CardStamps,
   type CardTimes,
 } from "../lib/card-sort.js";
+import { compareIds } from "../../lib/order.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
@@ -42,6 +44,7 @@ type CardAddOptions = Omit<CardOptions, "taskspace"> & {
   y?: number;
 };
 type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
+type CardShowOptions = { times?: boolean };
 
 /** What {@link printCards} needs of a card: the fields every listing prints. */
 type PrintableCard = {
@@ -285,7 +288,22 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
   });
 }
 
-export async function cardShow(requestedId: string): Promise<void> {
+/**
+ * The three lines `--times` puts above the text, printed through the same {@link sortColumn}
+ * `card list --sort` prints its column with, so one card reads the same whichever command
+ * showed it — the unreadable timestamps of a hand-edited row included.
+ *
+ * `gap` is derived from the two above it rather than stored, and is listed all the same:
+ * it is what `--sort gap` orders by, and a card is easier to find in that listing when the
+ * command that shows one card names the same three things.
+ */
+function printCardTimes(card: CardStamps): void {
+  for (const key of CARD_SORT_KEYS) console.log(`${key.padEnd(7)}  ${sortColumn(card, key)}`);
+  // The text is what this command exists to print, so it is kept a block of its own.
+  console.log("");
+}
+
+export async function cardShow(requestedId: string, options: CardShowOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     // Ids alone: resolving a short id needs every id in the workspace, but printing one
     // card needs one card's text. Selected together, `kozane card show` read the whole
@@ -297,13 +315,21 @@ export async function cardShow(requestedId: string): Promise<void> {
       "Card",
     );
     const card = await db
-      .select({ content: cardTable.content })
+      .select({
+        content: cardTable.content,
+        createdAt: cardTable.createdAt,
+        updatedAt: cardTable.updatedAt,
+      })
       .from(cardTable)
       .where(eq(cardTable.id, cardId))
       .get();
     // Not `findById`: the row is fetched by a second query rather than found in the list
     // the id was resolved against, which is the case its docstring warns a `!` would break.
     if (!card) throw new Error(`Card not found: ${requestedId}`);
+    // Behind a flag, and above the text rather than below it. Without the flag this command
+    // prints a card's text and nothing else, which is what makes `kozane card show x > f.txt`
+    // write the card — a history printed by default would end up in the file too.
+    if (options.times) printCardTimes(card);
     console.log(card.content);
   });
 }
@@ -342,7 +368,8 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(eq(bundleTable.projectId, origin.projectId));
     // Equal distances are broken by `compareIds`, which is what `sortCards` breaks equal
-    // timestamps with: the reason it is not `localeCompare` is written there once.
+    // timestamps with and `orderLayers` equal positions: the reason it is not
+    // `localeCompare` is written once, in `lib/order.ts`.
     const sorted: NearestCard[] = cards
       .map((card) => ({
         ...card,
