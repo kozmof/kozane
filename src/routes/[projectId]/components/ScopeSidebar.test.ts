@@ -162,15 +162,15 @@ describe("ScopeSidebar focus state", () => {
     expect(scopeButton().getAttribute("aria-pressed")).toBe("true");
   });
 
-  // The eye says the board is being looked at through this scope — cards outside it are
-  // dimmed on the canvas. Resting, the same eye is drawn shut: a bare lid, with no pupil to
-  // look with, which is what separates the two states.
-  it("opens the closed eye once the scope is focused", () => {
+  // The centre mark says the board is held to this scope — cards outside it are dimmed on
+  // the canvas. Resting, the frame is drawn empty, and that mark is the whole difference
+  // between the two states.
+  it("marks the framed region once the scope is focused", () => {
     mount({ activeScope: null });
-    expect(scopeButton().querySelector("svg circle")).toBeNull();
+    expect(scopeButton().querySelector("svg rect")).toBeNull();
 
     cleanup();
     mount();
-    expect(scopeButton().querySelector("svg circle")).toBeTruthy();
+    expect(scopeButton().querySelector("svg rect")).toBeTruthy();
   });
 });

@@ -74,16 +74,16 @@ describe("ScopeControl", () => {
     );
   });
 
-  // The eye is the state, the same glyph the side panel's focused row carries. Resting, it
-  // is the same eye drawn shut — a bare lid, with no pupil to look with.
-  it("draws a closed eye while nothing is focused", () => {
+  // The centre mark is the state, the same glyph the side panel's focused row carries.
+  // Resting, the frame is drawn empty.
+  it("leaves the frame empty while nothing is focused", () => {
     mount();
-    expect(trigger().querySelector("svg circle")).toBeNull();
+    expect(trigger().querySelector("svg rect")).toBeNull();
   });
 
-  it("opens the eye on the trigger when a scope is already focused", () => {
+  it("marks the frame on the trigger when a scope is already focused", () => {
     mount({ activeScope: "scope-1" });
-    expect(trigger().querySelector("svg circle")).toBeTruthy();
+    expect(trigger().querySelector("svg rect")).toBeTruthy();
   });
 
   // Escape closes the menu without leaving the scope: the board stays where it was put, and

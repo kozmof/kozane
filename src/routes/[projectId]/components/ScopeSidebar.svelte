@@ -158,33 +158,24 @@
   });
 </script>
 
-<!-- A closed lid rather than a different object: the same eye, not looking through this
-     scope. One stroke carries far less weight than the filled open eye, so it is drawn at
-     neutral.iconDim to stay legible at 10px. -->
-{#snippet closedEyeIcon()}
-  <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style="flex-shrink:0">
-    <path
-      d="M1 5.8C3 8.6 4.9 9.7 7 9.7S11 8.6 13 5.8"
-      stroke="var(--colors-neutral-icon-dim)"
-      stroke-width="1.1"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+<!-- Corner marks framing a region, nothing in the middle: this scope is not the one the
+     board is held to. Sparse enough that it needs neutral.iconDim to read at 10px.
+
+     Redrawn on a 10-unit grid rather than sharing the corner control's 14-unit one. Sharing
+     it meant scaling 14 units into 10 pixels, which puts every edge on a fraction of a pixel
+     and blurs the whole figure. Same design, drawn to the size it is actually rendered at. -->
+{#snippet frameIcon()}
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" shape-rendering="crispEdges" style="flex-shrink:0">
+    <path d="M4 1.5H1.5V4M6 1.5h2.5V4M8.5 6v2.5H6M4 8.5H1.5V6" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
   </svg>
 {/snippet}
 
 <!-- Only ever drawn on the focused row, where the fill is ink.charcoal, so it is stroked in
-     the row colour rather than the dim grey the resting icon uses. Same geometry as the
-     corner control, drawn smaller. -->
-{#snippet eyeIcon()}
-  <svg width="10" height="10" viewBox="0 0 14 14" fill="none" style="flex-shrink:0">
-    <path
-      d="M1 7C3 4.2 4.9 3.1 7 3.1S11 4.2 13 7c-2 2.8-3.9 3.9-6 3.9S3 9.8 1 7Z"
-      stroke="currentColor"
-      stroke-width="1.1"
-      stroke-linejoin="round"
-    />
-    <circle cx="7" cy="7" r="1.8" fill="currentColor" />
+     the row colour rather than the dim grey the resting icon uses. -->
+{#snippet frameHeldIcon()}
+  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" shape-rendering="crispEdges" style="flex-shrink:0">
+    <path d="M4 1.5H1.5V4M6 1.5h2.5V4M8.5 6v2.5H6M4 8.5H1.5V6" stroke="currentColor" stroke-width="1" />
+    <rect x="4" y="4" width="2" height="2" fill="currentColor" />
   </svg>
 {/snippet}
 
@@ -221,9 +212,9 @@
             aria-pressed={active}
             onclick={() => (activeScope = active ? null : scope.id)}
           >
-            <!-- The eye is the state, not decoration: this is the scope the board is
-                 currently being looked at through. -->
-            {#if active}{@render eyeIcon()}{:else}{@render closedEyeIcon()}{/if}
+            <!-- The centre mark is the state, not decoration: this is the scope the board
+                 is currently held to. -->
+            {#if active}{@render frameHeldIcon()}{:else}{@render frameIcon()}{/if}
             <span class={flex1Class}>{scope.name}</span>
             <!-- This project's cards in the scope, not the scope's total: scopeRels is
                  built from this project's cards. A shared scope reads differently on each

@@ -49,8 +49,8 @@
   const triggerRestClass = css({
     backgroundColor: "ink.light",
     borderColor: "neutral.border",
-    // A lone lid stroke carries much less weight than the filled open eye, so it is drawn
-    // darker than a resting icon otherwise would be, to hold the corner at all.
+    // Corner marks are sparse — four short strokes and no enclosed shape — so they are
+    // drawn darker than a resting icon otherwise would be, to hold the corner at all.
     color: "neutral.iconDim",
   });
   // The same filled treatment the focused row in the side panel carries, so the two places
@@ -80,27 +80,26 @@
   const rowNameClass = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
 </script>
 
-{#snippet closedEyeGlyph()}
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <path
-      d="M1 5.8C3 8.6 4.9 9.7 7 9.7S11 8.6 13 5.8"
-      stroke="currentColor"
-      stroke-width="1.1"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-    />
+<!-- Corner marks framing a region, and nothing in the middle: a board with no part of it
+     singled out. Four corners rather than a closed box so it does not read as another card,
+     and one path rather than four so the DOM stays as small as the drawing.
+
+     The figure is drawn to the pixel grid: the viewBox matches the rendered size so a unit
+     is a pixel, strokes sit on half-units so a 1-wide stroke fills one pixel instead of
+     straddling two, and crispEdges keeps the browser from softening what is already
+     aligned. Every segment here is axis-aligned, which is the case crispEdges is for. -->
+{#snippet frameGlyph()}
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" shape-rendering="crispEdges" aria-hidden="true">
+    <path d="M5.5 2.5H2.5v3M8.5 2.5h3v3M11.5 8.5v3h-3M5.5 11.5H2.5V8.5" stroke="currentColor" stroke-width="1" />
   </svg>
 {/snippet}
 
-{#snippet eyeGlyph()}
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-    <path
-      d="M1 7C3 4.2 4.9 3.1 7 3.1S11 4.2 13 7c-2 2.8-3.9 3.9-6 3.9S3 9.8 1 7Z"
-      stroke="currentColor"
-      stroke-width="1.1"
-      stroke-linejoin="round"
-    />
-    <circle cx="7" cy="7" r="1.8" fill="currentColor" />
+<!-- The same frame with the region held: one small mark at the centre, the only filled
+     shape either state carries. Whole units, so its edges land on pixel boundaries too. -->
+{#snippet frameHeldGlyph()}
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" shape-rendering="crispEdges" aria-hidden="true">
+    <path d="M5.5 2.5H2.5v3M8.5 2.5h3v3M11.5 8.5v3h-3M5.5 11.5H2.5V8.5" stroke="currentColor" stroke-width="1" />
+    <rect x="6" y="6" width="2" height="2" fill="currentColor" />
   </svg>
 {/snippet}
 
@@ -125,9 +124,9 @@
       aria-haspopup="listbox"
       onclick={() => (open = !open)}
     >
-      <!-- The eye is the state, the same as in the side panel: this is the scope the board
-           is being looked at through. -->
-      {#if active}{@render eyeGlyph()}{:else}{@render closedEyeGlyph()}{/if}
+      <!-- The centre mark is the state, the same as in the side panel: this is the scope
+           the board is currently held to. -->
+      {#if active}{@render frameHeldGlyph()}{:else}{@render frameGlyph()}{/if}
     </button>
 
     {#if open}
