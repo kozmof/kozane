@@ -190,6 +190,19 @@ export const cardTable = sqliteTable(
      * widening every card is still one line of config rather than a pass over the table.
      */
     width: integer(),
+    /**
+     * Both timestamps carry a `DEFAULT 0` in the database that this declaration does not
+     * mention. Migration 0011 needed one to add the columns NOT NULL to a table with rows
+     * in it, and SQLite cannot drop a column default afterwards — the only way out is a
+     * full table rebuild, which for `card` means `DROP TABLE` under a `PRAGMA
+     * foreign_keys=OFF` that does nothing inside the migrator's transaction, cascading away
+     * every `scope_rel` and `glue_rel` row. So the default stays.
+     *
+     * `$defaultFn` is what actually fills these on every insert through this table, and
+     * `db import` names both columns. A raw `INSERT INTO card` that omits them takes the
+     * default and lands at the epoch instead of failing — so write them, as the fixtures in
+     * `test-utils/db.ts` and the `db-json` tests do.
+     */
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
@@ -203,6 +216,10 @@ export const cardTable = sqliteTable(
      * read "last moved" for most cards, and the interval `kozane card list --sort gap`
      * reports — how long a card stood before it was rewritten — would be reset by arranging
      * the board rather than by thinking on it.
+     *
+     * Text that arrives unchanged does not count either: `updateCard` reads the card and
+     * compares before deciding, because the board's composer sends the textarea's contents
+     * on every save whether or not a character of it was edited.
      */
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()

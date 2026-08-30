@@ -122,12 +122,16 @@ describe("additional database CLI branches", () => {
         [
           { sql: "INSERT INTO scope (id, name) VALUES ('s1', 'demo')" },
           { sql: "INSERT INTO glue (id) VALUES ('g1')" },
+          // The timestamps are written rather than left to the column default: migration
+          // 0011 had to give them one to add them NOT NULL, and a row that takes it lands
+          // at the epoch. Nothing here reads them, but a fixture that leans on that default
+          // is a fixture that quietly disagrees with every card the app itself writes.
           {
-            sql: "INSERT INTO card (id, bundle_id, layer_id, content) SELECT 'c1', ?, id, 'one' FROM layer LIMIT 1",
+            sql: "INSERT INTO card (id, bundle_id, layer_id, content, created_at, updated_at) SELECT 'c1', ?, id, 'one', unixepoch(), unixepoch() FROM layer LIMIT 1",
             args: [bundleId],
           },
           {
-            sql: "INSERT INTO card (id, bundle_id, layer_id, content) SELECT 'c2', ?, id, 'two' FROM layer LIMIT 1",
+            sql: "INSERT INTO card (id, bundle_id, layer_id, content, created_at, updated_at) SELECT 'c2', ?, id, 'two', unixepoch(), unixepoch() FROM layer LIMIT 1",
             args: [bundleId],
           },
           { sql: "INSERT INTO glue_rel (glue_id, card_id) VALUES ('g1','c1'), ('g1','c2')" },

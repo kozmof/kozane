@@ -20,8 +20,8 @@ export type CardTimes = {
   updatedAt: Date;
 };
 
-export function isCardSortKey(value: string): value is CardSortKey {
-  return (CARD_SORT_KEYS as readonly string[]).includes(value);
+export function isCardSortKey(value: unknown): value is CardSortKey {
+  return (CARD_SORT_KEYS as readonly unknown[]).includes(value);
 }
 
 /**
@@ -44,7 +44,13 @@ function sortValue(card: CardTimes, key: CardSortKey): number {
 }
 
 /**
- * Ascending by the key, with the id breaking ties the way the rest of the app breaks them.
+ * Ascending by the key, with the id breaking ties.
+ *
+ * The tiebreak is a plain comparison rather than `localeCompare`, for the reason
+ * `orderLayers` gives: it has to land the same way as SQLite's binary `ORDER BY id`,
+ * whatever locale the machine running the CLI happens to be in. Card ids are UUIDv7 and the
+ * two agree on those, but the ids a test or an import can put in the column are not, and an
+ * order that depends on `LANG` is not an order worth promising in the spec.
  *
  * `reverse` flips the whole comparison, ties included, so the listing is the exact reverse
  * of the one without it — two cards created in the same second keep swapping places with
@@ -55,7 +61,9 @@ function sortValue(card: CardTimes, key: CardSortKey): number {
 export function sortCards<T extends CardTimes>(cards: T[], key: CardSortKey, reverse = false): T[] {
   const direction = reverse ? -1 : 1;
   return [...cards].sort(
-    (a, b) => direction * (sortValue(a, key) - sortValue(b, key) || a.id.localeCompare(b.id)),
+    (a, b) =>
+      direction *
+      (sortValue(a, key) - sortValue(b, key) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
   );
 }
 
@@ -72,6 +80,11 @@ const GAP_UNITS = [
  * card rewritten twenty hours after it was added reads `20h`, not `1d`. Timestamps are
  * stored to the second, so anything under a second is a card added and edited within the
  * same second and reads `0s`.
+ *
+ * A negative interval means a row whose `updated_at` precedes its `created_at`, which
+ * nothing in the app can write and only a hand-edited database or a doctored import can
+ * hold. It reads `0s` rather than `-3d`: the clamp is on the seconds branch because that is
+ * the only branch a negative reaches, every unit above it requiring a positive threshold.
  */
 export function formatGap(milliseconds: number): string {
   for (const { suffix, ms } of GAP_UNITS) {

@@ -12,7 +12,7 @@ import {
 } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
-import { sortCards, sortColumn, type CardSortKey } from "../lib/card-sort.js";
+import { sortCards, sortColumn, type CardSortKey, type CardTimes } from "../lib/card-sort.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
@@ -46,7 +46,7 @@ type ListedCard = {
 };
 type DistanceListedCard = ListedCard & { distance: number };
 /** What `card list` selects: the columns `--sort` orders by ride along with the rest. */
-type TimedListedCard = ListedCard & { createdAt: Date; updatedAt: Date };
+type TimedListedCard = ListedCard & CardTimes;
 
 async function resolveBundleId(db: DB, projectId: string, requestedId?: string): Promise<string> {
   if (requestedId) {
@@ -353,7 +353,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
 
     // Applied on every path below, so listing from a taskspace directory sorts the same way
     // listing a project does.
-    const ordered = <T extends { id: string; createdAt: Date; updatedAt: Date }>(cards: T[]): T[] =>
+    const ordered = <T extends CardTimes>(cards: T[]): T[] =>
       options.sort ? sortCards(cards, options.sort, options.reverse) : cards;
 
     const locatedMarker =

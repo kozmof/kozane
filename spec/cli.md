@@ -840,6 +840,11 @@ ISO timestamp to the second for `created` and `updated`, and the interval in its
 whole unit for `gap` (`0s`, `45s`, `12m`, `3h`, `5d`). Without `--sort` the line is
 unchanged.
 
+The column goes before the text rather than after it because card text may contain
+anything, trailing spaces included, so the end of the line is not a place another field
+can be told apart from. A script that reads the card text as everything past the
+coordinates must therefore account for the column when it passes `--sort`, or not pass it.
+
 ```bash
 kozane card list --sort created
 kozane card list --sort updated --reverse

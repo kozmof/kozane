@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
@@ -19,8 +19,21 @@ const cliEntry = resolve("src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
 const tempRoots: string[] = [];
 
-/** The `when` of migration 0011 in `drizzle/meta/_journal.json`. */
-const CARD_TIMESTAMPS_MIGRATION_WHEN = 1788078370276;
+/**
+ * The `when` of migration 0011, read out of the journal rather than copied from it, so
+ * regenerating a migration cannot leave this test rolling a workspace back to the wrong
+ * point and still passing for the wrong reason.
+ */
+const CARD_TIMESTAMPS_MIGRATION_WHEN = migrationWhen("0011_card_timestamps");
+
+function migrationWhen(tag: string): number {
+  const journal = JSON.parse(readFileSync(resolve("drizzle/meta/_journal.json"), "utf-8")) as {
+    entries: { tag: string; when: number }[];
+  };
+  const entry = journal.entries.find((candidate) => candidate.tag === tag);
+  if (!entry) throw new Error(`No migration tagged ${tag} in drizzle/meta/_journal.json`);
+  return entry.when;
+}
 
 function tempWorkspace(): string {
   const root = mkdtempSync(join(tmpdir(), "kozane-card-sort-e2e-"));

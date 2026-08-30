@@ -197,6 +197,9 @@ function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
  * in seconds, matching `integer({ mode: "timestamp" })` and the `unixepoch()` the migration
  * uses. A row that somehow carries a value already keeps it, so a newer export mislabelled
  * with an older version number is not overwritten.
+ *
+ * One `now` for the whole dump rather than one per card: an import is a single moment, and
+ * cards that arrived together should not be separable by a second's drift they never had.
  */
 function upgradeCardTimestamps(tables: Partial<TableRows>): void {
   const now = Math.floor(Date.now() / 1000);

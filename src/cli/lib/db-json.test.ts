@@ -66,12 +66,16 @@ async function seedDb(dbUrl: string): Promise<void> {
             1_700_000_000_001,
           ],
         },
+        // Both timestamps are written rather than left to the column default that migration
+        // 0011 needed in order to add them NOT NULL: a row that takes that default lands at
+        // the epoch, and a seed that exports as 1970 is not the seed these round trips mean
+        // to be testing.
         {
-          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
           args: ["card-1", "bundle-1", "layer-1", "taskspace-1", "First", 10, 20],
         },
         {
-          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
           args: ["card-2", "bundle-1", "layer-1", null, "Second", 30, 40],
         },
         {
@@ -405,7 +409,7 @@ describe("import batching", () => {
     try {
       await client.batch(
         Array.from({ length: cardCount }, (_unused, index) => ({
-          sql: "INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y) VALUES (?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
           args: [`bulk-${index}`, "bundle-1", "layer-1", `card ${index}`, index, index * 2],
         })),
         "write",

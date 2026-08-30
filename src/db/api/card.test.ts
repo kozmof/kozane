@@ -716,6 +716,32 @@ describe("card timestamps", () => {
     expect(card?.updatedAt.getTime()).toBeGreaterThan(LONG_AGO.getTime());
   });
 
+  it("leaves updatedAt alone when the content sent is what the card already held", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "Unchanged" });
+    await backdate(db, cardId);
+
+    // What the board's composer sends when a card is opened and saved without an edit: the
+    // field is present, so `updateCard` writes it, and the row is left exactly as it was.
+    await updateCard({ db, cardId, bundleId, content: "Unchanged" });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.content).toBe("Unchanged");
+    expect(card?.updatedAt.getTime()).toBe(LONG_AGO.getTime());
+  });
+
+  it("moves updatedAt when a re-save changes the content back to something new", async () => {
+    const { db, bundleId } = await setup();
+    const cardId = await addCard({ db, bundleId, content: "First" });
+    await backdate(db, cardId);
+
+    await updateCard({ db, cardId, bundleId, content: "First" });
+    await updateCard({ db, cardId, bundleId, content: "Second" });
+
+    const card = await getCard({ db, bundleId, cardId });
+    expect(card?.updatedAt.getTime()).toBeGreaterThan(LONG_AGO.getTime());
+  });
+
   it("leaves updatedAt alone for a card that was only moved, resized, or restacked", async () => {
     const { db, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "Hi" });

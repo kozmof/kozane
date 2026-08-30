@@ -58,6 +58,16 @@ describe("sortCards", () => {
     expect(ids(sortCards([first, second], "created", true))).toEqual(["z", "y"]);
   });
 
+  it("breaks ties the way SQLite orders ids, not the way a locale does", () => {
+    // `"a".localeCompare("B")` is negative in every locale ICU knows, while SQLite's binary
+    // `ORDER BY id` puts "B" first — an uppercase letter is the lower codepoint. The ids the
+    // app writes are UUIDv7, on which the two agree; the ids an import or a fixture can put
+    // in the column are not, and the listing must not change with `LANG`.
+    const upper = card("B", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
+    const lower = card("a", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
+    expect(ids(sortCards([lower, upper], "created"))).toEqual(["B", "a"]);
+  });
+
   it("leaves the caller's array alone", () => {
     const cards = [c, a, b];
     sortCards(cards, "created");
