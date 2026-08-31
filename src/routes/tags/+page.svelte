@@ -16,7 +16,10 @@
     tagMatches,
     truncationReasons,
     truncationPaths,
+    missingTaskspaceLabel,
+    cleanupCommandTail,
     CARDS_TRUNCATED_LABEL,
+    TASKSPACE_CLEANUP_COMMAND,
     type TagCounts,
     type TagNode,
   } from "$lib/tag";
@@ -175,6 +178,10 @@
   const projectName = (id: string | null | undefined) =>
     (id !== null && id !== undefined ? projectNames.get(id) : undefined) ?? "";
 
+  /** The taskspaces the gather could not open, or none from an export built before the page
+   *  said anything about them. See where they are drawn, at the foot of the hits. */
+  const missing = $derived(data.missing ?? []);
+
   /** The workspace default, which is where an unplaced taskspace's file is opened: it is on
    *  every board, so no one of them is more its own than another. */
   const defaultProjectId = $derived(
@@ -293,6 +300,12 @@
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
   });
+
+  /** Everything the gather has to say about what it could not read, in one voice: the cards'
+   *  ceiling, a taskspace read in part, and a taskspace not read at all. Quieter than a row,
+   *  because none of it is what the reader came for — and all of it is the same aside, so
+   *  none of it should look more urgent than the rest. */
+  const noteClass = css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" });
 
   /**
    * The two row shapes, and the part that is only true of a row you can follow.
@@ -571,7 +584,7 @@
              are about the files. Same words as `kozane tag list` prints, from the same
              constant — see `CARDS_TRUNCATED_LABEL`. -->
         {#if data.cardsTruncated}
-          <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
+          <p class={noteClass}>
             The cards were not read in full — {CARDS_TRUNCATED_LABEL}, so a tag written on one
             may be missing here.
           </p>
@@ -582,12 +595,31 @@
              gather walked. The reasons are put into words by the same helper the terminal
              uses, and so are the paths behind them — which is the half a reader can act on. -->
         {#each data.truncated as { taskspaceId, reasons, paths } (taskspaceId)}
-          <p class={css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" })}>
+          <p class={noteClass}>
             {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}{truncationPaths(
               paths,
             )}, so a tag written in it may be missing here.
           </p>
         {/each}
+
+        <!-- Last, and apart from the truncations above: those say a taskspace was read and
+             not to the end of it, and this says there was nothing to read. The words are the
+             terminal's, from `missingTaskspaceLabel`; the command after them is set as code
+             here and quoted there, which is why only the words around it are shared.
+
+             Read through `??`, for the reason `truncationPaths` takes an absent list: a
+             static export built before this field existed carries page data without it, and
+             the build serving that export is this one. -->
+        {#each missing as taskspaceId (taskspaceId)}
+          <p class={noteClass}>{missingTaskspaceLabel(taskspaceName(taskspaceId))}.</p>
+        {/each}
+        {#if missing.length > 0}
+          <!-- Once, under all of them: one run of it settles every record named above. -->
+          <p class={noteClass}>
+            Run <code class={css({ fontFamily: "mono" })}>{TASKSPACE_CLEANUP_COMMAND}</code>
+            {cleanupCommandTail(missing.length)}
+          </p>
+        {/if}
       </section>
     </div>
   {/if}

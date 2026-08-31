@@ -119,22 +119,30 @@ describe("loadTagIndex", () => {
     expect(truncated).toEqual([]);
   });
 
-  it("names the taskspace it could not read in full", async () => {
+  /**
+   * Counted apart from the truncations rather than as one of them. It was a truncation with
+   * the reason `"unreadable"` and the path `"./"`, which both readers drew as "was not read in
+   * full — some files could not be read (for example ./)": a sentence about a bad file, in a
+   * taskspace whose directory no longer exists. The record is what is wrong here, and `missing`
+   * is what lets a reader be told to drop it.
+   */
+  it("counts a taskspace whose directory is gone as missing, not truncated", async () => {
     const { db, projectId } = await setup();
     const taskspaceId = await seedTaskspace(db, projectId, "notes", "'foo\n");
     rmSync(join(root, "notes"), { recursive: true, force: true });
 
-    const { truncated } = await loadTagIndex({
+    const { truncated, missing, taskspaces } = await loadTagIndex({
       db,
       projectId,
       includeFiles: true,
       root,
     });
 
-    // The taskspace root is what could not be listed, so the path naming it is `./` — enough
-    // for the reader to tell "this taskspace is gone" from "one file in it is unreadable",
-    // which is the distinction the reason alone cannot draw.
-    expect(truncated).toEqual([{ taskspaceId, reasons: ["unreadable"], paths: ["./"] }]);
+    expect(truncated).toEqual([]);
+    expect(missing).toEqual([taskspaceId]);
+    // Still recorded as walked, which is the only place the name in that notice comes from:
+    // a taskspace that could not be opened contributes no hit to carry one.
+    expect(taskspaces[taskspaceId]?.name).toBe("notes");
   });
 
   describe("across the workspace", () => {

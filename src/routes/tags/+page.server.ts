@@ -204,10 +204,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   // Only what the rows being sent actually name, except in an export — see `narrow`. The
   // taskspaces are those the file rows sit in, plus any the gather has a warning to give
-  // about, since that warning names one.
+  // about, since that warning names one. A taskspace that could not be opened is exactly such
+  // a one, and the only place its name can come from: it contributed no hit to name it by.
   const shownTaskspaceIds = new Set([
     ...hits.flatMap((hit) => (hit.source.kind === "file" ? [hit.source.taskspaceId] : [])),
     ...index.truncated.map(({ taskspaceId }) => taskspaceId),
+    ...index.missing,
   ]);
 
   return {
@@ -235,6 +237,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     cardTotal,
     fileTotal,
     truncated: index.truncated,
+    /** The taskspaces whose directory the gather could not open at all — a record left behind
+     *  by a directory that has been deleted or moved. Beside `truncated` and not among it:
+     *  such a taskspace was not read in part, it was not read. See `TagIndex.missing`. */
+    missing: index.missing,
     /** Whether the card side stopped at its own ceiling. Beside `truncated` rather than
      *  inside it, and drawn beside it too: to a reader whose tag is missing, "not every card
      *  was read" and "not every file was read" are one fact. See `TagIndex.cardsTruncated`. */

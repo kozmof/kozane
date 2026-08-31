@@ -104,7 +104,8 @@ Taskspace files are read on demand, within the same boundary the browser's file 
 dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a
 file that is not UTF-8 text or is over 1 MB is passed over. A taskspace too large to read in
 full is reported as such rather than quietly half-read, and each reason is reported as
-itself: a file larger than one file may be is not described as one that could not be read.
+itself: a file larger than one file may be is not described as one that could not be read,
+and a taskspace whose directory is gone is not described as one that was read in part.
 A reason that is about particular files names a few of them, since "some files could not be
 read" describes a taskspace with one bad file and one that is wholly unreadable identically
 and gives neither reader anywhere to look.
@@ -958,6 +959,19 @@ Note: notes was not read in full — some files were larger than the scan had bu
 ```
 
 A path ending in `/` is a directory that could not be listed rather than a file of that name.
+
+A taskspace whose directory is not there at all is reported apart from those, because it is
+not a taskspace that was read in part — the record points somewhere that has been deleted,
+moved, or made unreadable since it was written. The note names it and the command that
+settles it, once however many such records a gather meets:
+
+```
+Note: notes could not be read — its directory has been deleted, moved, or made unreadable since the record naming it was written, so no tag written in it is listed here.
+  Run `kozane taskspace scan --apply --cleanup` to drop the record.
+```
+
+That command is the whole repair rather than only the cleanup: a taskspace that was *moved*
+looks identical from here, and the same run re-points its record instead of dropping it.
 
 The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
 and re-read every file to reach the answer the first one reached. Nothing is trusted from it

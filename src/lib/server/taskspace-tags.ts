@@ -93,6 +93,24 @@ export type TaskspaceTagScan = {
    */
   truncated: TagScanTruncation[];
   /**
+   * Whether the taskspace directory itself could not be opened — deleted, moved, or made
+   * unreadable since the record naming it was written.
+   *
+   * Its own field and not a {@link TagScanTruncation}, which is what it was. A truncation is
+   * a scan that read a taskspace and stopped short of the end of it, and every reader of one
+   * says exactly that: "was not read in full", followed by a reason about the files it did
+   * not reach. None of that holds here — there was nothing to read and no file to name, and
+   * the sentence it produced ("some files could not be read", the file in question being
+   * `./`) described a taskspace with one bad file rather than a record pointing at nothing.
+   * The distinction {@link TagScanTruncation} already draws between `"too-large"` and
+   * `"unreadable"`, carried one step further out: this is not a limit the scan met, it is a
+   * taskspace that is not there to meet one.
+   *
+   * A directory the walk cannot list *below* the root stays a truncation. That taskspace was
+   * read as far as it goes, and one unreadable directory inside it is a fact about a file.
+   */
+  missing: boolean;
+  /**
    * A few of the paths behind {@link TaskspaceTagScan.truncated}, relative to the taskspace,
    * or empty where the scan read everything.
    *
@@ -329,6 +347,9 @@ type Scan = {
   /** Whether this walk read a file it did not already hold. What decides whether there is
    *  anything new to persist — see `openTagCache` in `tag-index.ts`. */
   parsed: boolean;
+  /** Whether the taskspace root itself could not be listed. See
+   *  {@link TaskspaceTagScan.missing}. */
+  missing: boolean;
 };
 
 /**
@@ -358,14 +379,22 @@ function walk(scan: Scan, subPath: string, depth: number): void {
   try {
     listing = listTaskspaceDirectory({ baseDir: scan.baseDir, subPath });
   } catch {
-    // A directory the server user cannot read, one gone since it was named, or — reaching
-    // this as the first call of the walk — a taskspace whose directory has been deleted or
-    // moved since the row naming it was written. One such taskspace must not take a page
-    // load down with it, so it is reported and skipped.
+    // A directory the server user cannot read, or one gone since it was named. Either way it
+    // must not take a page load down with it, so it is reported and skipped.
+    //
+    // At depth 0 it is neither: the directory that could not be listed is the taskspace, so
+    // there is no taskspace here to have read part of. That is not a truncation and is not
+    // reported as one — see `TaskspaceTagScan.missing`. No path is noted either, because the
+    // one it would name is `./`, which tells a reader nothing the taskspace's own name has
+    // not already told them.
+    if (depth === 0) {
+      scan.missing = true;
+      return;
+    }
     scan.truncated.add("unreadable");
     // The directory itself, which is what could not be read here — every other path noted is
     // a file. Named as a directory so the reader is not sent looking for a file of that name.
-    noteTruncatedPath(scan, `${subPath || "."}/`);
+    noteTruncatedPath(scan, `${subPath}/`);
     return;
   }
   // Cut short, so its entries are not all here and nothing below may conclude that a file it
@@ -485,8 +514,9 @@ function pruneStale(baseDir: string, seen: Set<string>, completed: Set<string>):
  * Every tag in one taskspace, with the file and line it was written on.
  *
  * Never throws. A taskspace whose directory has been deleted, moved, or made unreadable
- * comes back as no hits and an `"unreadable"` truncation, because a tag page listing five
- * taskspaces must not become a 500 over one of them.
+ * comes back as no hits and `missing`, because a tag page listing five taskspaces must not
+ * become a 500 over one of them. Not as a truncation: nothing here was read in part. See
+ * {@link TaskspaceTagScan.missing}.
  */
 export function scanTaskspaceTags(
   baseDir: string,
@@ -517,6 +547,7 @@ export function scanTaskspaceTags(
     completed: new Set(),
     paths: [],
     parsed: false,
+    missing: false,
   };
 
   walk(scan, "", 0);
@@ -534,6 +565,7 @@ export function scanTaskspaceTags(
   return {
     hits: scan.hits,
     truncated: [...scan.truncated],
+    missing: scan.missing,
     paths: scan.paths,
     changed: scan.parsed || pruned,
   };

@@ -153,6 +153,27 @@ describe("tag CLI flow", () => {
     expect(output.split("\n").filter((line) => line.includes("README.md:1"))).toHaveLength(2);
   }, 30_000);
 
+  /**
+   * A record left behind by a directory that is gone, which is what `taskspace scan` calls
+   * missing. It reached this output as a truncation — "was not read in full — some files
+   * could not be read (for example ./)" — which describes a taskspace with one bad file in
+   * it rather than a record pointing nowhere, and left the reader with nothing to do about it.
+   */
+  it("names a taskspace whose directory is gone, and how to drop the record", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "card", "add", "caching work 'perf");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    rmSync(join(root, "notes"), { recursive: true, force: true });
+
+    const output = cli(root, "tag", "list");
+
+    expect(output).toContain("Note: notes could not be read");
+    expect(output).toContain("kozane taskspace scan --apply --cleanup");
+    // The words that go with a truncation, which this is not: nothing here was read in part.
+    expect(output).not.toContain("was not read in full");
+  }, 30_000);
+
   it("lists a card found under two tags once", () => {
     const root = tempWorkspace();
     cli(root, "init");

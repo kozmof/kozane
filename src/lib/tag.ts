@@ -686,6 +686,38 @@ export const CARDS_TRUNCATED_LABEL =
   "more cards carry tags than one gather reads, so the counts above are a floor";
 
 /**
+ * What a taskspace nothing could be read from says to the person reading it.
+ *
+ * Not one of {@link TRUNCATION_LABELS} and deliberately not phrased like one: those complete
+ * "was not read in full", and a taskspace that could not be opened was not read at all. It
+ * was a truncation once — reason `"unreadable"`, path `./` — and told a user whose taskspace
+ * directory had been deleted that "some files could not be read (for example ./)", which
+ * describes a taskspace with one bad file in it. See `TagIndex.missing`.
+ *
+ * Takes the name rather than returning a sentence to put one into, because the name is the
+ * subject: the reader has to know which of their taskspaces this is about before anything
+ * else in the sentence is worth reading.
+ */
+export const missingTaskspaceLabel = (name: string): string =>
+  `${name} could not be read — its directory has been deleted, moved, or made unreadable since the record naming it was written, so no tag written in it is listed here`;
+
+/**
+ * The command that puts that right, and the words that go around it.
+ *
+ * Split from the sentence because the two readers set a command differently — the terminal
+ * quotes it, the page marks it up — and the words either side of it should still be written
+ * once. `taskspace scan` is the whole repair and not only the cleanup: a taskspace that was
+ * moved rather than deleted looks identical from here, and the same run re-points that record
+ * instead of dropping it.
+ */
+export const TASKSPACE_CLEANUP_COMMAND = "kozane taskspace scan --apply --cleanup";
+
+/** What follows {@link TASKSPACE_CLEANUP_COMMAND} in that instruction. Plural because one
+ *  gather can meet several such records, and one run of the command settles all of them. */
+export const cleanupCommandTail = (count: number): string =>
+  count === 1 ? "to drop the record." : "to drop the records.";
+
+/**
  * A few paths behind a truncation, as a phrase, or empty where the reasons name no file.
  *
  * Beside the wording above for the same reason, and it is the half the reader actually acts

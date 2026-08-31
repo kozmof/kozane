@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -54,13 +54,20 @@ describe("scanTaskspaceTags", () => {
         },
       ],
       truncated: [],
+      missing: false,
       paths: [],
       changed: true,
     });
   });
 
   it("finds nothing in an empty taskspace", () => {
-    expect(scan(dir)).toEqual({ hits: [], truncated: [], paths: [], changed: false });
+    expect(scan(dir)).toEqual({
+      hits: [],
+      truncated: [],
+      missing: false,
+      paths: [],
+      changed: false,
+    });
   });
 
   it("recurses into subdirectories, and reports the path from the taskspace root", () => {
@@ -102,18 +109,51 @@ describe("scanTaskspaceTags", () => {
     }
   });
 
-  it("reports a taskspace directory that is not there rather than throwing", () => {
+  /**
+   * `missing` and not a truncation, which is what this was — reason `"unreadable"`, path
+   * `"./"`. Both readers turn a truncation into "was not read in full", and a taskspace whose
+   * directory is gone was not read in part: it told a user that "some files could not be read
+   * (for example ./)" in a taskspace that no longer existed. See `TaskspaceTagScan.missing`.
+   */
+  it("reports a taskspace directory that is not there as missing rather than truncated", () => {
     rmSync(dir, { recursive: true, force: true });
 
-    // `./` and not a file name: the taskspace root itself is what could not be listed, and a
-    // trailing slash is how a path that names a directory says so.
     expect(scan(dir)).toEqual({
       hits: [],
-      truncated: ["unreadable"],
-      paths: ["./"],
+      truncated: [],
+      missing: true,
+      paths: [],
       changed: false,
     });
   });
+
+  /**
+   * The other half of that split, and the reason it is drawn at the root rather than at any
+   * unreadable directory. This taskspace was read — one directory inside it was not — which
+   * is a truncation and names the directory it is about.
+   */
+  // Nothing is unreadable to root, so the denial this rests on does not happen there — the
+  // same guard `taskspace-snapshot.test.ts` puts on the equivalent case.
+  it.skipIf(process.getuid?.() === 0)(
+    "reports a directory below the root that could not be listed as a truncation",
+    () => {
+      write(join(dir, "notes.md"), "'mine");
+      mkdirSync(join(dir, "locked"));
+      chmodSync(join(dir, "locked"), 0o000);
+
+      let result;
+      try {
+        result = scan(dir);
+      } finally {
+        chmodSync(join(dir, "locked"), 0o755);
+      }
+
+      expect(result.missing).toBe(false);
+      expect(result.truncated).toEqual(["unreadable"]);
+      expect(result.paths).toEqual(["locked/"]);
+      expect(tagsOf(result.hits)).toEqual(["mine"]);
+    },
+  );
 
   it("passes over a file that is not UTF-8 text", () => {
     writeFileSync(join(dir, "binary.bin"), Buffer.from([0x00, 0x01, 0x02]));
@@ -142,6 +182,7 @@ describe("scanTaskspaceTags", () => {
         },
       ],
       truncated: [],
+      missing: false,
       paths: [],
       changed: true,
     });

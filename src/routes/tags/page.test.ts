@@ -33,6 +33,7 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
     cardTotal: hits.filter(({ source }) => source.kind === "card").length,
     fileTotal: hits.filter(({ source }) => source.kind === "file").length,
     truncated: [],
+    missing: [],
     cardsTruncated: false,
     cardProjects: { c1: "p1", c2: "p1" },
     files: true,
@@ -192,6 +193,44 @@ describe("tag index page", () => {
 
     expect(screen.getByText(/Notes was not read in full/)).toBeTruthy();
     expect(screen.queryByText(/for example/)).toBeNull();
+  });
+
+  /**
+   * A record whose directory is gone, which is a different thing to have to say: the words a
+   * truncation is drawn with — "was not read in full", a reason about files — describe a
+   * taskspace that was read and not finished, and this one could not be opened. It was drawn
+   * as one, and told a reader that "some files could not be read (for example ./)".
+   */
+  it("names a taskspace whose directory is gone, apart from the truncations", () => {
+    draw([cardHit("c1", "perf", "one")], { missing: ["t1"] });
+
+    expect(screen.getByText(/^Notes could not be read/)).toBeTruthy();
+    expect(screen.queryByText(/was not read in full/)).toBeNull();
+  });
+
+  /** The half a reader can act on. One command settles every such record, so it is printed
+   *  once however many of them there are. */
+  it("gives the command that drops such records, once for all of them", () => {
+    draw([cardHit("c1", "perf", "one")], { missing: ["t1", "t2"] });
+
+    expect(screen.getByText(/^Notes could not be read/)).toBeTruthy();
+    expect(screen.getByText(/^Drafts could not be read/)).toBeTruthy();
+    expect(screen.getAllByText("kozane taskspace scan --apply --cleanup")).toHaveLength(1);
+    expect(screen.getByText(/to drop the records.$/)).toBeTruthy();
+  });
+
+  /**
+   * The case above from an export built before the page said anything about such a taskspace,
+   * which carries no `missing` at all. Nothing is drawn and the page still renders — reading
+   * `.length` off an absent array is what would take it down. See `truncationPaths` for the
+   * same rule about the same boundary.
+   */
+  it("draws a page from an older export, which carries no missing taskspaces", () => {
+    draw([cardHit("c1", "perf", "one")], { missing: undefined });
+
+    expect(screen.queryByText(/could not be read/)).toBeNull();
+    // The hits it does carry are still drawn, which is the half that would have been lost.
+    expect(screen.getByText("one")).toBeTruthy();
   });
 
   /**

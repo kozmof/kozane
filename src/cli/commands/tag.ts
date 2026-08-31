@@ -9,7 +9,10 @@ import {
   tagMatcher,
   truncationReasons,
   truncationPaths,
+  missingTaskspaceLabel,
+  cleanupCommandTail,
   CARDS_TRUNCATED_LABEL,
+  TASKSPACE_CLEANUP_COMMAND,
   type CappedHits,
   type TagCounts,
   type TagNode,
@@ -67,7 +70,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
     // The cache matters most here. A command runs in a process that exits, so without one
     // every invocation re-queries every card and re-reads every taskspace file to learn what
     // the last invocation already worked out.
-    const { hits, truncated, taskspaces, cardsTruncated } = await loadTagIndex({
+    const { hits, truncated, missing, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
       projectId,
       includeFiles: true,
@@ -81,7 +84,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
       return;
     }
     printTree(tree);
-    warnTruncated(truncated, taskspaces, cardsTruncated);
+    warnIncomplete({ truncated, missing, taskspaces, cardsTruncated });
   });
 }
 
@@ -90,24 +93,35 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
  *  rather than for one it never saw. */
 const nameOf = (taskspaces: TagIndexTaskspaces, id: string): string => taskspaces[id]?.name || id;
 
+type WarnIncomplete = {
+  truncated: TagIndexTruncation[];
+  missing: string[];
+  taskspaces: TagIndexTaskspaces;
+  cardsTruncated: boolean;
+};
+
 /**
- * Says what was not read in full — the cards, and each taskspace — so a tag missing from the
- * list above is not read as a tag nobody wrote.
+ * Says what the gather could not read — the cards, each taskspace it read part of, and each
+ * one it could not open — so a tag missing from the list above is not read as a tag nobody
+ * wrote.
  *
  * Names and wording both come from elsewhere. The name is joined from the gather's own record
  * of what it walked — this had been fetching every taskspace in the project again to turn an
- * id back into a name. The wording is `truncationReasons` and `CARDS_TRUNCATED_LABEL`, shared
- * with the tag index page, because the two say the same thing about the same gather and the
- * scanner's own vocabulary — `budget`, `nodes` — was reaching the screen unchanged.
+ * id back into a name. The wording is `truncationReasons`, `missingTaskspaceLabel`, and
+ * `CARDS_TRUNCATED_LABEL`, shared with the tag index page, because the two say the same thing
+ * about the same gather and the scanner's own vocabulary — `budget`, `nodes` — was reaching
+ * the screen unchanged.
  *
  * A reason now arrives with a sample of the paths behind it, which is the half a reader can
  * act on: `truncationPaths` turns "some files could not be read" into a place to go and look.
+ * A taskspace that could not be opened has no path worth naming and one thing to do about it,
+ * so it is followed by the command that does it, once however many records there are.
+ *
+ * A record rather than four positional arguments, two of which are now lists of ids that
+ * differ only in their element type: `warnTruncated(missing, truncated, …)` would have
+ * type-checked.
  */
-function warnTruncated(
-  truncated: TagIndexTruncation[],
-  taskspaces: TagIndexTaskspaces,
-  cardsTruncated: boolean,
-): void {
+function warnIncomplete({ truncated, missing, taskspaces, cardsTruncated }: WarnIncomplete): void {
   // First, because it is about the cards printed above and every taskspace note below is
   // about files. To a reader whose tag is missing the two are one fact — part of the
   // workspace was not read — so neither is worth printing without the other.
@@ -116,6 +130,14 @@ function warnTruncated(
     console.log(
       `Note: ${nameOf(taskspaces, taskspaceId)} was not read in full — ${truncationReasons(reasons)}${truncationPaths(paths)}.`,
     );
+  }
+  for (const taskspaceId of missing) {
+    console.log(`Note: ${missingTaskspaceLabel(nameOf(taskspaces, taskspaceId))}.`);
+  }
+  // After all of them rather than under each: one run of it settles every record named above,
+  // and printed per taskspace it reads as a different command each time.
+  if (missing.length > 0) {
+    console.log(`  Run \`${TASKSPACE_CLEANUP_COMMAND}\` ${cleanupCommandTail(missing.length)}`);
   }
 }
 
@@ -151,7 +173,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const projectId = await resolveProjectId(db, options.project);
     // `--no-files` is commander's spelling of a `--files` that defaults to true.
     const includeFiles = options.files !== false;
-    const { hits, truncated, taskspaces, cardsTruncated } = await loadTagIndex({
+    const { hits, truncated, missing, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
       projectId,
       includeFiles,
@@ -171,7 +193,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
 
     await printCardHits(db, projectId, shown);
     printFileHits(shown, taskspaces);
-    warnTruncated(truncated, taskspaces, cardsTruncated);
+    warnIncomplete({ truncated, missing, taskspaces, cardsTruncated });
   });
 }
 

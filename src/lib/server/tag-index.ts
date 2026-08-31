@@ -73,6 +73,23 @@ export type TagIndex = {
   taskspaces: TagIndexTaskspaces;
   truncated: TagIndexTruncation[];
   /**
+   * The taskspaces this gather could not open at all, by id — a record whose directory has
+   * been deleted, moved, or made unreadable since it was written.
+   *
+   * Apart from {@link TagIndex.truncated} rather than one of its reasons, which is where this
+   * was. The two are different things to have to tell someone: a truncation says a taskspace
+   * was read and not to the end, and a reader acts on it by looking at the file it names;
+   * this says a record points at nothing, and the way to act on it is to drop the record —
+   * `kozane taskspace scan --apply --cleanup`, which both readers print. Folded in as a
+   * reason it read as the first, and told the user that "some files could not be read" in a
+   * taskspace that no longer exists.
+   *
+   * Ids only, for the reason {@link TagIndexTruncation} carries only an id:
+   * {@link TagIndex.taskspaces} names every taskspace this gather walked, and one it could
+   * not read is still one it walked.
+   */
+  missing: string[];
+  /**
    * Whether the card side stopped at {@link TAG_CARD_HITS_MAX}, so the hits above hold a
    * prefix of the workspace's card tags rather than all of them.
    *
@@ -168,12 +185,13 @@ export async function loadTagIndex({
   const { cardProjects } = cards;
   const taskspaces: Record<string, TagIndexTaskspace> = {};
   const truncated: TagIndexTruncation[] = [];
+  const missing: string[] = [];
 
   // No workspace root means no directory to resolve a taskspace against. The cards are still
   // a complete answer about cards, so the index is served rather than refused.
   if (!includeFiles || !root) {
     store?.save({ cards, changed });
-    return { hits, cardProjects, taskspaces, truncated, cardsTruncated: cards.truncated };
+    return { hits, cardProjects, taskspaces, truncated, missing, cardsTruncated: cards.truncated };
   }
 
   const rows = projectId
@@ -213,8 +231,11 @@ export async function loadTagIndex({
         reasons: scan.truncated,
         paths: scan.paths,
       });
+    // Beside the truncations and not among them: a taskspace that could not be opened has no
+    // reason to give and nothing for one to be about. See `TagIndex.missing`.
+    if (scan.missing) missing.push(taskspace.id);
   }
 
   store?.save({ cards, scanned, changed });
-  return { hits, cardProjects, taskspaces, truncated, cardsTruncated: cards.truncated };
+  return { hits, cardProjects, taskspaces, truncated, missing, cardsTruncated: cards.truncated };
 }
