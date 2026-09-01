@@ -45,18 +45,6 @@
     data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
   );
 
-  /**
-   * Whether taskspace files are part of the answer. `?files=0` says they are not.
-   *
-   * Read the same way `selectedTag` is, and filtered below for the same reason: on the live
-   * page the server already skipped the walk, so there is nothing to filter out and this is a
-   * no-op; in a static export the hits were baked before anyone could ask, so this is the
-   * real cut. One path rather than a branch only one of the two ever takes.
-   */
-  const showFiles = $derived(
-    data.files && (!browser || page.url.searchParams.get("files") !== "0"),
-  );
-
   const selectedProject = $derived(
     data.projects.find(({ id }) => id === selectedProjectId) ?? null,
   );
@@ -94,8 +82,7 @@
     return capHitsByKind(
       data.hits,
       TAG_HITS_SHOWN_MAX,
-      (hit) =>
-        matches(hit.tag) && inSelectedProject(hit) && (showFiles || hit.source.kind === "card"),
+      (hit) => matches(hit.tag) && inSelectedProject(hit),
     );
   });
   const shownCount = $derived(shown.cards.length + shown.files.length);
@@ -133,21 +120,13 @@
    * The tree, narrowed the same way the panel is, so the count beside a tag is a count of
    * what selecting it would list.
    *
-   * Only a static export ever has anything to narrow, and each half says why: the live server
-   * built the tree from the project it was asked about, and skipped the taskspace walk
-   * outright when asked for cards alone — so on that path both of these are false and the
-   * tree it sent is already the right one.
+   * Only a static export ever has anything to narrow: the live server already built the tree
+   * from the project it was asked about, so on that path this is false and the tree it sent
+   * is already the right one.
    */
   const narrowsProject = $derived(selectedProjectId !== null && data.projectId === null);
-  const narrowsFiles = $derived(!showFiles && data.files);
   const tree = $derived(
-    narrowsProject || narrowsFiles
-      ? buildTagTree(
-          data.hits.filter(
-            (hit) => inSelectedProject(hit) && (showFiles || hit.source.kind === "card"),
-          ),
-        )
-      : data.tree,
+    narrowsProject ? buildTagTree(data.hits.filter(inSelectedProject)) : data.tree,
   );
 
   /**
@@ -224,23 +203,6 @@
       ? `${base}/${projectId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
       : null;
   };
-
-  /**
-   * The way to ask for cards alone, and back again. `?files=0`, which the server reads as a
-   * gate on the gather itself — see `+page.server.ts`.
-   *
-   * Offered only where there is something to turn off. A workspace with no taskspace, and a
-   * plain static export, both answer about cards whatever this said, so a control that
-   * changed nothing would be a control that looks broken.
-   */
-  const filesToggleHref = $derived.by(() => {
-    const params = new URLSearchParams();
-    if (selectedProjectId) params.set("projectId", selectedProjectId);
-    if (selectedTag) params.set("tag", selectedTag);
-    if (showFiles) params.set("files", "0");
-    const query = params.toString();
-    return query ? `${base}/tags?${query}` : `${base}/tags`;
-  });
 
   /** A node is open while the selected tag is inside it, so arriving on `'foo:bar:baz` by
    *  link opens the tree down to it rather than showing a collapsed root. */
@@ -418,21 +380,6 @@
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
     >
-      <!-- Cards alone, or cards and taskspace files. A taskspace of source code tags every
-           quoted string literal in it, so the index over one is mostly noise; this is the
-           way to put it down without giving up the tags written on cards. -->
-      {#if data.filesAvailable}
-        <a
-          href={filesToggleHref}
-          class={css({
-            textDecoration: "none",
-            color: "neutral.subtle",
-            _hover: { color: "ink.black" },
-          })}
-        >
-          {showFiles ? "Cards only" : "Include files"}
-        </a>
-      {/if}
       {#each data.projects as project (project.id)}
         {@const selected = selectedProjectId === project.id}
         <a

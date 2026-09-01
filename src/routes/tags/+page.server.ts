@@ -141,23 +141,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const requestedTag = prerender ? null : url.searchParams.get("tag");
   const tag = requestedTag ? normalizeTag(requestedTag) : null;
 
-  /**
-   * `?files=0` skips the taskspace walk, the way `kozane tag show --no-files` does.
-   *
-   * A tag is just text, so a taskspace holding source code gathers under the first word of
-   * every multi-word quoted string in it — `echo 'hello world'` under `'hello`, and
-   * `it('does a thing', …)` under `'does`. (A one-word literal such as `from 'drizzle-orm'`
-   * is cancelled by the closing quote and yields nothing.) That is the deliberate side of the
-   * grammar to err on (see `lib/tag.ts`), but the terminal had the only way to say "cards
-   * only" and the page had none, which left the one place the noise is most visible with no
-   * answer to it.
-   *
-   * On the live path it is a gate on the *gather*, so asking for cards alone also skips the
-   * disk walk rather than merely hiding what it found. A prerender has no query to read, so
-   * an export bakes whatever it was built with and the page filters the baked hits instead —
-   * the same split every other parameter on this page is read by.
-   */
-  const includeFiles = prerender ? includeScopedFiles : url.searchParams.get("files") !== "0";
+  // The live page always reads taskspace files; only a prerendered export's build-time flag
+  // decides whether file hits are baked in at all.
+  const includeFiles = prerender ? includeScopedFiles : true;
 
   // Checked rather than passed through: a `?projectId=` naming nothing would otherwise
   // quietly gather nothing at all and read as a workspace with no tags in it.
@@ -214,15 +200,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   return {
     projectId: requestedProject,
-    /** Whether this gather read taskspace files. */
-    files: includeFiles,
-    /**
-     * Whether asking for them is a question this page can answer at all — false only in a
-     * plain export, which holds no file hit however the URL asks. It is what decides whether
-     * the page offers the control, because a control that cannot change the answer reads as
-     * one that is broken.
-     */
-    filesAvailable: !prerender || includeScopedFiles,
     // Named so the page can title itself and offer the way back to a board.
     projects: projects.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
     // Built from every hit, always: the tree is this page's index, and one narrowed to the

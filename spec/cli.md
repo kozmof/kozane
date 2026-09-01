@@ -95,10 +95,9 @@ word, so `from 'drizzle-orm'` gathers nothing at all. That is the deliberate sid
 on — a tag nobody meant is one row to ignore, a tag swallowed is a card that cannot be
 found — and it is bounded by what the scan walks rather than by a second grammar for files.
 
-Both front ends can put the file half down entirely: `tag show --no-files` and, in the
-browser, `?files=0` on the tag index. Each skips the disk walk rather than hiding what it
-found, which is the answer for a taskspace that is a source checkout — the tags written on
-cards are still gathered.
+The terminal can put the file half down entirely with `tag show --no-files`, which skips the
+disk walk rather than hiding what it found — the answer for a taskspace that is a source
+checkout, where the tags written on cards are still gathered.
 
 Taskspace files are read on demand, within the same boundary the browser's file panel holds:
 dot-entries such as `.git` and `.env` are never read, symlinks are never followed, and a

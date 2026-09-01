@@ -41,7 +41,6 @@ const run = (db: DB, query = "") =>
     taskspaces: Record<string, { name: string; projectId: string | null }>;
     tree: { tag: string }[];
     projectId: string | null;
-    files: boolean;
     cardProjects: Record<string, string>;
     bundles: Record<string, { name: string }>;
     cardBundleIds: Record<string, string>;
@@ -156,19 +155,6 @@ describe("GET /tags", () => {
     expect(data.cardProjects).not.toHaveProperty(other);
   });
 
-  /**
-   * `?files=0` is `kozane tag show --no-files`, and is a gate on the gather rather than on
-   * what is drawn: asking for cards alone skips the taskspace walk instead of hiding what it
-   * found. There is no workspace root in this process, so what it is asserted by here is the
-   * flag reaching the page — `lib/server/tag-index.test.ts` is where the walk itself is.
-   */
-  it("says whether it read files, and is told not to by the URL", async () => {
-    const { db, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'perf" });
-
-    expect((await run(db, "?tag=perf")).files).toBe(true);
-    expect((await run(db, "?tag=perf&files=0")).files).toBe(false);
-  });
 });
 
 /**
