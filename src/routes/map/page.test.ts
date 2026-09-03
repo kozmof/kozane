@@ -258,6 +258,40 @@ describe("map page", () => {
       expect(tagPaths(container)).toHaveLength(0);
     });
 
+    /**
+     * A click and only a click. Hovering used to draw a tag's lines too, so a pointer
+     * crossing the panel on its way somewhere else redrew the map under a reader who had
+     * asked for none of it.
+     */
+    it("draws nothing for a tag merely pointed at", async () => {
+      const { container } = draw();
+      const row = [...container.querySelectorAll('nav[aria-label="Tags"] a')].find((a) =>
+        a.textContent?.includes("docs"),
+      )!;
+
+      await fireEvent.mouseEnter(row);
+      await fireEvent.focus(row);
+      await tick();
+
+      expect(tagPaths(container)).toHaveLength(0);
+      // Nor does the packing stand back, which is the other half of a tag being drawn.
+      expect(Number(rectOf(container, "General")?.getAttribute("opacity"))).toBe(1);
+    });
+
+    /** Pointing at one row while another is drawn leaves the drawn one alone. */
+    it("keeps the chosen tag's lines while another row is pointed at", async () => {
+      const { container } = draw({ tag: "docs" });
+      const before = tagPaths(container).map((path) => path.getAttribute("d"));
+      const other = [...container.querySelectorAll('nav[aria-label="Tags"] a')].find((a) =>
+        a.textContent?.includes("perf"),
+      )!;
+
+      await fireEvent.mouseEnter(other);
+      await tick();
+
+      expect(tagPaths(container).map((path) => path.getAttribute("d"))).toEqual(before);
+    });
+
     it("stands the rest of the map back so the lines read", () => {
       const { container } = draw({ tag: "docs" });
       const dimmed = rectOf(container, "General");

@@ -522,10 +522,12 @@ in stay put too — only the part that stands for cards grows.
 The tags are on the left, as a tree over the map: `'perf` with `'perf:cache` beneath it,
 the way a directory holds a subdirectory. The number beside each is how many cards it
 gathers, that tag and everything under it. A tree taller than the window scrolls inside its
-own panel, and the lines follow their rows as it does. Hover a tag to draw a line from its
+own panel, and the lines follow their rows as it does. Click a tag to draw a line from its
 row to every bundle holding a card that carries it, and the rest of the map stands back so
-the lines read; click to keep them drawn and put `?tag=` in the URL, so any view of the map
-is a link you can send. Clicking the selected tag again clears it.
+the lines read. The lines stay until you clear them, and clicking the selected tag again is
+how: pointing at a row does nothing, so a pointer crossing the panel on its way somewhere
+else leaves the drawing alone. A click also puts `?tag=` in the URL, so any view of the map
+is a link you can send.
 
 Unlike the tag index, the map counts cards only — it reads no taskspace files. A file tag
 has no bundle rectangle to be drawn against, and gathering one would put a number in the

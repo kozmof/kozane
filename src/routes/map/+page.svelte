@@ -41,12 +41,24 @@
    * packing, and the tags the tree they spell.
    *
    * Nothing here writes. The board is where a workspace is changed; this is where its shape
-   * is looked at, so every interaction on the page is a link or a hover.
+   * is looked at, so every interaction on the page is a link or a gesture that moves it.
    */
 
   let { data }: PageProps = $props();
 
   /**
+   * The tag whose lines are drawn — and the only thing that decides it.
+   *
+   * Hovering used to preview a tag as well, and it read as the map flickering: a pointer
+   * crossing the panel on its way somewhere else lit up every row it passed over, and the
+   * drawing a reader was looking at kept being replaced by one they had not asked for. Now
+   * a click draws the lines and they stay drawn, clicking the same row again clears them,
+   * and moving the pointer over the tree changes nothing but the row's own highlight.
+   *
+   * That leaves one piece of state instead of two, and it lives in the URL rather than in
+   * this component — which is what makes a drawn map a link somebody can send, and why
+   * there is no setter here: every way of changing which tag is drawn is a navigation.
+   *
    * What the URL asks for. `data.*` on the live page, where the server read the query; from
    * the URL in a static export, which is prerendered and so had no query to read at build
    * time. One value either way, so everything below reads the same on both. The same
@@ -63,17 +75,6 @@
     data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
   );
   const selectedProject = $derived(data.projects.find(({ id }) => id === selectedProjectId) ?? null);
-
-  /**
-   * The tag whose lines are being drawn: the one hovered, or failing that the one selected.
-   *
-   * Hover previews without navigating, which is what makes a tree of a hundred tags worth
-   * having — reading down it shows where each one lives without a page load per row. The
-   * selection is what survives letting go of the mouse, and what a link into the page can
-   * name.
-   */
-  let hoveredTag = $state<string | null>(null);
-  const activeTag = $derived(hoveredTag ?? selectedTag);
 
   /**
    * The box the map is drawn into.
@@ -209,7 +210,7 @@
   /** Which bundles the active tag reaches, rolled up over its subcategories — see
    *  `tagBundleTargets`. Empty when nothing is selected or hovered, which is the ordinary
    *  state of the page. */
-  const targets = $derived(activeTag ? tagBundleTargets(data.tagBundles, activeTag) : new Map());
+  const targets = $derived(selectedTag ? tagBundleTargets(data.tagBundles, selectedTag) : new Map());
 
   /**
    * The rows the panel is drawing, and the point on the canvas the active one's lines leave
@@ -224,9 +225,9 @@
    * the window — so it changes nothing about what is served, only about what a line does
    * after the row it belongs to has moved.
    */
-  const rows = $derived(visibleTagRows(data.tree, activeTag));
+  const rows = $derived(visibleTagRows(data.tree, selectedTag));
   let panelScroll = $state(0);
-  const lineOrigin = $derived(tagLineOrigin(rows, activeTag, panelScroll));
+  const lineOrigin = $derived(tagLineOrigin(rows, selectedTag, panelScroll));
 
   const links = $derived(lineOrigin === null ? [] : tagLinks(layout, lineOrigin, targets));
   /** Whether the packing should stand back so the tag's lines read. Only once a tag is
@@ -325,12 +326,8 @@
         <a
           href={tagHref(selectedTag === node.tag ? null : node.tag)}
           aria-current={selectedTag === node.tag ? "page" : undefined}
-          onmouseenter={() => (hoveredTag = node.tag)}
-          onmouseleave={() => (hoveredTag = null)}
-          onfocus={() => (hoveredTag = node.tag)}
-          onblur={() => (hoveredTag = null)}
           style="{rowStyle}; padding-left: {8 + depth * 14}px"
-          class="{rowClass} {activeTag === node.tag ? activeRowClass : ''}"
+          class="{rowClass} {selectedTag === node.tag ? activeRowClass : ''}"
         >
           <span class={css({ fontFamily: "mono" })}>{node.name}</span>
           <!-- Bare in the column, spelled out for a reader who cannot see the column. The
@@ -338,7 +335,7 @@
           <span class={countClass} aria-hidden="true">{countLabel(node)}</span>
           <span class={css({ srOnly: true })}>{countDescription(node)}</span>
         </a>
-        {#if childrenShown(node, depth, activeTag)}
+        {#if childrenShown(node, depth, selectedTag)}
           {@render branch(node.children, depth + 1)}
         {/if}
       </li>
