@@ -33,6 +33,19 @@ describe("NavIcon", () => {
     expect(new Set(areas("map")).size).toBeGreaterThan(1);
   });
 
+  /**
+   * The icon has no colour of its own, which is what lets the link set it: at rest that is
+   * `neutral.icon`, the weight the canvas draws its own rectangle icons at, and on hover it
+   * darkens the whole way. A fill written into the drawing would take that away.
+   */
+  it("takes its colour from the link around it", () => {
+    const svg = draw("map").querySelector("svg")!;
+    expect(svg.getAttribute("fill")).toBe("currentColor");
+    for (const rect of svg.querySelectorAll("rect")) {
+      expect(rect.getAttribute("fill")).toBeNull();
+    }
+  });
+
   it("says nothing of its own, so the link around it is what is read", () => {
     const svg = draw("map").querySelector("svg")!;
     expect(svg.getAttribute("aria-hidden")).toBe("true");

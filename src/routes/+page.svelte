@@ -12,18 +12,23 @@
   /**
    * The links across the workspace, which are icons and so have no text to be read.
    *
-   * The padding is the point of the class: an icon is 16px square and a 16px target is a
-   * target you have to aim at, so the link is grown around it. The colour is the hover
-   * state, since without a label there is nothing else to say the icon is a link at all.
+   * `neutral.icon` at rest, which is what the canvas fills its own rectangle icons with —
+   * these are furniture in the corner of a page whose subject is elsewhere, and they should
+   * sit at the weight the rest of the app's icons sit at rather than at a label's.
+   *
+   * Darkening the whole way to `ink.black` on hover is the other half of that: light enough
+   * to ignore has to become unmistakable when pointed at, or an icon with no label beside it
+   * gives no sign it is a link at all. The padding is the same argument in pixels — a 16px
+   * target is a target you have to aim at, so the link is grown around the drawing.
    */
   const navLinkClass = css({
     display: "flex",
     alignItems: "center",
     padding: "6px",
     borderRadius: "2px",
-    color: "neutral.muted",
+    color: "neutral.icon",
     textDecoration: "none",
-    _hover: { color: "ink.black", backgroundColor: "neutral.bg" },
+    _hover: { color: "ink.black", backgroundColor: "neutral.border" },
   });
 </script>
 

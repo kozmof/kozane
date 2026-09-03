@@ -374,9 +374,10 @@
         alignItems: "center",
         padding: "6px",
         borderRadius: "2px",
-        color: "neutral.muted",
+        // The weight the canvas draws its own rectangle icons at; see the map's header.
+        color: "neutral.icon",
         textDecoration: "none",
-        _hover: { color: "ink.black", backgroundColor: "neutral.bg" },
+        _hover: { color: "ink.black", backgroundColor: "neutral.border" },
       })}
     >
       <NavIcon kind="projects" />
