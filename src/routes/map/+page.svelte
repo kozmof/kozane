@@ -15,7 +15,7 @@
   } from "./lib/map-layout.js";
   import {
     clampView,
-    FITTED_VIEW,
+    defaultView,
     pannedBy,
     viewedArea,
     zoomedBy,
@@ -96,10 +96,22 @@
    *
    * Held raw and clamped on the way out, so the box being resized cannot leave a pan the
    * clamp would no longer allow — and so nothing has to re-clamp what is already stored.
+   *
+   * `null` is the opening view rather than a copy of it, because `defaultView` centres the
+   * map in the box and the box is not known until the browser has measured it. Stored as a
+   * value, the pan the server centred `MAP_DEFAULT_VIEWPORT` at would survive into a window
+   * of another size and sit the map slightly off-centre for as long as nobody touched it.
    */
-  let rawView = $state<MapView>(FITTED_VIEW);
+  let movedView = $state<MapView | null>(null);
+  const rawView = $derived(movedView ?? defaultView(size));
   const view = $derived(clampView(rawView, size));
-  const fitted = $derived(view.zoom === 1 && view.panX === 0 && view.panY === 0);
+  /** Whether the map is where it opens. Compared by value, and against the clamped default,
+   *  so a map panned back by hand counts as home and a box too small to hold the default
+   *  does not leave the way back permanently offered. */
+  const atDefault = $derived.by(() => {
+    const home = clampView(defaultView(size), size);
+    return view.zoom === home.zoom && view.panX === home.panX && view.panY === home.panY;
+  });
 
   /**
    * The packing, laid into the rectangle the view describes rather than into the box on the
@@ -149,7 +161,7 @@
     if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) travelled = true;
     // From where the drag began and how far the pointer has gone altogether, not from the
     // last frame. See `pannedBy`.
-    rawView = pannedBy(origin.view, size, dx, dy);
+    movedView = pannedBy(origin.view, size, dx, dy);
   }
 
   function onPointerUp(event: PointerEvent) {
@@ -187,7 +199,7 @@
       const box = el!.getBoundingClientRect();
       const at = { x: event.clientX - box.left, y: event.clientY - box.top };
       const delta = event.deltaY < 0 ? data.zoomStep : -data.zoomStep;
-      rawView = zoomedTo(view, size, at, view.zoom + delta);
+      movedView = zoomedTo(view, size, at, view.zoom + delta);
     }
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -656,7 +668,7 @@
             <button
               type="button"
               aria-label={label as string}
-              onclick={() => (rawView = zoomedBy(view, size, delta as number))}
+              onclick={() => (movedView = zoomedBy(view, size, delta as number))}
               class={css({
                 width: "30px",
                 height: "26px",
@@ -673,9 +685,9 @@
           {/each}
           <button
             type="button"
-            disabled={fitted}
-            title={fitted ? "Fitted to the page" : "Fit the map to the page"}
-            onclick={() => (rawView = FITTED_VIEW)}
+            disabled={atDefault}
+            title={atDefault ? "At the size the map opens at" : "Back to the size the map opens at"}
+            onclick={() => (movedView = null)}
             class={css({
               padding: "0 8px",
               height: "26px",

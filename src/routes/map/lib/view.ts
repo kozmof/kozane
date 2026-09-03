@@ -29,16 +29,53 @@ export type MapView = {
   panY: number;
 };
 
+export type Size = { width: number; height: number };
+
 /**
- * Where the map opens, always.
+ * The map filling its box exactly: zoom 1, and no pan.
  *
- * `ui.defaultZoom` is deliberately not read here, though the board opens at it. On a board,
- * zoom 1 means one canvas pixel per screen pixel and a workspace may well want to sit at
- * another ratio; on the map, 1 means *fitted to the box*, and a map that opened part-scrolled
- * would be a map you had to put back before you could read it. `ui.zoomStep` is shared,
- * because that is about the input device rather than about either page.
+ * Not where the map opens — see {@link defaultView} — but still the view every other one is
+ * measured against, since zoom is defined as a multiple of it.
  */
 export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
+
+/**
+ * How large the rectangles are when the map opens, as a multiple of the size the box would
+ * fit them at.
+ *
+ * Half, because the canvas is the whole window: fitted, a workspace of a few projects is a
+ * handful of rectangles each the size of a dinner plate, which says nothing more than the
+ * same shapes at half the size and leaves nowhere to go but in. Opening at half gives the
+ * map room around it, and it makes the zoom control a control in both directions rather than
+ * one that can only take you further in.
+ *
+ * `ui.defaultZoom` is still deliberately not read, though the board opens at it. On a board,
+ * zoom 1 means one canvas pixel per screen pixel and a workspace may well want another
+ * ratio; here it means fitted to the box, and the two numbers would not mean the same thing.
+ * `ui.zoomStep` is shared, because that is about the input device rather than either page.
+ */
+export const DEFAULT_ZOOM = 0.5;
+
+/**
+ * Where the map opens: {@link DEFAULT_ZOOM}, centred in the box.
+ *
+ * A function of the box rather than a constant, which is what centring costs — and it is
+ * worth paying rather than opening at a pan of zero, which would leave the map in the
+ * top-left corner with the tag panel across it and the rest of the window empty.
+ *
+ * Taking the size at the moment it is asked for, rather than being stored once, is also what
+ * keeps the opening view right across hydration: the server centres in
+ * `MAP_DEFAULT_VIEWPORT` and the browser centres in the box it measured, and neither has to
+ * know about the other.
+ */
+export function defaultView(size: Size): MapView {
+  const zoom = clampZoom(DEFAULT_ZOOM);
+  return {
+    zoom,
+    panX: (size.width * (1 - zoom)) / 2,
+    panY: (size.height * (1 - zoom)) / 2,
+  };
+}
 
 /**
  * How much of the map must stay on screen, in pixels.
@@ -48,8 +85,6 @@ export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
  * always in view, so the way back is always visible.
  */
 const PAN_MARGIN = 96;
-
-export type Size = { width: number; height: number };
 
 /** The rectangle the packing is laid into under this view. */
 export function viewedArea(size: Size, view: MapView): Rect {

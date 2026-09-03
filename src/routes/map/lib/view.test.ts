@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   clampView,
+  DEFAULT_ZOOM,
+  defaultView,
   FITTED_VIEW,
   pannedBy,
   viewedArea,
@@ -189,5 +191,40 @@ describe("what a zoom does to the packing", () => {
     expect(a.x - b.x).toBeCloseTo(40, 6);
     expect(a.y - b.y).toBeCloseTo(-25, 6);
     expect(a.width).toBeCloseTo(b.width, 6);
+  });
+});
+
+describe("defaultView", () => {
+  /** Half the box in each direction, which is a quarter of the area — the rectangles are
+   *  drawn at half the size the box would fit them at. */
+  it("lays the packing out at half the size of the box", () => {
+    const area = viewedArea(SIZE, defaultView(SIZE));
+    expect(area.width).toBe(SIZE.width * DEFAULT_ZOOM);
+    expect(area.height).toBe(SIZE.height * DEFAULT_ZOOM);
+  });
+
+  /** Centred, not at a pan of zero: the map would otherwise open in the top-left corner with
+   *  the tag panel across it and the rest of the window empty. */
+  it("centres it, leaving the same margin on both sides", () => {
+    const area = viewedArea(SIZE, defaultView(SIZE));
+    expect(area.x).toBeCloseTo(SIZE.width - (area.x + area.width), 6);
+    expect(area.y).toBeCloseTo(SIZE.height - (area.y + area.height), 6);
+  });
+
+  /** Centring is a function of the box, which is what lets the server centre in one size and
+   *  the browser re-centre in the size it measured. */
+  it("centres in whatever box it is given", () => {
+    const wide = viewedArea(
+      { width: 2400, height: 600 },
+      defaultView({ width: 2400, height: 600 }),
+    );
+    expect(wide.x).toBeCloseTo(2400 - (wide.x + wide.width), 6);
+    expect(wide.y).toBeCloseTo(600 - (wide.y + wide.height), 6);
+  });
+
+  /** The pan it opens at is one the clamp already allows, so the map does not jump on the
+   *  first thing that touches it. */
+  it("opens at a view the clamp leaves alone", () => {
+    expect(clampView(defaultView(SIZE), SIZE)).toEqual(defaultView(SIZE));
   });
 });

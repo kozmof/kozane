@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
+import { DEFAULT_ZOOM } from "./lib/view.js";
 import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "./lib/tag-rows.js";
 import type { TagHit } from "$lib/types";
 
@@ -321,9 +322,11 @@ describe("panning and zooming", () => {
     fireEvent.pointerUp(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
   };
 
-  it("opens fitted to the page", () => {
+  /** Half, not fitted — see `DEFAULT_ZOOM`. The map opens with room around it, so the zoom
+   *  control has somewhere to go in both directions. */
+  it("opens at the size it means to open at", () => {
     draw();
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByText(`${DEFAULT_ZOOM * 100}%`)).toBeInTheDocument();
   });
 
   it("moves the whole map by the drag, without resizing anything", async () => {
@@ -376,28 +379,28 @@ describe("panning and zooming", () => {
     await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
 
-    expect(screen.getByText("105%")).toBeInTheDocument();
+    expect(screen.getByText(`${Math.round((DEFAULT_ZOOM + 0.05) * 100)}%`)).toBeInTheDocument();
     const widthOf = (rows: string[]) => Number(rows[0].split(",")[2]);
     expect(widthOf(geometry(container))).toBeGreaterThan(widthOf(before));
   });
 
   it("puts the map back when the reading is used as the way home", async () => {
     const { container } = draw();
-    const fitted = geometry(container);
+    const opened = geometry(container);
     drag(surface(container), [400, 300], [500, 380]);
     await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
-    expect(geometry(container)).not.toEqual(fitted);
+    expect(geometry(container)).not.toEqual(opened);
 
-    await fireEvent.click(screen.getByTitle("Fit the map to the page"));
+    await fireEvent.click(screen.getByTitle("Back to the size the map opens at"));
     await tick();
-    expect(geometry(container)).toEqual(fitted);
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(geometry(container)).toEqual(opened);
+    expect(screen.getByText(`${DEFAULT_ZOOM * 100}%`)).toBeInTheDocument();
   });
 
   it("offers no way home while it is already there", () => {
     draw();
-    expect(screen.getByTitle("Fitted to the page")).toBeDisabled();
+    expect(screen.getByTitle("At the size the map opens at")).toBeDisabled();
   });
 
   /** A tag's line leaves from its row in the panel, which does not move with the map — so
@@ -447,7 +450,8 @@ describe("zooming into something too small to read", () => {
 
   it("labels it once zoomed in far enough to hold the label", async () => {
     const { container } = tiny();
-    for (let i = 0; i < 20; i++) await fireEvent.click(screen.getByLabelText("Zoom in"));
+    // Far enough to reach the ceiling from where the map opens; the clamp absorbs the rest.
+    for (let i = 0; i < 40; i++) await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
 
     expect(screen.getByText("200%")).toBeInTheDocument();

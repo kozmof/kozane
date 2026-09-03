@@ -502,25 +502,29 @@ several projects, which is exactly what the lines show. A scope reaching a proje
 through a taskspace has no bundle to point at, so its line runs to the project instead.
 Hover a circle to raise its own lines out of the rest.
 
+The map opens at 50%, centred, with room around it — 100% means the rectangles fitted to
+the window exactly, which is further in than is useful to start from and leaves the zoom
+control with nowhere to go but closer.
+
 Drag anywhere on the map to move it, and hold `Ctrl` or `Cmd` while scrolling to zoom
 toward the pointer — the same two gestures as the canvas, to the same 25%–200% range and the
 same `ui.zoomStep`. The control in the bottom-right corner zooms in steps, and the reading
-beside it is also the way back: click the percentage to fit the map to the page again. A drag
-that starts on a bundle pans the map rather than opening that bundle's board, so there is no
-part of the map you have to avoid grabbing.
+beside it is also the way back: click the percentage to return to the size the map opened at.
+A drag that starts on a bundle pans the map rather than opening that bundle's board, so there
+is no part of the map you have to avoid grabbing.
 
 Zooming in enlarges the rectangles and leaves the labels the size they were, so it does what
-you would want it for: a bundle too small to be named at 100% becomes large enough to carry
-its name. The gaps between rectangles and the band each project's name sits in stay put too —
-only the part that stands for cards grows.
+you would want it for: a bundle too small to be named where the map opens becomes large
+enough to carry its name. The gaps between rectangles and the band each project's name sits
+in stay put too — only the part that stands for cards grows.
 
 The tags are on the left, as a tree over the map: `'perf` with `'perf:cache` beneath it,
 the way a directory holds a subdirectory. The number beside each is how many cards it
 gathers, that tag and everything under it. A tree taller than the window scrolls inside its
-own panel, and the lines follow their rows as it does. Hover a tag to draw a line from its row to every bundle
-holding a card that carries it, and the rest of the map stands back so the lines read; click
-to keep them drawn and put `?tag=` in the URL, so any view of the map is a link you can
-send. Clicking the selected tag again clears it.
+own panel, and the lines follow their rows as it does. Hover a tag to draw a line from its
+row to every bundle holding a card that carries it, and the rest of the map stands back so
+the lines read; click to keep them drawn and put `?tag=` in the URL, so any view of the map
+is a link you can send. Clicking the selected tag again clears it.
 
 Unlike the tag index, the map counts cards only — it reads no taskspace files. A file tag
 has no bundle rectangle to be drawn against, and gathering one would put a number in the
