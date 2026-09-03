@@ -96,6 +96,24 @@ describe("squarify", () => {
       expect(strip[0].rect.height).toBeLessThanOrEqual(AREA.height * 0.25 + 1e-6);
     });
 
+    it("lays the strip out at the height a caller asks for", () => {
+      const cells = byId(
+        squarify([item("full", 10), item("zero", 0)], AREA, { emptyStripHeight: 26 }),
+      );
+      expect(cells.zero.rect.height).toBeCloseTo(26, 6);
+      // Taken off the packing rather than added to the area: the two still tile it.
+      expect(cells.full.rect.height + cells.zero.rect.height).toBeCloseTo(AREA.height, 6);
+    });
+
+    it("caps a height a caller asks for at a quarter of the area, like any other", () => {
+      const cells = byId(
+        squarify([item("full", 10), item("zero", 0)], AREA, {
+          emptyStripHeight: 500,
+        }),
+      );
+      expect(cells.zero.rect.height).toBeCloseTo(AREA.height * 0.25, 6);
+    });
+
     it("gives the whole area to the strip when nothing has any value", () => {
       const cells = squarify([item("a", 0), item("b", 0)], AREA);
       expect(cells.every((c) => c.empty)).toBe(true);

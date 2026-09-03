@@ -54,9 +54,23 @@ export const rectCenter = ({ x, y, width, height }: Rect): Point => ({
  * how much of the rectangle it may take. A strip is for the items that have no area to be
  * given; it must be tall enough to be seen and small enough that a workspace of mostly empty
  * bundles does not turn the map into a row of them.
+ *
+ * The height is what a caller may override, because "tall enough to be seen" is a question
+ * about what is going in the strip rather than about the packing. A bundle laid there is a
+ * dashed outline, and 18px is room for one; a *project* laid there is a rectangle that still
+ * has to carry its own name, and needs more — see `PROJECT_EMPTY_STRIP_HEIGHT` in
+ * `layout.ts`. The fraction is deliberately not overridable: it is the promise that the strip
+ * stays a footnote, and it holds against whatever height a caller asks for.
  */
 const EMPTY_STRIP_HEIGHT = 18;
 const EMPTY_STRIP_MAX_FRACTION = 0.25;
+
+/** What {@link squarify} leaves to its caller. */
+export type SquarifyOptions = {
+  /** The empty strip's height in pixels, before the quarter-of-the-area cap. Defaults to 18,
+   *  which is room for a dashed outline and nothing else. */
+  emptyStripHeight?: number;
+};
 
 /**
  * Descending by value, with {@link compareIds} as the tiebreak.
@@ -153,7 +167,11 @@ function placeRow<T extends TreemapItem>(
  * the other end — a project whose every bundle is empty is drawn as those bundles, not as a
  * blank.
  */
-export function squarify<T extends TreemapItem>(items: T[], area: Rect): TreemapCell<T>[] {
+export function squarify<T extends TreemapItem>(
+  items: T[],
+  area: Rect,
+  { emptyStripHeight = EMPTY_STRIP_HEIGHT }: SquarifyOptions = {},
+): TreemapCell<T>[] {
   const cells: TreemapCell<T>[] = [];
   if (items.length === 0 || area.width <= 0 || area.height <= 0) return cells;
 
@@ -166,7 +184,7 @@ export function squarify<T extends TreemapItem>(items: T[], area: Rect): Treemap
     const height =
       positive.length === 0
         ? area.height
-        : Math.min(EMPTY_STRIP_HEIGHT, area.height * EMPTY_STRIP_MAX_FRACTION);
+        : Math.min(emptyStripHeight, area.height * EMPTY_STRIP_MAX_FRACTION);
     const strip: Rect = { x: area.x, y: area.y + area.height - height, width: area.width, height };
     const width = strip.width / zeros.length;
     for (const [index, item] of zeros.entries()) {

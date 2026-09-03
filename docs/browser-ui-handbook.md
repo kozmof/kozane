@@ -485,8 +485,9 @@ rectangle's **area is its card count** — a bundle holding two hundred cards is
 hundred times the size of one holding two, and a project's size is the cards its bundles
 hold between them. A bundle holding nothing has no area to be given, so empty bundles are
 drawn as dashed outlines in a strip along the bottom of their project rather than left out.
-A project with no cards at all is drawn the same way. Bundles keep the colours their own
-board gives them.
+A project with no cards at all is drawn the same way, in a strip along the foot of the map
+— named, as an outline, and without its own bundles drawn inside it, since a project holding
+no cards holds none in any of them. Bundles keep the colours their own board gives them.
 
 Below the rectangles is a row of circles, one per scope, each with a line to every bundle
 it reaches. A scope is drawn this way rather than as a rectangle of its own because a scope

@@ -106,6 +106,43 @@ describe("map page", () => {
     expect(link?.getAttribute("href")).toBe("/p2");
   });
 
+  /**
+   * A project holding no cards anywhere has no area to be given and lands in the strip along
+   * the bottom. It has to arrive there saying which project it is and looking like the empty
+   * thing it is — drawn nameless and solid, as it once was, two of them read as a pair of
+   * rectangles belonging to no project at all.
+   */
+  describe("a project with no cards in it", () => {
+    const withEmpty = () =>
+      draw({
+        projects: [
+          { id: "p1", name: "Project One", isDefault: true },
+          { id: "p3", name: "Nothing Yet", isDefault: false },
+        ],
+        drawn: [
+          { id: "p1", name: "Project One" },
+          { id: "p3", name: "Nothing Yet" },
+        ],
+        bundles: [bundle("b1", "p1", "General", 8), bundle("b4", "p3", "General", 0)],
+        scopes: [],
+      });
+
+    it("is drawn with its name rather than as an unlabelled box", () => {
+      const { container } = withEmpty();
+      expect(container.querySelector("svg")?.textContent).toContain("Nothing Yet");
+    });
+
+    it("is drawn as an outline, so it is not read as a project that packed small", () => {
+      const { container } = withEmpty();
+      const empty = [...container.querySelectorAll("svg > g > rect")].find(
+        (rect) => rect.getAttribute("stroke-dasharray") === "2 2",
+      );
+      expect(empty).toBeDefined();
+      expect(empty?.getAttribute("fill")).toBe("transparent");
+      expect(Number(empty?.getAttribute("height"))).toBeGreaterThan(0);
+    });
+  });
+
   it("draws a hub for each scope, named, with a line per bundle it reaches", () => {
     const { container } = draw();
     expect(screen.getByText("Release plan")).toBeInTheDocument();

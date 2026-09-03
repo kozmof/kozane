@@ -6,7 +6,13 @@
   import { page } from "$app/state";
   import { normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
   import { MAP_DEFAULT_VIEWPORT } from "$lib/constants";
-  import { buildMapLayout, tagLinks, HUB_RADIUS } from "./lib/layout.js";
+  import {
+    buildMapLayout,
+    tagLinks,
+    HUB_RADIUS,
+    LABEL_MIN_WIDTH,
+    LABEL_MIN_HEIGHT,
+  } from "./lib/layout.js";
   import {
     clampView,
     FITTED_VIEW,
@@ -242,9 +248,15 @@
    * Asked of the rectangle as drawn, which is what makes zooming worth doing: the label is
    * the same size at every zoom, so a bundle too small to carry one grows into it rather
    * than growing its text along with itself.
+   *
+   * The two measures come from `layout.ts` rather than being written here, because the empty
+   * strip is sized to clear them — see `PROJECT_EMPTY_STRIP_HEIGHT`. Kept in this file, they
+   * were a threshold the geometry could not read, and the strip cleared them by luck until it
+   * stopped: an empty project used to reach the page too short to carry its own name, and so
+   * was drawn as an unlabelled box belonging to nothing.
    */
   const roomForLabel = (rect: { width: number; height: number }) =>
-    rect.width >= 54 && rect.height >= 20;
+    rect.width >= LABEL_MIN_WIDTH && rect.height >= LABEL_MIN_HEIGHT;
 
   /**
    * Pinned to `TAG_ROW_HEIGHT` rather than left to come out of the font, because
@@ -442,14 +454,19 @@
         >
           {#each layout.projects as project (project.id)}
             <g opacity={dimming ? 0.55 : 1}>
+              <!-- A project holding no cards anywhere is drawn as the outline an empty
+                   bundle is, and for the same reason: it is in the map because leaving it
+                   out would say it does not exist, and it should not be mistaken for a
+                   project that merely packed small. -->
               <rect
                 x={project.rect.x}
                 y={project.rect.y}
                 width={project.rect.width}
                 height={project.rect.height}
                 rx="2"
-                fill="var(--colors-ink-white)"
+                fill={project.empty ? "transparent" : "var(--colors-ink-white)"}
                 stroke="var(--colors-neutral-border)"
+                stroke-dasharray={project.empty ? "2 2" : undefined}
               />
               {#if roomForLabel(project.rect)}
                 <text

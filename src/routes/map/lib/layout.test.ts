@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildMapLayout, tagLinks, type LayoutBundle, type MapLayoutInput } from "./layout.js";
+import {
+  buildMapLayout,
+  tagLinks,
+  LABEL_MIN_HEIGHT,
+  LABEL_MIN_WIDTH,
+  type LayoutBundle,
+  type MapLayoutInput,
+} from "./layout.js";
 
 const AREA = { x: 0, y: 0, width: 1200, height: 800 };
 
@@ -94,6 +101,40 @@ describe("buildMapLayout", () => {
     const fresh = layout.projects.find(({ id }) => id === "fresh");
     expect(fresh?.empty).toBe(true);
     expect(fresh?.rect.height).toBeGreaterThan(0);
+  });
+
+  /** The strip is sized off the label thresholds, so what lands in it can say what it is. An
+   *  unlabelled box at the foot of the map reads as belonging to no project at all. */
+  it("leaves a project in the empty strip room for its own name", () => {
+    const layout = buildMapLayout(
+      input({
+        projects: [
+          { id: "p1", name: "One" },
+          { id: "fresh", name: "Fresh" },
+          { id: "fresher", name: "Fresher" },
+        ],
+      }),
+    );
+    for (const id of ["fresh", "fresher"]) {
+      const placed = layout.projects.find((p) => p.id === id);
+      expect(placed?.empty).toBe(true);
+      expect(placed?.rect.height).toBeGreaterThanOrEqual(LABEL_MIN_HEIGHT);
+      expect(placed?.rect.width).toBeGreaterThanOrEqual(LABEL_MIN_WIDTH);
+    }
+  });
+
+  /** The strip is taller than a bundle's, and the cap is what stops that mattering. */
+  it("still holds the empty strip to a quarter of the map", () => {
+    const layout = buildMapLayout(
+      input({
+        projects: [
+          { id: "p1", name: "One" },
+          ...Array.from({ length: 30 }, (_, i) => ({ id: `e${i}`, name: `E${i}` })),
+        ],
+      }),
+    );
+    const full = layout.projects.find(({ id }) => id === "p1")!;
+    expect(full.rect.height).toBeGreaterThan(AREA.height * 0.7);
   });
 
   it("leaves the whole area to the packing when there are no scopes", () => {

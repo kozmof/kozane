@@ -16,6 +16,39 @@ const PROJECT_GAP = 6;
 const BUNDLE_GAP = 1.5;
 /** The band along the top of a project's rectangle that carries its name. */
 const PROJECT_TITLE_HEIGHT = 20;
+
+/**
+ * The smallest rectangle a label is drawn in. Below either measure the rectangle is drawn
+ * and left unlabelled, rather than carrying text wider or taller than itself.
+ *
+ * Here rather than in the component, though it is the component that does the drawing,
+ * because {@link PROJECT_EMPTY_STRIP_HEIGHT} is computed from it: the strip has to be sized
+ * so that what lands in it clears this, and a threshold the geometry cannot see is a
+ * threshold the geometry sizes against by coincidence.
+ */
+export const LABEL_MIN_WIDTH = 54;
+export const LABEL_MIN_HEIGHT = 20;
+
+/**
+ * How tall the strip of card-less *projects* along the bottom of the map is.
+ *
+ * Taller than the 18px `squarify` defaults to, and it has to be. That default is sized for a
+ * bundle, which is drawn in the strip as a dashed outline and nothing more; a project is a
+ * rectangle that still has to say which project it is. {@link PROJECT_GAP} comes off it
+ * before anything is drawn, so at the default an empty project reaches the page 12px tall —
+ * under {@link LABEL_MIN_HEIGHT}, and so nameless. Two nameless boxes at the foot of the map
+ * read as belonging to nothing, which is the opposite of what putting them there was for.
+ *
+ * So it is the sum rather than a number that happens to work: exactly the height at which a
+ * project in the strip still carries its name, and it moves if either part moves.
+ *
+ * Its bundles are still not drawn — {@link PROJECT_TITLE_HEIGHT} plus the inner inset is
+ * more than what is left. That is deliberate. A project in this strip has no cards anywhere
+ * in it, so its bundles are empty by definition and would each be an outline inside an
+ * outline; the named, empty rectangle already says the whole of what there is to say.
+ */
+const PROJECT_EMPTY_STRIP_HEIGHT = LABEL_MIN_HEIGHT + PROJECT_GAP;
+
 /** Room left under the packing for the scope rail's spokes to travel through. */
 const RAIL_CLEARANCE = 8;
 
@@ -112,6 +145,7 @@ export function buildMapLayout({ projects, bundles, scopes, area }: MapLayoutInp
       value: (byProject.get(id) ?? []).reduce((sum, { cards }) => sum + cards, 0),
     })),
     packing,
+    { emptyStripHeight: PROJECT_EMPTY_STRIP_HEIGHT },
   );
 
   for (const cell of projectCells) {
