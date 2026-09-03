@@ -374,8 +374,6 @@
       fontSize: "12px",
       fontFamily: "mono",
       pointerEvents: "none",
-      backgroundColor: "rgba(242, 242, 242, 0.82)",
-      backdropFilter: "blur(4px)",
       "& a": { pointerEvents: "auto" },
     })}
   >
@@ -458,9 +456,6 @@
         overflowY: "auto",
         overscrollBehavior: "contain",
         padding: "0 4px",
-        borderRadius: "3px",
-        backgroundColor: "rgba(242, 242, 242, 0.9)",
-        backdropFilter: "blur(4px)",
         scrollbarWidth: "thin",
       })}
     >
