@@ -34,8 +34,11 @@ export type Size = { width: number; height: number };
 /**
  * The map filling its box exactly: zoom 1, and no pan.
  *
- * Not where the map opens — see {@link defaultView} — but still the view every other one is
- * measured against, since zoom is defined as a multiple of it.
+ * Not where the map opens — see {@link defaultView} — and not what the control in the corner
+ * calls 100% either, which is {@link zoomPercent}'s business. It stays the unit everything
+ * here is written in, because it is the one view the box itself defines: `viewedArea`
+ * multiplies by `zoom`, and 1 has to mean *the box* for that to be arithmetic rather than a
+ * convention.
  */
 export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
 
@@ -75,6 +78,22 @@ export function defaultView(size: Size): MapView {
     panX: (size.width * (1 - zoom)) / 2,
     panY: (size.height * (1 - zoom)) / 2,
   };
+}
+
+/**
+ * The zoom as the control in the corner reports it: a percentage of the size the map opens
+ * at, not of the size the box would fit it at.
+ *
+ * The two differ because {@link DEFAULT_ZOOM} is not 1, and the opening view is the one a
+ * reader actually has to compare against — it is what they were looking at a moment ago,
+ * whereas "fitted to the box" is a view they may never see. A control that read 50% before
+ * anyone had touched it was reporting a fraction of something nobody had been shown.
+ *
+ * So {@link FITTED_VIEW} reads as 200%, and the range `clampZoom` allows reads as 50%–400%.
+ * The band is the board's; only the number written on it is this page's own.
+ */
+export function zoomPercent(zoom: number): number {
+  return Math.round((zoom / DEFAULT_ZOOM) * 100);
 }
 
 /**

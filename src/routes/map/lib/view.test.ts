@@ -8,6 +8,7 @@ import {
   viewedArea,
   zoomedBy,
   zoomedTo,
+  zoomPercent,
   type MapView,
 } from "./view.js";
 import { buildMapLayout, type LayoutBundle } from "./map-layout.js";
@@ -226,5 +227,29 @@ describe("defaultView", () => {
    *  first thing that touches it. */
   it("opens at a view the clamp leaves alone", () => {
     expect(clampView(defaultView(SIZE), SIZE)).toEqual(defaultView(SIZE));
+  });
+});
+
+describe("zoomPercent", () => {
+  /** The whole point: a map nobody has touched reads 100%, not a fraction of a view nobody
+   *  has been shown. */
+  it("calls the size the map opens at 100%", () => {
+    expect(zoomPercent(defaultView(SIZE).zoom)).toBe(100);
+  });
+
+  it("calls the box's own fit 200%, since the map opens at half of it", () => {
+    expect(zoomPercent(FITTED_VIEW.zoom)).toBe(200);
+  });
+
+  /** The band `clampZoom` allows, read in this page's units. */
+  it("reads the allowed range as 50% to 400%", () => {
+    expect(zoomPercent(0.25)).toBe(50);
+    expect(zoomPercent(2)).toBe(400);
+  });
+
+  it("rises with the zoom and never reports a fraction of a percent", () => {
+    expect(zoomPercent(0.55)).toBe(110);
+    expect(zoomPercent(0.6)).toBe(120);
+    expect(Number.isInteger(zoomPercent(0.37))).toBe(true);
   });
 });

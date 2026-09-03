@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
-import { DEFAULT_ZOOM } from "./lib/view.js";
+import { DEFAULT_ZOOM, zoomPercent } from "./lib/view.js";
 import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "./lib/tag-rows.js";
 import type { TagHit } from "$lib/types";
 
@@ -322,11 +322,15 @@ describe("panning and zooming", () => {
     fireEvent.pointerUp(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
   };
 
-  /** Half, not fitted — see `DEFAULT_ZOOM`. The map opens with room around it, so the zoom
-   *  control has somewhere to go in both directions. */
-  it("opens at the size it means to open at", () => {
+  /**
+   * The map opens with room around it rather than fitted to the window — see `DEFAULT_ZOOM` —
+   * and the control calls that 100%, because the size it opens at is the one a reader has to
+   * compare against. The literal is the point of the test: a reading of anything else on a
+   * map nobody has touched is a fraction of a view nobody has been shown.
+   */
+  it("opens reading 100%", () => {
     draw();
-    expect(screen.getByText(`${DEFAULT_ZOOM * 100}%`)).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
   it("moves the whole map by the drag, without resizing anything", async () => {
@@ -379,7 +383,7 @@ describe("panning and zooming", () => {
     await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
 
-    expect(screen.getByText(`${Math.round((DEFAULT_ZOOM + 0.05) * 100)}%`)).toBeInTheDocument();
+    expect(screen.getByText(`${zoomPercent(DEFAULT_ZOOM + 0.05)}%`)).toBeInTheDocument();
     const widthOf = (rows: string[]) => Number(rows[0].split(",")[2]);
     expect(widthOf(geometry(container))).toBeGreaterThan(widthOf(before));
   });
@@ -395,7 +399,7 @@ describe("panning and zooming", () => {
     await fireEvent.click(screen.getByTitle("Back to the size the map opens at"));
     await tick();
     expect(geometry(container)).toEqual(opened);
-    expect(screen.getByText(`${DEFAULT_ZOOM * 100}%`)).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
   it("offers no way home while it is already there", () => {
@@ -454,7 +458,9 @@ describe("zooming into something too small to read", () => {
     for (let i = 0; i < 40; i++) await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
 
-    expect(screen.getByText("200%")).toBeInTheDocument();
+    // The ceiling `clampZoom` allows, which is twice the window fit and so 400% of the
+    // size the map opens at.
+    expect(screen.getByText(`${zoomPercent(2)}%`)).toBeInTheDocument();
     expect(labelled(container, "Scraps")).toBe(true);
   });
 });

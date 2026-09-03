@@ -502,16 +502,17 @@ several projects, which is exactly what the lines show. A scope reaching a proje
 through a taskspace has no bundle to point at, so its line runs to the project instead.
 Hover a circle to raise its own lines out of the rest.
 
-The map opens at 50%, centred, with room around it — 100% means the rectangles fitted to
-the window exactly, which is further in than is useful to start from and leaves the zoom
-control with nowhere to go but closer.
+The map opens centred, with room around it, and the control in the corner calls that 100% —
+100% is the size the map opens at rather than the size that would fill the window, because
+the view you were looking at a moment ago is the one worth measuring against. Filling the
+window is 200%, and the range runs from 50% to 400%.
 
 Drag anywhere on the map to move it, and hold `Ctrl` or `Cmd` while scrolling to zoom
-toward the pointer — the same two gestures as the canvas, to the same 25%–200% range and the
-same `ui.zoomStep`. The control in the bottom-right corner zooms in steps, and the reading
-beside it is also the way back: click the percentage to return to the size the map opened at.
-A drag that starts on a bundle pans the map rather than opening that bundle's board, so there
-is no part of the map you have to avoid grabbing.
+toward the pointer — the same two gestures as the canvas, and the same `ui.zoomStep` behind
+them. The control in the bottom-right corner zooms in steps, and the reading beside it is
+also the way back: click the percentage to return to the size the map opened at. A drag that
+starts on a bundle pans the map rather than opening that bundle's board, so there is no part
+of the map you have to avoid grabbing.
 
 Zooming in enlarges the rectangles and leaves the labels the size they were, so it does what
 you would want it for: a bundle too small to be named where the map opens becomes large

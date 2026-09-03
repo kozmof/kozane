@@ -20,6 +20,7 @@
     viewedArea,
     zoomedBy,
     zoomedTo,
+    zoomPercent,
     type MapView,
   } from "./lib/view.js";
   import { tagBundleTargets } from "./lib/graph.js";
@@ -701,7 +702,7 @@
               cursor: "pointer",
               _disabled: { cursor: "default" },
             })}
-          >{Math.round(view.zoom * 100)}%</button>
+          >{zoomPercent(view.zoom)}%</button>
         </div>
       </div>
 
