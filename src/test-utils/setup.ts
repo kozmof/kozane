@@ -19,6 +19,19 @@ if (typeof globalThis.ResizeObserver === "undefined") {
   } as unknown as typeof ResizeObserver;
 }
 
+// jsdom raises pointer events but implements none of the capture API behind them, and a
+// drag that is not captured is a drag that stops the moment the pointer leaves the element.
+// Stubs rather than a guard at each call site: capture is in every browser the app runs in,
+// so a `?.` in the page would be describing this file rather than anything real.
+for (const name of ["setPointerCapture", "releasePointerCapture"] as const) {
+  if (typeof Element.prototype[name] !== "function") {
+    Object.defineProperty(Element.prototype, name, { value: () => undefined });
+  }
+}
+if (typeof Element.prototype.hasPointerCapture !== "function") {
+  Object.defineProperty(Element.prototype, "hasPointerCapture", { value: () => false });
+}
+
 afterEach(() => {
   cleanup();
   // The page remembers the layer being worked on in sessionStorage, which outlives a

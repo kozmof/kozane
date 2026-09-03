@@ -133,6 +133,12 @@ directories a workspace was worked in are not served to whoever opens the site.
 By default taskspaces do not appear in a static export at all: a plain `kozane
 net ssg generate` carries no scopes, no taskspace names, and no files.
 
+The map at `/map` is exported on the same terms. It publishes project names,
+bundle names, card counts, and the tag tree — card and bundle content, which
+the export carries by design. Its scope graph is not: a plain export draws no
+scope circles and names no scope, the same line every other page holds, and it
+is gathered at all only when the export was built to carry scopes.
+
 `--include-scoped-files` is the exception, and it publishes real file contents:
 
 ```sh

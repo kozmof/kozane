@@ -474,6 +474,59 @@ and quotes a line of that file. The same flag governs whether the export names y
 taskspaces at all — without it, an exported tag index mentions no taskspace, the same as an
 exported board does not.
 
+## The map
+
+The map lives at `/map`, reached from the "Map" link on the project list. It is one picture
+of the whole workspace, and it is read-only: nothing on it changes anything, and there is
+no live-sync poll behind it.
+
+Every project is a rectangle, and the bundles inside it are rectangles of their own. A
+rectangle's **area is its card count** — a bundle holding two hundred cards is drawn a
+hundred times the size of one holding two, and a project's size is the cards its bundles
+hold between them. A bundle holding nothing has no area to be given, so empty bundles are
+drawn as dashed outlines in a strip along the bottom of their project rather than left out.
+A project with no cards at all is drawn the same way. Bundles keep the colours their own
+board gives them.
+
+Below the rectangles is a row of circles, one per scope, each with a line to every bundle
+it reaches. A scope is drawn this way rather than as a rectangle of its own because a scope
+is not inside a project — the same scope holds cards from several bundles and often from
+several projects, which is exactly what the lines show. A scope reaching a project only
+through a taskspace has no bundle to point at, so its line runs to the project instead.
+Hover a circle to raise its own lines out of the rest.
+
+Drag anywhere on the map to move it, and hold `Ctrl` or `Cmd` while scrolling to zoom
+toward the pointer — the same two gestures as the canvas, to the same 25%–200% range and the
+same `ui.zoomStep`. The control in the bottom-right corner zooms in steps, and the reading
+beside it is also the way back: click the percentage to fit the map to the page again. A drag
+that starts on a bundle pans the map rather than opening that bundle's board, so there is no
+part of the map you have to avoid grabbing.
+
+Zooming in enlarges the rectangles and leaves the labels the size they were, so it does what
+you would want it for: a bundle too small to be named at 100% becomes large enough to carry
+its name. The gaps between rectangles and the band each project's name sits in stay put too —
+only the part that stands for cards grows.
+
+The tags are on the left, as a tree: `'perf` with `'perf:cache` beneath it, the way a
+directory holds a subdirectory. The number beside each is how many cards it gathers, that
+tag and everything under it. Hover a tag to draw a line from its row to every bundle
+holding a card that carries it, and the rest of the map stands back so the lines read; click
+to keep them drawn and put `?tag=` in the URL, so any view of the map is a link you can
+send. Clicking the selected tag again clears it.
+
+Unlike the tag index, the map counts cards only — it reads no taskspace files. A file tag
+has no bundle rectangle to be drawn against, and gathering one would put a number in the
+tree that means something different from the number beside it.
+
+The row of project names in the top right narrows the map to one project, the same control
+the tag index carries and with the same `?projectId=` behind it. Narrowed, the map draws
+that project's rectangle alone, and only the scopes and tags that reach it.
+
+A static export made with `kozane net ssg generate` carries the map, and both the tag
+selection and the project narrowing keep working there without a server. The scope circles
+are left out unless the export was built with `--include-scoped-files` — a plain export
+carries no scopes anywhere, and the map holds the same line.
+
 ## Card footers
 
 Toggle footers with the `f` key. A footer shows, when relevant, the glue-group

@@ -7,6 +7,7 @@ import {
   updateScopeName,
   deleteScope,
   deleteScopeFromProject,
+  getScopeBundleUsage,
   getScopeProjectUsage,
   getScopesInProject,
 } from "./scope.js";
@@ -352,5 +353,90 @@ describe("getScopeProjectUsage", () => {
     await addTaskspace({ db: d, projectId, name: "unscoped" });
 
     expect(await getScopeProjectUsage({ db: d })).toEqual([]);
+  });
+});
+
+describe("getScopeBundleUsage", () => {
+  it("reports no rows for a scope nothing refers to", async () => {
+    const d = await createTestDB();
+    await addScope({ db: d, name: "Fresh" });
+    expect(await getScopeBundleUsage({ db: d })).toEqual([]);
+  });
+
+  it("reports each bundle once, with how many of its cards are in the scope", async () => {
+    const d = await createTestDB();
+    const projectId = await addProject({ db: d, name: "P" });
+    await addLayer({ db: d, projectId, name: "Base", isDefault: true });
+    const bundleId = await addBundle({ db: d, projectId, name: "B" });
+    const scopeId = await addScope({ db: d, name: "S" });
+    const first = await addCard({ db: d, bundleId, content: "one" });
+    const second = await addCard({ db: d, bundleId, content: "two" });
+    await addScopeRel({ db: d, scopeId, cardId: first });
+    await addScopeRel({ db: d, scopeId, cardId: second });
+
+    expect(await getScopeBundleUsage({ db: d })).toEqual([{ scopeId, bundleId, cards: 2 }]);
+  });
+
+  /** The grain this exists for: a project would collapse these two into one line. */
+  it("keeps two bundles of one project apart", async () => {
+    const d = await createTestDB();
+    const projectId = await addProject({ db: d, name: "P" });
+    await addLayer({ db: d, projectId, name: "Base", isDefault: true });
+    const left = await addBundle({ db: d, projectId, name: "Left" });
+    const right = await addBundle({ db: d, projectId, name: "Right" });
+    const scopeId = await addScope({ db: d, name: "S" });
+    await addScopeRel({
+      db: d,
+      scopeId,
+      cardId: await addCard({ db: d, bundleId: left, content: "l" }),
+    });
+    await addScopeRel({
+      db: d,
+      scopeId,
+      cardId: await addCard({ db: d, bundleId: right, content: "r" }),
+    });
+
+    expect(await getScopeBundleUsage({ db: d })).toEqual(
+      expect.arrayContaining([
+        { scopeId, bundleId: left, cards: 1 },
+        { scopeId, bundleId: right, cards: 1 },
+      ]),
+    );
+  });
+
+  it("reaches across project lines, which is what a scope is for", async () => {
+    const d = await createTestDB();
+    const p1 = await addProject({ db: d, name: "P1" });
+    const p2 = await addProject({ db: d, name: "P2" });
+    await addLayer({ db: d, projectId: p1, name: "Base", isDefault: true });
+    await addLayer({ db: d, projectId: p2, name: "Base", isDefault: true });
+    const b1 = await addBundle({ db: d, projectId: p1, name: "One" });
+    const b2 = await addBundle({ db: d, projectId: p2, name: "Two" });
+    const scopeId = await addScope({ db: d, name: "Shared" });
+    await addScopeRel({
+      db: d,
+      scopeId,
+      cardId: await addCard({ db: d, bundleId: b1, content: "a" }),
+    });
+    await addScopeRel({
+      db: d,
+      scopeId,
+      cardId: await addCard({ db: d, bundleId: b2, content: "b" }),
+    });
+
+    const usage = await getScopeBundleUsage({ db: d });
+    expect(usage.map(({ bundleId }) => bundleId).sort()).toEqual([b1, b2].sort());
+  });
+
+  /** A taskspace places a scope on a project and on no bundle, so it has nothing to report
+   *  here — the map draws those against the project rectangle instead. */
+  it("says nothing about a scope placed only by a taskspace", async () => {
+    const d = await createTestDB();
+    const projectId = await addProject({ db: d, name: "P" });
+    const scopeId = await addScope({ db: d, name: "S" });
+    await addTaskspace({ db: d, projectId, scopeId, name: "Notes", path: "notes" });
+
+    expect(await getScopeBundleUsage({ db: d })).toEqual([]);
+    expect(await getScopeProjectUsage({ db: d })).toEqual([{ scopeId, projectId }]);
   });
 });

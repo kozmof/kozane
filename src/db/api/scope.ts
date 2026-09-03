@@ -1,5 +1,16 @@
 import { scopeTable, scopeRelTable, cardTable, bundleTable, taskspaceTable } from "../schema.js";
-import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  exists,
+  inArray,
+  isNotNull,
+  isNull,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { union } from "drizzle-orm/sqlite-core";
 import type { NeedsDB, NeedsProject, NeedsScope, Scope } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
@@ -132,6 +143,45 @@ export async function getScopeProjectUsage({ db }: NeedsDB): Promise<ScopeProjec
   // operation, and it makes the answer one consistent read rather than two a CLI write
   // could land between.
   return union(fromCards, fromTaskspaces);
+}
+
+/** One scope's reach into one bundle, and how many cards make it. See
+ *  {@link getScopeBundleUsage}. */
+export type ScopeBundleUsage = { scopeId: string; bundleId: string; cards: number };
+
+/**
+ * Which bundles each scope reaches, and by how many cards.
+ *
+ * {@link getScopeProjectUsage} one level finer, and for the map page, which draws a scope as
+ * a node with a line to every bundle it reaches. A project is the wrong grain for that line:
+ * a scope holding cards from two bundles of one project is two lines there, and collapsing
+ * them to the project would draw one line to a rectangle that is not what the cards are in.
+ *
+ * Cards only. A taskspace attaches a scope to a *project* and to no bundle at all, so it
+ * cannot produce a row here — which is why the map recovers those from
+ * {@link getScopeProjectUsage} and draws them against the project rectangle instead. The two
+ * queries are the two ways a scope is placed, and this is the half that has a bundle.
+ *
+ * What crosses back is the size of the answer rather than the size of the walk, the same
+ * property {@link getScopeProjectUsage} has: twenty cards of one bundle filed into one scope
+ * is one row, and it is SQLite that collapses the other nineteen. The count is kept rather
+ * than discarded because it is what says how much of a scope sits where — a spoke carrying
+ * one card and a spoke carrying two hundred are not the same line to draw.
+ *
+ * Walks every `scope_rel` row in the workspace, so this is a query a page load makes and not
+ * one the once-a-second board poll does.
+ */
+export async function getScopeBundleUsage({ db }: NeedsDB): Promise<ScopeBundleUsage[]> {
+  return db
+    .select({
+      scopeId: scopeRelTable.scopeId,
+      bundleId: bundleTable.id,
+      cards: count(scopeRelTable.cardId),
+    })
+    .from(scopeRelTable)
+    .innerJoin(cardTable, eq(cardTable.id, scopeRelTable.cardId))
+    .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId))
+    .groupBy(scopeRelTable.scopeId, bundleTable.id);
 }
 
 type GetScope = NeedsDB & { scopeId: string };

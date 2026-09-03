@@ -10,10 +10,14 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <!-- The way in to the tag index. A tag written on a card links to it, but that is only a
-       way in once there is a tag to click and only ever to that one tag; the index reaches
-       across every project, which is what makes this page — the one thing above them all —
-       where it belongs. -->
+  <!-- The two views that are of the workspace rather than of one project, and so belong on
+       the one page above them all.
+
+       The tag index reaches across every project: a tag written on a card links to it, but
+       that is only a way in once there is a tag to click and only ever to that one tag. The
+       map is the other: every project's rectangle at once, which no board can show and which
+       is also what makes this link the only way to reach it — SvelteKit's prerender crawler
+       finds the route from here. -->
   <div
     class={css({
       display: "flex",
@@ -26,18 +30,35 @@
     <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "neutral.muted" })}>
       {data.workspaceRoot ?? "Kozane"}
     </h1>
-    <a
-      href="{base}/tags"
-      class={css({
-        fontSize: "12px",
-        fontFamily: "mono",
-        color: "neutral.muted",
-        textDecoration: "none",
-        _hover: { color: "ink.black" },
-      })}
+    <nav
+      aria-label="Across the workspace"
+      class={css({ display: "flex", gap: "14px" })}
     >
-      Tags →
-    </a>
+      <a
+        href="{base}/map"
+        class={css({
+          fontSize: "12px",
+          fontFamily: "mono",
+          color: "neutral.muted",
+          textDecoration: "none",
+          _hover: { color: "ink.black" },
+        })}
+      >
+        Map →
+      </a>
+      <a
+        href="{base}/tags"
+        class={css({
+          fontSize: "12px",
+          fontFamily: "mono",
+          color: "neutral.muted",
+          textDecoration: "none",
+          _hover: { color: "ink.black" },
+        })}
+      >
+        Tags →
+      </a>
+    </nav>
   </div>
 
   {#if data.projects.length === 0}

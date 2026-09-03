@@ -4,11 +4,14 @@ import {
   addBundle,
   getBundle,
   getAllBundles,
+  getBundleCardCounts,
   deleteBundle,
   updateBundleName,
   getDefaultBundle,
 } from "./bundle.js";
 import { addProject } from "./project.js";
+import { addLayer } from "./layer.js";
+import { addCard } from "./card.js";
 import { NotFoundError } from "./utils.js";
 
 async function setup() {
@@ -139,5 +142,56 @@ describe("updateBundleName", () => {
     await expect(updateBundleName({ db, projectId, bundleId: "ghost", name: "X" })).rejects.toThrow(
       NotFoundError,
     );
+  });
+});
+
+describe("getBundleCardCounts", () => {
+  it("returns nothing for a workspace with no bundles", async () => {
+    const db = await createTestDB();
+    expect(await getBundleCardCounts({ db })).toEqual([]);
+  });
+
+  /** The whole reason this is a left join. An empty bundle is a bundle. */
+  it("reports a bundle holding no cards, at zero", async () => {
+    const { db, projectId } = await setup();
+    const bundleId = await addBundle({ db, projectId, name: "Empty" });
+    expect(await getBundleCardCounts({ db })).toEqual([
+      { id: bundleId, projectId, name: "Empty", isDefault: false, cards: 0 },
+    ]);
+  });
+
+  it("counts the cards of each bundle", async () => {
+    const { db, projectId } = await setup();
+    await addLayer({ db, projectId, name: "Base", isDefault: true });
+    const busy = await addBundle({ db, projectId, name: "Busy" });
+    const quiet = await addBundle({ db, projectId, name: "Quiet" });
+    await addCard({ db, bundleId: busy, content: "one" });
+    await addCard({ db, bundleId: busy, content: "two" });
+    await addCard({ db, bundleId: quiet, content: "three" });
+
+    const counts = await getBundleCardCounts({ db });
+    expect(Object.fromEntries(counts.map(({ id, cards }) => [id, cards]))).toEqual({
+      [busy]: 2,
+      [quiet]: 1,
+    });
+  });
+
+  it("reaches every project in the workspace, and says which is which", async () => {
+    const db = await createTestDB();
+    const p1 = await addProject({ db, name: "P1" });
+    const p2 = await addProject({ db, name: "P2" });
+    await addLayer({ db, projectId: p1, name: "Base", isDefault: true });
+    const b1 = await addBundle({ db, projectId: p1, name: "One" });
+    const b2 = await addBundle({ db, projectId: p2, name: "Two" });
+    await addCard({ db, bundleId: b1, content: "a card" });
+
+    const counts = await getBundleCardCounts({ db });
+    expect(counts.map(({ id, projectId, cards }) => ({ id, projectId, cards }))).toEqual(
+      expect.arrayContaining([
+        { id: b1, projectId: p1, cards: 1 },
+        { id: b2, projectId: p2, cards: 0 },
+      ]),
+    );
+    expect(counts).toHaveLength(2);
   });
 });
