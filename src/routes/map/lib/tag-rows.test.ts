@@ -1,7 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
-import { childrenShown, tagRowCenter, visibleTagRows, TAG_ROW_HEIGHT } from "./tag-rows.js";
+import {
+  childrenShown,
+  tagLineOrigin,
+  tagRowCenter,
+  visibleTagRows,
+  TAG_PANEL_LEFT,
+  TAG_PANEL_TOP,
+  TAG_PANEL_WIDTH,
+  TAG_ROW_HEIGHT,
+} from "./tag-rows.js";
 
 const hit = (cardId: string, tag: string): TagHit => ({
   tag,
@@ -75,5 +84,39 @@ describe("tagRowCenter", () => {
     const rows = visibleTagRows(tree, null);
     expect(tagRowCenter(rows, "perf:cache:invalidation")).toBeNull();
     expect(tagRowCenter(rows, null)).toBeNull();
+  });
+});
+
+describe("tagLineOrigin", () => {
+  const rows = () => visibleTagRows(tree, null);
+
+  /** The panel is drawn over the map, so a line from anywhere left of its right edge spends
+   *  its first stretch underneath the panel and appears to start out of nothing. */
+  it("leaves the panel's right edge, level with the row", () => {
+    expect(tagLineOrigin(rows(), "docs")).toEqual({
+      x: TAG_PANEL_LEFT + TAG_PANEL_WIDTH,
+      y: TAG_PANEL_TOP + TAG_ROW_HEIGHT / 2,
+    });
+  });
+
+  it("follows the row down the panel", () => {
+    const docs = tagLineOrigin(rows(), "docs")!;
+    const cache = tagLineOrigin(rows(), "perf:cache")!;
+    expect(cache.x).toBe(docs.x);
+    expect(cache.y - docs.y).toBe(2 * TAG_ROW_HEIGHT);
+  });
+
+  /** A tree taller than the window scrolls, and a row scrolled up is a line that leaves from
+   *  further up. Zero before anything has been scrolled, which is what the server renders. */
+  it("moves with the panel when it is scrolled", () => {
+    const still = tagLineOrigin(rows(), "perf:cache")!;
+    const scrolled = tagLineOrigin(rows(), "perf:cache", 30)!;
+    expect(scrolled.y).toBe(still.y - 30);
+    expect(tagLineOrigin(rows(), "perf:cache", 0)).toEqual(still);
+  });
+
+  it("has no answer for a tag that is not on the page", () => {
+    expect(tagLineOrigin(rows(), "perf:cache:invalidation")).toBeNull();
+    expect(tagLineOrigin(rows(), null)).toBeNull();
   });
 });

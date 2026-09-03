@@ -25,8 +25,12 @@
   import { tagBundleTargets } from "./lib/graph.js";
   import {
     childrenShown,
-    tagRowCenter,
+    tagLineOrigin,
     visibleTagRows,
+    MAP_HEADER_HEIGHT,
+    TAG_PANEL_LEFT,
+    TAG_PANEL_TOP,
+    TAG_PANEL_WIDTH,
     TAG_ROW_HEIGHT,
   } from "./lib/tag-rows.js";
 
@@ -195,23 +199,23 @@
   const targets = $derived(activeTag ? tagBundleTargets(data.tagBundles, activeTag) : new Map());
 
   /**
-   * The rows the panel is drawing, and how far down it the active one sits.
+   * The rows the panel is drawing, and the point on the canvas the active one's lines leave
+   * from.
    *
    * Worked out from the tree rather than measured off the page — see `lib/tag-rows.ts`. The
-   * panel and the map are the two halves of one grid row and so share a top edge, which is
-   * what lets a row's offset within the panel be a y on the map without either being
-   * measured. It is also what makes a line right in the served HTML, before any JavaScript
-   * has run, and right in a static export opened without any.
+   * panel is drawn over the canvas at a known corner, so a row's offset down it is a y on the
+   * map without either being measured. That is what makes a line right in the served HTML,
+   * before any JavaScript has run, and right in a static export opened without any.
+   *
+   * `panelScroll` is the exception, and it is zero until someone scrolls a tree too tall for
+   * the window — so it changes nothing about what is served, only about what a line does
+   * after the row it belongs to has moved.
    */
   const rows = $derived(visibleTagRows(data.tree, activeTag));
-  const rowY = $derived(tagRowCenter(rows, activeTag));
+  let panelScroll = $state(0);
+  const lineOrigin = $derived(tagLineOrigin(rows, activeTag, panelScroll));
 
-  /** The lines leave the left edge of the map, level with the row they belong to: the panel
-   *  is immediately to the left, so a line starting there reads as coming out of the row
-   *  without the map drawing over the panel to say so. */
-  const links = $derived(
-    rowY === null ? [] : tagLinks(layout, { x: 0, y: rowY }, targets),
-  );
+  const links = $derived(lineOrigin === null ? [] : tagLinks(layout, lineOrigin, targets));
   /** Whether the packing should stand back so the tag's lines read. Only once a tag is
    *  actually reaching somewhere — a tag written on no card dims nothing. */
   const dimming = $derived(links.length > 0);
@@ -259,15 +263,28 @@
     rect.width >= LABEL_MIN_WIDTH && rect.height >= LABEL_MIN_HEIGHT;
 
   /**
+   * Every measurement this page shares with `lib/tag-rows.ts` is written as an inline
+   * `style`, and none of them through `css()`.
+   *
+   * Panda extracts its atomic classes by reading the source, so a length interpolated from a
+   * constant is a length it cannot evaluate where it stands. It emits the class name at
+   * runtime all the same and no rule to go with it, which is silent in the worst way:
+   * nothing fails to build, nothing fails to render, and the row is simply whatever height
+   * its text came out at. That is the measurement every tag line is drawn from, so it is the
+   * one thing here that must not be able to quietly not apply.
+   */
+  const rowStyle = `height: ${TAG_ROW_HEIGHT}px`;
+
+  /**
    * Pinned to `TAG_ROW_HEIGHT` rather than left to come out of the font, because
    * `tagRowCenter` multiplies by it to decide where a tag's lines leave from. A row an odd
    * pixel taller than the constant would put every line below it out by a growing amount.
+   * The height itself is in `rowStyle` — see the note there.
    */
   const rowClass = css({
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    height: `${TAG_ROW_HEIGHT}px`,
     padding: "0 8px",
     borderRadius: "2px",
     color: "ink.black",
@@ -299,7 +316,7 @@
           onmouseleave={() => (hoveredTag = null)}
           onfocus={() => (hoveredTag = node.tag)}
           onblur={() => (hoveredTag = null)}
-          style="padding-left: {8 + depth * 14}px"
+          style="{rowStyle}; padding-left: {8 + depth * 14}px"
           class="{rowClass} {activeTag === node.tag ? activeRowClass : ''}"
         >
           <span class={css({ fontFamily: "mono" })}>{node.name}</span>
@@ -316,24 +333,50 @@
   </ul>
 {/snippet}
 
+<!--
+  The window, and nothing but the map in it. The canvas fills it edge to edge and everything
+  else — the header, the tag panel, the zoom control — is drawn over it rather than beside
+  it, because a treemap laid into what is left over after the furniture has taken its share
+  is a treemap of a smaller workspace: every rectangle is scaled down by the same fraction,
+  and the small ones fall under the size a label needs first.
+
+  `height` rather than `min-height`, and the overflow hidden with it: this page does not
+  scroll. The map is moved by dragging it, which is the board's gesture and the one the rest
+  of this page is built around — a page that also scrolled would have two answers to "move
+  the map down", and the tag lines are drawn in window coordinates that a page scroll would
+  slide out from under.
+-->
 <main
   class={css({
-    padding: "32px 48px 48px",
+    position: "relative",
+    height: "100dvh",
+    overflow: "hidden",
     backgroundColor: "ink.lighter",
-    minHeight: "100vh",
-    display: "flex",
-    flexDirection: "column",
   })}
 >
+  <!-- Over the map, and letting a drag through where there is nothing to click: the band
+       runs the width of the window, and a strip that swallowed every gesture that began in
+       it would be a strip of dead map. `pointer-events` is handed back by the links
+       themselves. -->
   <header
+    style="height: {MAP_HEADER_HEIGHT}px"
     class={css({
-      marginBottom: "20px",
+      position: "absolute",
+      top: "0",
+      left: "0",
+      right: "0",
+      zIndex: "2",
+      boxSizing: "border-box",
+      padding: "0 16px",
       display: "flex",
-      alignItems: "baseline",
-      flexWrap: "wrap",
+      alignItems: "center",
       gap: "6px 14px",
       fontSize: "12px",
       fontFamily: "mono",
+      pointerEvents: "none",
+      backgroundColor: "rgba(242, 242, 242, 0.82)",
+      backdropFilter: "blur(4px)",
+      "& a": { pointerEvents: "auto" },
     })}
   >
     <a href="{base}/{selectedProjectId ?? ''}" class={headerLinkClass}>
@@ -346,7 +389,16 @@
          The same control the tag index carries, in the same place. -->
     <nav
       aria-label="Project"
-      class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
+      class={css({
+        display: "flex",
+        gap: "10px",
+        marginLeft: "auto",
+        // Sideways rather than onto a second line — see `MAP_HEADER_HEIGHT`. A workspace of
+        // thirty projects scrolls its list; it does not take a second band off the map.
+        overflowX: "auto",
+        whiteSpace: "nowrap",
+        scrollbarWidth: "none",
+      })}
     >
       {#each data.projects as project (project.id)}
         {@const selected = selectedProjectId === project.id}
@@ -367,25 +419,51 @@
   </header>
 
   {#if data.drawn.length === 0}
-    <p class={css({ color: "neutral.subtle", fontSize: "13px", maxWidth: "52ch" })}>
+    <p
+      style="top: {TAG_PANEL_TOP}px"
+      class={css({
+        position: "absolute",
+        left: "16px",
+        color: "neutral.subtle",
+        fontSize: "13px",
+        maxWidth: "52ch",
+      })}
+    >
       No projects yet. A project is drawn here as a rectangle, and the bundles inside it are
       sized by how many cards each one holds.
     </p>
   {:else}
-    <div
+    <!--
+      The tag panel, floating at the corner `tagLineOrigin` draws from — so the numbers that
+      place it and the numbers a line starts at are one set of numbers.
+
+      A scroller, which it did not used to be. Beside the map it could be any height and the
+      page scrolled to reach the bottom of it; over a window-height canvas there is no page
+      scroll left to do that, and a tree taller than the window would simply have tags that
+      could not be reached. What it costs is `panelScroll`: the one measured quantity on a
+      page that is otherwise pure arithmetic, and zero until someone actually scrolls.
+
+      No vertical padding and no border, deliberately. `tagRowCenter` counts rows from this
+      element's top edge, so anything between that edge and the first row is an offset every
+      line below would be out by.
+    -->
+    <nav
+      aria-label="Tags"
+      onscroll={(event) => (panelScroll = event.currentTarget.scrollTop)}
+      style="left: {TAG_PANEL_LEFT}px; top: {TAG_PANEL_TOP}px; width: {TAG_PANEL_WIDTH}px; max-height: calc(100% - {TAG_PANEL_TOP + 16}px)"
       class={css({
-        display: "grid",
-        gridTemplateColumns: { base: "1fr", md: "minmax(180px, 240px) 1fr" },
-        gap: "24px",
-        alignItems: "stretch",
-        flex: "1",
-        minHeight: "560px",
+        position: "absolute",
+        zIndex: "1",
+        boxSizing: "border-box",
+        overflowY: "auto",
+        overscrollBehavior: "contain",
+        padding: "0 4px",
+        borderRadius: "3px",
+        backgroundColor: "rgba(242, 242, 242, 0.9)",
+        backdropFilter: "blur(4px)",
+        scrollbarWidth: "thin",
       })}
     >
-      <!-- Not a scroller of its own: a row's offset down this panel is read as a y on the
-           map beside it, and a panel scrolled independently would move the rows out from
-           under the lines drawn to them. A long tree scrolls with the page instead. -->
-      <nav aria-label="Tags" class={css({ position: "relative" })}>
         {#if data.tree.length === 0}
           <p class={css({ color: "neutral.subtle", fontSize: "12px", padding: "3px 8px" })}>
             No tags yet. Write <code class={css({ fontFamily: "mono" })}>'like:this</code> in a
@@ -436,10 +514,11 @@
         onpointercancel={onPointerUp}
         onclickcapture={onClickCapture}
         class={css({
-          position: "relative",
-          minHeight: "560px",
-          // Zoomed in, the packing is larger than the box. Clipped to it, rather than drawn
-          // over the panel beside it and the page below.
+          position: "absolute",
+          inset: "0",
+          // Zoomed in, the packing is larger than the window. Clipped to it rather than
+          // drawn past the edges — and it is the bottom of the stack, so the header and the
+          // panel are over it rather than under.
           overflow: "hidden",
           touchAction: "none",
           cursor: dragging ? "grabbing" : "grab",
@@ -618,7 +697,6 @@
           >{Math.round(view.zoom * 100)}%</button>
         </div>
       </div>
-    </div>
 
     <!--
       The same map in words, for a reader who cannot see it. An `<svg>` with one label says

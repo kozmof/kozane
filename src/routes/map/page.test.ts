@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
+import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "./lib/tag-rows.js";
 import type { TagHit } from "$lib/types";
 
 /**
@@ -65,6 +66,12 @@ function pageData(over: Record<string, unknown> = {}) {
     ...over,
   };
 }
+
+/** Where a line for the nth row of the tree starts: the panel's right edge, level with the
+ *  middle of that row. Spelled out from the constants that place the panel rather than
+ *  written down, so it is the same arithmetic the page does and not a copy of its answer. */
+const lineStart = (row: number) =>
+  `M ${TAG_PANEL_LEFT + TAG_PANEL_WIDTH} ${TAG_PANEL_TOP + row * TAG_ROW_HEIGHT + TAG_ROW_HEIGHT / 2} Q `;
 
 const draw = (over: Record<string, unknown> = {}) =>
   render(MapPage, { props: { data: pageData(over) as never, params: {}, form: null } });
@@ -157,6 +164,18 @@ describe("map page", () => {
       expect(screen.getByText("2 cards")).toBeInTheDocument();
     });
 
+    /**
+     * Written on the element rather than reached through `css()`, and asserted here because
+     * losing it is silent. Panda extracts its classes by reading the source: a height
+     * interpolated from a constant gets a class name and no rule, so the row keeps whatever
+     * height its text came out at while every line drawn to it goes on assuming this one.
+     */
+    it("pins the row to the height the lines are drawn from", () => {
+      const { container } = draw();
+      const row = container.querySelector<HTMLElement>('nav[aria-label="Tags"] a')!;
+      expect(row.getAttribute("style")).toContain(`height: ${TAG_ROW_HEIGHT}px`);
+    });
+
     it("links a row to the same page with the tag selected", () => {
       draw();
       expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe("/map?tag=docs");
@@ -202,13 +221,35 @@ describe("map page", () => {
      */
     it("leaves from its own row, without waiting to be measured", () => {
       const { container } = draw({ tag: "docs" });
-      expect(tagPaths(container)[0].getAttribute("d")).toMatch(/^M 0 12 Q /);
+      expect(tagPaths(container)[0].getAttribute("d")?.startsWith(lineStart(0))).toBe(true);
     });
 
     it("leaves from further down for a row further down", () => {
       const { container } = draw({ tag: "perf" });
-      // docs, perf, perf:cache — the second row, so a row and a half down.
-      expect(tagPaths(container)[0].getAttribute("d")).toMatch(/^M 0 36 Q /);
+      // docs, perf, perf:cache — the second row.
+      expect(tagPaths(container)[0].getAttribute("d")?.startsWith(lineStart(1))).toBe(true);
+    });
+
+    /**
+     * The panel scrolls when the tree is taller than the window, which it has to now that
+     * the canvas is the window and there is no page scroll left to reach the bottom of a
+     * long tree with. A row that has moved is a line that has to move with it.
+     */
+    it("moves a line with its row when the panel is scrolled", async () => {
+      const { container } = draw({ tag: "docs" });
+      const panel = container.querySelector<HTMLElement>('nav[aria-label="Tags"]')!;
+      const startsAt = () => tagPaths(container)[0].getAttribute("d")!.split(" Q ")[0];
+      expect(startsAt()).toBe(lineStart(0).slice(0, -3));
+
+      panel.scrollTop = 30;
+      await fireEvent.scroll(panel);
+      await tick();
+
+      // The whole line is redrawn — where it lands on the bundle follows where it left from —
+      // so it is the near end that is checked, and it has moved by exactly the scroll.
+      const [x, y] = startsAt().split(" ").slice(1).map(Number);
+      expect(x).toBe(TAG_PANEL_LEFT + TAG_PANEL_WIDTH);
+      expect(y).toBe(TAG_PANEL_TOP + TAG_ROW_HEIGHT / 2 - 30);
     });
 
     it("draws nothing until a tag is chosen", () => {
@@ -369,7 +410,7 @@ describe("panning and zooming", () => {
 
     const after = tagPaths(container)[0].getAttribute("d")!;
     expect(after).not.toBe(before);
-    expect(after.startsWith("M 0 12 Q ")).toBe(true);
+    expect(after.startsWith(lineStart(0))).toBe(true);
   });
 });
 

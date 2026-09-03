@@ -480,6 +480,12 @@ The map lives at `/map`, reached from the "Map" link on the project list. It is 
 of the whole workspace, and it is read-only: nothing on it changes anything, and there is
 no live-sync poll behind it.
 
+It fills the window. The header and the tag panel are drawn over the picture rather than
+beside it, so the rectangles get the whole of the page rather than what is left after the
+furniture — a treemap laid into a smaller box is the same map with every rectangle scaled
+down, and the small ones lose their labels first. The page itself does not scroll: the map
+is moved by dragging it.
+
 Every project is a rectangle, and the bundles inside it are rectangles of their own. A
 rectangle's **area is its card count** — a bundle holding two hundred cards is drawn a
 hundred times the size of one holding two, and a project's size is the cards its bundles
@@ -508,9 +514,10 @@ you would want it for: a bundle too small to be named at 100% becomes large enou
 its name. The gaps between rectangles and the band each project's name sits in stay put too —
 only the part that stands for cards grows.
 
-The tags are on the left, as a tree: `'perf` with `'perf:cache` beneath it, the way a
-directory holds a subdirectory. The number beside each is how many cards it gathers, that
-tag and everything under it. Hover a tag to draw a line from its row to every bundle
+The tags are on the left, as a tree over the map: `'perf` with `'perf:cache` beneath it,
+the way a directory holds a subdirectory. The number beside each is how many cards it
+gathers, that tag and everything under it. A tree taller than the window scrolls inside its
+own panel, and the lines follow their rows as it does. Hover a tag to draw a line from its row to every bundle
 holding a card that carries it, and the rest of the map stands back so the lines read; click
 to keep them drawn and put `?tag=` in the URL, so any view of the map is a link you can
 send. Clicking the selected tag again clears it.
