@@ -12,7 +12,7 @@
     HUB_RADIUS,
     LABEL_MIN_WIDTH,
     LABEL_MIN_HEIGHT,
-  } from "./lib/layout.js";
+  } from "./lib/map-layout.js";
   import {
     clampView,
     FITTED_VIEW,
@@ -253,7 +253,7 @@
    * the same size at every zoom, so a bundle too small to carry one grows into it rather
    * than growing its text along with itself.
    *
-   * The two measures come from `layout.ts` rather than being written here, because the empty
+   * The two measures come from `map-layout.ts` rather than being written here, because the empty
    * strip is sized to clear them — see `PROJECT_EMPTY_STRIP_HEIGHT`. Kept in this file, they
    * were a threshold the geometry could not read, and the strip cleared them by luck until it
    * stopped: an empty project used to reach the page too short to carry its own name, and so

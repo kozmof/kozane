@@ -8,7 +8,7 @@ import {
   zoomedTo,
   type MapView,
 } from "./view.js";
-import { buildMapLayout, type LayoutBundle } from "./layout.js";
+import { buildMapLayout, type LayoutBundle } from "./map-layout.js";
 
 const SIZE = { width: 1200, height: 800 };
 

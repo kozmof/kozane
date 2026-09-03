@@ -11,7 +11,7 @@ import type { TagHit } from "$lib/types";
  * are things that can look right and be wrong: a rectangle labelled with one bundle's name
  * and sized by another's count, or a tag lighting the bundles of the tag above it.
  *
- * The geometry itself is `lib/layout.test.ts` — this is about what ends up in the document.
+ * The geometry itself is `lib/map-layout.test.ts` — this is about what ends up in the document.
  */
 
 const bundle = (id: string, projectId: string, name: string, cards: number) => ({

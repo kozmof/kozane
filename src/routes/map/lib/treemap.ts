@@ -59,7 +59,7 @@ export const rectCenter = ({ x, y, width, height }: Rect): Point => ({
  * about what is going in the strip rather than about the packing. A bundle laid there is a
  * dashed outline, and 18px is room for one; a *project* laid there is a rectangle that still
  * has to carry its own name, and needs more — see `PROJECT_EMPTY_STRIP_HEIGHT` in
- * `layout.ts`. The fraction is deliberately not overridable: it is the promise that the strip
+ * `map-layout.ts`. The fraction is deliberately not overridable: it is the promise that the strip
  * stays a footnote, and it holds against whatever height a caller asks for.
  */
 const EMPTY_STRIP_HEIGHT = 18;

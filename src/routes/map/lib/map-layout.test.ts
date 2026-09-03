@@ -6,7 +6,7 @@ import {
   LABEL_MIN_WIDTH,
   type LayoutBundle,
   type MapLayoutInput,
-} from "./layout.js";
+} from "./map-layout.js";
 
 const AREA = { x: 0, y: 0, width: 1200, height: 800 };
 
