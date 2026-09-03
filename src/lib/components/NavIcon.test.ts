@@ -35,8 +35,8 @@ describe("NavIcon", () => {
 
   /**
    * The icon has no colour of its own, which is what lets the link set it: at rest that is
-   * `neutral.icon`, the weight the canvas draws its own rectangle icons at, and on hover it
-   * darkens the whole way. A fill written into the drawing would take that away.
+   * `neutral.iconDim`, an icon's weight rather than a label's, and on hover it darkens the
+   * whole way. A fill written into the drawing would take that away.
    */
   it("takes its colour from the link around it", () => {
     const svg = draw("map").querySelector("svg")!;

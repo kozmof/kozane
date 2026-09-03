@@ -12,9 +12,11 @@
   /**
    * The links across the workspace, which are icons and so have no text to be read.
    *
-   * `neutral.icon` at rest, which is what the canvas fills its own rectangle icons with —
-   * these are furniture in the corner of a page whose subject is elsewhere, and they should
-   * sit at the weight the rest of the app's icons sit at rather than at a label's.
+   * `neutral.iconDim` at rest, one of the two weights the canvas draws its own icons at —
+   * these are furniture in the corner of a page whose subject is elsewhere, so they belong
+   * at an icon's weight rather than a label's. The lighter `neutral.icon` is the other, and
+   * it is for an icon sitting inside a control that is already drawn; standing alone in a
+   * header, with nothing around it, it reads as switched off.
    *
    * Darkening the whole way to `ink.black` on hover is the other half of that: light enough
    * to ignore has to become unmistakable when pointed at, or an icon with no label beside it
@@ -26,7 +28,7 @@
     alignItems: "center",
     padding: "6px",
     borderRadius: "2px",
-    color: "neutral.icon",
+    color: "neutral.iconDim",
     textDecoration: "none",
     _hover: { color: "ink.black", backgroundColor: "neutral.border" },
   });

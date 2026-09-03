@@ -312,9 +312,10 @@
   /**
    * The links out of the map, which are icons and carry no text of their own.
    *
-   * `neutral.icon` at rest, the weight the canvas draws its own rectangle icons at — and it
-   * matters more here than on the project list, because this band is over the map itself and
-   * a heavier icon would read as part of the drawing underneath it.
+   * `neutral.iconDim` at rest, an icon's weight rather than a label's — and the balance
+   * matters more here than on the project list, because this band is over the map itself:
+   * heavier and the icons read as part of the drawing underneath, lighter and they vanish
+   * into it.
    *
    * Grown well past the 16px the icon occupies, for the same reason: a link the size of its
    * own artwork is a link you have to aim at, while the thing beneath it is waiting to be
@@ -325,7 +326,7 @@
     alignItems: "center",
     padding: "6px",
     borderRadius: "2px",
-    color: "neutral.icon",
+    color: "neutral.iconDim",
     textDecoration: "none",
     _hover: { color: "ink.black", backgroundColor: "neutral.border" },
   });

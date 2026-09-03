@@ -374,8 +374,8 @@
         alignItems: "center",
         padding: "6px",
         borderRadius: "2px",
-        // The weight the canvas draws its own rectangle icons at; see the map's header.
-        color: "neutral.icon",
+        // An icon's weight rather than a label's; see the map's header.
+        color: "neutral.iconDim",
         textDecoration: "none",
         _hover: { color: "ink.black", backgroundColor: "neutral.border" },
       })}
