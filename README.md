@@ -123,10 +123,11 @@ leaves taskspace files out — the same switch as `--no-files` above.
 
 ## Seeing across projects
 
-The browser has one page above the boards: the map at `/map`, linked from the project list.
-Every project is a rectangle, the bundles inside it are sized by how many cards they hold,
-each scope is a node with a line to every bundle it reaches, and the tags are a tree you can
-pick from to see where each one lives. It is read-only, and it reaches every project at once.
+The browser has one page above the boards: the map at `/map`, reached from the icon in the
+corner of the project list. Every project is a rectangle, the bundles inside it are sized by
+how many cards they hold, each scope is a node with a line to every bundle it reaches, and
+the tags are a tree you can pick from to see where each one lives. It is read-only, and it
+reaches every project at once.
 
 A board shows the scopes and taskspaces its own project uses, plus any not yet claimed by a project. A scope another project alone is working in stays off it. The CLI is the workspace-wide view:
 

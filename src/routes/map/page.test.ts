@@ -77,25 +77,39 @@ const lineStart = (row: number) =>
 const draw = (over: Record<string, unknown> = {}) =>
   render(MapPage, { props: { data: pageData(over) as never, params: {}, form: null } });
 
-/** The lines a tag draws are the only accented paths on the page. */
+/**
+ * The map's own drawing, and what is inside it.
+ *
+ * Scoped to the surface rather than asked of the page, because the links out of the header
+ * are `<svg>` too — "the svg on the page" stopped being an answer the day they became icons,
+ * and a test that had gone on asking would have been reading a 16px picture of a treemap
+ * instead of the treemap.
+ */
+const MAP = '[role="presentation"] ';
+const mapSvg = (container: HTMLElement) => container.querySelector(`${MAP}svg`);
+const mapParts = (container: HTMLElement, selector: string) => [
+  ...container.querySelectorAll(`${MAP}${selector}`),
+];
+
+/** The lines a tag draws are the only accented paths on the map. */
 const tagPaths = (container: HTMLElement) =>
-  [...container.querySelectorAll("path")].filter((p) =>
+  mapParts(container, "path").filter((p) =>
     (p.getAttribute("stroke") ?? "").includes("select-accent"),
   );
 
 const rectOf = (container: HTMLElement, name: string) =>
-  [...container.querySelectorAll("g")].find((g) => g.textContent?.includes(name));
+  mapParts(container, "g").find((g) => g.textContent?.includes(name));
 
 describe("map page", () => {
   it("draws a rectangle for every project and every bundle", () => {
     const { container } = draw();
     // A project's name is in the header nav and in the picture and in the words beside it,
     // so the picture is asked about specifically.
-    expect(container.querySelector("svg")?.textContent).toContain("Project One");
+    expect(mapSvg(container)?.textContent).toContain("Project One");
     expect(screen.getByText("General")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
     // Two projects, three bundles, and none of them zero-sized.
-    const rects = [...container.querySelectorAll("svg rect")];
+    const rects = mapParts(container, "svg rect");
     expect(rects).toHaveLength(5);
     for (const rect of rects) expect(Number(rect.getAttribute("width"))).toBeGreaterThan(0);
   });
@@ -137,12 +151,12 @@ describe("map page", () => {
 
     it("is drawn with its name rather than as an unlabelled box", () => {
       const { container } = withEmpty();
-      expect(container.querySelector("svg")?.textContent).toContain("Nothing Yet");
+      expect(mapSvg(container)?.textContent).toContain("Nothing Yet");
     });
 
     it("is drawn as an outline, so it is not read as a project that packed small", () => {
       const { container } = withEmpty();
-      const empty = [...container.querySelectorAll("svg > g > rect")].find(
+      const empty = mapParts(container, "svg > g > rect").find(
         (rect) => rect.getAttribute("stroke-dasharray") === "2 2",
       );
       expect(empty).toBeDefined();
@@ -151,10 +165,47 @@ describe("map page", () => {
     });
   });
 
+  /**
+   * The links out are icons now, so the anchor has to carry the name the picture no longer
+   * does — and the back link is the same picture whether it leads to the whole list or to
+   * one project's board.
+   */
+  describe("the way out", () => {
+    const linkTo = (container: HTMLElement, href: string) =>
+      [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
+
+    it("names each link, since neither of them says anything in words", () => {
+      const { container } = draw();
+      for (const [href, name] of [
+        ["/", "All projects"],
+        ["/tags", "Tags"],
+      ]) {
+        const link = linkTo(container, href);
+        expect(link?.getAttribute("aria-label")).toBe(name);
+        // The picture is all there is, so an empty accessible name would leave the link
+        // announcing its own URL.
+        expect(link?.textContent?.trim()).toBe("");
+        expect(link?.querySelector("svg")).not.toBeNull();
+      }
+    });
+
+    /** The list of projects beside them stays words: it is a set of choices to read, not a
+     *  way out, and three project names are not three pictures. */
+    it("leaves the project narrowing in words", () => {
+      const { container } = draw();
+      expect(linkTo(container, "/map?projectId=p1")?.textContent?.trim()).toBe("Project One");
+    });
+
+    it("names the project it goes back to when the map is narrowed to one", () => {
+      const { container } = draw({ projectId: "p1" });
+      expect(linkTo(container, "/p1")?.getAttribute("aria-label")).toBe("Back to Project One");
+    });
+  });
+
   it("draws a hub for each scope, named, with a line per bundle it reaches", () => {
     const { container } = draw();
     expect(screen.getByText("Release plan")).toBeInTheDocument();
-    expect(container.querySelectorAll("svg circle")).toHaveLength(1);
+    expect(mapParts(container, "svg circle")).toHaveLength(1);
   });
 
   describe("the tag tree", () => {
@@ -310,7 +361,7 @@ describe("map page", () => {
     it("explains an empty workspace instead of drawing an empty box", () => {
       const { container } = draw({ projects: [], drawn: [], bundles: [], scopes: [], tree: [] });
       expect(screen.getByText(/No projects yet/)).toBeInTheDocument();
-      expect(container.querySelector("svg")).toBeNull();
+      expect(mapSvg(container)).toBeNull();
     });
 
     it("invites a first tag rather than showing an empty panel", () => {
@@ -346,7 +397,7 @@ describe("panning and zooming", () => {
   /** Every rectangle at once, as `x,y,w,h` strings — the cheapest way to say "the map
    *  moved" or "the map did not". */
   const geometry = (container: HTMLElement) =>
-    [...container.querySelectorAll("svg rect")].map((r) =>
+    mapParts(container, "svg rect").map((r) =>
       ["x", "y", "width", "height"].map((a) => r.getAttribute(a)).join(","),
     );
 
@@ -478,7 +529,7 @@ describe("zooming into something too small to read", () => {
     });
 
   const labelled = (container: HTMLElement, name: string) =>
-    [...container.querySelectorAll("svg text")].some((t) => t.textContent === name);
+    mapParts(container, "svg text").some((t) => t.textContent === name);
 
   it("leaves a bundle unlabelled while its rectangle is too small for the label", () => {
     const { container } = tiny();

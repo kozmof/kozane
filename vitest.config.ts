@@ -82,8 +82,10 @@ export default defineConfig({
         "src/lib/index.ts",
         // Page load functions require integration/e2e testing
         "src/routes/**/*page.server.ts",
-        // Not measurable by v8 rather than not tested; see the note above.
-        "src/routes/**/*.svelte",
+        // Not measurable by v8 rather than not tested; see the note above. Every component,
+        // wherever it lives — the ones shared across pages sit in `src/lib/components` and
+        // v8 can no more attribute their compiled output than it can a route's.
+        "src/**/*.svelte",
       ],
       reporter: ["text", "html", "lcov"],
       thresholds: {

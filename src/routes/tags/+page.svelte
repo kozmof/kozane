@@ -5,6 +5,7 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
+  import NavIcon from "$lib/components/NavIcon.svelte";
   import {
     buildTagTree,
     capHitsByKind,
@@ -355,22 +356,30 @@
     class={css({
       marginBottom: "24px",
       display: "flex",
-      alignItems: "baseline",
+      alignItems: "center",
       flexWrap: "wrap",
       gap: "6px 14px",
       fontSize: "12px",
       fontFamily: "mono",
     })}
   >
+    <!-- The same drawing whether it leads to the whole list or to one project's board, so
+         which of those it is lives in the label rather than in the picture. -->
     <a
       href="{base}/{selectedProjectId ?? ''}"
+      title={selectedProject ? selectedProject.name : "Projects"}
+      aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
       class={css({
+        display: "flex",
+        alignItems: "center",
+        padding: "6px",
+        borderRadius: "2px",
         color: "neutral.muted",
         textDecoration: "none",
-        _hover: { color: "ink.black" },
+        _hover: { color: "ink.black", backgroundColor: "neutral.bg" },
       })}
     >
-      ← {selectedProject ? selectedProject.name : "Projects"}
+      <NavIcon kind="projects" />
     </a>
 
     <!-- Which project the index is narrowed to, and the way to change it. Picking the

@@ -3,10 +3,28 @@
   import { base } from "$app/paths";
   import { enhance } from "$app/forms";
   import { css } from "styled-system/css";
+  import NavIcon from "$lib/components/NavIcon.svelte";
 
   let { data, form }: PageProps = $props();
   let submitting = $state(false);
   let nameInput = $state<HTMLInputElement | null>(null);
+
+  /**
+   * The links across the workspace, which are icons and so have no text to be read.
+   *
+   * The padding is the point of the class: an icon is 16px square and a 16px target is a
+   * target you have to aim at, so the link is grown around it. The colour is the hover
+   * state, since without a label there is nothing else to say the icon is a link at all.
+   */
+  const navLinkClass = css({
+    display: "flex",
+    alignItems: "center",
+    padding: "6px",
+    borderRadius: "2px",
+    color: "neutral.muted",
+    textDecoration: "none",
+    _hover: { color: "ink.black", backgroundColor: "neutral.bg" },
+  });
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
@@ -21,7 +39,7 @@
   <div
     class={css({
       display: "flex",
-      alignItems: "baseline",
+      alignItems: "center",
       justifyContent: "space-between",
       gap: "16px",
       marginBottom: "24px",
@@ -30,33 +48,12 @@
     <h1 class={css({ fontSize: "14px", fontWeight: "400", fontFamily: "mono", color: "neutral.muted" })}>
       {data.workspaceRoot ?? "Kozane"}
     </h1>
-    <nav
-      aria-label="Across the workspace"
-      class={css({ display: "flex", gap: "14px" })}
-    >
-      <a
-        href="{base}/map"
-        class={css({
-          fontSize: "12px",
-          fontFamily: "mono",
-          color: "neutral.muted",
-          textDecoration: "none",
-          _hover: { color: "ink.black" },
-        })}
-      >
-        Map →
+    <nav aria-label="Across the workspace" class={css({ display: "flex", gap: "4px" })}>
+      <a href="{base}/map" title="Map" aria-label="Map" class={navLinkClass}>
+        <NavIcon kind="map" />
       </a>
-      <a
-        href="{base}/tags"
-        class={css({
-          fontSize: "12px",
-          fontFamily: "mono",
-          color: "neutral.muted",
-          textDecoration: "none",
-          _hover: { color: "ink.black" },
-        })}
-      >
-        Tags →
+      <a href="{base}/tags" title="Tags" aria-label="Tags" class={navLinkClass}>
+        <NavIcon kind="tags" />
       </a>
     </nav>
   </div>

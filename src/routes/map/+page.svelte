@@ -5,6 +5,7 @@
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
+  import NavIcon from "$lib/components/NavIcon.svelte";
   import { MAP_DEFAULT_VIEWPORT } from "$lib/constants";
   import {
     buildMapLayout,
@@ -308,10 +309,21 @@
   });
   const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
   const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
+  /**
+   * The links out of the map, which are icons and carry no text of their own.
+   *
+   * Grown well past the 16px the icon occupies, because this band is over the canvas and a
+   * link the size of its own artwork is a link you have to aim at while the thing underneath
+   * it is waiting to be dragged.
+   */
   const headerLinkClass = css({
+    display: "flex",
+    alignItems: "center",
+    padding: "6px",
+    borderRadius: "2px",
     color: "neutral.muted",
     textDecoration: "none",
-    _hover: { color: "ink.black" },
+    _hover: { color: "ink.black", backgroundColor: "neutral.bg" },
   });
 </script>
 
@@ -387,10 +399,20 @@
       "& a": { pointerEvents: "auto" },
     })}
   >
-    <a href="{base}/{selectedProjectId ?? ''}" class={headerLinkClass}>
-      ← {selectedProject ? selectedProject.name : "Projects"}
+    <!-- Where the icon has to give the name back: it is the same drawing whether it leads
+         to the whole list or to one project's board, so which of those it is lives in the
+         label rather than in the picture. -->
+    <a
+      href="{base}/{selectedProjectId ?? ''}"
+      title={selectedProject ? selectedProject.name : "Projects"}
+      aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
+      class={headerLinkClass}
+    >
+      <NavIcon kind="projects" />
     </a>
-    <a href="{base}/tags" class={headerLinkClass}>Tags →</a>
+    <a href="{base}/tags" title="Tags" aria-label="Tags" class={headerLinkClass}>
+      <NavIcon kind="tags" />
+    </a>
 
     <!-- Which project the map is narrowed to, and the way to change it. Picking the project
          already selected clears the narrowing, which is the way back to the whole workspace.
