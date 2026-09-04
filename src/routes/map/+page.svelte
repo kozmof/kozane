@@ -324,11 +324,20 @@
   const headerLinkClass = css({
     display: "flex",
     alignItems: "center",
+    // Only ever between the icon and a name, so it costs nothing on the icon-only link.
+    gap: "6px",
     padding: "6px",
     borderRadius: "2px",
+    // A label's weight for the name beside the picture, an icon's for the picture. Both
+    // darken together on hover, or half the link would light up.
     color: "neutral.iconDim",
     textDecoration: "none",
-    _hover: { color: "ink.black", backgroundColor: "neutral.border" },
+    "& span": { color: "neutral.muted" },
+    _hover: {
+      color: "ink.black",
+      backgroundColor: "neutral.border",
+      "& span": { color: "ink.black" },
+    },
   });
 </script>
 
@@ -404,16 +413,20 @@
       "& a": { pointerEvents: "auto" },
     })}
   >
-    <!-- Where the icon has to give the name back: it is the same drawing whether it leads
-         to the whole list or to one project's board, so which of those it is lives in the
-         label rather than in the picture. -->
+    <!-- Back to the project list, or to one project's board when the map has been narrowed
+         to it. The icon is the same drawing either way, so the name is what says which — and
+         it is worth the room, because the two destinations are not interchangeable and the
+         picture alone cannot tell them apart. The same link the tag index carries. -->
     <a
       href="{base}/{selectedProjectId ?? ''}"
-      title={selectedProject ? selectedProject.name : "Projects"}
+      title={selectedProject ? undefined : "Projects"}
       aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
       class={headerLinkClass}
     >
       <NavIcon kind="projects" />
+      {#if selectedProject}
+        <span>{selectedProject.name}</span>
+      {/if}
     </a>
     <a href="{base}/tags" title="Tags" aria-label="Tags" class={headerLinkClass}>
       <NavIcon kind="tags" />

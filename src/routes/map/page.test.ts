@@ -196,9 +196,25 @@ describe("map page", () => {
       expect(linkTo(container, "/map?projectId=p1")?.textContent?.trim()).toBe("Project One");
     });
 
-    it("names the project it goes back to when the map is narrowed to one", () => {
+    /**
+     * Narrowed, the link no longer leads to the project list — it leads to one board — and
+     * the icon is the same drawing either way. So the name is shown rather than left to the
+     * label: the two destinations are not interchangeable, and nothing in the picture says
+     * which one you are about to get.
+     */
+    it("shows the project it goes back to when the map is narrowed to one", () => {
       const { container } = draw({ projectId: "p1" });
-      expect(linkTo(container, "/p1")?.getAttribute("aria-label")).toBe("Back to Project One");
+      const back = linkTo(container, "/p1")!;
+      expect(back.textContent?.trim()).toBe("Project One");
+      expect(back.getAttribute("aria-label")).toBe("Back to Project One");
+      // Still a picture and a name, not a name on its own.
+      expect(back.querySelector("svg")).not.toBeNull();
+    });
+
+    /** Unnarrowed there is no project to name, and the icon stands alone. */
+    it("shows no name when it leads to the whole list", () => {
+      const { container } = draw();
+      expect(linkTo(container, "/")?.textContent?.trim()).toBe("");
     });
   });
 

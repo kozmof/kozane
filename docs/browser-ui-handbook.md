@@ -558,9 +558,10 @@ tree instead of an indented list. Rows on their own say "a list", which is what 
 page already is — two icons that look different while meaning much the same thing have to be
 remembered rather than recognised.
 
-The back link on the map and the tag index is the grid, and it leads to the project list, or
-to one project's board when the page has been narrowed to that project. It is the same
-drawing either way, so which of the two it is only shows in its label.
+The back link on the map and the tag index is the grid. Unnarrowed it leads to the project
+list and stands alone; narrowed to a project it leads to that project's board, and the
+project's name is drawn beside it. The icon is the same drawing either way, so the name is
+what says which of the two you are about to get.
 
 The row of project names on those pages stays in words. It is a set of choices to read
 rather than a way out, and project names are not pictures.

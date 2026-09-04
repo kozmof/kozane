@@ -54,6 +54,33 @@ const draw = (hits: TagHit[], over: Record<string, unknown> = {}) =>
 const hrefOf = (text: string) => screen.getByText(text).closest("a")?.getAttribute("href") ?? null;
 
 describe("tag index page", () => {
+  /**
+   * The way out is an icon, and the icon is the same drawing whether it leads to the whole
+   * project list or to one project's board. Narrowed to a project it leads to that board, so
+   * the name is shown beside the picture — nothing in the drawing could say which of the two
+   * you are about to get.
+   */
+  describe("the way out", () => {
+    const backLink = (container: HTMLElement, href: string) =>
+      [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
+
+    it("shows the project it goes back to when the index is narrowed to one", () => {
+      const { container } = draw([cardHit("c1", "perf", "caching work")], { projectId: "p1" });
+      const back = backLink(container, "/p1")!;
+      expect(back.textContent?.trim()).toBe("Project One");
+      expect(back.getAttribute("aria-label")).toBe("Back to Project One");
+      expect(back.querySelector("svg")).not.toBeNull();
+    });
+
+    it("shows the icon alone when it leads to the whole list", () => {
+      const { container } = draw([cardHit("c1", "perf", "caching work")]);
+      const back = backLink(container, "/")!;
+      expect(back.textContent?.trim()).toBe("");
+      expect(back.getAttribute("aria-label")).toBe("All projects");
+      expect(back.querySelector("svg")).not.toBeNull();
+    });
+  });
+
   it("links a card row to its own board, centred on the card", () => {
     draw([cardHit("c1", "perf", "caching work")]);
 

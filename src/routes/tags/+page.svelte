@@ -363,24 +363,38 @@
       fontFamily: "mono",
     })}
   >
-    <!-- The same drawing whether it leads to the whole list or to one project's board, so
-         which of those it is lives in the label rather than in the picture. -->
+    <!-- Back to the project list, or to one project's board when the page has been narrowed
+         to it. The icon is the same drawing either way, so the name is what says which — and
+         it is worth the room, because the two destinations are not interchangeable and the
+         picture alone cannot tell them apart. -->
     <a
       href="{base}/{selectedProjectId ?? ''}"
-      title={selectedProject ? selectedProject.name : "Projects"}
+      title={selectedProject ? undefined : "Projects"}
       aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
       class={css({
         display: "flex",
         alignItems: "center",
+        // Only ever between the icon and a name, so it costs nothing on the icon-only link.
+        gap: "6px",
         padding: "6px",
         borderRadius: "2px",
-        // An icon's weight rather than a label's; see the map's header.
+        // An icon's weight, and a label's for the name beside it: the two are not the same
+        // kind of mark, and a name drawn as light as the picture is hard to read at the size
+        // a header sets. Both darken together on hover, or half the link would light up.
         color: "neutral.iconDim",
         textDecoration: "none",
-        _hover: { color: "ink.black", backgroundColor: "neutral.border" },
+        "& span": { color: "neutral.muted" },
+        _hover: {
+          color: "ink.black",
+          backgroundColor: "neutral.border",
+          "& span": { color: "ink.black" },
+        },
       })}
     >
       <NavIcon kind="projects" />
+      {#if selectedProject}
+        <span>{selectedProject.name}</span>
+      {/if}
     </a>
 
     <!-- Which project the index is narrowed to, and the way to change it. Picking the
