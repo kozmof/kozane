@@ -4,13 +4,13 @@
    *
    * Each is drawn as the thing its page is about rather than as a decoration standing in for
    * it: many of a size for the list of projects, an area carved up by how much each part
-   * holds for the map, and a label for the tag index.
+   * holds for the map, and a tree branching into its own children for the tag index.
    *
-   * That last one is why they are not all rectangles, which they were at first. A tag drawn
-   * as rows of rectangles says "a list", and a list is what the project page is — so the two
-   * icons differed in arrangement while meaning roughly the same thing, and a reader had to
-   * remember which was which instead of recognising them. A tag has a shape of its own, and
-   * borrowing it costs one notched corner and a hole.
+   * They have to differ in what they mean and not only in how they are arranged, which is
+   * the mistake worth recording. The tag index was rows of rectangles at first, and rows of
+   * rectangles say "a list" — which is what the project page is. Two icons that look
+   * different while meaning the same thing have to be remembered rather than recognised.
+   * A tree says nesting, which is what a tag namespace is and what no other page here has.
    *
    * The icon carries no text, so the link around it has to carry the name: every caller
    * gives its anchor an `aria-label`, and a `title` so a pointer can ask. This is
@@ -20,13 +20,15 @@
 
   let { kind, size = 16 }: { kind: Kind; size?: number } = $props();
 
-  type Rect = { x: number; y: number; w: number; h: number };
-
   /**
    * Everything is drawn on a 16-unit grid inside a 2-unit margin — the ink sits between 2
    * and 14 whichever icon it is, so none of them looks larger than the others beside it.
+   *
+   * All three are rectangles, and `rx` does the rest: SVG clamps a corner radius to half the
+   * side it is rounding, so one value gives the wide bars a soft corner and turns the tree's
+   * 1.2-thin connectors into capsules without either being asked for separately.
    */
-  const RECTS: Record<"projects" | "map", Rect[]> = {
+  const RECTS: Record<Kind, { x: number; y: number; w: number; h: number }[]> = {
     // The project list: many of a size, no one of them the large one. An even grid, so what
     // is read is the regularity rather than any one cell.
     projects: [
@@ -43,20 +45,18 @@
       { x: 10, y: 2, w: 4, h: 7 },
       { x: 10, y: 10, w: 4, h: 4 },
     ],
+    // The tag index: a tag, and the tags written underneath it. The trunk drops from the
+    // root and stops at the last branch it has to reach, which is what makes the shape a
+    // tree rather than three bars that happen to be indented — the connection is drawn.
+    tags: [
+      { x: 2, y: 2, w: 5, h: 3 },
+      { x: 3.9, y: 5, w: 1.2, h: 6.9 },
+      { x: 5.1, y: 7.4, w: 2.9, h: 1.2 },
+      { x: 8, y: 6.25, w: 6, h: 3.5 },
+      { x: 5.1, y: 11.3, w: 2.9, h: 1.2 },
+      { x: 8, y: 10.15, w: 6, h: 3.5 },
+    ],
   };
-
-  /**
-   * A tag: a label with a corner drawn to a point and a hole punched through it.
-   *
-   * One path rather than a shape and a circle on top, because the hole has to be a hole. The
-   * icons take their colour from the link around them and the map's header is transparent
-   * over the drawing, so a circle painted in "the background colour" would have to know a
-   * background that changes underneath it. `fill-rule="evenodd"` makes the second subpath
-   * subtract from the first instead, and it is right on every ground it is put on.
-   */
-  const TAG_PATH =
-    "M 6.4 2.5 H 13 Q 14 2.5 14 3.5 V 12.5 Q 14 13.5 13 13.5 H 6.4 L 2 8 Z" +
-    " M 5.6 8 m -1 0 a 1 1 0 1 0 2 0 a 1 1 0 1 0 -2 0 Z";
 </script>
 
 <svg
@@ -68,11 +68,7 @@
   focusable="false"
   style="display: block"
 >
-  {#if kind === "tags"}
-    <path d={TAG_PATH} fill-rule="evenodd" />
-  {:else}
-    {#each RECTS[kind] as rect (`${rect.x},${rect.y}`)}
-      <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx="1" />
-    {/each}
-  {/if}
+  {#each RECTS[kind] as rect (`${rect.x},${rect.y}`)}
+    <rect x={rect.x} y={rect.y} width={rect.w} height={rect.h} rx="1" />
+  {/each}
 </svg>

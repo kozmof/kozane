@@ -404,7 +404,7 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 
 ### The tag index
 
-The tag index lives at `/tags`. There are two ways in: the tag icon in the corner of the
+The tag index lives at `/tags`. There are two ways in: the tree icon in the corner of the
 project list, which opens it on the whole workspace, and any tag on a card, which opens it
 on that tag. It has two halves: the tree of
 every tag on the left, with a count of the cards and files each one gathers, and the selected
@@ -549,13 +549,14 @@ carries no scopes anywhere, and the map holds the same line.
 The links between the three workspace-wide pages are icons rather than words, and each one
 draws the thing its page is about: an even grid of four squares for the list of projects, no
 one of them the large one; unequal rectangles packed together for the map, which is a
-treemap; and a label with a hole punched through it for the tag index. They sit in the corner
-of each page's header, and each one names itself on hover — which is also what a screen
-reader reads, since the picture says nothing on its own.
+treemap; and a tree branching into two children for the tag index, which is what a tag
+namespace is. They sit in the corner of each page's header, and each one names itself on
+hover — which is also what a screen reader reads, since the picture says nothing on its own.
 
-The tag is the reason they are not all rectangles. Drawn as rows of rectangles it said "a
-list", which is what the project page is, so the two icons looked different while meaning
-much the same thing and had to be remembered rather than recognised.
+The connections in that last one are drawn rather than implied, and that is what makes it a
+tree instead of an indented list. Rows on their own say "a list", which is what the project
+page already is — two icons that look different while meaning much the same thing have to be
+remembered rather than recognised.
 
 The back link on the map and the tag index is the grid, and it leads to the project list, or
 to one project's board when the page has been narrowed to that project. It is the same

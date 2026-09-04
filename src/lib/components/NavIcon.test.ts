@@ -22,17 +22,47 @@ describe("NavIcon", () => {
   });
 
   /**
-   * The meaning is the point, not just the arrangement. A tag drawn as rows of rectangles
-   * says "a list", which is what the project page is — so the tag index gets the shape a tag
-   * actually has, and the hole has to be a hole rather than a dot in the background colour,
-   * because the header it sits in is transparent over the map.
+   * The meaning is the point, not just the arrangement. Rows of rectangles say "a list",
+   * which is what the project page is — so the tag index draws the connections too, and a
+   * drawn connection is what makes a shape a tree rather than an indented list.
    */
-  it("draws the tag index as a tag, punched through", () => {
-    const path = svgOf("tags").querySelector("path")!;
-    expect(svgOf("tags").querySelector("rect")).toBeNull();
-    expect(path.getAttribute("fill-rule")).toBe("evenodd");
-    // Two subpaths: the label, and the hole subtracted from it.
-    expect((path.getAttribute("d")!.match(/M/g) ?? []).length).toBe(2);
+  describe("the tag index, as a tree", () => {
+    const rects = () =>
+      [...svgOf("tags").querySelectorAll("rect")].map((rect) => ({
+        x: Number(rect.getAttribute("x")),
+        y: Number(rect.getAttribute("y")),
+        w: Number(rect.getAttribute("width")),
+        h: Number(rect.getAttribute("height")),
+      }));
+
+    /** Nodes are blocks, connectors are lines. A drawing with only blocks in it is a list. */
+    it("draws connections and not only nodes", () => {
+      const thin = rects().filter((r) => Math.min(r.w, r.h) <= 1.5);
+      const nodes = rects().filter((r) => Math.min(r.w, r.h) > 1.5);
+      expect(nodes.length).toBeGreaterThan(1);
+      expect(thin.length).toBeGreaterThan(1);
+      // One of them runs down the icon and the others across it, or nothing is joined up.
+      expect(thin.some((r) => r.h > r.w)).toBe(true);
+      expect(thin.some((r) => r.w > r.h)).toBe(true);
+    });
+
+    /** A child sits in from its parent, which is the whole of what a tag namespace is. */
+    it("sets the children in from the root", () => {
+      const [root, ...rest] = rects();
+      const children = rest.filter((r) => Math.min(r.w, r.h) > 1.5);
+      expect(children.length).toBeGreaterThan(0);
+      for (const child of children) expect(child.x).toBeGreaterThan(root.x);
+    });
+
+    /** The trunk has to reach what it connects to; a line stopping short joins nothing. */
+    it("runs the trunk down as far as the last branch it feeds", () => {
+      const trunk = rects().find((r) => r.h > r.w && Math.min(r.w, r.h) <= 1.5)!;
+      const branches = rects().filter((r) => r.w > r.h && Math.min(r.w, r.h) <= 1.5);
+      const lowest = Math.max(...branches.map((b) => b.y + b.h / 2));
+      expect(trunk.y + trunk.h).toBeGreaterThanOrEqual(lowest);
+      // And each branch leaves the trunk rather than floating beside it.
+      for (const branch of branches) expect(branch.x).toBeLessThanOrEqual(trunk.x + trunk.w);
+    });
   });
 
   /** The map is a treemap, so its icon is one: rectangles of unequal size. The project list
@@ -80,16 +110,6 @@ describe("NavIcon", () => {
         expect(y).toBeGreaterThanOrEqual(2);
         expect(x + w).toBeLessThanOrEqual(14);
         expect(y + h).toBeLessThanOrEqual(14);
-      }
-
-      // The outline only — the hole after it is written as an arc, whose radii and flags are
-      // not coordinates and would fail a test about where the ink is.
-      const path = svg.querySelector("path");
-      if (!path) continue;
-      const outline = path.getAttribute("d")!.split(/(?=M)/)[0];
-      for (const value of outline.match(/-?\d+(?:\.\d+)?/g) ?? []) {
-        expect(Number(value)).toBeGreaterThanOrEqual(2);
-        expect(Number(value)).toBeLessThanOrEqual(14);
       }
     }
   });
