@@ -969,7 +969,7 @@ Note: notes could not be read — its directory has been deleted, moved, or made
   Run `kozane taskspace scan --apply --cleanup` to drop the record.
 ```
 
-That command is the whole repair rather than only the cleanup: a taskspace that was *moved*
+That command is the whole repair rather than only the cleanup: a taskspace that was _moved_
 looks identical from here, and the same run re-points its record instead of dropping it.
 
 The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card

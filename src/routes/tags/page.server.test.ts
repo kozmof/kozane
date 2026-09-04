@@ -154,7 +154,6 @@ describe("GET /tags", () => {
     expect(data.cardProjects).toHaveProperty(shown);
     expect(data.cardProjects).not.toHaveProperty(other);
   });
-
 });
 
 /**
