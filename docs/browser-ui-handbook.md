@@ -405,8 +405,8 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 ### The tag index
 
 The tag index lives at `/tags`. There are two ways in: the tag icon in the corner of the
-project list — three rows, each indented under the one above — which opens it on the whole
-workspace, and any tag on a card, which opens it on that tag. It has two halves: the tree of
+project list, which opens it on the whole workspace, and any tag on a card, which opens it
+on that tag. It has two halves: the tree of
 every tag on the left, with a count of the cards and files each one gathers, and the selected
 tag's hits on the right. `?tag=` says which tag is open, so any view of the page is a link
 you can send.
@@ -477,8 +477,8 @@ exported board does not.
 
 ## The map
 
-The map lives at `/map`, reached from the icon in the corner of the project list: a large
-rectangle beside two small ones, which is what the page draws. It is one picture
+The map lives at `/map`, reached from the icon in the corner of the project list: unequal
+rectangles packed together, which is what the page draws. It is one picture
 of the whole workspace, and it is read-only: nothing on it changes anything, and there is
 no live-sync poll behind it.
 
@@ -546,11 +546,16 @@ carries no scopes anywhere, and the map holds the same line.
 
 ## Getting between the pages
 
-The links between the three workspace-wide pages are icons rather than words, drawn as the
-rectangles each page is made of: an even grid of four for the list of projects, one large
-rectangle beside two small ones for the map, and three indented rows for the tag index. They
-sit in the corner of each page's header, and each one names itself on hover — which is also
-what a screen reader reads, since the picture says nothing on its own.
+The links between the three workspace-wide pages are icons rather than words, and each one
+draws the thing its page is about: an even grid of four squares for the list of projects, no
+one of them the large one; unequal rectangles packed together for the map, which is a
+treemap; and a label with a hole punched through it for the tag index. They sit in the corner
+of each page's header, and each one names itself on hover — which is also what a screen
+reader reads, since the picture says nothing on its own.
+
+The tag is the reason they are not all rectangles. Drawn as rows of rectangles it said "a
+list", which is what the project page is, so the two icons looked different while meaning
+much the same thing and had to be remembered rather than recognised.
 
 The back link on the map and the tag index is the grid, and it leads to the project list, or
 to one project's board when the page has been narrowed to that project. It is the same
