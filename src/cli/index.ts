@@ -15,11 +15,13 @@ import { projectCreate, projectDefault, projectDelete, projectList } from "./com
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import {
   cardAdd,
+  cardGlue,
   cardList,
   cardNearest,
   cardSetLayer,
   cardShow,
   cardSquash,
+  cardUnglue,
 } from "./commands/card.js";
 import { CARD_SORT_KEYS, isCardSortKey, type CardSortKey } from "./lib/card-sort.js";
 import { fail } from "./lib/workspace-command.js";
@@ -304,6 +306,18 @@ card
   .command("layer <cardId> <layer>")
   .description("Move a card to another layer of its project, by layer ID, short ID, or name")
   .action((cardId, layer) => cardSetLayer(cardId, layer));
+
+card
+  .command("glue <cardIds...>")
+  .description("Glue two or more cards in the same project")
+  .option("--add", "Keep and merge the cards' existing glue groups")
+  .option("--align-list", "Align cards as a vertical list in argument order")
+  .action((cardIds, opts) => cardGlue(cardIds, opts));
+
+card
+  .command("unglue <cardIds...>")
+  .description("Remove one or more cards from their glue groups")
+  .action((cardIds) => cardUnglue(cardIds));
 
 card
   .command("nearest <cardId>")

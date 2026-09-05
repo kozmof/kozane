@@ -2,7 +2,13 @@ import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
-import { addCard, addCards, reassignCardsToLayer } from "../../db/api/card.js";
+import {
+  addCard,
+  addCards,
+  reassignCardsToLayer,
+  updateProjectCardPositions,
+} from "../../db/api/card.js";
+import { getGlueRelsByProject, glueProjectCards, unglueProjectCards } from "../../db/api/glue.js";
 import { getDefaultBundle } from "../../db/api/bundle.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import {
@@ -29,6 +35,11 @@ import { resolveProjectId } from "../lib/project-selection.js";
 import { contentLimitIssue } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { estimateCardHeight } from "../../lib/warp-list.js";
+
+/** The board grid used by card movement and vertical-list placement in the browser. */
+const GRID = 24;
 
 type CardOptions = {
   project?: string;
@@ -45,6 +56,26 @@ type CardAddOptions = Omit<CardOptions, "taskspace"> & {
 };
 type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
 type CardShowOptions = { times?: boolean };
+type CardGlueOptions = { add?: boolean; alignList?: boolean };
+
+/** Resolve card references together and retain the project needed by the guarded glue APIs. */
+async function resolveCardGroup(db: DB, requestedIds: string[]) {
+  const cards = await db
+    .select({
+      id: cardTable.id,
+      projectId: bundleTable.projectId,
+      content: cardTable.content,
+      width: cardTable.width,
+      posX: cardTable.posX,
+      posY: cardTable.posY,
+    })
+    .from(cardTable)
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+  const allIds = cards.map(({ id }) => id);
+  const cardIds = requestedIds.map((id) => resolveShortId(id, allIds, "Card"));
+  const projectId = findById(cards, cardIds[0], "Card").projectId;
+  return { cards, cardIds, projectId };
+}
 
 /** What {@link printCards} needs of a card: the fields every listing prints. */
 type PrintableCard = {
@@ -285,6 +316,87 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
       )}`,
     );
     console.log(`  layer: ${layer.name}`);
+  });
+}
+
+export async function cardGlue(
+  requestedIds: string[],
+  options: CardGlueOptions = {},
+): Promise<void> {
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const {
+      cards,
+      cardIds: requestedCardIds,
+      projectId,
+    } = await resolveCardGroup(db, requestedIds);
+    if (requestedCardIds.some((cardId) => findById(cards, cardId, "Card").projectId !== projectId))
+      throw new Error("Cards must belong to the same project.");
+
+    let cardIds = requestedCardIds;
+    if (options.add) {
+      const rels = await getGlueRelsByProject({ db, projectId });
+      const glueIdByCardId = new Map(rels.map((rel) => [rel.cardId, rel.glueId]));
+      const membersByGlueId = new Map<string, string[]>();
+      for (const card of cards) {
+        const glueId = glueIdByCardId.get(card.id);
+        if (glueId) membersByGlueId.set(glueId, [...(membersByGlueId.get(glueId) ?? []), card.id]);
+      }
+      cardIds = [
+        ...new Set(
+          requestedCardIds.flatMap((cardId) => {
+            const glueId = glueIdByCardId.get(cardId);
+            return glueId ? (membersByGlueId.get(glueId) ?? [cardId]) : [cardId];
+          }),
+        ),
+      ];
+    }
+
+    const result = await glueProjectCards({ db, projectId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same project.");
+
+    if (options.alignList) {
+      const ui = getUiConfigForRoot(root);
+      const bounds = canvasBoundsForRoot(root);
+      const byId = new Map(cards.map((card) => [card.id, card]));
+      const anchor = findById(cards, cardIds[0], "Card");
+      let nextY = anchor.posY;
+      const positions = cardIds.map((cardId) => {
+        const card = byId.get(cardId);
+        if (!card) throw new Error(`Card not found: ${cardId}`);
+        const position = clampToBounds(anchor.posX, nextY, bounds);
+        nextY =
+          Math.ceil(
+            (position.posY +
+              estimateCardHeight(card.content, {
+                cardWidth: card.width ?? ui.defaultCardWidth,
+                fontSize: ui.defaultFontSize,
+              }) +
+              GRID) /
+              GRID,
+          ) * GRID;
+        return { cardId, ...position };
+      });
+      const moved = await updateProjectCardPositions({ db, projectId, positions });
+      if (!moved.ok) throw new Error("Cards must belong to the same project.");
+    }
+
+    const allCardIds = cards.map(({ id }) => id);
+    console.log(`${cardIds.length} cards glued.`);
+    if (options.add) console.log("  mode: additive");
+    if (options.alignList) console.log("  layout: vertical list");
+    console.log(`  glue: ${shortId(result.glueId, [result.glueId])}`);
+    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allCardIds)}`);
+  });
+}
+
+export async function cardUnglue(requestedIds: string[]): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const { cards, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
+    const result = await unglueProjectCards({ db, projectId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same project.");
+    const allCardIds = cards.map(({ id }) => id);
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} unglued.`);
+    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allCardIds)}`);
   });
 }
 
