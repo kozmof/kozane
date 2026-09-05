@@ -470,6 +470,11 @@ export const TAG_CACHE_DIRS_MAX = 64;
  */
 export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 
+/** Maximum persisted semantic snapshot for the treemap. Like the tag cache, this is read
+ * synchronously on a page load, so an oversized result is better rebuilt than stored as a
+ * permanent navigation stall. */
+export const TREEMAP_CACHE_BYTES_MAX = 16 * 1024 * 1024;
+
 /**
  * How many (tag, bundle) pairs the map page's tag graph carries.
  *

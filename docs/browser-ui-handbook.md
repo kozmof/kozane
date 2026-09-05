@@ -548,6 +548,11 @@ or choose **Clear** to restore total card and tag counts and the full range head
 selection is stored as `?day=YYYY-MM-DD` and keeps any project or tag selection already in
 the URL.
 
+The server keeps the map's workspace-wide bundle counts, daily activity, scope graph, and
+card-tag dimensions together in `.kozane/treemap.json`. The file is a disposable cache tied
+to the database signature: any database change rebuilds the whole semantic snapshot, while
+project and day selections are derived from it without caching viewport-dependent geometry.
+
 A static export made with `kozane net ssg generate` carries the map, and both the tag
 selection and the project narrowing keep working there without a server. The scope circles
 are left out unless the export was built with `--include-scoped-files` — a plain export

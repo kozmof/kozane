@@ -1,14 +1,8 @@
 import type { PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
-import { getAllProjects, getProject } from "$db/api/project";
-import { getAllBundles, getBundleCardCounts } from "$db/api/bundle";
-import { getAllScopes, getScopeBundleUsage, getScopeProjectUsage } from "$db/api/scope";
-import { getCardChangeCounts } from "$db/api/card";
-import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/config";
 import { normalizeTag } from "$lib/tag";
-import { loadTagIndex } from "$lib/server/tag-index";
-import { applyPalette } from "../[projectId]/lib/project-page.js";
+import { loadTreemapSnapshot, type TreemapBundle } from "$lib/server/treemap-snapshot";
 import { validActivityDay } from "./lib/activity.js";
 
 /**
@@ -19,9 +13,8 @@ import { validActivityDay } from "./lib/activity.js";
  * A read, and only a read. There are no actions here and no snapshot poll — the board is
  * where a workspace is changed, and this page is where its shape is looked at.
  *
- * **Cards only, and no filesystem.** The shared tag index is loaded with files disabled, so
- * its persisted card gather can serve this page without exposing or walking taskspace files.
- * Its cached card dimensions let the browser regroup the same hits by bundle and change day.
+ * **Cards only, and no filesystem.** The persisted treemap snapshot gathers card tags without
+ * taskspace files, together with the other semantic data every map view derives from.
  */
 
 // Static export: one map of the workspace, prerendered. A static route with no `entries` to
@@ -45,26 +38,18 @@ export const prerender = process.env.KOZANE_SSG === "1";
 const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
 const includeScopes = !prerender || includeScopedFiles;
 
-function cacheLocation(): { cache: { dbUrl: string } } | null {
-  if (prerender || !getWorkspaceRoot()) return null;
+function cacheLocation(): { root: string; dbUrl: string } | undefined {
+  if (prerender || !getWorkspaceRoot()) return undefined;
   try {
-    return { cache: { dbUrl: getDBURL() } };
+    return { root: getWorkspaceRoot()!, dbUrl: getDBURL() };
   } catch {
-    return null;
+    return undefined;
   }
 }
 
 /** A bundle as the map draws it: what it is, how much it holds, and the colour its own board
  *  gives it. */
-export type MapBundle = {
-  id: string;
-  projectId: string;
-  name: string;
-  isDefault: boolean;
-  cards: number;
-  bg: string;
-  dot: string;
-};
+export type MapBundle = TreemapBundle;
 
 /**
  * One line from a scope's node. A scope reaches a bundle by a card filed into it, and reaches
@@ -73,34 +58,6 @@ export type MapBundle = {
  */
 export type MapSpoke = { kind: "bundle" | "project"; id: string; cards: number };
 export type MapScope = { id: string; name: string; spokes: MapSpoke[] };
-
-/**
- * The board's colours, by bundle id.
- *
- * Read through `getAllBundles` per project rather than off {@link getBundleCardCounts},
- * though that already names every bundle there is. The palette is assigned by a bundle's
- * *position* among its project's own bundles (see `applyPalette`), so a colour can only be
- * worked out from the same list, in the same order, that the board itself reads — an
- * aggregate grouped by id is not that list. The alternative is a map whose colours drift
- * from the boards it is a map of, which is the one thing the colours are for.
- *
- * The reads go together rather than one project after the next: nothing here depends on
- * anything else here, since each project's palette is assigned within its own bundles. The
- * same shape, and the same argument, as `bundlesForProjects` on the tag index.
- */
-async function paletteByBundle(
-  db: AnyDB,
-  projectIds: string[],
-): Promise<Record<string, { bg: string; dot: string }>> {
-  const palettes = await Promise.all(
-    projectIds.map(async (projectId) => applyPalette(await getAllBundles({ db, projectId }))),
-  );
-  const colours: Record<string, { bg: string; dot: string }> = {};
-  for (const bundles of palettes) {
-    for (const { id, bg, dot } of bundles) colours[id] = { bg, dot };
-  }
-  return colours;
-}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   const { db } = locals;
@@ -114,48 +71,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const tag = requestedTag ? normalizeTag(requestedTag) : null;
   if (requestedDay && !validActivityDay(requestedDay)) throw error(400, "Invalid activity day");
 
-  // Checked rather than passed through, for the reason the tag index checks it: a
-  // `?projectId=` naming nothing narrows every read below to nothing and draws as an empty
-  // workspace rather than as a bad link.
-  if (requestedProject && !(await getProject({ db, projectId: requestedProject })))
+  const snapshot = await loadTreemapSnapshot({ db, includeScopes, cache: cacheLocation() });
+  const { projects } = snapshot;
+  if (requestedProject && !projects.some(({ id }) => id === requestedProject))
     throw error(404, "Project not found");
-
-  const [projects, counts, tagIndex, activity] = await Promise.all([
-    getAllProjects({ db }),
-    getBundleCardCounts({ db }),
-    loadTagIndex({
-      db,
-      ...(requestedProject ? { projectId: requestedProject } : {}),
-      includeFiles: false,
-      ...cacheLocation(),
-    }),
-    getCardChangeCounts({
-      db,
-      ...(requestedProject ? { projectIds: [requestedProject] } : {}),
-    }),
-  ]);
 
   const drawn = requestedProject ? projects.filter(({ id }) => id === requestedProject) : projects;
   const drawnProjects = new Set(drawn.map(({ id }) => id));
-  const bundleRows = counts.filter(({ projectId }) => drawnProjects.has(projectId));
+  const bundleRows = snapshot.bundles.filter(({ projectId }) => drawnProjects.has(projectId));
   const onMap = new Set(bundleRows.map(({ id }) => id));
 
-  // The cards carrying a tag, and the scopes reaching across the map. Nothing here depends on
-  // anything else here.
-  const [colours, scopes, bundleUsage, projectUsage] = await Promise.all([
-    paletteByBundle(db, [...drawnProjects]),
-    includeScopes ? getAllScopes({ db }) : Promise.resolve([]),
-    includeScopes ? getScopeBundleUsage({ db }) : Promise.resolve([]),
-    includeScopes ? getScopeProjectUsage({ db }) : Promise.resolve([]),
-  ]);
-
-  const bundles: MapBundle[] = bundleRows.map((row) => ({
-    ...row,
-    ...(colours[row.id] ?? { bg: "transparent", dot: "currentColor" }),
-  }));
-
   const spokesByScope = new Map<string, MapSpoke[]>();
-  for (const { scopeId, bundleId, cards } of bundleUsage) {
+  for (const { scopeId, bundleId, cards } of snapshot.bundleUsage) {
     if (!onMap.has(bundleId)) continue;
     const spokes = spokesByScope.get(scopeId) ?? [];
     spokes.push({ kind: "bundle", id: bundleId, cards });
@@ -166,7 +93,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // rectangle instead — but only where the same scope has no bundle spoke into that project
   // already, or a scope with both would be drawn twice into one project.
   const bundleProject = new Map(bundleRows.map(({ id, projectId }) => [id, projectId]));
-  for (const { scopeId, projectId } of projectUsage) {
+  for (const { scopeId, projectId } of snapshot.projectUsage) {
     if (!drawnProjects.has(projectId)) continue;
     const spokes = spokesByScope.get(scopeId) ?? [];
     if (
@@ -192,23 +119,34 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     projects: projects.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
     /** The projects actually packed, which is all of them unless `?projectId=` narrowed it. */
     drawn: drawn.map(({ id, name }) => ({ id, name })),
-    bundles,
+    bundles: bundleRows,
     /**
      * Only the scopes with somewhere to point. A scope nobody has put anything in yet is a
      * hub with no spokes, and a node floating under the packing attached to nothing says
      * less than leaving it out does — `kozane scope list` is where a workspace's scopes are
      * enumerated. Empty in a plain static export; see `includeScopes`.
      */
-    scopes: scopes
+    scopes: snapshot.scopes
       .filter(({ id }) => spokesByScope.has(id))
       .map(({ id, name }): MapScope => ({ id, name, spokes: spokesByScope.get(id) ?? [] })),
-    tagHits: tagIndex.hits,
-    tagCards: tagIndex.cardData,
+    tagHits: snapshot.tags.hits.filter(
+      (hit) =>
+        !requestedProject ||
+        (hit.source.kind === "card" &&
+          snapshot.tags.cardData[hit.source.cardId]?.projectId === requestedProject),
+    ),
+    tagCards: requestedProject
+      ? Object.fromEntries(
+          Object.entries(snapshot.tags.cardData).filter(
+            ([, card]) => card?.projectId === requestedProject,
+          ),
+        )
+      : snapshot.tags.cardData,
     tag,
     day: requestedDay,
-    activity,
+    activity: snapshot.activity.filter(({ bundleId }) => onMap.has(bundleId)),
     /** Whether the card gather stopped at `TAG_CARD_HITS_MAX`, so the tree counts are a floor
      *  rather than the whole. The same flag the tag index draws, for the same reason. */
-    cardsTruncated: tagIndex.cardsTruncated,
+    cardsTruncated: snapshot.tags.truncated,
   };
 };
