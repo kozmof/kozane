@@ -132,6 +132,8 @@ describe("map page", () => {
         "date",
       );
       expect(screen.getByRole("link", { name: "Clear" })).toHaveAttribute("href", "/map");
+      expect(screen.getByText(today, { selector: "section span" })).toBeInTheDocument();
+      expect(screen.queryByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
     });
 
     it("places the activity control in its own labelled region", () => {

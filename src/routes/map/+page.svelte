@@ -818,7 +818,7 @@
             fontSize: "10px",
           })}
         >
-          <span>{activityRange}</span>
+          <span>{selectedDay ?? activityRange}</span>
           {#if selectedDay}
             <a
               href={dayHref(null)}
