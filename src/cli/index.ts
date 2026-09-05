@@ -15,21 +15,33 @@ import { projectCreate, projectDefault, projectDelete, projectList } from "./com
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import {
   cardAdd,
+  cardDelete,
+  cardEdit,
   cardGlue,
   cardList,
   cardMove,
   cardNearest,
+  cardSetBundle,
   cardSetLayer,
+  cardSetProject,
   cardShow,
   cardSquash,
   cardUnglue,
 } from "./commands/card.js";
 import { CARD_SORT_KEYS, isCardSortKey, type CardSortKey } from "./lib/card-sort.js";
 import { fail } from "./lib/workspace-command.js";
-import { scopeAdd, scopeDelete, scopeList } from "./commands/scope.js";
+import {
+  scopeAdd,
+  scopeAddCards,
+  scopeDelete,
+  scopeList,
+  scopeRemoveCards,
+} from "./commands/scope.js";
 import { tagList, tagShow } from "./commands/tag.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
+import { bundleAdd, bundleDelete, bundleList } from "./commands/bundle.js";
+import { warpAdd, warpDelete, warpList } from "./commands/warp.js";
 import {
   DEFAULT_PREVIEW_PORT,
   DEFAULT_SERVER_HOST,
@@ -156,6 +168,26 @@ project
   .description("Set the default project used when --project is omitted")
   .action((id) => projectDefault(id));
 
+const bundle = program.command("bundle").description("Bundle management");
+
+bundle
+  .command("list")
+  .description("List a project's bundles")
+  .option("--project <projectId>", "Project ID or short ID whose bundles to list")
+  .action((opts) => bundleList(opts));
+
+bundle
+  .command("add <name>")
+  .description("Add a bundle to a project")
+  .option("--project <projectId>", "Project ID or short ID to add the bundle to")
+  .action((name, opts) => bundleAdd(name, opts));
+
+bundle
+  .command("delete <bundleId>")
+  .description("Delete a bundle and move its cards to the default bundle")
+  .option("--project <projectId>", "Project ID or short ID the bundle belongs to")
+  .action((id, opts) => bundleDelete(id, opts));
+
 const scope = program.command("scope").description("Scope management");
 
 scope
@@ -173,6 +205,18 @@ scope
   .command("delete <id>")
   .description("Delete a scope by ID or short ID")
   .action((id) => scopeDelete(id));
+
+scope
+  .command("add-cards <scopeId> <cardIds...>")
+  .description("Add cards to a scope")
+  .option("--project <projectId>", "Project ID or short ID the cards belong to")
+  .action((scopeId, cardIds, opts) => scopeAddCards(scopeId, cardIds, opts));
+
+scope
+  .command("remove-cards <scopeId> <cardIds...>")
+  .description("Remove cards from a scope")
+  .option("--project <projectId>", "Project ID or short ID the cards belong to")
+  .action((scopeId, cardIds, opts) => scopeRemoveCards(scopeId, cardIds, opts));
 
 const tag = program.command("tag").description("Tags written in cards and taskspace files");
 
@@ -315,6 +359,16 @@ card
   .action((cardId, opts) => cardShow(cardId, opts));
 
 card
+  .command("edit <cardId> <content>")
+  .description("Replace a card's content")
+  .action((cardId, content) => cardEdit(cardId, content));
+
+card
+  .command("delete <cardIds...>")
+  .description("Delete one or more cards from the same project")
+  .action((cardIds) => cardDelete(cardIds));
+
+card
   .command("layer <cardId> <layer>")
   .description("Move a card to another layer of its project, by layer ID, short ID, or name")
   .action((cardId, layer) => cardSetLayer(cardId, layer));
@@ -325,6 +379,16 @@ card
   .option("--x <position>", "Horizontal integer or current+/-offset", cardPosition)
   .option("--y <position>", "Vertical integer or current+/-offset", cardPosition)
   .action((cardId, opts) => cardMove(cardId, opts));
+
+card
+  .command("bundle <bundleId> <cardIds...>")
+  .description("Move cards to another bundle in their project")
+  .action((bundleId, cardIds) => cardSetBundle(bundleId, cardIds));
+
+card
+  .command("project <projectId> <cardIds...>")
+  .description("Move cards to another project, preserving bundle and layer names")
+  .action((projectId, cardIds) => cardSetProject(projectId, cardIds));
 
 card
   .command("glue <cardIds...>")
@@ -393,5 +457,27 @@ Examples:
   kozane card list --sort gap
 `,
 );
+
+const warp = program.command("warp").description("Warp management");
+
+warp
+  .command("list")
+  .description("List a project's warps")
+  .option("--project <projectId>", "Project ID or short ID whose warps to list")
+  .action((opts) => warpList(opts));
+
+warp
+  .command("add")
+  .description("Add a warp at an X/Y position")
+  .option("--project <projectId>", "Project ID or short ID to add the warp to")
+  .requiredOption("--x <number>", "Horizontal warp position", integer)
+  .requiredOption("--y <number>", "Vertical warp position", integer)
+  .action((opts) => warpAdd(opts));
+
+warp
+  .command("delete <warpId>")
+  .description("Delete a warp by ID or short ID")
+  .option("--project <projectId>", "Project ID or short ID the warp belongs to")
+  .action((id, opts) => warpDelete(id, opts));
 
 program.parse();

@@ -5,7 +5,9 @@ import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schem
 import {
   addCard,
   addCards,
+  reassignCardsToBundle,
   reassignCardsToLayer,
+  updateCard,
   updateProjectCardPositions,
 } from "../../db/api/card.js";
 import { getGlueRelsByProject, glueProjectCards, unglueProjectCards } from "../../db/api/glue.js";
@@ -37,6 +39,9 @@ import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
 import { estimateCardHeight } from "../../lib/warp-list.js";
+import { deleteProjectCards, moveCardsToProject } from "../../db/api/composite.js";
+import { getAllProjects } from "../../db/api/project.js";
+import { getAllBundles } from "../../db/api/bundle.js";
 
 /** The board grid used by card movement and vertical-list placement in the browser. */
 const GRID = 24;
@@ -353,6 +358,98 @@ export async function cardMove(requestedCardId: string, { x, y }: CardMoveOption
       )}`,
     );
     console.log(`  position: (${position.posX}, ${position.posY})`);
+  });
+}
+
+export async function cardEdit(requestedCardId: string, content: string): Promise<void> {
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const issue = contentLimitIssue(content, contentMaxForRoot(root));
+    if (issue) throw new Error(issue);
+    const { cards, cardIds } = await resolveCardGroup(db, [requestedCardId]);
+    const card = findById(cards, cardIds[0], "Card");
+    const row = await db
+      .select({ bundleId: cardTable.bundleId })
+      .from(cardTable)
+      .where(eq(cardTable.id, card.id))
+      .get();
+    if (!row) throw new Error(`Card not found: ${requestedCardId}`);
+    await updateCard({ db, cardId: card.id, bundleId: row.bundleId, content });
+    console.log("Card updated.");
+    console.log(
+      `  id: ${shortId(
+        card.id,
+        cards.map(({ id }) => id),
+      )}`,
+    );
+  });
+}
+
+export async function cardDelete(requestedIds: string[]): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const { cards, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
+    const result = await deleteProjectCards({ db, projectId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same project.");
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} deleted.`);
+    const allIds = cards.map(({ id }) => id);
+    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
+  });
+}
+
+export async function cardSetBundle(
+  requestedBundleId: string,
+  requestedCardIds: string[],
+): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const { cardIds, projectId } = await resolveCardGroup(db, requestedCardIds);
+    const bundles = await getAllBundles({ db, projectId });
+    const bundleId = resolveShortId(
+      requestedBundleId,
+      bundles.map(({ id }) => id),
+      "Bundle",
+    );
+    const result = await reassignCardsToBundle({ db, projectId, cardIds, bundleId });
+    if (!result.ok)
+      throw new Error(
+        result.reason === "foreign-cards"
+          ? "Cards must belong to the same project."
+          : "Bundle does not belong to the cards' project.",
+      );
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to bundle.`);
+    console.log(
+      `  bundle: ${shortId(
+        bundleId,
+        bundles.map(({ id }) => id),
+      )}`,
+    );
+  });
+}
+
+export async function cardSetProject(
+  requestedProjectId: string,
+  requestedCardIds: string[],
+): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const { cardIds, projectId: sourceProjectId } = await resolveCardGroup(db, requestedCardIds);
+    const projects = await getAllProjects({ db });
+    const targetProjectId = resolveShortId(
+      requestedProjectId,
+      projects.map(({ id }) => id),
+      "Project",
+    );
+    const result = await moveCardsToProject({
+      db,
+      sourceProjectId,
+      targetProjectId,
+      cardIds,
+    });
+    if (!result.ok) throw new Error("Cards must belong to the same source project.");
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to project.`);
+    console.log(
+      `  project: ${shortId(
+        targetProjectId,
+        projects.map(({ id }) => id),
+      )}`,
+    );
   });
 }
 

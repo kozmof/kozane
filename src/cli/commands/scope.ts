@@ -9,6 +9,9 @@ import { getAllProjects } from "../../db/api/project.js";
 import { resolveProjectId } from "../lib/project-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
+import { addScopeMembers, removeScopeMembersFromProject } from "../../db/api/scope-rel.js";
+import { bundleTable, cardTable } from "../../db/schema.js";
+import { eq } from "drizzle-orm";
 
 export async function scopeAdd(name: string): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
@@ -75,4 +78,64 @@ export async function scopeDelete(scopeId: string): Promise<void> {
     console.log(`  id: ${shortId(resolvedId, scopeIds)}`);
     console.log("Taskspaces attached to this scope are now unscoped.");
   });
+}
+
+type ScopeMembersOptions = { project?: string };
+
+async function changeScopeMembers(
+  requestedScopeId: string,
+  requestedCardIds: string[],
+  options: ScopeMembersOptions,
+  action: "add" | "remove",
+): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const projectId = await resolveProjectId(db, options.project);
+    const scopes = await getAllScopes({ db });
+    const scopeId = resolveShortId(
+      requestedScopeId,
+      scopes.map(({ id }) => id),
+      "Scope",
+    );
+    const cards = await db
+      .select({ id: cardTable.id, projectId: bundleTable.projectId })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+    const allCardIds = cards.map(({ id }) => id);
+    const cardIds = requestedCardIds.map((id) => resolveShortId(id, allCardIds, "Card"));
+    const result =
+      action === "add"
+        ? await addScopeMembers({ db, scopeId, projectId, cardIds })
+        : await removeScopeMembersFromProject({ db, scopeId, projectId, cardIds });
+    if (!result.ok)
+      throw new Error(
+        result.reason === "foreign-cards"
+          ? "Cards must belong to the selected project."
+          : "Scope not found.",
+      );
+    console.log(
+      `${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} ${action === "add" ? "added to" : "removed from"} scope.`,
+    );
+    console.log(
+      `  scope: ${shortId(
+        scopeId,
+        scopes.map(({ id }) => id),
+      )}`,
+    );
+  });
+}
+
+export async function scopeAddCards(
+  scopeId: string,
+  cardIds: string[],
+  options: ScopeMembersOptions = {},
+): Promise<void> {
+  await changeScopeMembers(scopeId, cardIds, options, "add");
+}
+
+export async function scopeRemoveCards(
+  scopeId: string,
+  cardIds: string[],
+  options: ScopeMembersOptions = {},
+): Promise<void> {
+  await changeScopeMembers(scopeId, cardIds, options, "remove");
 }
