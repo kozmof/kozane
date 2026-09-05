@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
-import { buildTagTree } from "$lib/tag";
 import { DEFAULT_ZOOM, zoomPercent } from "./lib/view.js";
 import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "./lib/tag-rows.js";
 import type { TagHit } from "$lib/types";
@@ -58,10 +57,13 @@ function pageData(over: Record<string, unknown> = {}) {
         ],
       },
     ],
-    tree: buildTagTree(hits),
+    tagHits: hits,
+    tagCards: {
+      c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-09-05" },
+      c2: { projectId: "p2", bundleId: "b3", updatedDay: "2026-09-04" },
+      c3: { projectId: "p1", bundleId: "b2", updatedDay: "2026-09-05" },
+    },
     tag: null,
-    tagBundles: { perf: { b1: 2 }, "perf:cache": { b3: 1 }, docs: { b2: 5 } },
-    tagLinksTruncated: false,
     cardsTruncated: false,
     day: null,
     activity: [],
@@ -134,6 +136,23 @@ describe("map page", () => {
       expect(screen.getByRole("link", { name: "Clear" })).toHaveAttribute("href", "/map");
       expect(screen.getByText(today, { selector: "section span" })).toBeInTheDocument();
       expect(screen.queryByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+    });
+
+    it("filters tag counts and tag-to-bundle links to the selected day", () => {
+      const { container } = draw({
+        day: today,
+        tag: "perf",
+        activity: [
+          { day: today, bundleId: "b1", cards: 1 },
+          { day: today, bundleId: "b2", cards: 1 },
+        ],
+      });
+
+      expect(screen.getByRole("link", { name: /perf\s+1 card$/ })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /cache/ })).not.toBeInTheDocument();
+      expect(tagPaths(container)).toHaveLength(1);
+      expect(Number(rectOf(container, "General")?.getAttribute("opacity"))).toBe(1);
+      expect(Number(rectOf(container, "Drafts")?.getAttribute("opacity"))).toBeLessThan(1);
     });
 
     it("places the activity control in its own labelled region", () => {
@@ -419,13 +438,20 @@ describe("map page", () => {
 
   describe("what it says when there is little to say", () => {
     it("explains an empty workspace instead of drawing an empty box", () => {
-      const { container } = draw({ projects: [], drawn: [], bundles: [], scopes: [], tree: [] });
+      const { container } = draw({
+        projects: [],
+        drawn: [],
+        bundles: [],
+        scopes: [],
+        tagHits: [],
+        tagCards: {},
+      });
       expect(screen.getByText(/No projects yet/)).toBeInTheDocument();
       expect(mapSvg(container)).toBeNull();
     });
 
     it("invites a first tag rather than showing an empty panel", () => {
-      draw({ tree: [], tagBundles: {} });
+      draw({ tagHits: [], tagCards: {} });
       expect(screen.getByText(/No tags yet/)).toBeInTheDocument();
     });
 
@@ -584,8 +610,8 @@ describe("zooming into something too small to read", () => {
         bundle(`b${i}`, "p1", i === counts.length - 1 ? "Scraps" : `Bundle ${i}`, cards),
       ),
       scopes: [],
-      tagBundles: {},
-      tree: [],
+      tagHits: [],
+      tagCards: {},
     });
 
   const labelled = (container: HTMLElement, name: string) =>

@@ -12,6 +12,9 @@ import type { DB } from "$db/tx";
 import { createTestDB } from "../../test-utils/db.js";
 import { load } from "./+page.server.js";
 import type { MapBundle, MapScope } from "./+page.server.js";
+import { buildTagTree } from "$lib/tag";
+import type { TagHit } from "$lib/types";
+import { tagBundleIndex, type MapTagCard } from "./lib/graph.js";
 
 /**
  * The loader, which is where every decision the map draws is actually made: which projects
@@ -25,10 +28,9 @@ type MapData = {
   drawn: { id: string; name: string }[];
   bundles: MapBundle[];
   scopes: MapScope[];
-  tree: { tag: string; total: { cards: number; files: number } }[];
+  tagHits: TagHit[];
+  tagCards: Record<string, MapTagCard | undefined>;
   tag: string | null;
-  tagBundles: Record<string, Record<string, number> | undefined>;
-  tagLinksTruncated: boolean;
   cardsTruncated: boolean;
   zoomStep: number;
   day: string | null;
@@ -50,12 +52,14 @@ const run = (db: DB, query = "") =>
   } as never) as Promise<MapData>;
 
 const bundle = (data: MapData, id: string) => data.bundles.find((b) => b.id === id);
+const tree = (data: MapData) => buildTagTree(data.tagHits);
+const tagBundles = (data: MapData) => tagBundleIndex(data.tagHits, data.tagCards).index;
 
 describe("GET /map", () => {
   it("draws an empty workspace as an empty map rather than failing", async () => {
     const db = await createTestDB();
     const data = await run(db);
-    expect(data).toMatchObject({ projects: [], bundles: [], scopes: [], tree: [] });
+    expect(data).toMatchObject({ projects: [], bundles: [], scopes: [], tagHits: [] });
   });
 
   /** The map and the board are zoomed by the same setting, so a workspace that has tuned its
@@ -224,7 +228,7 @@ describe("GET /map", () => {
       const { db, bundleId } = await setup();
       await addCard({ db, bundleId, content: "caching work 'perf:cache" });
 
-      const [root] = (await run(db)).tree;
+      const [root] = tree(await run(db));
       expect(root.tag).toBe("perf");
       expect(root.total).toEqual({ cards: 1, files: 0 });
     });
@@ -236,7 +240,7 @@ describe("GET /map", () => {
       await addCard({ db, bundleId, content: "'perf again" });
       await addCard({ db, bundleId: other, content: "'perf over here" });
 
-      expect((await run(db)).tagBundles.perf).toEqual({ [bundleId]: 2, [other]: 1 });
+      expect(tagBundles(await run(db)).perf).toEqual({ [bundleId]: 2, [other]: 1 });
     });
 
     /** `getCardTagHits` answers with one hit per tag per line, so a card writing a tag twice
@@ -245,16 +249,16 @@ describe("GET /map", () => {
       const { db, bundleId } = await setup();
       await addCard({ db, bundleId, content: "'perf on this line\nand 'perf on this one" });
 
-      expect((await run(db)).tagBundles.perf).toEqual({ [bundleId]: 1 });
+      expect(tagBundles(await run(db)).perf).toEqual({ [bundleId]: 1 });
     });
 
     it("keeps subcategories apart, and leaves rolling them up to the page", async () => {
       const { db, bundleId } = await setup();
       await addCard({ db, bundleId, content: "'perf:cache" });
 
-      const { tagBundles } = await run(db);
-      expect(tagBundles["perf:cache"]).toEqual({ [bundleId]: 1 });
-      expect(tagBundles.perf).toBeUndefined();
+      const index = tagBundles(await run(db));
+      expect(index["perf:cache"]).toEqual({ [bundleId]: 1 });
+      expect(index.perf).toBeUndefined();
     });
 
     it("selects the tag named in the query, normalized", async () => {
@@ -270,7 +274,7 @@ describe("GET /map", () => {
       const theirs = await addBundle({ db, projectId: other, name: "Theirs" });
       await addCard({ db, bundleId: theirs, content: "'elsewhere" });
 
-      expect((await run(db, `?projectId=${projectId}`)).tree).toEqual([]);
+      expect(tree(await run(db, `?projectId=${projectId}`))).toEqual([]);
     });
 
     it("reports nothing truncated for an ordinary workspace", async () => {
@@ -278,7 +282,7 @@ describe("GET /map", () => {
       await addCard({ db, bundleId, content: "'perf" });
 
       const data = await run(db);
-      expect(data.tagLinksTruncated).toBe(false);
+      expect(tagBundleIndex(data.tagHits, data.tagCards).truncated).toBe(false);
       expect(data.cardsTruncated).toBe(false);
     });
   });
@@ -334,7 +338,7 @@ describe("as a static export", () => {
     const { db } = await withScope();
     const data = await loadUnderSsg(db);
     expect(data.bundles).toHaveLength(1);
-    expect(data.tree.map(({ tag }) => tag)).toEqual(["perf"]);
+    expect(tree(data).map(({ tag }) => tag)).toEqual(["perf"]);
   });
 
   /** An export has no query string, so it bakes the whole workspace and the browser selects
@@ -344,6 +348,6 @@ describe("as a static export", () => {
     const data = await loadUnderSsg(db);
     expect(data.tag).toBeNull();
     expect(data.projectId).toBeNull();
-    expect(Object.keys(data.tagBundles)).toEqual(["perf"]);
+    expect(Object.keys(tagBundles(data))).toEqual(["perf"]);
   });
 });

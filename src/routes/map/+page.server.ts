@@ -3,15 +3,12 @@ import { error } from "@sveltejs/kit";
 import { getAllProjects, getProject } from "$db/api/project";
 import { getAllBundles, getBundleCardCounts } from "$db/api/bundle";
 import { getAllScopes, getScopeBundleUsage, getScopeProjectUsage } from "$db/api/scope";
-import { getCardBundleNames, getCardChangeCounts } from "$db/api/card";
-import { getCardTagHits } from "$db/api/tag";
+import { getCardChangeCounts } from "$db/api/card";
 import type { AnyDB } from "$db/client";
-import { getWorkspaceUiConfig } from "$db/internal/config";
-import { buildTagTree, normalizeTag } from "$lib/tag";
-import { MAP_TAG_LINKS_MAX } from "$lib/constants";
-import type { TagHit } from "$lib/types";
+import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/config";
+import { normalizeTag } from "$lib/tag";
+import { loadTagIndex } from "$lib/server/tag-index";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
-import type { TagBundleIndex } from "./lib/graph.js";
 import { validActivityDay } from "./lib/activity.js";
 
 /**
@@ -22,11 +19,9 @@ import { validActivityDay } from "./lib/activity.js";
  * A read, and only a read. There are no actions here and no snapshot poll — the board is
  * where a workspace is changed, and this page is where its shape is looked at.
  *
- * **Cards only, and no filesystem.** The tags come from `getCardTagHits`, not from
- * `loadTagIndex`: no taskspace is walked, no tag cache is opened, and no file hit is
- * gathered. A file tag has no bundle rectangle to be drawn against, which is the reason as
- * much as the cost is — the counts in this tree are counts of cards, and mixing in a number
- * that means something else would make the tree's column two units in one place.
+ * **Cards only, and no filesystem.** The shared tag index is loaded with files disabled, so
+ * its persisted card gather can serve this page without exposing or walking taskspace files.
+ * Its cached card dimensions let the browser regroup the same hits by bundle and change day.
  */
 
 // Static export: one map of the workspace, prerendered. A static route with no `entries` to
@@ -49,6 +44,15 @@ export const prerender = process.env.KOZANE_SSG === "1";
  */
 const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
 const includeScopes = !prerender || includeScopedFiles;
+
+function cacheLocation(): { cache: { dbUrl: string } } | null {
+  if (prerender || !getWorkspaceRoot()) return null;
+  try {
+    return { cache: { dbUrl: getDBURL() } };
+  } catch {
+    return null;
+  }
+}
 
 /** A bundle as the map draws it: what it is, how much it holds, and the colour its own board
  *  gives it. */
@@ -98,64 +102,6 @@ async function paletteByBundle(
   return colours;
 }
 
-/**
- * Cards per bundle, per tag exactly as written — what the tag graph draws its lines from.
- *
- * An aggregate, and not the hits it is built from. The page is sent the whole index at once
- * so that clicking down the tree is not a round trip per row, and the hits are up to
- * `TAG_CARD_HITS_MAX` rows each carrying a tag, a source and an excerpt; this is one small
- * number per tag per bundle. Rolling the subcategories up is left to the browser, where
- * `tagBundleTargets` does it with the same `tagMatcher` everything else uses — storing the
- * rolled-up form would keep a copy of every tag's cards under each of its ancestors.
- *
- * Counted over a set of card ids rather than by adding hits: `getCardTagHits` answers with
- * one hit per tag per *line*, so a card writing `'perf` twice is two hits and one card. That
- * is the same distinction `buildTagTree` draws by tallying sources, and it is what keeps this
- * number and the tree's number the same number.
- *
- * Bounded by {@link MAP_TAG_LINKS_MAX} pairs, and it says so when it stops. A graph missing
- * lines and a tag that genuinely reaches nowhere else are indistinguishable otherwise.
- */
-function tagBundleIndex(
-  hits: TagHit[],
-  cardBundles: Map<string, string>,
-): { index: TagBundleIndex; truncated: boolean } {
-  const cards = new Map<string, Map<string, Set<string>>>();
-  let pairs = 0;
-  let truncated = false;
-
-  for (const hit of hits) {
-    if (hit.source.kind !== "card") continue;
-    const bundleId = cardBundles.get(hit.source.cardId);
-    // A card whose bundle was not read back is dropped rather than carried under a key
-    // nothing on the page can resolve. It cannot arise from a consistent database — the
-    // column is NOT NULL — but the two reads are separate statements a write could land
-    // between, and a line to a rectangle that is not there draws nothing useful.
-    if (!bundleId) continue;
-
-    let byBundle = cards.get(hit.tag);
-    if (!byBundle) cards.set(hit.tag, (byBundle = new Map()));
-    let members = byBundle.get(bundleId);
-    if (!members) {
-      if (pairs >= MAP_TAG_LINKS_MAX) {
-        truncated = true;
-        continue;
-      }
-      pairs++;
-      byBundle.set(bundleId, (members = new Set()));
-    }
-    members.add(hit.source.cardId);
-  }
-
-  const index: TagBundleIndex = {};
-  for (const [tag, byBundle] of cards) {
-    const counts: Record<string, number> = {};
-    for (const [bundleId, members] of byBundle) counts[bundleId] = members.size;
-    index[tag] = counts;
-  }
-  return { index, truncated };
-}
-
 export const load: PageServerLoad = async ({ locals, url }) => {
   const { db } = locals;
 
@@ -174,10 +120,15 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (requestedProject && !(await getProject({ db, projectId: requestedProject })))
     throw error(404, "Project not found");
 
-  const [projects, counts, tagHits, activity] = await Promise.all([
+  const [projects, counts, tagIndex, activity] = await Promise.all([
     getAllProjects({ db }),
     getBundleCardCounts({ db }),
-    getCardTagHits({ db, ...(requestedProject ? { projectId: requestedProject } : {}) }),
+    loadTagIndex({
+      db,
+      ...(requestedProject ? { projectId: requestedProject } : {}),
+      includeFiles: false,
+      ...cacheLocation(),
+    }),
     getCardChangeCounts({
       db,
       ...(requestedProject ? { projectIds: [requestedProject] } : {}),
@@ -191,14 +142,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
   // The cards carrying a tag, and the scopes reaching across the map. Nothing here depends on
   // anything else here.
-  const taggedCardIds = [
-    ...new Set(
-      tagHits.hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : [])),
-    ),
-  ];
-  const [colours, cardBundles, scopes, bundleUsage, projectUsage] = await Promise.all([
+  const [colours, scopes, bundleUsage, projectUsage] = await Promise.all([
     paletteByBundle(db, [...drawnProjects]),
-    getCardBundleNames({ db, cardIds: taggedCardIds }),
     includeScopes ? getAllScopes({ db }) : Promise.resolve([]),
     includeScopes ? getScopeBundleUsage({ db }) : Promise.resolve([]),
     includeScopes ? getScopeProjectUsage({ db }) : Promise.resolve([]),
@@ -232,11 +177,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     spokesByScope.set(scopeId, spokes);
   }
 
-  const { index: tagBundles, truncated: tagLinksTruncated } = tagBundleIndex(
-    tagHits.hits,
-    new Map(cardBundles.map(({ cardId, bundleId }) => [cardId, bundleId])),
-  );
-
   return {
     /**
      * How far one notch of the wheel, or one press of the zoom control, moves the zoom.
@@ -262,16 +202,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     scopes: scopes
       .filter(({ id }) => spokesByScope.has(id))
       .map(({ id, name }): MapScope => ({ id, name, spokes: spokesByScope.get(id) ?? [] })),
-    // Built from every hit, always: the tree is this page's index of the workspace's tags,
-    // and one narrowed to the selected tag would be a tree with a single branch.
-    tree: buildTagTree(tagHits.hits),
+    tagHits: tagIndex.hits,
+    tagCards: tagIndex.cardData,
     tag,
     day: requestedDay,
     activity,
-    tagBundles,
-    tagLinksTruncated,
     /** Whether the card gather stopped at `TAG_CARD_HITS_MAX`, so the tree counts are a floor
      *  rather than the whole. The same flag the tag index draws, for the same reason. */
-    cardsTruncated: tagHits.truncated,
+    cardsTruncated: tagIndex.cardsTruncated,
   };
 };

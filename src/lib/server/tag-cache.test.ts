@@ -19,6 +19,7 @@ let root: string;
  *  ones pad `cardProjects` to reach a ceiling — so the rest of the shape is defaulted here. */
 const scope = (cardProjects: Record<string, string> = {}): TagCache["scopes"][string] => ({
   hits: [],
+  cardData: {},
   cardProjects,
   truncated: false,
 });
@@ -55,10 +56,10 @@ afterEach(() => {
  */
 it("pins the shape the cache version is the version of", () => {
   const shape = {
-    version: 2,
+    version: 3,
     db: "ino:mtime:size|",
     builtAt: "2026-01-01T00:00:00.000Z",
-    scopes: { "*": { hits: [], cardProjects: {}, truncated: false } },
+    scopes: { "*": { hits: [], cardData: {}, cardProjects: {}, truncated: false } },
     files: { "/ws/notes": { "a.md": { signature: "t:1", hits: [] } } },
   } satisfies TagCache;
 
@@ -220,6 +221,9 @@ describe("readTagCache / writeTagCache", () => {
               excerpt: "b",
             },
           ],
+          cardData: {
+            c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-01-01" },
+          },
           cardProjects: { c1: "p1" },
           truncated: false,
         },

@@ -23,7 +23,7 @@ import type { TagHit } from "../types.js";
 
 /** Bumped when the shape below changes. A file carrying any other value is ignored, which is
  *  what lets the shape change without a migration or a stale-format bug. */
-export const TAG_CACHE_VERSION = 2;
+export const TAG_CACHE_VERSION = 3;
 export const TAG_CACHE_FILE = "tag-index.json";
 
 export function tagCachePath(root: string): string {
@@ -126,6 +126,14 @@ const isCachedCardHits = (value: unknown): value is CachedCardHits =>
   isRecord(value) &&
   Array.isArray(value.hits) &&
   value.hits.every(isTagHit) &&
+  everyValue(
+    value.cardData,
+    (card) =>
+      isRecord(card) &&
+      typeof card.projectId === "string" &&
+      typeof card.bundleId === "string" &&
+      typeof card.updatedDay === "string",
+  ) &&
   everyValue(value.cardProjects, (id) => typeof id === "string") &&
   // Required rather than defaulted, which is what the version above is for. A file written
   // before this field existed carries a complete-looking hit list that was in fact cut, and

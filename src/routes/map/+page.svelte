@@ -4,7 +4,7 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
+  import { buildTagTree, normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
   import NavIcon from "$lib/components/NavIcon.svelte";
   import { MAP_DEFAULT_VIEWPORT } from "$lib/constants";
   import {
@@ -24,7 +24,7 @@
     zoomPercent,
     type MapView,
   } from "./lib/view.js";
-  import { tagBundleTargets } from "./lib/graph.js";
+  import { tagBundleIndex, tagBundleTargets } from "./lib/graph.js";
   import {
     childrenShown,
     tagLineOrigin,
@@ -90,6 +90,17 @@
     );
     return data.bundles.map((bundle) => ({ ...bundle, cards: counts.get(bundle.id) ?? 0 }));
   });
+  const displayedTagHits = $derived(
+    selectedDay
+      ? data.tagHits.filter(
+          (hit) =>
+            hit.source.kind === "card" &&
+            data.tagCards[hit.source.cardId]?.updatedDay === selectedDay,
+        )
+      : data.tagHits,
+  );
+  const tree = $derived(buildTagTree(displayedTagHits));
+  const mapTags = $derived(tagBundleIndex(displayedTagHits, data.tagCards));
 
   const heatmap = $derived(
     activityCells(
@@ -235,7 +246,9 @@
   /** Which bundles the active tag reaches, rolled up over its subcategories — see
    *  `tagBundleTargets`. Empty when nothing is selected or hovered, which is the ordinary
    *  state of the page. */
-  const targets = $derived(selectedTag ? tagBundleTargets(data.tagBundles, selectedTag) : new Map());
+  const targets = $derived(
+    selectedTag ? tagBundleTargets(mapTags.index, selectedTag) : new Map(),
+  );
 
   /**
    * The rows the panel is drawing, and the point on the canvas the active one's lines leave
@@ -250,7 +263,7 @@
    * the window — so it changes nothing about what is served, only about what a line does
    * after the row it belongs to has moved.
    */
-  const rows = $derived(visibleTagRows(data.tree, selectedTag));
+  const rows = $derived(visibleTagRows(tree, selectedTag));
   let panelScroll = $state(0);
   const lineOrigin = $derived(tagLineOrigin(rows, selectedTag, panelScroll));
 
@@ -553,14 +566,14 @@
         scrollbarWidth: "thin",
       })}
     >
-        {#if data.tree.length === 0}
+        {#if tree.length === 0}
           <p class={css({ color: "neutral.subtle", fontSize: "12px", padding: "3px 8px" })}>
             No tags yet. Write <code class={css({ fontFamily: "mono" })}>'like:this</code> in a
             card and it is gathered here.
           </p>
         {:else}
-          {@render branch(data.tree, 0)}
-          {#if data.cardsTruncated || data.tagLinksTruncated}
+          {@render branch(tree, 0)}
+          {#if data.cardsTruncated || mapTags.truncated}
             <p
               class={css({
                 fontSize: "11px",
@@ -570,7 +583,7 @@
               })}
             >
               {data.cardsTruncated ? CARDS_TRUNCATED_LABEL : ""}
-              {data.tagLinksTruncated
+              {mapTags.truncated
                 ? "Some tags reach more bundles than this page draws lines for."
                 : ""}
             </p>

@@ -8,6 +8,12 @@ import { TAG_CARD_HITS_MAX, TAG_CARD_ROWS_PAGE, TAG_SIGIL } from "../../lib/cons
 export type CardTagHits = {
   hits: TagHit[];
   /**
+   * The map-facing dimensions of each tagged card, kept beside rather than repeated on
+   * every line-level hit. This is persisted with the tag cache, so the treemap can regroup
+   * one cached gather by bundle and UTC change day without querying the cards again.
+   */
+  cardData: Record<string, { projectId: string; bundleId: string; updatedDay: string } | undefined>;
+  /**
    * Which project each card named above belongs to.
    *
    * Beside the hits rather than on them, per the note on `TagSource`: a card's project is
@@ -103,6 +109,7 @@ export async function getCardTagHits({
 
   const hits: TagHit[] = [];
   const cardProjects: Record<string, string> = {};
+  const cardData: CardTagHits["cardData"] = {};
   let truncated = false;
   // Where the last page ended. Ordered by the same column it pages on, which is what makes
   // "after this one" mean the next row rather than an arbitrary one — and what makes a hit
@@ -111,7 +118,13 @@ export async function getCardTagHits({
 
   pages: for (;;) {
     const rows = await db
-      .select({ id: cardTable.id, content: cardTable.content, projectId: bundleTable.projectId })
+      .select({
+        id: cardTable.id,
+        content: cardTable.content,
+        projectId: bundleTable.projectId,
+        bundleId: cardTable.bundleId,
+        updatedAt: cardTable.updatedAt,
+      })
       .from(cardTable)
       .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
       .where(after === undefined ? where : and(where, gt(cardTable.id, after)))
@@ -137,6 +150,11 @@ export async function getCardTagHits({
       const found = scanTagLines(row.content);
       if (found.length === 0) continue;
       cardProjects[row.id] = row.projectId;
+      cardData[row.id] = {
+        projectId: row.projectId,
+        bundleId: row.bundleId,
+        updatedDay: row.updatedAt.toISOString().slice(0, 10),
+      };
       for (const { tag, excerpt } of found) {
         if (hits.length >= hitsMax) {
           truncated = true;
@@ -152,5 +170,5 @@ export async function getCardTagHits({
     if (rows.length < rowsPage) break;
   }
 
-  return { hits, cardProjects, truncated };
+  return { hits, cardData, cardProjects, truncated };
 }

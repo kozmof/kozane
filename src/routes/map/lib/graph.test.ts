@@ -5,6 +5,7 @@ import {
   rectAnchor,
   scopeRail,
   scopeRailRows,
+  tagBundleIndex,
   tagBundleTargets,
   HUB_RADIUS,
 } from "./graph.js";
@@ -197,5 +198,21 @@ describe("tagBundleTargets", () => {
 
   it("answers with nothing for a tag nothing carries", () => {
     expect(tagBundleTargets(index, "ghost").size).toBe(0);
+  });
+});
+
+describe("tagBundleIndex", () => {
+  it("joins tag hits to their cached bundle dimension and counts each card once", () => {
+    const hits = [
+      { tag: "perf", source: { kind: "card" as const, cardId: "c1" }, excerpt: "one" },
+      { tag: "perf", source: { kind: "card" as const, cardId: "c1" }, excerpt: "again" },
+      { tag: "perf", source: { kind: "card" as const, cardId: "c2" }, excerpt: "two" },
+    ];
+    const cards = {
+      c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-09-05" },
+      c2: { projectId: "p1", bundleId: "b2", updatedDay: "2026-09-04" },
+    };
+
+    expect(tagBundleIndex(hits, cards).index.perf).toEqual({ b1: 1, b2: 1 });
   });
 });

@@ -276,6 +276,7 @@ describe("loadTagIndex", () => {
       const planted = readTagCache(root)!;
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
+        cardData: { c1: { projectId: "p", bundleId: "b", updatedDay: "2026-01-01" } },
         cardProjects: { c1: "p" },
         truncated: false,
       };
@@ -292,6 +293,7 @@ describe("loadTagIndex", () => {
       const planted = readTagCache(root)!;
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
+        cardData: { c1: { projectId: "p", bundleId: "b", updatedDay: "2026-01-01" } },
         cardProjects: { c1: "p" },
         truncated: false,
       };

@@ -1,5 +1,5 @@
 import type { AnyDB } from "../../db/client.js";
-import { getCardTagHits } from "../../db/api/tag.js";
+import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
 import { getAllTaskspaces, getTaskspacesInProject } from "../../db/api/taskspace.js";
 import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit, TagScanTruncation } from "../types.js";
@@ -48,6 +48,8 @@ export type TagIndex = {
   /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
    *  was written in, and `hit.source.kind` is the only thing that separates them. */
   hits: TagHit[];
+  /** Cached bundle/project/change-day dimensions for every card carrying a hit. */
+  cardData: CardTagHits["cardData"];
   /** Which project each card carrying a hit belongs to. See `CardTagHits`. */
   cardProjects: Record<string, string | undefined>;
   /**
@@ -182,7 +184,7 @@ export async function loadTagIndex({
   // A card set that had to be queried is a card set the stored file does not hold.
   let changed = !stored;
   const hits = [...cards.hits];
-  const { cardProjects } = cards;
+  const { cardData, cardProjects } = cards;
   const taskspaces: Record<string, TagIndexTaskspace> = {};
   const truncated: TagIndexTruncation[] = [];
   const missing: string[] = [];
@@ -191,7 +193,15 @@ export async function loadTagIndex({
   // a complete answer about cards, so the index is served rather than refused.
   if (!includeFiles || !root) {
     store?.save({ cards, changed });
-    return { hits, cardProjects, taskspaces, truncated, missing, cardsTruncated: cards.truncated };
+    return {
+      hits,
+      cardData,
+      cardProjects,
+      taskspaces,
+      truncated,
+      missing,
+      cardsTruncated: cards.truncated,
+    };
   }
 
   const rows = projectId
@@ -237,5 +247,13 @@ export async function loadTagIndex({
   }
 
   store?.save({ cards, scanned, changed });
-  return { hits, cardProjects, taskspaces, truncated, missing, cardsTruncated: cards.truncated };
+  return {
+    hits,
+    cardData,
+    cardProjects,
+    taskspaces,
+    truncated,
+    missing,
+    cardsTruncated: cards.truncated,
+  };
 }

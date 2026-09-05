@@ -1,5 +1,7 @@
 import { compareIds } from "$lib/order";
 import { tagMatcher } from "$lib/tag";
+import type { TagHit } from "$lib/types";
+import { MAP_TAG_LINKS_MAX } from "$lib/constants";
 import type { Point, Rect } from "./treemap.js";
 
 /**
@@ -177,6 +179,48 @@ export function curve(from: Point, to: Point, bow = 0.14): string {
  * thing the tag graph is drawn from — see `MAP_TAG_LINKS_MAX`.
  */
 export type TagBundleIndex = Record<string, Record<string, number> | undefined>;
+export type MapTagCard = { projectId: string; bundleId: string; updatedDay: string };
+
+/**
+ * Exact written tags to bundle counts, derived from the cached card dimensions the map
+ * receives. Keeping card ids until this step lets a caller first filter hits by change day
+ * while still counting a card only once when the same tag occurs on several lines.
+ */
+export function tagBundleIndex(
+  hits: TagHit[],
+  cardData: Record<string, MapTagCard | undefined>,
+): { index: TagBundleIndex; truncated: boolean } {
+  const cards = new Map<string, Map<string, Set<string>>>();
+  let pairs = 0;
+  let truncated = false;
+
+  for (const hit of hits) {
+    if (hit.source.kind !== "card") continue;
+    const bundleId = cardData[hit.source.cardId]?.bundleId;
+    if (!bundleId) continue;
+
+    let byBundle = cards.get(hit.tag);
+    if (!byBundle) cards.set(hit.tag, (byBundle = new Map()));
+    let members = byBundle.get(bundleId);
+    if (!members) {
+      if (pairs >= MAP_TAG_LINKS_MAX) {
+        truncated = true;
+        continue;
+      }
+      pairs++;
+      byBundle.set(bundleId, (members = new Set()));
+    }
+    members.add(hit.source.cardId);
+  }
+
+  const index: TagBundleIndex = {};
+  for (const [tag, byBundle] of cards) {
+    const counts: Record<string, number> = {};
+    for (const [bundleId, members] of byBundle) counts[bundleId] = members.size;
+    index[tag] = counts;
+  }
+  return { index, truncated };
+}
 
 /**
  * The bundles a tag reaches, each with the weight of the line to draw to it.

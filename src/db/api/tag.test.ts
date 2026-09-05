@@ -29,6 +29,7 @@ describe("getCardTagHits", () => {
     const { db, projectId } = await setup();
     expect(await getCardTagHits({ db, projectId })).toEqual({
       hits: [],
+      cardData: {},
       cardProjects: {},
       truncated: false,
     });
@@ -38,7 +39,8 @@ describe("getCardTagHits", () => {
     const { db, projectId, bundleId } = await setup();
     const cardId = await addCard({ db, bundleId, content: "caching work 'perf:cache" });
 
-    expect(await getCardTagHits({ db, projectId })).toEqual({
+    const result = await getCardTagHits({ db, projectId });
+    expect(result).toMatchObject({
       hits: [
         {
           tag: "perf:cache",
@@ -46,9 +48,11 @@ describe("getCardTagHits", () => {
           excerpt: "caching work 'perf:cache",
         },
       ],
+      cardData: { [cardId]: { projectId, bundleId } },
       cardProjects: { [cardId]: projectId },
       truncated: false,
     });
+    expect(result.cardData[cardId]?.updatedDay).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it("returns every tag on a card", async () => {
