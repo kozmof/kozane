@@ -3,7 +3,7 @@ import { error } from "@sveltejs/kit";
 import { getAllProjects, getProject } from "$db/api/project";
 import { getAllBundles, getBundleCardCounts } from "$db/api/bundle";
 import { getAllScopes, getScopeBundleUsage, getScopeProjectUsage } from "$db/api/scope";
-import { getCardBundleNames } from "$db/api/card";
+import { getCardBundleNames, getCardChangeCounts } from "$db/api/card";
 import { getCardTagHits } from "$db/api/tag";
 import type { AnyDB } from "$db/client";
 import { getWorkspaceUiConfig } from "$db/internal/config";
@@ -12,6 +12,7 @@ import { MAP_TAG_LINKS_MAX } from "$lib/constants";
 import type { TagHit } from "$lib/types";
 import { applyPalette } from "../[projectId]/lib/project-page.js";
 import type { TagBundleIndex } from "./lib/graph.js";
+import { validActivityDay } from "./lib/activity.js";
 
 /**
  * The whole workspace at once: every project as a rectangle, its bundles inside it sized by
@@ -163,7 +164,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // export bakes the whole workspace and the browser reads the selection from the URL.
   const requestedProject = prerender ? null : url.searchParams.get("projectId");
   const requestedTag = prerender ? null : url.searchParams.get("tag");
+  const requestedDay = prerender ? null : url.searchParams.get("day");
   const tag = requestedTag ? normalizeTag(requestedTag) : null;
+  if (requestedDay && !validActivityDay(requestedDay)) throw error(400, "Invalid activity day");
 
   // Checked rather than passed through, for the reason the tag index checks it: a
   // `?projectId=` naming nothing narrows every read below to nothing and draws as an empty
@@ -171,10 +174,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   if (requestedProject && !(await getProject({ db, projectId: requestedProject })))
     throw error(404, "Project not found");
 
-  const [projects, counts, tagHits] = await Promise.all([
+  const [projects, counts, tagHits, activity] = await Promise.all([
     getAllProjects({ db }),
     getBundleCardCounts({ db }),
     getCardTagHits({ db, ...(requestedProject ? { projectId: requestedProject } : {}) }),
+    getCardChangeCounts({
+      db,
+      ...(requestedProject ? { projectIds: [requestedProject] } : {}),
+    }),
   ]);
 
   const drawn = requestedProject ? projects.filter(({ id }) => id === requestedProject) : projects;
@@ -259,6 +266,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     // and one narrowed to the selected tag would be a tree with a single branch.
     tree: buildTagTree(tagHits.hits),
     tag,
+    day: requestedDay,
+    activity,
     tagBundles,
     tagLinksTruncated,
     /** Whether the card gather stopped at `TAG_CARD_HITS_MAX`, so the tree counts are a floor

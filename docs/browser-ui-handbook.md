@@ -539,6 +539,13 @@ The row of project names in the top right narrows the map to one project, the sa
 the tag index carries and with the same `?projectId=` behind it. Narrowed, the map draws
 that project's rectangle alone, and only the scopes and tags that reach it.
 
+The activity grid at the bottom centre shows its UTC date range above a trailing year of
+card changes. A new card counts as its first change; moving, resizing, or otherwise arranging
+a card does not. Darker squares are busier UTC days. Click a square to size the treemap from
+the cards changed on that day, click the selected square again or choose **Clear** to restore
+total card counts. The selection is stored as `?day=YYYY-MM-DD` and keeps any project or tag
+selection already in the URL.
+
 A static export made with `kozane net ssg generate` carries the map, and both the tag
 selection and the project narrowing keep working there without a server. The scope circles
 are left out unless the export was built with `--include-scoped-files` — a plain export

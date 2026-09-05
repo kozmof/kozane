@@ -63,6 +63,8 @@ function pageData(over: Record<string, unknown> = {}) {
     tagBundles: { perf: { b1: 2 }, "perf:cache": { b3: 1 }, docs: { b2: 5 } },
     tagLinksTruncated: false,
     cardsTruncated: false,
+    day: null,
+    activity: [],
     zoomStep: 0.05,
     ...over,
   };
@@ -101,6 +103,46 @@ const rectOf = (container: HTMLElement, name: string) =>
   mapParts(container, "g").find((g) => g.textContent?.includes(name));
 
 describe("map page", () => {
+  describe("card change heatmap", () => {
+    const today = new Date().toISOString().slice(0, 10);
+
+    it("links an activity square to a day while preserving other filters", () => {
+      draw({
+        projectId: "p1",
+        tag: "perf",
+        activity: [{ day: today, bundleId: "b1", cards: 2 }],
+      });
+      const link = screen.getByRole("link", { name: `${today}: 2 card changes` });
+      expect(link.getAttribute("href")).toBe(`/map?projectId=p1&tag=perf&day=${today}`);
+    });
+
+    it("filters bundle counts to the selected day and offers a clear link", () => {
+      const { container } = draw({
+        day: today,
+        activity: [{ day: today, bundleId: "b1", cards: 3 }],
+      });
+      expect(rectOf(container, "General")?.textContent).toContain("3");
+      expect(
+        [...container.querySelectorAll("a")].find((link) =>
+          link.getAttribute("aria-label")?.startsWith("Drafts, 0 cards"),
+        ),
+      ).toBeDefined();
+      expect(screen.getByRole("link", { name: `${today}: 3 card changes` })).toHaveAttribute(
+        "aria-current",
+        "date",
+      );
+      expect(screen.getByRole("link", { name: "Clear" })).toHaveAttribute("href", "/map");
+    });
+
+    it("places the activity control in its own labelled region", () => {
+      draw();
+      expect(screen.getByRole("region", { name: "Card change activity" })).toBeInTheDocument();
+      const range = screen.getByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/);
+      expect(range).toBeInTheDocument();
+      expect(range).not.toHaveTextContent("Card changes");
+    });
+  });
+
   it("draws a rectangle for every project and every bundle", () => {
     const { container } = draw();
     // A project's name is in the header nav and in the picture and in the words beside it,

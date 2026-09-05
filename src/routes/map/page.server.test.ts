@@ -3,6 +3,8 @@ import { addProject } from "$db/api/project";
 import { addBundle } from "$db/api/bundle";
 import { addLayer } from "$db/api/layer";
 import { addCard } from "$db/api/card";
+import { cardTable } from "$db/schema";
+import { eq } from "drizzle-orm";
 import { addScope } from "$db/api/scope";
 import { addScopeRel } from "$db/api/scope-rel";
 import { addTaskspace } from "$db/api/taskspace";
@@ -29,6 +31,8 @@ type MapData = {
   tagLinksTruncated: boolean;
   cardsTruncated: boolean;
   zoomStep: number;
+  day: string | null;
+  activity: { day: string; bundleId: string; cards: number }[];
 };
 
 async function setup() {
@@ -59,6 +63,34 @@ describe("GET /map", () => {
   it("hands over the workspace zoom step", async () => {
     const { db } = await setup();
     expect((await run(db)).zoomStep).toBeGreaterThan(0);
+  });
+
+  describe("card change activity", () => {
+    it("groups card changes by UTC day and bundle", async () => {
+      const { db, bundleId } = await setup();
+      const first = await addCard({ db, bundleId, content: "one" });
+      const second = await addCard({ db, bundleId, content: "two" });
+      await db
+        .update(cardTable)
+        .set({ updatedAt: new Date("2026-09-05T12:00:00.000Z") })
+        .where(eq(cardTable.id, first));
+      await db
+        .update(cardTable)
+        .set({ updatedAt: new Date("2026-09-05T23:59:59.000Z") })
+        .where(eq(cardTable.id, second));
+
+      expect((await run(db)).activity).toContainEqual({
+        day: "2026-09-05",
+        bundleId,
+        cards: 2,
+      });
+    });
+
+    it("accepts a real selected day and rejects an invalid one", async () => {
+      const { db } = await setup();
+      expect((await run(db, "?day=2026-09-05")).day).toBe("2026-09-05");
+      await expect(run(db, "?day=2026-02-29")).rejects.toMatchObject({ status: 400 });
+    });
   });
 
   describe("the packing", () => {

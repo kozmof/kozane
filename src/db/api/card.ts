@@ -356,6 +356,31 @@ export async function getCardBundleNames({
   return rows;
 }
 
+export type CardChangeCount = { day: string; bundleId: string; cards: number };
+
+/**
+ * Daily content-change counts by bundle. Card creation counts as the first change because
+ * new cards begin with matching created/updated timestamps; arrangement-only writes do not
+ * appear because those deliberately leave updated_at unchanged.
+ */
+export async function getCardChangeCounts({
+  db,
+  projectIds,
+}: NeedsDB & { projectIds?: string[] }): Promise<CardChangeCount[]> {
+  if (projectIds?.length === 0) return [];
+  const day = sql<string>`strftime('%Y-%m-%d', ${cardTable.updatedAt}, 'unixepoch')`;
+  const query = db
+    .select({
+      day,
+      bundleId: cardTable.bundleId,
+      cards: sql<number>`count(*)`,
+    })
+    .from(cardTable)
+    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .groupBy(day, cardTable.bundleId);
+  return projectIds ? query.where(inArray(bundleTable.projectId, projectIds)) : query;
+}
+
 type GetCardLayerNames = NeedsDB & { cardIds: string[] };
 export async function getCardLayerNames({
   db,

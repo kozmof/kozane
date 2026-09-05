@@ -35,6 +35,7 @@
     TAG_PANEL_WIDTH,
     TAG_ROW_HEIGHT,
   } from "./lib/tag-rows.js";
+  import { activityCells } from "./lib/activity.js";
 
   /**
    * The whole workspace in one picture: every project a rectangle, its bundles inside it
@@ -76,6 +77,29 @@
     data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
   );
   const selectedProject = $derived(data.projects.find(({ id }) => id === selectedProjectId) ?? null);
+  const selectedDay = $derived(
+    data.day ?? (browser ? page.url.searchParams.get("day") : null),
+  );
+
+  const displayedBundles = $derived.by(() => {
+    if (!selectedDay) return data.bundles;
+    const counts = new Map(
+      data.activity
+        .filter(({ day }) => day === selectedDay)
+        .map(({ bundleId, cards }) => [bundleId, cards]),
+    );
+    return data.bundles.map((bundle) => ({ ...bundle, cards: counts.get(bundle.id) ?? 0 }));
+  });
+
+  const heatmap = $derived(
+    activityCells(
+      data.activity.map(({ day, cards }) => ({ day, cards })),
+    ),
+  );
+  const activityRange = $derived.by(() => {
+    const days = heatmap.flatMap(({ day }) => (day ? [day] : []));
+    return `${days[0]} ~ ${days.at(-1)}`;
+  });
 
   /**
    * The box the map is drawn into.
@@ -124,7 +148,7 @@
   const layout = $derived(
     buildMapLayout({
       projects: data.drawn,
-      bundles: data.bundles,
+      bundles: displayedBundles,
       scopes: data.scopes,
       area: viewedArea(size, view),
     }),
@@ -239,6 +263,7 @@
     const params = new URLSearchParams();
     if (selectedProjectId) params.set("projectId", selectedProjectId);
     if (tag) params.set("tag", tag);
+    if (selectedDay) params.set("day", selectedDay);
     const query = params.toString();
     return query ? `${base}/map?${query}` : `${base}/map`;
   };
@@ -246,9 +271,28 @@
     const params = new URLSearchParams();
     if (projectId) params.set("projectId", projectId);
     if (selectedTag) params.set("tag", selectedTag);
+    if (selectedDay) params.set("day", selectedDay);
     const query = params.toString();
     return query ? `${base}/map?${query}` : `${base}/map`;
   };
+  const dayHref = (day: string | null) => {
+    const params = new URLSearchParams();
+    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (selectedTag) params.set("tag", selectedTag);
+    if (day) params.set("day", day);
+    const query = params.toString();
+    return query ? `${base}/map?${query}` : `${base}/map`;
+  };
+
+  const ACTIVITY_COLORS = [
+    "oklch(94% 0.008 250)",
+    "oklch(88% 0.07 250)",
+    "oklch(76% 0.13 250)",
+    "oklch(64% 0.17 250)",
+    "oklch(50% 0.16 250)",
+  ] as const;
+  const activityLabel = (day: string, cards: number) =>
+    `${day}: ${cards} card ${cards === 1 ? "change" : "changes"}`;
 
   /** Cards, and only cards: this page gathers no file tags, so `total.files` is always zero
    *  and a two-part label would be one part that never appears. */
@@ -573,7 +617,9 @@
           width={size.width}
           height={size.height}
           viewBox="0 0 {size.width} {size.height}"
-          aria-label="Projects and bundles by card count, with the scopes and tags that cross between them"
+          aria-label={selectedDay
+            ? `Projects and bundles by cards changed on ${selectedDay}`
+            : "Projects and bundles by card count, with the scopes and tags that cross between them"}
           class={css({ display: "block" })}
         >
           {#each layout.projects as project (project.id)}
@@ -742,6 +788,81 @@
           >{zoomPercent(view.zoom)}%</button>
         </div>
       </div>
+
+      <section
+        aria-label="Card change activity"
+        class={css({
+          position: "absolute",
+          zIndex: "3",
+          left: "50%",
+          bottom: "12px",
+          transform: "translateX(-50%)",
+          maxWidth: "calc(100% - 150px)",
+          boxSizing: "border-box",
+          padding: "8px 10px",
+          backgroundColor: "ink.light",
+          border: "1px solid token(colors.neutral.dim)",
+          borderRadius: "3px",
+          boxShadow: "0 1px 6px rgba(0,0,0,0.025)",
+          fontFamily: "mono",
+        })}
+      >
+        <div
+          class={css({
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "6px",
+            color: "neutral.subtle",
+            fontSize: "10px",
+          })}
+        >
+          <span>{activityRange}</span>
+          {#if selectedDay}
+            <a
+              href={dayHref(null)}
+              class={css({
+                color: "neutral.secondary",
+                textDecoration: "none",
+                _hover: { color: "ink.black" },
+              })}
+            >Clear</a>
+          {/if}
+        </div>
+        <div
+          class={css({
+            display: "grid",
+            gridAutoFlow: "column",
+            gridTemplateRows: "repeat(7, 9px)",
+            gridAutoColumns: "9px",
+            gap: "3px",
+            overflowX: "auto",
+            scrollbarWidth: "thin",
+          })}
+        >
+          {#each heatmap as cell (cell.week + "-" + cell.weekday)}
+            {#if cell.day}
+              <a
+                href={dayHref(selectedDay === cell.day ? null : cell.day)}
+                title={activityLabel(cell.day, cell.cards)}
+                aria-label={activityLabel(cell.day, cell.cards)}
+                aria-current={selectedDay === cell.day ? "date" : undefined}
+                style="width: 9px; height: 9px; background-color: {ACTIVITY_COLORS[cell.level]}"
+                class={css({
+                  display: "block",
+                  boxSizing: "border-box",
+                  borderRadius: "1px",
+                  border: "1px solid rgba(0,0,0,0.055)",
+                  _hover: { outline: "1px solid token(colors.ink.black)" },
+                })}
+              ></a>
+            {:else}
+              <span aria-hidden="true" style="width: 9px; height: 9px"></span>
+            {/if}
+          {/each}
+        </div>
+      </section>
 
     <!--
       The same map in words, for a reader who cannot see it. An `<svg>` with one label says
