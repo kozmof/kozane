@@ -57,6 +57,14 @@ type CardAddOptions = Omit<CardOptions, "taskspace"> & {
 type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
 type CardShowOptions = { times?: boolean };
 type CardGlueOptions = { add?: boolean; alignList?: boolean };
+type CardMoveOptions = { x?: number | string; y?: number | string };
+
+function movedCoordinate(value: number | string, current: number): number {
+  if (typeof value === "number") return value;
+  const match = value.match(/^current([+-]\d+)$/);
+  if (!match) throw new Error(`Invalid card position: ${value}`);
+  return current + Number(match[1]);
+}
 
 /** Resolve card references together and retain the project needed by the guarded glue APIs. */
 async function resolveCardGroup(db: DB, requestedIds: string[]) {
@@ -316,6 +324,35 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
       )}`,
     );
     console.log(`  layer: ${layer.name}`);
+  });
+}
+
+export async function cardMove(requestedCardId: string, { x, y }: CardMoveOptions): Promise<void> {
+  if (x === undefined && y === undefined) throw new Error("card move requires --x or --y.");
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const { cards, cardIds, projectId } = await resolveCardGroup(db, [requestedCardId]);
+    const cardId = cardIds[0];
+    const card = findById(cards, cardId, "Card");
+    const position = clampToBounds(
+      x === undefined ? card.posX : movedCoordinate(x, card.posX),
+      y === undefined ? card.posY : movedCoordinate(y, card.posY),
+      canvasBoundsForRoot(root),
+    );
+    const result = await updateProjectCardPositions({
+      db,
+      projectId,
+      positions: [{ cardId, ...position }],
+    });
+    if (!result.ok) throw new Error("Card does not belong to the project.");
+
+    console.log("Card moved.");
+    console.log(
+      `  id: ${shortId(
+        cardId,
+        cards.map(({ id }) => id),
+      )}`,
+    );
+    console.log(`  position: (${position.posX}, ${position.posY})`);
   });
 }
 

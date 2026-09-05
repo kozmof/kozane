@@ -17,6 +17,7 @@ import {
   cardAdd,
   cardGlue,
   cardList,
+  cardMove,
   cardNearest,
   cardSetLayer,
   cardShow,
@@ -41,6 +42,17 @@ function integer(value: string): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed)) throw new InvalidArgumentError("Must be an integer.");
   return parsed;
+}
+
+function cardPosition(value: string): number | string {
+  if (/^current[+-]\d+$/.test(value)) return value;
+  try {
+    return integer(value);
+  } catch {
+    throw new InvalidArgumentError(
+      'Must be an integer or relative position such as "current+100".',
+    );
+  }
 }
 
 function cardSortKey(value: string): CardSortKey {
@@ -306,6 +318,13 @@ card
   .command("layer <cardId> <layer>")
   .description("Move a card to another layer of its project, by layer ID, short ID, or name")
   .action((cardId, layer) => cardSetLayer(cardId, layer));
+
+card
+  .command("move <cardId>")
+  .description("Move a card to an X/Y position")
+  .option("--x <position>", "Horizontal integer or current+/-offset", cardPosition)
+  .option("--y <position>", "Vertical integer or current+/-offset", cardPosition)
+  .action((cardId, opts) => cardMove(cardId, opts));
 
 card
   .command("glue <cardIds...>")

@@ -43,6 +43,12 @@ function cli(cwd: string, ...args: string[]): string {
   return result.stdout;
 }
 
+function outputId(output: string): string {
+  const match = output.match(/^\s*id\s*:\s*(\S+)/m);
+  if (!match) throw new Error(`Command output did not contain an ID:\n${output}`);
+  return match[1];
+}
+
 function configureUi(root: string, overrides: Record<string, unknown>): void {
   const path = join(root, ".kozane", "config.json");
   const config = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
@@ -185,5 +191,77 @@ describe("card squash", () => {
     const result = run(root, ["card", "squash"], "one. two. three. four");
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("4 cards added.");
+  });
+});
+
+describe("card move", () => {
+  it("moves a card by short ID to the requested position", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const cardId = outputId(cli(root, "card", "add", "moving card"));
+
+    const output = cli(root, "card", "move", cardId, "--x", "120", "--y", "340");
+
+    expect(output).toContain("Card moved.");
+    expect(output).toContain("position: (120, 340)");
+    expect(listedPositions(root)).toEqual([{ posX: 120, posY: 340 }]);
+  });
+
+  it("holds a moved card inside the workspace's configured board", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    configureCanvas(root, 900, 700);
+    const cardId = outputId(cli(root, "card", "add", "bounded card"));
+
+    cli(root, "card", "move", cardId, "--x", "999999", "--y", "-500");
+
+    expect(listedPositions(root)).toEqual([{ posX: 900, posY: 0 }]);
+  });
+
+  it("moves each axis relative to its current position", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const cardId = outputId(cli(root, "card", "add", "relative card", "--x", "120", "--y", "340"));
+
+    const output = cli(root, "card", "move", cardId, "--x", "current+100", "--y", "current-20");
+
+    expect(output).toContain("position: (220, 320)");
+    expect(listedPositions(root)).toEqual([{ posX: 220, posY: 320 }]);
+  });
+
+  it("moves only the specified axis", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const cardId = outputId(cli(root, "card", "add", "one-axis card", "--x", "120", "--y", "340"));
+
+    cli(root, "card", "move", cardId, "--x", "current+10");
+    expect(listedPositions(root)).toEqual([{ posX: 130, posY: 340 }]);
+
+    cli(root, "card", "move", cardId, "--y", "200");
+    expect(listedPositions(root)).toEqual([{ posX: 130, posY: 200 }]);
+  });
+
+  it("requires at least one axis", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const cardId = outputId(cli(root, "card", "add", "stationary card"));
+
+    const result = run(root, ["card", "move", cardId]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("card move requires --x or --y.");
+    expect(listedPositions(root)).toEqual([{ posX: 0, posY: 0 }]);
+  });
+
+  it("rejects malformed relative positions", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const cardId = outputId(cli(root, "card", "add", "stationary card"));
+
+    const result = run(root, ["card", "move", cardId, "--x", "current*2", "--y", "current+20"]);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Must be an integer or relative position");
+    expect(listedPositions(root)).toEqual([{ posX: 0, posY: 0 }]);
   });
 });
