@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
 import {
@@ -34,7 +34,7 @@ import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx, type DB } from "../../db/tx.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveProjectId } from "../lib/project-selection.js";
-import { contentLimitIssue } from "../../lib/constants.js";
+import { chunked, contentLimitIssue, STATEMENT_PARAMS_MAX } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
@@ -71,23 +71,64 @@ function movedCoordinate(value: number | string, current: number): number {
   return current + Number(match[1]);
 }
 
-/** Resolve card references together and retain the project needed by the guarded glue APIs. */
+/**
+ * Resolve card references together and retain the project needed by the guarded glue APIs.
+ *
+ * Workspace-wide, and it has to be: an abbreviated id is unambiguous or it is not, and the
+ * set it is unambiguous *in* is every card there is — `kozane card project` moves cards
+ * between projects, so narrowing this to one would make a prefix resolve here that
+ * `shortId` had refused to print. What each id is printed back as depends on the same set.
+ *
+ * What it does not read is every card's *text*. This selected `content` — and `width`,
+ * `pos_x`, `pos_y` — for every card in the workspace in order to answer a question about
+ * ids, so `kozane card delete 3f9a2c1` read every word anyone had written. The two columns
+ * resolution needs are here; {@link loadCards} fetches the rest for the handful of cards a
+ * command actually acts on.
+ */
 async function resolveCardGroup(db: DB, requestedIds: string[]) {
-  const cards = await db
-    .select({
-      id: cardTable.id,
-      projectId: bundleTable.projectId,
-      content: cardTable.content,
-      width: cardTable.width,
-      posX: cardTable.posX,
-      posY: cardTable.posY,
-    })
+  const index = await db
+    .select({ id: cardTable.id, projectId: bundleTable.projectId })
     .from(cardTable)
     .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
-  const allIds = cards.map(({ id }) => id);
+  const allIds = index.map(({ id }) => id);
   const cardIds = requestedIds.map((id) => resolveShortId(id, allIds, "Card"));
-  const projectId = findById(cards, cardIds[0], "Card").projectId;
-  return { cards, cardIds, projectId };
+  const projectId = findById(index, cardIds[0], "Card").projectId;
+  return { index, allIds, cardIds, projectId };
+}
+
+/** What a command that positions or re-lays-out cards needs of each one. */
+type LoadedCard = {
+  id: string;
+  content: string;
+  width: number | null;
+  posX: number;
+  posY: number;
+};
+
+/**
+ * The full rows behind a resolved set of ids.
+ *
+ * Chunked, because the set is not always what someone typed: `card glue --add` expands a
+ * selection to whole glue groups, and a group has no ceiling short of the project. One
+ * bound parameter per id puts a large enough group past {@link STATEMENT_PARAMS_MAX}, which
+ * SQLite refuses after building the statement rather than before.
+ */
+async function loadCards(db: DB, cardIds: string[]): Promise<LoadedCard[]> {
+  const rows: LoadedCard[] = [];
+  for (const batch of chunked(cardIds, { size: STATEMENT_PARAMS_MAX })) {
+    const found = await db
+      .select({
+        id: cardTable.id,
+        content: cardTable.content,
+        width: cardTable.width,
+        posX: cardTable.posX,
+        posY: cardTable.posY,
+      })
+      .from(cardTable)
+      .where(inArray(cardTable.id, batch));
+    rows.push(...found);
+  }
+  return rows;
 }
 
 /** What {@link printCards} needs of a card: the fields every listing prints. */
@@ -335,9 +376,9 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
 export async function cardMove(requestedCardId: string, { x, y }: CardMoveOptions): Promise<void> {
   if (x === undefined && y === undefined) throw new Error("card move requires --x or --y.");
   await runWorkspaceCommand(async ({ db, root }) => {
-    const { cards, cardIds, projectId } = await resolveCardGroup(db, [requestedCardId]);
+    const { allIds, cardIds, projectId } = await resolveCardGroup(db, [requestedCardId]);
     const cardId = cardIds[0];
-    const card = findById(cards, cardId, "Card");
+    const card = findById(await loadCards(db, cardIds), cardId, "Card");
     const position = clampToBounds(
       x === undefined ? card.posX : movedCoordinate(x, card.posX),
       y === undefined ? card.posY : movedCoordinate(y, card.posY),
@@ -351,12 +392,7 @@ export async function cardMove(requestedCardId: string, { x, y }: CardMoveOption
     if (!result.ok) throw new Error("Card does not belong to the project.");
 
     console.log("Card moved.");
-    console.log(
-      `  id: ${shortId(
-        cardId,
-        cards.map(({ id }) => id),
-      )}`,
-    );
+    console.log(`  id: ${shortId(cardId, allIds)}`);
     console.log(`  position: (${position.posX}, ${position.posY})`);
   });
 }
@@ -365,32 +401,28 @@ export async function cardEdit(requestedCardId: string, content: string): Promis
   await runWorkspaceCommand(async ({ db, root }) => {
     const issue = contentLimitIssue(content, contentMaxForRoot(root));
     if (issue) throw new Error(issue);
-    const { cards, cardIds } = await resolveCardGroup(db, [requestedCardId]);
-    const card = findById(cards, cardIds[0], "Card");
+    const { allIds, cardIds } = await resolveCardGroup(db, [requestedCardId]);
+    // `resolveShortId` already established that this id names a card, so there is no row to
+    // look up here beyond the bundle the update has to name.
+    const cardId = cardIds[0];
     const row = await db
       .select({ bundleId: cardTable.bundleId })
       .from(cardTable)
-      .where(eq(cardTable.id, card.id))
+      .where(eq(cardTable.id, cardId))
       .get();
     if (!row) throw new Error(`Card not found: ${requestedCardId}`);
-    await updateCard({ db, cardId: card.id, bundleId: row.bundleId, content });
+    await updateCard({ db, cardId, bundleId: row.bundleId, content });
     console.log("Card updated.");
-    console.log(
-      `  id: ${shortId(
-        card.id,
-        cards.map(({ id }) => id),
-      )}`,
-    );
+    console.log(`  id: ${shortId(cardId, allIds)}`);
   });
 }
 
 export async function cardDelete(requestedIds: string[]): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { cards, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
+    const { allIds, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
     const result = await deleteProjectCards({ db, projectId, cardIds });
     if (!result.ok) throw new Error("Cards must belong to the same project.");
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} deleted.`);
-    const allIds = cards.map(({ id }) => id);
     for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
 }
@@ -459,19 +491,23 @@ export async function cardGlue(
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
     const {
-      cards,
+      index,
+      allIds,
       cardIds: requestedCardIds,
       projectId,
     } = await resolveCardGroup(db, requestedIds);
-    if (requestedCardIds.some((cardId) => findById(cards, cardId, "Card").projectId !== projectId))
+    if (requestedCardIds.some((cardId) => findById(index, cardId, "Card").projectId !== projectId))
       throw new Error("Cards must belong to the same project.");
 
     let cardIds = requestedCardIds;
     if (options.add) {
       const rels = await getGlueRelsByProject({ db, projectId });
       const glueIdByCardId = new Map(rels.map((rel) => [rel.cardId, rel.glueId]));
+      // Built from the workspace index rather than from `rels`, though the two hold the same
+      // pairs: the members of a group come out in the order the cards did, which is the order
+      // the anchor below and the printed list are chosen in.
       const membersByGlueId = new Map<string, string[]>();
-      for (const card of cards) {
+      for (const card of index) {
         const glueId = glueIdByCardId.get(card.id);
         if (glueId) membersByGlueId.set(glueId, [...(membersByGlueId.get(glueId) ?? []), card.id]);
       }
@@ -491,8 +527,11 @@ export async function cardGlue(
     if (options.alignList) {
       const ui = getUiConfigForRoot(root);
       const bounds = canvasBoundsForRoot(root);
-      const byId = new Map(cards.map((card) => [card.id, card]));
-      const anchor = findById(cards, cardIds[0], "Card");
+      // Read here rather than up front: this is the one branch that needs a card's text and
+      // width, and it needs them for the *expanded* set, which `--add` has just decided.
+      const detailed = await loadCards(db, cardIds);
+      const byId = new Map(detailed.map((card) => [card.id, card]));
+      const anchor = findById(detailed, cardIds[0], "Card");
       let nextY = anchor.posY;
       const positions = cardIds.map((cardId) => {
         const card = byId.get(cardId);
@@ -514,23 +553,21 @@ export async function cardGlue(
       if (!moved.ok) throw new Error("Cards must belong to the same project.");
     }
 
-    const allCardIds = cards.map(({ id }) => id);
     console.log(`${cardIds.length} cards glued.`);
     if (options.add) console.log("  mode: additive");
     if (options.alignList) console.log("  layout: vertical list");
     console.log(`  glue: ${shortId(result.glueId, [result.glueId])}`);
-    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allCardIds)}`);
+    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
 }
 
 export async function cardUnglue(requestedIds: string[]): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { cards, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
+    const { allIds, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
     const result = await unglueProjectCards({ db, projectId, cardIds });
     if (!result.ok) throw new Error("Cards must belong to the same project.");
-    const allCardIds = cards.map(({ id }) => id);
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} unglued.`);
-    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allCardIds)}`);
+    for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
 }
 
