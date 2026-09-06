@@ -8,6 +8,25 @@ import { createScanPool, scanTaskspaceTags, type ScanLimits } from "./taskspace-
 import { openTagCache } from "./tag-cache.js";
 
 /**
+ * Hands the event loop back, so whatever is already queued runs before the caller resumes.
+ *
+ * `setImmediate` and not `await null` or a resolved promise: those two resume in the
+ * microtask queue, which is drained before the loop moves on to anything else, so neither
+ * lets a pending request in. This yields to the check phase, which is after I/O callbacks —
+ * a poll that arrived while the previous taskspace was being walked is answered here.
+ *
+ * `setTimeout` where there is no `setImmediate`: the browser has none, and though nothing in
+ * a browser reaches this file — it is under `lib/server` and built on `node:fs` — the test
+ * environment is jsdom and would otherwise fail on the name rather than on anything real.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof setImmediate === "function") setImmediate(resolve);
+    else setTimeout(resolve, 0);
+  });
+}
+
+/**
  * What one taskspace could not tell us, and which one it was. Empty for a taskspace read
  * whole, and absent from the list entirely rather than present with nothing to say.
  *
@@ -216,8 +235,18 @@ export async function loadTagIndex({
   // what a workspace of a dozen costs; this is that second bound. See
   // `TAG_SCAN_WORKSPACE_BYTES_MAX`.
   const pool = createScanPool(limits?.gather);
+  let scannedAny = false;
   for (const taskspace of rows) {
     if (!taskspace.path) continue;
+    // Between taskspaces, and not before the first: one uninterrupted run of synchronous
+    // walks is what made a gather over a dozen taskspaces a single stall the whole process
+    // sat inside. Yielding here does not make any one walk interruptible — that needs the
+    // boundary functions themselves to be async, which is a change to the module the live
+    // file endpoints hold their path containment in — but it does put the board's poll and
+    // every other request back in front of the *next* taskspace rather than behind all of
+    // them. A gather of one taskspace is unchanged, and pays nothing for this.
+    if (scannedAny) await yieldToEventLoop();
+    scannedAny = true;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
     // Before the scan, so the files this taskspace parsed last time are already in hand when
     // the walk asks about them. The walk still happens and still checks every signature —

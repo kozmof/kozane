@@ -167,6 +167,37 @@ describe("loadTagIndex", () => {
       expect(tags(hits)).toEqual(["mine", "mine:file", "theirs", "theirs:file"]);
     });
 
+    /**
+     * Each taskspace's walk is synchronous — `readdirSync` and `readFileSync` all the way
+     * down — so a gather over several of them used to be one uninterrupted block, and the
+     * board's once-a-second poll waited behind the whole of it. The walks are still
+     * synchronous; what changed is that the loop hands the event loop back between them.
+     *
+     * Asserted by counting what a queued callback got to run: a `setImmediate` scheduled
+     * before the gather fires while the gather is still going, which it cannot do if
+     * nothing yields.
+     */
+    it("lets other work run between taskspaces", async () => {
+      const { db, projectId, bundleId } = await setup();
+      await addCard({ db, bundleId, content: "'mine" });
+      await seedTaskspace(db, projectId, "one", "'one:file\n");
+      await seedTaskspace(db, projectId, "two", "'two:file\n");
+      await seedTaskspace(db, projectId, "three", "'three:file\n");
+
+      let ranDuringGather = false;
+      let finished = false;
+      setImmediate(() => {
+        ranDuringGather = !finished;
+      });
+
+      const { hits } = await loadTagIndex({ db, includeFiles: true, root });
+      finished = true;
+
+      expect(ranDuringGather).toBe(true);
+      // And the gather is still whole: yielding must not lose a taskspace.
+      expect(tags(hits)).toEqual(["mine", "one:file", "three:file", "two:file"]);
+    });
+
     it("says which project each card and taskspace belongs to", async () => {
       const { db, projectId, bundleId } = await setup();
       const cardId = await addCard({ db, bundleId, content: "'mine" });
