@@ -523,21 +523,7 @@
     </nav>
   </header>
 
-  {#if data.drawn.length === 0}
-    <p
-      style="top: {TAG_PANEL_TOP}px"
-      class={css({
-        position: "absolute",
-        left: "16px",
-        color: "neutral.subtle",
-        fontSize: "13px",
-        maxWidth: "52ch",
-      })}
-    >
-      No projects yet. A project is drawn here as a rectangle, and the bundles inside it are
-      sized by how many cards each one holds.
-    </p>
-  {:else}
+  {#if data.drawn.length !== 0}
     <!--
       The tag panel, floating at the corner `tagLineOrigin` draws from — so the numbers that
       place it and the numbers a line starts at are one set of numbers.
@@ -568,7 +554,7 @@
         })}
       >
         {@render branch(tree, 0)}
-        {#if data.cardsTruncated || mapTags.truncated}
+        {#if data.cardsTruncated}
           <p
             class={css({
               fontSize: "11px",
@@ -577,10 +563,7 @@
               maxWidth: "34ch",
             })}
           >
-            {data.cardsTruncated ? CARDS_TRUNCATED_LABEL : ""}
-            {mapTags.truncated
-              ? "Some tags reach more bundles than this page draws lines for."
-              : ""}
+            {CARDS_TRUNCATED_LABEL}
           </p>
         {/if}
       </nav>

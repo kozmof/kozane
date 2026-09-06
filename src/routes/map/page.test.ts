@@ -467,7 +467,7 @@ describe("map page", () => {
   });
 
   describe("what it says when there is little to say", () => {
-    it("explains an empty workspace instead of drawing an empty box", () => {
+    it("draws nothing rather than an empty box for an empty workspace", () => {
       const { container } = draw({
         projects: [],
         drawn: [],
@@ -476,7 +476,6 @@ describe("map page", () => {
         tagHits: [],
         tagCards: {},
       });
-      expect(screen.getByText(/No projects yet/)).toBeInTheDocument();
       expect(mapSvg(container)).toBeNull();
     });
 
