@@ -2,7 +2,8 @@ import type { Handle } from "@sveltejs/kit";
 import { error } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
-import { getWorkspaceRoot } from "./db/internal/config";
+import { getDBURL, getWorkspaceRoot } from "./db/internal/config";
+import { getMigrationStatus } from "./db/internal/migrations";
 import { readApiKeyResult } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
 import {
@@ -17,6 +18,27 @@ import { LOGIN_PATH } from "./lib/server/login";
 // Default to localhost so that running `node build/index.js` directly without
 // the CLI never accidentally exposes the server on all interfaces.
 // The CLI (kozane open) always sets HOST explicitly, so this is a no-op there.
+//
+// A backstop, and no longer the mechanism. `bin/server.js` is Kozane's server entry and
+// calls `listen` itself with `DEFAULT_SERVER_HOST`, so nothing about the address Kozane
+// binds depends on this line, or on when it runs.
+//
+// It stays for the entry Kozane does not use. `build/index.js` is excluded from the
+// published package now — `files` in `package.json` drops it, and
+// `scripts/check-package-entry.mjs` fails the release if it comes back — but `vite build`
+// still emits it, so it is there in every checkout and `pnpm build && node build/index.js`
+// is a thing a contributor can do. Adapter-node's default there is `env('HOST', '0.0.0.0')`,
+// and this assignment is what keeps that off every interface.
+//
+// It happens to win that race — `index.js` statically imports the handler chunk, that chunk
+// ends in a top-level `await server.init(...)`, and `init()` reaches hooks through a dynamic
+// import, so hooks evaluates before the entry's body reads HOST. That chain is two SvelteKit
+// internals deep and could change in a minor release without an error, which is precisely
+// why it is not what the supported path relies on any more.
+//
+// `scripts/smoke-production.mjs` starts a server with HOST unset and asserts the socket is
+// loopback and that the machine's routable address is refused, so a regression on either
+// path fails a check rather than shipping.
 process.env.HOST ??= "127.0.0.1";
 
 let registeredRoot: string | null = null;
@@ -64,6 +86,79 @@ function registerRuntimeState(root: string | null): string | null {
 }
 
 /**
+ * The schema check's answer, or null while it has not been made. Held rather than repeated:
+ * a current workspace is checked once and never again, because the only thing that could
+ * migrate it out from under a running server is `kozane db migrate`, which refuses to run
+ * while one holds the workspace.
+ *
+ * A *stale* answer is re-checked on the interval {@link CONFLICT_RECHECK_MS} sets, for the
+ * same reason the runtime-state conflict is: `kozane db migrate` in another terminal is the
+ * ordinary way out of this state, and a latched answer would go on refusing every request
+ * until the server was restarted too.
+ */
+let migrationBlock: { message: string; checkedAt: number } | null = null;
+let migrationsVerified = false;
+
+/**
+ * Why this process may not serve the workspace's database, or null when it may.
+ *
+ * The gap this closes: every CLI command runs `requireCurrentMigrations` through
+ * `runWorkspaceCommand`, and `kozane open` runs it before spawning anything — but the server
+ * itself never did. Started any other way — `node bin/server.js` under a process manager, a
+ * container that mounts a workspace an older release wrote — it opened whatever was there and
+ * failed at the first query, with SQLite's wording about a missing column standing in for
+ * "this workspace needs migrating".
+ *
+ * 503 and not 500, and answered rather than thrown, for the reason the unreadable key file
+ * is: the condition belongs to the workspace rather than to the request, and it clears
+ * without a restart.
+ */
+async function checkMigrations(): Promise<string | null> {
+  if (migrationsVerified) return null;
+  if (migrationBlock && Date.now() - migrationBlock.checkedAt < CONFLICT_RECHECK_MS)
+    return migrationBlock.message;
+
+  let url: string;
+  try {
+    url = getDBURL();
+  } catch {
+    // No workspace at all. Left to the database open below, which already words that case.
+    return null;
+  }
+
+  // An in-memory database is migrated by the act of opening it (`openDb`), and there is no
+  // file for a second connection to look at: `getMigrationStatus` would open its own empty
+  // one, find no `__drizzle_migrations` table, and report every migration pending. The same
+  // exemption `kozane open --memory` takes for the same reason.
+  if (url.includes(":memory:")) {
+    migrationsVerified = true;
+    return null;
+  }
+
+  const status = await getMigrationStatus(url);
+  if (status.state === "current") {
+    migrationsVerified = true;
+    migrationBlock = null;
+    return null;
+  }
+
+  const message =
+    status.state === "pending"
+      ? `Kozane database is behind this version (${status.pendingCount} migration${status.pendingCount === 1 ? "" : "s"} pending). Run 'kozane db migrate'.`
+      : status.state === "gapped"
+        ? "Kozane database has a gapped migration history and cannot be repaired by migrating. Run 'kozane db status', then 'kozane db restore'."
+        : status.state === "missing"
+          ? "No Kozane workspace database found. Run 'kozane init' first."
+          : `Kozane database state could not be read: ${status.error}. Run 'kozane doctor'.`;
+
+  // Only when it is news, for the reason `registerRuntimeState` gives: re-checking on a
+  // timer would otherwise write the same line every few seconds for as long as it stands.
+  if (migrationBlock?.message !== message) console.error(`[kozane] ${message}`);
+  migrationBlock = { message, checkedAt: Date.now() };
+  return message;
+}
+
+/**
  * The gates every request passes, in the order they run. The order is load-bearing, so it
  * is written down rather than left to be inferred from the sequence below:
  *
@@ -81,7 +176,12 @@ function registerRuntimeState(root: string | null): string | null {
  * 7. **Login page exemption.** After 3–6 so those still apply to it, and before the key
  *    check so that redirecting an unauthenticated browser to it cannot loop.
  * 8. **The key check** (`authenticateRequest`).
- * 9. **The database**, opened only for a request that got this far.
+ * 9. **The schema**, and 10. **the database**, both only for a request that got this far.
+ *    The schema is a condition of the workspace like gates 2–5, and would sit with them but
+ *    for what it costs: answering it opens the database file, so asking it before the key
+ *    check would do that work for every unauthenticated prober, and would tell one the
+ *    workspace's migration state. `migrationsVerified` makes the steady-state cost one check
+ *    per process.
  */
 const handleRequest: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
@@ -153,6 +253,9 @@ const handleRequest: Handle = async ({ event, resolve }) => {
     const auth = authenticateRequest(event, configuredKey);
     if (auth.kind === "respond") return applySecurityHeaders(auth.response);
   }
+  const behind = await checkMigrations();
+  if (behind) return applySecurityHeaders(new Response(behind, { status: 503 }));
+
   try {
     event.locals.db = await getDb();
   } catch (e) {

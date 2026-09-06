@@ -1,5 +1,5 @@
 import { getTableColumns, type Table } from "drizzle-orm";
-import { NAME_MAX } from "../../lib/constants.js";
+import { BATCH_MAX, NAME_MAX, chunked } from "../../lib/constants.js";
 
 /**
  * How many columns a table has, for an insert sizing its batches by what it binds rather
@@ -42,8 +42,58 @@ export function columnCount(table: Table): number {
  */
 export type BatchRejection = "foreign-cards" | "foreign-bundle" | "foreign-layer" | "foreign-scope";
 
+/**
+ * The refused half of a result, narrowed to the reasons one operation can actually produce.
+ *
+ * Every result type below spelled its subset as a bare literal union, which meant the shared
+ * vocabulary above was shared only by convention: renaming a member — or adding a fifth and
+ * mis-typing it at one call site — left {@link BatchRejection} and the six result types that
+ * draw from it disagreeing, with nothing to say so. The parameter is constrained to the union,
+ * so a reason that is no longer in it fails to compile everywhere it is named, which is the
+ * property naming the union once was for.
+ *
+ * Deliberately not the whole result: `ok: true` carries something different in each of them —
+ * nothing, a `glueId`, a `stacking`, a list of cleared cards — and a generic covering that too
+ * would be a type parameter per member for no gain.
+ */
+export type BatchRefusal<R extends BatchRejection> = { ok: false; reason: R };
+
 /** The refusal every batch operation whose only precondition is card ownership can give. */
-export type CardBatchResult = { ok: true } | { ok: false; reason: "foreign-cards" };
+export type CardBatchResult = { ok: true } | BatchRefusal<"foreign-cards">;
+
+/**
+ * Runs a read over an id list in statement-sized batches and concatenates the rows.
+ *
+ * The reads that take a list of ids were split on whether anyone had thought about the
+ * limit: `getCardBundleNames` chunked, `loadCards` in the CLI chunked, and `cardsInProject`
+ * and `getCardLayerNames` bound the whole list. Every one of them is safe at today's numbers
+ * — an HTTP route caps a list at {@link BATCH_MAX}, sixteen times under the 32766 parameters
+ * SQLite will take — but that is a fact about two constants far apart, not a property of
+ * these functions, and the CLI reaches all three of the ones here without a route's cap in
+ * between: `card glue --add` expands a selection to whole glue groups, which have no ceiling
+ * short of the project — the same reason `loadCards` was already batching beside it.
+ *
+ * Not for every id-list read. `getGlueRelsByCards` is deliberately left unbatched, because
+ * there the oversized call is a caller using the wrong function and the failure is how they
+ * find out; see the note on it.
+ *
+ * So the batching goes in one place and the callers stop deciding. {@link BATCH_MAX} rather
+ * than `chunked`'s row-count default, for the reason `getCardBundleNames` gave when it was
+ * the only one doing this: the default is sized for a multi-row INSERT, where every column
+ * of every row binds a parameter, and an id list binds one each.
+ *
+ * Order follows the batches, so a caller that needs a particular order still has to ask for
+ * it — none of these do; they are all read into a map or a set.
+ */
+export async function readByIds<Id, Row>(
+  ids: Id[],
+  read: (batch: Id[]) => Promise<Row[]>,
+): Promise<Row[]> {
+  if (ids.length === 0) return [];
+  const rows: Row[] = [];
+  for (const batch of chunked(ids, { size: BATCH_MAX })) rows.push(...(await read(batch)));
+  return rows;
+}
 
 export class NotFoundError extends Error {
   constructor(label: string) {

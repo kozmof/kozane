@@ -43,6 +43,132 @@
   },
 
   "overrides": [
+    // ── Layer boundaries ────────────────────────────────────────────────────────────
+    //
+    // The dependency direction was upheld by convention and by the comments that state it,
+    // and it did hold — but a comment cannot fail a build, and the one edge that had drifted
+    // (a data-layer module reading a constant out of a presentation module) was found by
+    // reading rather than by anything that would have caught the next one. Each override
+    // below names what a directory may not depend on, and why.
+    //
+    //     lib  ←  db  ←  lib/server  ←  routes, cli
+    //
+    // Test files are held to the same rules: a test that reaches across a boundary is
+    // usually the first sign that production code is about to.
+    {
+      // `src/lib` is the leaf tier — pure modules with no I/O, imported by the browser, the
+      // server and the tsc-built CLI alike. Anything it depended on would be pulled into all
+      // three, and `lib/server` in particular would drag `node:fs` into a browser bundle.
+      //
+      // Type-only imports of `db` are allowed and are not an exception to the direction:
+      // `lib/types.ts` derives the wire types from the row types, and an erased import
+      // creates no dependency at runtime. A value import of `db` from here is a real one.
+      "files": ["src/lib/**"],
+      "excludeFiles": ["src/lib/server/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/db/**", "$db/**"],
+                "allowTypeImports": true,
+                "message": "src/lib is the leaf tier: import db types only, never its values. Move the shared value into lib/ instead."
+              },
+              {
+                "group": ["**/lib/server/**", "./server/**", "../server/**"],
+                "message": "src/lib is imported by the browser; lib/server is Node-only and sits above db. Move the shared value down into lib/."
+              },
+              {
+                "group": ["**/routes/**", "**/cli/**", "$app/**"],
+                "message": "src/lib is below both front ends and must not import either."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // `src/db` may use the leaf tier and nothing above it. `lib/server` holds services
+      // built *on* db — a db module importing one closes a loop through the tier above.
+      //
+      // `file-signature` is exempt, and is the reason this is a negation rather than a flat
+      // ban: it is a filesystem primitive (`ino:mtimeNs:size`), not a service — the same
+      // three-line stat that `db/internal/config` validates its cache with and that
+      // `api-key`, `tag-cache` and `taskspace-files` use for theirs. It lives under
+      // `lib/server` because it needs `node:fs`, not because it belongs to that tier.
+      "files": ["src/db/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/lib/server/**", "!**/lib/server/file-signature*"],
+                "message": "db sits below lib/server. Only lib/server/file-signature, a filesystem primitive, is shared downward."
+              },
+              {
+                "group": ["**/routes/**", "**/cli/**", "$app/**"],
+                "message": "db is below both front ends and must not import either."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // Server services may use everything below them, and neither front end above.
+      "files": ["src/lib/server/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/routes/**", "**/cli/**", "$app/**"],
+                "message": "lib/server is below both front ends and must not import either."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // The two front ends are siblings. They meet at `db/api` and `lib/server`, never at
+      // each other: the CLI is built by `tsc` and cannot resolve SvelteKit's aliases, and a
+      // route reaching into `src/cli` would pull `commander` and `process.exit` into the
+      // server bundle.
+      "files": ["src/routes/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/cli/**"],
+                "message": "routes and cli are siblings; share through db/api or lib/server."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/cli/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["**/routes/**", "$app/**", "$lib/**", "$db/**"],
+                "message": "cli is built by tsc and cannot resolve SvelteKit aliases or routes; import through relative paths into db/ and lib/."
+              }
+            ]
+          }
+        ]
+      }
+    },
     {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
       // exactly what the route guards in `lib/request.ts` exist to reject.

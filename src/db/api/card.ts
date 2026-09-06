@@ -3,10 +3,15 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type { NeedsDB, NeedsBundle, NeedsProject, NeedsProjectCards, Card } from "./types.js";
 import type { CardData } from "../../lib/types.js";
-import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
-import { BATCH_MAX, chunked } from "../../lib/constants.js";
+import { BATCH_MAX, WARP_HINT_MAX_CHARS, chunked } from "../../lib/constants.js";
 import { compareIds } from "../../lib/order.js";
-import { assertFound, columnCount, type CardBatchResult } from "./utils.js";
+import {
+  assertFound,
+  columnCount,
+  readByIds,
+  type BatchRefusal,
+  type CardBatchResult,
+} from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 // ── Simple operations (no ownership check) ────────────────────────────────────
@@ -16,15 +21,16 @@ export async function cardsInProject({
   projectId,
   cardIds,
 }: NeedsProjectCards): Promise<string[]> {
-  if (cardIds.length === 0) return [];
-  const rows = await db
-    .select({ id: cardTable.id })
-    .from(cardTable)
-    .innerJoin(
-      bundleTable,
-      and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
-    )
-    .where(inArray(cardTable.id, cardIds));
+  const rows = await readByIds(cardIds, (batch) =>
+    db
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .innerJoin(
+        bundleTable,
+        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+      )
+      .where(inArray(cardTable.id, batch)),
+  );
   return rows.map((r) => r.id);
 }
 
@@ -325,35 +331,30 @@ type GetCardBundleNames = NeedsDB & { cardIds: string[] };
 /**
  * The bundle each of `cardIds` is in.
  *
- * In {@link chunked} statements, because an `IN` list is subject to the same SQLite variable
- * ceiling an `INSERT` is. Every caller but one hands this a handful of ids; the one that does
- * not is the tag index's static export, which is built before anyone has chosen a tag and so
- * asks about every tagged card in the workspace at once.
+ * In statement-sized batches through {@link readByIds}, because an `IN` list is subject to
+ * the same SQLite variable ceiling an `INSERT` is. Every caller but one hands this a handful
+ * of ids; the one that does not is the tag index's static export, which is built before
+ * anyone has chosen a tag and so asks about every tagged card in the workspace at once.
  *
- * Batched at {@link BATCH_MAX} rather than at `chunked`'s default, and the difference is a
- * factor of ten in round trips. That default is `INSERT_CHUNK_MAX`, which is a *row*
- * count for a multi-row `INSERT`, where every column of every row binds a parameter — here
- * each id binds one, which is the case `BATCH_MAX` is the budget for.
+ * This function's own loop was the first of these and is now the shared one — see
+ * {@link readByIds} for why the batch is sized by {@link BATCH_MAX} rather than by
+ * `chunked`'s row-count default.
  */
 export async function getCardBundleNames({
   db,
   cardIds,
 }: GetCardBundleNames): Promise<{ cardId: string; bundleId: string; bundleName: string }[]> {
-  const rows: { cardId: string; bundleId: string; bundleName: string }[] = [];
-  for (const batch of chunked(cardIds, { size: BATCH_MAX })) {
-    rows.push(
-      ...(await db
-        .select({
-          cardId: cardTable.id,
-          bundleId: bundleTable.id,
-          bundleName: bundleTable.name,
-        })
-        .from(cardTable)
-        .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-        .where(inArray(cardTable.id, batch))),
-    );
-  }
-  return rows;
+  return readByIds(cardIds, (batch) =>
+    db
+      .select({
+        cardId: cardTable.id,
+        bundleId: bundleTable.id,
+        bundleName: bundleTable.name,
+      })
+      .from(cardTable)
+      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .where(inArray(cardTable.id, batch)),
+  );
 }
 
 export type CardChangeCount = { day: string; bundleId: string; cards: number };
@@ -386,16 +387,17 @@ export async function getCardLayerNames({
   db,
   cardIds,
 }: GetCardLayerNames): Promise<{ cardId: string; layerId: string; layerName: string }[]> {
-  if (cardIds.length === 0) return [];
-  return db
-    .select({
-      cardId: cardTable.id,
-      layerId: layerTable.id,
-      layerName: layerTable.name,
-    })
-    .from(cardTable)
-    .innerJoin(layerTable, eq(cardTable.layerId, layerTable.id))
-    .where(inArray(cardTable.id, cardIds));
+  return readByIds(cardIds, (batch) =>
+    db
+      .select({
+        cardId: cardTable.id,
+        layerId: layerTable.id,
+        layerName: layerTable.name,
+      })
+      .from(cardTable)
+      .innerJoin(layerTable, eq(cardTable.layerId, layerTable.id))
+      .where(inArray(cardTable.id, batch)),
+  );
 }
 
 type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
@@ -617,7 +619,7 @@ export type CardStacking = { cardId: string; zIndex: number };
  */
 export type ReassignLayerResult =
   | { ok: true; stacking: CardStacking[] }
-  | { ok: false; reason: "foreign-cards" | "foreign-layer" };
+  | BatchRefusal<"foreign-cards" | "foreign-layer">;
 
 // Same shape as buildPositionCaseWhen, including the ELSE, and for the same reason.
 function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
@@ -706,9 +708,7 @@ type ReassignCardsToBundle = {
 };
 
 /** Refused the two ways {@link ReassignLayerResult} is, for the same reason. */
-export type ReassignBundleResult =
-  | { ok: true }
-  | { ok: false; reason: "foreign-cards" | "foreign-bundle" };
+export type ReassignBundleResult = { ok: true } | BatchRefusal<"foreign-cards" | "foreign-bundle">;
 
 export async function reassignCardsToBundle({
   db,

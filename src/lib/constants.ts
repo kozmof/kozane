@@ -139,6 +139,19 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
  */
 export const TASKSPACE_DIR_ENTRIES_MAX = 500;
 
+/**
+ * How long a warp's hint may be, in characters. Hints ride in a single narrow row of the
+ * warp palette, so a long card is cut rather than wrapped.
+ *
+ * Here rather than beside the palette code in `lib/warp-list.ts`, because both sides of the
+ * hint need it and they sit on opposite sides of the app: `condense` there builds the line,
+ * and `getCardMarkersByProjects` in `db/api/card.ts` sizes the `substr` it reads each card's
+ * text with against it. A data-layer module reaching into a presentation module for a number
+ * was the one import in the tree pointing that way; a leaf module is the place both can
+ * reach. Same argument as {@link PATH_KINDS}.
+ */
+export const WARP_HINT_MAX_CHARS = 48;
+
 /** The character that opens a tag. See `lib/tag.ts` for the grammar it starts. */
 export const TAG_SIGIL = "'";
 

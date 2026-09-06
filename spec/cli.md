@@ -335,7 +335,9 @@ Behavior:
    `:memory:` instead. While the server is running, project-dependent CLI commands use this
    database and select its sole project automatically, so `--project` can be omitted.
 3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
-4. Spawns the built server at `build/index.js`.
+4. Spawns the server at `bin/server.js`. That entry, rather than adapter-node's
+   `build/index.js`, is what binds the socket: it calls `listen` with Kozane's own
+   `DEFAULT_SERVER_HOST` so the default is loopback rather than the adapter's `0.0.0.0`.
 5. Prints the local URL, then (unless `--no-open`) opens the browser after 1 s.
 
 Output:

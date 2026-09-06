@@ -10,7 +10,6 @@ import {
   serverStatePath,
   writeServerState,
 } from "./runtime-state";
-import { commandDbUrl, dbUrl } from "../../cli/lib/config";
 
 const roots: string[] = [];
 function workspace(): string {
@@ -62,7 +61,10 @@ describe("server runtime state", () => {
     expect(activeServerProcess(root)?.pid).toBe(process.pid);
   });
 
-  it("exposes the active memory database to CLI commands", () => {
+  // What a CLI command reads to find a running memory server's database. That it *is* read
+  // that way is `commandDbUrl`'s own test, in `cli/lib/config.test.ts` — asserting it from
+  // here meant a module below both front ends reaching up into one of them.
+  it("exposes the active memory database", () => {
     const root = workspace();
     const memoryUrl = "file:/tmp/kozane-memory-test/kozane.db";
     writeServerState(root, process.pid, { memory: true, databaseUrl: memoryUrl });
@@ -72,10 +74,9 @@ describe("server runtime state", () => {
       memory: true,
       databaseUrl: memoryUrl,
     });
-    expect(commandDbUrl(root)).toBe(memoryUrl);
 
     removeServerState(root);
-    expect(commandDbUrl(root)).toBe(dbUrl(root));
+    expect(activeServerProcess(root)).toBeNull();
   });
 
   it("removes stale process state", () => {

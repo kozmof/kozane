@@ -3,8 +3,11 @@ import { eq } from "drizzle-orm";
 import { createTestDB, seedCards } from "../../test-utils/db.js";
 import { cardTable } from "../schema.js";
 import type { DB } from "../tx.js";
-import { WARP_HINT_MAX_CHARS } from "../../lib/warp-list.js";
-import { INSERT_CHUNK_MAX, STATEMENT_PARAMS_MAX } from "../../lib/constants.js";
+import {
+  INSERT_CHUNK_MAX,
+  STATEMENT_PARAMS_MAX,
+  WARP_HINT_MAX_CHARS,
+} from "../../lib/constants.js";
 import {
   addCard,
   addCards,

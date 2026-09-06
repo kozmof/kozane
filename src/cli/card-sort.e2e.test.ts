@@ -298,14 +298,21 @@ describe("kozane card list --sort", () => {
     // Everything the journal now disclaims has to go, not only 0011's: the delete below is
     // a `>=`, so every migration after it is re-applied too, and one that creates a name
     // still standing fails on it. That is the whole of what a later migration has to add
-    // here — 0012's index is the case, and a `DROP … IF EXISTS` per migration keeps this
-    // fixture rolling back to 0010 rather than to whatever the newest migration is.
+    // here — 0012's and 0013's indexes are the cases so far, and a `DROP … IF EXISTS` per
+    // migration keeps this fixture rolling back to 0010 rather than to whatever the newest
+    // migration is.
+    //
+    // The index drops come first, and 0013's has to: `card_bundle_updated` is built on
+    // `updated_at`, and SQLite refuses to drop a column an index still names — "error in
+    // index card_bundle_updated after drop column". An index over a column this fixture
+    // removes belongs above the ALTERs; one over a column it keeps may sit anywhere.
     await withDb(root, async (client) => {
       await client.batch(
         [
+          "DROP INDEX IF EXISTS card_bundle_updated",
+          "DROP INDEX IF EXISTS glue_rel_glue",
           "ALTER TABLE card DROP COLUMN created_at",
           "ALTER TABLE card DROP COLUMN updated_at",
-          "DROP INDEX IF EXISTS glue_rel_glue",
           `DELETE FROM __drizzle_migrations WHERE created_at >= ${CARD_TIMESTAMPS_MIGRATION_WHEN}`,
         ],
         "write",

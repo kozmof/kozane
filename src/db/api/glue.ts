@@ -4,13 +4,19 @@ import type { GlueRel, NeedsDB, NeedsProject, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsBelongToProject } from "./card.js";
 import { chunked } from "../../lib/constants.js";
-import { columnCount } from "./utils.js";
+import { columnCount, type BatchRefusal } from "./utils.js";
 
 /**
  * The glue rows of a named handful of cards. For a caller that already holds the ids and
  * knows how many there are — a route acting on a selection, which `BATCH_MAX` caps.
  *
  * Not for the board: see {@link getGlueRelsByProject}.
+ *
+ * Deliberately *not* batched through `readByIds`, unlike the id-list reads in `card.ts`.
+ * Batching it would make handing it a whole board work — slowly, at a round trip per two
+ * thousand cards, once a second for as long as a tab is open. The hard failure is the point:
+ * every caller here is a bounded selection, and the one that was not is why
+ * {@link getGlueRelsByProject} exists. See the test that pins this.
  */
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -159,7 +165,7 @@ type GlueProjectCards = { db: DB; projectId: string; cardIds: string[] };
  * reporting the first. Same argument as {@link CardBatchResult}, and the same vocabulary,
  * so one route helper words them all.
  */
-export type GlueResult = { ok: true; glueId: string } | { ok: false; reason: "foreign-cards" };
+export type GlueResult = { ok: true; glueId: string } | BatchRefusal<"foreign-cards">;
 
 /** Glues cards together after verifying all belong to projectId. */
 export async function glueProjectCards({
@@ -177,9 +183,7 @@ export async function glueProjectCards({
 type UnglueProjectCards = { db: DB; projectId: string; cardIds: string[] };
 
 /** The cards left ungrouped, or the refusal. See {@link GlueResult}. */
-export type UnglueResult =
-  | { ok: true; clearedCardIds: string[] }
-  | { ok: false; reason: "foreign-cards" };
+export type UnglueResult = { ok: true; clearedCardIds: string[] } | BatchRefusal<"foreign-cards">;
 
 /** Unglues cards after verifying all belong to projectId. */
 export async function unglueProjectCards({

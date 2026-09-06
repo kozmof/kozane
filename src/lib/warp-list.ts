@@ -1,4 +1,5 @@
 import type { Warp } from "./types.js";
+import { WARP_HINT_MAX_CHARS } from "./constants.js";
 
 /**
  * One row of the cross-project warp palette. `label` is the warp's number on its own
@@ -195,9 +196,6 @@ function squaredDistanceToCard(
   );
   return dx * dx + dy * dy;
 }
-
-/** Hints ride in a single narrow row, so a long card is cut rather than wrapped. */
-export const WARP_HINT_MAX_CHARS = 48;
 
 function condense(content: string): string {
   const oneLine = content.replace(/\s+/gu, " ").trim();

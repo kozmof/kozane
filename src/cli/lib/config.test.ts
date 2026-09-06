@@ -3,8 +3,17 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
-import { CONFIG_FILE, KOZANE_DIR, defaultConfig, readConfig, writeConfig } from "./config.js";
+import {
+  CONFIG_FILE,
+  KOZANE_DIR,
+  commandDbUrl,
+  dbUrl,
+  defaultConfig,
+  readConfig,
+  writeConfig,
+} from "./config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
+import { removeServerState, writeServerState } from "../../lib/server/runtime-state.js";
 
 let root: string;
 
@@ -91,5 +100,42 @@ describe("writeConfig", () => {
   it("leaves no temporary file in the workspace", () => {
     writeConfig(root, defaultConfig("demo"));
     expect(readdirSync(join(root, KOZANE_DIR))).toEqual([CONFIG_FILE]);
+  });
+});
+
+/**
+ * The resolver that decides which database an interactive command reads. Tested here rather
+ * than beside `runtime-state`, where it was: the state file is what a *server* writes, and
+ * which database a *command* picks from it is this module's decision.
+ */
+describe("commandDbUrl", () => {
+  beforeEach(() => {
+    mkdirSync(join(root, KOZANE_DIR), { recursive: true });
+  });
+
+  it("follows a running memory server's temporary database", () => {
+    const memoryUrl = "file:/tmp/kozane-memory-test/kozane.db";
+    writeServerState(root, process.pid, { memory: true, databaseUrl: memoryUrl });
+
+    // The bug this pins: with a memory server up, a command reading the workspace file
+    // instead wrote cards the open board could never show.
+    expect(commandDbUrl(root)).toBe(memoryUrl);
+  });
+
+  it("falls back to the workspace database once that server stops", () => {
+    writeServerState(root, process.pid, {
+      memory: true,
+      databaseUrl: "file:/tmp/kozane-memory-test/kozane.db",
+    });
+    removeServerState(root);
+
+    expect(commandDbUrl(root)).toBe(dbUrl(root));
+  });
+
+  it("ignores a running server that is not in memory mode", () => {
+    // An ordinary server serves the workspace's own database, so there is nothing to follow.
+    writeServerState(root, process.pid, {});
+
+    expect(commandDbUrl(root)).toBe(dbUrl(root));
   });
 });

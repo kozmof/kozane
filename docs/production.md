@@ -55,10 +55,19 @@ written to the log, not to the response.
 
 Run only one Kozane server per workspace, enforced by an exclusive runtime reservation.
 `kozane open` checks the reservation before it starts anything and refuses outright. A server
-started directly (`node build/index.js`) against a workspace another process already holds
+started directly (`node bin/server.js`) against a workspace another process already holds
 answers every request with HTTP 503 naming the process that holds it, and logs the conflict
-once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server so the adapter can
-drain connections before exit.
+once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server, which stops accepting
+connections, drains the ones in flight, and exits — releasing the reservation.
+
+`bin/server.js` is the server entry, and the one to point a process manager at. It binds
+`HOST` if set and `127.0.0.1` otherwise, which is why running it without a HOST cannot put a
+workspace on a public interface. Set `HOST` explicitly when you mean to bind beyond loopback
+— see the [Security matrix](./security-matrix.md).
+
+It is also the only server entry the package contains. The Node adapter emits its own,
+`build/index.js`, which binds every interface by default; that file is excluded from the
+published package, and `pnpm pack:check` fails the release if it reappears.
 
 Each HTTP response includes `X-Request-Id`. Request completion and errors are emitted as JSON.
 

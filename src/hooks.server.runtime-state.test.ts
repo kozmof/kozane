@@ -8,7 +8,10 @@ import { SERVER_STATE_FILE } from "./lib/server/runtime-state";
 // and `hooks.server` remembers it in module state. Kept in its own file so that state does
 // not leak into the request tests next door.
 const state = vi.hoisted(() => ({ root: null as string | null }));
-vi.mock("./db/internal/config", () => ({ getWorkspaceRoot: () => state.root }));
+vi.mock("./db/internal/config", () => ({
+  getWorkspaceRoot: () => state.root,
+  getDBURL: () => ":memory:",
+}));
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
 /**

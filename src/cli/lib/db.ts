@@ -8,215 +8,25 @@ import {
   fsyncSync,
   mkdirSync,
   openSync,
-  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
 import * as schema from "../../db/schema.js";
-import { resolveMigrationsFolder } from "../../db/internal/migrations.js";
+import {
+  getMigrationStatus,
+  resolveMigrationsFolder,
+  type MigrationStatus,
+} from "../../db/internal/migrations.js";
 import { dbPath } from "./config.js";
 
-export { resolveMigrationsFolder };
-
-type MigrationJournal = {
-  entries: MigrationJournalEntry[];
-};
-
-type MigrationJournalEntry = {
-  idx: number;
-  when: number;
-  tag: string;
-};
-
-export type MigrationStatus =
-  | {
-      state: "missing";
-      dbPath: string | null;
-      latest: MigrationJournalEntry | null;
-      applied: null;
-      pendingCount: number;
-    }
-  | {
-      state: "current";
-      dbPath: string | null;
-      latest: MigrationJournalEntry | null;
-      applied: MigrationJournalEntry | null;
-      pendingCount: 0;
-    }
-  | {
-      state: "pending";
-      dbPath: string | null;
-      latest: MigrationJournalEntry;
-      applied: MigrationJournalEntry | null;
-      pendingCount: number;
-    }
-  // Migrations were applied out of order or a row was lost: the database records
-  // a migration newer than one it never applied. `kozane db migrate` cannot repair
-  // this, because drizzle only applies migrations newer than the newest recorded one.
-  | {
-      state: "gapped";
-      dbPath: string | null;
-      latest: MigrationJournalEntry | null;
-      applied: MigrationJournalEntry | null;
-      pendingCount: number;
-      skipped: MigrationJournalEntry[];
-    }
-  | {
-      state: "unknown";
-      dbPath: string | null;
-      latest: MigrationJournalEntry | null;
-      error: string;
-    };
-
-function readMigrationJournal(): MigrationJournal {
-  const journalPath = join(resolveMigrationsFolder(), "meta", "_journal.json");
-  const parsed: unknown = JSON.parse(readFileSync(journalPath, "utf-8"));
-  if (
-    typeof parsed !== "object" ||
-    parsed === null ||
-    !Array.isArray((parsed as { entries?: unknown }).entries)
-  ) {
-    throw new Error(`Invalid migration journal at ${journalPath}`);
-  }
-
-  const entries = (parsed as { entries: unknown[] }).entries.map((entry) => {
-    if (
-      typeof entry !== "object" ||
-      entry === null ||
-      typeof (entry as { idx?: unknown }).idx !== "number" ||
-      typeof (entry as { when?: unknown }).when !== "number" ||
-      typeof (entry as { tag?: unknown }).tag !== "string"
-    ) {
-      throw new Error(`Invalid migration journal entry at ${journalPath}`);
-    }
-    return entry as MigrationJournalEntry;
-  });
-
-  return { entries };
-}
-
-function latestMigration(entries: MigrationJournalEntry[]): MigrationJournalEntry | null {
-  return entries.at(-1) ?? null;
-}
-
-function migrationByWhen(
-  entries: MigrationJournalEntry[],
-  createdAt: number | null,
-): MigrationJournalEntry | null {
-  if (createdAt === null) return null;
-  return entries.find((entry) => entry.when === createdAt) ?? null;
-}
-
-/** SQLite returns `created_at` as a number, bigint, or string depending on the driver path. */
-function toTimestamp(value: unknown): number | null {
-  const parsed =
-    typeof value === "number"
-      ? value
-      : typeof value === "bigint"
-        ? Number(value)
-        : typeof value === "string"
-          ? Number(value)
-          : null;
-  return parsed !== null && Number.isFinite(parsed) ? parsed : null;
-}
-
-function pathFromDbUrl(dbUrl: string): string | null {
-  if (!dbUrl.startsWith("file:")) return null;
-  return dbUrl.slice("file:".length);
-}
-
-export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus> {
-  let entries: MigrationJournalEntry[];
-  let latest: MigrationJournalEntry | null;
-  try {
-    entries = readMigrationJournal().entries;
-    latest = latestMigration(entries);
-  } catch (e) {
-    return {
-      state: "unknown",
-      dbPath: pathFromDbUrl(dbUrl),
-      latest: null,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  }
-
-  const filePath = pathFromDbUrl(dbUrl);
-  if (filePath && !existsSync(filePath)) {
-    return {
-      state: "missing",
-      dbPath: filePath,
-      latest,
-      applied: null,
-      pendingCount: entries.length,
-    };
-  }
-
-  const client = createClient({ url: dbUrl });
-  try {
-    await client.execute("PRAGMA busy_timeout = 5000");
-    const table = await client.execute({
-      sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1",
-      args: ["__drizzle_migrations"],
-    });
-    const hasMigrationTable = table.rows.length > 0;
-    // Every applied timestamp is read, not just the newest one: a database that is
-    // missing an interior migration still has a newest row, and reporting on that
-    // alone would call an incomplete schema "current".
-    const appliedRows = hasMigrationTable
-      ? await client.execute("SELECT created_at FROM __drizzle_migrations ORDER BY created_at ASC")
-      : null;
-    const appliedWhens = new Set(
-      (appliedRows?.rows ?? []).map((row) => {
-        const value = toTimestamp(row.created_at);
-        if (value === null) throw new Error("Invalid latest applied migration timestamp");
-        return value;
-      }),
-    );
-    const newestApplied = appliedWhens.size > 0 ? Math.max(...appliedWhens) : null;
-
-    const applied = migrationByWhen(entries, newestApplied);
-    const notApplied = entries.filter((entry) => !appliedWhens.has(entry.when));
-    const skipped =
-      newestApplied === null ? [] : notApplied.filter((entry) => entry.when < newestApplied);
-    const pending = notApplied.filter(
-      (entry) => newestApplied === null || entry.when > newestApplied,
-    );
-
-    if (skipped.length > 0) {
-      return {
-        state: "gapped",
-        dbPath: filePath,
-        latest,
-        applied,
-        pendingCount: pending.length,
-        skipped,
-      };
-    }
-
-    if (pending.length === 0 || !latest) {
-      return { state: "current", dbPath: filePath, latest, applied, pendingCount: 0 };
-    }
-
-    return {
-      state: "pending",
-      dbPath: filePath,
-      latest,
-      applied,
-      pendingCount: pending.length,
-    };
-  } catch (e) {
-    return {
-      state: "unknown",
-      dbPath: filePath,
-      latest,
-      error: e instanceof Error ? e.message : String(e),
-    };
-  } finally {
-    client.close();
-  }
-}
+// Reading a migration state now lives in `db/internal/migrations.ts`, which the server can
+// reach and `src/cli` cannot be reached from — see the note there. What stays here is the
+// half with policy in it: how to word a status, and what to do about a bad one. Re-exported
+// so the commands and tests that already name them through this module still can.
+export { getMigrationStatus, resolveMigrationsFolder };
+export type { MigrationStatus, MigrationJournalEntry } from "../../db/internal/migrations.js";
 
 function timestamp(date = new Date()): string {
   const pad = (n: number) => String(n).padStart(2, "0");

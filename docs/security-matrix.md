@@ -4,6 +4,12 @@ Kozane runs in a few modes with different network exposure and authentication.
 This page lists what each mode enforces so you can pick the right one and avoid
 exposing a workspace by accident.
 
+Every mode below is served by `bin/server.js`, which is what calls `listen`. It binds `HOST`
+when one is set and `127.0.0.1` otherwise, so the address a mode reaches is decided by Kozane
+rather than inherited from a framework default. The Node adapter's own entry, which defaults
+to every interface, is not shipped — `bin/server.js` is the only way the package starts a
+server, and `pnpm pack:check` enforces that. Point a process manager at it.
+
 When a workspace has an API key, two rules hold in every server mode.
 
 - The API-key cookie is `HttpOnly` and `SameSite=Strict`, so a cross-site page

@@ -241,6 +241,17 @@ export const cardTable = sqliteTable(
     // default one, and the scan it would otherwise be is over every card in the workspace,
     // not just the layer's.
     index("card_layer").on(t.layerId),
+    // `getCardChangeCounts` groups every card in the workspace by the day its text last
+    // changed, which is what the map page's activity bands are drawn from. Without this it
+    // is a full scan of `card` — the largest table — on every load of `/map`.
+    //
+    // Leading with `bundle_id` because the query joins `bundle` on it and groups by it, so
+    // this covers the whole read rather than only the ordering: SQLite walks the index and
+    // never touches the table. That also makes it a wider `card_bundle`, so the two are not
+    // redundant in the direction that matters — `card_bundle` still answers the board's own
+    // once-a-second read with a narrower index, and this one is not a substitute for it on a
+    // path where every byte read is paid for per tab per second.
+    index("card_bundle_updated").on(t.bundleId, t.updatedAt),
   ],
 );
 

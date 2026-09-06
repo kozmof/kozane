@@ -12,9 +12,9 @@ import {
   textCells,
   warpEntriesForProject,
   withoutWarp,
-  WARP_HINT_MAX_CHARS,
   WARP_HINT_RADIUS,
 } from "./warp-list.js";
+import { WARP_HINT_MAX_CHARS } from "./constants.js";
 import type { HintCard, WarpListEntry } from "./warp-list.js";
 
 function warp(id: string, posX: number, posY: number, projectId = "p1") {

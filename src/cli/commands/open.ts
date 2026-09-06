@@ -150,7 +150,10 @@ export async function open(options: OpenOptions): Promise<void> {
   // nothing here that could be behind.
   if (!options.memory) await requireCurrentMigrations(dbURL, "the UI can start");
 
-  const serverEntry = join(packageRoot, "build", "index.js");
+  // `bin/server.js`, not adapter-node's `build/index.js`: Kozane calls `listen` itself so
+  // the bind address is a constant in this repository rather than the adapter's `0.0.0.0`
+  // default. See the note at the top of that file.
+  const serverEntry = join(packageRoot, "bin", "server.js");
   const normalizedHost = normalizeHost(host);
   const urlHost = normalizedHost.includes(":") ? `[${normalizedHost}]` : normalizedHost;
   const url = `http://${urlHost}:${port}`;

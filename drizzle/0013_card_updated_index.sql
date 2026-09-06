@@ -1,0 +1,1 @@
+CREATE INDEX `card_bundle_updated` ON `card` (`bundle_id`,`updated_at`);

@@ -4,7 +4,13 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ root: null as string | null }));
-vi.mock("./db/internal/config", () => ({ getWorkspaceRoot: () => state.root }));
+// `:memory:` so the schema gate passes on its own exemption rather than by the accident of
+// an unmocked export being undefined. What that gate does is its own suite:
+// `hooks.server.migrations.test.ts`.
+vi.mock("./db/internal/config", () => ({
+  getWorkspaceRoot: () => state.root,
+  getDBURL: () => ":memory:",
+}));
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
 import { handle } from "./hooks.server";
