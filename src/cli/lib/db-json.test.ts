@@ -269,23 +269,60 @@ describe("db JSON export/import", () => {
 });
 
 describe("export table list", () => {
-  // Columns added to the schema without being added here are silently dropped by
-  // `kozane db export`, which is how `project.is_default` was lost after migration 0003.
-  it("covers every column of every table in the Drizzle schema", () => {
-    const schemaTables = Object.values(schema)
+  const schemaTables = () =>
+    Object.values(schema)
       .filter((value) => is(value, SQLiteTable))
       .map((table) => getTableConfig(table as SQLiteTable));
 
+  /**
+   * The columns are read off the schema now rather than restated, so this no longer catches a
+   * drift — it asserts that the derivation reaches every table with the columns it declares,
+   * which is the property the export depends on. A column missing here is a column
+   * `kozane db export` silently drops, which is how `project.is_default` was lost after
+   * migration 0003.
+   */
+  it("covers every column of every table in the Drizzle schema", () => {
     const exported = new Map<string, readonly string[]>(
       TABLES.map((table) => [table.name, table.columns]),
     );
 
-    expect([...exported.keys()].sort()).toEqual(schemaTables.map((t) => t.name).sort());
-    for (const table of schemaTables) {
+    expect([...exported.keys()].sort()).toEqual(schemaTables().map((t) => t.name).sort());
+    for (const table of schemaTables()) {
       expect({ table: table.name, columns: [...(exported.get(table.name) ?? [])].sort() }).toEqual({
         table: table.name,
         columns: table.columns.map((column) => column.name).sort(),
       });
+    }
+  });
+
+  /**
+   * The half that is still written by hand, and so the half that can still drift. A table
+   * added to the schema and left out of `TABLE_ORDER` is exported as nothing at all — worse
+   * than the missing column above, and invisible for the same reason.
+   *
+   * The order itself is asserted rather than only its membership: an insert has to name a
+   * table after every table its foreign keys point at, and a restore deletes in the reverse
+   * of this order for the same reason.
+   */
+  it("orders every table after the tables its foreign keys point at", () => {
+    // Keyed as plain strings: the names come back off the Drizzle tables below, which report
+    // a `string` rather than the literal union `TABLE_ORDER` gives these.
+    const position = new Map<string, number>(TABLES.map((table, index) => [table.name, index]));
+
+    expect([...position.keys()].sort()).toEqual(schemaTables().map((t) => t.name).sort());
+
+    for (const table of schemaTables()) {
+      for (const reference of table.foreignKeys) {
+        const target = getTableConfig(reference.reference().foreignTable).name;
+        // A self-reference would be neither before nor after itself; there are none, and one
+        // added later needs a rule of its own rather than this one.
+        expect(target).not.toBe(table.name);
+        expect({
+          table: table.name,
+          references: target,
+          writtenAfterIt: position.get(table.name)! > position.get(target)!,
+        }).toEqual({ table: table.name, references: target, writtenAfterIt: true });
+      }
     }
   });
 });

@@ -1,4 +1,7 @@
 import { createClient, type InValue } from "@libsql/client";
+import { is } from "drizzle-orm";
+import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
+import * as schema from "../../db/schema.js";
 import { v7 as uuidv7 } from "uuid";
 import { chunked, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
@@ -8,83 +11,54 @@ const EXPORT_VERSION = 6;
 // importable; every project comes back non-default, which is what version 2 recorded.
 const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
 
-/** Exported so tests can assert this list stays in step with the Drizzle schema. */
-export const TABLES = [
-  {
-    name: "project",
-    columns: ["id", "name", "is_default"],
-    orderBy: ["id"],
-  },
-  {
-    name: "scope",
-    columns: ["id", "name"],
-    orderBy: ["id"],
-  },
-  {
-    name: "bundle",
-    columns: ["id", "project_id", "name", "is_default"],
-    orderBy: ["id"],
-  },
-  {
-    name: "layer",
-    columns: ["id", "project_id", "name", "position", "is_default"],
-    orderBy: ["id"],
-  },
-  {
-    name: "warp",
-    columns: ["id", "project_id", "pos_x", "pos_y"],
-    orderBy: ["id"],
-  },
-  {
-    name: "taskspace",
-    columns: [
-      "id",
-      "project_id",
-      "scope_id",
-      "name",
-      "path",
-      "path_kind",
-      "last_seen_at",
-      "created_at",
-      "updated_at",
-    ],
-    orderBy: ["id"],
-  },
-  {
-    name: "card",
-    columns: [
-      "id",
-      "bundle_id",
-      "layer_id",
-      "taskspace_id",
-      "content",
-      "pos_x",
-      "pos_y",
-      "z_index",
-      "width",
-      "created_at",
-      "updated_at",
-    ],
-    orderBy: ["id"],
-  },
-  {
-    name: "glue",
-    columns: ["id"],
-    orderBy: ["id"],
-  },
-  {
-    name: "glue_rel",
-    columns: ["glue_id", "card_id"],
-    orderBy: ["glue_id", "card_id"],
-  },
-  {
-    name: "scope_rel",
-    columns: ["scope_id", "card_id"],
-    orderBy: ["scope_id", "card_id"],
-  },
+/**
+ * The tables a dump carries, in the order rows may be inserted: a table's foreign keys all
+ * point at one already written. The reverse of this order is what a restore deletes in.
+ *
+ * The order and the sort are decisions the schema does not hold, so they are written here.
+ * The *columns* are not: they are read off the Drizzle table below, because a column added
+ * to the schema and not to this list is silently dropped by `kozane db export` — which is
+ * how `project.is_default` was lost after migration 0003 — and a list restated by hand
+ * could only ever be checked against the schema after the fact. Drizzle reports them in
+ * declaration order, which is the order this list held them in.
+ */
+const TABLE_ORDER = [
+  { name: "project", orderBy: ["id"] },
+  { name: "scope", orderBy: ["id"] },
+  { name: "bundle", orderBy: ["id"] },
+  { name: "layer", orderBy: ["id"] },
+  { name: "warp", orderBy: ["id"] },
+  { name: "taskspace", orderBy: ["id"] },
+  { name: "card", orderBy: ["id"] },
+  { name: "glue", orderBy: ["id"] },
+  // Grouped by glue rather than sorted by the primary key, which is `card_id` alone: a
+  // dump read by a person is easier to check when a group's members are adjacent.
+  { name: "glue_rel", orderBy: ["glue_id", "card_id"] },
+  { name: "scope_rel", orderBy: ["scope_id", "card_id"] },
 ] as const;
 
-type TableName = (typeof TABLES)[number]["name"];
+/** Every table in the Drizzle schema, by its SQL name, with the columns it declares. */
+const schemaColumns = new Map(
+  Object.values(schema)
+    .filter((value) => is(value, SQLiteTable))
+    .map((table) => getTableConfig(table))
+    .map(({ name, columns }) => [name, columns.map((column) => column.name)]),
+);
+
+/**
+ * The tables, their columns, and the order rows come back in.
+ *
+ * Exported so a test can assert that {@link TABLE_ORDER} still names every table the schema
+ * has — the one half of this that is not derived, and so the one half that can drift. A
+ * table added to the schema and left out here is exported as nothing at all, which is the
+ * larger version of the column bug this derivation removes.
+ */
+export const TABLES = TABLE_ORDER.map((table) => ({
+  ...table,
+  columns: schemaColumns.get(table.name) ?? [],
+}));
+
+type TableName = (typeof TABLE_ORDER)[number]["name"];
 type TableRows = Record<TableName, JsonObject[]>;
 type JsonScalar = string | number | boolean | null;
 type JsonObject = Record<string, JsonScalar>;
