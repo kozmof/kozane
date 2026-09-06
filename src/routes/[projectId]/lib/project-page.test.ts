@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  applyPalette,
   ARROW_DIRECTIONS,
   buildGlueGroupMap,
   cardPositionPatches,
@@ -18,7 +17,6 @@ import {
   moveWithin,
   nearestWarpInDirection,
   orderLayers,
-  PALETTE,
   scrollForViewCenter,
   viewCenterWorld,
   warpInDirection,
@@ -89,20 +87,6 @@ const glueRels: GlueRel[] = [
   { cardId: "card-1", glueId: "glue-1" },
   { cardId: "card-2", glueId: "glue-1" },
 ];
-
-describe("applyPalette", () => {
-  it("adds palette colors and wraps when there are more bundles than colors", () => {
-    const bundles = Array.from({ length: PALETTE.length + 1 }, (_, i) => ({
-      id: `bundle-${i}`,
-      name: `Bundle ${i}`,
-    }));
-
-    const result = applyPalette(bundles);
-
-    expect(result[0]).toEqual({ ...bundles[0], ...PALETTE[0] });
-    expect(result[PALETTE.length]).toEqual({ ...bundles[PALETTE.length], ...PALETTE[0] });
-  });
-});
 
 describe("layerStack", () => {
   const layers = [

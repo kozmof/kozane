@@ -6,9 +6,9 @@
   import WarpMarker from "./WarpMarker.svelte";
   import type { CardWithGlue, BundleWithColor, GlueRel, Layer, Warp } from "$lib/types";
   import type { SelectionState } from "../project-state.svelte.js";
+  import { PALETTE } from "$lib/palette";
   import {
     GRID,
-    PALETTE,
     buildGlueGroupMap,
     centeredScrollOffset,
     clampZoom,

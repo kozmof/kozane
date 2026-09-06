@@ -15,8 +15,8 @@
     deleteWarp,
     failureMessage,
   } from "./lib/project-api.js";
+  import { applyPalette } from "$lib/palette";
   import {
-    applyPalette,
     ARROW_DIRECTIONS,
     clampZoom,
     maxZIndex,

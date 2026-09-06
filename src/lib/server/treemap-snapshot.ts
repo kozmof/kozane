@@ -14,7 +14,7 @@ import {
 import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
 import type { Project, Scope } from "../../db/api/types.js";
 import { TREEMAP_CACHE_BYTES_MAX } from "../constants.js";
-import { applyPalette } from "../../routes/[projectId]/lib/project-page.js";
+import { applyPalette } from "../palette.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { databaseSignature } from "./tag-cache.js";
 

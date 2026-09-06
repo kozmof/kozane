@@ -8,7 +8,7 @@ import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "$lib/tag";
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
-import { applyPalette } from "../[projectId]/lib/project-page.js";
+import { applyPalette } from "$lib/palette";
 import type { TagHit } from "$lib/types";
 
 // Static export: one tag index for the whole workspace. A static route, so unlike the board

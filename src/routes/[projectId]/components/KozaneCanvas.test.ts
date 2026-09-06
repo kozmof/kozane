@@ -2,7 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/svelte";
 import KozaneCanvas from "./KozaneCanvas.svelte";
 import { SelectionState } from "../project-state.svelte.js";
-import { INACTIVE_LAYER_OPACITY, PALETTE } from "../lib/project-page.js";
+import { INACTIVE_LAYER_OPACITY } from "../lib/project-page.js";
+import { PALETTE } from "$lib/palette";
 import type { NewCardPlacement } from "$lib/ui-config";
 import type { BundleWithColor, CardWithGlue, Layer, Warp } from "$lib/types";
 

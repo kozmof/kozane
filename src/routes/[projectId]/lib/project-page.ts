@@ -11,17 +11,6 @@ export const ZOOM_MAX = 2;
 /** Opacity of a layer that is not the selected one: present, but well out of the way. */
 export const INACTIVE_LAYER_OPACITY = 0.3;
 
-export const PALETTE = [
-  { bg: "oklch(93% 0.055 272)", dot: "oklch(80% 0.21 272)" },
-  { bg: "oklch(93% 0.055 158)", dot: "oklch(80% 0.21 158)" },
-  { bg: "oklch(93% 0.055 220)", dot: "oklch(80% 0.21 220)" },
-  { bg: "oklch(93% 0.055 18)", dot: "oklch(80% 0.21 18)" },
-  { bg: "oklch(93% 0.055 100)", dot: "oklch(80% 0.21 100)" },
-  { bg: "oklch(93% 0.055 52)", dot: "oklch(80% 0.21 52)" },
-  { bg: "oklch(93% 0.055 310)", dot: "oklch(80% 0.21 310)" },
-  { bg: "oklch(93% 0.055 180)", dot: "oklch(80% 0.21 180)" },
-] as const;
-
 export type Point = { x: number; y: number };
 export type WorldRect = Point & { w: number; h: number };
 export type ScreenRect = { left: number; top: number; right: number; bottom: number };
@@ -45,11 +34,6 @@ export function verticalListPosition(
     return intersectsColumn ? Math.max(bottom, card.posY + card.height + gap) : bottom;
   }, startY);
   return { x: posX, y: Math.ceil(nextY / GRID) * GRID };
-}
-
-// Colors repeat intentionally when bundles exceed PALETTE.length (8).
-export function applyPalette<T extends { id: string }>(bundles: T[]) {
-  return bundles.map((bundle, i) => ({ ...bundle, ...PALETTE[i % PALETTE.length] }));
 }
 
 export type StackedLayer<T> = { layer: T; rank: number; active: boolean; floating: boolean };
