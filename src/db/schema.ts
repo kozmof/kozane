@@ -249,14 +249,26 @@ export const glueTable = sqliteTable("glue", {
     .primaryKey()
     .$defaultFn(() => uuidv7()),
 });
-export const glueRelTable = sqliteTable("glue_rel", {
-  glueId: text("glue_id")
-    .notNull()
-    .references(() => glueTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-  cardId: text("card_id")
-    .primaryKey()
-    .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-});
+export const glueRelTable = sqliteTable(
+  "glue_rel",
+  {
+    glueId: text("glue_id")
+      .notNull()
+      .references(() => glueTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    cardId: text("card_id")
+      .primaryKey()
+      .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+  },
+  (t) => [
+    // The primary key is `card_id`, which answers "what group is this card in" and nothing
+    // else — and `dissolveOrphanGroups` asks the other question three times over: count the
+    // members of these groups, select the ones left alone, delete them. Without this each of
+    // those is a scan of the whole table, on the write path of every glue, unglue and card
+    // delete. Same argument as `scope_rel_card` and `taskspace_scope`, on the table whose
+    // reads are all on the far side of the key it has.
+    index("glue_rel_glue").on(t.glueId),
+  ],
+);
 
 export const scopeRelTable = sqliteTable(
   "scope_rel",

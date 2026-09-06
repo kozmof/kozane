@@ -12,6 +12,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { backupDb, getMigrationStatus, restoreDb, runMigrations } from "./db";
+import { resolveMigrationsFolder } from "../../db/internal/migrations.js";
+
+/** The same folder `getMigrationStatus` reads its journal from. */
+const MIGRATIONS_DIR = resolveMigrationsFolder();
 
 const tempRoots: string[] = [];
 
@@ -43,8 +47,18 @@ describe("getMigrationStatus", () => {
     expect(status.state).toBe("missing");
     if (status.state !== "missing") return;
     expect(status.pendingCount).toBeGreaterThan(0);
-    // The newest migration in drizzle/: update this when another one is generated.
-    expect(status.latest?.tag).toBe("0011_card_timestamps");
+    // The newest migration in drizzle/, read off the directory rather than written down.
+    // It was written down, and so had to be corrected by hand every time one was generated
+    // — which is a test that fails on a change that is not a fault, and is corrected by
+    // copying the value the code just produced. Taken from the `.sql` files, this asserts
+    // something the pinned string never did: that the journal `getMigrationStatus` reads
+    // agrees with the migrations actually on disk.
+    const newest = readdirSync(MIGRATIONS_DIR)
+      .filter((name) => name.endsWith(".sql"))
+      .sort()
+      .at(-1)
+      ?.replace(/\.sql$/, "");
+    expect(status.latest?.tag).toBe(newest);
   });
 
   it("reports current after migrations are applied", async () => {

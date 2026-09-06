@@ -294,11 +294,18 @@ describe("kozane card list --sort", () => {
     // they were added — and write the card there, so it genuinely predates them the way a
     // card in an upgraded workspace does. `db migrate` then re-applies 0011 over a row with
     // no history at all.
+    //
+    // Everything the journal now disclaims has to go, not only 0011's: the delete below is
+    // a `>=`, so every migration after it is re-applied too, and one that creates a name
+    // still standing fails on it. That is the whole of what a later migration has to add
+    // here — 0012's index is the case, and a `DROP … IF EXISTS` per migration keeps this
+    // fixture rolling back to 0010 rather than to whatever the newest migration is.
     await withDb(root, async (client) => {
       await client.batch(
         [
           "ALTER TABLE card DROP COLUMN created_at",
           "ALTER TABLE card DROP COLUMN updated_at",
+          "DROP INDEX IF EXISTS glue_rel_glue",
           `DELETE FROM __drizzle_migrations WHERE created_at >= ${CARD_TIMESTAMPS_MIGRATION_WHEN}`,
         ],
         "write",

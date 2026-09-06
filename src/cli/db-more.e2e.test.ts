@@ -92,6 +92,7 @@ describe("additional database CLI branches", () => {
           // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
           // and `warp`'s with the table it drops.
           "DROP INDEX IF EXISTS taskspace_scope",
+          "DROP INDEX IF EXISTS glue_rel_glue",
           "DROP INDEX IF EXISTS scope_rel_card",
           "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
         ],
@@ -167,6 +168,7 @@ describe("additional database CLI branches", () => {
         // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
         // and `warp`'s with the table it drops.
         "DROP INDEX IF EXISTS taskspace_scope",
+        "DROP INDEX IF EXISTS glue_rel_glue",
         "DROP INDEX IF EXISTS scope_rel_card",
         "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
       ]) {

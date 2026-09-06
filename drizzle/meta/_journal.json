@@ -85,6 +85,13 @@
       "when": 1788078370276,
       "tag": "0011_card_timestamps",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1788658822375,
+      "tag": "0012_glue_rel_glue_index",
+      "breakpoints": true
     }
   ]
 }

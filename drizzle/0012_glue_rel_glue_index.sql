@@ -1,0 +1,1 @@
+CREATE INDEX `glue_rel_glue` ON `glue_rel` (`glue_id`);
