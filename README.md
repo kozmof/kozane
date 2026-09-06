@@ -210,6 +210,8 @@ kozane doctor config
 Migrations create a backup first. Back up the entire `.kozane` directory and test restores regularly.
 After hand-editing `.kozane/config.json`, `kozane doctor config` lists every missing key,
 unknown key, and invalid value in one pass.
+For persisted-cache contents, refresh rules, and safe cleanup, see
+[Cache behavior](./docs/cache.md).
 
 ## License
 

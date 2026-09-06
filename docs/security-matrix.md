@@ -216,6 +216,7 @@ the server user can read. It is a cache and never a record: deleting it costs on
 slow load, and it is rebuilt from the files themselves. Past 16 MB it is ignored
 and rebuilt rather than read, since reading it happens while a page load waits.
 Treat it as you would the taskspaces it summarizes.
+See [Cache behavior](./cache.md) for the complete cache lifecycle and cleanup guidance.
 
 `kozane init` writes a `.gitignore` inside `.kozane/` that ignores the whole
 directory, so a workspace created inside a checkout does not commit this cache —

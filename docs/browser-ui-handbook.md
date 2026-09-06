@@ -552,6 +552,7 @@ The server keeps the map's workspace-wide bundle counts, daily activity, scope g
 card-tag dimensions together in `.kozane/treemap.json`. The file is a disposable cache tied
 to the database signature: any database change rebuilds the whole semantic snapshot, while
 project and day selections are derived from it without caching viewport-dependent geometry.
+See [Cache behavior](./cache.md) for its validation, refresh, and recovery rules.
 
 A static export made with `kozane net ssg generate` carries the map, and both the tag
 selection and the project narrowing keep working there without a server. The scope circles
