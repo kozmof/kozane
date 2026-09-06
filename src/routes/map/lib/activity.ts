@@ -24,10 +24,19 @@ function dayDate(day: string): Date {
  */
 export function activityCells(rows: ActivityCount[], today = utcDay(new Date())): ActivityCell[] {
   const todayDate = dayDate(today);
+  // Anchored on the week today sits in — the Saturday that closes it — and laid backwards,
+  // so today always has a cell in the last week. Anchoring on the year-ago week instead
+  // (the Sunday on or before `rangeStart`, then 53 weeks forward) put the final cell a day
+  // *before* today whenever today was a Sunday, and on about a third of Mondays: the window
+  // ended on the previous Saturday, so the day's own card changes were neither drawn nor
+  // clickable. The two anchors agree on every other day, which is why it read as correct.
+  const end = new Date(todayDate);
+  end.setUTCDate(end.getUTCDate() + (6 - end.getUTCDay()));
+  const start = new Date(end.getTime() - (ACTIVITY_WEEKS * 7 - 1) * DAY_MS);
+  // A year back from today, which is what blanks the leading cells of the first week: the
+  // grid is whole weeks, so it opens some days before the year the range is meant to cover.
   const rangeStart = new Date(todayDate);
   rangeStart.setUTCFullYear(rangeStart.getUTCFullYear() - 1);
-  const start = new Date(rangeStart);
-  start.setUTCDate(start.getUTCDate() - start.getUTCDay());
 
   const counts = new Map<string, number>();
   for (const row of rows) counts.set(row.day, (counts.get(row.day) ?? 0) + row.cards);

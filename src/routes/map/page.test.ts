@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
@@ -13,6 +13,19 @@ import type { TagHit } from "$lib/types";
  *
  * The geometry itself is `lib/map-layout.test.ts` — this is about what ends up in the document.
  */
+
+/**
+ * The day the heatmap cases pin the clock to, and the day the card fixtures below were
+ * changed on. Written down once because the two have to agree: the page filters tag rows by
+ * `tagCards[id].updatedDay === selectedDay`, so a fixture holding a fixed date and a test
+ * reading its day off `new Date()` agreed only on the day the fixture was written, and
+ * stopped asserting anything about day filtering from the next day on.
+ *
+ * A Sunday, which is the weekday `activityCells` used to leave today off the grid on.
+ */
+const TODAY = "2026-09-06";
+/** A day inside the grid but not the selected one: the card a day filter has to leave out. */
+const EARLIER = "2026-09-04";
 
 const bundle = (id: string, projectId: string, name: string, cards: number) => ({
   id,
@@ -59,9 +72,9 @@ function pageData(over: Record<string, unknown> = {}) {
     ],
     tagHits: hits,
     tagCards: {
-      c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-09-05" },
-      c2: { projectId: "p2", bundleId: "b3", updatedDay: "2026-09-04" },
-      c3: { projectId: "p1", bundleId: "b2", updatedDay: "2026-09-05" },
+      c1: { projectId: "p1", bundleId: "b1", updatedDay: TODAY },
+      c2: { projectId: "p2", bundleId: "b3", updatedDay: EARLIER },
+      c3: { projectId: "p1", bundleId: "b2", updatedDay: TODAY },
     },
     tag: null,
     cardsTruncated: false,
@@ -106,7 +119,24 @@ const rectOf = (container: HTMLElement, name: string) =>
 
 describe("map page", () => {
   describe("card change heatmap", () => {
-    const today = new Date().toISOString().slice(0, 10);
+    /**
+     * Pinned rather than read off the clock — see {@link TODAY}, which the card fixtures
+     * carry too.
+     *
+     * Taking it from `new Date()` made these cases assert a different thing every day they
+     * ran, and they were the only cover the grid's own window had at the page level: on the
+     * day the window excluded today they failed here, correctly, and a suite that fails one
+     * day in seven is read as flaky rather than as right.
+     *
+     * Only `Date` is faked — the timers Svelte and testing-library run on are left alone.
+     */
+    const today = TODAY;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(`${today}T12:00:00.000Z`));
+    });
+    afterEach(() => vi.useRealTimers());
 
     it("links an activity square to a day while preserving other filters", () => {
       draw({
