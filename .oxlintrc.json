@@ -1,0 +1,66 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+
+  // There was no config file here at all, which is not the same as "the defaults were
+  // chosen": oxlint with no config runs `correctness` alone, so `suspicious` and `perf`,
+  // and every plugin below, were off without anyone having decided they should be.
+  //
+  // The rules turned off further down were each turned off after reading what they found.
+  // Between them they reported 94 places and not one bug — every hit was an idiom this
+  // codebase uses deliberately. They are named rather than left to a blanket category
+  // downgrade so that adding a category later does not silently switch them back on.
+
+  "plugins": ["typescript", "import", "promise", "oxc"],
+
+  "categories": {
+    "correctness": "error",
+    "suspicious": "error",
+    "perf": "error"
+  },
+
+  "rules": {
+    // Sequential awaits are load-bearing here. `chunked` splits an oversized statement into
+    // batches that have to run in order inside one transaction, and the taskspace walks
+    // read one directory before deciding whether to descend. `Promise.all` over either is
+    // not a faster version of the same thing, it is a different thing.
+    "eslint/no-await-in-loop": "off",
+    // `map(({ id }) => …)` inside a function that also has an `id` is the shape of nearly
+    // every query result handler in `db/api`.
+    "eslint/no-shadow": "off",
+    // `_require`/`_version` in `cli/index.ts` mark the CommonJS interop, deliberately.
+    "eslint/no-underscore-dangle": "off",
+    // `cards.map((c) => ({ ...c, posX }))` is how board state is replaced rather than
+    // mutated, which is what Svelte's reactivity is watching for. The in-place alternative
+    // this rule asks for would not re-render.
+    "oxc/no-map-spread": "off",
+    // `src/test-utils/setup.ts` and `bin/kozane.js` are side-effect imports on purpose.
+    "import/no-unassigned-import": "off",
+    // `TaskspaceTree.svelte` imports itself because a directory tree is drawn by recursion.
+    // The rule cannot tell that from a cycle.
+    "import/no-self-import": "off",
+    // `tick().then(() => …)` runs an effect after a render; there is nothing to return.
+    "promise/always-return": "off"
+  },
+
+  "overrides": [
+    {
+      // A test may reach for `any` to build a malformed payload the types forbid — which is
+      // exactly what the route guards in `lib/request.ts` exist to reject.
+      "files": ["**/*.test.ts", "**/*.spec.ts", "src/test-utils/**"],
+      "rules": { "typescript/no-explicit-any": "off" }
+    }
+  ],
+
+  // Generated or vendored: panda's `styled-system`, drizzle's migrations, and every build
+  // output. `tmp/` and `coverage/` are working directories.
+  "ignorePatterns": [
+    "build/",
+    "build-ssg/",
+    "dist/",
+    "styled-system/",
+    ".svelte-kit/",
+    "drizzle/",
+    "coverage/",
+    "tmp/"
+  ]
+}
