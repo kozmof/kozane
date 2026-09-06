@@ -63,7 +63,8 @@ describe("activityCells", () => {
     for (const day of ["2026-09-06", "2026-09-12", "2027-01-01"]) {
       const days = activityCells([], day).flatMap((cell) => (cell.day ? [cell.day] : []));
       expect(days.at(-1)).toBe(day);
-      const span = (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${days[0]}T00:00:00Z`)) / 86_400_000;
+      const span =
+        (Date.parse(`${day}T00:00:00Z`) - Date.parse(`${days[0]}T00:00:00Z`)) / 86_400_000;
       expect(span).toBeGreaterThanOrEqual(364);
       expect(span).toBeLessThanOrEqual(366);
     }

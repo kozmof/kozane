@@ -286,7 +286,11 @@ describe("export table list", () => {
       TABLES.map((table) => [table.name, table.columns]),
     );
 
-    expect([...exported.keys()].sort()).toEqual(schemaTables().map((t) => t.name).sort());
+    expect([...exported.keys()].sort()).toEqual(
+      schemaTables()
+        .map((t) => t.name)
+        .sort(),
+    );
     for (const table of schemaTables()) {
       expect({ table: table.name, columns: [...(exported.get(table.name) ?? [])].sort() }).toEqual({
         table: table.name,
@@ -309,7 +313,11 @@ describe("export table list", () => {
     // a `string` rather than the literal union `TABLE_ORDER` gives these.
     const position = new Map<string, number>(TABLES.map((table, index) => [table.name, index]));
 
-    expect([...position.keys()].sort()).toEqual(schemaTables().map((t) => t.name).sort());
+    expect([...position.keys()].sort()).toEqual(
+      schemaTables()
+        .map((t) => t.name)
+        .sort(),
+    );
 
     for (const table of schemaTables()) {
       for (const reference of table.foreignKeys) {
