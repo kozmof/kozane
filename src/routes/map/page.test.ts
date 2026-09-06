@@ -480,9 +480,9 @@ describe("map page", () => {
       expect(mapSvg(container)).toBeNull();
     });
 
-    it("invites a first tag rather than showing an empty panel", () => {
+    it("omits the tags panel when there are no tags", () => {
       draw({ tagHits: [], tagCards: {} });
-      expect(screen.getByText(/No tags yet/)).toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "Tags" })).toBeNull();
     });
 
     /** A tree cut at a ceiling and a workspace with that many tags look identical. */

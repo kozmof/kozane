@@ -422,12 +422,7 @@
     </nav>
   </header>
 
-  {#if tree.length === 0}
-    <p class={css({ color: "neutral.subtle", fontSize: "13px", maxWidth: "52ch" })}>
-      No tags yet. Write <code class={css({ fontFamily: "mono" })}>'like:this</code> in a card
-      or in a taskspace file, and it will be gathered here.
-    </p>
-  {:else}
+  {#if tree.length !== 0}
     <div
       class={css({
         display: "grid",

@@ -552,44 +552,39 @@
       element's top edge, so anything between that edge and the first row is an offset every
       line below would be out by.
     -->
-    <nav
-      aria-label="Tags"
-      onscroll={(event) => (panelScroll = event.currentTarget.scrollTop)}
-      style="left: {TAG_PANEL_LEFT}px; top: {TAG_PANEL_TOP}px; width: {TAG_PANEL_WIDTH}px; max-height: calc(100% - {TAG_PANEL_TOP + 16}px)"
-      class={css({
-        position: "absolute",
-        zIndex: "1",
-        boxSizing: "border-box",
-        overflowY: "auto",
-        overscrollBehavior: "contain",
-        padding: "0 4px",
-        scrollbarWidth: "thin",
-      })}
-    >
-        {#if tree.length === 0}
-          <p class={css({ color: "neutral.subtle", fontSize: "12px", padding: "3px 8px" })}>
-            No tags yet. Write <code class={css({ fontFamily: "mono" })}>'like:this</code> in a
-            card and it is gathered here.
+    {#if tree.length !== 0}
+      <nav
+        aria-label="Tags"
+        onscroll={(event) => (panelScroll = event.currentTarget.scrollTop)}
+        style="left: {TAG_PANEL_LEFT}px; top: {TAG_PANEL_TOP}px; width: {TAG_PANEL_WIDTH}px; max-height: calc(100% - {TAG_PANEL_TOP + 16}px)"
+        class={css({
+          position: "absolute",
+          zIndex: "1",
+          boxSizing: "border-box",
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+          padding: "0 4px",
+          scrollbarWidth: "thin",
+        })}
+      >
+        {@render branch(tree, 0)}
+        {#if data.cardsTruncated || mapTags.truncated}
+          <p
+            class={css({
+              fontSize: "11px",
+              color: "neutral.subtle",
+              padding: "8px",
+              maxWidth: "34ch",
+            })}
+          >
+            {data.cardsTruncated ? CARDS_TRUNCATED_LABEL : ""}
+            {mapTags.truncated
+              ? "Some tags reach more bundles than this page draws lines for."
+              : ""}
           </p>
-        {:else}
-          {@render branch(tree, 0)}
-          {#if data.cardsTruncated || mapTags.truncated}
-            <p
-              class={css({
-                fontSize: "11px",
-                color: "neutral.subtle",
-                padding: "8px",
-                maxWidth: "34ch",
-              })}
-            >
-              {data.cardsTruncated ? CARDS_TRUNCATED_LABEL : ""}
-              {mapTags.truncated
-                ? "Some tags reach more bundles than this page draws lines for."
-                : ""}
-            </p>
-          {/if}
         {/if}
       </nav>
+    {/if}
 
       <!--
         The map, and the surface that is dragged to pan it. `touch-action: none` hands the
