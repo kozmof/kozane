@@ -500,6 +500,52 @@ describe("scanTaskspaceTags", () => {
         expect(exportTaskspaceTagCache(first)).toBeDefined();
       });
     });
+
+    /**
+     * The ceiling the one above does not give. `TAG_CACHE_DIRS_MAX` bounds how many
+     * taskspaces are held and says nothing about how many files any one of them holds, and
+     * the precise cleanup — `pruneStale` — may only drop an entry from a directory the walk
+     * listed to the end. So the taskspace that cannot be finished in one scan is the one
+     * nothing prunes, and its entries accumulated a slice at a time for the life of the
+     * process.
+     *
+     * `limits.files` reaches the ceiling without writing twenty thousand files, the same way
+     * `limits.bytes` and `limits.nodes` reach theirs.
+     */
+    describe("its bound on files within one taskspace", () => {
+      it("keeps the most recently seen files and forgets the rest", () => {
+        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `'tag-${name}`);
+
+        scan(dir, { files: 2 });
+
+        // Walk order is the listing's, which `listTaskspaceDirectory` sorts, so `a.md` is the
+        // one that fell off the front.
+        expect(Object.keys(exportTaskspaceTagCache(dir) ?? {})).toEqual(["b.md", "c.md"]);
+      });
+
+      it("never drops a file the scan it is running has just parsed", () => {
+        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `'tag-${name}`);
+
+        // Every file still reports its tags, whatever the cache went on to keep: eviction is
+        // about what the next scan is spared, never about what this one answers with.
+        // `'tag-a.md` is the tag `tag-a`: a `.` is not a tag character, so it closes the tag
+        // and the extension is left as text.
+        expect(tagsOf(scan(dir, { files: 1 }).hits)).toEqual(["tag-a", "tag-b", "tag-c"]);
+      });
+
+      it("keeps a file that is still there over one that has gone, across scans", () => {
+        write(join(dir, "a.md"), "'gone");
+        write(join(dir, "b.md"), "'kept");
+        scan(dir, { files: 2 });
+
+        rmSync(join(dir, "a.md"));
+        // `b.md` is answered from the cache and writes nothing, so only a hit marking its
+        // entry as used keeps it ahead of the entry for a file that is no longer there.
+        scan(dir, { files: 1 });
+
+        expect(Object.keys(exportTaskspaceTagCache(dir) ?? {})).toEqual(["b.md"]);
+      });
+    });
   });
 
   /**

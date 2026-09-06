@@ -430,6 +430,32 @@ export const TAG_CACHE_SCOPES_MAX = 16;
 export const TAG_CACHE_DIRS_MAX = 64;
 
 /**
+ * How many parsed files one taskspace directory keeps, in this process and in the file on
+ * disk alike — the ceiling {@link TAG_CACHE_DIRS_MAX} does not give.
+ *
+ * That one bounds how many directories are held and says nothing about how many files any
+ * one of them holds, and the two are not the same guarantee. `pruneStale` is the precise
+ * cleanup and needs a directory to have been listed *to the end* before it may call an
+ * entry stale — so a taskspace large enough that every scan of it stops at a ceiling is
+ * exactly the one nothing prunes, and its entries accumulated across scans for the life of
+ * the process. A million-file checkout walked twenty thousand nodes at a time reaches all
+ * of it eventually, a different slice each scan, and kept every slice.
+ *
+ * Set to {@link TAG_SCAN_NODES_MAX} rather than to a smaller round number, and that
+ * equality is the whole design: one walk visits at most that many nodes, so it can never
+ * write more entries than this keeps, and eviction therefore cannot drop something the
+ * current scan has just parsed. A lower ceiling would evict the front of the very walk
+ * filling it, and every scan would re-read the files the one before it had already read.
+ *
+ * Least-recently-used within the directory, and a cache *hit* touches its entry — which it
+ * has to, since a hit writes nothing and would otherwise sink to the front and be evicted
+ * ahead of a file that changed. After a scan the order is that scan's walk order, so what
+ * is kept is what was most recently seen, and what is dropped is what the taskspace no
+ * longer shows.
+ */
+export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
+
+/**
  * How large the gathered tag index on disk may be before it is ignored and rebuilt.
  *
  * The one ceiling the cache did not have. {@link TAG_CACHE_SCOPES_MAX} and

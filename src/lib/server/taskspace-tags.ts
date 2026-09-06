@@ -1,5 +1,6 @@
 import {
   TAG_CACHE_DIRS_MAX,
+  TAG_CACHE_FILES_MAX,
   TAG_SCAN_DEPTH_MAX,
   TAG_SCAN_HITS_MAX,
   TAG_SCAN_NODES_MAX,
@@ -42,8 +43,19 @@ import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js"
 type Budget = { remaining: number; nodes: number };
 
 /** What one taskspace's walk may spend, each defaulting to the constant it is named after.
- *  Overridable so a test can reach a limit without putting twenty thousand entries on disk. */
-export type TaskspaceScanLimits = { bytes?: number; nodes?: number; depth?: number; hits?: number };
+ *  Overridable so a test can reach a limit without putting twenty thousand entries on disk.
+ *
+ *  `files` is the odd one: not what the walk may spend but what it may leave behind — how
+ *  many parsed files this directory keeps afterwards. It is here rather than in a separate
+ *  bag because it is overridable for the same reason as the rest, and reaching
+ *  {@link TAG_CACHE_FILES_MAX} honestly means writing twenty thousand files. */
+export type TaskspaceScanLimits = {
+  bytes?: number;
+  nodes?: number;
+  depth?: number;
+  hits?: number;
+  files?: number;
+};
 
 /** What a whole gather may spend, across every taskspace in it. See {@link ScanPool}. */
 export type GatherScanLimits = { workspaceBytes?: number; workspaceNodes?: number };
@@ -207,6 +219,20 @@ function dirEntries(baseDir: string): Map<string, CachedFile> {
  */
 const touchDir = (baseDir: string): void => touch(fileCache, baseDir);
 
+/**
+ * Drops all but the last {@link TAG_CACHE_FILES_MAX} files of one directory.
+ *
+ * Once per scan rather than once per file: {@link evict} walks every key, so calling it on
+ * each parse would be a pass over the whole directory per file — quadratic in exactly the
+ * taskspace this exists to bound. A single walk cannot write more entries than the ceiling
+ * keeps (see the note on the constant), so waiting until the end of one cannot let the map
+ * exceed it by more than that walk's own worth.
+ */
+function evictFiles(baseDir: string, max: number): void {
+  const entries = fileCache.get(baseDir);
+  if (entries) evict(entries, max);
+}
+
 /** Forgets every cached file. For tests, which write a temporary directory, delete it, and
  *  write a fresh one at a path the first may well have used — the same reason
  *  `clearTaskspaceFileTreeCache` exists. */
@@ -253,6 +279,11 @@ export function importTaskspaceTagCache(
   for (const [subPath, entry] of incoming) {
     if (!existing.has(subPath)) existing.set(subPath, entry);
   }
+  // The store on disk is written under the same ceiling, so this normally has nothing to do.
+  // It is here for the file that arrives from somewhere else — an older version's, one
+  // carried between machines, one edited by hand — which must not be able to seed this
+  // process past a bound the process itself observes.
+  evict(existing, TAG_CACHE_FILES_MAX);
 }
 
 type FileTags =
@@ -273,8 +304,16 @@ function fileTagHits(
   // to tell one version of it from another. Such a file is read every time rather than
   // sharing a made-up key with every other file in the same position.
   const signature = entry.modifiedAt === null ? null : `${entry.modifiedAt}:${size}`;
-  const cached = fileCache.get(baseDir)?.get(subPath);
-  if (signature !== null && cached?.signature === signature) return { hits: cached.hits };
+  const entries = fileCache.get(baseDir);
+  const cached = entries?.get(subPath);
+  if (entries && signature !== null && cached?.signature === signature) {
+    // Marked as used, which a hit would otherwise never do: it writes nothing, so under the
+    // eviction in `evictFiles` an unchanged file would sink to the front of the directory
+    // and be dropped ahead of one that changed — the exact inversion of what the ceiling is
+    // for. See `TAG_CACHE_FILES_MAX`.
+    touch(entries, subPath);
+    return { hits: cached.hits };
+  }
 
   // Refused here rather than by the read below, because the read is not what it would cost.
   // `readTaskspaceFile` turns a file past the per-file cap away without opening it, so
@@ -561,6 +600,11 @@ export function scanTaskspaceTags(
   }
 
   const pruned = pruneStale(baseDir, scan.seen, scan.completed);
+  // After pruning, which is the precise cleanup and usually leaves nothing for this to do.
+  // This is the backstop for the taskspace pruning cannot reach: one too large for a scan to
+  // finish, whose directories are therefore never `completed` and whose entries would
+  // otherwise accumulate a slice at a time, scan after scan, for the life of the process.
+  evictFiles(baseDir, limits.files ?? TAG_CACHE_FILES_MAX);
 
   return {
     hits: scan.hits,
