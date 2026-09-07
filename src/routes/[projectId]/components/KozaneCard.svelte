@@ -125,10 +125,10 @@
             href={tagHref(part.tag)}
             onmousedown={(e) => e.stopPropagation()}
             onclick={(e) => e.stopPropagation()}
-            class={css({ color: "select.accent", textDecoration: "none", _hover: { textDecoration: "underline" } })}
+            class={css({ color: "ink.tag", textDecoration: "none", _hover: { textDecoration: "underline" } })}
           >{part.text}</a>
         {:else if part.tag}
-          <span class={css({ color: "select.accent" })}>{part.text}</span>
+          <span class={css({ color: "ink.tag" })}>{part.text}</span>
         {:else}{part.text}{/if}
       {/each}
     {:else}Empty card…{/if}

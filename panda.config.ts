@@ -17,6 +17,7 @@ export default defineConfig({
             lighter: { value: "#f2f2f2" },
             canvas: { value: "#ececec" },
             content: { value: "#575757" },
+            tag: { value: "#6e6e6e" },
             secondary: { value: "#575757" },
             white: { value: "#ffffff" },
           },
