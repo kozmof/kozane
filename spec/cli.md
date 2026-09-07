@@ -942,7 +942,7 @@ than one project. Positions, layers, and scope memberships are untouched.
 
 ### `kozane card project <projectId> <cardIds>`
 
-Moves cards to another project, matching bundle and layer *by name* rather than by ID.
+Moves cards to another project, matching bundle and layer _by name_ rather than by ID.
 
 ```bash
 kozane card project <projectId> <cardIds...>
