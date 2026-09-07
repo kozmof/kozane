@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVITY_WEEKS, activityCells, validActivityDay } from "./activity.js";
+import {
+  ACTIVITY_WEEKS,
+  activityCells,
+  activityRangeLabel,
+  bundlesForDay,
+  tagHitsForDay,
+  validActivityDay,
+} from "./activity.js";
 
 describe("activityCells", () => {
   it("builds 53 Sunday-to-Saturday weeks ending in the current week", () => {
@@ -76,5 +83,88 @@ describe("validActivityDay", () => {
     expect(validActivityDay("2026-09-05")).toBe(true);
     expect(validActivityDay("2026-02-29")).toBe(false);
     expect(validActivityDay("09/05/2026")).toBe(false);
+  });
+});
+
+describe("bundlesForDay", () => {
+  const bundles = [
+    { id: "b1", name: "One", cards: 10 },
+    { id: "b2", name: "Two", cards: 4 },
+  ];
+  const activity = [
+    { day: "2026-03-01", bundleId: "b1", cards: 3 },
+    { day: "2026-03-02", bundleId: "b1", cards: 1 },
+    { day: "2026-03-02", bundleId: "b2", cards: 5 },
+  ];
+
+  it("leaves the bundles alone when no day is chosen", () => {
+    expect(bundlesForDay(bundles, activity, null)).toBe(bundles);
+  });
+
+  it("re-sizes each bundle by what changed on the day", () => {
+    expect(bundlesForDay(bundles, activity, "2026-03-02")).toEqual([
+      { id: "b1", name: "One", cards: 1 },
+      { id: "b2", name: "Two", cards: 5 },
+    ]);
+  });
+
+  it("keeps a bundle with no change that day, at zero", () => {
+    // Dropping it would make the rectangle vanish rather than empty, and the packing is of
+    // the workspace whichever day is being looked at.
+    expect(bundlesForDay(bundles, activity, "2026-03-01")).toEqual([
+      { id: "b1", name: "One", cards: 3 },
+      { id: "b2", name: "Two", cards: 0 },
+    ]);
+  });
+
+  it("carries the rest of each row through untouched", () => {
+    const [first] = bundlesForDay(bundles, activity, "2026-03-01");
+    expect(first.name).toBe("One");
+  });
+});
+
+describe("tagHitsForDay", () => {
+  const cardHit = (cardId: string) => ({
+    tag: "perf",
+    source: { kind: "card" as const, cardId },
+    excerpt: "…",
+  });
+  const fileHit = {
+    tag: "perf",
+    source: { kind: "file" as const, taskspaceId: "t1", path: "notes.md", line: 3 },
+    excerpt: "…",
+  };
+  const hits = [cardHit("c1"), cardHit("c2"), fileHit];
+  const tagCards = {
+    c1: { projectId: "p", bundleId: "b", updatedDay: "2026-03-01" },
+    c2: { projectId: "p", bundleId: "b", updatedDay: "2026-03-02" },
+  };
+
+  it("leaves the hits alone when no day is chosen", () => {
+    expect(tagHitsForDay(hits, tagCards, null)).toBe(hits);
+  });
+
+  it("keeps the cards whose text changed on the day", () => {
+    expect(tagHitsForDay(hits, tagCards, "2026-03-01")).toEqual([cardHit("c1")]);
+  });
+
+  it("drops a card the snapshot has no change day for", () => {
+    expect(tagHitsForDay([cardHit("unknown")], tagCards, "2026-03-01")).toEqual([]);
+  });
+
+  it("drops file hits, which have no change day to be asked about", () => {
+    // Keeping them would count them on every day at once; see the note on the function.
+    expect(tagHitsForDay([fileHit], tagCards, "2026-03-01")).toEqual([]);
+    expect(tagHitsForDay([fileHit], tagCards, null)).toEqual([fileHit]);
+  });
+});
+
+describe("activityRangeLabel", () => {
+  it("spans the first real day to the last, skipping the week's placeholders", () => {
+    const cells = activityCells([{ day: "2026-03-01", cards: 1 }], "2026-03-05");
+    const days = cells.flatMap(({ day }) => (day ? [day] : []));
+
+    expect(activityRangeLabel(cells)).toBe(`${days[0]} ~ ${days.at(-1)}`);
+    expect(activityRangeLabel(cells)).toMatch(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/);
   });
 });

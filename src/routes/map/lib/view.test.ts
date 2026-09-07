@@ -4,6 +4,7 @@ import {
   DEFAULT_ZOOM,
   defaultView,
   FITTED_VIEW,
+  isDefaultView,
   pannedBy,
   viewedArea,
   zoomedBy,
@@ -251,5 +252,31 @@ describe("zoomPercent", () => {
     expect(zoomPercent(0.55)).toBe(110);
     expect(zoomPercent(0.6)).toBe(120);
     expect(Number.isInteger(zoomPercent(0.37))).toBe(true);
+  });
+});
+
+describe("isDefaultView", () => {
+  const size = { width: 1600, height: 1000 };
+
+  it("is true of the view the map opens at", () => {
+    expect(isDefaultView(defaultView(size), size)).toBe(true);
+  });
+
+  it("is true of a view panned away and back by hand", () => {
+    const moved = pannedBy(defaultView(size), size, 40, -25);
+    expect(isDefaultView(moved, size)).toBe(false);
+    expect(isDefaultView(pannedBy(moved, size, -40, 25), size)).toBe(true);
+  });
+
+  it("is false once the map has been zoomed", () => {
+    expect(isDefaultView(zoomedBy(defaultView(size), size, 1), size)).toBe(false);
+  });
+
+  it("compares against the clamped default, so a box too small still has a way home", () => {
+    // Unclamped, the default of a tiny box is a pan the clamp would not allow, and nothing
+    // the user could reach would ever compare equal to it — leaving "back to the map"
+    // offered forever.
+    const tiny = { width: 40, height: 30 };
+    expect(isDefaultView(clampView(defaultView(tiny), tiny), tiny)).toBe(true);
   });
 });

@@ -16,7 +16,7 @@
  * Deliberately plain fields rather than `$state`: nothing renders from these, and a rune
  * here would make every drag frame a reactive write for no reader.
  */
-export class Activity {
+export class InFlight {
   #count = 0;
   #version = 0;
 

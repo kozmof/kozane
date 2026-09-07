@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Activity } from "./activity.js";
+import { InFlight } from "./in-flight.js";
 import { SNAPSHOT_POLL_MS, startSnapshotPoll } from "./snapshot-poll.js";
 import type { ProjectDataSnapshot } from "$lib/types.js";
 
@@ -28,14 +28,14 @@ function snapshotResponse(etag?: string): Response {
 type Harness = {
   fetcher: ReturnType<typeof vi.fn>;
   applied: ProjectDataSnapshot[];
-  activity: Activity;
+  activity: InFlight;
   hidden: { value: boolean };
   stop: () => void;
 };
 
 function start(fetcher: ReturnType<typeof vi.fn>): Harness {
   const applied: ProjectDataSnapshot[] = [];
-  const activity = new Activity();
+  const activity = new InFlight();
   const hidden = { value: false };
   const stop = startSnapshotPoll({
     fetcher: fetcher as unknown as typeof fetch,

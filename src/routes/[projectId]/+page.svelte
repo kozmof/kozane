@@ -44,7 +44,7 @@
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
-  import { Activity } from "./lib/activity.js";
+  import { InFlight } from "./lib/in-flight.js";
   import { startSnapshotPoll } from "./lib/snapshot-poll.js";
 
   let { data }: PageProps = $props();
@@ -91,7 +91,7 @@
   // A drag in progress, and the save that follows it. Held apart from `s.mutations`
   // because the canvas opens it before any request exists: the poll has to stand down for
   // the drag itself, not only for the PATCH at the end of it.
-  const positionActivity = new Activity();
+  const positionActivity = new InFlight();
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: {

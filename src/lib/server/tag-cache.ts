@@ -2,13 +2,19 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { TAG_CACHE_BYTES_MAX, TAG_CACHE_DIRS_MAX, TAG_CACHE_SCOPES_MAX } from "../constants.js";
 import { writeFileAtomic } from "./atomic-write.js";
-import { fileSignature } from "./file-signature.js";
+import { databaseSignature } from "./file-signature.js";
 import { evictRecord, setLast } from "./lru.js";
 import { exportTaskspaceTagCache, importTaskspaceTagCache } from "./taskspace-tags.js";
 import type { CardTagHits } from "../../db/api/tag.js";
 import type { TagLineHit } from "../tag.js";
 import type { CachedFile } from "./taskspace-tags.js";
 import type { TagHit } from "../types.js";
+
+// `databaseSignature` moved to `file-signature.js`, where the rest of the "identity of
+// these bytes" reasoning lives — it is not about tags, and a third caller (the snapshot
+// endpoint's ETag gate) arrived to make that plain. Re-exported so `treemap-snapshot.ts`
+// and the tests that already name it through this module still can.
+export { databaseSignature };
 
 /**
  * The gathered tags of a workspace, kept on disk so a gather survives a page navigation and
@@ -61,32 +67,6 @@ export type TagCache = {
   /** Keyed by resolved taskspace directory, then by path within it. */
   files: Record<string, Record<string, CachedFileEntry>>;
 };
-
-/**
- * Identity of the database behind `dbUrl`, or null where there is nothing to identify it by.
- *
- * `fileSignature` rather than a stored timestamp compared with `>`: it is `ino:mtimeNs:size`,
- * and requiring it to be *equal* catches the write that lands inside the same filesystem
- * timestamp tick as the gather, which a "has anything happened since?" comparison waves
- * through. Any commit moves it — this server's own, another tab's, a `kozane card add` in
- * another terminal, a `db import`.
- *
- * The `-wal` is signed alongside, though nothing here turns WAL on: `journal_mode` is
- * `delete`, so today every write moves the main file itself. Under WAL it would not, until a
- * checkpoint — so signing both is what keeps this correct if that ever changes, and costs one
- * `stat` of a file that is usually absent.
- *
- * Null for an in-memory database, which has no file to sign and no life beyond the process.
- */
-export function databaseSignature(dbUrl: string): string | null {
-  if (dbUrl.includes(":memory:")) return null;
-  // libsql takes `file:/path`, optionally with query parameters; anything else is not a
-  // local file this can stat.
-  const path = dbUrl.startsWith("file:") ? dbUrl.slice("file:".length).split("?")[0] : dbUrl;
-  const main = fileSignature(path);
-  if (!main) return null;
-  return `${main}|${fileSignature(`${path}-wal`) ?? ""}`;
-}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

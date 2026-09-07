@@ -59,14 +59,31 @@ export interface TaskspaceListing {
 }
 
 /**
- * Why a directory is not all there, or null when it is. Every limit the export walk stops
- * at is a distinct one, because a directory that ran past the entry cap, one that sat
- * deeper than the walk goes, one that arrived after the tree's total entry budget was
- * spent, and one that could not be read at all are four different things to be told — and
- * the first three all leave a node that would otherwise be indistinguishable from a
- * genuinely empty directory. A live listing only ever reaches the entry cap.
+ * The limits any walk of a taskspace directory tree stops at, and the vocabulary the two
+ * walks below both draw from.
+ *
+ * Named because the two of them shared these four members by writing them out twice, which
+ * is a convention rather than a relationship: renaming `"nodes"` on one side, or adding a
+ * fifth shared limit to one walk and not the other, left the pair silently disagreeing about
+ * words the same page prints. What is genuinely particular to one walk stays particular to
+ * it — see {@link TagScanTruncation}, which extends this and says why.
+ *
+ * Each is a distinct thing to be told, because a directory that ran past the entry cap, one
+ * that sat deeper than the walk goes, one that arrived after the tree's total entry budget
+ * was spent, and one that could not be read at all all leave a node that would otherwise be
+ * indistinguishable from a genuinely empty directory.
  */
-export type TaskspaceTruncation = "entries" | "depth" | "nodes" | "unreadable";
+export type WalkTruncation = "entries" | "depth" | "nodes" | "unreadable";
+
+/**
+ * Why a directory is not all there in a static export, or null when it is. Exactly
+ * {@link WalkTruncation}: the export walk stops at the shared limits and at nothing else. An
+ * alias rather than the four members again, so that a limit added to one walk is a decision
+ * about which of them it belongs to rather than a line copied into both.
+ *
+ * A live listing only ever reaches the entry cap.
+ */
+export type TaskspaceTruncation = WalkTruncation;
 
 /**
  * One entry of a taskspace's file tree as `kozane net ssg generate --include-scoped-files`
@@ -139,11 +156,12 @@ export interface TagHit {
 }
 
 /**
- * Why a tag scan is not the whole taskspace. Its own vocabulary rather than
- * `TaskspaceTruncation`, which enumerates the limits the *export walk* stops at: the tag
- * walk has a reason that one does not — `"budget"`, a file left unread because the scan's
- * byte ceiling was already spent — and the export has nodes to hang a per-file reason on
- * where this has only the one answer for the whole taskspace.
+ * Why a tag scan is not the whole taskspace. {@link WalkTruncation} — the limits any walk of
+ * a directory tree stops at — plus the three the tag walk has and the export walk does not:
+ * `"budget"`, a file left unread because the scan's byte ceiling was already spent, and the
+ * two below. The export has nodes to hang a per-file reason on where this has only the one
+ * answer for the whole taskspace, which is why the extra members sit here rather than in the
+ * shared half.
  *
  * Each is a distinct thing to be told. A file that ran past the budget and one that could
  * not be read at all both produce no tags, and neither is "there are no tags in this file".
@@ -166,14 +184,7 @@ export interface TagHit {
  * both ends can import, and `truncationReasons` in `lib/tag.ts` is the wording that goes
  * with it.
  */
-export type TagScanTruncation =
-  | "entries"
-  | "depth"
-  | "nodes"
-  | "budget"
-  | "hits"
-  | "too-large"
-  | "unreadable";
+export type TagScanTruncation = WalkTruncation | "budget" | "hits" | "too-large";
 
 /**
  * Everything a project board is drawn from. The snapshot endpoint answers with this and

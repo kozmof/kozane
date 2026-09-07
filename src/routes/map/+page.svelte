@@ -22,6 +22,7 @@
     zoomedBy,
     zoomedTo,
     zoomPercent,
+    isDefaultView,
     type MapView,
   } from "./lib/view.js";
   import { tagBundleIndex, tagBundleTargets } from "./lib/graph.js";
@@ -35,7 +36,12 @@
     TAG_PANEL_WIDTH,
     TAG_ROW_HEIGHT,
   } from "./lib/tag-rows.js";
-  import { activityCells } from "./lib/activity.js";
+  import {
+    activityCells,
+    activityRangeLabel,
+    bundlesForDay,
+    tagHitsForDay,
+  } from "./lib/activity.js";
 
   /**
    * The whole workspace in one picture: every project a rectangle, its bundles inside it
@@ -81,24 +87,9 @@
     data.day ?? (browser ? page.url.searchParams.get("day") : null),
   );
 
-  const displayedBundles = $derived.by(() => {
-    if (!selectedDay) return data.bundles;
-    const counts = new Map(
-      data.activity
-        .filter(({ day }) => day === selectedDay)
-        .map(({ bundleId, cards }) => [bundleId, cards]),
-    );
-    return data.bundles.map((bundle) => ({ ...bundle, cards: counts.get(bundle.id) ?? 0 }));
-  });
-  const displayedTagHits = $derived(
-    selectedDay
-      ? data.tagHits.filter(
-          (hit) =>
-            hit.source.kind === "card" &&
-            data.tagCards[hit.source.cardId]?.updatedDay === selectedDay,
-        )
-      : data.tagHits,
-  );
+  // The two halves of one decision — see `bundlesForDay`, which says why they are not two.
+  const displayedBundles = $derived(bundlesForDay(data.bundles, data.activity, selectedDay));
+  const displayedTagHits = $derived(tagHitsForDay(data.tagHits, data.tagCards, selectedDay));
   const tree = $derived(buildTagTree(displayedTagHits));
   const mapTags = $derived(tagBundleIndex(displayedTagHits, data.tagCards));
 
@@ -107,10 +98,7 @@
       data.activity.map(({ day, cards }) => ({ day, cards })),
     ),
   );
-  const activityRange = $derived.by(() => {
-    const days = heatmap.flatMap(({ day }) => (day ? [day] : []));
-    return `${days[0]} ~ ${days.at(-1)}`;
-  });
+  const activityRange = $derived(activityRangeLabel(heatmap));
 
   /**
    * The box the map is drawn into.
@@ -143,13 +131,7 @@
   let movedView = $state<MapView | null>(null);
   const rawView = $derived(movedView ?? defaultView(size));
   const view = $derived(clampView(rawView, size));
-  /** Whether the map is where it opens. Compared by value, and against the clamped default,
-   *  so a map panned back by hand counts as home and a box too small to hold the default
-   *  does not leave the way back permanently offered. */
-  const atDefault = $derived.by(() => {
-    const home = clampView(defaultView(size), size);
-    return view.zoom === home.zoom && view.panX === home.panX && view.panY === home.panY;
-  });
+  const atDefault = $derived(isDefaultView(view, size));
 
   /**
    * The packing, laid into the rectangle the view describes rather than into the box on the

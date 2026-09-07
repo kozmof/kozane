@@ -20,33 +20,22 @@ import { buildProgram } from "./program.js";
 const SPEC_PATH = resolve("spec/cli.md");
 
 /**
- * Commands `spec/cli.md` does not document, and does not currently claim to.
+ * Commands `spec/cli.md` does not document.
  *
- * Not an exemption anyone should be comfortable with — every one of these is a command a
- * user can run today with no specified behaviour — but recording them is what turns an
- * invisible gap into a list that can be worked off. The test below holds it exactly: an
- * entry that gets documented must be deleted from here, and a command added without a
- * section is a failure rather than a sixteenth line.
+ * Empty, and the check below is what keeps it that way: a command added without a section
+ * fails rather than quietly joining a list of exemptions. It held fifteen entries — every
+ * `bundle` and `warp` subcommand, the two `scope` membership commands, and seven of
+ * `card` — each of them something a user could run today against no specified behaviour.
+ * They are written up now.
+ *
+ * Kept as a list rather than deleted outright so that a command shipped ahead of its
+ * documentation has somewhere honest to be recorded, instead of the check being loosened.
+ * An entry here is a debt; an entry that has since been documented is a failure, which is
+ * what the last test below is for.
  *
  * Written as full command paths without their arguments, the same key the check uses.
  */
-const UNSPECIFIED = [
-  "bundle add",
-  "bundle delete",
-  "bundle list",
-  "card bundle",
-  "card delete",
-  "card edit",
-  "card glue",
-  "card move",
-  "card project",
-  "card unglue",
-  "scope add-cards",
-  "scope remove-cards",
-  "warp add",
-  "warp delete",
-  "warp list",
-] as const;
+const UNSPECIFIED: readonly string[] = [];
 
 type CommandEntry = {
   /** Space-separated path, e.g. `net ssg generate`. */
@@ -140,12 +129,5 @@ describe("spec/cli.md against the command tree", () => {
     expect(UNSPECIFIED.filter((path) => documented.has(path))).toEqual([]);
     // An entry naming a command that no longer exists.
     expect(UNSPECIFIED.filter((path) => !real.has(path))).toEqual([]);
-  });
-
-  it("still has commands left to specify, and says how many", () => {
-    // Not an assertion about the number so much as a place for it to be read off. When this
-    // reaches zero, `UNSPECIFIED` and this test go away together.
-    expect(UNSPECIFIED).toHaveLength(15);
-    expect(commands.length).toBeGreaterThan(UNSPECIFIED.length);
   });
 });

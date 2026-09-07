@@ -1,6 +1,6 @@
 import { base } from "$app/paths";
 import type { ProjectDataSnapshot } from "$lib/types.js";
-import type { Activity } from "./activity.js";
+import type { InFlight } from "./in-flight.js";
 import { readProjectSnapshot } from "./snapshot-reader.js";
 
 /** How often the board asks the server whether anything has changed. */
@@ -18,7 +18,7 @@ export type SnapshotPollOptions = {
    * the mutations the action layer has outstanding. A poll stands down while any of them
    * is open, and an answer is dropped if any of them moved while it was on its way.
    */
-  activities: readonly Activity[];
+  activities: readonly InFlight[];
   /** Applied only once every guard above still holds. */
   apply: (snapshot: ProjectDataSnapshot) => void;
   /** Hidden tabs are not drawn, so polling one spends a request on nothing. */
@@ -58,7 +58,7 @@ export function startSnapshotPoll({
     if (refreshing || isHidden() || activities.some((activity) => !activity.idle)) return;
     refreshing = true;
     // Noted before the request so the answer can be checked against them afterwards; see
-    // the note on `Activity.version` for the case the counts alone would miss.
+    // the note on `InFlight.version` for the case the counts alone would miss.
     const versions = activities.map((activity) => activity.version);
     const currentProjectId = projectId();
     const known = applied?.projectId === currentProjectId ? applied.etag : null;

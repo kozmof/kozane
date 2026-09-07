@@ -1,4 +1,5 @@
 import { statSync } from "node:fs";
+import { isMemoryDbUrl } from "../db-url.js";
 
 /**
  * Identity of the bytes currently at `path`, or null when nothing is there. It lets a
@@ -26,4 +27,30 @@ import { statSync } from "node:fs";
 export function fileSignature(path: string): string | null {
   const stats = statSync(path, { bigint: true, throwIfNoEntry: false });
   return stats ? `${stats.ino}:${stats.mtimeNs}:${stats.size}` : null;
+}
+
+/**
+ * Identity of the database behind `dbUrl`, or null where there is nothing to identify it by.
+ *
+ * `fileSignature` rather than a stored timestamp compared with `>`: it is `ino:mtimeNs:size`,
+ * and requiring it to be *equal* catches the write that lands inside the same filesystem
+ * timestamp tick as the gather, which a "has anything happened since?" comparison waves
+ * through. Any commit moves it — this server's own, another tab's, a `kozane card add` in
+ * another terminal, a `db import`.
+ *
+ * The `-wal` is signed alongside, though nothing here turns WAL on: `journal_mode` is
+ * `delete`, so today every write moves the main file itself. Under WAL it would not, until a
+ * checkpoint — so signing both is what keeps this correct if that ever changes, and costs one
+ * `stat` of a file that is usually absent.
+ *
+ * Null for an in-memory database, which has no file to sign and no life beyond the process.
+ */
+export function databaseSignature(dbUrl: string): string | null {
+  if (isMemoryDbUrl(dbUrl)) return null;
+  // libsql takes `file:/path`, optionally with query parameters; anything else is not a
+  // local file this can stat.
+  const path = dbUrl.startsWith("file:") ? dbUrl.slice("file:".length).split("?")[0] : dbUrl;
+  const main = fileSignature(path);
+  if (!main) return null;
+  return `${main}|${fileSignature(`${path}-wal`) ?? ""}`;
 }

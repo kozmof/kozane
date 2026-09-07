@@ -632,6 +632,40 @@ Project deleted.
 
 ---
 
+### `kozane bundle list`
+
+Lists a project's bundles, one per line, as short ID and name. The default bundle is marked
+`(default)`.
+
+```bash
+kozane bundle list [--project <projectId>]
+```
+
+If the project has no bundles, the command prints `No bundles found.`
+
+### `kozane bundle add <name>`
+
+Adds a bundle to a project. Output includes the new short bundle ID and name.
+
+```bash
+kozane bundle add <name> [--project <projectId>]
+```
+
+Bundle names are trimmed, must be non-empty, and are unique within the project.
+
+### `kozane bundle delete <bundleId>`
+
+Deletes a bundle and moves its cards to the project's default bundle, so no card is lost
+with the label it carried. Deleting the default bundle is refused.
+
+```bash
+kozane bundle delete <bundleId> [--project <projectId>]
+```
+
+`<bundleId>` is a full or short ID, resolved against the selected project's bundles.
+
+---
+
 ### `kozane scope add <name>`
 
 Adds a cross-project card scope.
@@ -660,6 +694,33 @@ whether or not the list was narrowed.
 
 If no scopes exist, the command prints `No scopes found.`, or
 `No scopes found in this project.` when `--project` was given.
+
+### `kozane scope add-cards <scopeId> <cardIds>`
+
+Adds one or more cards to a scope. `<cardIds>` takes any number of full or short card IDs,
+separated by spaces.
+
+```bash
+kozane scope add-cards <scopeId> <cardIds...> [--project <projectId>]
+kozane scope add-cards e3ee90b 3f9a2c1 72ac1f8
+```
+
+Every card must belong to the selected project; a card from another project is refused
+rather than moved. A card already in the scope is left as it is, so the command can be run
+twice without doubling anything. Output is the number of cards added and the scope's short
+ID.
+
+### `kozane scope remove-cards <scopeId> <cardIds>`
+
+Removes one or more cards from a scope. The cards themselves are not deleted — a scope
+gathers cards and removing one from the gathering leaves it on its board.
+
+```bash
+kozane scope remove-cards <scopeId> <cardIds...> [--project <projectId>]
+```
+
+Refused, with the same wording as `add-cards`, when a named card does not belong to the
+selected project. A card that was not in the scope is not an error.
 
 ### `kozane scope delete <id>`
 
@@ -824,6 +885,79 @@ layer is stacked above the cards already there.
 
 ---
 
+### `kozane card edit <cardId> <content>`
+
+Replaces a card's text outright. The card keeps its position, bundle, layer, scope
+memberships, and glue group; only the text changes.
+
+```bash
+kozane card edit <cardId> <content>
+kozane card edit 3f9a2c1 "Investigate caching, then measure"
+```
+
+`<content>` is bounded by the workspace's content limit, the same one `card add` applies.
+Text identical to what the card already holds leaves `updated_at` alone, so an edit that
+changed nothing does not read as a card that was worked on.
+
+### `kozane card delete <cardIds>`
+
+Deletes one or more cards.
+
+```bash
+kozane card delete <cardIds...>
+kozane card delete 3f9a2c1 72ac1f8
+```
+
+Every card must belong to the same project, which is taken from the first ID given. A glue
+group left holding one card by the deletion is dissolved, so no card is left offering to be
+unglued from a group of itself. Output is the number of cards deleted and their short IDs.
+
+### `kozane card move <cardId>`
+
+Moves a card to a position on its project's canvas. At least one of `--x` and `--y` is
+required; the axis not given is left where it was.
+
+```bash
+kozane card move <cardId> [--x <position>] [--y <position>]
+kozane card move 3f9a2c1 --x 480 --y current+120
+```
+
+Each position is either an integer or a relative offset written `current+<n>` or
+`current-<n>`, read against the card's present coordinate on that axis. Anything else is an
+error. The result is clamped to the workspace's canvas bounds, and the clamped position is
+what the command prints.
+
+### `kozane card bundle <bundleId> <cardIds>`
+
+Moves cards to another bundle of their own project.
+
+```bash
+kozane card bundle <bundleId> <cardIds...>
+kozane card bundle 72ac1f8 3f9a2c1 e3ee90b
+```
+
+The project is taken from the cards rather than from an option, and the bundle is resolved
+within it — so a bundle of another project is refused, as is a set of cards drawn from more
+than one project. Positions, layers, and scope memberships are untouched.
+
+### `kozane card project <projectId> <cardIds>`
+
+Moves cards to another project, matching bundle and layer *by name* rather than by ID.
+
+```bash
+kozane card project <projectId> <cardIds...>
+kozane card project eb155d6 3f9a2c1
+```
+
+A card in a bundle named `General` lands in the target project's `General`, and likewise for
+its layer; where the target has no bundle or layer of that name, one is created. The source
+project is taken from the cards, and they must all come from the same one.
+
+Moved cards leave their glue groups. A group spanning two projects is never drawn by the UI,
+so it would only ever be rows nothing could act on.
+
+---
+
 ### `kozane card list`
 
 Lists project cards or dynamically lists cards associated with a taskspace.
@@ -930,6 +1064,84 @@ kozane card nearest 17b86d2
 ```
 
 Each row includes the card's short ID, bundle, position, distance, and content.
+
+---
+
+### `kozane card glue <cardIds>`
+
+Glues two or more cards of one project into a group. A glued group moves as a unit on the
+board and is selected as one.
+
+```bash
+kozane card glue <cardIds...> [--add] [--align-list]
+kozane card glue 3f9a2c1 72ac1f8
+```
+
+All the cards must belong to the same project, which is taken from the first ID given.
+
+By default the named cards become the group, and any group they were already in is left
+behind. `--add` instead expands the selection to whole groups first: naming one member of an
+existing group brings its fellow members along, and the result is the merge of every group
+touched. That is what makes `card glue --add` able to join two groups by naming one card
+from each.
+
+`--align-list` also lays the group out as a vertical list, in the order the IDs were given,
+starting from the first card's position. Each card's height is estimated from its text and
+its drawn width, so the spacing follows what the board will actually show, and every
+position is clamped to the canvas bounds. Because `--add` decides the final set, the two
+options compose: the list is laid out over the expanded group.
+
+Output is the number of cards glued, the group's short ID, the short ID of each card, and a
+line for each option in force.
+
+### `kozane card unglue <cardIds>`
+
+Removes one or more cards from their glue groups. The cards themselves are untouched — they
+keep their text, position, bundle, and layer, and simply stop moving with the group.
+
+```bash
+kozane card unglue <cardIds...>
+```
+
+All the cards must belong to the same project. A group left holding fewer than two cards is
+dissolved rather than kept as a group of one. A card that was not glued is not an error.
+
+---
+
+### `kozane warp list`
+
+Lists a project's warps in creation order, one per line, as short ID, number, and position.
+A warp's number is its place in this list, which is what the browser UI labels it by.
+
+```bash
+kozane warp list [--project <projectId>]
+```
+
+If the project has no warps, the command prints `No warps found.`
+
+### `kozane warp add`
+
+Adds a warp — a saved place on the project's canvas — at a position.
+
+```bash
+kozane warp add [--project <projectId>] [--x <number>] [--y <number>]
+kozane warp add --x 1200 --y 800
+```
+
+The position is clamped to the workspace's canvas bounds, and the clamped position is what
+the command prints alongside the new warp's short ID. Warps carry no name: they are numbered
+by creation order, which `warp list` prints.
+
+### `kozane warp delete <warpId>`
+
+Deletes a warp by full or short ID, resolved against the selected project's warps.
+
+```bash
+kozane warp delete <warpId> [--project <projectId>]
+```
+
+Deleting a warp renumbers the ones after it, since a warp's number is its place in creation
+order rather than anything stored.
 
 ---
 
@@ -1468,9 +1680,12 @@ CLI:
   kozane api key generate
   kozane api key refresh
   kozane project list / create / delete / default
-  kozane scope list [--project] / add / delete
+  kozane bundle list / add / delete
+  kozane scope list [--project] / add / delete / add-cards / remove-cards
   kozane layer list / add / rename / move / delete
+  kozane warp list / add / delete
   kozane card add / squash / show / list / layer / nearest
+  kozane card edit / delete / move / bundle / project / glue / unglue
   kozane tag list / show
   kozane db status / migrate / export / import / restore
   kozane taskspace list [--project] / scan / create

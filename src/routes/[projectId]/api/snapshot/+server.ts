@@ -1,41 +1,40 @@
-import { createHash } from "node:crypto";
 import { error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
+import { openedDbUrl } from "$db/client";
+import {
+  matchesEtag,
+  rememberSnapshotEtag,
+  snapshotEtag,
+  unchangedSnapshotEtag,
+} from "$lib/server/snapshot-etag";
 import { loadProjectSnapshot } from "../../lib/project-snapshot.js";
 
-/**
- * A tag for the exact bytes of a snapshot. Derived from the payload rather than from a
- * revision the writers maintain, and that is the point: the CLI writes to the same database
- * file without passing through this server at all, so there is no counter here that could
- * see every change. A tag computed from the data cannot miss one, and no future write path
- * has to remember to bump anything.
- *
- * Not a security boundary — it says "these bytes differ", nothing more.
- */
-function snapshotEtag(body: string): string {
-  return `"${createHash("sha1").update(body).digest("base64url")}"`;
-}
-
-/**
- * Whether the client already holds this exact snapshot. A weak validator is accepted
- * because the tag only ever has to answer that question, and `*` matches anything the
- * server would send.
- */
-function matchesEtag(header: string | null, etag: string): boolean {
-  if (!header) return false;
-  return header
-    .split(",")
-    .map((candidate) => candidate.trim().replace(/^W\//, ""))
-    .some((candidate) => candidate === "*" || candidate === etag);
-}
-
 export const GET: RequestHandler = async ({ locals, params, request }) => {
+  const { projectId } = params;
+  const ifNoneMatch = request.headers.get("if-none-match");
+  const dbUrl = openedDbUrl();
+
+  // The cheap answer first. The board is polled once a second for as long as it is open,
+  // and almost every one of those polls finds nothing new — but finding that out used to
+  // mean running the whole read and serializing it, because the tag is a hash of the bytes.
+  // If the database file has not moved since the tag the client is offering was computed,
+  // that tag is still correct and none of that work has to happen. See
+  // `lib/server/snapshot-etag.ts` for why the file's identity settles it, and for the ways
+  // this declines to answer.
+  const unchanged = unchangedSnapshotEtag(dbUrl, projectId);
+  if (unchanged && matchesEtag(ifNoneMatch, unchanged)) {
+    return new Response(null, {
+      status: 304,
+      headers: { etag: unchanged, "cache-control": "no-store" },
+    });
+  }
+
   // The same read the page load makes, so the board the poll replaces cannot be assembled
   // differently from the board it replaces. `path` is sent as stored — unlike the static
   // export, which nulls it; see the note on `includeTaskspacePaths`.
   const loaded = await loadProjectSnapshot({
     db: locals.db,
-    projectId: params.projectId,
+    projectId,
     includeTaskspacePaths: true,
     includeScopes: true,
     includeScopedFiles: false,
@@ -48,11 +47,13 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
   // that changed no data would cost one needless refresh, never a wrong one.
   const body = JSON.stringify(loaded.snapshot);
   const etag = snapshotEtag(body);
+  // Recorded against the database signature as it stands *now*, after the read. A write
+  // that landed while the queries ran therefore leaves a signature this tag is not
+  // remembered under, so the next poll reads again rather than trusting a snapshot that
+  // may already have been overtaken.
+  rememberSnapshotEtag(dbUrl, projectId, etag);
 
-  // The board is polled once a second for as long as it is open. Almost every one of those
-  // polls finds nothing new, and answering them with the whole board again is what made an
-  // idle page re-parse and re-render itself every second.
-  if (matchesEtag(request.headers.get("if-none-match"), etag)) {
+  if (matchesEtag(ifNoneMatch, etag)) {
     return new Response(null, { status: 304, headers: { etag, "cache-control": "no-store" } });
   }
 

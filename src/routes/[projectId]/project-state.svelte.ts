@@ -10,7 +10,7 @@ import type {
   Warp,
 } from "$lib/types";
 import { TaskspaceTreeState } from "./lib/taskspace-tree.svelte.js";
-import { Activity } from "./lib/activity.js";
+import { InFlight } from "./lib/in-flight.js";
 
 // Re-exported for the components and tests that already name it through this module.
 export type { ProjectDataSnapshot } from "$lib/types";
@@ -90,7 +90,7 @@ export class ProjectState {
    * open and drops an answer that arrived across one — see `snapshot-poll.ts`, which is
    * handed this alongside the page's own drag activity.
    */
-  readonly mutations = new Activity();
+  readonly mutations = new InFlight();
 
   mutationFetcher: typeof fetch = (input, init) =>
     this.mutations.track(() => this.fetcher(input, init));

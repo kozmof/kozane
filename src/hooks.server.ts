@@ -3,6 +3,7 @@ import { error } from "@sveltejs/kit";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
 import { getDBURL, getWorkspaceRoot } from "./db/internal/config";
+import { isMemoryDbUrl } from "./lib/db-url";
 import { getMigrationStatus } from "./db/internal/migrations";
 import { readApiKeyResult } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
@@ -130,7 +131,7 @@ async function checkMigrations(): Promise<string | null> {
   // file for a second connection to look at: `getMigrationStatus` would open its own empty
   // one, find no `__drizzle_migrations` table, and report every migration pending. The same
   // exemption `kozane open --memory` takes for the same reason.
-  if (url.includes(":memory:")) {
+  if (isMemoryDbUrl(url)) {
     migrationsVerified = true;
     return null;
   }

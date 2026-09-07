@@ -172,3 +172,15 @@ export function zoomedBy(view: MapView, size: Size, delta: number): MapView {
 export function pannedBy(view: MapView, size: Size, dx: number, dy: number): MapView {
   return clampView({ ...view, panX: view.panX + dx, panY: view.panY + dy }, size);
 }
+
+/**
+ * Whether the map is where it opens.
+ *
+ * Compared by value, and against the *clamped* default: a map panned back by hand counts as
+ * home, and a box too small to hold the default does not leave the way back permanently
+ * offered — the clamp is what makes those two the same test rather than two.
+ */
+export function isDefaultView(view: MapView, size: Size): boolean {
+  const home = clampView(defaultView(size), size);
+  return view.zoom === home.zoom && view.panX === home.panX && view.panY === home.panY;
+}
