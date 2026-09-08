@@ -107,6 +107,6 @@ rejects an unauthenticated request,
 and exports the database.
 
 The browser test starts the built server against a temporary real workspace, verifies the
-one-time API-key exchange, hydrates the project UI in Chromium, creates and reloads a card,
+one-time API-key exchange, hydrates the namespace UI in Chromium, creates and reloads a card,
 and confirms that an unauthenticated browser remains locked out. Run `pnpm verify:production`
 to execute the complete release gate locally.

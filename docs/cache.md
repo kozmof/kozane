@@ -3,14 +3,14 @@
 Kozane keeps disposable cache files in the workspace's `.kozane/` directory. They make
 aggregate pages and commands faster, but they do not own any user data:
 
-- The SQLite database owns projects, bundles, cards, card modification times, scopes, scope
+- The SQLite database owns namespaces, partitions, cards, card modification times, scopes, scope
   relationships, and taskspace registrations.
 - Each taskspace file owns its file contents and the tags written in those contents.
 - Cache files contain only copies or aggregates calculated from those database rows and file
   contents. Kozane accepts a cached copy only after matching it to the current database or
   taskspace file identity.
 
-Deleting a cache therefore removes no project, card, scope, relationship, taskspace
+Deleting a cache therefore removes no namespace, card, scope, relationship, taskspace
 registration, or taskspace file. Kozane recreates the missing calculations from the database
 and registered taskspace files when they are next requested.
 
@@ -20,12 +20,12 @@ and registered taskspace files when they are next requested.
 
 The treemap cache is one versioned, workspace-wide semantic snapshot containing:
 
-- projects and bundles, including bundle card counts and display colours;
-- card-change counts grouped by UTC day and bundle;
-- scopes and their project and bundle relationships; and
-- card tag hits, with each tagged card's project, bundle, and UTC change day.
+- namespaces and partitions, including partition card counts and display colours;
+- card-change counts grouped by UTC day and partition;
+- scopes and their namespace and partition relationships; and
+- card tag hits, with each tagged card's namespace, partition, and UTC change day.
 
-The map derives project filters, day filters, tag counts, tag-to-bundle links, and treemap
+The map derives namespace filters, day filters, tag counts, tag-to-partition links, and treemap
 input values from this snapshot. It does not cache rectangle coordinates, zoom, pan, or other
 viewport-dependent geometry.
 
@@ -35,11 +35,11 @@ the database so the exported files reflect the database used for that build.
 ### `.kozane/tag-index.json`
 
 The tag-index cache serves the tag page and tag CLI commands. Its database-backed section
-stores card tag hits for recently used project scopes and for the whole workspace.
+stores card tag hits for recently used namespace scopes and for the whole workspace.
 
 Its filesystem-backed section stores parsed tag hits from taskspace files. Each entry is
-validated against that individual file's identity. A project-specific scan cannot decide
-that another project's taskspace disappeared, so only a workspace-wide scan removes cached
+validated against that individual file's identity. A namespace-specific scan cannot decide
+that another namespace's taskspace disappeared, so only a workspace-wide scan removes cached
 taskspace directories that are no longer present.
 
 Because tag hits include excerpts, this cache can contain text from taskspaces outside the
@@ -84,7 +84,7 @@ workspace exceeding the limit pays for a fresh gather instead.
 
 ## Security and backups
 
-Cache files can contain card text excerpts, scope and project names, and taskspace excerpts.
+Cache files can contain card text excerpts, scope and namespace names, and taskspace excerpts.
 Keep `.kozane/` private and apply the same filesystem permissions and backup protections used
 for the database and taskspaces. The cache files themselves do not need to be backed up: a
 restore without them rebuilds them from the restored database rows and taskspace file
@@ -100,7 +100,7 @@ rm .kozane/tag-index.json
 ```
 
 The next relevant page load or command recreates it. Clearing a cache does not delete cards,
-projects, scopes, bundles, or taskspace files.
+namespaces, scopes, partitions, or taskspace files.
 
 If a view appears stale, first reload it. If it remains stale, stop the server, remove the
 relevant cache, and restart. A cache that cannot be recreated usually indicates that

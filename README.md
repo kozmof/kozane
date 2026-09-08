@@ -47,7 +47,7 @@ kozane init
 kozane open
 ```
 
-To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a project named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default project named `main`. Run `kozane project default <id>` to change which project commands use when `--project` is omitted.
+To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a namespace named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default namespace named `main`. Run `kozane namespace default <id>` to change which namespace commands use when `--namespace` is omitted.
 
 The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key a monitoring probe has to send it too — see [Production operations](./docs/production.md).
 
@@ -73,13 +73,13 @@ Pass a JavaScript regular expression source to customize the separator:
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-Project, bundle, layer, and scope options also work with piped files:
+Namespace, partition, layer, and scope options also work with piped files:
 
 ```sh
-cat foo.txt | kozane card squash --project eb155d6 --bundle 72ac1f8 --scope e3ee90b
+cat foo.txt | kozane card squash --namespace eb155d6 --partition 72ac1f8 --scope e3ee90b
 ```
 
-A layer is a surface cards sit on, so a set of cards can be worked on with the rest of the board dimmed behind it. Every project starts with a `Base` layer:
+A layer is a surface cards sit on, so a set of cards can be worked on with the rest of the board dimmed behind it. Every namespace starts with a `Base` layer:
 
 ```sh
 kozane layer list
@@ -106,7 +106,7 @@ kozane card add "caching work 'perf:cache"
 `'perf:cache` or `'perf:cache:invalidation`:
 
 ```sh
-kozane tag list          # every tag in the project, as a tree, with counts
+kozane tag list          # every tag in the namespace, as a tree, with counts
 kozane tag show perf     # the cards and files under it, subcategories included
 ```
 
@@ -114,29 +114,29 @@ Nothing is created to make a tag exist. It is in the workspace for as long as so
 holds it, and gone once that text is. Ordinary punctuation stays punctuation: `don't` is a
 word and `'quoted'` is a quoted word, and neither becomes a tag.
 
-In the browser, the tag index is at `/tags`, linked from the project list and from every
+In the browser, the tag index is at `/tags`, linked from the namespace list and from every
 tag written on a card. It lists every tag in the workspace and what each one gathers. Add
-`?projectId=<id>` to narrow it to one project; without it, the index reaches across every
-project at once — which nothing else in the UI does, and which is the point of a label that
+`?namespaceId=<id>` to narrow it to one namespace; without it, the index reaches across every
+namespace at once — which nothing else in the UI does, and which is the point of a label that
 lives in the text rather than in a table. `?files=0`, or the "Cards only" link on the page,
 leaves taskspace files out — the same switch as `--no-files` above.
 
-## Seeing across projects
+## Seeing across namespaces
 
 The browser has one page above the boards: the map at `/map`, reached from the icon in the
-corner of the project list. Every project is a rectangle, the bundles inside it are sized by
-how many cards they hold, each scope is a node with a line to every bundle it reaches, and
+corner of the namespace list. Every namespace is a rectangle, the partitions inside it are sized by
+how many cards they hold, each scope is a node with a line to every partition it reaches, and
 the tags are a tree you can pick from to see where each one lives. It is read-only, and it
-reaches every project at once.
+reaches every namespace at once.
 
-A board shows the scopes and taskspaces its own project uses, plus any not yet claimed by a project. A scope another project alone is working in stays off it. The CLI is the workspace-wide view:
+A board shows the scopes and taskspaces its own namespace uses, plus any not yet claimed by a namespace. A scope another namespace alone is working in stays off it. The CLI is the workspace-wide view:
 
 ```sh
-kozane scope list                    # every scope, and the projects each one reaches
-kozane taskspace list                # every taskspace, with its project and scope
+kozane scope list                    # every scope, and the namespaces each one reaches
+kozane taskspace list                # every taskspace, with its namespace and scope
 ```
 
-Pass `--project <id>` to either to see exactly what that project's board draws.
+Pass `--namespace <id>` to either to see exactly what that namespace's board draws.
 
 ## Security and remote access
 
@@ -181,7 +181,7 @@ kozane net ssg generate --out ./site --include-scoped-files
 
 This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported — those are the ones a board draws — so a taskspace you haven't put in a scope stays off the export entirely. Each exported taskspace is capped at 20MB of embedded content and 50,000 entries; files beyond the content cap, along with any oversized (>1MB) or non-text file, are still listed by name but open with an explanation instead of their contents, and a directory past the entry cap is marked as not included. Dotfiles are never included and symlinks are listed but never followed, the same as in the live file panel. A taskspace pointed at a large checkout will hit these limits — `node_modules` and its like are not excluded, only dotfiles are.
 
-Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a project is drawn on every project's board, so its files are embedded in every project's page: across five projects, a 20MB taskspace is 100MB of export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a project if you do not want it published board-wide.
+Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a namespace is drawn on every namespace's board, so its files are embedded in every namespace's page: across five namespaces, a 20MB taskspace is 100MB of export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a namespace if you do not want it published board-wide.
 
 Preview it over HTTP, not by opening the files directly.
 

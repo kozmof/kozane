@@ -117,20 +117,20 @@ kozane net ssg generate
 Builds plain HTML, CSS, and JS with no server, for hosting on GitHub Pages or
 any static host.
 
-The export is public and read-only. It bakes out one page per project, each
-carrying that project's cards, bundles, layers, warps, and glue, along with the
-scopes that project draws. Anyone who can open the site reads all of it. There
+The export is public and read-only. It bakes out one page per namespace, each
+carrying that namespace's cards, partitions, layers, warps, and glue, along with the
+scopes that namespace draws. Anyone who can open the site reads all of it. There
 is no API key, no login page, and no way to authenticate, because there is no
 server. Composing, dragging, deleting, taskspaces, and live sync are all
 disabled.
 
-Every project in the workspace is exported, so narrowing scopes to a project
-hides nothing here: a scope used by any project is on that project's page, and
+Every namespace in the workspace is exported, so narrowing scopes to a namespace
+hides nothing here: a scope used by any namespace is on that namespace's page, and
 one used by none is on every page. It is a question of which page a scope
 appears on, not of whether it is published.
 
 Do not export a workspace that holds anything you would not publish. Card text,
-bundle names, scope names, layer names, and warp positions are all part of the
+partition names, scope names, layer names, and warp positions are all part of the
 export by design, because that is what is being published.
 
 Filesystem paths are not. The machine-specific workspace path is stripped, and
@@ -139,8 +139,8 @@ directories a workspace was worked in are not served to whoever opens the site.
 By default taskspaces do not appear in a static export at all: a plain `kozane
 net ssg generate` carries no scopes, no taskspace names, and no files.
 
-The map at `/map` is exported on the same terms. It publishes project names,
-bundle names, card counts, and the tag tree — card and bundle content, which
+The map at `/map` is exported on the same terms. It publishes namespace names,
+partition names, card counts, and the tag tree — card and partition content, which
 the export carries by design. Its scope graph is not: a plain export draws no
 scope circles and names no scope, the same line every other page holds, and it
 is gathered at all only when the export was built to carry scopes.
@@ -151,7 +151,7 @@ is gathered at all only when the export was built to carry scopes.
 kozane net ssg generate --out ./site --include-scoped-files
 ```
 
-The export then carries the scopes each project draws, the names of the
+The export then carries the scopes each namespace draws, the names of the
 taskspaces under those scopes, and a read-only copy of each of those taskspaces'
 files, contents inline. A taskspace that belongs to no scope is not drawn by the
 board, so it is left out of the export entirely — neither its name nor a byte of

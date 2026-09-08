@@ -19,7 +19,7 @@ const port = String(20_000 + Math.floor(Math.random() * 20_000));
 const baseUrl = `http://127.0.0.1:${port}`;
 const taskspaceDir = join(workspace, "demo");
 let server: ChildProcess | undefined;
-let projectId = "";
+let namespaceId = "";
 
 function cli(...args: string[]): string {
   const result = spawnSync(process.execPath, [join(packageRoot, "bin", "kozane.js"), ...args], {
@@ -51,7 +51,7 @@ type Page = import("@playwright/test").Page;
 
 /** Opens the board, shows the panels, and opens one file from the taskspace tree. */
 async function openFile(page: Page, name: string): Promise<void> {
-  await page.goto(`${baseUrl}/${projectId}`);
+  await page.goto(`${baseUrl}/${namespaceId}`);
   await page.getByTitle("Show panels").click();
   await page.getByRole("button", { name: "Work" }).click();
   await page.getByRole("button", { name: "demo" }).click();
@@ -126,8 +126,8 @@ test.beforeAll(async () => {
 
   // The marker carries the full UUIDs; the CLI prints short ids, and the routes want the
   // full ones.
-  projectId = JSON.parse(readFileSync(join(taskspaceDir, ".taskspace.json"), "utf8"))
-    .projectId as string;
+  namespaceId = JSON.parse(readFileSync(join(taskspaceDir, ".taskspace.json"), "utf8"))
+    .namespaceId as string;
 
   server = spawn(process.execPath, [join(packageRoot, "build", "index.js")], {
     cwd: packageRoot,

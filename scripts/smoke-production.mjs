@@ -133,7 +133,7 @@ async function checkLoopbackDefault(port) {
 let server;
 try {
   cli("init");
-  cli("project", "create", "Smoke project");
+  cli("namespace", "create", "Smoke namespace");
   cli("api", "key", "generate");
 
   const { apiKey } = JSON.parse(readFileSync(join(workspace, ".kozane", "api.json"), "utf8"));

@@ -18,23 +18,23 @@ kozane open
 ```
 
 This starts the server, which defaults to `http://127.0.0.1:17173`, and opens a
-browser. The landing page lists the workspace's projects, and the workspace
-default is tagged "Default". Click a project to open its canvas.
+browser. The landing page lists the workspace's namespaces, and the workspace
+default is tagged "Default". Click a namespace to open its canvas.
 
-To start a new project, type a name into the field below the list and press
-the "+" button beside it, the same as creating a bundle or a layer. It arrives
-with the default "General" bundle and "Base" layer, the same as
-`kozane project create <name>`, and appears in the list ready to open. A
+To start a new namespace, type a name into the field below the list and press
+the "+" button beside it, the same as creating a partition or a layer. It arrives
+with the default "General" partition and "Base" layer, the same as
+`kozane namespace create <name>`, and appears in the list ready to open. A
 read-only static export has no server to create anything, so it shows the CLI
 command instead of the field.
 
-The back arrow at the top of the left panel returns to the project list.
+The back arrow at the top of the left panel returns to the namespace list.
 
 ## Layout
 
-The project view has three parts.
+The namespace view has three parts.
 
-- Left panel — bundles, where you filter, create, and delete.
+- Left panel — partitions, where you filter, create, and delete.
 - Canvas — the card workspace, with the composer and controls floating over it.
 - Right panel — scopes and taskspaces.
 
@@ -55,9 +55,9 @@ Cards snap to a 24-pixel grid, so positions stay aligned as you work.
 
 ## Warps
 
-A warp is a saved place on the canvas. Once a project has a few, the arrow keys
+A warp is a saved place on the canvas. Once a namespace has a few, the arrow keys
 move the view between them, which beats dragging across a board several screens
-wide. Warps belong to the project and are stored with it, so they are still
+wide. Warps belong to the namespace and are stored with it, so they are still
 there after a reload and in another tab.
 
 - Set — press `a`. A numbered marker appears under the mouse pointer, or at the
@@ -68,14 +68,14 @@ there after a reload and in another tab.
   round: `→` off the rightmost warp arrives at the leftmost, and `↓` off the
   bottom one at the top, so a row of warps cycles under one key. Zoom is left as
   it is.
-- Warp to another project — press `Shift` with any arrow key. A list of every warp
-  in the workspace opens, grouped by project, with this project's warps first and
+- Warp to another namespace — press `Shift` with any arrow key. A list of every warp
+  in the workspace opens, grouped by namespace, with this namespace's warps first and
   each warp named after the card it sits on, or the nearest one when it sits on
   the bare board. `↑` and `↓` move through the list,
-  `Enter` or a click jumps, and `Esc` closes it. A warp in this project just moves
-  the view. A warp in another project opens that project's board already centered
+  `Enter` or a click jumps, and `Esc` closes it. A warp in this namespace just moves
+  the view. A warp in another namespace opens that namespace's board already centered
   on it. The direction pressed does not matter, since all four open the same list.
-  Each row has a remove button, which is the only way to remove another project's
+  Each row has a remove button, which is the only way to remove another namespace's
   warps without going there.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
@@ -90,7 +90,7 @@ with `Ctrl`, `Cmd`, or `Alt` does nothing, and `Cmd+A` still selects text rather
 than dropping a warp. The letters are `ui.setWarpShortcut`,
 `ui.toggleWarpsShortcut`, and `ui.removeWarpShortcut` in `.kozane/config.json` and
 can be rebound. The arrow keys cannot, since they are what moves between warps. A
-static export keeps warping, including the cross-project list, and the show/hide
+static export keeps warping, including the cross-namespace list, and the show/hide
 toggle. It drops setting and removing along with every other write.
 
 ## Creating cards
@@ -106,15 +106,15 @@ The composer floats at the bottom-center of the canvas.
 New cards appear near the center of the current view, snapped to the grid.
 Create several in a row and they stack downward in one column without
 overlapping. Set `ui.newCardPlacement` to `"grid"` in `.kozane/config.json` for a
-compact four-column layout instead. The bundle dropdown at the top of the
-composer sets the new card's bundle. If a bundle filter is active in the left
+compact four-column layout instead. The partition dropdown at the top of the
+composer sets the new card's partition. If a partition filter is active in the left
 panel, new cards inherit it, and if a scope is active in the right panel, new
 cards are added to that scope automatically.
 
 ## Editing a card
 
 Double-click a card. The composer switches to edit mode, pre-filled with the
-card's text and bundle. Change the text or pick a different bundle, then press
+card's text and partition. Change the text or pick a different partition, then press
 `Enter` to save or `Esc` to cancel.
 
 ## Selecting cards
@@ -137,20 +137,20 @@ showing the selection count. The actions and their keyboard shortcuts:
 
 | Action             | Key      | Availability                    |
 | ------------------ | -------- | ------------------------------- |
-| Change bundle      | none     | Any selection (bundle dropdown) |
+| Change partition      | none     | Any selection (partition dropdown) |
 | Copy card ID       | `c`      | Exactly one card selected       |
 | Bring to front     | `]`      | Exactly one card selected       |
 | Send to back       | `[`      | Exactly one card selected       |
 | Glue or Unglue all | `g`      | Two or more cards selected      |
 | Unglue this        | `u`      | Primary card is in a glue group |
-| Move to project    | `m`      | Another project exists          |
+| Move to namespace    | `m`      | Another namespace exists          |
 | Resize             | `r`      | Exactly one card selected       |
 | Squash             | `s`      | One card whose text splits      |
 | Delete             | `Delete` | Any selection                   |
 | Clear selection    | `Esc`    | Any selection                   |
 
-Shortcuts fire only when you are not typing in a text field. "Move to project"
-opens a picker of the workspace's other projects, and choosing one moves every
+Shortcuts fire only when you are not typing in a text field. "Move to namespace"
+opens a picker of the workspace's other namespaces, and choosing one moves every
 selected card there.
 
 ## Arranging cards
@@ -199,7 +199,7 @@ The first piece takes the place the card was in, and the rest are laid out to it
 right and below, skipping positions other cards already sit on. Because the split
 happens before the pieces are drawn, they are spaced rather than measured, and a
 long piece can overlap the one below it until you drag it. Every piece inherits
-the card's bundle, layer, and width, and joins every scope the card was in. The
+the card's partition, layer, and width, and joins every scope the card was in. The
 pieces are left selected, so the next action applies to all of them at once.
 
 What the pieces do not inherit is the card's history: each is a new card, created
@@ -218,23 +218,23 @@ cards and press `g`, or click "Glue". To break a group, select it and choose
 "Unglue all", which is `g` again. To remove just the primary card from its group,
 press `u`. Glued cards show a small link icon in their footer.
 
-## Bundles
+## Partitions
 
-A bundle is a colored label on every card, a coarse category rather than a
-folder. The left panel lists bundles with a card count each.
+A partition is a colored label on every card, a coarse category rather than a
+folder. The left panel lists partitions with a card count each.
 
-- Filter — click a bundle to show only its cards, and click "All cards", or the
-  same bundle again, to clear the filter.
+- Filter — click a partition to show only its cards, and click "All cards", or the
+  same partition again, to clear the filter.
 - Create — type a name in the input at the bottom of the panel and press `Enter`
   or the `+` button.
-- Delete — hover a bundle and click the `×`. The default bundle cannot be
-  deleted, and cards in a deleted bundle move to the project's default bundle.
+- Delete — hover a partition and click the `×`. The default partition cannot be
+  deleted, and cards in a deleted partition move to the namespace's default partition.
 
 ## Layers
 
 A layer is a surface a card sits on, so one set of cards can be worked on
 without the rest getting in the way. Every card belongs to exactly one layer of
-its project, and every project starts with a layer named `Base`.
+its namespace, and every namespace starts with a layer named `Base`.
 
 One layer is selected at a time. Its cards are drawn at full strength above all
 the others, and the remaining layers fade well back, in their own order. Cards
@@ -256,13 +256,13 @@ toggle.
   first. The grip on the left of each row also moves the layer with `↑` and `↓`
   when it has focus.
 - Delete — hover a layer and click the `×`. The default layer cannot be deleted,
-  and cards on a deleted layer move to the project's default layer.
+  and cards on a deleted layer move to the namespace's default layer.
 
 New cards are created on the selected layer, and the selection is remembered, so
 reopening the page comes back to the layer you were working on.
 
 To move cards you have already written, select them and pick a layer from the
-control beside the bundle picker in the composer. The selection moves with them,
+control beside the partition picker in the composer. The selection moves with them,
 so the board follows the cards to their new layer.
 
 From the terminal, `kozane layer list|add|rename|move|delete` manages layers,
@@ -272,17 +272,17 @@ is named, its name, ID, or short ID all work, and an exact name wins.
 
 ## Scopes
 
-A scope is a cross-project grouping of cards. The right panel lists scopes
-with a member count each. The count is this project's cards in the scope,
+A scope is a cross-namespace grouping of cards. The right panel lists scopes
+with a member count each. The count is this namespace's cards in the scope,
 not the scope's total.
 
-A scope can hold cards from several projects, but the panel lists only the
-ones this project has reason to draw: scopes holding one of its cards,
+A scope can hold cards from several namespaces, but the panel lists only the
+ones this namespace has reason to draw: scopes holding one of its cards,
 scopes one of its taskspaces is attached to, and scopes nothing anywhere
 refers to yet — so a scope you have just named, and not yet filed anything
-into, stays put. A scope only another project is working in is not shown.
+into, stays put. A scope only another namespace is working in is not shown.
 Run `kozane scope list` to see every scope in the workspace and which
-projects reach each one.
+namespaces reach each one.
 
 - Filter — click a scope to highlight its cards. Cards outside it are dimmed.
   Click again to clear.
@@ -291,10 +291,10 @@ projects reach each one.
 - Add or remove cards — select cards, then use each scope's "Add to scope" or
   "Remove from scope" button. The label reflects whether the whole selection is
   already in that scope.
-- Delete — hover a scope and click the `×`. This removes this project's cards
+- Delete — hover a scope and click the `×`. This removes this namespace's cards
   from the scope. The cards themselves are kept, and the scope disappears
   workspace-wide only once nothing anywhere refers to it — no cards in any
-  project, and no taskspaces.
+  namespace, and no taskspaces.
 
 ## Taskspaces
 
@@ -305,8 +305,8 @@ create one, select the scope, type a name in the taskspace input, and press
 copy show a `taskspace` badge in their footer.
 
 The taskspaces under a scope are narrowed like the scopes themselves: this
-project's, plus any that belong to no project. Run `kozane taskspace list`
-to see every taskspace in the workspace with the project it belongs to.
+namespace's, plus any that belong to no namespace. Run `kozane taskspace list`
+to see every taskspace in the workspace with the namespace it belongs to.
 Manage taskspaces on disk with `kozane taskspace scan` and
 `kozane taskspace create`, described in the
 [CLI specification](../spec/cli.md).
@@ -405,23 +405,23 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 ### The tag index
 
 The tag index lives at `/tags`. There are two ways in: the tree icon in the corner of the
-project list, which opens it on the whole workspace, and any tag on a card, which opens it
+namespace list, which opens it on the whole workspace, and any tag on a card, which opens it
 on that tag. It has two halves: the tree of
 every tag on the left, with a count of the cards and files each one gathers, and the selected
 tag's hits on the right. `?tag=` says which tag is open, so any view of the page is a link
 you can send.
 
-It reaches the whole workspace by default. Unlike a board, which draws one project, the
-index gathers every project's cards and every taskspace at once — a tag lives in the text
+It reaches the whole workspace by default. Unlike a board, which draws one namespace, the
+index gathers every namespace's cards and every taskspace at once — a tag lives in the text
 rather than in a table, so nothing stops the same one being used on two boards.
 
-The row of project names in the top right narrows it. Picking one adds `?projectId=<id>` to
-the URL and reduces the tree to that project's cards and the taskspaces its board draws;
+The row of namespace names in the top right narrows it. Picking one adds `?namespaceId=<id>` to
+the URL and reduces the tree to that namespace's cards and the taskspaces its board draws;
 picking the one already selected clears it again and goes back to the whole workspace. The
 narrowing sticks as you browse the tree. A tag link in a card opens the index already
-narrowed to that card's project.
+narrowed to that card's namespace.
 
-**Cards only**, beside the project names, puts the taskspace files down and leaves the tags
+**Cards only**, beside the namespace names, puts the taskspace files down and leaves the tags
 written on cards. It adds `?files=0` to the URL and skips the disk walk rather than hiding
 what it found, so it is also the quickest the page gets. It is the answer for a taskspace
 that is a source checkout: a tag is just text, so every multi-word quoted string in one
@@ -429,7 +429,7 @@ opens a tag under its first word — `echo 'hello world'` gathers under `'hello`
 over such a taskspace is largely that. **Include files** puts them back.
 `kozane tag show --no-files` is the same switch in the terminal.
 
-- Cards show their text and bundle, and their project when you are looking across the
+- Cards show their text and partition, and their namespace when you are looking across the
   whole workspace. Click one to go to that card's board with the view centered on it.
 - Files show the path, the line number, and the line the tag is on. Click one to open it in
   the file editor.
@@ -468,7 +468,7 @@ number it names — the count in the tree, which is of cards and files, is the o
 for how much is under a tag.
 
 A static export made with `kozane net ssg generate` carries one tag index for the whole
-workspace, covering the cards on every exported board, and both the tag and the project
+workspace, covering the cards on every exported board, and both the tag and the namespace
 narrowing keep working there. Tags in taskspace files are left out unless the export was
 built with `--include-scoped-files`, because a file hit names a path inside the workspace
 and quotes a line of that file. The same flag governs whether the export names your
@@ -477,7 +477,7 @@ exported board does not.
 
 ## The map
 
-The map lives at `/map`, reached from the icon in the corner of the project list: unequal
+The map lives at `/map`, reached from the icon in the corner of the namespace list: unequal
 rectangles packed together, which is what the page draws. It is one picture
 of the whole workspace, and it is read-only: nothing on it changes anything, and there is
 no live-sync poll behind it.
@@ -488,20 +488,20 @@ furniture — a treemap laid into a smaller box is the same map with every recta
 down, and the small ones lose their labels first. The page itself does not scroll: the map
 is moved by dragging it.
 
-Every project is a rectangle, and the bundles inside it are rectangles of their own. A
-rectangle's **area is its card count** — a bundle holding two hundred cards is drawn a
-hundred times the size of one holding two, and a project's size is the cards its bundles
-hold between them. A bundle holding nothing has no area to be given, so empty bundles are
-drawn as dashed outlines in a strip along the bottom of their project rather than left out.
-A project with no cards at all is drawn the same way, in a strip along the foot of the map
-— named, as an outline, and without its own bundles drawn inside it, since a project holding
-no cards holds none in any of them. Bundles keep the colours their own board gives them.
+Every namespace is a rectangle, and the partitions inside it are rectangles of their own. A
+rectangle's **area is its card count** — a partition holding two hundred cards is drawn a
+hundred times the size of one holding two, and a namespace's size is the cards its partitions
+hold between them. A partition holding nothing has no area to be given, so empty partitions are
+drawn as dashed outlines in a strip along the bottom of their namespace rather than left out.
+A namespace with no cards at all is drawn the same way, in a strip along the foot of the map
+— named, as an outline, and without its own partitions drawn inside it, since a namespace holding
+no cards holds none in any of them. Partitions keep the colours their own board gives them.
 
-Below the rectangles is a row of circles, one per scope, each with a line to every bundle
+Below the rectangles is a row of circles, one per scope, each with a line to every partition
 it reaches. A scope is drawn this way rather than as a rectangle of its own because a scope
-is not inside a project — the same scope holds cards from several bundles and often from
-several projects, which is exactly what the lines show. A scope reaching a project only
-through a taskspace has no bundle to point at, so its line runs to the project instead.
+is not inside a namespace — the same scope holds cards from several partitions and often from
+several namespaces, which is exactly what the lines show. A scope reaching a namespace only
+through a taskspace has no partition to point at, so its line runs to the namespace instead.
 Hover a circle to raise its own lines out of the rest.
 
 The map opens centred, with room around it, and the control in the corner calls that 100% —
@@ -513,82 +513,82 @@ Drag anywhere on the map to move it, and hold `Ctrl` or `Cmd` while scrolling to
 toward the pointer — the same two gestures as the canvas, and the same `ui.zoomStep` behind
 them. The control in the bottom-right corner zooms in steps, and the reading beside it is
 also the way back: click the percentage to return to the size the map opened at. A drag that
-starts on a bundle pans the map rather than opening that bundle's board, so there is no part
+starts on a partition pans the map rather than opening that partition's board, so there is no part
 of the map you have to avoid grabbing.
 
 Zooming in enlarges the rectangles and leaves the labels the size they were, so it does what
-you would want it for: a bundle too small to be named where the map opens becomes large
-enough to carry its name. The gaps between rectangles and the band each project's name sits
+you would want it for: a partition too small to be named where the map opens becomes large
+enough to carry its name. The gaps between rectangles and the band each namespace's name sits
 in stay put too — only the part that stands for cards grows.
 
 The tags are on the left, as a tree over the map: `'perf` with `'perf:cache` beneath it,
 the way a directory holds a subdirectory. The number beside each is how many cards it
 gathers, that tag and everything under it. A tree taller than the window scrolls inside its
 own panel, and the lines follow their rows as it does. Click a tag to draw a line from its
-row to every bundle holding a card that carries it, and the rest of the map stands back so
+row to every partition holding a card that carries it, and the rest of the map stands back so
 the lines read. The lines stay until you clear them, and clicking the selected tag again is
 how: pointing at a row does nothing, so a pointer crossing the panel on its way somewhere
 else leaves the drawing alone. A click also puts `?tag=` in the URL, so any view of the map
 is a link you can send.
 
 Unlike the tag index, the map counts cards only — it reads no taskspace files. A file tag
-has no bundle rectangle to be drawn against, and gathering one would put a number in the
+has no partition rectangle to be drawn against, and gathering one would put a number in the
 tree that means something different from the number beside it.
 
-The row of project names in the top right narrows the map to one project, the same control
-the tag index carries and with the same `?projectId=` behind it. Narrowed, the map draws
-that project's rectangle alone, and only the scopes and tags that reach it.
+The row of namespace names in the top right narrows the map to one namespace, the same control
+the tag index carries and with the same `?namespaceId=` behind it. Narrowed, the map draws
+that namespace's rectangle alone, and only the scopes and tags that reach it.
 
 The activity grid at the bottom centre shows its UTC date range above a trailing year of
 card changes. A new card counts as its first change; moving, resizing, or otherwise arranging
 a card does not. Darker squares are busier UTC days. Click a square to size the treemap from
-the cards changed on that day and filter the tag tree, its counts, and its bundle links to
+the cards changed on that day and filter the tag tree, its counts, and its partition links to
 those same cards; the heading then shows that specific date. Click the selected square again
 or choose **Clear** to restore total card and tag counts and the full range heading. The
-selection is stored as `?day=YYYY-MM-DD` and keeps any project or tag selection already in
+selection is stored as `?day=YYYY-MM-DD` and keeps any namespace or tag selection already in
 the URL.
 
-The server keeps the map's workspace-wide bundle counts, daily activity, scope graph, and
+The server keeps the map's workspace-wide partition counts, daily activity, scope graph, and
 card-tag dimensions together in `.kozane/treemap.json`. The file is a disposable cache tied
 to the database signature: any database change rebuilds the whole semantic snapshot, while
-project and day selections are derived from it without caching viewport-dependent geometry.
+namespace and day selections are derived from it without caching viewport-dependent geometry.
 See [Cache behavior](./cache.md) for its validation, refresh, and recovery rules.
 
 A static export made with `kozane net ssg generate` carries the map, and both the tag
-selection and the project narrowing keep working there without a server. The scope circles
+selection and the namespace narrowing keep working there without a server. The scope circles
 are left out unless the export was built with `--include-scoped-files` — a plain export
 carries no scopes anywhere, and the map holds the same line.
 
 ## Getting between the pages
 
 The links between the three workspace-wide pages are icons rather than words, and each one
-draws the thing its page is about: an even grid of four squares for the list of projects, no
+draws the thing its page is about: an even grid of four squares for the list of namespaces, no
 one of them the large one; unequal rectangles packed together for the map, which is a
 treemap; and a tree branching into two children for the tag index, which is what a tag
 namespace is. They sit in the corner of each page's header, and each one names itself on
 hover — which is also what a screen reader reads, since the picture says nothing on its own.
 
 The connections in that last one are drawn rather than implied, and that is what makes it a
-tree instead of an indented list. Rows on their own say "a list", which is what the project
+tree instead of an indented list. Rows on their own say "a list", which is what the namespace
 page already is — two icons that look different while meaning much the same thing have to be
 remembered rather than recognised.
 
-The back link on the map and the tag index is the grid. Unnarrowed it leads to the project
-list and stands alone; narrowed to a project it leads to that project's board, and the
-project's name is drawn beside it. The icon is the same drawing either way, so the name is
+The back link on the map and the tag index is the grid. Unnarrowed it leads to the namespace
+list and stands alone; narrowed to a namespace it leads to that namespace's board, and the
+namespace's name is drawn beside it. The icon is the same drawing either way, so the name is
 what says which of the two you are about to get.
 
-The row of project names on those pages stays in words. It is a set of choices to read
-rather than a way out, and project names are not pictures.
+The row of namespace names on those pages stays in words. It is a set of choices to read
+rather than a way out, and namespace names are not pictures.
 
 ## Card footers
 
 Toggle footers with the `f` key. A footer shows, when relevant, the glue-group
-link icon, the `taskspace` badge, and the card's bundle dot and name.
+link icon, the `taskspace` badge, and the card's partition dot and name.
 
 ## Live sync
 
-The project view polls the server about once a second, and again whenever the tab
+The namespace view polls the server about once a second, and again whenever the tab
 regains focus, to pull in changes made by the CLI or another browser tab. Updates
 apply without disturbing your current filter or selection. Live sync is off in a
 static export, which is a fixed snapshot with no server behind it.
