@@ -185,6 +185,31 @@ export function readTagCache(root: string): TagCache | null {
 }
 
 /**
+ * Workspace roots this process has already warned about. A gather runs once per page load
+ * and once per `kozane tag` invocation, and a workspace past {@link TAG_CACHE_BYTES_MAX}
+ * stays past it — so without this, every one of those repeats the same line forever instead
+ * of saying it once and letting the rest of the process's output be about something else.
+ */
+const warnedOversizeRoots = new Set<string>();
+
+/**
+ * The gap {@link TAG_CACHE_BYTES_MAX} itself calls out: a cache too large to write is refused
+ * silently by design (see {@link writeTagCache}), so a workspace that crosses the ceiling pays
+ * a cold gather on every load with nothing saying why. This is that "why", printed once per
+ * process the first time a write is actually skipped for it — not at startup, since whether a
+ * given workspace is oversized is not known until a gather has already tried to write one.
+ */
+function warnOversizeOnce(root: string): void {
+  if (warnedOversizeRoots.has(root)) return;
+  warnedOversizeRoots.add(root);
+  console.warn(
+    `[kozane] Tag cache exceeds ${Math.round(TAG_CACHE_BYTES_MAX / (1024 * 1024))}MB and will ` +
+      "not be written; every page load and 'kozane tag' command will gather tags from " +
+      "scratch until the workspace's tagged content shrinks back under the limit.",
+  );
+}
+
+/**
  * Writes the cache, atomically. Best-effort: a workspace on a read-only filesystem, or two
  * processes finishing a gather at once, must not fail the page that was being served.
  *
@@ -209,7 +234,10 @@ export function writeTagCache(root: string, cache: TagCache): void {
     // Japanese is three bytes a character and one unit, so the two disagree by a factor of
     // three on exactly the content this cache is full of — and it is the byte count that
     // `readTagCache` will `stat`.
-    if (Buffer.byteLength(serialized) > TAG_CACHE_BYTES_MAX) return;
+    if (Buffer.byteLength(serialized) > TAG_CACHE_BYTES_MAX) {
+      warnOversizeOnce(root);
+      return;
+    }
     writeFileAtomic(tagCachePath(root), serialized);
   } catch {
     // Ignored: see above. `JSON.stringify` is inside the try for the same reason the write

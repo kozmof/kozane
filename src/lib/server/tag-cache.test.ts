@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, rmSync, statSync, writeFileSync, utimesSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -116,6 +116,50 @@ describe("readTagCache / writeTagCache", () => {
     writeTagCache(root, cache({ scopes: { "*": scope({ c1: padding }) } }));
 
     expect(() => statSync(tagCachePath(root))).toThrow();
+  });
+
+  /**
+   * The gap `TAG_CACHE_BYTES_MAX` itself calls out: a refused write said nothing, so a
+   * workspace past the ceiling paid a cold gather on every load with no way to learn why.
+   * One line at the point the write is actually skipped, once per workspace root per
+   * process — not once per gather, which every page load and `kozane tag` invocation would
+   * otherwise repeat forever.
+   */
+  it("warns once per root when a write is skipped for size, not on every gather", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
+    const oversized = cache({ scopes: { "*": scope({ c1: padding }) } });
+
+    writeTagCache(root, oversized);
+    writeTagCache(root, oversized);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toMatch(/tag cache/i);
+    warn.mockRestore();
+  });
+
+  it("warns again for a different root that also writes an oversized cache", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const otherRoot = join(tmpdir(), `kozane-tag-cache-test-${randomUUID()}`);
+    mkdirSync(join(otherRoot, ".kozane"), { recursive: true });
+    const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
+    const oversized = cache({ scopes: { "*": scope({ c1: padding }) } });
+
+    writeTagCache(root, oversized);
+    writeTagCache(otherRoot, oversized);
+
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+    rmSync(otherRoot, { recursive: true, force: true });
+  });
+
+  it("does not warn for a cache written under the ceiling", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    writeTagCache(root, cache());
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   /** And it does not destroy the cache already there in the attempt: the write is refused
