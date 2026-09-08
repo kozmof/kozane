@@ -66,7 +66,7 @@ describe("production request hook", () => {
     process.env.KOZANE_LOG_REQUESTS = "1";
     const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
     await handle({
-      event: event("http://localhost/project") as never,
+      event: event("http://localhost/namespace") as never,
       resolve: vi.fn(async () => new Response("ok")) as never,
     });
     expect(log).toHaveBeenCalledOnce();
@@ -74,7 +74,7 @@ describe("production request hook", () => {
       level: "info",
       event: "http_request",
       method: "GET",
-      path: "/project",
+      path: "/namespace",
       status: 200,
     });
   });
@@ -172,12 +172,12 @@ describe("production request hook", () => {
   it("redirects an unauthenticated browser navigation to the login page", async () => {
     state.root = workspace("secret");
     const response = await handle({
-      event: event("http://localhost/project?view=all", { accept: "text/html" }) as never,
+      event: event("http://localhost/namespace?view=all", { accept: "text/html" }) as never,
       resolve: vi.fn() as never,
     });
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(
-      "/login?next=" + encodeURIComponent("/project?view=all"),
+      "/login?next=" + encodeURIComponent("/namespace?view=all"),
     );
   });
 
@@ -208,11 +208,11 @@ describe("production request hook", () => {
   it("exchanges a query key for a protected cookie and clean redirect", async () => {
     state.root = workspace("secret");
     const response = await handle({
-      event: event("http://localhost/project?api_key=secret&view=all") as never,
+      event: event("http://localhost/namespace?api_key=secret&view=all") as never,
       resolve: vi.fn() as never,
     });
     expect(response.status).toBe(303);
-    expect(response.headers.get("location")).toBe("/project?view=all");
+    expect(response.headers.get("location")).toBe("/namespace?view=all");
     expect(response.headers.get("set-cookie")).toBe(
       "kozane_api_key=secret; Path=/; HttpOnly; SameSite=Strict",
     );

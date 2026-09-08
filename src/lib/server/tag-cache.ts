@@ -62,7 +62,7 @@ export type TagCache = {
   /** {@link databaseSignature} as it stood when the card hits below were gathered. */
   db: string;
   builtAt: string;
-  /** Keyed by project id, or `*` for a gather across the whole workspace. */
+  /** Keyed by namespace id, or `*` for a gather across the whole workspace. */
   scopes: Record<string, CachedCardHits>;
   /** Keyed by resolved taskspace directory, then by path within it. */
   files: Record<string, Record<string, CachedFileEntry>>;
@@ -110,11 +110,11 @@ const isCachedCardHits = (value: unknown): value is CachedCardHits =>
     value.cardData,
     (card) =>
       isRecord(card) &&
-      typeof card.projectId === "string" &&
-      typeof card.bundleId === "string" &&
+      typeof card.namespaceId === "string" &&
+      typeof card.partitionId === "string" &&
       typeof card.updatedDay === "string",
   ) &&
-  everyValue(value.cardProjects, (id) => typeof id === "string") &&
+  everyValue(value.cardNamespaces, (id) => typeof id === "string") &&
   // Required rather than defaulted, which is what the version above is for. A file written
   // before this field existed carries a complete-looking hit list that was in fact cut, and
   // reading it as `truncated: false` would restore the exact silence the field was added to
@@ -219,8 +219,8 @@ export function writeTagCache(root: string, cache: TagCache): void {
 }
 
 /** How a scope is named in the cache file. `*` is the gather across the whole workspace,
- *  which is a different set from any one project's and so a different entry. */
-export const scopeKey = (projectId?: string) => projectId ?? "*";
+ *  which is a different set from any one namespace's and so a different entry. */
+export const scopeKey = (namespaceId?: string) => namespaceId ?? "*";
 
 export type SaveCache = {
   cards: CachedCardHits;
@@ -247,24 +247,24 @@ export type SaveCache = {
 export function openTagCache({
   root,
   dbUrl,
-  projectId,
+  namespaceId,
 }: {
   root: string;
   dbUrl: string;
   /**
-   * The project this gather is narrowed to, or omitted for one across the whole workspace.
+   * The namespace this gather is narrowed to, or omitted for one across the whole workspace.
    *
    * Taken once, here, rather than handed to each call below — which is what makes the scope
    * key and the eviction rule that depends on it one decision instead of two that have to
    * agree. `save` used to be given a scope string and, separately, the set of directories it
    * was allowed to presume complete; the caller built the second with
-   * `...(projectId ? {} : { live })` and the two type-checked in every combination, including
-   * the one that tells a workspace-wide store that a project's taskspaces are all there are.
+   * `...(namespaceId ? {} : { live })` and the two type-checked in every combination, including
+   * the one that tells a workspace-wide store that a namespace's taskspaces are all there are.
    * Neither is passed now: both are derived from this.
    */
-  projectId?: string;
+  namespaceId?: string;
 }) {
-  const scope = scopeKey(projectId);
+  const scope = scopeKey(namespaceId);
   const signature = databaseSignature(dbUrl);
   // No signature means nothing to validate card hits against — an in-memory database, or one
   // that is not a local file. Rather than cache what cannot be checked, do not cache.
@@ -288,9 +288,9 @@ export function openTagCache({
     save: ({ cards, scanned = [], changed }: SaveCache) => {
       // Only a gather across the whole workspace read every taskspace there is, so only it
       // can tell a stored directory that is gone from one that simply belongs to another
-      // project. Derived from the project this store was opened for rather than passed in
+      // namespace. Derived from the namespace this store was opened for rather than passed in
       // beside the scope — see the note there.
-      const live = projectId ? null : new Set(scanned.map(({ baseDir }) => baseDir));
+      const live = namespaceId ? null : new Set(scanned.map(({ baseDir }) => baseDir));
       // A copy, because what is read from is what is compared against below: `unchangedFrom`
       // asks whether the record about to be written is the one already on disk, and it could
       // not if this had been built by editing that one.
@@ -304,7 +304,7 @@ export function openTagCache({
       for (const [baseDir, entries] of Object.entries(files)) {
         // A gather that saw every taskspace in the workspace knows which directories are
         // still taskspaces, so one that is not among them is gone and its entries go with
-        // it. A gather narrowed to one project knows nothing about the others' and keeps
+        // it. A gather narrowed to one namespace knows nothing about the others' and keeps
         // them — the bound below is what answers for that case.
         if (live && !live.has(baseDir)) continue;
         nextFiles[baseDir] = entries;

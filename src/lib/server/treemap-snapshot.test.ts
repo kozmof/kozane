@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createTestDB } from "../../test-utils/db.js";
-import { addProject } from "../../db/api/project.js";
+import { addNamespace } from "../../db/api/namespace.js";
 import { addLayer } from "../../db/api/layer.js";
-import { addBundle } from "../../db/api/bundle.js";
+import { addPartition } from "../../db/api/partition.js";
 import { addCard } from "../../db/api/card.js";
 import { addScope } from "../../db/api/scope.js";
 import { addScopeRel } from "../../db/api/scope-rel.js";
@@ -25,10 +25,10 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 async function setup() {
   const db = await createTestDB(dbPath);
-  const projectId = await addProject({ db, name: "P" });
-  await addLayer({ db, projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "B" });
-  return { db, projectId, bundleId };
+  const namespaceId = await addNamespace({ db, name: "P" });
+  await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "B" });
+  return { db, namespaceId, partitionId };
 }
 
 const cached = (db: Awaited<ReturnType<typeof createTestDB>>, includeScopes = true) =>
@@ -39,21 +39,21 @@ const cached = (db: Awaited<ReturnType<typeof createTestDB>>, includeScopes = tr
   });
 
 describe("treemap snapshot cache", () => {
-  it("stores activity, bundle counts, scope graph, and tag dimensions together", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const cardId = await addCard({ db, bundleId, content: "work 'perf" });
+  it("stores activity, partition counts, scope graph, and tag dimensions together", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const cardId = await addCard({ db, partitionId, content: "work 'perf" });
     const scopeId = await addScope({ db, name: "Release" });
     await addScopeRel({ db, scopeId, cardId });
 
     const snapshot = await cached(db);
 
-    expect(snapshot.projects).toContainEqual(expect.objectContaining({ id: projectId }));
-    expect(snapshot.bundles).toContainEqual(
-      expect.objectContaining({ id: bundleId, cards: 1, bg: expect.any(String) }),
+    expect(snapshot.namespaces).toContainEqual(expect.objectContaining({ id: namespaceId }));
+    expect(snapshot.partitions).toContainEqual(
+      expect.objectContaining({ id: partitionId, cards: 1, bg: expect.any(String) }),
     );
-    expect(snapshot.activity).toContainEqual(expect.objectContaining({ bundleId, cards: 1 }));
-    expect(snapshot.bundleUsage).toEqual([{ scopeId, bundleId, cards: 1 }]);
-    expect(snapshot.tags.cardData[cardId]).toMatchObject({ projectId, bundleId });
+    expect(snapshot.activity).toContainEqual(expect.objectContaining({ partitionId, cards: 1 }));
+    expect(snapshot.partitionUsage).toEqual([{ scopeId, partitionId, cards: 1 }]);
+    expect(snapshot.tags.cardData[cardId]).toMatchObject({ namespaceId, partitionId });
     expect(snapshot.tags.hits.map(({ tag }) => tag)).toEqual(["perf"]);
     expect(readTreemapCache(root)?.snapshot).toEqual(snapshot);
   });
@@ -69,22 +69,22 @@ describe("treemap snapshot cache", () => {
   });
 
   it("rebuilds every dimension after the database changes", async () => {
-    const { db, bundleId } = await setup();
-    expect((await cached(db)).bundles.find(({ id }) => id === bundleId)?.cards).toBe(0);
+    const { db, partitionId } = await setup();
+    expect((await cached(db)).partitions.find(({ id }) => id === partitionId)?.cards).toBe(0);
 
-    const cardId = await addCard({ db, bundleId, content: "new 'docs" });
+    const cardId = await addCard({ db, partitionId, content: "new 'docs" });
     const rebuilt = await cached(db);
 
-    expect(rebuilt.bundles.find(({ id }) => id === bundleId)?.cards).toBe(1);
-    expect(rebuilt.activity).toContainEqual(expect.objectContaining({ bundleId, cards: 1 }));
-    expect(rebuilt.tags.cardData[cardId]?.bundleId).toBe(bundleId);
+    expect(rebuilt.partitions.find(({ id }) => id === partitionId)?.cards).toBe(1);
+    expect(rebuilt.activity).toContainEqual(expect.objectContaining({ partitionId, cards: 1 }));
+    expect(rebuilt.tags.cardData[cardId]?.partitionId).toBe(partitionId);
   });
 
   it("ignores malformed cache files and gathers a valid replacement", async () => {
     const { db } = await setup();
     writeFileSync(treemapCachePath(root), '{"version":1,"snapshot":{}}');
 
-    await expect(cached(db)).resolves.toMatchObject({ projects: expect.any(Array) });
+    await expect(cached(db)).resolves.toMatchObject({ namespaces: expect.any(Array) });
     expect(readTreemapCache(root)).not.toBeNull();
   });
 });

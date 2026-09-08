@@ -15,7 +15,7 @@ import type { PathKind } from "../constants.js";
 export function resolveTaskspacePath(
   storedPath: string,
   pathKind: PathKind,
-  projectRoot: string,
+  namespaceRoot: string,
 ): string {
-  return pathKind === "absolute" ? storedPath : join(projectRoot, storedPath);
+  return pathKind === "absolute" ? storedPath : join(namespaceRoot, storedPath);
 }

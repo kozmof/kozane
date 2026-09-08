@@ -4,7 +4,7 @@ import { safeNext } from "./login";
 describe("safeNext", () => {
   it("keeps same-origin paths", () => {
     expect(safeNext("/")).toBe("/");
-    expect(safeNext("/project?view=all")).toBe("/project?view=all");
+    expect(safeNext("/namespace?view=all")).toBe("/namespace?view=all");
     expect(safeNext("/a/b/c")).toBe("/a/b/c");
   });
 
@@ -16,7 +16,7 @@ describe("safeNext", () => {
     expect(safeNext("//evil.test")).toBe("/");
     expect(safeNext("/\\evil.test")).toBe("/");
     expect(safeNext("javascript:alert(1)")).toBe("/");
-    expect(safeNext("project")).toBe("/");
+    expect(safeNext("namespace")).toBe("/");
   });
 
   it("never loops back to the login page", () => {

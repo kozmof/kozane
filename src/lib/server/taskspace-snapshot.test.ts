@@ -149,7 +149,7 @@ describe("buildTaskspaceFileTree", () => {
    * The walk has to be as forgiving of a directory it cannot read as it already is of a
    * file: an export builds from rows written whenever the taskspace was created, against a
    * disk that has moved on. A single unreadable directory that threw from here would take
-   * the whole prerender down with it — every project page, not just the subtree it could
+   * the whole prerender down with it — every namespace page, not just the subtree it could
    * not read.
    */
   // Nothing is unreadable to root, so the denial this rests on does not happen there.
@@ -251,7 +251,7 @@ describe("buildTaskspaceFileTreeOnce", () => {
     const second = buildTaskspaceFileTreeOnce(dir);
 
     // The identity check is the point: an export asking about one unplaced taskspace from
-    // every project page must not pay for the walk more than once.
+    // every namespace page must not pay for the walk more than once.
     expect(second).toBe(first);
   });
 

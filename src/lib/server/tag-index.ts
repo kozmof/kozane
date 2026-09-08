@@ -1,6 +1,6 @@
 import type { AnyDB } from "../../db/client.js";
 import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
-import { getAllTaskspaces, getTaskspacesInProject } from "../../db/api/taskspace.js";
+import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
 import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit, TagScanTruncation } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
@@ -48,13 +48,13 @@ export type TagIndexTruncation = {
  *
  * Both, together, because both are joined against the same id and by the same callers — the
  * terminal and the page each label a file row with the name and send it back to a board with
- * the project. Two records keyed alike would be two chances to hold one and not the other.
+ * the namespace. Two records keyed alike would be two chances to hold one and not the other.
  *
- * `projectId` is null for a taskspace belonging to no project. Null is not missing data: an
- * unplaced taskspace is drawn on every board (see `getTaskspacesInProject`), so a hit in one
+ * `namespaceId` is null for a taskspace belonging to no namespace. Null is not missing data: an
+ * unplaced taskspace is drawn on every board (see `getTaskspacesInNamespace`), so a hit in one
  * has no single board to be sent back to.
  */
-export type TagIndexTaskspace = { name: string; projectId: string | null };
+export type TagIndexTaskspace = { name: string; namespaceId: string | null };
 
 /**
  * Those, by taskspace id — named once here rather than written out at each reader, so the
@@ -67,10 +67,10 @@ export type TagIndex = {
   /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
    *  was written in, and `hit.source.kind` is the only thing that separates them. */
   hits: TagHit[];
-  /** Cached bundle/project/change-day dimensions for every card carrying a hit. */
+  /** Cached partition/namespace/change-day dimensions for every card carrying a hit. */
   cardData: CardTagHits["cardData"];
-  /** Which project each card carrying a hit belongs to. See `CardTagHits`. */
-  cardProjects: Record<string, string | undefined>;
+  /** Which namespace each card carrying a hit belongs to. See `CardTagHits`. */
+  cardNamespaces: Record<string, string | undefined>;
   /**
    * Every taskspace this gather walked, by id — not every taskspace there is.
    *
@@ -84,7 +84,7 @@ export type TagIndex = {
    * what keeps a static export from naming a taskspace it carries no hit from, without the
    * page needing a second rule to say so.
    *
-   * The value is optional for the reason `CardTagHits.cardProjects` is: every taskspace this
+   * The value is optional for the reason `CardTagHits.cardNamespaces` is: every taskspace this
    * gather walked has an entry, and a lookup can still miss — the page narrows this record to
    * the taskspaces its rows name, and the live page and a static export reach it through
    * different builds. Both readers already answer for a miss (`nameOf` here,
@@ -126,17 +126,17 @@ export type TagIndex = {
 type LoadTagIndex = {
   db: AnyDB;
   /**
-   * Narrows the index to one project's cards, and to the taskspaces that project's board
+   * Narrows the index to one namespace's cards, and to the taskspaces that namespace's board
    * draws. Omitted, every card and every taskspace in the workspace is read — which is what
-   * the tag index page does when its URL names no project.
+   * the tag index page does when its URL names no namespace.
    */
-  projectId?: string;
+  namespaceId?: string;
   /**
    * Whether taskspace files are scanned at all.
    *
    * The live page passes `true`. A static export passes `false` unless built with
    * `--include-scoped-files`, for the reason the note on `includeScopes` in
-   * `project-snapshot.ts` gives at more length: a file hit carries a path inside the
+   * `namespace-snapshot.ts` gives at more length: a file hit carries a path inside the
    * workspace *and* a line of that file's content, and page data baked into a publishable
    * export is readable via view-source however the UI draws it. So it has to be decided
    * here, not in the component.
@@ -169,22 +169,22 @@ type LoadTagIndex = {
 };
 
 /**
- * Every tag in a workspace, or in one project of it: the ones on cards and the ones in
+ * Every tag in a workspace, or in one namespace of it: the ones on cards and the ones in
  * taskspace files.
  *
  * The one read behind both callers — the tag index page and `kozane tag list|show` — for the
- * same reason `loadProjectSnapshot` is one read behind the page load and the poll: two
+ * same reason `loadNamespaceSnapshot` is one read behind the page load and the poll: two
  * copies of "gather the tags" is two answers to the same question, and the CLI quietly
  * disagreeing with the page about what a tag holds is a bug nobody would think to look for.
  *
- * Narrowed to a project, the taskspaces read are the ones `getTaskspacesInProject` returns —
- * that project's, plus any belonging to no project — so the tags come from the taskspaces
- * that project's board lists, and no others. Across the workspace it is every taskspace
+ * Narrowed to a namespace, the taskspaces read are the ones `getTaskspacesInNamespace` returns —
+ * that namespace's, plus any belonging to no namespace — so the tags come from the taskspaces
+ * that namespace's board lists, and no others. Across the workspace it is every taskspace
  * there is, which is the same set `kozane taskspace list` prints.
  */
 export async function loadTagIndex({
   db,
-  projectId,
+  namespaceId,
   includeFiles,
   root = getWorkspaceRoot(),
   limits,
@@ -195,15 +195,15 @@ export async function loadTagIndex({
   // workspace.
   const store =
     cache && root
-      ? openTagCache({ root, dbUrl: cache.dbUrl, ...(projectId && { projectId }) })
+      ? openTagCache({ root, dbUrl: cache.dbUrl, ...(namespaceId && { namespaceId }) })
       : null;
 
   const stored = store?.cards();
-  const cards = stored ?? (await getCardTagHits({ db, projectId }));
+  const cards = stored ?? (await getCardTagHits({ db, namespaceId }));
   // A card set that had to be queried is a card set the stored file does not hold.
   let changed = !stored;
   const hits = [...cards.hits];
-  const { cardData, cardProjects } = cards;
+  const { cardData, cardNamespaces } = cards;
   const taskspaces: Record<string, TagIndexTaskspace> = {};
   const truncated: TagIndexTruncation[] = [];
   const missing: string[] = [];
@@ -215,7 +215,7 @@ export async function loadTagIndex({
     return {
       hits,
       cardData,
-      cardProjects,
+      cardNamespaces,
       taskspaces,
       truncated,
       missing,
@@ -223,8 +223,8 @@ export async function loadTagIndex({
     };
   }
 
-  const rows = projectId
-    ? await getTaskspacesInProject({ db, projectId })
+  const rows = namespaceId
+    ? await getTaskspacesInNamespace({ db, namespaceId })
     : await getAllTaskspaces({ db });
 
   const scanned: { baseDir: string; changed: boolean }[] = [];
@@ -257,7 +257,7 @@ export async function loadTagIndex({
     changed ||= scan.changed;
     // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
     // truncation names a taskspace too, and the page has to be able to name it back.
-    taskspaces[taskspace.id] = { name: taskspace.name, projectId: taskspace.projectId };
+    taskspaces[taskspace.id] = { name: taskspace.name, namespaceId: taskspace.namespaceId };
     // Appended rather than spread as arguments. `push(...scan.hits)` passes one argument per
     // hit, and an engine's argument limit is reached somewhere past a hundred thousand of
     // them — so a taskspace holding enough tags took the page down with
@@ -279,7 +279,7 @@ export async function loadTagIndex({
   return {
     hits,
     cardData,
-    cardProjects,
+    cardNamespaces,
     taskspaces,
     truncated,
     missing,

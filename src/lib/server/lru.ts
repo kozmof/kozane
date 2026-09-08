@@ -80,7 +80,7 @@ export function evict<K, V>(map: Map<K, V>, max: number): void {
  * evict in an order nobody chose — the least-recently-used entry kept and a fresh one dropped,
  * with the file still valid and every test still passing. It is stated here rather than
  * guarded because the guard would run on every key of every save, and because both callers are
- * safe by construction rather than by luck: `tag-cache.ts` keys its scopes on a uuidv7 project
+ * safe by construction rather than by luck: `tag-cache.ts` keys its scopes on a uuidv7 namespace
  * id or the literal `*`, and its files on an absolute directory path. Neither can be an
  * integer. A third caller keyed on something countable — a row number, a port, an index — is
  * the case to look for.

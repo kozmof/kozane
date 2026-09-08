@@ -10,15 +10,15 @@ import {
   nearestCardHint,
   cardMetrics,
   textCells,
-  warpEntriesForProject,
+  warpEntriesForNamespace,
   withoutWarp,
   WARP_HINT_RADIUS,
 } from "./warp-list.js";
 import { WARP_HINT_MAX_CHARS } from "./constants.js";
 import type { HintCard, WarpListEntry } from "./warp-list.js";
 
-function warp(id: string, posX: number, posY: number, projectId = "p1") {
-  return { id, projectId, posX, posY };
+function warp(id: string, posX: number, posY: number, namespaceId = "p1") {
+  return { id, namespaceId, posX, posY };
 }
 
 function card(posX: number, posY: number, content: string, zIndex = 0) {
@@ -41,7 +41,7 @@ describe("CARD_BOX", () => {
   // From the repository root, the way the Vitest config resolves its own paths: a test
   // file's own URL is not a file: one once Vite has transformed it.
   const cardSource = readFileSync(
-    resolve("src/routes/[projectId]/components/KozaneCard.svelte"),
+    resolve("src/routes/[namespaceId]/components/KozaneCard.svelte"),
     "utf8",
   );
   // The content block is the styled element that sets a minimum height.
@@ -164,7 +164,7 @@ describe("nearestCardHint", () => {
   });
 
   it("measures a card read as an opening by how long it turned out to be", () => {
-    // How the palette reads another project's cards: the first few hundred characters,
+    // How the palette reads another namespace's cards: the first few hundred characters,
     // plus the length of the whole. Measured as the short text it arrives as, the tall
     // card would stop above the warp and its neighbour would be named instead — so one
     // warp would carry one hint on its own board and another in the palette.
@@ -191,7 +191,7 @@ describe("nearestCardHint", () => {
     );
   });
 
-  it("has no hint when the project has no cards", () => {
+  it("has no hint when the namespace has no cards", () => {
     expect(hintFor(warp("w1", 0, 0), [])).toBeNull();
   });
 
@@ -220,10 +220,10 @@ describe("nearestCardHint", () => {
   });
 });
 
-describe("warpEntriesForProject", () => {
+describe("warpEntriesForNamespace", () => {
   it("numbers warps from one in the order they arrive", () => {
-    const entries = warpEntriesForProject({
-      project: { id: "p1", name: "Kozane" },
+    const entries = warpEntriesForNamespace({
+      namespace: { id: "p1", name: "Kozane" },
       warps: [warp("w1", 0, 0), warp("w2", 900, 0), warp("w3", 1800, 0)],
       cards: [card(40, 0, "notes")],
       metrics: METRICS,
@@ -231,7 +231,7 @@ describe("warpEntriesForProject", () => {
     });
 
     expect(entries).toMatchObject([
-      { id: "w1", label: 1, projectName: "Kozane", isCurrent: true, hint: "notes" },
+      { id: "w1", label: 1, namespaceName: "Kozane", isCurrent: true, hint: "notes" },
       { id: "w2", label: 2, hint: null },
       { id: "w3", label: 3, hint: null },
     ]);
@@ -239,8 +239,8 @@ describe("warpEntriesForProject", () => {
 });
 
 describe("moveHighlight", () => {
-  const entries = warpEntriesForProject({
-    project: { id: "p1", name: "Kozane" },
+  const entries = warpEntriesForNamespace({
+    namespace: { id: "p1", name: "Kozane" },
     warps: [warp("w1", 0, 0), warp("w2", 900, 0), warp("w3", 1800, 0)],
     cards: [],
     metrics: METRICS,
@@ -270,13 +270,13 @@ describe("moveHighlight", () => {
 
 describe("withoutWarp", () => {
   const entries = [
-    { id: "w1", projectId: "p1", label: 1 },
-    { id: "w2", projectId: "p1", label: 2 },
-    { id: "w3", projectId: "p1", label: 3 },
-    { id: "w4", projectId: "p2", label: 1 },
+    { id: "w1", namespaceId: "p1", label: 1 },
+    { id: "w2", namespaceId: "p1", label: 2 },
+    { id: "w3", namespaceId: "p1", label: 3 },
+    { id: "w4", namespaceId: "p2", label: 1 },
   ] as WarpListEntry[];
 
-  it("renumbers what is left of the project the warp belonged to", () => {
+  it("renumbers what is left of the namespace the warp belonged to", () => {
     expect(withoutWarp(entries, "w1")).toMatchObject([
       { id: "w2", label: 1 },
       { id: "w3", label: 2 },
@@ -284,7 +284,7 @@ describe("withoutWarp", () => {
     ]);
   });
 
-  it("leaves the other projects' numbers alone", () => {
+  it("leaves the other namespaces' numbers alone", () => {
     expect(withoutWarp(entries, "w4")).toMatchObject([
       { id: "w1", label: 1 },
       { id: "w2", label: 2 },
@@ -298,21 +298,21 @@ describe("withoutWarp", () => {
 });
 
 describe("groupWarpEntries", () => {
-  it("gathers consecutive entries of one project under one heading", () => {
+  it("gathers consecutive entries of one namespace under one heading", () => {
     const entries = [
-      { projectId: "p1", projectName: "Kozane", isCurrent: true, id: "w1" },
-      { projectId: "p1", projectName: "Kozane", isCurrent: true, id: "w2" },
-      { projectId: "p2", projectName: "Research", isCurrent: false, id: "w3" },
+      { namespaceId: "p1", namespaceName: "Kozane", isCurrent: true, id: "w1" },
+      { namespaceId: "p1", namespaceName: "Kozane", isCurrent: true, id: "w2" },
+      { namespaceId: "p2", namespaceName: "Research", isCurrent: false, id: "w3" },
     ] as WarpListEntry[];
 
     expect(groupWarpEntries(entries)).toMatchObject([
       {
-        projectId: "p1",
-        projectName: "Kozane",
+        namespaceId: "p1",
+        namespaceName: "Kozane",
         isCurrent: true,
         entries: [{ id: "w1" }, { id: "w2" }],
       },
-      { projectId: "p2", projectName: "Research", isCurrent: false, entries: [{ id: "w3" }] },
+      { namespaceId: "p2", namespaceName: "Research", isCurrent: false, entries: [{ id: "w3" }] },
     ]);
   });
 
@@ -322,59 +322,59 @@ describe("groupWarpEntries", () => {
 });
 
 describe("buildWarpDirectory", () => {
-  const projects = [
+  const namespaces = [
     { id: "p1", name: "Kozane" },
     { id: "p2", name: "Research" },
   ];
   const warps = [warp("w1", 0, 0, "p1"), warp("w2", 100, 100, "p2"), warp("w3", 900, 900, "p2")];
   const cards = [
-    { projectId: "p1", ...card(20, 0, "current project card") },
-    { projectId: "p2", ...card(120, 100, "research card") },
+    { namespaceId: "p1", ...card(20, 0, "current namespace card") },
+    { namespaceId: "p2", ...card(120, 100, "research card") },
   ];
 
-  it("leaves out the project being viewed and numbers the rest from one", () => {
+  it("leaves out the namespace being viewed and numbers the rest from one", () => {
     const directory = buildWarpDirectory({
-      projects,
+      namespaces,
       warps,
       cards,
       metrics: METRICS,
-      excludeProjectId: "p1",
+      excludeNamespaceId: "p1",
     });
 
     expect(directory).toMatchObject([
       {
         id: "w2",
-        projectId: "p2",
-        projectName: "Research",
+        namespaceId: "p2",
+        namespaceName: "Research",
         label: 1,
         hint: "research card",
         isCurrent: false,
       },
-      { id: "w3", projectId: "p2", label: 2, hint: null },
+      { id: "w3", namespaceId: "p2", label: 2, hint: null },
     ]);
   });
 
-  it("only hints with cards from the warp's own project", () => {
-    const overlapping = [{ projectId: "p1", ...card(100, 100, "wrong project") }];
+  it("only hints with cards from the warp's own namespace", () => {
+    const overlapping = [{ namespaceId: "p1", ...card(100, 100, "wrong namespace") }];
     const directory = buildWarpDirectory({
-      projects,
+      namespaces,
       warps,
       cards: overlapping,
       metrics: METRICS,
-      excludeProjectId: "p1",
+      excludeNamespaceId: "p1",
     });
 
     expect(directory[0]).toMatchObject({ id: "w2", hint: null });
   });
 
-  it("is empty when the workspace has only the project being viewed", () => {
+  it("is empty when the workspace has only the namespace being viewed", () => {
     expect(
       buildWarpDirectory({
-        projects: [projects[0]],
+        namespaces: [namespaces[0]],
         warps,
         cards,
         metrics: METRICS,
-        excludeProjectId: "p1",
+        excludeNamespaceId: "p1",
       }),
     ).toEqual([]);
   });

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SNAPSHOT_ETAG_PROJECTS_MAX } from "../constants.js";
+import { SNAPSHOT_ETAG_NAMESPACES_MAX } from "../constants.js";
 import {
   _resetSnapshotEtagsForTest,
   matchesEtag,
@@ -76,7 +76,7 @@ describe("unchangedSnapshotEtag", () => {
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
   });
 
-  it("keeps one project's tag out of another's answer", () => {
+  it("keeps one namespace's tag out of another's answer", () => {
     rememberSnapshotEtag(dbUrl, "p1", '"tag-1"');
     expect(unchangedSnapshotEtag(dbUrl, "p2")).toBeNull();
     rememberSnapshotEtag(dbUrl, "p2", '"tag-2"');
@@ -103,20 +103,20 @@ describe("unchangedSnapshotEtag", () => {
     expect(unchangedSnapshotEtag(gone, "p1")).toBeNull();
   });
 
-  it("keeps the most recently used projects and drops the idlest", () => {
-    const ids = Array.from({ length: SNAPSHOT_ETAG_PROJECTS_MAX + 1 }, (_, i) => `p${i}`);
+  it("keeps the most recently used namespaces and drops the idlest", () => {
+    const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX + 1 }, (_, i) => `p${i}`);
     for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
 
     expect(unchangedSnapshotEtag(dbUrl, ids[0])).toBeNull();
     for (const id of ids.slice(1)) expect(unchangedSnapshotEtag(dbUrl, id)).toBe(`"${id}"`);
   });
 
-  it("moves a re-remembered project back to the end of the queue", () => {
-    const ids = Array.from({ length: SNAPSHOT_ETAG_PROJECTS_MAX }, (_, i) => `p${i}`);
+  it("moves a re-remembered namespace back to the end of the queue", () => {
+    const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
     for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
 
     // Re-remembering `p0` must move it, or the eviction below would order the map by
-    // first-seen and discard the project being polled rather than the idle one.
+    // first-seen and discard the namespace being polled rather than the idle one.
     rememberSnapshotEtag(dbUrl, "p0", '"p0"');
     rememberSnapshotEtag(dbUrl, "fresh", '"fresh"');
 

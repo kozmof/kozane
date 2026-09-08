@@ -401,7 +401,7 @@ export interface CappedHits<T extends { source: TagSource }> {
  * hundred of each spent the whole of what the cap was there to avoid.
  *
  * `keep` is that argument carried one step further back, to where it was still being spent.
- * Every caller selects before it caps — a tag, a project, whether files count at all — and
+ * Every caller selects before it caps — a tag, a namespace, whether files count at all — and
  * each was doing it with a `filter` into an array of everything that matched, which is the
  * very allocation the paragraph above is about. Asked here, the selection happens inside the
  * one pass and nothing larger than the two capped lists is ever built. Omitted, every hit is
@@ -545,7 +545,7 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
  * `source` beside `key` rather than only `key`, and that is the whole point of the shape. The
  * key is `card:<id>`, which is a string, and so is the card id it is built from — so a caller
  * that read the identity of a row off its key type-checked, linked to `/card:<id>`, and
- * looked its bundle up under a key nothing holds. The row now carries the thing itself, and
+ * looked its partition up under a key nothing holds. The row now carries the thing itself, and
  * the key is only ever what an `{#each}` or a `Map` is keyed by.
  */
 export interface TagHitRow<T extends { source: TagSource }> {

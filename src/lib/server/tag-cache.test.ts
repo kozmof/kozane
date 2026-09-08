@@ -16,11 +16,11 @@ import {
 let root: string;
 
 /** One scope's stored card hits. Most cases care only about which cards it names — the size
- *  ones pad `cardProjects` to reach a ceiling — so the rest of the shape is defaulted here. */
-const scope = (cardProjects: Record<string, string> = {}): TagCache["scopes"][string] => ({
+ *  ones pad `cardNamespaces` to reach a ceiling — so the rest of the shape is defaulted here. */
+const scope = (cardNamespaces: Record<string, string> = {}): TagCache["scopes"][string] => ({
   hits: [],
   cardData: {},
-  cardProjects,
+  cardNamespaces,
   truncated: false,
 });
 
@@ -59,7 +59,7 @@ it("pins the shape the cache version is the version of", () => {
     version: 3,
     db: "ino:mtime:size|",
     builtAt: "2026-01-01T00:00:00.000Z",
-    scopes: { "*": { hits: [], cardData: {}, cardProjects: {}, truncated: false } },
+    scopes: { "*": { hits: [], cardData: {}, cardNamespaces: {}, truncated: false } },
     files: { "/ws/notes": { "a.md": { signature: "t:1", hits: [] } } },
   } satisfies TagCache;
 
@@ -170,7 +170,7 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   it("answers with nothing for a hit that names no source", () => {
-    const scopes = { "*": { hits: [{ tag: "perf", excerpt: "" }], cardProjects: {} } };
+    const scopes = { "*": { hits: [{ tag: "perf", excerpt: "" }], cardNamespaces: {} } };
 
     writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes } as never)));
 
@@ -184,7 +184,7 @@ describe("readTagCache / writeTagCache", () => {
    * for as long as the database signature stayed fresh.
    */
   it("answers with nothing for a scope that does not say whether it was cut", () => {
-    const scopes = { "*": { hits: [], cardProjects: {} } };
+    const scopes = { "*": { hits: [], cardNamespaces: {} } };
 
     writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes } as never)));
 
@@ -222,9 +222,9 @@ describe("readTagCache / writeTagCache", () => {
             },
           ],
           cardData: {
-            c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-01-01" },
+            c1: { namespaceId: "p1", partitionId: "b1", updatedDay: "2026-01-01" },
           },
-          cardProjects: { c1: "p1" },
+          cardNamespaces: { c1: "p1" },
           truncated: false,
         },
       },

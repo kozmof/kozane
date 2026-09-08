@@ -167,7 +167,7 @@ describe("scanTaskspaceTags", () => {
   it("does not walk into generated or vendored directories", () => {
     for (const name of ["node_modules", "build", "dist", "coverage", "target"]) {
       mkdirSync(join(dir, name, "nested"), { recursive: true });
-      write(join(dir, name, "nested", "bundle.js"), "import x from 'generated'\n");
+      write(join(dir, name, "nested", "partition.js"), "import x from 'generated'\n");
     }
     write(join(dir, "notes.md"), "'mine");
 

@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { createTestDB } from "../../test-utils/db.js";
-import { addProject } from "../../db/api/project.js";
-import { addBundle } from "../../db/api/bundle.js";
+import { addNamespace } from "../../db/api/namespace.js";
+import { addPartition } from "../../db/api/partition.js";
 import { addLayer } from "../../db/api/layer.js";
 import { addCard, updateCard } from "../../db/api/card.js";
 import { addTaskspace, deleteTaskspace } from "../../db/api/taskspace.js";
@@ -31,53 +31,53 @@ describe("loadTagIndex", () => {
 
   async function setup() {
     const db = await createTestDB();
-    const projectId = await addProject({ db, name: "P" });
-    await addLayer({ db, projectId, name: "Base", isDefault: true });
-    const bundleId = await addBundle({ db, projectId, name: "B" });
-    return { db, projectId, bundleId };
+    const namespaceId = await addNamespace({ db, name: "P" });
+    await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+    const partitionId = await addPartition({ db, namespaceId, name: "B" });
+    return { db, namespaceId, partitionId };
   }
 
-  /** A taskspace directory under the workspace root, with one file in it. `projectId` is
-   *  optional because a row belonging to no project is a case this has to cover. */
+  /** A taskspace directory under the workspace root, with one file in it. `namespaceId` is
+   *  optional because a row belonging to no namespace is a case this has to cover. */
   async function seedTaskspace(
     db: Awaited<ReturnType<typeof createTestDB>>,
-    projectId: string | undefined,
+    namespaceId: string | undefined,
     name: string,
     content: string,
   ) {
     mkdirSync(join(root, name), { recursive: true });
     writeFileSync(join(root, name, "notes.md"), content);
-    return addTaskspace({ db, projectId, name, path: name });
+    return addTaskspace({ db, namespaceId, name, path: name });
   }
 
   it("gathers card tags and file tags into one list", async () => {
-    const { db, projectId, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "on a card 'perf" });
-    await seedTaskspace(db, projectId, "notes", "in a file 'docs\n");
+    const { db, namespaceId, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "on a card 'perf" });
+    await seedTaskspace(db, namespaceId, "notes", "in a file 'docs\n");
 
-    const { hits } = await loadTagIndex({ db, projectId, includeFiles: true, root });
+    const { hits } = await loadTagIndex({ db, namespaceId, includeFiles: true, root });
 
     expect(tags(hits)).toEqual(["docs", "perf"]);
     expect(hits.map(({ source }) => source.kind).sort()).toEqual(["card", "file"]);
   });
 
   it("leaves files out when it is told to", async () => {
-    const { db, projectId, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "on a card 'perf" });
-    await seedTaskspace(db, projectId, "notes", "in a file 'docs\n");
+    const { db, namespaceId, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "on a card 'perf" });
+    await seedTaskspace(db, namespaceId, "notes", "in a file 'docs\n");
 
-    const { hits } = await loadTagIndex({ db, projectId, includeFiles: false, root });
+    const { hits } = await loadTagIndex({ db, namespaceId, includeFiles: false, root });
 
     expect(tags(hits)).toEqual(["perf"]);
   });
 
   it("answers about cards alone when there is no workspace root to resolve against", async () => {
-    const { db, projectId, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'perf" });
+    const { db, namespaceId, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "'perf" });
 
     const { hits } = await loadTagIndex({
       db,
-      projectId,
+      namespaceId,
       includeFiles: true,
       root: null,
     });
@@ -85,32 +85,32 @@ describe("loadTagIndex", () => {
     expect(tags(hits)).toEqual(["perf"]);
   });
 
-  it("reads a taskspace belonging to no project, which every board draws", async () => {
-    const { db, projectId } = await setup();
+  it("reads a taskspace belonging to no namespace, which every board draws", async () => {
+    const { db, namespaceId } = await setup();
     await seedTaskspace(db, undefined, "loose", "'unplaced\n");
 
-    const { hits } = await loadTagIndex({ db, projectId, includeFiles: true, root });
+    const { hits } = await loadTagIndex({ db, namespaceId, includeFiles: true, root });
 
     expect(tags(hits)).toEqual(["unplaced"]);
   });
 
-  it("does not read another project's taskspace", async () => {
-    const { db, projectId } = await setup();
-    const otherProjectId = await addProject({ db, name: "Other" });
-    await seedTaskspace(db, otherProjectId, "theirs", "'theirs\n");
+  it("does not read another namespace's taskspace", async () => {
+    const { db, namespaceId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    await seedTaskspace(db, otherNamespaceId, "theirs", "'theirs\n");
 
-    const { hits } = await loadTagIndex({ db, projectId, includeFiles: true, root });
+    const { hits } = await loadTagIndex({ db, namespaceId, includeFiles: true, root });
 
     expect(hits).toEqual([]);
   });
 
   it("skips a taskspace row with no path", async () => {
-    const { db, projectId } = await setup();
-    await addTaskspace({ db, projectId, name: "pathless" });
+    const { db, namespaceId } = await setup();
+    await addTaskspace({ db, namespaceId, name: "pathless" });
 
     const { hits, truncated } = await loadTagIndex({
       db,
-      projectId,
+      namespaceId,
       includeFiles: true,
       root,
     });
@@ -127,13 +127,13 @@ describe("loadTagIndex", () => {
    * is what lets a reader be told to drop it.
    */
   it("counts a taskspace whose directory is gone as missing, not truncated", async () => {
-    const { db, projectId } = await setup();
-    const taskspaceId = await seedTaskspace(db, projectId, "notes", "'foo\n");
+    const { db, namespaceId } = await setup();
+    const taskspaceId = await seedTaskspace(db, namespaceId, "notes", "'foo\n");
     rmSync(join(root, "notes"), { recursive: true, force: true });
 
     const { truncated, missing, taskspaces } = await loadTagIndex({
       db,
-      projectId,
+      namespaceId,
       includeFiles: true,
       root,
     });
@@ -146,21 +146,21 @@ describe("loadTagIndex", () => {
   });
 
   describe("across the workspace", () => {
-    /** A second project with a card and a taskspace of its own. */
-    async function addSecondProject(db: Awaited<ReturnType<typeof createTestDB>>) {
-      const projectId = await addProject({ db, name: "Other" });
-      await addLayer({ db, projectId, name: "Base", isDefault: true });
-      const bundleId = await addBundle({ db, projectId, name: "B" });
-      await addCard({ db, bundleId, content: "'theirs" });
-      await seedTaskspace(db, projectId, "theirs-notes", "'theirs:file\n");
-      return { projectId, bundleId };
+    /** A second namespace with a card and a taskspace of its own. */
+    async function addSecondNamespace(db: Awaited<ReturnType<typeof createTestDB>>) {
+      const namespaceId = await addNamespace({ db, name: "Other" });
+      await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+      const partitionId = await addPartition({ db, namespaceId, name: "B" });
+      await addCard({ db, partitionId, content: "'theirs" });
+      await seedTaskspace(db, namespaceId, "theirs-notes", "'theirs:file\n");
+      return { namespaceId, partitionId };
     }
 
-    it("gathers cards and files from every project when none is named", async () => {
-      const { db, projectId, bundleId } = await setup();
-      await addCard({ db, bundleId, content: "'mine" });
-      await seedTaskspace(db, projectId, "mine-notes", "'mine:file\n");
-      await addSecondProject(db);
+    it("gathers cards and files from every namespace when none is named", async () => {
+      const { db, namespaceId, partitionId } = await setup();
+      await addCard({ db, partitionId, content: "'mine" });
+      await seedTaskspace(db, namespaceId, "mine-notes", "'mine:file\n");
+      await addSecondNamespace(db);
 
       const { hits } = await loadTagIndex({ db, includeFiles: true, root });
 
@@ -178,11 +178,11 @@ describe("loadTagIndex", () => {
      * nothing yields.
      */
     it("lets other work run between taskspaces", async () => {
-      const { db, projectId, bundleId } = await setup();
-      await addCard({ db, bundleId, content: "'mine" });
-      await seedTaskspace(db, projectId, "one", "'one:file\n");
-      await seedTaskspace(db, projectId, "two", "'two:file\n");
-      await seedTaskspace(db, projectId, "three", "'three:file\n");
+      const { db, namespaceId, partitionId } = await setup();
+      await addCard({ db, partitionId, content: "'mine" });
+      await seedTaskspace(db, namespaceId, "one", "'one:file\n");
+      await seedTaskspace(db, namespaceId, "two", "'two:file\n");
+      await seedTaskspace(db, namespaceId, "three", "'three:file\n");
 
       let ranDuringGather = false;
       let finished = false;
@@ -198,33 +198,33 @@ describe("loadTagIndex", () => {
       expect(tags(hits)).toEqual(["mine", "one:file", "three:file", "two:file"]);
     });
 
-    it("says which project each card and taskspace belongs to", async () => {
-      const { db, projectId, bundleId } = await setup();
-      const cardId = await addCard({ db, bundleId, content: "'mine" });
-      const taskspaceId = await seedTaskspace(db, projectId, "mine-notes", "'mine:file\n");
+    it("says which namespace each card and taskspace belongs to", async () => {
+      const { db, namespaceId, partitionId } = await setup();
+      const cardId = await addCard({ db, partitionId, content: "'mine" });
+      const taskspaceId = await seedTaskspace(db, namespaceId, "mine-notes", "'mine:file\n");
 
-      const { cardProjects, taskspaces } = await loadTagIndex({
+      const { cardNamespaces, taskspaces } = await loadTagIndex({
         db,
         includeFiles: true,
         root,
       });
 
-      expect(cardProjects[cardId]).toBe(projectId);
-      expect(taskspaces[taskspaceId]).toEqual({ name: "mine-notes", projectId });
+      expect(cardNamespaces[cardId]).toBe(namespaceId);
+      expect(taskspaces[taskspaceId]).toEqual({ name: "mine-notes", namespaceId });
     });
 
-    it("reports a taskspace belonging to no project as belonging to none", async () => {
+    it("reports a taskspace belonging to no namespace as belonging to none", async () => {
       const { db } = await setup();
       const taskspaceId = await seedTaskspace(db, undefined, "loose", "'unplaced\n");
 
       const { taskspaces } = await loadTagIndex({ db, includeFiles: true, root });
 
-      expect(taskspaces[taskspaceId]).toEqual({ name: "loose", projectId: null });
+      expect(taskspaces[taskspaceId]).toEqual({ name: "loose", namespaceId: null });
     });
 
     it("names a taskspace it looked at even when it held no tags", async () => {
-      const { db, projectId } = await setup();
-      const taskspaceId = await seedTaskspace(db, projectId, "empty", "nothing here\n");
+      const { db, namespaceId } = await setup();
+      const taskspaceId = await seedTaskspace(db, namespaceId, "empty", "nothing here\n");
 
       const { taskspaces } = await loadTagIndex({ db, includeFiles: true, root });
 
@@ -241,9 +241,9 @@ describe("loadTagIndex", () => {
      * makes: a taskspace half-read is never reported as a taskspace holding no tags.
      */
     it("bounds what one gather costs across every taskspace in it", async () => {
-      const { db, projectId } = await setup();
-      await seedTaskspace(db, projectId, "a-notes", "'first\n");
-      await seedTaskspace(db, projectId, "b-notes", "'second\n");
+      const { db, namespaceId } = await setup();
+      await seedTaskspace(db, namespaceId, "a-notes", "'first\n");
+      await seedTaskspace(db, namespaceId, "b-notes", "'second\n");
 
       const { hits, truncated, taskspaces } = await loadTagIndex({
         db,
@@ -273,10 +273,10 @@ describe("loadTagIndex", () => {
       const dbPath = join(root, ".kozane", "kozane.db");
       dbUrl = `file:${dbPath}`;
       const db = await createTestDB(dbPath);
-      const projectId = await addProject({ db, name: "P" });
-      await addLayer({ db, projectId, name: "Base", isDefault: true });
-      const bundleId = await addBundle({ db, projectId, name: "B" });
-      return { db, projectId, bundleId, cache: { dbUrl } };
+      const namespaceId = await addNamespace({ db, name: "P" });
+      await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+      const partitionId = await addPartition({ db, namespaceId, name: "B" });
+      return { db, namespaceId, partitionId, cache: { dbUrl } };
     }
 
     const gather = (db: Awaited<ReturnType<typeof createTestDB>>, cache: TagCacheLocation) =>
@@ -284,8 +284,8 @@ describe("loadTagIndex", () => {
     type TagCacheLocation = { dbUrl: string };
 
     it("writes a cache, and does not when it was not asked to", async () => {
-      const { db, bundleId } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
 
       await loadTagIndex({ db, includeFiles: true, root });
       expect(readTagCache(root)).toBeNull();
@@ -300,15 +300,15 @@ describe("loadTagIndex", () => {
      * getting the same tags would have proved nothing at all.
      */
     it("uses the stored card hits rather than querying again", async () => {
-      const { db, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
       await gather(db, cache);
 
       const planted = readTagCache(root)!;
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
-        cardData: { c1: { projectId: "p", bundleId: "b", updatedDay: "2026-01-01" } },
-        cardProjects: { c1: "p" },
+        cardData: { c1: { namespaceId: "p", partitionId: "b", updatedDay: "2026-01-01" } },
+        cardNamespaces: { c1: "p" },
         truncated: false,
       };
       writeTagCache(root, planted);
@@ -317,19 +317,19 @@ describe("loadTagIndex", () => {
     });
 
     it("re-queries once the database has changed", async () => {
-      const { db, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
       await gather(db, cache);
 
       const planted = readTagCache(root)!;
       planted.scopes["*"] = {
         hits: [{ tag: "planted", source: { kind: "card", cardId: "c1" }, excerpt: "planted" }],
-        cardData: { c1: { projectId: "p", bundleId: "b", updatedDay: "2026-01-01" } },
-        cardProjects: { c1: "p" },
+        cardData: { c1: { namespaceId: "p", partitionId: "b", updatedDay: "2026-01-01" } },
+        cardNamespaces: { c1: "p" },
         truncated: false,
       };
       writeTagCache(root, planted);
-      await addCard({ db, bundleId, content: "'second" });
+      await addCard({ db, partitionId, content: "'second" });
 
       expect(tags((await gather(db, cache)).hits)).toEqual(["perf", "second"]);
     });
@@ -337,23 +337,23 @@ describe("loadTagIndex", () => {
     /** The case a stored build time compared with `>` would wave through, and the reason the
      *  cache stores a signature instead. */
     it("re-queries after an edit that changes neither the card count nor the length", async () => {
-      const { db, bundleId, cache } = await cachedSetup();
-      const cardId = await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId, cache } = await cachedSetup();
+      const cardId = await addCard({ db, partitionId, content: "'perf" });
       expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
 
-      await updateCard({ db, cardId, bundleId, content: "'perg" });
+      await updateCard({ db, cardId, partitionId, content: "'perg" });
 
       expect(tags((await gather(db, cache)).hits)).toEqual(["perg"]);
     });
 
     it("keeps each scope apart", async () => {
-      const { db, projectId, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, namespaceId, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
 
       await loadTagIndex({ db, includeFiles: true, root, cache });
-      await loadTagIndex({ db, projectId, includeFiles: true, root, cache });
+      await loadTagIndex({ db, namespaceId, includeFiles: true, root, cache });
 
-      expect(Object.keys(readTagCache(root)!.scopes).sort()).toEqual(["*", projectId].sort());
+      expect(Object.keys(readTagCache(root)!.scopes).sort()).toEqual(["*", namespaceId].sort());
     });
 
     /**
@@ -362,8 +362,8 @@ describe("loadTagIndex", () => {
      * from there rather than from a re-read.
      */
     it("starts a new process warm from the file entries on disk", async () => {
-      const { db, projectId, cache } = await cachedSetup();
-      await seedTaskspace(db, projectId, "notes", "'ondisk\n");
+      const { db, namespaceId, cache } = await cachedSetup();
+      await seedTaskspace(db, namespaceId, "notes", "'ondisk\n");
       await gather(db, cache);
 
       const planted = readTagCache(root)!;
@@ -376,8 +376,8 @@ describe("loadTagIndex", () => {
     });
 
     it("re-reads a file that changed since it was stored", async () => {
-      const { db, projectId, cache } = await cachedSetup();
-      await seedTaskspace(db, projectId, "notes", "'before\n");
+      const { db, namespaceId, cache } = await cachedSetup();
+      await seedTaskspace(db, namespaceId, "notes", "'before\n");
       await gather(db, cache);
       clearTaskspaceTagCache();
 
@@ -394,9 +394,9 @@ describe("loadTagIndex", () => {
      * itself on every page load and every `kozane tag` run.
      */
     it("leaves the file alone when the gather learned nothing", async () => {
-      const { db, projectId, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
-      await seedTaskspace(db, projectId, "notes", "'docs\n");
+      const { db, namespaceId, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
+      await seedTaskspace(db, namespaceId, "notes", "'docs\n");
       await gather(db, cache);
 
       const before = statSync(tagCachePath(root)).mtimeMs;
@@ -408,8 +408,8 @@ describe("loadTagIndex", () => {
     });
 
     it("writes again as soon as a file under it changes", async () => {
-      const { db, projectId, cache } = await cachedSetup();
-      await seedTaskspace(db, projectId, "notes", "'before\n");
+      const { db, namespaceId, cache } = await cachedSetup();
+      await seedTaskspace(db, namespaceId, "notes", "'before\n");
       await gather(db, cache);
       const stamp = readTagCache(root)!.builtAt;
 
@@ -429,8 +429,8 @@ describe("loadTagIndex", () => {
      * happen to look at.
      */
     it("drops the stored files of a taskspace that is no longer one", async () => {
-      const { db, projectId, cache } = await cachedSetup();
-      const taskspaceId = await seedTaskspace(db, projectId, "notes", "'docs\n");
+      const { db, namespaceId, cache } = await cachedSetup();
+      const taskspaceId = await seedTaskspace(db, namespaceId, "notes", "'docs\n");
       await gather(db, cache);
       expect(Object.keys(readTagCache(root)!.files)).toEqual([join(root, "notes")]);
 
@@ -441,16 +441,16 @@ describe("loadTagIndex", () => {
       expect(readTagCache(root)!.files).toEqual({});
     });
 
-    /** A gather narrowed to one project has not seen the other projects' taskspaces, so it
+    /** A gather narrowed to one namespace has not seen the other namespaces' taskspaces, so it
      *  must not read their absence from its own list as their deletion. */
-    it("keeps another project's stored files when narrowed to one project", async () => {
-      const { db, projectId, cache } = await cachedSetup();
-      const otherId = await addProject({ db, name: "Other" });
-      await seedTaskspace(db, projectId, "mine", "'mine\n");
+    it("keeps another namespace's stored files when narrowed to one namespace", async () => {
+      const { db, namespaceId, cache } = await cachedSetup();
+      const otherId = await addNamespace({ db, name: "Other" });
+      await seedTaskspace(db, namespaceId, "mine", "'mine\n");
       await seedTaskspace(db, otherId, "theirs", "'theirs\n");
       await gather(db, cache);
 
-      await loadTagIndex({ db, projectId, includeFiles: true, root, cache });
+      await loadTagIndex({ db, namespaceId, includeFiles: true, root, cache });
 
       expect(Object.keys(readTagCache(root)!.files).sort()).toEqual(
         [join(root, "mine"), join(root, "theirs")].sort(),
@@ -458,8 +458,8 @@ describe("loadTagIndex", () => {
     });
 
     it("rebuilds silently from a corrupt cache file", async () => {
-      const { db, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
       await gather(db, cache);
       writeFileSync(tagCachePath(root), "{ not json");
 
@@ -469,8 +469,8 @@ describe("loadTagIndex", () => {
     /** Not json is the easy corruption. This is the one that got through: the top of the file
      *  says everything a reader checked, and the scope under it holds nothing to gather. */
     it("rebuilds from a cache file that is plausible at the top and wrong underneath", async () => {
-      const { db, bundleId, cache } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId, cache } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
       await gather(db, cache);
       const stored = JSON.parse(readFileSync(tagCachePath(root), "utf-8"));
       writeFileSync(tagCachePath(root), JSON.stringify({ ...stored, scopes: { "*": {} } }));
@@ -479,8 +479,8 @@ describe("loadTagIndex", () => {
     });
 
     it("does not cache a database it cannot identify", async () => {
-      const { db, bundleId } = await cachedSetup();
-      await addCard({ db, bundleId, content: "'perf" });
+      const { db, partitionId } = await cachedSetup();
+      await addCard({ db, partitionId, content: "'perf" });
 
       await loadTagIndex({
         db,

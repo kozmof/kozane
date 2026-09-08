@@ -3,17 +3,17 @@
  * into before a browser has measured one.
  */
 /**
- * How many (tag, bundle) pairs the map page's tag graph carries.
+ * How many (tag, partition) pairs the map page's tag graph carries.
  *
  * The page draws one selected tag's lines at a time, but it is sent the whole index at once,
  * because the tree beside it is the whole index and clicking down it must not be a round trip
- * per row. That index is an aggregate — one entry per tag per bundle, however many cards
+ * per row. That index is an aggregate — one entry per tag per partition, however many cards
  * made it — so it is far smaller than the up-to-{@link TAG_CARD_HITS_MAX} hits it is built
  * from, and in a workspace of any ordinary shape it never approaches this.
  *
  * It is bounded anyway, for the reason every other ceiling on the tag path exists: "one entry
- * per tag per bundle" is a product of two quantities the code does not know, and a tag
- * written into a template that seeds every card of every bundle multiplies them. Reaching it
+ * per tag per partition" is a product of two quantities the code does not know, and a tag
+ * written into a template that seeds every card of every partition multiplies them. Reaching it
  * is reported rather than silently absorbed — see `tagLinksTruncated` on the map loader —
  * because a graph missing lines and a graph whose tag genuinely reaches nowhere else look
  * identical.

@@ -64,7 +64,7 @@ export const INSERT_CHUNK_MAX = 200;
  * says whether it will take it.
  *
  * Named for the statement rather than for the INSERT it was introduced for, because the
- * widest statements this app builds are not inserts. `updateProjectCardPositions` and
+ * widest statements this app builds are not inserts. `updateNamespaceCardPositions` and
  * `reassignCardsToLayer` write a column with a `CASE` per row, which binds the id and the
  * value in every CASE and the id again in the WHERE — several times an insert's cost per
  * row, on a list `BATCH_MAX` alone would let reach two thousand. They draw their batch size

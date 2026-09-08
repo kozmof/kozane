@@ -1,18 +1,22 @@
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AnyDB } from "../../db/client.js";
-import { getAllProjects } from "../../db/api/project.js";
-import { getAllBundles, getBundleCardCounts, type BundleCardCount } from "../../db/api/bundle.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
+import {
+  getAllPartitions,
+  getPartitionCardCounts,
+  type PartitionCardCount,
+} from "../../db/api/partition.js";
 import { getCardChangeCounts, type CardChangeCount } from "../../db/api/card.js";
 import {
   getAllScopes,
-  getScopeBundleUsage,
-  getScopeProjectUsage,
-  type ScopeBundleUsage,
-  type ScopeProjectUsage,
+  getScopePartitionUsage,
+  getScopeNamespaceUsage,
+  type ScopePartitionUsage,
+  type ScopeNamespaceUsage,
 } from "../../db/api/scope.js";
 import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
-import type { Project, Scope } from "../../db/api/types.js";
+import type { Namespace, Scope } from "../../db/api/types.js";
 import { TREEMAP_CACHE_BYTES_MAX } from "../constants.js";
 import { applyPalette } from "../palette.js";
 import { writeFileAtomic } from "./atomic-write.js";
@@ -21,17 +25,17 @@ import { databaseSignature } from "./tag-cache.js";
 export const TREEMAP_CACHE_VERSION = 1;
 export const TREEMAP_CACHE_FILE = "treemap.json";
 
-export type TreemapBundle = BundleCardCount & { bg: string; dot: string };
+export type TreemapPartition = PartitionCardCount & { bg: string; dot: string };
 
 /** The workspace facts needed to derive every map view. Geometry and query selections are
  * deliberately absent: they are cheap browser-side projections of these facts. */
 export type TreemapSnapshot = {
-  projects: Project[];
-  bundles: TreemapBundle[];
+  namespaces: Namespace[];
+  partitions: TreemapPartition[];
   activity: CardChangeCount[];
   scopes: Scope[];
-  bundleUsage: ScopeBundleUsage[];
-  projectUsage: ScopeProjectUsage[];
+  partitionUsage: ScopePartitionUsage[];
+  namespaceUsage: ScopeNamespaceUsage[];
   tags: CardTagHits;
 };
 
@@ -52,21 +56,21 @@ const strings = (value: unknown, fields: string[]): boolean =>
 const arrayOf = (value: unknown, check: (entry: unknown) => boolean): boolean =>
   Array.isArray(value) && value.every(check);
 
-const isProject = (value: unknown): boolean =>
+const isNamespace = (value: unknown): boolean =>
   strings(value, ["id", "name"]) &&
   typeof (value as Record<string, unknown>).isDefault === "boolean";
-const isBundle = (value: unknown): boolean =>
-  strings(value, ["id", "projectId", "name", "bg", "dot"]) &&
+const isPartition = (value: unknown): boolean =>
+  strings(value, ["id", "namespaceId", "name", "bg", "dot"]) &&
   typeof (value as Record<string, unknown>).isDefault === "boolean" &&
   typeof (value as Record<string, unknown>).cards === "number";
 const isActivity = (value: unknown): boolean =>
-  strings(value, ["day", "bundleId"]) &&
+  strings(value, ["day", "partitionId"]) &&
   typeof (value as Record<string, unknown>).cards === "number";
 const isScope = (value: unknown): boolean => strings(value, ["id", "name"]);
-const isBundleUsage = (value: unknown): boolean =>
-  strings(value, ["scopeId", "bundleId"]) &&
+const isPartitionUsage = (value: unknown): boolean =>
+  strings(value, ["scopeId", "partitionId"]) &&
   typeof (value as Record<string, unknown>).cards === "number";
-const isProjectUsage = (value: unknown): boolean => strings(value, ["scopeId", "projectId"]);
+const isNamespaceUsage = (value: unknown): boolean => strings(value, ["scopeId", "namespaceId"]);
 const isTagHit = (value: unknown): boolean => {
   if (!strings(value, ["tag", "excerpt"])) return false;
   const source = (value as Record<string, unknown>).source;
@@ -76,14 +80,14 @@ const isTags = (value: unknown): boolean => {
   if (!isRecord(value) || !arrayOf(value.hits, isTagHit) || typeof value.truncated !== "boolean")
     return false;
   if (
-    !isRecord(value.cardProjects) ||
-    !Object.values(value.cardProjects).every((v) => typeof v === "string")
+    !isRecord(value.cardNamespaces) ||
+    !Object.values(value.cardNamespaces).every((v) => typeof v === "string")
   )
     return false;
   return (
     isRecord(value.cardData) &&
     Object.values(value.cardData).every((card) =>
-      strings(card, ["projectId", "bundleId", "updatedDay"]),
+      strings(card, ["namespaceId", "partitionId", "updatedDay"]),
     )
   );
 };
@@ -100,12 +104,12 @@ function isTreemapCache(value: unknown): value is TreemapCache {
     return false;
   const snapshot = value.snapshot;
   return (
-    arrayOf(snapshot.projects, isProject) &&
-    arrayOf(snapshot.bundles, isBundle) &&
+    arrayOf(snapshot.namespaces, isNamespace) &&
+    arrayOf(snapshot.partitions, isPartition) &&
     arrayOf(snapshot.activity, isActivity) &&
     arrayOf(snapshot.scopes, isScope) &&
-    arrayOf(snapshot.bundleUsage, isBundleUsage) &&
-    arrayOf(snapshot.projectUsage, isProjectUsage) &&
+    arrayOf(snapshot.partitionUsage, isPartitionUsage) &&
+    arrayOf(snapshot.namespaceUsage, isNamespaceUsage) &&
     isTags(snapshot.tags)
   );
 }
@@ -131,15 +135,18 @@ function writeTreemapCache(root: string, value: TreemapCache): void {
   }
 }
 
-async function paletteByBundle(
+async function paletteByPartition(
   db: AnyDB,
-  projectIds: string[],
+  namespaceIds: string[],
 ): Promise<Record<string, { bg: string; dot: string }>> {
   const palettes = await Promise.all(
-    projectIds.map(async (projectId) => applyPalette(await getAllBundles({ db, projectId }))),
+    namespaceIds.map(async (namespaceId) =>
+      applyPalette(await getAllPartitions({ db, namespaceId })),
+    ),
   );
   const colours: Record<string, { bg: string; dot: string }> = {};
-  for (const bundles of palettes) for (const { id, bg, dot } of bundles) colours[id] = { bg, dot };
+  for (const partitions of palettes)
+    for (const { id, bg, dot } of partitions) colours[id] = { bg, dot };
   return colours;
 }
 
@@ -157,29 +164,30 @@ export async function loadTreemapSnapshot({
   if (signature && stored?.db === signature && stored.includeScopes === includeScopes)
     return stored.snapshot;
 
-  const [projects, counts, activity, tags, scopes, bundleUsage, projectUsage] = await Promise.all([
-    getAllProjects({ db }),
-    getBundleCardCounts({ db }),
-    getCardChangeCounts({ db }),
-    getCardTagHits({ db }),
-    includeScopes ? getAllScopes({ db }) : Promise.resolve([]),
-    includeScopes ? getScopeBundleUsage({ db }) : Promise.resolve([]),
-    includeScopes ? getScopeProjectUsage({ db }) : Promise.resolve([]),
-  ]);
-  const colours = await paletteByBundle(
+  const [namespaces, counts, activity, tags, scopes, partitionUsage, namespaceUsage] =
+    await Promise.all([
+      getAllNamespaces({ db }),
+      getPartitionCardCounts({ db }),
+      getCardChangeCounts({ db }),
+      getCardTagHits({ db }),
+      includeScopes ? getAllScopes({ db }) : Promise.resolve([]),
+      includeScopes ? getScopePartitionUsage({ db }) : Promise.resolve([]),
+      includeScopes ? getScopeNamespaceUsage({ db }) : Promise.resolve([]),
+    ]);
+  const colours = await paletteByPartition(
     db,
-    projects.map(({ id }) => id),
+    namespaces.map(({ id }) => id),
   );
   const snapshot: TreemapSnapshot = {
-    projects,
-    bundles: counts.map((bundle) => ({
-      ...bundle,
-      ...(colours[bundle.id] ?? { bg: "transparent", dot: "currentColor" }),
+    namespaces,
+    partitions: counts.map((partition) => ({
+      ...partition,
+      ...(colours[partition.id] ?? { bg: "transparent", dot: "currentColor" }),
     })),
     activity,
     scopes,
-    bundleUsage,
-    projectUsage,
+    partitionUsage,
+    namespaceUsage,
     tags,
   };
 

@@ -2,14 +2,14 @@ import type { Warp } from "./types.js";
 import { WARP_HINT_MAX_CHARS } from "./constants.js";
 
 /**
- * One row of the cross-project warp palette. `label` is the warp's number on its own
- * board — numbering restarts per project, so a row and the marker it stands for always
+ * One row of the cross-namespace warp palette. `label` is the warp's number on its own
+ * board — numbering restarts per namespace, so a row and the marker it stands for always
  * carry the same digit.
  */
 export type WarpListEntry = {
   id: string;
-  projectId: string;
-  projectName: string;
+  namespaceId: string;
+  namespaceName: string;
   label: number;
   posX: number;
   posY: number;
@@ -160,7 +160,7 @@ function hintCardWidth(card: HintCard, metrics: CardMetrics): number {
  * by how much text there turned out to be, taking it as representative of the rest. That
  * assumption is what a hint is worth: an estimate of which card a warp is sitting on, made
  * the same way wherever the row is built, so a warp is named after the same card whether
- * it is read from its own board or from another project's.
+ * it is read from its own board or from another namespace's.
  *
  * Measured at the card's own width, so a resized card wraps to the number of lines it
  * really wraps to.
@@ -235,8 +235,8 @@ export function nearestCardHint(
   return best ? condense(best.content) : null;
 }
 
-type WarpEntriesForProject = {
-  project: { id: string; name: string };
+type WarpEntriesForNamespace = {
+  namespace: { id: string; name: string };
   /** In the order `getAllWarps` returns them: creation order, which is what markers show. */
   warps: readonly Warp[];
   cards: readonly HintCard[];
@@ -244,17 +244,17 @@ type WarpEntriesForProject = {
   isCurrent: boolean;
 };
 
-export function warpEntriesForProject({
-  project,
+export function warpEntriesForNamespace({
+  namespace,
   warps,
   cards,
   metrics,
   isCurrent,
-}: WarpEntriesForProject): WarpListEntry[] {
+}: WarpEntriesForNamespace): WarpListEntry[] {
   return warps.map((warp, index) => ({
     id: warp.id,
-    projectId: project.id,
-    projectName: project.name,
+    namespaceId: namespace.id,
+    namespaceName: namespace.name,
     label: index + 1,
     posX: warp.posX,
     posY: warp.posY,
@@ -279,9 +279,9 @@ export function moveHighlight(
 }
 
 /**
- * The list without `warpId`, with the project it belonged to renumbered: a removed warp
+ * The list without `warpId`, with the namespace it belonged to renumbered: a removed warp
  * renumbers the markers on its board, and the list has to say the same thing. Entries of
- * one project are contiguous, so one counter is enough.
+ * one namespace are contiguous, so one counter is enough.
  */
 export function withoutWarp(entries: readonly WarpListEntry[], warpId: string): WarpListEntry[] {
   const removed = entries.find((entry) => entry.id === warpId);
@@ -289,27 +289,29 @@ export function withoutWarp(entries: readonly WarpListEntry[], warpId: string): 
   let label = 0;
   return entries
     .filter((entry) => entry.id !== warpId)
-    .map((entry) => (entry.projectId === removed.projectId ? { ...entry, label: ++label } : entry));
+    .map((entry) =>
+      entry.namespaceId === removed.namespaceId ? { ...entry, label: ++label } : entry,
+    );
 }
 
-/** The entries of one project, in list order, so a rendered list can print its heading once. */
+/** The entries of one namespace, in list order, so a rendered list can print its heading once. */
 export type WarpListGroup = {
-  projectId: string;
-  projectName: string;
+  namespaceId: string;
+  namespaceName: string;
   isCurrent: boolean;
   entries: WarpListEntry[];
 };
 
-/** Groups an already-ordered list by project, keeping the order the entries arrived in. */
+/** Groups an already-ordered list by namespace, keeping the order the entries arrived in. */
 export function groupWarpEntries(entries: readonly WarpListEntry[]): WarpListGroup[] {
   const groups: WarpListGroup[] = [];
   for (const entry of entries) {
     const last = groups.at(-1);
-    if (last && last.projectId === entry.projectId) last.entries.push(entry);
+    if (last && last.namespaceId === entry.namespaceId) last.entries.push(entry);
     else
       groups.push({
-        projectId: entry.projectId,
-        projectName: entry.projectName,
+        namespaceId: entry.namespaceId,
+        namespaceName: entry.namespaceName,
         isCurrent: entry.isCurrent,
         entries: [entry],
       });
@@ -318,52 +320,52 @@ export function groupWarpEntries(entries: readonly WarpListEntry[]): WarpListGro
 }
 
 type BuildWarpDirectory = {
-  projects: readonly { id: string; name: string }[];
-  /** Every warp in the workspace, each carrying the project it belongs to. */
+  namespaces: readonly { id: string; name: string }[];
+  /** Every warp in the workspace, each carrying the namespace it belongs to. */
   warps: readonly Warp[];
-  cards: readonly (HintCard & { projectId: string })[];
+  cards: readonly (HintCard & { namespaceId: string })[];
   /** What the boards draw their cards at, which decides what a warp is sitting on. */
   metrics: CardMetrics;
-  /** The project the page is already showing, whose entries the client derives live. */
-  excludeProjectId: string;
+  /** The namespace the page is already showing, whose entries the client derives live. */
+  excludeNamespaceId: string;
 };
 
 /**
- * The palette rows for every project except the one being viewed, in `projects` order.
+ * The palette rows for every namespace except the one being viewed, in `namespaces` order.
  * Shared by the page load and the warp-directory endpoint so the two cannot drift, and
- * built from the same {@link warpEntriesForProject} the client uses for its own project.
+ * built from the same {@link warpEntriesForNamespace} the client uses for its own namespace.
  */
 export function buildWarpDirectory({
-  projects,
+  namespaces,
   warps,
   cards,
   metrics,
-  excludeProjectId,
+  excludeNamespaceId,
 }: BuildWarpDirectory): WarpListEntry[] {
   // Bucketed once instead of filtered inside the loop: a workspace's cards are scanned
-  // one time between them all, rather than once for every project it holds.
-  const warpsByProject = groupByProject(warps);
-  const cardsByProject = groupByProject(cards);
-  return projects.flatMap((project) =>
-    project.id === excludeProjectId
+  // one time between them all, rather than once for every namespace it holds.
+  const warpsByNamespace = groupByNamespace(warps);
+  const cardsByNamespace = groupByNamespace(cards);
+  return namespaces.flatMap((namespace) =>
+    namespace.id === excludeNamespaceId
       ? []
-      : warpEntriesForProject({
-          project,
-          warps: warpsByProject.get(project.id) ?? [],
-          cards: cardsByProject.get(project.id) ?? [],
+      : warpEntriesForNamespace({
+          namespace,
+          warps: warpsByNamespace.get(namespace.id) ?? [],
+          cards: cardsByNamespace.get(namespace.id) ?? [],
           metrics,
           isCurrent: false,
         }),
   );
 }
 
-/** Rows by the project they belong to, each bucket in the order the rows arrived. */
-function groupByProject<T extends { projectId: string }>(rows: readonly T[]): Map<string, T[]> {
-  const byProject = new Map<string, T[]>();
+/** Rows by the namespace they belong to, each bucket in the order the rows arrived. */
+function groupByNamespace<T extends { namespaceId: string }>(rows: readonly T[]): Map<string, T[]> {
+  const byNamespace = new Map<string, T[]>();
   for (const row of rows) {
-    const bucket = byProject.get(row.projectId);
+    const bucket = byNamespace.get(row.namespaceId);
     if (bucket) bucket.push(row);
-    else byProject.set(row.projectId, [row]);
+    else byNamespace.set(row.namespaceId, [row]);
   }
-  return byProject;
+  return byNamespace;
 }

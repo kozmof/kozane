@@ -75,7 +75,7 @@ function buildDirectoryNode(
   depth: number,
 ): DirectoryNode {
   // A backstop against a pathological real directory structure, not a limit anyone
-  // browsing a normal project tree should ever reach. What is left unread here is still
+  // browsing a normal namespace tree should ever reach. What is left unread here is still
   // reported as truncated, the same as a directory cut off by any other limit — under its
   // own reason, so the panel does not call a directory this stopped at "empty".
   if (depth > TASKSPACE_SSG_DEPTH_MAX)
@@ -157,10 +157,10 @@ const treesByBaseDir = new Map<string, TaskspaceFileTree>();
  * {@link buildTaskspaceFileTree}, but walking each directory once however many pages of an
  * export end up carrying it.
  *
- * A taskspace with no `project_id` is unplaced rather than another project's, so every
- * project's board draws it (see `getTaskspacesInProject`) and every project's page therefore
+ * A taskspace with no `namespace_id` is unplaced rather than another namespace's, so every
+ * namespace's board draws it (see `getTaskspacesInNamespace`) and every namespace's page therefore
  * embeds its files. Walked afresh per page, one such taskspace over a workspace of five
- * projects is five full recursive passes over the same unchanged directory — up to five
+ * namespaces is five full recursive passes over the same unchanged directory — up to five
  * times {@link TASKSPACE_SSG_NODES_MAX} `lstat` calls and five reads of every file — to
  * produce five trees that cannot differ, because a prerender reads a filesystem nobody is
  * writing to. Two taskspace rows pointed at the same directory collapse the same way, which

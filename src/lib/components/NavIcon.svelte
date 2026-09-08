@@ -3,12 +3,12 @@
    * The ways across a workspace, drawn instead of written.
    *
    * Each is drawn as the thing its page is about rather than as a decoration standing in for
-   * it: many of a size for the list of projects, an area carved up by how much each part
+   * it: many of a size for the list of namespaces, an area carved up by how much each part
    * holds for the map, and a tree branching into its own children for the tag index.
    *
    * They have to differ in what they mean and not only in how they are arranged, which is
    * the mistake worth recording. The tag index was rows of rectangles at first, and rows of
-   * rectangles say "a list" — which is what the project page is. Two icons that look
+   * rectangles say "a list" — which is what the namespace page is. Two icons that look
    * different while meaning the same thing have to be remembered rather than recognised.
    * A tree says nesting, which is what a tag namespace is and what no other page here has.
    *
@@ -16,7 +16,7 @@
    * gives its anchor an `aria-label`, and a `title` so a pointer can ask. This is
    * `aria-hidden` precisely so that the anchor's name is the one thing announced.
    */
-  type Kind = "projects" | "map" | "tags";
+  type Kind = "namespaces" | "map" | "tags";
 
   let { kind, size = 16 }: { kind: Kind; size?: number } = $props();
 
@@ -29,9 +29,9 @@
    * 1.2-thin connectors into capsules without either being asked for separately.
    */
   const RECTS: Record<Kind, { x: number; y: number; w: number; h: number }[]> = {
-    // The project list: many of a size, no one of them the large one. An even grid, so what
+    // The namespace list: many of a size, no one of them the large one. An even grid, so what
     // is read is the regularity rather than any one cell.
-    projects: [
+    namespaces: [
       { x: 2, y: 2, w: 5.5, h: 5.5 },
       { x: 8.5, y: 2, w: 5.5, h: 5.5 },
       { x: 2, y: 8.5, w: 5.5, h: 5.5 },

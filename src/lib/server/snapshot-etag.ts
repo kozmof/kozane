@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { SNAPSHOT_ETAG_PROJECTS_MAX } from "../constants.js";
+import { SNAPSHOT_ETAG_NAMESPACES_MAX } from "../constants.js";
 import { databaseSignature } from "./file-signature.js";
 import { evict } from "./lru.js";
 
@@ -20,7 +20,7 @@ import { evict } from "./lru.js";
  * answer, and the queries are skipped outright.
  *
  * Why the file's identity is enough. With `includeScopedFiles: false` — which is what the
- * live endpoint passes — `loadProjectSnapshot` is a pure function of the database: nine
+ * live endpoint passes — `loadNamespaceSnapshot` is a pure function of the database: nine
  * reads and no filesystem access at all. A byte-identical database therefore cannot produce
  * a different snapshot. `databaseSignature` is `ino:mtimeNs:size` over the main file and
  * its `-wal`, so any commit moves it, whoever made it — this server, another tab, a
@@ -52,39 +52,43 @@ export function matchesEtag(header: string | null, etag: string): boolean {
     .some((candidate) => candidate === "*" || candidate === etag);
 }
 
-/** The tag last computed for one project, against the database it was computed from. */
+/** The tag last computed for one namespace, against the database it was computed from. */
 type RememberedEtag = { signature: string; etag: string };
 
 /**
- * Keyed by project id, in least-recently-used order — a workspace has a handful of
- * projects, but nothing here bounds how many, and this map would otherwise be the one
+ * Keyed by namespace id, in least-recently-used order — a workspace has a handful of
+ * namespaces, but nothing here bounds how many, and this map would otherwise be the one
  * structure in the server that grows with what a client asks for.
  */
 const remembered = new Map<string, RememberedEtag>();
 
 /**
- * The tag this project's snapshot still has, or null when that cannot be established
+ * The tag this namespace's snapshot still has, or null when that cannot be established
  * without reading the database.
  */
-export function unchangedSnapshotEtag(dbUrl: string | null, projectId: string): string | null {
+export function unchangedSnapshotEtag(dbUrl: string | null, namespaceId: string): string | null {
   if (!dbUrl) return null;
   const signature = databaseSignature(dbUrl);
   if (!signature) return null;
-  const entry = remembered.get(projectId);
+  const entry = remembered.get(namespaceId);
   return entry && entry.signature === signature ? entry.etag : null;
 }
 
 /** Records the tag a full read produced, against the database it was read from. */
-export function rememberSnapshotEtag(dbUrl: string | null, projectId: string, etag: string): void {
+export function rememberSnapshotEtag(
+  dbUrl: string | null,
+  namespaceId: string,
+  etag: string,
+): void {
   if (!dbUrl) return;
   const signature = databaseSignature(dbUrl);
   if (!signature) return;
   // Deleted first so a revisit moves to the end, which is what makes the eviction below
   // least-recently-used rather than first-seen. Same shape as `touchOrCreate` in `lru.ts`,
   // which cannot be used here because the value depends on a signature read at write time.
-  remembered.delete(projectId);
-  remembered.set(projectId, { signature, etag });
-  evict(remembered, SNAPSHOT_ETAG_PROJECTS_MAX);
+  remembered.delete(namespaceId);
+  remembered.set(namespaceId, { signature, etag });
+  evict(remembered, SNAPSHOT_ETAG_NAMESPACES_MAX);
 }
 
 export function _resetSnapshotEtagsForTest(): void {

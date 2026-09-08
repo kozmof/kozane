@@ -9,7 +9,7 @@
 import { TAG_SCAN_NODES_MAX } from "./tag.js";
 
 /**
- * How many scopes a gathered tag index keeps. A workspace has few projects and the index is
+ * How many scopes a gathered tag index keeps. A workspace has few namespaces and the index is
  * looked at one scope at a time, so this is a backstop against a file that grows forever
  * rather than a limit anyone reaches: at a realistic size one scope is around a megabyte.
  */
@@ -26,7 +26,7 @@ export const TAG_CACHE_SCOPES_MAX = 16;
  *
  * The precise cleanup is neither of them: a gather across the whole workspace knows every
  * taskspace there is and drops what is not among them. This bounds the case that cannot do
- * that — a workspace only ever looked at one project at a time, or a long-lived `kozane open`
+ * that — a workspace only ever looked at one namespace at a time, or a long-lived `kozane open`
  * against taskspaces that come and go — and is set well above the number anyone has, so that
  * eviction is the exception rather than the rhythm.
  */
@@ -77,7 +77,7 @@ export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
  * which directory to drop while holding the parsed file this is trying to avoid parsing.
  * Rebuilding writes a smaller file only if the workspace has shrunk, so a workspace that is
  * genuinely this size pays a cold read every time — which is the honest outcome, and the
- * signal that {@code ?files=0} or a narrower project is the answer rather than a bigger
+ * signal that {@code ?files=0} or a narrower namespace is the answer rather than a bigger
  * ceiling.
  *
  * Set above what a realistic workspace reaches and no further, which is a smaller number than
@@ -109,12 +109,12 @@ export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 export const TREEMAP_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 
 /**
- * How many projects the snapshot endpoint remembers an ETag for.
+ * How many namespaces the snapshot endpoint remembers an ETag for.
  *
- * The map is keyed by project id, and a project id arrives in a URL — so without a ceiling
+ * The map is keyed by namespace id, and a namespace id arrives in a URL — so without a ceiling
  * it is the one structure in the server whose size a client chooses. A workspace has a
- * handful of projects and a browser has one board open at a time, so this is far above what
+ * handful of namespaces and a browser has one board open at a time, so this is far above what
  * any real use reaches; it is here so that "far above" is a number rather than an
  * assumption. Least-recently-used, so the boards actually being polled are the ones kept.
  */
-export const SNAPSHOT_ETAG_PROJECTS_MAX = 32;
+export const SNAPSHOT_ETAG_NAMESPACES_MAX = 32;

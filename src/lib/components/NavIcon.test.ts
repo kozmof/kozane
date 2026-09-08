@@ -7,7 +7,7 @@ import NavIcon from "./NavIcon.svelte";
  * page is about — a set, an area, a label — and that none of them announces itself, since
  * the link around an icon is what a screen reader should read.
  */
-const KINDS = ["projects", "map", "tags"] as const;
+const KINDS = ["namespaces", "map", "tags"] as const;
 
 const draw = (kind: (typeof KINDS)[number]) =>
   render(NavIcon, { props: { kind } as never }).container;
@@ -23,7 +23,7 @@ describe("NavIcon", () => {
 
   /**
    * The meaning is the point, not just the arrangement. Rows of rectangles say "a list",
-   * which is what the project page is — so the tag index draws the connections too, and a
+   * which is what the namespace page is — so the tag index draws the connections too, and a
    * drawn connection is what makes a shape a tree rather than an indented list.
    */
   describe("the tag index, as a tree", () => {
@@ -65,14 +65,14 @@ describe("NavIcon", () => {
     });
   });
 
-  /** The map is a treemap, so its icon is one: rectangles of unequal size. The project list
+  /** The map is a treemap, so its icon is one: rectangles of unequal size. The namespace list
    *  is the opposite — many of a size, no one of them the large one. */
-  it("draws the map unequal and the project list even", () => {
-    const areas = (kind: "projects" | "map") =>
+  it("draws the map unequal and the namespace list even", () => {
+    const areas = (kind: "namespaces" | "map") =>
       [...svgOf(kind).querySelectorAll("rect")].map(
         (rect) => Number(rect.getAttribute("width")) * Number(rect.getAttribute("height")),
       );
-    expect(new Set(areas("projects")).size).toBe(1);
+    expect(new Set(areas("namespaces")).size).toBe(1);
     expect(new Set(areas("map")).size).toBeGreaterThan(1);
   });
 
