@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { getDBURL } from "./internal/config.js";
 import { isMemoryDbUrl } from "../lib/db-url.js";
+import { applyConnectionPragmas } from "./pragmas.js";
 import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
 import type { DB } from "./tx.js";
@@ -24,8 +25,7 @@ export type OpenedDb = { db: DB; close: () => void };
 
 export async function openDb(url: string): Promise<OpenedDb> {
   const client = createClient({ url });
-  await client.execute("PRAGMA busy_timeout = 5000");
-  await client.execute("PRAGMA foreign_keys = ON");
+  await applyConnectionPragmas(client, url);
   const db = drizzle(client, { schema });
 
   if (isMemoryDbUrl(url)) {
@@ -40,6 +40,15 @@ export async function createDb(url: string): Promise<DB> {
 }
 
 let _dbPromise: Promise<DB> | null = null;
+/**
+ * How to hand back the connection {@link getDb} opened, so {@link resetDb} can close it.
+ *
+ * Held because `getDb` memoizes a `DB` and a `DB` has no way back to its client — the type
+ * is drizzle's handle, and `close` lives on the libsql client underneath it. Without this,
+ * `resetDb` dropped the promise and left the socket and file descriptors open: one leak per
+ * call, which in a suite that resets between cases is one per test.
+ */
+let _dbClose: (() => void) | null = null;
 /**
  * The URL {@link getDb} opened, or null before it has opened one.
  *
@@ -56,9 +65,10 @@ let _openedDbUrl: string | null = null;
 export async function getDb(): Promise<DB> {
   if (!_dbPromise) {
     const url = getDBURL();
-    _dbPromise = createDb(url)
-      .then((db) => {
+    _dbPromise = openDb(url)
+      .then(({ db, close }) => {
         _openedDbUrl = url;
+        _dbClose = close;
         return db;
       })
       .catch((e) => {
@@ -74,7 +84,21 @@ export function openedDbUrl(): string | null {
   return _openedDbUrl;
 }
 
+/**
+ * Forgets the process-wide connection, closing it first.
+ *
+ * Closing is the point: this is what a test calls between cases, and a `getDb` that had
+ * opened a database left its client alive with nothing holding a reference to it. The close
+ * is guarded because a connection already gone — the process exiting, a second reset — must
+ * not turn tidying up into the error being reported.
+ */
 export function resetDb(): void {
+  try {
+    _dbClose?.();
+  } catch {
+    // Already closed, or never fully opened. Nothing here depends on it having worked.
+  }
   _dbPromise = null;
   _openedDbUrl = null;
+  _dbClose = null;
 }

@@ -38,10 +38,11 @@ export function fileSignature(path: string): string | null {
  * through. Any commit moves it — this server's own, another tab's, a `kozane card add` in
  * another terminal, a `db import`.
  *
- * The `-wal` is signed alongside, though nothing here turns WAL on: `journal_mode` is
- * `delete`, so today every write moves the main file itself. Under WAL it would not, until a
- * checkpoint — so signing both is what keeps this correct if that ever changes, and costs one
- * `stat` of a file that is usually absent.
+ * The `-wal` is signed alongside, and under WAL — which is what a workspace runs in, see
+ * `db/pragmas.ts` — it is the half that moves. A commit appends to the log and leaves the
+ * main file untouched until a checkpoint, so signing the main file alone would report an
+ * actively-written database as unchanged. This was already written this way before the mode
+ * was set, which is why turning WAL on did not change what any cache here believes.
  *
  * Null for an in-memory database, which has no file to sign and no life beyond the process.
  */

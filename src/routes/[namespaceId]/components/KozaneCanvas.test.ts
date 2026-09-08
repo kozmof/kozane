@@ -1,11 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/svelte";
 import KozaneCanvas from "./KozaneCanvas.svelte";
+import CanvasBindingHarness from "./CanvasBindingHarness.svelte";
 import { SelectionState } from "../namespace-state.svelte.js";
 import { INACTIVE_LAYER_OPACITY } from "../lib/namespace-page.js";
+import type { CardPositionPatch } from "../lib/namespace-page.js";
 import { PALETTE } from "$lib/palette";
 import type { NewCardPlacement } from "$lib/ui-config";
 import type { PartitionWithColor, CardWithGlue, Layer, Warp } from "$lib/types";
+import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 
 /**
  * What this covers, and what it deliberately leaves to `namespace-page.test.ts`.
@@ -16,8 +19,10 @@ import type { PartitionWithColor, CardWithGlue, Layer, Warp } from "$lib/types";
  * that wrapper's opacity and stacking come out as, and what a warp does that a card does
  * not. Those rules have no home outside the template, so they had no test at all.
  *
- * jsdom lays nothing out — every element has a zero-sized rect — so drag, marquee, and
- * edge-scroll are not assertable here and stay with `e2e/`.
+ * jsdom lays nothing out — every element has a zero-sized rect — so the marquee, which
+ * intersects card rects, and edge-scroll, which needs an element with edges, are not
+ * assertable here and stay with `e2e/`. Dragging and resizing are, and are covered at the
+ * foot of this file: see the note there for why the missing layout does not reach them.
  */
 
 const color = (id: string): PartitionWithColor => ({
@@ -84,8 +89,8 @@ function makeProps(overrides: Overrides = {}) {
     newCardPlacement: "grid" as NewCardPlacement,
     fontSize: 11.5,
     fontFamily: "sans-serif",
-    onPersistPositions: vi.fn(async () => true),
-    onPersistWidth: vi.fn(async () => true),
+    onPersistPositions: vi.fn(async (_positions: CardPositionPatch[]) => true),
+    onPersistWidth: vi.fn(async (_cardId: string, _width: number) => true),
     onPositionActivityStart: vi.fn(),
     onPositionActivityEnd: vi.fn(),
     onError: vi.fn(),
@@ -280,5 +285,237 @@ describe("KozaneCanvas selection and scope", () => {
     expect(
       [...container.querySelectorAll<HTMLElement>("[data-card-id]")].map((el) => el.dataset.cardId),
     ).toEqual(["c1"]);
+  });
+});
+
+/**
+ * Dragging and resizing, which is the state machine this component holds and the only part
+ * of it with no pure function underneath.
+ *
+ * The header above says drag is not assertable here because jsdom lays nothing out. That is
+ * true of anything measured against the viewport — the marquee, which intersects card rects,
+ * and edge-scroll, which needs an element with edges — and it is not true of the drag
+ * itself. The offset is taken from the same zero rect at mousedown that every move is
+ * measured against, so the rect cancels: a pointer moved 60px right moves the card 60/zoom
+ * canvas pixels, whatever `getBoundingClientRect` claims. What was untested here was not
+ * untestable, and it is the code where a mistake is least visible — a drag that saves the
+ * wrong position, or a failed save that leaves the board showing a move that did not happen.
+ *
+ * Written against the component rather than a lifted-out controller with a fake canvas: the
+ * fake is where the bugs are not.
+ */
+
+const down = (target: Element, clientX: number, clientY: number, init: MouseEventInit = {}) =>
+  target.dispatchEvent(
+    new MouseEvent("mousedown", { bubbles: true, button: 0, clientX, clientY, ...init }),
+  );
+
+const move = (clientX: number, clientY: number) =>
+  window.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX, clientY }));
+
+const up = () => window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+
+/** A settled tick: the release awaits the persist callback before it rolls anything back. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+/**
+ * The same props, split for {@link CanvasBindingHarness}: it owns `cards` and `zoom`, and
+ * derives `visibleCards` from what it owns, so passing those through would give the canvas
+ * two sources for one list.
+ */
+function boundProps(overrides: Overrides = {}) {
+  const { cards, visibleCards: _visible, zoom: _zoom, ...props } = makeProps(overrides);
+  return { initialCards: cards, props };
+}
+
+function cardEl(container: HTMLElement, id: string): HTMLElement {
+  const found = container.querySelector<HTMLElement>(`[data-card-id="${id}"]`);
+  if (!found) throw new Error(`no card "${id}"`);
+  return found;
+}
+
+function resizeHandle(container: HTMLElement, id: string): HTMLElement {
+  const found = cardEl(container, id).querySelector<HTMLElement>("[data-resize-handle]");
+  if (!found) throw new Error(`card "${id}" is not showing a resize handle`);
+  return found;
+}
+
+describe("KozaneCanvas dragging", () => {
+  it("moves the card by the pointer's travel and saves where it landed", async () => {
+    const props = makeProps();
+    const { container } = render(KozaneCanvas, props);
+
+    down(cardEl(container, "c1"), 100, 100);
+    move(160, 140);
+    up();
+    await settle();
+
+    // 10 + 60 and 20 + 40, each snapped to the nearest 24: 70 and 60 both land on 72.
+    expect(props.cards[0].posX).toBe(72);
+    expect(props.cards[0].posY).toBe(72);
+    expect(props.onPersistPositions).toHaveBeenCalledWith([{ cardId: "c1", posX: 72, posY: 72 }]);
+  });
+
+  // The threshold that separates a drag from a click. Without it every click on a card
+  // would write a position, and the click handler would be racing a save.
+  it("does not save a press that never travelled", async () => {
+    const props = makeProps();
+    const { container } = render(KozaneCanvas, props);
+
+    down(cardEl(container, "c1"), 100, 100);
+    move(102, 101);
+    up();
+    await settle();
+
+    expect(props.onPersistPositions).not.toHaveBeenCalled();
+    // The card does follow the pointer — the threshold gates the save and the snap, not the
+    // drawing — so it is left the 2px off that nothing wrote down, until the next snapshot
+    // poll puts it back.
+    expect(props.cards[0].posX).toBe(12);
+  });
+
+  it("moves a glued card's whole group, and saves every one of them", async () => {
+    const cards = [
+      card("c1", "l1", { glueId: "g1" }),
+      card("c2", "l1", { glueId: "g1", posX: 100, posY: 200 }),
+      card("c3", "l1", { posX: 500, posY: 500 }),
+    ];
+    const props = makeProps({
+      cards,
+      visibleCards: cards,
+      glueRels: [
+        { glueId: "g1", cardId: "c1" },
+        { glueId: "g1", cardId: "c2" },
+      ],
+    });
+    const { container } = render(KozaneCanvas, props);
+
+    down(cardEl(container, "c1"), 0, 0);
+    move(48, 0);
+    up();
+    await settle();
+
+    // The dragged card lands on the grid, and the rest of the group travels exactly the
+    // distance it did — the snap on release moves the whole group, not just the card under
+    // the pointer, so their spacing is what it was.
+    expect(cards[0].posX).toBe(48);
+    expect(cards[1].posX).toBe(138);
+    expect(cards[1].posX - cards[0].posX).toBe(100 - 10);
+    // A card outside the group does not move, and is not saved.
+    expect(cards[2].posX).toBe(500);
+    const saved = props.onPersistPositions.mock.calls[0][0];
+    expect(saved.map(({ cardId }) => cardId).sort()).toEqual(["c1", "c2"]);
+  });
+
+  it("holds the snapshot poll off for the length of the drag", async () => {
+    const props = makeProps();
+    const { container } = render(KozaneCanvas, props);
+
+    down(cardEl(container, "c1"), 100, 100);
+    move(160, 100);
+    expect(props.onPositionActivityStart).toHaveBeenCalledTimes(1);
+    // Still open while the save is in flight: a snapshot applied here would replace the
+    // card list under the drag that produced it.
+    expect(props.onPositionActivityEnd).not.toHaveBeenCalled();
+    up();
+    await settle();
+
+    expect(props.onPositionActivityEnd).toHaveBeenCalledTimes(1);
+  });
+
+  // The rollback path. It has to put back the position the drag started from, not the one
+  // the request carried — and it has to say so, since the card is already drawn moved.
+  //
+  // Through the harness, because the rollback replaces the whole array rather than writing
+  // through the row: that assignment reaches a caller only across the binding, and the
+  // canvas rendered on its own writes it to a plain object nobody reads.
+  it("puts the card back where it was when the save fails", async () => {
+    const { initialCards, props } = boundProps({
+      onPersistPositions: vi.fn(async (_positions: CardPositionPatch[]) => false),
+    });
+    const { container, component } = render(CanvasBindingHarness, { initialCards, ...props });
+
+    down(cardEl(container, "c1"), 100, 100);
+    move(400, 400);
+    up();
+    await settle();
+
+    const [restored] = component.read();
+    expect(restored.posX).toBe(10);
+    expect(restored.posY).toBe(20);
+    expect(props.onError).toHaveBeenCalledWith("Failed to save card position");
+  });
+
+  it("ignores a drag on a read-only board", async () => {
+    const props = makeProps({ readonly: true });
+    const { container } = render(KozaneCanvas, props);
+
+    down(cardEl(container, "c1"), 100, 100);
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.cards[0].posX).toBe(10);
+    expect(props.onPersistPositions).not.toHaveBeenCalled();
+    expect(props.onPositionActivityStart).not.toHaveBeenCalled();
+  });
+});
+
+describe("KozaneCanvas resizing", () => {
+  /** The handle is only drawn for the card the resize shortcut armed. */
+  function armed(overrides: Overrides = {}) {
+    const selection = new SelectionState();
+    selection.selectedCards = new Set(["c1"]);
+    selection.resizingCardId = "c1";
+    return makeProps({ selection, ...overrides });
+  }
+
+  it("widens the card by the drag and saves the width it settled on", async () => {
+    const props = armed();
+    const { container } = render(KozaneCanvas, props);
+
+    down(resizeHandle(container, "c1"), 300, 0);
+    move(360, 0);
+    up();
+    await settle();
+
+    // 240 + 60, snapped to the nearest 24 on release: 300 lands on 312.
+    expect(props.cards[0].width).toBe(312);
+    expect(props.onPersistWidth).toHaveBeenCalledWith("c1", 312);
+  });
+
+  // Out of range is refused rather than stored, on the server. Clamping here is what keeps
+  // the board from ever asking: a drag past either end stops at it.
+  it("stops at the ends of the width range however far the pointer goes", async () => {
+    const props = armed();
+    const { container } = render(KozaneCanvas, props);
+
+    down(resizeHandle(container, "c1"), 0, 0);
+    move(-5000, 0);
+    up();
+    await settle();
+
+    expect(props.cards[0].width).toBe(CARD_WIDTH_RANGE[0]);
+  });
+
+  // A card with no width of its own follows `ui.defaultCardWidth`, and a failed resize has
+  // to leave it doing that rather than pinning it at the width it was drawn.
+  it("returns the card to following the default width when the save fails", async () => {
+    const selection = new SelectionState();
+    selection.selectedCards = new Set(["c1"]);
+    selection.resizingCardId = "c1";
+    const { initialCards, props } = boundProps({
+      selection,
+      onPersistWidth: vi.fn(async (_cardId: string, _width: number) => false),
+    });
+    const { container, component } = render(CanvasBindingHarness, { initialCards, ...props });
+
+    down(resizeHandle(container, "c1"), 300, 0);
+    move(400, 0);
+    up();
+    await settle();
+
+    expect(component.read()[0].width).toBeNull();
+    expect(props.onError).toHaveBeenCalledWith("Failed to save card width");
   });
 });

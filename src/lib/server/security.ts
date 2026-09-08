@@ -79,6 +79,39 @@ export function isAllowedRequestHost(
     .includes(normalized);
 }
 
+/**
+ * Why the authentication throttle will not do what it looks like it does, or null when it
+ * will.
+ *
+ * {@link recordAuthFailure} counts per client address, and the address comes from
+ * `getClientAddress()` — which, for a server behind a reverse proxy, is the *proxy's*
+ * address unless the Node adapter is told which header carries the real one. Every remote
+ * client then shares one counter: ten bad keys from anyone locks out everybody, and a
+ * distributed attempt is never counted per attacker at all.
+ *
+ * `docs/production.md` has said so since remote access existed. What it could not do is
+ * notice — a workspace deployed without `ADDRESS_HEADER` looked exactly like one deployed
+ * with it, from the outside and from the log. So the condition is checked where the server
+ * can see it, and the answer is a line at startup rather than a refusal: the throttle is a
+ * second line of defence behind the key, and a workspace whose proxy genuinely presents one
+ * address is not misconfigured, only limited.
+ *
+ * Loopback bindings are exempt, having exactly one client and no proxy to be behind.
+ */
+export function remoteThrottleWarning(
+  host = process.env.HOST ?? "127.0.0.1",
+  addressHeader = process.env.ADDRESS_HEADER,
+): string | null {
+  if (isLoopbackHost(host)) return null;
+  if (addressHeader?.trim()) return null;
+  return (
+    "Bound remotely with no ADDRESS_HEADER set. Every request will be counted against the " +
+    "proxy's own address, so one client failing to authenticate throttles all of them. Set " +
+    "ADDRESS_HEADER (typically x-forwarded-for) and XFF_DEPTH for your proxy chain — see " +
+    "docs/production.md."
+  );
+}
+
 export function recordAuthFailure(client: string, now = Date.now()): number | null {
   const current = authFailures.get(client);
   const rolledOver = !current || current.resetAt <= now;

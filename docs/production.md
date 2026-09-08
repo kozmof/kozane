@@ -53,7 +53,15 @@ with the API key. It verifies that the database accepts queries, answering `200`
 Alert on the `status` field rather than on the status code alone; the cause of a failure is
 written to the log, not to the response.
 
-Run only one Kozane server per workspace, enforced by an exclusive runtime reservation.
+Run only one Kozane server per workspace. This is not only a matter of writers contending for
+one SQLite file — several things the server keeps are process-local and quietly stop meaning
+what they say once there are two of them. The authentication throttle counts failures in
+memory, so two processes give an attacker twice the attempts. The snapshot ETag memo and the
+API-key cache are each validated against the database and key files, so a second process is
+correct but pays the work again. Do not run Kozane behind a load balancer across replicas, and
+do not scale it to more than one instance or worker; scale the machine instead.
+
+The rule is enforced by an exclusive runtime reservation.
 `kozane open` checks the reservation before it starts anything and refuses outright. A server
 started directly (`node bin/server.js`) against a workspace another process already holds
 answers every request with HTTP 503 naming the process that holds it, and logs the conflict

@@ -52,6 +52,9 @@ To start with an empty database that exists only for the lifetime of the server,
 The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key a monitoring probe has to send it too — see [Production operations](./docs/production.md).
 
 For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
+The two surfaces Kozane implements are specified in full: the commands in
+[the CLI specification](./spec/cli.md), and the endpoints the browser and any API client
+reach in [the HTTP API specification](./spec/http.md).
 
 ## Adding cards from text
 

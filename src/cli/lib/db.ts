@@ -3,7 +3,6 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { createClient } from "@libsql/client";
 import {
   closeSync,
-  copyFileSync,
   existsSync,
   fsyncSync,
   mkdirSync,
@@ -19,6 +18,7 @@ import {
   resolveMigrationsFolder,
   type MigrationStatus,
 } from "../../db/internal/migrations.js";
+import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "../../db/pragmas.js";
 import { dbPath } from "./config.js";
 
 // Reading a migration state now lives in `db/internal/migrations.ts`, which the server can
@@ -49,7 +49,7 @@ export async function backupDb(workspaceRoot: string): Promise<string> {
   // VACUUM INTO produces a consistent copy even under concurrent writes, unlike copyFileSync.
   const client = createClient({ url: `file:${source}` });
   try {
-    await client.execute("PRAGMA busy_timeout = 5000");
+    await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
   } finally {
     client.close();
@@ -144,8 +144,49 @@ export async function runMigrations(dbUrl: string): Promise<void> {
   const db = drizzle(client, { schema });
 
   try {
-    await client.execute("PRAGMA busy_timeout = 5000");
+    // The same pragmas the server opens with, `kozane init` included — so a workspace is in
+    // WAL from the migration that creates it rather than from whichever connection happened
+    // to open it first. See `db/pragmas.ts`.
+    await applyConnectionPragmas(client, dbUrl);
     await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
+  } finally {
+    client.close();
+  }
+}
+
+/**
+ * Puts a self-contained copy of `backupPath` at `stagedPath`, for the restore to validate
+ * and then rename into place.
+ *
+ * `VACUUM INTO` rather than `copyFileSync`, and the difference is the whole of a bug that a
+ * plain copy had no way to show. A database in WAL — which is what a workspace runs in, see
+ * `db/pragmas.ts` — keeps its most recent commits in the `-wal` beside it until a
+ * checkpoint, so copying the main file alone can produce a database missing everything
+ * committed since. What arrived here was not a corrupt file but an *older* one, and an older
+ * Kozane database is a plausible database: `validateRestoreCandidate` below read it as one
+ * that had never been migrated, and refused a backup that was perfectly good.
+ *
+ * That is the visible half. The other half is worse and quieter: a backup whose `-wal`
+ * happened to hold nothing but recent rows would have passed every check here and restored a
+ * workspace silently missing them.
+ *
+ * `VACUUM INTO` reads through a connection, so it sees the log and writes one file with
+ * everything in it, whatever mode the source is in and whether or not it has a sidecar. It
+ * is what `backupDb` already uses, for the same reason.
+ *
+ * A source that is not a database at all fails here rather than at the integrity check, so
+ * the wording is the one this refuses everything unreadable with.
+ */
+async function stageRestoreCandidate(backupPath: string, stagedPath: string): Promise<void> {
+  const client = createClient({ url: `file:${backupPath}` });
+  try {
+    await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    await client.execute(`VACUUM INTO '${stagedPath.replace(/'/g, "''")}'`);
+  } catch (e) {
+    throw new Error(
+      `Backup is not a recognized Kozane database: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e },
+    );
   } finally {
     client.close();
   }
@@ -154,7 +195,7 @@ export async function runMigrations(dbUrl: string): Promise<void> {
 async function validateRestoreCandidate(path: string): Promise<void> {
   const client = createClient({ url: `file:${path}` });
   try {
-    await client.execute("PRAGMA busy_timeout = 5000");
+    await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     const result = await client.execute("PRAGMA integrity_check");
     if (result.rows.length !== 1 || result.rows[0]?.integrity_check !== "ok") {
       throw new Error("SQLite integrity check failed");
@@ -188,17 +229,17 @@ function sidecarPaths(dbFile: string): string[] {
 /**
  * Validate a backup, flush it, then atomically replace the workspace database.
  *
- * The rename alone is not the whole replacement. Nothing here sets `journal_mode`, so the
- * mode is the driver's to choose and may change under us; in WAL, the file being replaced
- * has a `-wal` beside it holding commits the main file does not, and SQLite would go on
- * replaying that log over the restored database. The result is neither the backup nor what
- * was there before. Removing the sidecars is correct in every journal mode — in the others
- * there are none to remove — so this does not depend on knowing which one is in force.
+ * The rename alone is not the whole replacement. A workspace runs in WAL — see
+ * `db/pragmas.ts` — so the file being replaced has a `-wal` beside it holding commits the
+ * main file does not, and SQLite would go on replaying that log over the restored database.
+ * The result is neither the backup nor what was there before. Removing the sidecars is
+ * correct in every journal mode — in the others there are none to remove — so this does not
+ * depend on the mode staying what it is today.
  */
 export async function restoreDb(backupPath: string, targetPath: string): Promise<void> {
   const stagedPath = `${targetPath}.restore-${process.pid}-${Date.now()}`;
   try {
-    copyFileSync(backupPath, stagedPath);
+    await stageRestoreCandidate(backupPath, stagedPath);
     await validateRestoreCandidate(stagedPath);
 
     const fd = openSync(stagedPath, "r");

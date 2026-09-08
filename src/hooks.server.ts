@@ -12,6 +12,7 @@ import {
   isAllowedRequestHost,
   remoteBindingRequiresApiKey,
   remoteBindingRequiresTls,
+  remoteThrottleWarning,
 } from "./lib/server/security";
 import { authenticateRequest } from "./lib/server/request-auth";
 import { LOGIN_PATH } from "./lib/server/login";
@@ -41,6 +42,16 @@ import { LOGIN_PATH } from "./lib/server/login";
 // loopback and that the machine's routable address is refused, so a regression on either
 // path fails a check rather than shipping.
 process.env.HOST ??= "127.0.0.1";
+
+// After the line above, which is what decides whether this is a remote binding at all.
+// At module scope rather than per request: it is a property of how the process was
+// started, and both supported starts reach it — `kozane open` spawns `bin/server.js`,
+// which loads hooks, and so does a `node bin/server.js` under a process manager, which
+// never passes through the CLI at all. A warning and not a refusal; see the note on it.
+{
+  const throttleWarning = remoteThrottleWarning();
+  if (throttleWarning) console.warn(`[kozane] ${throttleWarning}`);
+}
 
 let registeredRoot: string | null = null;
 /**

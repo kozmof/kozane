@@ -169,6 +169,40 @@ describe("restoreDb", () => {
     expect((await getMigrationStatus(tempDbUrl(target))).state).toBe("current");
   });
 
+  // The case a plain `copyFileSync` could not stage. A workspace runs in WAL, so a backup
+  // taken while something still holds the database keeps its most recent commits in the
+  // `-wal` beside it — copying the main file alone produced a database missing them, and the
+  // restore then refused a good backup as one that had never been migrated. Staged with
+  // `VACUUM INTO`, which reads through a connection and therefore sees the log.
+  it("restores a backup whose latest commits are still in its write-ahead log", async () => {
+    const root = tempRoot();
+    const source = join(root, "backup.db");
+    const target = join(root, "current.db");
+    await runMigrations(tempDbUrl(source));
+
+    // Held open, and checkpointing switched off, so the rows below stay in the log rather
+    // than being folded into the main file on close.
+    const holder = createClient({ url: tempDbUrl(source) });
+    await holder.execute("PRAGMA wal_autocheckpoint = 0");
+    await holder.execute("INSERT INTO namespace (id, name, is_default) VALUES ('n1', 'kept', 1)");
+    writeFileSync(target, "old database");
+
+    try {
+      await restoreDb(source, target);
+    } finally {
+      holder.close();
+    }
+
+    expect((await getMigrationStatus(tempDbUrl(target))).state).toBe("current");
+    const restored = createClient({ url: tempDbUrl(target) });
+    try {
+      const rows = await restored.execute("SELECT name FROM namespace");
+      expect(rows.rows.map((row) => row.name)).toEqual(["kept"]);
+    } finally {
+      restored.close();
+    }
+  });
+
   it("rejects a SQLite database without Kozane migration metadata", async () => {
     const root = tempRoot();
     const source = join(root, "other.db");
@@ -196,8 +230,9 @@ describe("restoreDb", () => {
   // A write-ahead log holds commits the main file does not, so one left beside a database
   // that has been swapped underneath it describes a history the restored database never
   // had — SQLite would replay it and produce neither the backup nor what was there before.
-  // Written by hand rather than by provoking WAL mode: nothing here sets `journal_mode`, so
-  // the point is that the restore clears these whether or not the driver is using them.
+  // Written by hand rather than by provoking a checkpoint boundary: a workspace is in WAL
+  // (`db/pragmas.ts`), but the point being made is that the restore clears these whatever
+  // the mode, and staging that by hand is what says so without depending on it.
   it("clears the log files left beside the database it replaces", async () => {
     const root = tempRoot();
     const source = join(root, "backup.db");

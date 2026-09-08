@@ -11,6 +11,7 @@ import {
   recordAuthFailure,
   remoteBindingRequiresApiKey,
   remoteBindingRequiresTls,
+  remoteThrottleWarning,
 } from "./security";
 
 describe("server security", () => {
@@ -134,5 +135,29 @@ describe("request host allowlist", () => {
 
   it("rejects everything unnamed when no allow list is set", () => {
     expect(isAllowedRequestHost("evil.test", undefined)).toBe(false);
+  });
+});
+
+describe("remote throttle warning", () => {
+  it("says nothing about a loopback binding, which has no proxy to be behind", () => {
+    expect(remoteThrottleWarning("127.0.0.1", undefined)).toBeNull();
+    expect(remoteThrottleWarning("localhost", undefined)).toBeNull();
+  });
+
+  it("says nothing once the proxy chain is configured", () => {
+    expect(remoteThrottleWarning("0.0.0.0", "x-forwarded-for")).toBeNull();
+  });
+
+  // The condition itself: bound to the world, counting every client as the proxy.
+  it("warns when a remote binding has no address header", () => {
+    expect(remoteThrottleWarning("0.0.0.0", undefined)).toMatch(/ADDRESS_HEADER/);
+    expect(remoteThrottleWarning("192.168.1.10", undefined)).toMatch(/throttles all of them/);
+  });
+
+  // An empty or whitespace value is the adapter reading no header at all, so it must not
+  // read here as a configured one.
+  it("treats a blank address header as unset", () => {
+    expect(remoteThrottleWarning("0.0.0.0", "")).toMatch(/ADDRESS_HEADER/);
+    expect(remoteThrottleWarning("0.0.0.0", "   ")).toMatch(/ADDRESS_HEADER/);
   });
 });
