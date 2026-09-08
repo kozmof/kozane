@@ -62,21 +62,21 @@ something the server did not save.
 Errors are SvelteKit errors: the status code, and a message a client may show. The statuses
 these endpoints use:
 
-| Status | Meaning |
-|---|---|
-| `400` | The body is malformed, or names a row this namespace does not have |
-| `401` / `429` | See [Authentication](#authentication) |
-| `403` | The file or directory cannot be read |
-| `404` | The resource the URL names does not exist |
-| `409` | The file changed on disk since it was read, or the directory already exists |
-| `413` / `415` | The file is too large, or is not UTF-8 text |
-| `426` | A remote binding was reached over plain HTTP |
-| `500` | An unexpected failure; the cause is logged, not returned |
-| `503` | The workspace is unavailable — no workspace, an unreadable key file, a database behind the schema, or another server holding it |
+| Status        | Meaning                                                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `400`         | The body is malformed, or names a row this namespace does not have                                                              |
+| `401` / `429` | See [Authentication](#authentication)                                                                                           |
+| `403`         | The file or directory cannot be read                                                                                            |
+| `404`         | The resource the URL names does not exist                                                                                       |
+| `409`         | The file changed on disk since it was read, or the directory already exists                                                     |
+| `413` / `415` | The file is too large, or is not UTF-8 text                                                                                     |
+| `426`         | A remote binding was reached over plain HTTP                                                                                    |
+| `500`         | An unexpected failure; the cause is logged, not returned                                                                        |
+| `503`         | The workspace is unavailable — no workspace, an unreadable key file, a database behind the schema, or another server holding it |
 
 The distinction between `400` and `404` is deliberate and consistent: a route naming a
 single resource in its path answers `404` when that resource is absent, because the resource
-*is* the URL. A batch route names no resource but the namespace, which exists, so an id it
+_is_ the URL. A batch route names no resource but the namespace, which exists, so an id it
 cannot act on is a bad request.
 
 ---

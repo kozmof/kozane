@@ -441,7 +441,7 @@ Checks (in order):
 | Check                         | Pass condition                                     |
 | ----------------------------- | -------------------------------------------------- |
 | Kozane workspace found        | `.kozane/config.json` found by walking up from CWD |
-| `.kozane/` directory exists   | directory present at workspace root                  |
+| `.kozane/` directory exists   | directory present at workspace root                |
 | `config.json` valid           | parses as valid JSON with expected shape           |
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
 | DB migrations current         | migration status is `current`                      |
@@ -1472,12 +1472,12 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
 
 Options:
 
-| Flag                | Description                                                         |
-| ------------------- | ------------------------------------------------------------------- |
-| `--scope <scopeId>` | Attach taskspace to an existing scope                               |
-| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)          |
-| `--namespace <id>`    | Namespace to own it, required when the workspace has several namespaces |
-| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)                  |
+| Flag                | Description                                                             |
+| ------------------- | ----------------------------------------------------------------------- |
+| `--scope <scopeId>` | Attach taskspace to an existing scope                                   |
+| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)              |
+| `--namespace <id>`  | Namespace to own it, required when the workspace has several namespaces |
+| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)                    |
 
 Either `--scope` or `--no-scope` is required.
 
@@ -1642,17 +1642,17 @@ taskspaces placed anywhere on the filesystem.
 
 ## Database schema (taskspace)
 
-| Column           | Type                | Notes                                |
-| ---------------- | ------------------- | ------------------------------------ |
-| `id`             | text PK             | UUID v7, stable identity             |
-| `namespace_id`   | text FK → namespace | nullable, cascade delete             |
-| `scope_id`       | text FK → scope     | nullable, set null on delete         |
-| `name`           | text                | display name                         |
-| `path`           | text                | current known filesystem path        |
-| `path_kind`      | text enum           | `workspace_relative` \| `absolute`   |
-| `last_seen_at`   | integer (timestamp) | set by `taskspace scan`              |
-| `created_at`     | integer (timestamp) | set on insert                        |
-| `updated_at`     | integer (timestamp) | set on every update                  |
+| Column         | Type                | Notes                              |
+| -------------- | ------------------- | ---------------------------------- |
+| `id`           | text PK             | UUID v7, stable identity           |
+| `namespace_id` | text FK → namespace | nullable, cascade delete           |
+| `scope_id`     | text FK → scope     | nullable, set null on delete       |
+| `name`         | text                | display name                       |
+| `path`         | text                | current known filesystem path      |
+| `path_kind`    | text enum           | `workspace_relative` \| `absolute` |
+| `last_seen_at` | integer (timestamp) | set by `taskspace scan`            |
+| `created_at`   | integer (timestamp) | set on insert                      |
+| `updated_at`   | integer (timestamp) | set on every update                |
 
 ---
 
