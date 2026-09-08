@@ -16,8 +16,8 @@ import { PATH_KINDS } from "../lib/constants.js";
 // `resolveTaskspacePath` needs it too and must not import the schema to get it.
 export { PATH_KINDS, type PathKind } from "../lib/constants.js";
 
-export const projectTable = sqliteTable(
-  "project",
+export const namespaceTable = sqliteTable(
+  "namespace",
   {
     id: text("id")
       .primaryKey()
@@ -26,29 +26,29 @@ export const projectTable = sqliteTable(
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
-    uniqueIndex("project_one_default")
+    uniqueIndex("namespace_one_default")
       .on(t.isDefault)
       .where(sql`is_default = 1`),
   ],
 );
 
-export const bundleTable = sqliteTable(
-  "bundle",
+export const partitionTable = sqliteTable(
+  "partition",
   {
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    projectId: text("project_id")
+    namespaceId: text("namespace_id")
       .notNull()
-      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+      .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: text().notNull(),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
-    uniqueIndex("bundle_one_default_per_project")
-      .on(t.projectId)
+    uniqueIndex("partition_one_default_per_namespace")
+      .on(t.namespaceId)
       .where(sql`is_default = 1`),
-    uniqueIndex("bundle_name_per_project").on(t.projectId, t.name),
+    uniqueIndex("partition_name_per_namespace").on(t.namespaceId, t.name),
   ],
 );
 
@@ -58,31 +58,31 @@ export const layerTable = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    projectId: text("project_id")
+    namespaceId: text("namespace_id")
       .notNull()
-      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+      .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: text().notNull(),
     // Index order of the layer on the canvas: a higher position stacks above a lower one.
     position: integer().notNull().default(0),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
   },
   (t) => [
-    uniqueIndex("layer_one_default_per_project")
-      .on(t.projectId)
+    uniqueIndex("layer_one_default_per_namespace")
+      .on(t.namespaceId)
       .where(sql`is_default = 1`),
-    uniqueIndex("layer_name_per_project").on(t.projectId, t.name),
+    uniqueIndex("layer_name_per_namespace").on(t.namespaceId, t.name),
   ],
 );
 
 /**
- * A saved place on a project's canvas. A warp holds the world coordinates of a view
+ * A saved place on a namespace's canvas. A warp holds the world coordinates of a view
  * centre, and the browser UI moves the viewport between them with the arrow keys. There
  * is no name column: warps are numbered by creation order, and uuidv7 ids already sort
  * that way.
  *
- * The index on `project_id` is spelled out because nothing else here implies one: the
- * project-scoped tables that carry a name get theirs from a unique index on
- * `(project_id, name)`, and a warp has no name to be unique in.
+ * The index on `namespace_id` is spelled out because nothing else here implies one: the
+ * namespace-scoped tables that carry a name get theirs from a unique index on
+ * `(namespace_id, name)`, and a warp has no name to be unique in.
  */
 export const warpTable = sqliteTable(
   "warp",
@@ -90,24 +90,24 @@ export const warpTable = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    projectId: text("project_id")
+    namespaceId: text("namespace_id")
       .notNull()
-      .references(() => projectTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+      .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
     posX: integer("pos_x").notNull().default(0),
     posY: integer("pos_y").notNull().default(0),
   },
-  (t) => [index("warp_project").on(t.projectId)],
+  (t) => [index("warp_namespace").on(t.namespaceId)],
 );
 
 export const scopeTable = sqliteTable(
   "scope",
   {
-    // A scope is intentionally cross-project. Do not add project_id here: a scope is
+    // A scope is intentionally cross-namespace. Do not add namespace_id here: a scope is
     // placed by what refers to it — scope_rel/card rows, and taskspace.scope_id — not by
-    // a column, which is what lets one scope hold cards from several projects at once.
+    // a column, which is what lets one scope hold cards from several namespaces at once.
     //
-    // That is not the same as every project seeing every scope. A board draws the scopes
-    // `getScopesInProject` selects, and a project_id here would make that a column read
+    // That is not the same as every namespace seeing every scope. A board draws the scopes
+    // `getScopesInNamespace` selects, and a namespace_id here would make that a column read
     // but would also make a shared scope impossible. The CLI keeps the workspace-wide
     // view (`kozane scope list`).
     id: text("id")
@@ -128,13 +128,13 @@ export const taskspaceTable = sqliteTable(
       .primaryKey()
       .$defaultFn(() => uuidv7()),
     // nullable, but nothing writes a null on the ordinary paths: `taskspace create` and
-    // the HTTP route both resolve a project first, and `taskspace create` exits rather
+    // the HTTP route both resolve a namespace first, and `taskspace create` exits rather
     // than proceed without one. What lands here empty is a reattach — `taskspace scan
-    // --apply --reattach` inserts from the on-disk marker, and a marker naming no project
-    // ("projectId": "") gives a record with none. Such a record is unplaced rather than
-    // another project's, which is why `getTaskspacesInProject` shows it on every board.
-    // Cascade delete removes the record if the linked project is later deleted.
-    projectId: text("project_id").references(() => projectTable.id, {
+    // --apply --reattach` inserts from the on-disk marker, and a marker naming no namespace
+    // ("namespaceId": "") gives a record with none. Such a record is unplaced rather than
+    // another namespace's, which is why `getTaskspacesInNamespace` shows it on every board.
+    // Cascade delete removes the record if the linked namespace is later deleted.
+    namespaceId: text("namespace_id").references(() => namespaceTable.id, {
       onDelete: "cascade",
       onUpdate: "cascade",
     }),
@@ -154,8 +154,8 @@ export const taskspaceTable = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  // Read once per scope by `getScopesInProject`, which asks whether a scope has a
-  // taskspace at all and whether it has one of this project. Without this the board's
+  // Read once per scope by `getScopesInNamespace`, which asks whether a scope has a
+  // taskspace at all and whether it has one of this namespace. Without this the board's
   // once-a-second poll scans the whole table twice for every scope in the workspace.
   (t) => [index("taskspace_scope").on(t.scopeId)],
 );
@@ -166,11 +166,11 @@ export const cardTable = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    bundleId: text("bundle_id")
+    partitionId: text("partition_id")
       .notNull()
-      .references(() => bundleTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
-    // Every card sits on exactly one layer of its project. Callers that omit it get the
-    // project's default layer (see addCard).
+      .references(() => partitionTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    // Every card sits on exactly one layer of its namespace. Callers that omit it get the
+    // namespace's default layer (see addCard).
     layerId: text("layer_id")
       .notNull()
       .references(() => layerTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
@@ -214,8 +214,8 @@ export const cardTable = sqliteTable(
       .$defaultFn(() => new Date()),
     /**
      * When the card's *text* last changed, and nothing else about it. A card dragged across
-     * the board, resized, restacked, or moved to another bundle or layer keeps the timestamp
-     * it had — which is why `updateProjectCardPositions` and the `reassign*` writers do not
+     * the board, resized, restacked, or moved to another partition or layer keeps the timestamp
+     * it had — which is why `updateNamespaceCardPositions` and the `reassign*` writers do not
      * touch this column, and only `updateCard`'s content branch does.
      *
      * The board sends a position PATCH per drag. Were those to count, `updated_at` would
@@ -232,11 +232,11 @@ export const cardTable = sqliteTable(
       .$defaultFn(() => new Date()),
   },
   (t) => [
-    // Read on every page load and on every snapshot poll, by `getCardDataByBundles`: the board
-    // asks for the cards of this project's bundles once a second for as long as a tab is
+    // Read on every page load and on every snapshot poll, by `getCardDataByPartitions`: the board
+    // asks for the cards of this namespace's partitions once a second for as long as a tab is
     // open. Without it SQLite answers that with a full scan of `card`, the largest table
     // here, per poll per tab.
-    index("card_bundle").on(t.bundleId),
+    index("card_partition").on(t.partitionId),
     // `reassignLayerCards` selects by layer alone — deleting a layer moves its cards to the
     // default one, and the scan it would otherwise be is over every card in the workspace,
     // not just the layer's.
@@ -245,13 +245,13 @@ export const cardTable = sqliteTable(
     // changed, which is what the map page's activity bands are drawn from. Without this it
     // is a full scan of `card` — the largest table — on every load of `/map`.
     //
-    // Leading with `bundle_id` because the query joins `bundle` on it and groups by it, so
+    // Leading with `partition_id` because the query joins `partition` on it and groups by it, so
     // this covers the whole read rather than only the ordering: SQLite walks the index and
-    // never touches the table. That also makes it a wider `card_bundle`, so the two are not
-    // redundant in the direction that matters — `card_bundle` still answers the board's own
+    // never touches the table. That also makes it a wider `card_partition`, so the two are not
+    // redundant in the direction that matters — `card_partition` still answers the board's own
     // once-a-second read with a narrower index, and this one is not a substitute for it on a
     // path where every byte read is paid for per tab per second.
-    index("card_bundle_updated").on(t.bundleId, t.updatedAt),
+    index("card_partition_updated").on(t.partitionId, t.updatedAt),
   ],
 );
 
@@ -300,30 +300,42 @@ export const scopeRelTable = sqliteTable(
   ],
 );
 
-// Relations enable the .query.* relational API (db.query.projectTable.findMany({ with: { bundles: true } }))
+// Relations enable the .query.* relational API (db.query.namespaceTable.findMany({ with: { partitions: true } }))
 
-export const projectRelations = relations(projectTable, ({ many }) => ({
-  bundles: many(bundleTable),
+export const namespaceRelations = relations(namespaceTable, ({ many }) => ({
+  partitions: many(partitionTable),
   layers: many(layerTable),
   warps: many(warpTable),
 }));
 
 export const warpRelations = relations(warpTable, ({ one }) => ({
-  project: one(projectTable, { fields: [warpTable.projectId], references: [projectTable.id] }),
+  namespace: one(namespaceTable, {
+    fields: [warpTable.namespaceId],
+    references: [namespaceTable.id],
+  }),
 }));
 
 export const layerRelations = relations(layerTable, ({ one, many }) => ({
-  project: one(projectTable, { fields: [layerTable.projectId], references: [projectTable.id] }),
+  namespace: one(namespaceTable, {
+    fields: [layerTable.namespaceId],
+    references: [namespaceTable.id],
+  }),
   cards: many(cardTable),
 }));
 
-export const bundleRelations = relations(bundleTable, ({ one, many }) => ({
-  project: one(projectTable, { fields: [bundleTable.projectId], references: [projectTable.id] }),
+export const partitionRelations = relations(partitionTable, ({ one, many }) => ({
+  namespace: one(namespaceTable, {
+    fields: [partitionTable.namespaceId],
+    references: [namespaceTable.id],
+  }),
   cards: many(cardTable),
 }));
 
 export const cardRelations = relations(cardTable, ({ one, many }) => ({
-  bundle: one(bundleTable, { fields: [cardTable.bundleId], references: [bundleTable.id] }),
+  partition: one(partitionTable, {
+    fields: [cardTable.partitionId],
+    references: [partitionTable.id],
+  }),
   layer: one(layerTable, { fields: [cardTable.layerId], references: [layerTable.id] }),
   // nullable: card retains its row when its taskspace is deleted (onDelete: "set null")
   taskspace: one(taskspaceTable, {
