@@ -74,15 +74,15 @@ describe("database CLI flow", () => {
   it("exports compact JSON to stdout and formatted JSON to a file", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Exported project"));
-    cli(root, "card", "add", "Exported card", "--project", projectId);
+    const namespaceId = outputId(cli(root, "namespace", "create", "Exported namespace"));
+    cli(root, "card", "add", "Exported card", "--namespace", namespaceId);
 
     const compact = cli(root, "db", "export", "--compact");
     const parsed = JSON.parse(compact);
     expect(compact).not.toContain("\n  ");
     expect(parsed.kind).toBe("kozane.db.export");
-    expect(parsed.tables.project).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "Exported project" })]),
+    expect(parsed.tables.namespace).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "Exported namespace" })]),
     );
     expect(parsed.tables.card).toEqual(
       expect.arrayContaining([expect.objectContaining({ content: "Exported card" })]),
@@ -97,13 +97,13 @@ describe("database CLI flow", () => {
   it("refuses a non-forced import and restores exported rows with --force", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Round-trip project"));
-    cli(root, "card", "add", "Round-trip card", "--project", projectId);
+    const namespaceId = outputId(cli(root, "namespace", "create", "Round-trip namespace"));
+    cli(root, "card", "add", "Round-trip card", "--namespace", namespaceId);
     const dump = join(root, "round-trip.json");
     cli(root, "db", "export", dump);
 
-    cli(root, "project", "delete", projectId);
-    expect(cli(root, "project", "list")).not.toContain("Round-trip project");
+    cli(root, "namespace", "delete", namespaceId);
+    expect(cli(root, "namespace", "list")).not.toContain("Round-trip namespace");
 
     const refused = runCli(root, "db", "import", dump);
     expect(refused.status).not.toBe(0);
@@ -112,25 +112,25 @@ describe("database CLI flow", () => {
     const output = cli(root, "db", "import", dump, "--force");
     expect(output).toContain(`Database imported: ${dump}`);
     expect(output).toMatch(/Backup created: .*\.kozane\/backups\//);
-    expect(output).toContain("project: 2");
+    expect(output).toContain("namespace: 2");
     expect(output).toContain("card: 1");
-    expect(cli(root, "project", "list")).toContain("Round-trip project");
-    expect(cli(root, "card", "list", "--project", projectId)).toContain("Round-trip card");
+    expect(cli(root, "namespace", "list")).toContain("Round-trip namespace");
+    expect(cli(root, "card", "list", "--namespace", namespaceId)).toContain("Round-trip card");
   }, 30_000);
 
   it("restores an explicit database backup", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Restored project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Restored namespace"));
     const backup = join(root, "known-good.db");
     copyFileSync(join(root, ".kozane", "kozane.db"), backup);
 
-    cli(root, "project", "delete", projectId);
-    expect(cli(root, "project", "list")).not.toContain("Restored project");
+    cli(root, "namespace", "delete", namespaceId);
+    expect(cli(root, "namespace", "list")).not.toContain("Restored namespace");
 
     const output = cli(root, "db", "restore", backup);
     expect(output).toContain(`Restored: ${backup}`);
     expect(output).toMatch(/Current database backed up: .*\.kozane\/backups\//);
-    expect(cli(root, "project", "list")).toContain("Restored project");
+    expect(cli(root, "namespace", "list")).toContain("Restored namespace");
   }, 30_000);
 });

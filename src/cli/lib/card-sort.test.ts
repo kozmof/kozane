@@ -161,7 +161,7 @@ describe("sortColumn", () => {
   it("names a timestamp it cannot read rather than throwing on it", () => {
     // `toISOString` throws `RangeError: Invalid time value` on such a date, which reached
     // the user as one line of error in place of the whole listing — every sound card in the
-    // project hidden to report a problem with one of them.
+    // namespace hidden to report a problem with one of them.
     for (const key of CARD_SORT_KEYS) expect(sortColumn(unreadable, key)).toBe("invalid");
   });
 

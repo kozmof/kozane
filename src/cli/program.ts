@@ -9,7 +9,12 @@ import { ssg, ssgPreview } from "./commands/ssg.js";
 import { doctor, doctorConfig } from "./commands/doctor.js";
 import { status } from "./commands/status.js";
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "./commands/taskspace.js";
-import { projectCreate, projectDefault, projectDelete, projectList } from "./commands/project.js";
+import {
+  namespaceCreate,
+  namespaceDefault,
+  namespaceDelete,
+  namespaceList,
+} from "./commands/namespace.js";
 import { dbExport, dbImport, dbMigrate, dbRestore, dbStatus } from "./commands/db.js";
 import {
   cardAdd,
@@ -19,9 +24,9 @@ import {
   cardList,
   cardMove,
   cardNearest,
-  cardSetBundle,
+  cardSetPartition,
   cardSetLayer,
-  cardSetProject,
+  cardSetNamespace,
   cardShow,
   cardSquash,
   cardUnglue,
@@ -38,7 +43,7 @@ import {
 import { tagList, tagShow } from "./commands/tag.js";
 import { layerAdd, layerDelete, layerList, layerMove, layerRename } from "./commands/layer.js";
 import { apiGenerate, apiRefresh } from "./commands/api.js";
-import { bundleAdd, bundleDelete, bundleList } from "./commands/bundle.js";
+import { partitionAdd, partitionDelete, partitionList } from "./commands/partition.js";
 import { warpAdd, warpDelete, warpList } from "./commands/warp.js";
 import {
   DEFAULT_PREVIEW_PORT,
@@ -160,60 +165,60 @@ export function buildProgram(): Command {
     .action(apiGenerate);
   apiKey.command("refresh").description("Replace the current API key").action(apiRefresh);
 
-  const project = program.command("project").description("Project management");
+  const namespace = program.command("namespace").description("Namespace management");
 
-  project
+  namespace
     .command("list")
-    .description("List all projects in the current workspace")
-    .action(() => projectList());
+    .description("List all namespaces in the current workspace")
+    .action(() => namespaceList());
 
-  project
+  namespace
     .command("create <name>")
-    .description("Create a new project in the current workspace")
-    .action((name) => projectCreate(name));
+    .description("Create a new namespace in the current workspace")
+    .action((name) => namespaceCreate(name));
 
-  project
+  namespace
     .command("delete <id>")
-    .description("Delete a project by ID or short ID")
-    .action((id) => projectDelete(id));
+    .description("Delete a namespace by ID or short ID")
+    .action((id) => namespaceDelete(id));
 
-  project
+  namespace
     .command("default <id>")
     .alias("set-default")
-    .description("Set the default project used when --project is omitted")
-    .action((id) => projectDefault(id));
+    .description("Set the default namespace used when --namespace is omitted")
+    .action((id) => namespaceDefault(id));
 
-  const bundle = program.command("bundle").description("Bundle management");
+  const partition = program.command("partition").description("Partition management");
 
-  bundle
+  partition
     .command("list")
-    .description("List a project's bundles")
-    .option("--project <projectId>", "Project ID or short ID whose bundles to list")
-    .action((opts) => bundleList(opts));
+    .description("List a namespace's partitions")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID whose partitions to list")
+    .action((opts) => partitionList(opts));
 
-  bundle
+  partition
     .command("add <name>")
-    .description("Add a bundle to a project")
-    .option("--project <projectId>", "Project ID or short ID to add the bundle to")
-    .action((name, opts) => bundleAdd(name, opts));
+    .description("Add a partition to a namespace")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID to add the partition to")
+    .action((name, opts) => partitionAdd(name, opts));
 
-  bundle
-    .command("delete <bundleId>")
-    .description("Delete a bundle and move its cards to the default bundle")
-    .option("--project <projectId>", "Project ID or short ID the bundle belongs to")
-    .action((id, opts) => bundleDelete(id, opts));
+  partition
+    .command("delete <partitionId>")
+    .description("Delete a partition and move its cards to the default partition")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the partition belongs to")
+    .action((id, opts) => partitionDelete(id, opts));
 
   const scope = program.command("scope").description("Scope management");
 
   scope
     .command("list")
-    .description("List every scope in the workspace and the projects each one reaches")
-    .option("--project <projectId>", "Show only the scopes this project's board draws")
+    .description("List every scope in the workspace and the namespaces each one reaches")
+    .option("--namespace <namespaceId>", "Show only the scopes this namespace's board draws")
     .action((opts) => scopeList(opts));
 
   scope
     .command("add <name>")
-    .description("Add a cross-project card scope")
+    .description("Add a cross-namespace card scope")
     .action((name) => scopeAdd(name));
 
   scope
@@ -224,27 +229,27 @@ export function buildProgram(): Command {
   scope
     .command("add-cards <scopeId> <cardIds...>")
     .description("Add cards to a scope")
-    .option("--project <projectId>", "Project ID or short ID the cards belong to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the cards belong to")
     .action((scopeId, cardIds, opts) => scopeAddCards(scopeId, cardIds, opts));
 
   scope
     .command("remove-cards <scopeId> <cardIds...>")
     .description("Remove cards from a scope")
-    .option("--project <projectId>", "Project ID or short ID the cards belong to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the cards belong to")
     .action((scopeId, cardIds, opts) => scopeRemoveCards(scopeId, cardIds, opts));
 
   const tag = program.command("tag").description("Tags written in cards and taskspace files");
 
   tag
     .command("list")
-    .description("List every tag in a project, with what each one gathers")
-    .option("--project <projectId>", "Project to read (default: the workspace default)")
+    .description("List every tag in a namespace, with what each one gathers")
+    .option("--namespace <namespaceId>", "Namespace to read (default: the workspace default)")
     .action((opts) => tagList(opts));
 
   tag
     .command("show <tag>")
     .description("List the cards and files under a tag, subcategories included")
-    .option("--project <projectId>", "Project to read (default: the workspace default)")
+    .option("--namespace <namespaceId>", "Namespace to read (default: the workspace default)")
     .option("--no-files", "Skip taskspace files and list only cards")
     .action((name, opts) => tagShow(name, opts));
 
@@ -252,32 +257,32 @@ export function buildProgram(): Command {
 
   layer
     .command("list")
-    .description("List a project's layers, bottom to top")
-    .option("--project <projectId>", "Project ID or short ID whose layers to list")
+    .description("List a namespace's layers, bottom to top")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID whose layers to list")
     .action((opts) => layerList(opts));
 
   layer
     .command("add <name>")
-    .description("Add a layer on top of a project's existing layers")
-    .option("--project <projectId>", "Project ID or short ID to add the layer to")
+    .description("Add a layer on top of a namespace's existing layers")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID to add the layer to")
     .action((name, opts) => layerAdd(name, opts));
 
   layer
     .command("rename <layer> <name>")
     .description("Rename a layer by name, ID, or short ID — an exact name wins")
-    .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the layer belongs to")
     .action((id, name, opts) => layerRename(id, name, opts));
 
   layer
     .command("move <layer> <direction>")
     .description("Move a layer one step up or down the stack, by name, ID, or short ID")
-    .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the layer belongs to")
     .action((id, direction, opts) => layerMove(id, direction, opts));
 
   layer
     .command("delete <layer>")
     .description("Delete a layer by name, ID, or short ID, moving its cards to the default layer")
-    .option("--project <projectId>", "Project ID or short ID the layer belongs to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the layer belongs to")
     .action((id, opts) => layerDelete(id, opts));
 
   const db = program.command("db").description("Database management");
@@ -308,8 +313,8 @@ export function buildProgram(): Command {
 
   taskspace
     .command("list")
-    .description("List every taskspace in the workspace with its project and scope")
-    .option("--project <projectId>", "Show only the taskspaces this project's board draws")
+    .description("List every taskspace in the workspace with its namespace and scope")
+    .option("--namespace <namespaceId>", "Show only the taskspaces this namespace's board draws")
     .action((opts) => taskspaceList(opts));
 
   taskspace
@@ -329,19 +334,19 @@ export function buildProgram(): Command {
     )
     .option("--no-scope", "Create without a scope")
     .option(
-      "--project <projectId>",
-      "Project ID or short ID (required when workspace has multiple projects)",
+      "--namespace <namespaceId>",
+      "Namespace ID or short ID (required when workspace has multiple namespaces)",
     )
-    .option("--dir <path>", "Target directory (default: <projectRoot>/<name>)")
+    .option("--dir <path>", "Target directory (default: <workspaceRoot>/<name>)")
     .action((name, opts) => taskspaceCreate(name, opts));
 
   const card = program.command("card").description("Card management");
 
   card
     .command("add <content>")
-    .description("Add a card to a project")
-    .option("--project <projectId>", "Project ID or short ID to add the card to")
-    .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
+    .description("Add a card to a namespace")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID to add the card to")
+    .option("--partition <partitionId>", "Partition ID or short ID (defaults to General)")
     .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
     .option(
       "--layer <layer>",
@@ -354,8 +359,8 @@ export function buildProgram(): Command {
   card
     .command("squash [content]")
     .description("Split an argument or stdin with a regex and add each part as a card")
-    .option("--project <projectId>", "Project ID or short ID to add the cards to")
-    .option("--bundle <bundleId>", "Bundle ID or short ID (defaults to General)")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID to add the cards to")
+    .option("--partition <partitionId>", "Partition ID or short ID (defaults to General)")
     .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
     .option(
       "--layer <layer>",
@@ -380,12 +385,12 @@ export function buildProgram(): Command {
 
   card
     .command("delete <cardIds...>")
-    .description("Delete one or more cards from the same project")
+    .description("Delete one or more cards from the same namespace")
     .action((cardIds) => cardDelete(cardIds));
 
   card
     .command("layer <cardId> <layer>")
-    .description("Move a card to another layer of its project, by layer ID, short ID, or name")
+    .description("Move a card to another layer of its namespace, by layer ID, short ID, or name")
     .action((cardId, layer) => cardSetLayer(cardId, layer));
 
   card
@@ -396,18 +401,18 @@ export function buildProgram(): Command {
     .action((cardId, opts) => cardMove(cardId, opts));
 
   card
-    .command("bundle <bundleId> <cardIds...>")
-    .description("Move cards to another bundle in their project")
-    .action((bundleId, cardIds) => cardSetBundle(bundleId, cardIds));
+    .command("partition <partitionId> <cardIds...>")
+    .description("Move cards to another partition in their namespace")
+    .action((partitionId, cardIds) => cardSetPartition(partitionId, cardIds));
 
   card
-    .command("project <projectId> <cardIds...>")
-    .description("Move cards to another project, preserving bundle and layer names")
-    .action((projectId, cardIds) => cardSetProject(projectId, cardIds));
+    .command("namespace <namespaceId> <cardIds...>")
+    .description("Move cards to another namespace, preserving partition and layer names")
+    .action((namespaceId, cardIds) => cardSetNamespace(namespaceId, cardIds));
 
   card
     .command("glue <cardIds...>")
-    .description("Glue two or more cards in the same project")
+    .description("Glue two or more cards in the same namespace")
     .option("--add", "Keep and merge the cards' existing glue groups")
     .option("--align-list", "Align cards as a vertical list in argument order")
     .action((cardIds, opts) => cardGlue(cardIds, opts));
@@ -419,14 +424,14 @@ export function buildProgram(): Command {
 
   card
     .command("nearest <cardId>")
-    .description("List cards in the same project, nearest to the specified card first")
+    .description("List cards in the same namespace, nearest to the specified card first")
     .action((cardId) => cardNearest(cardId));
 
   const cardListCommand = card
     .command("list")
-    .description("List cards in a project or taskspace scope")
-    .option("--project <projectId>", "Project ID or short ID whose cards to list")
-    .option("--bundle <bundleId>", "Only list cards in this bundle ID or short ID")
+    .description("List cards in a namespace or taskspace scope")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID whose cards to list")
+    .option("--partition <partitionId>", "Only list cards in this partition ID or short ID")
     .option("--taskspace <path>", "Taskspace directory or .taskspace.json path")
     .option(
       "--sort <key>",
@@ -445,7 +450,7 @@ export function buildProgram(): Command {
     `
 Taskspace behavior:
   If the current directory contains .taskspace.json, this command automatically
-  lists cards for that taskspace when --project and --bundle are omitted.
+  lists cards for that taskspace when --namespace and --partition are omitted.
 
   Use --taskspace <path> from elsewhere. <path> may be either the taskspace
   directory or its .taskspace.json file. A scoped taskspace lists current
@@ -458,7 +463,7 @@ Sorting:
   --sort gap      shortest interval between the two first
 
   Only a change to a card's text counts as updating it. Moving a card across the
-  board, resizing it, restacking it, or moving it to another bundle or layer
+  board, resizing it, restacking it, or moving it to another partition or layer
   leaves both timestamps as they were, so --sort gap measures how long a card
   stood before it was rewritten rather than how recently it was rearranged.
 
@@ -477,14 +482,14 @@ Examples:
 
   warp
     .command("list")
-    .description("List a project's warps")
-    .option("--project <projectId>", "Project ID or short ID whose warps to list")
+    .description("List a namespace's warps")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID whose warps to list")
     .action((opts) => warpList(opts));
 
   warp
     .command("add")
     .description("Add a warp at an X/Y position")
-    .option("--project <projectId>", "Project ID or short ID to add the warp to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID to add the warp to")
     .requiredOption("--x <number>", "Horizontal warp position", integer)
     .requiredOption("--y <number>", "Vertical warp position", integer)
     .action((opts) => warpAdd(opts));
@@ -492,7 +497,7 @@ Examples:
   warp
     .command("delete <warpId>")
     .description("Delete a warp by ID or short ID")
-    .option("--project <projectId>", "Project ID or short ID the warp belongs to")
+    .option("--namespace <namespaceId>", "Namespace ID or short ID the warp belongs to")
     .action((id, opts) => warpDelete(id, opts));
 
   return program;

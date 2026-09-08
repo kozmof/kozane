@@ -3,12 +3,12 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { requireWorkspace } from "../lib/project.js";
+import { requireWorkspace } from "../lib/workspace.js";
 import { dbUrl } from "../lib/config.js";
 import { readApiKeyResult } from "../../lib/server/api-key.js";
 import { requireCurrentMigrations, runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
-import { projectTable, bundleTable, layerTable } from "../../db/schema.js";
+import { namespaceTable, partitionTable, layerTable } from "../../db/schema.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import {
   activeServerProcess,
@@ -126,16 +126,16 @@ export async function open(options: OpenOptions): Promise<void> {
     try {
       await runMigrations(dbURL);
       const db = await createDb(dbURL);
-      const [project] = await db
-        .insert(projectTable)
+      const [namespace] = await db
+        .insert(namespaceTable)
         .values({ name: ":memory:", isDefault: true })
-        .returning({ id: projectTable.id });
+        .returning({ id: namespaceTable.id });
       await db
-        .insert(bundleTable)
-        .values({ projectId: project.id, name: "General", isDefault: true });
+        .insert(partitionTable)
+        .values({ namespaceId: namespace.id, name: "General", isDefault: true });
       await db
         .insert(layerTable)
-        .values({ projectId: project.id, name: DEFAULT_LAYER_NAME, isDefault: true });
+        .values({ namespaceId: namespace.id, name: DEFAULT_LAYER_NAME, isDefault: true });
     } catch (error) {
       rmSync(memoryDir, { recursive: true, force: true });
       throw error;

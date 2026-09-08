@@ -43,9 +43,9 @@ describe("card glue CLI", () => {
   it("glues and individually unglues cards by short ID", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Glue project"));
-    const first = outputId(cli(root, "card", "add", "First", "--project", projectId));
-    const second = outputId(cli(root, "card", "add", "Second", "--project", projectId));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Glue namespace"));
+    const first = outputId(cli(root, "card", "add", "First", "--namespace", namespaceId));
+    const second = outputId(cli(root, "card", "add", "Second", "--namespace", namespaceId));
     expect(cli(root, "card", "glue", first, second)).toContain("2 cards glued.");
     const glued = JSON.parse(cli(root, "db", "export"));
     expect(glued.tables.glue).toHaveLength(1);
@@ -59,20 +59,20 @@ describe("card glue CLI", () => {
   it("aligns glued cards as a vertical list in argument order", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "List project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "List namespace"));
     const first = outputId(
-      cli(root, "card", "add", "First", "--project", projectId, "--x", "96", "--y", "48"),
+      cli(root, "card", "add", "First", "--namespace", namespaceId, "--x", "96", "--y", "48"),
     );
     const second = outputId(
-      cli(root, "card", "add", "Second", "--project", projectId, "--x", "500", "--y", "400"),
+      cli(root, "card", "add", "Second", "--namespace", namespaceId, "--x", "500", "--y", "400"),
     );
     const third = outputId(
-      cli(root, "card", "add", "Third", "--project", projectId, "--x", "700", "--y", "600"),
+      cli(root, "card", "add", "Third", "--namespace", namespaceId, "--x", "700", "--y", "600"),
     );
 
     const output = cli(root, "card", "glue", first, second, third, "--align-list");
     expect(output).toContain("layout: vertical list");
-    const listed = cli(root, "card", "list", "--project", projectId);
+    const listed = cli(root, "card", "list", "--namespace", namespaceId);
     const positions = [...listed.matchAll(/\((\d+), (\d+)\)/g)].map((match) => [
       Number(match[1]),
       Number(match[2]),
@@ -87,9 +87,9 @@ describe("card glue CLI", () => {
   it("adds cards while preserving and merging existing glue groups", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Additive project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Additive namespace"));
     const ids = ["First", "Second", "Third", "Fourth"].map((content) =>
-      outputId(cli(root, "card", "add", content, "--project", projectId)),
+      outputId(cli(root, "card", "add", content, "--namespace", namespaceId)),
     );
     cli(root, "card", "glue", ids[0], ids[1]);
     cli(root, "card", "glue", ids[2], ids[3]);
@@ -106,16 +106,16 @@ describe("card glue CLI", () => {
     ).toBe(1);
   }, 30_000);
 
-  it("rejects cards from different projects without changing glue data", () => {
+  it("rejects cards from different namespaces without changing glue data", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const firstProject = outputId(cli(root, "project", "create", "First project"));
-    const secondProject = outputId(cli(root, "project", "create", "Second project"));
-    const first = outputId(cli(root, "card", "add", "First", "--project", firstProject));
-    const second = outputId(cli(root, "card", "add", "Second", "--project", secondProject));
+    const firstNamespace = outputId(cli(root, "namespace", "create", "First namespace"));
+    const secondNamespace = outputId(cli(root, "namespace", "create", "Second namespace"));
+    const first = outputId(cli(root, "card", "add", "First", "--namespace", firstNamespace));
+    const second = outputId(cli(root, "card", "add", "Second", "--namespace", secondNamespace));
     const result = runCli(root, "card", "glue", first, second);
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain("Cards must belong to the same project.");
+    expect(result.stderr).toContain("Cards must belong to the same namespace.");
     const exported = JSON.parse(cli(root, "db", "export"));
     expect(exported.tables.glue).toHaveLength(0);
     expect(exported.tables.glue_rel).toHaveLength(0);

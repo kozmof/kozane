@@ -5,13 +5,13 @@ import { compareIds } from "../../lib/order.js";
  * The orders `kozane card list --sort` offers, and the column each one prints.
  *
  * Sorting happens here rather than in an `ORDER BY` because `card list` has three query
- * paths — a project's cards, a taskspace scope's members, and the cards tied directly to a
+ * paths — a namespace's cards, a taskspace scope's members, and the cards tied directly to a
  * taskspace — and each has already materialised its whole list by the time anything is
  * printed. One comparator over the finished list is one behaviour to document and to test;
  * three `ORDER BY` clauses would be three places for the orders to drift apart. It is the
  * same choice `cardNearest` makes for distance.
  *
- * The cost of that choice is that `--sort` holds a project's whole card list in the CLI
+ * The cost of that choice is that `--sort` holds a namespace's whole card list in the CLI
  * process and sorts it there. It is the list `card list` was already holding in order to
  * print it, so sorting adds no read; what it rules out is ever streaming the listing.
  */
@@ -91,7 +91,7 @@ export function namesAMoment(at: Date): boolean {
  * A word rather than a blank, so a column that could not be filled is not read as a column
  * that was empty. And a word rather than the `RangeError: Invalid time value` that
  * `toISOString` throws on such a date, which used to leave the command printing one line of
- * error in place of the whole listing — hiding every sound card in the project in order to
+ * error in place of the whole listing — hiding every sound card in the namespace in order to
  * report a problem with one of them.
  */
 const UNREADABLE = "invalid";

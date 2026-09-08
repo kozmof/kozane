@@ -14,7 +14,7 @@ import type { CardTimes } from "./card-sort.js";
 /** What {@link printCards} needs of a card: the fields every listing prints. */
 export type PrintableCard = {
   id: string;
-  bundle: string;
+  partition: string;
   content: string;
   posX: number;
   posY: number;
@@ -30,7 +30,7 @@ export type NearestCard = PrintableCard & { distance: number };
  * ordered by for `card list --sort`.
  *
  * A listing that asked for neither prints exactly what it printed before either column
- * existed: `<id>  <bundle>  (<x>, <y>)  <text>`.
+ * existed: `<id>  <partition>  (<x>, <y>)  <text>`.
  *
  * The column arrives as a function of the card rather than as a flag this reads a field
  * for, so it is the caller's card shape that decides what can be printed: a column reading
@@ -51,7 +51,7 @@ export async function printCards<T extends PrintableCard>(
   for (const card of cards) {
     const extra = column ? `${column(card)}  ` : "";
     console.log(
-      `${shortIds.get(card.id) ?? card.id}  ${card.bundle}  (${card.posX}, ${card.posY})  ${extra}${card.content.replace(/\r?\n/g, " ")}`,
+      `${shortIds.get(card.id) ?? card.id}  ${card.partition}  (${card.posX}, ${card.posY})  ${extra}${card.content.replace(/\r?\n/g, " ")}`,
     );
   }
 }

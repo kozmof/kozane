@@ -1,4 +1,4 @@
-import { getProjectCardIds } from "../../db/api/card.js";
+import { getNamespaceCardIds } from "../../db/api/card.js";
 import {
   buildTagTree,
   capHitsByKind,
@@ -25,11 +25,11 @@ import {
 } from "../../lib/server/tag-index.js";
 import type { DB } from "../../db/tx.js";
 import type { TagHit } from "../../lib/types.js";
-import { resolveProjectId } from "../lib/project-selection.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { shortIdMap } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 
-export type TagOptions = { project?: string };
+export type TagOptions = { namespace?: string };
 export type TagShowOptions = TagOptions & { files?: boolean };
 
 /**
@@ -59,20 +59,20 @@ function printTree(nodes: TagNode[], depth = 0): void {
 }
 
 /**
- * Every tag in a project, as a tree.
+ * Every tag in a namespace, as a tree.
  *
  * Reads exactly what the tag index page reads — `loadTagIndex` — so the terminal and
  * the browser cannot come to different conclusions about what a tag holds.
  */
 export async function tagList(options: TagOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
-    const projectId = await resolveProjectId(db, options.project);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
     // The cache matters most here. A command runs in a process that exits, so without one
     // every invocation re-queries every card and re-reads every taskspace file to learn what
     // the last invocation already worked out.
     const { hits, truncated, missing, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
-      projectId,
+      namespaceId,
       includeFiles: true,
       root,
       cache: { dbUrl },
@@ -106,7 +106,7 @@ type WarnIncomplete = {
  * wrote.
  *
  * Names and wording both come from elsewhere. The name is joined from the gather's own record
- * of what it walked — this had been fetching every taskspace in the project again to turn an
+ * of what it walked — this had been fetching every taskspace in the namespace again to turn an
  * id back into a name. The wording is `truncationReasons`, `missingTaskspaceLabel`, and
  * `CARDS_TRUNCATED_LABEL`, shared with the tag index page, because the two say the same thing
  * about the same gather and the scanner's own vocabulary — `budget`, `nodes` — was reaching
@@ -170,12 +170,12 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     const query = normalizeTag(tag.replace(/^'/, ""));
     if (!query) throw new Error("Tag cannot be empty.");
 
-    const projectId = await resolveProjectId(db, options.project);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
     // `--no-files` is commander's spelling of a `--files` that defaults to true.
     const includeFiles = options.files !== false;
     const { hits, truncated, missing, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
-      projectId,
+      namespaceId,
       includeFiles,
       root,
       cache: { dbUrl },
@@ -191,7 +191,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
       return;
     }
 
-    await printCardHits(db, projectId, shown);
+    await printCardHits(db, namespaceId, shown);
     printFileHits(shown, taskspaces);
     warnIncomplete({ truncated, missing, taskspaces, cardsTruncated });
   });
@@ -199,22 +199,22 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
 
 async function printCardHits(
   db: DB,
-  projectId: string,
+  namespaceId: string,
   { cards: cardHits, cardTotal }: CappedHits<TagHit>,
 ): Promise<void> {
   if (cardHits.length === 0) return;
 
-  // Short ids are drawn against every card of the project, so the id printed for a card is
+  // Short ids are drawn against every card of the namespace, so the id printed for a card is
   // the one `kozane card show` takes, whichever tag was asked for. Ids alone, in one
-  // statement: this was a bundle read followed by a card read per bundle, which is a round
-  // trip per bundle and the full text of every card in the project, to number them.
+  // statement: this was a partition read followed by a card read per partition, which is a round
+  // trip per partition and the full text of every card in the namespace, to number them.
   //
   // Unbounded on purpose, which is worth saying where every neighbouring read is bounded.
   // A short id is only unambiguous against the whole set it was drawn from, so numbering the
   // at-most-`TAG_HITS_SHOWN_MAX` rows below against the cards that happen to carry this tag
   // would print ids that `kozane card show` resolves to different cards — or to none. What is
   // read is one id per card and nothing else, so the cost is a column rather than a corpus.
-  const shortIds = shortIdMap(await getProjectCardIds({ db, projectId }));
+  const shortIds = shortIdMap(await getNamespaceCardIds({ db, namespaceId }));
 
   console.log("Cards:");
   // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
@@ -233,7 +233,7 @@ async function printCardHits(
  * The file rows, under the taskspace each was found in.
  *
  * Grouped by taskspace first, because a path is relative to one and says nothing on its own:
- * a project draws its own taskspaces *and* every unplaced one, so `README.md:2` printed bare
+ * a namespace draws its own taskspaces *and* every unplaced one, so `README.md:2` printed bare
  * was two indistinguishable rows for two different files as soon as a workspace had a second
  * taskspace. The tag index page heads its file rows the same way, through the same
  * `groupHitsByTaskspace` — only the drawing below differs, which is the whole of what the

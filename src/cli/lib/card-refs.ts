@@ -1,6 +1,6 @@
 import { eq, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, scopeTable } from "../../db/schema.js";
-import { getDefaultBundle } from "../../db/api/bundle.js";
+import { partitionTable, cardTable, scopeTable } from "../../db/schema.js";
+import { getDefaultPartition } from "../../db/api/partition.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import { chunked, STATEMENT_PARAMS_MAX } from "../../lib/constants.js";
 import type { DB } from "../../db/tx.js";
@@ -39,11 +39,11 @@ export function movedCoordinate(value: number | string, current: number): number
 }
 
 /**
- * Resolve card references together and retain the project needed by the guarded glue APIs.
+ * Resolve card references together and retain the namespace needed by the guarded glue APIs.
  *
  * Workspace-wide, and it has to be: an abbreviated id is unambiguous or it is not, and the
- * set it is unambiguous *in* is every card there is — `kozane card project` moves cards
- * between projects, so narrowing this to one would make a prefix resolve here that
+ * set it is unambiguous *in* is every card there is — `kozane card namespace` moves cards
+ * between namespaces, so narrowing this to one would make a prefix resolve here that
  * `shortId` had refused to print. What each id is printed back as depends on the same set.
  *
  * What it does not read is every card's *text*. This selected `content` — and `width`,
@@ -54,13 +54,13 @@ export function movedCoordinate(value: number | string, current: number): number
  */
 export async function resolveCardGroup(db: DB, requestedIds: string[]) {
   const index = await db
-    .select({ id: cardTable.id, projectId: bundleTable.projectId })
+    .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
     .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+    .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
   const allIds = index.map(({ id }) => id);
   const cardIds = requestedIds.map((id) => resolveShortId(id, allIds, "Card"));
-  const projectId = findById(index, cardIds[0], "Card").projectId;
-  return { index, allIds, cardIds, projectId };
+  const namespaceId = findById(index, cardIds[0], "Card").namespaceId;
+  return { index, allIds, cardIds, namespaceId };
 }
 
 /** What a command that positions or re-lays-out cards needs of each one. */
@@ -76,7 +76,7 @@ export type LoadedCard = {
  * The full rows behind a resolved set of ids.
  *
  * Chunked, because the set is not always what someone typed: `card glue --add` expands a
- * selection to whole glue groups, and a group has no ceiling short of the project. One
+ * selection to whole glue groups, and a group has no ceiling short of the namespace. One
  * bound parameter per id puts a large enough group past {@link STATEMENT_PARAMS_MAX}, which
  * SQLite refuses after building the statement rather than before.
  */
@@ -98,37 +98,37 @@ export async function loadCards(db: DB, cardIds: string[]): Promise<LoadedCard[]
   return rows;
 }
 
-export async function resolveBundleId(
+export async function resolvePartitionId(
   db: DB,
-  projectId: string,
+  namespaceId: string,
   requestedId?: string,
 ): Promise<string> {
   if (requestedId) {
-    const bundles = await db
-      .select({ id: bundleTable.id })
-      .from(bundleTable)
-      .where(eq(bundleTable.projectId, projectId));
+    const partitions = await db
+      .select({ id: partitionTable.id })
+      .from(partitionTable)
+      .where(eq(partitionTable.namespaceId, namespaceId));
     return resolveShortId(
       requestedId,
-      bundles.map(({ id }) => id),
-      "Bundle",
+      partitions.map(({ id }) => id),
+      "Partition",
     );
   }
-  const bundle = await getDefaultBundle({ db, projectId });
-  if (!bundle) throw new Error(`Project has no default bundle: ${projectId}`);
-  return bundle.id;
+  const partition = await getDefaultPartition({ db, namespaceId });
+  if (!partition) throw new Error(`Namespace has no default partition: ${namespaceId}`);
+  return partition.id;
 }
 
-/** The requested layer, or the project's default one when nothing was asked for. */
+/** The requested layer, or the namespace's default one when nothing was asked for. */
 export async function resolveLayerId(
   db: DB,
-  projectId: string,
+  namespaceId: string,
   requested?: string,
 ): Promise<string> {
-  const layers = await getAllLayers({ db, projectId });
+  const layers = await getAllLayers({ db, namespaceId });
   if (!requested) {
     const defaultLayer = layers.find(({ isDefault }) => isDefault);
-    if (!defaultLayer) throw new Error(`Project has no default layer: ${projectId}`);
+    if (!defaultLayer) throw new Error(`Namespace has no default layer: ${namespaceId}`);
     return defaultLayer.id;
   }
   return resolveLayerRef(layers, requested);

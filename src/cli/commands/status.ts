@@ -2,8 +2,8 @@ import { count } from "drizzle-orm";
 import { openingStatus } from "../lib/opening-status.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import {
-  projectTable,
-  bundleTable,
+  namespaceTable,
+  partitionTable,
   cardTable,
   scopeTable,
   taskspaceTable,
@@ -14,9 +14,9 @@ export async function status(): Promise<void> {
   // reporting the state of a workspace is exactly what is wanted when it needs attention.
   await runWorkspaceCommand(
     async ({ db, root, config }) => {
-      const [[projects], [bundles], [cards], [scopes], [taskspaces]] = await Promise.all([
-        db.select({ count: count() }).from(projectTable),
-        db.select({ count: count() }).from(bundleTable),
+      const [[namespaces], [partitions], [cards], [scopes], [taskspaces]] = await Promise.all([
+        db.select({ count: count() }).from(namespaceTable),
+        db.select({ count: count() }).from(partitionTable),
         db.select({ count: count() }).from(cardTable),
         db.select({ count: count() }).from(scopeTable),
         db.select({ count: count() }).from(taskspaceTable),
@@ -24,8 +24,8 @@ export async function status(): Promise<void> {
 
       console.log(`Workspace    : ${config.name}`);
       console.log(`Opening      : ${openingStatus(root)}`);
-      console.log(`Projects     : ${projects.count}`);
-      console.log(`Bundles      : ${bundles.count}`);
+      console.log(`Namespaces     : ${namespaces.count}`);
+      console.log(`Partitions      : ${partitions.count}`);
       console.log(`Cards        : ${cards.count}`);
       console.log(`Scopes       : ${scopes.count}`);
       console.log(`Taskspaces   : ${taskspaces.count}`);

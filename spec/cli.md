@@ -3,7 +3,7 @@
 ## Overview
 
 Kozane is a local-first workspace for arranging short pieces of text on a canvas.
-The CLI starts a local SvelteKit web server and manages project initialization,
+The CLI starts a local SvelteKit web server and manages namespace initialization,
 database bootstrapping, taskspace files, and workspace health. This document
 records the command surface the codebase implements today.
 
@@ -19,32 +19,32 @@ kozane
 
 ## Core concepts
 
-### Projects
+### Namespaces
 
-A project is the top-level container. It owns bundles, and bundles own cards.
-Most operations (card creation, bundle management, card positions) are scoped to a single project.
+A namespace is the top-level container. It owns partitions, and partitions own cards.
+Most operations (card creation, partition management, card positions) are scoped to a single namespace.
 
-### Bundles
+### Partitions
 
-A bundle is a named label attached to every card. Each project has one default bundle
-("General") created automatically. Bundles give cards a color in the UI and act as a
+A partition is a named label attached to every card. Each namespace has one default partition
+("General") created automatically. Partitions give cards a color in the UI and act as a
 coarse category rather than a folder hierarchy.
 
 ### Layers
 
-A layer is a surface within a project that cards sit on. Every card belongs to exactly one
-layer, and every project has one default layer ("Base") created automatically. Layers are
+A layer is a surface within a namespace that cards sit on. Every card belongs to exactly one
+layer, and every namespace has one default layer ("Base") created automatically. Layers are
 stacked. The UI draws the selected layer at full strength with the rest dimmed behind it,
 so one set of cards can be worked on without the others in the way.
 
 Layers are ordered by position, bottom to top. `kozane layer move` shifts a layer one step
 at a time, and `layer list` prints them in the same bottom-to-top order.
 
-Unlike bundles and scopes, a layer can be named on the command line by its name as well as
-by its full or short ID, because names are unique within a project. An exact name wins,
+Unlike partitions and scopes, a layer can be named on the command line by its name as well as
+by its full or short ID, because names are unique within a namespace. An exact name wins,
 then a case-insensitive one, then a short ID.
 
-Deleting a layer does not delete its cards. They move to the project's default layer. The
+Deleting a layer does not delete its cards. They move to the namespace's default layer. The
 default layer cannot be deleted.
 
 ### Tags
@@ -65,11 +65,11 @@ leave an index disagreeing with the cards, with nothing able to say so. Derived 
 tag exists exactly as long as the text holding it does. Any future command that appears to
 name tags directly has to be a way of editing text, not a second place tags are kept.
 
-A tag is not confined to a project, for the same reason: nothing stops the same one being
+A tag is not confined to a namespace, for the same reason: nothing stops the same one being
 written on two boards. The browser's tag index at `/tags` gathers the whole workspace by
-default and narrows to a project with `?projectId=<id>`. The CLI is the other way round —
-`tag list` and `tag show` read one project, the workspace default unless `--project` names
-another — because a command run inside a workspace is usually asking about the project it
+default and narrows to a namespace with `?namespaceId=<id>`. The CLI is the other way round —
+`tag list` and `tag show` read one namespace, the workspace default unless `--namespace` names
+another — because a command run inside a workspace is usually asking about the namespace it
 is working in.
 
 An apostrophe is also ordinary punctuation, so three rules keep writing from becoming
@@ -128,41 +128,41 @@ and routinely covers notes someone would want tagged.
 
 ### Warps
 
-A warp is a saved place on a project's canvas, a point the browser UI moves the view to
+A warp is a saved place on a namespace's canvas, a point the browser UI moves the view to
 with the arrow keys. Warps have no name and are numbered by creation order. They have no
 CLI commands either, since a viewport position means nothing in a terminal. They are
-listed here because they are project data. `kozane db export` carries them, and deleting
-a project deletes its warps. See the
+listed here because they are namespace data. `kozane db export` carries them, and deleting
+a namespace deletes its warps. See the
 [Browser UI handbook](../docs/browser-ui-handbook.md).
 
 ### Scopes
 
-A scope is a named cross-project grouping of cards. Unlike projects and bundles, a scope
-does not belong to any one project, so the same scope can contain cards from multiple
-projects at once.
+A scope is a named cross-namespace grouping of cards. Unlike namespaces and partitions, a scope
+does not belong to any one namespace, so the same scope can contain cards from multiple
+namespaces at once.
 
 ```
 scope "Q3 planning"
-  ├── card from project "backend"   (bundle: Roadmap)
-  ├── card from project "backend"   (bundle: Risks)
-  └── card from project "frontend"  (bundle: Roadmap)
+  ├── card from namespace "backend"   (partition: Roadmap)
+  ├── card from namespace "backend"   (partition: Risks)
+  └── card from namespace "frontend"  (partition: Roadmap)
 ```
 
 Scopes are the bridge between the card canvas and the filesystem. A taskspace for a scope
 stores an identity marker. Run `kozane card list` from that directory to read the scope's
-current cards directly from the database, regardless of which project they belong to.
+current cards directly from the database, regardless of which namespace they belong to.
 
-A board shows only the scopes its own project has reason to draw: those holding one of its
+A board shows only the scopes its own namespace has reason to draw: those holding one of its
 cards, those one of its taskspaces is attached to, and those nothing anywhere refers to yet.
-A scope used only by another project is not on it. The CLI is the workspace-wide view —
-`kozane scope list` names every scope and the projects each one reaches, and
-`kozane taskspace list` does the same for taskspaces. Pass `--project` to either to see
-exactly what that project's board draws.
+A scope used only by another namespace is not on it. The CLI is the workspace-wide view —
+`kozane scope list` names every scope and the namespaces each one reaches, and
+`kozane taskspace list` does the same for taskspaces. Pass `--namespace` to either to see
+exactly what that namespace's board draws.
 
 Cards are added to a scope explicitly (via the UI's scope panel or `taskspace create --scope`).
-Deleting a scope from the UI removes that project's cards from it. The scope itself is only
-deleted once nothing anywhere refers to it: no member cards in any project, and no
-taskspaces attached. A scope another project has attached a taskspace to but not yet filed
+Deleting a scope from the UI removes that namespace's cards from it. The scope itself is only
+deleted once nothing anywhere refers to it: no member cards in any namespace, and no
+taskspaces attached. A scope another namespace has attached a taskspace to but not yet filed
 cards into therefore survives, rather than being removed out from under it.
 
 `kozane scope delete` is the blunter one: it deletes the scope workspace-wide whatever
@@ -182,15 +182,15 @@ status and lists the cards associated directly with the taskspace.
 Taskspaces are discovered by `kozane taskspace scan`, which walks the directories listed
 in `config.taskspace.searchRoots` and reconciles what is on disk with the database.
 `kozane taskspace list` reads only the database and reports every taskspace with the
-project and scope it sits under.
+namespace and scope it sits under.
 
-A taskspace records the project it was created for, and a board shows its own project's
-taskspaces. `taskspace create` always settles on one — `--project` if given, otherwise the
-default project, otherwise the only project there is — and exits with an error when none of
-those applies. It never creates a taskspace with no project.
+A taskspace records the namespace it was created for, and a board shows its own namespace's
+taskspaces. `taskspace create` always settles on one — `--namespace` if given, otherwise the
+default namespace, otherwise the only namespace there is — and exits with an error when none of
+those applies. It never creates a taskspace with no namespace.
 
 A record can still end up without one through `taskspace scan --apply --reattach`, which
-inserts from the on-disk marker: a marker naming no project gives a taskspace with none,
+inserts from the on-disk marker: a marker naming no namespace gives a taskspace with none,
 and that taskspace appears on every board until something places it.
 
 ---
@@ -212,18 +212,18 @@ pnpm build:cli            # compile to dist/
 
 ---
 
-## Project layout
+## Namespace layout
 
 ```
-<project-root>/
+<workspace-root>/
   .kozane/
-    config.json           # project config
+    config.json           # namespace config
     kozane.db             # SQLite database
     tag-index.json        # cached tag gather, rebuilt when stale, safe to delete
     backups/              # database backups created before migrations/imports
 ```
 
-Taskspaces live wherever you choose (default: project root).
+Taskspaces live wherever you choose (default: workspace root).
 Each taskspace directory carries its own identity marker:
 
 ```
@@ -238,7 +238,7 @@ Each taskspace directory carries its own identity marker:
 
 ### What every workspace command does first
 
-`project`, `card`, `layer`, `scope`, `taskspace` and `status` all open the workspace the
+`namespace`, `card`, `layer`, `scope`, `taskspace` and `status` all open the workspace the
 same way, and it is the same three steps every time.
 
 1. **Find the workspace**, walking up from the current directory. Without one, the command
@@ -273,20 +273,20 @@ Behavior:
 2. Creates `.kozane/`.
 3. Writes `.kozane/config.json` with defaults (workspace name = current directory name).
 4. Runs Drizzle migrations to create `.kozane/kozane.db`.
-5. Creates a project named `main`, marks it as the workspace default, and creates its default `General` bundle.
+5. Creates a namespace named `main`, marks it as the workspace default, and creates its default `General` partition.
 
 Output:
 
 ```
-Initializing Kozane workspace "my-project"...
+Initializing Kozane workspace "my-namespace"...
 
 Kozane initialized.
 
-  Workspace: my-project
+  Workspace: my-namespace
   Config   : .kozane/config.json
   Database : .kozane/kozane.db
 
-Default project: main
+Default namespace: main
 ```
 
 ---
@@ -329,11 +329,11 @@ OS for an ephemeral port.
 
 Behavior:
 
-1. Walks up from CWD to find `.kozane/config.json` → project root.
+1. Walks up from CWD to find `.kozane/config.json` → workspace root.
 2. Checks DB migration status and exits with an error if migrations are not current. With
-   `--memory`, creates and migrates a fresh temporary session database with one project named
-   `:memory:` instead. While the server is running, project-dependent CLI commands use this
-   database and select its sole project automatically, so `--project` can be omitted.
+   `--memory`, creates and migrates a fresh temporary session database with one namespace named
+   `:memory:` instead. While the server is running, namespace-dependent CLI commands use this
+   database and select its sole namespace automatically, so `--namespace` can be omitted.
 3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
 4. Spawns the server at `bin/server.js`. That entry, rather than adapter-node's
    `build/index.js`, is what binds the socket: it calls `listen` with Kozane's own
@@ -343,7 +343,7 @@ Behavior:
 Output:
 
 ```
-Kozane workspace: my-project
+Kozane workspace: my-namespace
 Database: .kozane/kozane.db
 
 Local UI:
@@ -430,7 +430,7 @@ Exits with an error if the directory holds no `index.html`.
 
 ### `kozane doctor`
 
-Checks the Kozane project environment and reports health.
+Checks the Kozane namespace environment and reports health.
 
 ```bash
 kozane doctor
@@ -441,7 +441,7 @@ Checks (in order):
 | Check                         | Pass condition                                     |
 | ----------------------------- | -------------------------------------------------- |
 | Kozane workspace found        | `.kozane/config.json` found by walking up from CWD |
-| `.kozane/` directory exists   | directory present at project root                  |
+| `.kozane/` directory exists   | directory present at workspace root                  |
 | `config.json` valid           | parses as valid JSON with expected shape           |
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
 | DB migrations current         | migration status is `current`                      |
@@ -453,7 +453,7 @@ Exit code `0` if all checks pass, `1` otherwise.
 Output:
 
 ```
-  ✓  Kozane workspace found — /path/to/project
+  ✓  Kozane workspace found — /path/to/namespace
   ✓  .kozane/ directory exists
   ✓  config.json valid
   ✓  kozane.db readable/writable
@@ -508,7 +508,7 @@ fail too, for setups where an unknown key should break the build.
 Output:
 
 ```
-Config: /path/to/project/.kozane/config.json
+Config: /path/to/namespace/.kozane/config.json
 
   ✗  name is missing
   ✗  server.port must be between 0 and 65535 (found: 70000)
@@ -532,7 +532,7 @@ visible without going to look them up.
 ### `kozane status`
 
 Shows whether the server is stopped or running in persistent/`:memory:` mode, plus the
-current project state. While a memory server is running, counts come from its temporary
+current namespace state. While a memory server is running, counts come from its temporary
 session database.
 
 ```bash
@@ -542,10 +542,10 @@ kozane status
 Output:
 
 ```
-Workspace    : my-project
+Workspace    : my-namespace
 Opening      : running (:memory:)
-Projects     : 1
-Bundles      : 6
+Namespaces     : 1
+Partitions      : 6
 Cards        : 128
 Scopes       : 4
 Taskspaces   : 3
@@ -553,122 +553,122 @@ Taskspaces   : 3
 
 ---
 
-### `kozane project list`
+### `kozane namespace list`
 
-Lists all projects in the current workspace.
+Lists all namespaces in the current workspace.
 
 ```bash
-kozane project list
+kozane namespace list
 ```
 
-Output (one line per project):
+Output (one line per namespace):
 
 ```
 aa414b7  main  (default)
 ```
 
-If no projects exist:
+If no namespaces exist:
 
 ```
-No projects found.
+No namespaces found.
 ```
 
 ---
 
-### `kozane project create <name>`
+### `kozane namespace create <name>`
 
-Creates a new project in the current workspace.
+Creates a new namespace in the current workspace.
 
 ```bash
-kozane project create <name>
+kozane namespace create <name>
 ```
 
 Behavior:
 
 1. Requires a Kozane workspace (walks up from CWD).
 2. Requires the database to be current, as every workspace command does (see below).
-3. Inserts a `project` DB record → gets a stable UUID.
-4. Creates a default "General" bundle and a default "Base" layer for the project.
+3. Inserts a `namespace` DB record → gets a stable UUID.
+4. Creates a default "General" partition and a default "Base" layer for the namespace.
 
-Steps 3 and 4 are one transaction, so a project never exists without the bundle and layer
-a canvas needs. The browser project list creates projects through the same routine.
+Steps 3 and 4 are one transaction, so a namespace never exists without the partition and layer
+a canvas needs. The browser namespace list creates namespaces through the same routine.
 
 Output:
 
 ```
-Project created.
+Namespace created.
   id  : aa414b7
-  name: my-project
+  name: my-namespace
 ```
 
 ---
 
-### `kozane project default <id>`
+### `kozane namespace default <id>`
 
-Marks a project as the workspace default. The alias `project set-default <id>` is also
-accepted. Commands use this project whenever `--project` is omitted. Project IDs may
+Marks a namespace as the workspace default. The alias `namespace set-default <id>` is also
+accepted. Commands use this namespace whenever `--namespace` is omitted. Namespace IDs may
 be full or short.
 
 ```bash
-kozane project default <id>
+kozane namespace default <id>
 ```
 
 ---
 
-### `kozane project delete <id>`
+### `kozane namespace delete <id>`
 
-Deletes a project by ID (cascade-deletes its bundles and cards). If it was the default, another remaining project is promoted automatically.
+Deletes a namespace by ID (cascade-deletes its partitions and cards). If it was the default, another remaining namespace is promoted automatically.
 
 ```bash
-kozane project delete <id>
+kozane namespace delete <id>
 ```
 
 Output:
 
 ```
-Project deleted.
+Namespace deleted.
   id: aa414b7
 ```
 
 ---
 
-### `kozane bundle list`
+### `kozane partition list`
 
-Lists a project's bundles, one per line, as short ID and name. The default bundle is marked
+Lists a namespace's partitions, one per line, as short ID and name. The default partition is marked
 `(default)`.
 
 ```bash
-kozane bundle list [--project <projectId>]
+kozane partition list [--namespace <namespaceId>]
 ```
 
-If the project has no bundles, the command prints `No bundles found.`
+If the namespace has no partitions, the command prints `No partitions found.`
 
-### `kozane bundle add <name>`
+### `kozane partition add <name>`
 
-Adds a bundle to a project. Output includes the new short bundle ID and name.
+Adds a partition to a namespace. Output includes the new short partition ID and name.
 
 ```bash
-kozane bundle add <name> [--project <projectId>]
+kozane partition add <name> [--namespace <namespaceId>]
 ```
 
-Bundle names are trimmed, must be non-empty, and are unique within the project.
+Partition names are trimmed, must be non-empty, and are unique within the namespace.
 
-### `kozane bundle delete <bundleId>`
+### `kozane partition delete <partitionId>`
 
-Deletes a bundle and moves its cards to the project's default bundle, so no card is lost
-with the label it carried. Deleting the default bundle is refused.
+Deletes a partition and moves its cards to the namespace's default partition, so no card is lost
+with the label it carried. Deleting the default partition is refused.
 
 ```bash
-kozane bundle delete <bundleId> [--project <projectId>]
+kozane partition delete <partitionId> [--namespace <namespaceId>]
 ```
 
-`<bundleId>` is a full or short ID, resolved against the selected project's bundles.
+`<partitionId>` is a full or short ID, resolved against the selected namespace's partitions.
 
 ---
 
 ### `kozane scope add <name>`
 
-Adds a cross-project card scope.
+Adds a cross-namespace card scope.
 
 ```bash
 kozane scope add <name>
@@ -679,21 +679,21 @@ unique within the workspace.
 
 ### `kozane scope list`
 
-Lists every scope in the workspace using collision-safe short IDs, followed by the projects
+Lists every scope in the workspace using collision-safe short IDs, followed by the namespaces
 that scope reaches — through a card filed into it or a taskspace attached to it. A scope no
-project has reached yet is shown as `(unused)`; those are visible from every board.
+namespace has reached yet is shown as `(unused)`; those are visible from every board.
 
 ```bash
 kozane scope list
-kozane scope list --project <projectId>
+kozane scope list --namespace <namespaceId>
 ```
 
-`--project` narrows the list to what that project's board draws. Short IDs are always
+`--namespace` narrows the list to what that namespace's board draws. Short IDs are always
 computed against every scope in the workspace, so an ID printed here is the same one
 whether or not the list was narrowed.
 
 If no scopes exist, the command prints `No scopes found.`, or
-`No scopes found in this project.` when `--project` was given.
+`No scopes found in this namespace.` when `--namespace` was given.
 
 ### `kozane scope add-cards <scopeId> <cardIds>`
 
@@ -701,11 +701,11 @@ Adds one or more cards to a scope. `<cardIds>` takes any number of full or short
 separated by spaces.
 
 ```bash
-kozane scope add-cards <scopeId> <cardIds...> [--project <projectId>]
+kozane scope add-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
 kozane scope add-cards e3ee90b 3f9a2c1 72ac1f8
 ```
 
-Every card must belong to the selected project; a card from another project is refused
+Every card must belong to the selected namespace; a card from another namespace is refused
 rather than moved. A card already in the scope is left as it is, so the command can be run
 twice without doubling anything. Output is the number of cards added and the scope's short
 ID.
@@ -716,11 +716,11 @@ Removes one or more cards from a scope. The cards themselves are not deleted —
 gathers cards and removing one from the gathering leaves it on its board.
 
 ```bash
-kozane scope remove-cards <scopeId> <cardIds...> [--project <projectId>]
+kozane scope remove-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
 ```
 
 Refused, with the same wording as `add-cards`, when a named card does not belong to the
-selected project. A card that was not in the scope is not an error.
+selected namespace. A card that was not in the scope is not an error.
 
 ### `kozane scope delete <id>`
 
@@ -735,32 +735,32 @@ kozane scope delete <id>
 
 ### `kozane layer list`
 
-Lists a project's layers bottom to top, one per line, as short ID, position, card count,
+Lists a namespace's layers bottom to top, one per line, as short ID, position, card count,
 and name. The default layer is marked `(default)`.
 
 ```bash
-kozane layer list [--project <projectId>]
+kozane layer list [--namespace <namespaceId>]
 ```
 
-If the project has no layers, the command prints `No layers found.`
+If the namespace has no layers, the command prints `No layers found.`
 
 ### `kozane layer add <name>`
 
-Adds a layer on top of the project's existing ones. Output includes the new short layer ID,
+Adds a layer on top of the namespace's existing ones. Output includes the new short layer ID,
 name, and position.
 
 ```bash
-kozane layer add <name> [--project <projectId>]
+kozane layer add <name> [--namespace <namespaceId>]
 ```
 
-Layer names must be non-empty and unique within the project.
+Layer names must be non-empty and unique within the namespace.
 
 ### `kozane layer rename <layer> <name>`
 
 Renames a layer, identified by name, full ID, or short ID.
 
 ```bash
-kozane layer rename <layer> <name> [--project <projectId>]
+kozane layer rename <layer> <name> [--namespace <namespaceId>]
 kozane layer rename Draft Sketches
 ```
 
@@ -770,41 +770,41 @@ Moves a layer one step up or down the stack. `<direction>` must be `up` or `down
 past either end is an error, as is any other direction.
 
 ```bash
-kozane layer move <layer> up|down [--project <projectId>]
+kozane layer move <layer> up|down [--namespace <namespaceId>]
 kozane layer move Sketches down
 ```
 
 ### `kozane layer delete <layer>`
 
-Deletes a layer and moves its cards to the project's default layer. Deleting the default
+Deletes a layer and moves its cards to the namespace's default layer. Deleting the default
 layer is refused.
 
 ```bash
-kozane layer delete <layer> [--project <projectId>]
+kozane layer delete <layer> [--namespace <namespaceId>]
 ```
 
 ---
 
 ### `kozane card add <content>`
 
-Adds a card to a project and optionally associates it with a scope.
+Adds a card to a namespace and optionally associates it with a scope.
 
 ```bash
-kozane card add <content> [--project <projectId>] [--bundle <bundleId>]
+kozane card add <content> [--namespace <namespaceId>] [--partition <partitionId>]
                           [--scope <scopeId>] [--layer <layer>]
                           [--x <number>] [--y <number>]
 ```
 
-Project, bundle, and scope options accept full or short IDs, and `--layer` also accepts a
-layer name. Without `--project`, the workspace default project is used. Without `--bundle`, that
-project's default bundle is used. Without `--layer`, that project's default layer is used.
+Namespace, partition, and scope options accept full or short IDs, and `--layer` also accepts a
+layer name. Without `--namespace`, the workspace default namespace is used. Without `--partition`, that
+namespace's default partition is used. Without `--layer`, that namespace's default layer is used.
 When `--scope` is provided, card creation and scope membership are committed in one
 transaction.
 
 Example:
 
 ```bash
-kozane card add "Investigate caching" --project eb155d6 --scope e3ee90b --x 48 --y 72
+kozane card add "Investigate caching" --namespace eb155d6 --scope e3ee90b --x 48 --y 72
 ```
 
 ---
@@ -824,12 +824,12 @@ cat foo.txt | kozane card squash
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-The command accepts `--pattern`, `--project`, `--bundle`, `--scope`, and `--layer`, using
+The command accepts `--pattern`, `--namespace`, `--partition`, `--scope`, and `--layer`, using
 full or short IDs. `--layer` also accepts a layer name. These options work with piped
 input as well:
 
 ```bash
-cat foo.txt | kozane card squash --project eb155d6 --scope e3ee90b
+cat foo.txt | kozane card squash --namespace eb155d6 --scope e3ee90b
 ```
 
 All generated cards and their optional scope memberships are committed in one
@@ -870,9 +870,9 @@ a timestamp that names no moment reads `invalid`.
 
 ### `kozane card layer <cardId> <layer>`
 
-Moves an existing card to another layer of its own project. The card is found by full or
-short ID, and the project is taken from the card rather than from `--project`, so the layer
-is always resolved against the project that owns it. `<layer>` accepts a layer name, full
+Moves an existing card to another layer of its own namespace. The card is found by full or
+short ID, and the namespace is taken from the card rather than from `--namespace`, so the layer
+is always resolved against the namespace that owns it. `<layer>` accepts a layer name, full
 ID, or short ID.
 
 ```bash
@@ -880,14 +880,14 @@ kozane card layer <cardId> <layer>
 kozane card layer 3f9a2c1 Draft
 ```
 
-Moving a card to a layer of a different project is refused. A card arriving from another
+Moving a card to a layer of a different namespace is refused. A card arriving from another
 layer is stacked above the cards already there.
 
 ---
 
 ### `kozane card edit <cardId> <content>`
 
-Replaces a card's text outright. The card keeps its position, bundle, layer, scope
+Replaces a card's text outright. The card keeps its position, partition, layer, scope
 memberships, and glue group; only the text changes.
 
 ```bash
@@ -908,13 +908,13 @@ kozane card delete <cardIds...>
 kozane card delete 3f9a2c1 72ac1f8
 ```
 
-Every card must belong to the same project, which is taken from the first ID given. A glue
+Every card must belong to the same namespace, which is taken from the first ID given. A glue
 group left holding one card by the deletion is dissolved, so no card is left offering to be
 unglued from a group of itself. Output is the number of cards deleted and their short IDs.
 
 ### `kozane card move <cardId>`
 
-Moves a card to a position on its project's canvas. At least one of `--x` and `--y` is
+Moves a card to a position on its namespace's canvas. At least one of `--x` and `--y` is
 required; the axis not given is left where it was.
 
 ```bash
@@ -927,48 +927,48 @@ Each position is either an integer or a relative offset written `current+<n>` or
 error. The result is clamped to the workspace's canvas bounds, and the clamped position is
 what the command prints.
 
-### `kozane card bundle <bundleId> <cardIds>`
+### `kozane card partition <partitionId> <cardIds>`
 
-Moves cards to another bundle of their own project.
-
-```bash
-kozane card bundle <bundleId> <cardIds...>
-kozane card bundle 72ac1f8 3f9a2c1 e3ee90b
-```
-
-The project is taken from the cards rather than from an option, and the bundle is resolved
-within it — so a bundle of another project is refused, as is a set of cards drawn from more
-than one project. Positions, layers, and scope memberships are untouched.
-
-### `kozane card project <projectId> <cardIds>`
-
-Moves cards to another project, matching bundle and layer _by name_ rather than by ID.
+Moves cards to another partition of their own namespace.
 
 ```bash
-kozane card project <projectId> <cardIds...>
-kozane card project eb155d6 3f9a2c1
+kozane card partition <partitionId> <cardIds...>
+kozane card partition 72ac1f8 3f9a2c1 e3ee90b
 ```
 
-A card in a bundle named `General` lands in the target project's `General`, and likewise for
-its layer; where the target has no bundle or layer of that name, one is created. The source
-project is taken from the cards, and they must all come from the same one.
+The namespace is taken from the cards rather than from an option, and the partition is resolved
+within it — so a partition of another namespace is refused, as is a set of cards drawn from more
+than one namespace. Positions, layers, and scope memberships are untouched.
 
-Moved cards leave their glue groups. A group spanning two projects is never drawn by the UI,
+### `kozane card namespace <namespaceId> <cardIds>`
+
+Moves cards to another namespace, matching partition and layer _by name_ rather than by ID.
+
+```bash
+kozane card namespace <namespaceId> <cardIds...>
+kozane card namespace eb155d6 3f9a2c1
+```
+
+A card in a partition named `General` lands in the target namespace's `General`, and likewise for
+its layer; where the target has no partition or layer of that name, one is created. The source
+namespace is taken from the cards, and they must all come from the same one.
+
+Moved cards leave their glue groups. A group spanning two namespaces is never drawn by the UI,
 so it would only ever be rows nothing could act on.
 
 ---
 
 ### `kozane card list`
 
-Lists project cards or dynamically lists cards associated with a taskspace.
+Lists namespace cards or dynamically lists cards associated with a taskspace.
 
 ```bash
-kozane card list [--project <projectId>] [--bundle <bundleId>] [--sort <key>] [--reverse]
+kozane card list [--namespace <namespaceId>] [--partition <partitionId>] [--sort <key>] [--reverse]
 kozane card list --taskspace <path> [--sort <key>] [--reverse]
 ```
 
 When the current directory contains `.taskspace.json`, running `kozane card list`
-without project or bundle options automatically uses that marker. The marker must be
+without namespace or partition options automatically uses that marker. The marker must be
 in the current directory, and parent directories are not searched.
 
 `--taskspace <path>` accepts either a taskspace directory or the
@@ -987,7 +987,7 @@ kozane card list --taskspace ./my-taskspace
 kozane card list --taskspace ./my-taskspace/.taskspace.json
 ```
 
-The taskspace form cannot be combined with `--project` or `--bundle`.
+The taskspace form cannot be combined with `--namespace` or `--partition`.
 
 #### Sorting
 
@@ -1005,7 +1005,7 @@ Cards with equal values are ordered by ID. `--reverse` flips the whole listing, 
 included, and is refused without `--sort` — there is no defined order to reverse.
 
 **Only a change to a card's text counts as updating it.** Moving a card across the board,
-resizing it, restacking it, or moving it to another bundle or layer leaves both timestamps
+resizing it, restacking it, or moving it to another partition or layer leaves both timestamps
 as they were. So `gap` measures how long a card stood before it was rewritten, not how
 recently it was rearranged; a card never edited since it was added has a gap of `0s`.
 
@@ -1054,7 +1054,7 @@ pieces there were.
 
 ### `kozane card nearest <cardId>`
 
-Lists all cards in the specified card's project, sorted by Euclidean distance from
+Lists all cards in the specified card's namespace, sorted by Euclidean distance from
 that card's canvas position. The specified card appears first with distance `0.00`.
 Cards at the same distance are ordered by ID. Full and short card IDs are accepted.
 
@@ -1063,13 +1063,13 @@ kozane card nearest <cardId>
 kozane card nearest 17b86d2
 ```
 
-Each row includes the card's short ID, bundle, position, distance, and content.
+Each row includes the card's short ID, partition, position, distance, and content.
 
 ---
 
 ### `kozane card glue <cardIds>`
 
-Glues two or more cards of one project into a group. A glued group moves as a unit on the
+Glues two or more cards of one namespace into a group. A glued group moves as a unit on the
 board and is selected as one.
 
 ```bash
@@ -1077,7 +1077,7 @@ kozane card glue <cardIds...> [--add] [--align-list]
 kozane card glue 3f9a2c1 72ac1f8
 ```
 
-All the cards must belong to the same project, which is taken from the first ID given.
+All the cards must belong to the same namespace, which is taken from the first ID given.
 
 By default the named cards become the group, and any group they were already in is left
 behind. `--add` instead expands the selection to whole groups first: naming one member of an
@@ -1097,34 +1097,34 @@ line for each option in force.
 ### `kozane card unglue <cardIds>`
 
 Removes one or more cards from their glue groups. The cards themselves are untouched — they
-keep their text, position, bundle, and layer, and simply stop moving with the group.
+keep their text, position, partition, and layer, and simply stop moving with the group.
 
 ```bash
 kozane card unglue <cardIds...>
 ```
 
-All the cards must belong to the same project. A group left holding fewer than two cards is
+All the cards must belong to the same namespace. A group left holding fewer than two cards is
 dissolved rather than kept as a group of one. A card that was not glued is not an error.
 
 ---
 
 ### `kozane warp list`
 
-Lists a project's warps in creation order, one per line, as short ID, number, and position.
+Lists a namespace's warps in creation order, one per line, as short ID, number, and position.
 A warp's number is its place in this list, which is what the browser UI labels it by.
 
 ```bash
-kozane warp list [--project <projectId>]
+kozane warp list [--namespace <namespaceId>]
 ```
 
-If the project has no warps, the command prints `No warps found.`
+If the namespace has no warps, the command prints `No warps found.`
 
 ### `kozane warp add`
 
-Adds a warp — a saved place on the project's canvas — at a position.
+Adds a warp — a saved place on the namespace's canvas — at a position.
 
 ```bash
-kozane warp add [--project <projectId>] [--x <number>] [--y <number>]
+kozane warp add [--namespace <namespaceId>] [--x <number>] [--y <number>]
 kozane warp add --x 1200 --y 800
 ```
 
@@ -1134,10 +1134,10 @@ by creation order, which `warp list` prints.
 
 ### `kozane warp delete <warpId>`
 
-Deletes a warp by full or short ID, resolved against the selected project's warps.
+Deletes a warp by full or short ID, resolved against the selected namespace's warps.
 
 ```bash
-kozane warp delete <warpId> [--project <projectId>]
+kozane warp delete <warpId> [--namespace <namespaceId>]
 ```
 
 Deleting a warp renumbers the ones after it, since a warp's number is its place in creation
@@ -1147,10 +1147,10 @@ order rather than anything stored.
 
 ### `kozane tag list`
 
-Lists every tag in a project as a tree, with how many cards and files each one gathers.
+Lists every tag in a namespace as a tree, with how many cards and files each one gathers.
 
 ```bash
-kozane tag list [--project <projectId>]
+kozane tag list [--namespace <namespaceId>]
 ```
 
 A count is of distinct cards and files, not of occurrences: a card written
@@ -1199,7 +1199,7 @@ Anything else is gathered again. Deleting the file costs one slow run.
 Lists the cards and taskspace files under a tag, subcategories included.
 
 ```bash
-kozane tag show <tag> [--project <projectId>] [--no-files]
+kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
 The tag may be given with or without its sigil — `kozane tag show perf` and
@@ -1211,7 +1211,7 @@ carries the path and line, the tags matched, and the line the tag sits on. A car
 under two tags is one row naming both.
 
 File rows are grouped under the taskspace they were found in, because a path is relative to
-one and says nothing on its own — a project draws its own taskspaces and every unplaced one,
+one and says nothing on its own — a namespace draws its own taskspaces and every unplaced one,
 so two `README.md`s in one listing is an ordinary workspace rather than an unusual one. The
 browser's tag index heads its file rows the same way.
 
@@ -1307,8 +1307,8 @@ Behavior:
 - Requires migrations to be current.
 - Writes to `file` if given, otherwise prints to stdout.
 - Writes export format version 6. Older files can still be imported: version 2
-  (exported before projects had a default flag) comes back with every project
-  non-default, version 3 (before layers) gets a rebuilt default layer per project,
+  (exported before namespaces had a default flag) comes back with every namespace
+  non-default, version 3 (before layers) gets a rebuilt default layer per namespace,
   version 4 (before warps) comes back with no warps, and version 5 (before the
   card timestamps) comes back with every card created at the moment of the import
   and never since edited.
@@ -1347,8 +1347,8 @@ Output:
 ```
 Backup created: .kozane/backups/kozane.20240101T120000.db
 Database imported: /path/to/export.json
-project: 1
-bundle: 2
+namespace: 1
+partition: 2
 card: 42
 ```
 
@@ -1382,24 +1382,24 @@ Restored: .kozane/backups/kozane.20240101T120000.db
 
 ### `kozane taskspace list`
 
-Lists every taskspace in the workspace as `<id>  <name>  <project>  <scope>  <path>`, using
+Lists every taskspace in the workspace as `<id>  <name>  <namespace>  <scope>  <path>`, using
 collision-safe short IDs. This is the workspace-wide view: a board draws only its own
-project's taskspaces plus the unassigned ones, so a taskspace created from another project
+namespace's taskspaces plus the unassigned ones, so a taskspace created from another namespace
 is visible here and nowhere else.
 
 ```bash
 kozane taskspace list
-kozane taskspace list --project <projectId>
+kozane taskspace list --namespace <namespaceId>
 ```
 
-`--project` narrows the list to what that project's board draws, which includes taskspaces
-with no project of their own. An em dash in the project or scope column is a real state
+`--namespace` narrows the list to what that namespace's board draws, which includes taskspaces
+with no namespace of their own. An em dash in the namespace or scope column is a real state
 rather than missing data: an unassigned taskspace appears on every board, and an unscoped
 one gathers no cards. Short IDs are always computed against every taskspace in the
 workspace, so an ID printed here is the same one whether or not the list was narrowed.
 
 If no taskspaces exist, the command prints `No taskspaces found.`, or
-`No taskspaces found in this project.` when `--project` was given.
+`No taskspaces found in this namespace.` when `--namespace` was given.
 
 Unlike `kozane taskspace scan`, this reads only the database and never touches the
 filesystem, so it reports what Kozane believes rather than what is on disk.
@@ -1467,7 +1467,7 @@ Creates a new taskspace.
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
-                              [--project <projectId>] [--dir <path>]
+                              [--namespace <namespaceId>] [--dir <path>]
 ```
 
 Options:
@@ -1476,8 +1476,8 @@ Options:
 | ------------------- | ------------------------------------------------------------------- |
 | `--scope <scopeId>` | Attach taskspace to an existing scope                               |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)          |
-| `--project <id>`    | Project to own it, required when the workspace has several projects |
-| `--dir <path>`      | Target directory (default: `<projectRoot>/<name>`)                  |
+| `--namespace <id>`    | Namespace to own it, required when the workspace has several namespaces |
+| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)                  |
 
 Either `--scope` or `--no-scope` is required.
 
@@ -1486,7 +1486,7 @@ Behavior:
 1. Inserts a `taskspace` DB record → gets a stable UUID.
 2. Creates the target directory.
 3. Writes `<dir>/.taskspace.json` with the stable ID.
-4. Stores the path in the DB (`project_relative` if inside project root, `absolute` otherwise).
+4. Stores the path in the DB (`project_relative` if inside workspace root, `absolute` otherwise).
 
 Output:
 
@@ -1505,7 +1505,7 @@ Taskspace created.
 
 ```json
 {
-  "name": "my-project",
+  "name": "my-namespace",
   "server": {
     "host": "127.0.0.1",
     "port": 17173
@@ -1594,7 +1594,7 @@ Identity anchor written at the root of each taskspace directory at creation time
   "kind": "kozane.taskspace",
   "version": 1,
   "taskspaceId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
-  "projectId": "019dddef-87e3-7000-ac4d-aa414b7e75d7"
+  "namespaceId": "019dddef-87e3-7000-ac4d-aa414b7e75d7"
 }
 ```
 
@@ -1607,15 +1607,15 @@ Renaming or moving the directory does not change the taskspace's identity, and
 
 ---
 
-## Project detection
+## Namespace detection
 
 Any command that needs a workspace (all except `init`) walks up from `process.cwd()`
 looking for `.kozane/config.json`. This allows running commands from any
 subdirectory of a workspace:
 
 ```bash
-cd my-project/docs/chapter-1
-kozane status   # resolves to my-project/.kozane/
+cd my-namespace/docs/chapter-1
+kozane status   # resolves to my-namespace/.kozane/
 ```
 
 If no workspace is found, the command prints:
@@ -1630,10 +1630,10 @@ and exits with code `1`.
 
 ## Path storage policy
 
-| Location relative to project root | Stored `path_kind` | Stored `path`            |
+| Location relative to workspace root | Stored `path_kind` | Stored `path`            |
 | --------------------------------- | ------------------ | ------------------------ |
-| Inside project root               | `project_relative` | relative path from root  |
-| Outside project root              | `absolute`         | absolute filesystem path |
+| Inside workspace root               | `project_relative` | relative path from root  |
+| Outside workspace root              | `absolute`         | absolute filesystem path |
 
 This keeps repo-local paths portable across machines while still supporting
 taskspaces placed anywhere on the filesystem.
@@ -1645,7 +1645,7 @@ taskspaces placed anywhere on the filesystem.
 | Column         | Type                | Notes                            |
 | -------------- | ------------------- | -------------------------------- |
 | `id`           | text PK             | UUID v7, stable identity         |
-| `project_id`   | text FK → project   | nullable, cascade delete         |
+| `namespace_id`   | text FK → namespace   | nullable, cascade delete         |
 | `scope_id`     | text FK → scope     | nullable, set null on delete     |
 | `name`         | text                | display name                     |
 | `path`         | text                | current known filesystem path    |
@@ -1679,23 +1679,23 @@ CLI:
   kozane status
   kozane api key generate
   kozane api key refresh
-  kozane project list / create / delete / default
-  kozane bundle list / add / delete
-  kozane scope list [--project] / add / delete / add-cards / remove-cards
+  kozane namespace list / create / delete / default
+  kozane partition list / add / delete
+  kozane scope list [--namespace] / add / delete / add-cards / remove-cards
   kozane layer list / add / rename / move / delete
   kozane warp list / add / delete
   kozane card add / squash / show / list / layer / nearest
-  kozane card edit / delete / move / bundle / project / glue / unglue
+  kozane card edit / delete / move / partition / namespace / glue / unglue
   kozane tag list / show
   kozane db status / migrate / export / import / restore
-  kozane taskspace list [--project] / scan / create
+  kozane taskspace list [--namespace] / scan / create
 
 UI (SvelteKit):
-  project dashboard
-  bundle list and filtering
+  namespace dashboard
+  partition list and filtering
   card creation, editing, gluing, and arranging
   layers
-  warps, including the cross-project warp list
+  warps, including the cross-namespace warp list
   scope builder
   taskspace creation
   tag index page

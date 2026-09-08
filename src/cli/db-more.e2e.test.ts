@@ -43,6 +43,63 @@ function outputId(output: string): string {
   return match[1];
 }
 
+/**
+ * Puts a freshly-initialised workspace back onto the 0004 schema, so that `db migrate` has
+ * the whole chain from 0005 on to re-apply. Written out once because both tests below need
+ * exactly this, and a rollback that drifts between them is a rollback neither one states.
+ *
+ * The first half is migration 0014 in reverse, and the schema is wrong without it. The
+ * journal rows deleted at the end say 0005 onward never ran, and 0005 is written against
+ * `project` and `bundle` — so a database still carrying the renamed tables answers the
+ * re-apply with `no such table: project`. The three indexes are restored for the same
+ * reason from the other end: they are older than 0005, so nothing in the chain recreates
+ * them, and 0014 drops them by their old names without an `IF EXISTS` to fall back on.
+ *
+ * Only what the chain actually reads is reversed. `layer` and `warp` are dropped a few
+ * statements later and recreated by 0005 and 0006 under the old names, so their columns and
+ * indexes need nothing here; `card` gets its old column back because 0005's UPDATE joins on
+ * it and because the rebuilt table has to be the shape 0005 expects to find.
+ */
+const ROLLBACK_TO_0004 = [
+  "ALTER TABLE `namespace` RENAME TO `project`",
+  "ALTER TABLE `partition` RENAME TO `bundle`",
+  "ALTER TABLE `bundle` RENAME COLUMN `namespace_id` TO `project_id`",
+  "ALTER TABLE `taskspace` RENAME COLUMN `namespace_id` TO `project_id`",
+  "ALTER TABLE `card` RENAME COLUMN `partition_id` TO `bundle_id`",
+  "DROP INDEX IF EXISTS `namespace_one_default`",
+  "CREATE UNIQUE INDEX `project_one_default` ON `project` (`is_default`) WHERE is_default = 1",
+  "DROP INDEX IF EXISTS `partition_one_default_per_namespace`",
+  "CREATE UNIQUE INDEX `bundle_one_default_per_project` ON `bundle` (`project_id`) WHERE is_default = 1",
+  "DROP INDEX IF EXISTS `partition_name_per_namespace`",
+  "CREATE UNIQUE INDEX `bundle_name_per_project` ON `bundle` (`project_id`,`name`)",
+  // Rebuild `card` without `layer_id`, which is the column 0005 adds and rebuilds the table
+  // for.
+  `CREATE TABLE __old_card (
+     id text PRIMARY KEY NOT NULL,
+     bundle_id text NOT NULL,
+     taskspace_id text,
+     content text NOT NULL,
+     pos_x integer DEFAULT 0 NOT NULL,
+     pos_y integer DEFAULT 0 NOT NULL,
+     z_index integer DEFAULT 0 NOT NULL,
+     FOREIGN KEY (bundle_id) REFERENCES bundle(id) ON UPDATE cascade ON DELETE cascade,
+     FOREIGN KEY (taskspace_id) REFERENCES taskspace(id) ON UPDATE cascade ON DELETE set null
+   )`,
+  "INSERT INTO __old_card SELECT id, bundle_id, taskspace_id, content, pos_x, pos_y, z_index FROM card",
+  "DROP TABLE card",
+  "ALTER TABLE __old_card RENAME TO card",
+  "DROP TABLE layer",
+  "DROP TABLE warp",
+  // Indexes added after 0004 belong to the rolled-back migrations too: the journal says they
+  // were never applied, so leaving one behind makes the re-apply fail on a name that already
+  // exists. Only the ones on tables this fixture leaves standing need naming — `card`'s go
+  // with the table it rebuilds, and `warp`'s with the table it drops.
+  "DROP INDEX IF EXISTS taskspace_scope",
+  "DROP INDEX IF EXISTS glue_rel_glue",
+  "DROP INDEX IF EXISTS scope_rel_card",
+  "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
+];
+
 afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
@@ -64,40 +121,10 @@ describe("additional database CLI branches", () => {
     const dbPath = join(root, ".kozane", "kozane.db");
     const client = createClient({ url: `file:${dbPath}` });
     try {
-      // Roll back to the pre-layer schema (0004) so migrations are pending: rebuild `card`
-      // without layer_id, then drop the tables 0005 and 0006 added and their journal rows.
-      // Drizzle re-applies everything newer than the newest row left behind, so every
-      // migration from 0005 on has to go, not just the one being exercised.
-      await client.batch(
-        [
-          `CREATE TABLE __old_card (
-             id text PRIMARY KEY NOT NULL,
-             bundle_id text NOT NULL,
-             taskspace_id text,
-             content text NOT NULL,
-             pos_x integer DEFAULT 0 NOT NULL,
-             pos_y integer DEFAULT 0 NOT NULL,
-             z_index integer DEFAULT 0 NOT NULL,
-             FOREIGN KEY (bundle_id) REFERENCES bundle(id) ON UPDATE cascade ON DELETE cascade,
-             FOREIGN KEY (taskspace_id) REFERENCES taskspace(id) ON UPDATE cascade ON DELETE set null
-           )`,
-          "INSERT INTO __old_card SELECT id, bundle_id, taskspace_id, content, pos_x, pos_y, z_index FROM card",
-          "DROP TABLE card",
-          "ALTER TABLE __old_card RENAME TO card",
-          "DROP TABLE layer",
-          "DROP TABLE warp",
-          // Indexes added after 0004 belong to the rolled-back migrations too: the
-          // journal says they were never applied, so leaving one behind makes the
-          // re-apply fail on a name that already exists. Only the ones on tables this
-          // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
-          // and `warp`'s with the table it drops.
-          "DROP INDEX IF EXISTS taskspace_scope",
-          "DROP INDEX IF EXISTS glue_rel_glue",
-          "DROP INDEX IF EXISTS scope_rel_card",
-          "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
-        ],
-        "write",
-      );
+      // Roll back to the pre-layer schema (0004) so migrations are pending. Drizzle
+      // re-applies everything newer than the newest row left behind, so every migration
+      // from 0005 on has to go, not just the one being exercised.
+      await client.batch(ROLLBACK_TO_0004, "write");
     } finally {
       client.close();
     }
@@ -118,7 +145,8 @@ describe("additional database CLI branches", () => {
     const dbPath = join(root, ".kozane", "kozane.db");
     const client = createClient({ url: `file:${dbPath}` });
     try {
-      const bundleId = (await client.execute("SELECT id FROM bundle LIMIT 1")).rows[0].id as string;
+      const partitionId = (await client.execute("SELECT id FROM partition LIMIT 1")).rows[0]
+        .id as string;
       await client.batch(
         [
           { sql: "INSERT INTO scope (id, name) VALUES ('s1', 'demo')" },
@@ -128,12 +156,12 @@ describe("additional database CLI branches", () => {
           // at the epoch. Nothing here reads them, but a fixture that leans on that default
           // is a fixture that quietly disagrees with every card the app itself writes.
           {
-            sql: "INSERT INTO card (id, bundle_id, layer_id, content, created_at, updated_at) SELECT 'c1', ?, id, 'one', unixepoch(), unixepoch() FROM layer LIMIT 1",
-            args: [bundleId],
+            sql: "INSERT INTO card (id, partition_id, layer_id, content, created_at, updated_at) SELECT 'c1', ?, id, 'one', unixepoch(), unixepoch() FROM layer LIMIT 1",
+            args: [partitionId],
           },
           {
-            sql: "INSERT INTO card (id, bundle_id, layer_id, content, created_at, updated_at) SELECT 'c2', ?, id, 'two', unixepoch(), unixepoch() FROM layer LIMIT 1",
-            args: [bundleId],
+            sql: "INSERT INTO card (id, partition_id, layer_id, content, created_at, updated_at) SELECT 'c2', ?, id, 'two', unixepoch(), unixepoch() FROM layer LIMIT 1",
+            args: [partitionId],
           },
           { sql: "INSERT INTO glue_rel (glue_id, card_id) VALUES ('g1','c1'), ('g1','c2')" },
           { sql: "INSERT INTO scope_rel (scope_id, card_id) VALUES ('s1','c1')" },
@@ -145,33 +173,7 @@ describe("additional database CLI branches", () => {
       // on, this fixture's own DROP TABLE would cascade the rows away and the test would
       // pass without the migration ever being the reason.
       await client.execute("PRAGMA foreign_keys = OFF");
-      for (const sql of [
-        `CREATE TABLE __old_card (
-           id text PRIMARY KEY NOT NULL,
-           bundle_id text NOT NULL,
-           taskspace_id text,
-           content text NOT NULL,
-           pos_x integer DEFAULT 0 NOT NULL,
-           pos_y integer DEFAULT 0 NOT NULL,
-           z_index integer DEFAULT 0 NOT NULL,
-           FOREIGN KEY (bundle_id) REFERENCES bundle(id) ON UPDATE cascade ON DELETE cascade,
-           FOREIGN KEY (taskspace_id) REFERENCES taskspace(id) ON UPDATE cascade ON DELETE set null
-         )`,
-        "INSERT INTO __old_card SELECT id, bundle_id, taskspace_id, content, pos_x, pos_y, z_index FROM card",
-        "DROP TABLE card",
-        "ALTER TABLE __old_card RENAME TO card",
-        "DROP TABLE layer",
-        "DROP TABLE warp",
-        // Indexes added after 0004 belong to the rolled-back migrations too: the
-        // journal says they were never applied, so leaving one behind makes the
-        // re-apply fail on a name that already exists. Only the ones on tables this
-        // fixture leaves standing need naming — `card`'s go with the table it rebuilds,
-        // and `warp`'s with the table it drops.
-        "DROP INDEX IF EXISTS taskspace_scope",
-        "DROP INDEX IF EXISTS glue_rel_glue",
-        "DROP INDEX IF EXISTS scope_rel_card",
-        "DELETE FROM __drizzle_migrations WHERE created_at >= 1786415069324",
-      ]) {
+      for (const sql of ROLLBACK_TO_0004) {
         await client.execute(sql);
       }
       expect((await client.execute("SELECT count(*) AS n FROM glue_rel")).rows[0].n).toBe(2);
@@ -200,19 +202,19 @@ describe("additional database CLI branches", () => {
   it("restores the most recent automatic backup", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Latest backup project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Latest backup namespace"));
     const backupDir = join(root, ".kozane", "backups");
     mkdirSync(backupDir, { recursive: true });
     const backup = join(backupDir, "kozane-99999999-999999.db");
     copyFileSync(join(root, ".kozane", "kozane.db"), backup);
 
-    cli(root, "project", "delete", projectId);
+    cli(root, "namespace", "delete", namespaceId);
     const output = cli(root, "db", "restore");
 
     expect(output).toContain("Available backups:");
     expect(output).toContain("← most recent");
     expect(output).toContain(`Restored: ${backup}`);
-    expect(cli(root, "project", "list")).toContain("Latest backup project");
+    expect(cli(root, "namespace", "list")).toContain("Latest backup namespace");
   }, 30_000);
 
   it("reports invalid imports and missing restore files", () => {

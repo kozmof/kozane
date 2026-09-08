@@ -20,7 +20,7 @@ export {
 
 export type FoundTaskspace = {
   taskspaceId: string;
-  projectId: string;
+  namespaceId: string;
   path: string;
 };
 
@@ -83,7 +83,7 @@ export type TaskspaceDiff = {
 export function diffTaskspaces(
   found: FoundTaskspace[],
   dbRecords: TaskspaceRecord[],
-  projectRoot: string,
+  workspaceRoot: string,
 ): TaskspaceDiff {
   const foundById = new Map(found.map((f) => [f.taskspaceId, f]));
   const dbIds = new Set(dbRecords.map((r) => r.id));
@@ -97,7 +97,7 @@ export function diffTaskspaces(
       missing.push(record);
     } else {
       const resolvedStored = record.path
-        ? resolveTaskspacePath(record.path, record.pathKind, projectRoot)
+        ? resolveTaskspacePath(record.path, record.pathKind, workspaceRoot)
         : null;
       if (resolvedStored !== scanned.path) moved.push({ record, scanned });
     }
@@ -125,7 +125,7 @@ export function scanTaskspaces(searchRoots: string[]): FoundTaskspace[] {
 
       found.push({
         taskspaceId: marker.taskspaceId,
-        projectId: marker.projectId,
+        namespaceId: marker.namespaceId,
         path: dir,
       });
     }

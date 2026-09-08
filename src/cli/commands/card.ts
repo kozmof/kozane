@@ -1,28 +1,32 @@
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
-import { bundleTable, cardTable, projectTable, scopeTable } from "../../db/schema.js";
+import { partitionTable, cardTable, namespaceTable, scopeTable } from "../../db/schema.js";
 import {
   addCard,
   addCards,
-  reassignCardsToBundle,
+  reassignCardsToPartition,
   reassignCardsToLayer,
   updateCard,
-  updateProjectCardPositions,
+  updateNamespaceCardPositions,
 } from "../../db/api/card.js";
-import { getGlueRelsByProject, glueProjectCards, unglueProjectCards } from "../../db/api/glue.js";
+import {
+  getGlueRelsByNamespace,
+  glueNamespaceCards,
+  unglueNamespaceCards,
+} from "../../db/api/glue.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import {
   addScopeRel,
   addScopeRels,
-  getCardsByScopeWithBundleName,
+  getCardsByScopeWithPartitionName,
 } from "../../db/api/scope-rel.js";
 import { getTaskspace } from "../../db/api/taskspace.js";
 import { findById, resolveShortId, shortId, shortIdMap } from "../lib/short-id.js";
 import {
   loadCards,
   movedCoordinate,
-  resolveBundleId,
+  resolvePartitionId,
   resolveCardGroup,
   resolveLayerId,
   resolveScopeId,
@@ -41,22 +45,22 @@ import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx } from "../../db/tx.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
-import { resolveProjectId } from "../lib/project-selection.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { contentLimitIssue } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
 import { estimateCardHeight } from "../../lib/warp-list.js";
-import { deleteProjectCards, moveCardsToProject } from "../../db/api/composite.js";
-import { getAllProjects } from "../../db/api/project.js";
-import { getAllBundles } from "../../db/api/bundle.js";
+import { deleteNamespaceCards, moveCardsToNamespace } from "../../db/api/composite.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
+import { getAllPartitions } from "../../db/api/partition.js";
 
 /** The board grid used by card movement and vertical-list placement in the browser. */
 const GRID = 24;
 
 type CardOptions = {
-  project?: string;
-  bundle?: string;
+  namespace?: string;
+  partition?: string;
   taskspace?: string;
   sort?: CardSortKey;
   reverse?: boolean;
@@ -79,9 +83,9 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const contentIssue = contentLimitIssue(content, contentMaxForRoot(root));
     if (contentIssue) throw new Error(contentIssue);
 
-    const projectId = await resolveProjectId(db, options.project);
-    const bundleId = await resolveBundleId(db, projectId, options.bundle);
-    const layerId = await resolveLayerId(db, projectId, options.layer);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
+    const layerId = await resolveLayerId(db, namespaceId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     // `--x`/`--y` are held to the board the same way the create endpoint holds a dragged
     // card, and against the same workspace bounds: a position outside them is one the
@@ -90,7 +94,7 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const id = await withTx(db, async (tx) => {
       const cardId = await addCard({
         db: tx,
-        bundleId,
+        partitionId,
         layerId,
         content,
         ...placement,
@@ -98,12 +102,12 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
       if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
       return cardId;
     });
-    const [projects, bundles, cards, scopes, layers] = await Promise.all([
-      db.select({ id: projectTable.id }).from(projectTable),
-      db.select({ id: bundleTable.id }).from(bundleTable),
+    const [namespaces, partitions, cards, scopes, layers] = await Promise.all([
+      db.select({ id: namespaceTable.id }).from(namespaceTable),
+      db.select({ id: partitionTable.id }).from(partitionTable),
       db.select({ id: cardTable.id }).from(cardTable),
       scopeId ? db.select({ id: scopeTable.id }).from(scopeTable) : Promise.resolve([]),
-      getAllLayers({ db, projectId }),
+      getAllLayers({ db, namespaceId }),
     ]);
     console.log("Card added.");
     console.log(
@@ -113,15 +117,15 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
       )}`,
     );
     console.log(
-      `  project : ${shortId(
-        projectId,
-        projects.map(({ id }) => id),
+      `  namespace : ${shortId(
+        namespaceId,
+        namespaces.map(({ id }) => id),
       )}`,
     );
     console.log(
-      `  bundle  : ${shortId(
-        bundleId,
-        bundles.map(({ id }) => id),
+      `  partition  : ${shortId(
+        partitionId,
+        partitions.map(({ id }) => id),
       )}`,
     );
     console.log(
@@ -158,20 +162,20 @@ export async function cardSquash(
       if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
     }
 
-    const projectId = await resolveProjectId(db, options.project);
-    const bundleId = await resolveBundleId(db, projectId, options.bundle);
-    const layerId = await resolveLayerId(db, projectId, options.layer);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
+    const layerId = await resolveLayerId(db, namespaceId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     const occupied = await db
       .select({ posX: cardTable.posX, posY: cardTable.posY })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-      .where(eq(bundleTable.projectId, projectId));
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+      .where(eq(partitionTable.namespaceId, namespaceId));
     // The workspace's own board, not the built-in default: `ui.canvasWidth` decides how
     // many columns the layout wraps at, and laying out against 5600 on a board configured
     // narrower puts the right-hand columns past its edge. Clamped afterwards for the rows,
     // which run downwards without a wrap to stop them — the same pair of steps
-    // `squashProjectCard` takes for the board's own squash.
+    // `squashNamespaceCard` takes for the board's own squash.
     const bounds = canvasBoundsForRoot(root);
     const positions = squashCardPositions(occupied, contents.length, {
       canvasWidth: bounds.canvasWidth,
@@ -179,7 +183,7 @@ export async function cardSquash(
     const ids = await withTx(db, async (tx) => {
       const cardIds = await addCards({
         db: tx,
-        bundleId,
+        partitionId,
         layerId,
         cards: contents.map((cardContent, index) => ({
           content: cardContent,
@@ -198,27 +202,27 @@ export async function cardSquash(
 }
 
 /**
- * Moves an existing card to another layer of its own project. The project is taken from
- * the card rather than from `--project`, so the layer is always resolved against the
- * project that actually owns the card.
+ * Moves an existing card to another layer of its own namespace. The namespace is taken from
+ * the card rather than from `--namespace`, so the layer is always resolved against the
+ * namespace that actually owns the card.
  */
 export async function cardSetLayer(requestedCardId: string, requestedLayer: string): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     const cards = await db
-      .select({ id: cardTable.id, projectId: bundleTable.projectId })
+      .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
     const cardId = resolveShortId(
       requestedCardId,
       cards.map(({ id }) => id),
       "Card",
     );
-    const { projectId } = findById(cards, cardId, "Card");
-    const layers = await getAllLayers({ db, projectId });
+    const { namespaceId } = findById(cards, cardId, "Card");
+    const layers = await getAllLayers({ db, namespaceId });
     const layerId = resolveLayerRef(layers, requestedLayer);
 
-    if (!(await reassignCardsToLayer({ db, projectId, cardIds: [cardId], layerId })).ok)
-      throw new Error("Card and layer do not belong to the same project.");
+    if (!(await reassignCardsToLayer({ db, namespaceId, cardIds: [cardId], layerId })).ok)
+      throw new Error("Card and layer do not belong to the same namespace.");
 
     const layer = findById(layers, layerId, "Layer");
     console.log("Card moved to another layer.");
@@ -235,7 +239,7 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
 export async function cardMove(requestedCardId: string, { x, y }: CardMoveOptions): Promise<void> {
   if (x === undefined && y === undefined) throw new Error("card move requires --x or --y.");
   await runWorkspaceCommand(async ({ db, root }) => {
-    const { allIds, cardIds, projectId } = await resolveCardGroup(db, [requestedCardId]);
+    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, [requestedCardId]);
     const cardId = cardIds[0];
     const card = findById(await loadCards(db, cardIds), cardId, "Card");
     const position = clampToBounds(
@@ -243,12 +247,12 @@ export async function cardMove(requestedCardId: string, { x, y }: CardMoveOption
       y === undefined ? card.posY : movedCoordinate(y, card.posY),
       canvasBoundsForRoot(root),
     );
-    const result = await updateProjectCardPositions({
+    const result = await updateNamespaceCardPositions({
       db,
-      projectId,
+      namespaceId,
       positions: [{ cardId, ...position }],
     });
-    if (!result.ok) throw new Error("Card does not belong to the project.");
+    if (!result.ok) throw new Error("Card does not belong to the namespace.");
 
     console.log("Card moved.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
@@ -262,15 +266,15 @@ export async function cardEdit(requestedCardId: string, content: string): Promis
     if (issue) throw new Error(issue);
     const { allIds, cardIds } = await resolveCardGroup(db, [requestedCardId]);
     // `resolveShortId` already established that this id names a card, so there is no row to
-    // look up here beyond the bundle the update has to name.
+    // look up here beyond the partition the update has to name.
     const cardId = cardIds[0];
     const row = await db
-      .select({ bundleId: cardTable.bundleId })
+      .select({ partitionId: cardTable.partitionId })
       .from(cardTable)
       .where(eq(cardTable.id, cardId))
       .get();
     if (!row) throw new Error(`Card not found: ${requestedCardId}`);
-    await updateCard({ db, cardId, bundleId: row.bundleId, content });
+    await updateCard({ db, cardId, partitionId: row.partitionId, content });
     console.log("Card updated.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
   });
@@ -278,67 +282,70 @@ export async function cardEdit(requestedCardId: string, content: string): Promis
 
 export async function cardDelete(requestedIds: string[]): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { allIds, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
-    const result = await deleteProjectCards({ db, projectId, cardIds });
-    if (!result.ok) throw new Error("Cards must belong to the same project.");
+    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, requestedIds);
+    const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} deleted.`);
     for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
 }
 
-export async function cardSetBundle(
-  requestedBundleId: string,
+export async function cardSetPartition(
+  requestedPartitionId: string,
   requestedCardIds: string[],
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { cardIds, projectId } = await resolveCardGroup(db, requestedCardIds);
-    const bundles = await getAllBundles({ db, projectId });
-    const bundleId = resolveShortId(
-      requestedBundleId,
-      bundles.map(({ id }) => id),
-      "Bundle",
+    const { cardIds, namespaceId } = await resolveCardGroup(db, requestedCardIds);
+    const partitions = await getAllPartitions({ db, namespaceId });
+    const partitionId = resolveShortId(
+      requestedPartitionId,
+      partitions.map(({ id }) => id),
+      "Partition",
     );
-    const result = await reassignCardsToBundle({ db, projectId, cardIds, bundleId });
+    const result = await reassignCardsToPartition({ db, namespaceId, cardIds, partitionId });
     if (!result.ok)
       throw new Error(
         result.reason === "foreign-cards"
-          ? "Cards must belong to the same project."
-          : "Bundle does not belong to the cards' project.",
+          ? "Cards must belong to the same namespace."
+          : "Partition does not belong to the cards' namespace.",
       );
-    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to bundle.`);
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to partition.`);
     console.log(
-      `  bundle: ${shortId(
-        bundleId,
-        bundles.map(({ id }) => id),
+      `  partition: ${shortId(
+        partitionId,
+        partitions.map(({ id }) => id),
       )}`,
     );
   });
 }
 
-export async function cardSetProject(
-  requestedProjectId: string,
+export async function cardSetNamespace(
+  requestedNamespaceId: string,
   requestedCardIds: string[],
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { cardIds, projectId: sourceProjectId } = await resolveCardGroup(db, requestedCardIds);
-    const projects = await getAllProjects({ db });
-    const targetProjectId = resolveShortId(
-      requestedProjectId,
-      projects.map(({ id }) => id),
-      "Project",
-    );
-    const result = await moveCardsToProject({
+    const { cardIds, namespaceId: sourceNamespaceId } = await resolveCardGroup(
       db,
-      sourceProjectId,
-      targetProjectId,
+      requestedCardIds,
+    );
+    const namespaces = await getAllNamespaces({ db });
+    const targetNamespaceId = resolveShortId(
+      requestedNamespaceId,
+      namespaces.map(({ id }) => id),
+      "Namespace",
+    );
+    const result = await moveCardsToNamespace({
+      db,
+      sourceNamespaceId,
+      targetNamespaceId,
       cardIds,
     });
-    if (!result.ok) throw new Error("Cards must belong to the same source project.");
-    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to project.`);
+    if (!result.ok) throw new Error("Cards must belong to the same source namespace.");
+    console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to namespace.`);
     console.log(
-      `  project: ${shortId(
-        targetProjectId,
-        projects.map(({ id }) => id),
+      `  namespace: ${shortId(
+        targetNamespaceId,
+        namespaces.map(({ id }) => id),
       )}`,
     );
   });
@@ -353,14 +360,16 @@ export async function cardGlue(
       index,
       allIds,
       cardIds: requestedCardIds,
-      projectId,
+      namespaceId,
     } = await resolveCardGroup(db, requestedIds);
-    if (requestedCardIds.some((cardId) => findById(index, cardId, "Card").projectId !== projectId))
-      throw new Error("Cards must belong to the same project.");
+    if (
+      requestedCardIds.some((cardId) => findById(index, cardId, "Card").namespaceId !== namespaceId)
+    )
+      throw new Error("Cards must belong to the same namespace.");
 
     let cardIds = requestedCardIds;
     if (options.add) {
-      const rels = await getGlueRelsByProject({ db, projectId });
+      const rels = await getGlueRelsByNamespace({ db, namespaceId });
       const glueIdByCardId = new Map(rels.map((rel) => [rel.cardId, rel.glueId]));
       // Built from the workspace index rather than from `rels`, though the two hold the same
       // pairs: the members of a group come out in the order the cards did, which is the order
@@ -380,8 +389,8 @@ export async function cardGlue(
       ];
     }
 
-    const result = await glueProjectCards({ db, projectId, cardIds });
-    if (!result.ok) throw new Error("Cards must belong to the same project.");
+    const result = await glueNamespaceCards({ db, namespaceId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
 
     if (options.alignList) {
       const ui = getUiConfigForRoot(root);
@@ -408,8 +417,8 @@ export async function cardGlue(
           ) * GRID;
         return { cardId, ...position };
       });
-      const moved = await updateProjectCardPositions({ db, projectId, positions });
-      if (!moved.ok) throw new Error("Cards must belong to the same project.");
+      const moved = await updateNamespaceCardPositions({ db, namespaceId, positions });
+      if (!moved.ok) throw new Error("Cards must belong to the same namespace.");
     }
 
     console.log(`${cardIds.length} cards glued.`);
@@ -422,9 +431,9 @@ export async function cardGlue(
 
 export async function cardUnglue(requestedIds: string[]): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const { allIds, cardIds, projectId } = await resolveCardGroup(db, requestedIds);
-    const result = await unglueProjectCards({ db, projectId, cardIds });
-    if (!result.ok) throw new Error("Cards must belong to the same project.");
+    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, requestedIds);
+    const result = await unglueNamespaceCards({ db, namespaceId, cardIds });
+    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} unglued.`);
     for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
@@ -456,7 +465,7 @@ export async function cardShow(requestedId: string, options: CardShowOptions = {
   await runWorkspaceCommand(async ({ db }) => {
     // Ids alone: resolving a short id needs every id in the workspace, but printing one
     // card needs one card's text. Selected together, `kozane card show` read the whole
-    // content column — every card of every project — to put a single card on stdout.
+    // content column — every card of every namespace — to put a single card on stdout.
     const cards = await db.select({ id: cardTable.id }).from(cardTable);
     const cardId = resolveShortId(
       requestedId,
@@ -486,17 +495,17 @@ export async function cardShow(requestedId: string, options: CardShowOptions = {
 export async function cardNearest(requestedId: string): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     // Positions first, without the text. Resolving a short id needs every card in the
-    // workspace, but only the origin's own project is ever printed — carrying `content`
-    // through this pass read every other project's cards to throw them away again.
+    // workspace, but only the origin's own namespace is ever printed — carrying `content`
+    // through this pass read every other namespace's cards to throw them away again.
     const placed = await db
       .select({
         id: cardTable.id,
-        projectId: bundleTable.projectId,
+        namespaceId: partitionTable.namespaceId,
         posX: cardTable.posX,
         posY: cardTable.posY,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
     const cardId = resolveShortId(
       requestedId,
       placed.map(({ id }) => id),
@@ -504,18 +513,18 @@ export async function cardNearest(requestedId: string): Promise<void> {
     );
     const origin = findById(placed, cardId, "Card");
 
-    // Now the text, for the one project that is about to be printed.
+    // Now the text, for the one namespace that is about to be printed.
     const cards = await db
       .select({
         id: cardTable.id,
-        bundle: bundleTable.name,
+        partition: partitionTable.name,
         content: cardTable.content,
         posX: cardTable.posX,
         posY: cardTable.posY,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-      .where(eq(bundleTable.projectId, origin.projectId));
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+      .where(eq(partitionTable.namespaceId, origin.namespaceId));
     // Equal distances are broken by `compareIds`, which is what `sortCards` breaks equal
     // timestamps with and `orderLayers` equal positions: the reason it is not
     // `localeCompare` is written once, in `lib/order.ts`.
@@ -540,21 +549,21 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
   // file prints. That keeps the exit in the CLI's outermost layer and leaves this function
   // callable — and its refusals assertable — without ending the process.
   const { sort, reverse } = options;
-  if (options.taskspace && (options.project || options.bundle))
-    throw new Error("--taskspace cannot be combined with --project or --bundle.");
+  if (options.taskspace && (options.namespace || options.partition))
+    throw new Error("--taskspace cannot be combined with --namespace or --partition.");
   // Without a key there is no order to reverse: the unsorted listing comes back in
   // whatever order SQLite hands the rows over, which is not an order anything promises.
   if (reverse && !sort) throw new Error("--reverse requires --sort.");
 
   // Both applied on every path below, so listing from a taskspace directory sorts the same
-  // way — and prints the same column — as listing a project does.
+  // way — and prints the same column — as listing a namespace does.
   const ordered = <T extends ListedCard>(cards: T[]): T[] =>
     sort ? sortCards(cards, sort, reverse) : cards;
   const timeColumn = sort ? (card: CardTimes) => sortColumn(card, sort) : undefined;
 
   await runWorkspaceCommand(async ({ db }) => {
     const locatedMarker =
-      options.taskspace || (!options.project && !options.bundle)
+      options.taskspace || (!options.namespace && !options.partition)
         ? readTaskspaceMarker(options.taskspace)
         : null;
 
@@ -566,13 +575,13 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
       if (!taskspace)
         throw new Error(`Taskspace is not registered in this workspace: ${locatedMarker.path}`);
       if (taskspace.scopeId) {
-        const scopedCards = await getCardsByScopeWithBundleName({
+        const scopedCards = await getCardsByScopeWithPartitionName({
           db,
           scopeId: taskspace.scopeId,
         });
         await printCards(
           db,
-          ordered(scopedCards.map((card) => ({ ...card, bundle: card.bundleName }))),
+          ordered(scopedCards.map((card) => ({ ...card, partition: card.partitionName }))),
           timeColumn,
         );
       } else {
@@ -582,7 +591,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
         const taskspaceCards = await db
           .select({
             id: cardTable.id,
-            bundle: bundleTable.name,
+            partition: partitionTable.name,
             content: cardTable.content,
             posX: cardTable.posX,
             posY: cardTable.posY,
@@ -590,23 +599,23 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
             updatedAt: cardTable.updatedAt,
           })
           .from(cardTable)
-          .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+          .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
           .where(eq(cardTable.taskspaceId, taskspace.id));
         await printCards(db, ordered(taskspaceCards), timeColumn);
       }
       return;
     }
 
-    const projectId = await resolveProjectId(db, options.project);
-    const conditions = [eq(bundleTable.projectId, projectId)];
-    if (options.bundle) {
-      const bundleId = await resolveBundleId(db, projectId, options.bundle);
-      conditions.push(eq(bundleTable.id, bundleId));
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const conditions = [eq(partitionTable.namespaceId, namespaceId)];
+    if (options.partition) {
+      const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
+      conditions.push(eq(partitionTable.id, partitionId));
     }
     const cards = await db
       .select({
         id: cardTable.id,
-        bundle: bundleTable.name,
+        partition: partitionTable.name,
         content: cardTable.content,
         posX: cardTable.posX,
         posY: cardTable.posY,
@@ -614,7 +623,7 @@ export async function cardList(options: CardOptions = {}): Promise<void> {
         updatedAt: cardTable.updatedAt,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(and(...conditions));
     await printCards(db, ordered(cards), timeColumn);
   });

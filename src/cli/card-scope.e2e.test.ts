@@ -82,19 +82,19 @@ describe("scoped card taskspace CLI flow", () => {
   it("reads squash content from standard input", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Piped project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Piped namespace"));
 
     const output = cliWithInput(
       root,
       "Piped first. パイプ二番目。",
       "card",
       "squash",
-      "--project",
-      projectId,
+      "--namespace",
+      namespaceId,
     );
 
     expect(output).toContain("2 cards added.");
-    const listed = cli(root, "card", "list", "--project", projectId);
+    const listed = cli(root, "card", "list", "--namespace", namespaceId);
     expect(listed).toContain("Piped first");
     expect(listed).toContain("パイプ二番目");
   }, 30_000);
@@ -102,7 +102,7 @@ describe("scoped card taskspace CLI flow", () => {
   it("squashes English and Japanese sentences into individual cards", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Squash project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Squash namespace"));
     const scopeId = outputId(cli(root, "scope", "add", "Squash scope"));
 
     const output = cli(
@@ -110,19 +110,19 @@ describe("scoped card taskspace CLI flow", () => {
       "card",
       "squash",
       "First thought. 第二の考え。  Third thought..",
-      "--project",
-      projectId,
+      "--namespace",
+      namespaceId,
       "--scope",
       scopeId,
     );
 
     expect(output).toContain("3 cards added.");
-    const listed = cli(root, "card", "list", "--project", projectId);
+    const listed = cli(root, "card", "list", "--namespace", namespaceId);
     expect(listed).toContain("First thought");
     expect(listed).toContain("第二の考え");
     expect(listed).toContain("Third thought");
 
-    cli(root, "taskspace", "create", "squashed", "--scope", scopeId, "--project", projectId);
+    cli(root, "taskspace", "create", "squashed", "--scope", scopeId, "--namespace", namespaceId);
     const scoped = cli(join(root, "squashed"), "card", "list");
     expect(scoped).toContain("First thought");
     expect(scoped).toContain("第二の考え");
@@ -132,14 +132,23 @@ describe("scoped card taskspace CLI flow", () => {
   it("creates a scope, adds scoped cards, and lists them from the taskspace directory", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "E2E project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "E2E namespace"));
     const scopeId = outputId(cli(root, "scope", "add", "E2E scope"));
 
-    cli(root, "card", "add", "First scoped card", "--project", projectId, "--scope", scopeId);
-    cli(root, "card", "add", "Second scoped card", "--project", projectId, "--scope", scopeId);
-    cli(root, "card", "add", "Unscoped card", "--project", projectId);
+    cli(root, "card", "add", "First scoped card", "--namespace", namespaceId, "--scope", scopeId);
+    cli(root, "card", "add", "Second scoped card", "--namespace", namespaceId, "--scope", scopeId);
+    cli(root, "card", "add", "Unscoped card", "--namespace", namespaceId);
 
-    cli(root, "taskspace", "create", "scope-taskspace", "--scope", scopeId, "--project", projectId);
+    cli(
+      root,
+      "taskspace",
+      "create",
+      "scope-taskspace",
+      "--scope",
+      scopeId,
+      "--namespace",
+      namespaceId,
+    );
 
     const taskspaceDir = join(root, "scope-taskspace");
     expect(existsSync(join(taskspaceDir, ".taskspace.json"))).toBe(true);
@@ -154,9 +163,9 @@ describe("scoped card taskspace CLI flow", () => {
   it("shows card content by its listed short ID", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Show project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Show namespace"));
     const content = "A small observation\nkeeps its line break.";
-    const cardId = outputId(cli(root, "card", "add", content, "--project", projectId));
+    const cardId = outputId(cli(root, "card", "add", content, "--namespace", namespaceId));
 
     expect(cli(root, "card", "show", cardId)).toBe(content + "\n");
     expect(() => cli(root, "card", "show", "ffff")).toThrow("Card not found: ffff");
@@ -165,12 +174,12 @@ describe("scoped card taskspace CLI flow", () => {
   it("lists cards by distance from a specified card", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Distance project"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Distance namespace"));
     const originId = outputId(
-      cli(root, "card", "add", "Origin", "--project", projectId, "--x", "10", "--y", "10"),
+      cli(root, "card", "add", "Origin", "--namespace", namespaceId, "--x", "10", "--y", "10"),
     );
-    cli(root, "card", "add", "Far", "--project", projectId, "--x", "16", "--y", "18");
-    cli(root, "card", "add", "Near", "--project", projectId, "--x", "13", "--y", "14");
+    cli(root, "card", "add", "Far", "--namespace", namespaceId, "--x", "16", "--y", "18");
+    cli(root, "card", "add", "Near", "--namespace", namespaceId, "--x", "13", "--y", "14");
 
     const lines = cli(root, "card", "nearest", originId).trim().split("\n");
     expect(lines.map((line) => line.match(/(Origin|Near|Far)$/)?.[1])).toEqual([

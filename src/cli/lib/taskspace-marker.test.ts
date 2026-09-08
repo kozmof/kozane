@@ -18,7 +18,7 @@ function fixture(): { dir: string; markerPath: string } {
       kind: TASKSPACE_MARKER_KIND,
       version: TASKSPACE_MARKER_VERSION,
       taskspaceId: "taskspace-1",
-      projectId: "p-1",
+      namespaceId: "p-1",
     }),
   );
   return { dir, markerPath };

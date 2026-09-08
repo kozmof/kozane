@@ -33,9 +33,9 @@ function timestamp(date = new Date()): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
-export async function backupDb(projectRoot: string): Promise<string> {
-  const source = dbPath(projectRoot);
-  const backupDir = join(projectRoot, ".kozane", "backups");
+export async function backupDb(workspaceRoot: string): Promise<string> {
+  const source = dbPath(workspaceRoot);
+  const backupDir = join(workspaceRoot, ".kozane", "backups");
   mkdirSync(backupDir, { recursive: true });
 
   const base = join(backupDir, `kozane-${timestamp()}`);
@@ -57,8 +57,8 @@ export async function backupDb(projectRoot: string): Promise<string> {
   return target;
 }
 
-export function listBackups(projectRoot: string): string[] {
-  const backupDir = join(projectRoot, ".kozane", "backups");
+export function listBackups(workspaceRoot: string): string[] {
+  const backupDir = join(workspaceRoot, ".kozane", "backups");
   if (!existsSync(backupDir)) return [];
   return readdirSync(backupDir)
     .filter((f) => f.endsWith(".db"))
@@ -112,7 +112,7 @@ export function migrationStatusMessage(status: MigrationStatus): string {
  * The one rule for schema drift, so that a workspace left behind by an upgrade fails the
  * same way whichever command reaches it first. `kozane open` and `kozane net ssg generate`
  * already refused this way; the workspace commands did not, and split three ways instead —
- * `layer add`, `scope add` and `project create` called {@link runMigrations} outright,
+ * `layer add`, `scope add` and `namespace create` called {@link runMigrations} outright,
  * while `card add`, `taskspace create` and the rest went straight at the stale schema and
  * failed with whatever SQLite said about a missing column.
  *

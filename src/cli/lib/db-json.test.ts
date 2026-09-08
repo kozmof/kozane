@@ -33,30 +33,30 @@ async function seedDb(dbUrl: string): Promise<void> {
     await client.batch(
       [
         {
-          sql: "INSERT INTO project (id, name) VALUES (?, ?)",
-          args: ["project-1", "Portable Project"],
+          sql: "INSERT INTO namespace (id, name) VALUES (?, ?)",
+          args: ["namespace-1", "Portable Namespace"],
         },
         {
           sql: "INSERT INTO scope (id, name) VALUES (?, ?)",
           args: ["scope-1", "Planning"],
         },
         {
-          sql: "INSERT INTO bundle (id, project_id, name, is_default) VALUES (?, ?, ?, ?)",
-          args: ["bundle-1", "project-1", "General", 1],
+          sql: "INSERT INTO partition (id, namespace_id, name, is_default) VALUES (?, ?, ?, ?)",
+          args: ["partition-1", "namespace-1", "General", 1],
         },
         {
-          sql: "INSERT INTO layer (id, project_id, name, position, is_default) VALUES (?, ?, ?, ?, ?)",
-          args: ["layer-1", "project-1", "Base", 0, 1],
+          sql: "INSERT INTO layer (id, namespace_id, name, position, is_default) VALUES (?, ?, ?, ?, ?)",
+          args: ["layer-1", "namespace-1", "Base", 0, 1],
         },
         {
-          sql: "INSERT INTO warp (id, project_id, pos_x, pos_y) VALUES (?, ?, ?, ?)",
-          args: ["warp-1", "project-1", 240, 480],
+          sql: "INSERT INTO warp (id, namespace_id, pos_x, pos_y) VALUES (?, ?, ?, ?)",
+          args: ["warp-1", "namespace-1", 240, 480],
         },
         {
-          sql: "INSERT INTO taskspace (id, project_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
             "taskspace-1",
-            "project-1",
+            "namespace-1",
             "scope-1",
             "Main",
             ".kozane/taskspaces/main",
@@ -71,12 +71,12 @@ async function seedDb(dbUrl: string): Promise<void> {
         // the epoch, and a seed that exports as 1970 is not the seed these round trips mean
         // to be testing.
         {
-          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
-          args: ["card-1", "bundle-1", "layer-1", "taskspace-1", "First", 10, 20],
+          sql: "INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
+          args: ["card-1", "partition-1", "layer-1", "taskspace-1", "First", 10, 20],
         },
         {
-          sql: "INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
-          args: ["card-2", "bundle-1", "layer-1", null, "Second", 30, 40],
+          sql: "INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
+          args: ["card-2", "partition-1", "layer-1", null, "Second", 30, 40],
         },
         {
           sql: "INSERT INTO glue (id) VALUES (?)",
@@ -123,9 +123,9 @@ describe("db JSON export/import", () => {
     const targetDump = await exportDbJson(targetUrl);
 
     expect(counts).toEqual({
-      project: 1,
+      namespace: 1,
       scope: 1,
-      bundle: 1,
+      partition: 1,
       layer: 1,
       warp: 1,
       taskspace: 1,
@@ -145,13 +145,13 @@ describe("db JSON export/import", () => {
     await expect(hasDbJsonRows(dbUrl)).resolves.toBe(true);
   });
 
-  it("preserves the default project flag", async () => {
+  it("preserves the default namespace flag", async () => {
     const sourceUrl = await migratedDbUrl("default-source.db");
     const targetUrl = await migratedDbUrl("default-target.db");
     await seedDb(sourceUrl);
     const client = createClient({ url: sourceUrl });
     try {
-      await client.execute("UPDATE project SET is_default = 1 WHERE id = 'project-1'");
+      await client.execute("UPDATE namespace SET is_default = 1 WHERE id = 'namespace-1'");
     } finally {
       client.close();
     }
@@ -159,10 +159,10 @@ describe("db JSON export/import", () => {
     await importDbJson(targetUrl, await exportDbJson(sourceUrl));
 
     const dump = await exportDbJson(targetUrl);
-    expect(dump.tables.project[0].is_default).toBe(1);
+    expect(dump.tables.namespace[0].is_default).toBe(1);
   });
 
-  it("imports a version 2 export without the default project column", async () => {
+  it("imports a version 2 export without the default namespace column", async () => {
     const sourceUrl = await migratedDbUrl("v2-source.db");
     const targetUrl = await migratedDbUrl("v2-target.db");
     await seedDb(sourceUrl);
@@ -173,12 +173,12 @@ describe("db JSON export/import", () => {
       version: 2,
       tables: {
         ...dump.tables,
-        project: dump.tables.project.map(({ id, name }) => ({ id, name })),
+        namespace: dump.tables.namespace.map(({ id, name }) => ({ id, name })),
       },
     };
 
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ project: 1 });
-    expect((await exportDbJson(targetUrl)).tables.project[0].is_default).toBe(0);
+    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ namespace: 1 });
+    expect((await exportDbJson(targetUrl)).tables.namespace[0].is_default).toBe(0);
   });
 
   it("imports a version 3 export by rebuilding the default layer", async () => {
@@ -201,7 +201,7 @@ describe("db JSON export/import", () => {
 
     const imported = await exportDbJson(targetUrl);
     expect(imported.tables.layer).toMatchObject([
-      { project_id: "project-1", name: "Base", position: 0, is_default: 1 },
+      { namespace_id: "namespace-1", name: "Base", position: 0, is_default: 1 },
     ]);
     const baseLayerId = imported.tables.layer[0].id;
     expect(imported.tables.card.map(({ layer_id }) => layer_id)).toEqual([
@@ -219,7 +219,7 @@ describe("db JSON export/import", () => {
     const { warp: _warp, ...tablesWithoutWarp } = dump.tables;
     const legacy = { ...dump, version: 4, tables: tablesWithoutWarp };
 
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ warp: 0, project: 1 });
+    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ warp: 0, namespace: 1 });
     expect((await exportDbJson(targetUrl)).tables.warp).toEqual([]);
   });
 
@@ -278,7 +278,7 @@ describe("export table list", () => {
    * The columns are read off the schema now rather than restated, so this no longer catches a
    * drift — it asserts that the derivation reaches every table with the columns it declares,
    * which is the property the export depends on. A column missing here is a column
-   * `kozane db export` silently drops, which is how `project.is_default` was lost after
+   * `kozane db export` silently drops, which is how `namespace.is_default` was lost after
    * migration 0003.
    */
   it("covers every column of every table in the Drizzle schema", () => {
@@ -338,8 +338,8 @@ describe("export table list", () => {
 /**
  * `validateDumpRefs` exists to name the offending row, because SQLite's own
  * `FOREIGN KEY constraint failed` names nothing. None of its branches had a test, which is
- * how three of the export's foreign keys — `card.layer_id`, `layer.project_id` and
- * `warp.project_id` — came to have no check at all while the docblock claimed every one
+ * how three of the export's foreign keys — `card.layer_id`, `layer.namespace_id` and
+ * `warp.namespace_id` — came to have no check at all while the docblock claimed every one
  * was covered.
  */
 describe("import reference validation", () => {
@@ -367,7 +367,7 @@ describe("import reference validation", () => {
     // still whole. A dump rejected halfway would be the worst of both.
     const after = await exportDbJson(targetUrl);
     expect(after.tables.card).toHaveLength(2);
-    expect(after.tables.project).toHaveLength(1);
+    expect(after.tables.namespace).toHaveLength(1);
   }
 
   it("rejects a card on an unknown layer", async () => {
@@ -376,28 +376,28 @@ describe("import reference validation", () => {
     }, "card card-1: references unknown layer_id layer-missing");
   });
 
-  it("rejects a layer in an unknown project", async () => {
+  it("rejects a layer in an unknown namespace", async () => {
     await expectRejectedImport((tables) => {
-      tables.layer[0].project_id = "project-missing";
-    }, "layer layer-1: references unknown project_id project-missing");
+      tables.layer[0].namespace_id = "namespace-missing";
+    }, "layer layer-1: references unknown namespace_id namespace-missing");
   });
 
-  it("rejects a warp in an unknown project", async () => {
+  it("rejects a warp in an unknown namespace", async () => {
     await expectRejectedImport((tables) => {
-      tables.warp[0].project_id = "project-missing";
-    }, "warp warp-1: references unknown project_id project-missing");
+      tables.warp[0].namespace_id = "namespace-missing";
+    }, "warp warp-1: references unknown namespace_id namespace-missing");
   });
 
-  it("rejects a bundle in an unknown project", async () => {
+  it("rejects a partition in an unknown namespace", async () => {
     await expectRejectedImport((tables) => {
-      tables.bundle[0].project_id = "project-missing";
-    }, "bundle bundle-1: references unknown project_id project-missing");
+      tables.partition[0].namespace_id = "namespace-missing";
+    }, "partition partition-1: references unknown namespace_id namespace-missing");
   });
 
-  it("rejects a card in an unknown bundle", async () => {
+  it("rejects a card in an unknown partition", async () => {
     await expectRejectedImport((tables) => {
-      tables.card[0].bundle_id = "bundle-missing";
-    }, "card card-1: references unknown bundle_id bundle-missing");
+      tables.card[0].partition_id = "partition-missing";
+    }, "card card-1: references unknown partition_id partition-missing");
   });
 
   it("rejects a card in an unknown taskspace", async () => {
@@ -424,11 +424,11 @@ describe("import reference validation", () => {
     }, "scope_rel: references unknown scope_id scope-missing");
   });
 
-  it("rejects two projects claiming to be the default", async () => {
+  it("rejects two namespaces claiming to be the default", async () => {
     await expectRejectedImport((tables) => {
-      tables.project.push({ ...tables.project[0], id: "project-2", is_default: 1 });
-      tables.project[0].is_default = 1;
-    }, "more than one project is marked as the default");
+      tables.namespace.push({ ...tables.namespace[0], id: "namespace-2", is_default: 1 });
+      tables.namespace[0].is_default = 1;
+    }, "more than one namespace is marked as the default");
   });
 
   // `card.layer_id` is NOT NULL, so a null here would otherwise reach SQLite as a
@@ -454,8 +454,8 @@ describe("import batching", () => {
     try {
       await client.batch(
         Array.from({ length: cardCount }, (_unused, index) => ({
-          sql: "INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
-          args: [`bulk-${index}`, "bundle-1", "layer-1", `card ${index}`, index, index * 2],
+          sql: "INSERT INTO card (id, partition_id, layer_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
+          args: [`bulk-${index}`, "partition-1", "layer-1", `card ${index}`, index, index * 2],
         })),
         "write",
       );

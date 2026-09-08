@@ -6,7 +6,7 @@ import {
   writeApiKey,
   type ApiKeyFile,
 } from "../../lib/server/api-key.js";
-import { requireWorkspace } from "../lib/project.js";
+import { requireWorkspace } from "../lib/workspace.js";
 
 function writeNewApiKey(root: string): string {
   const apiKey = randomBytes(32).toString("base64url");

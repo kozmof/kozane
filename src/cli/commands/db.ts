@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { basename } from "node:path";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { requireWorkspace } from "../lib/project.js";
+import { requireWorkspace } from "../lib/workspace.js";
 import { dbPath, dbUrl } from "../lib/config.js";
 import {
   backupDb,
@@ -37,8 +37,8 @@ export async function dbStatus(): Promise<void> {
 
 export async function dbMigrate(): Promise<void> {
   const { root } = requireWorkspace();
-  const projectRoot = resolve(root);
-  const url = dbUrl(projectRoot);
+  const workspaceRoot = resolve(root);
+  const url = dbUrl(workspaceRoot);
   const status = await getMigrationStatus(url);
 
   if (status.state === "current") {
@@ -48,7 +48,7 @@ export async function dbMigrate(): Promise<void> {
   }
 
   if (status.state === "missing") {
-    console.error(`Database file is missing: ${dbPath(projectRoot)}`);
+    console.error(`Database file is missing: ${dbPath(workspaceRoot)}`);
     process.exit(1);
   }
 
@@ -68,7 +68,7 @@ export async function dbMigrate(): Promise<void> {
 
   let backupPath: string;
   try {
-    backupPath = await backupDb(projectRoot);
+    backupPath = await backupDb(workspaceRoot);
   } catch (e) {
     console.error("Failed to create database backup.");
     console.error(e instanceof Error ? e.message : String(e));
@@ -102,8 +102,8 @@ function requireCurrentStatus(status: MigrationStatus): void {
 
 export async function dbExport(file?: string, options: DbExportOptions = {}): Promise<void> {
   const { root } = requireWorkspace();
-  const projectRoot = resolve(root);
-  const url = dbUrl(projectRoot);
+  const workspaceRoot = resolve(root);
+  const url = dbUrl(workspaceRoot);
   const status = await getMigrationStatus(url);
   requireCurrentStatus(status);
 
@@ -125,8 +125,8 @@ export async function dbExport(file?: string, options: DbExportOptions = {}): Pr
 
 export async function dbImport(file: string, options: DbImportOptions = {}): Promise<void> {
   const { root } = requireWorkspace();
-  const projectRoot = resolve(root);
-  const url = dbUrl(projectRoot);
+  const workspaceRoot = resolve(root);
+  const url = dbUrl(workspaceRoot);
   const status = await getMigrationStatus(url);
   requireCurrentStatus(status);
 
@@ -148,7 +148,7 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
 
   let backupPath: string;
   try {
-    backupPath = await backupDb(projectRoot);
+    backupPath = await backupDb(workspaceRoot);
   } catch (e) {
     console.error("Failed to create database backup.");
     console.error(e instanceof Error ? e.message : String(e));
@@ -172,8 +172,8 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
 
 export async function dbRestore(file?: string): Promise<void> {
   const { root } = requireWorkspace();
-  const projectRoot = resolve(root);
-  const server = activeServerProcess(projectRoot);
+  const workspaceRoot = resolve(root);
+  const server = activeServerProcess(workspaceRoot);
   if (server) {
     console.error(`Refusing to restore while Kozane server process ${server.pid} is running.`);
     console.error("Stop the server, then run the restore again.");
@@ -189,7 +189,7 @@ export async function dbRestore(file?: string): Promise<void> {
       process.exit(1);
     }
   } else {
-    const backups = listBackups(projectRoot);
+    const backups = listBackups(workspaceRoot);
     if (backups.length === 0) {
       console.error("No backups found in .kozane/backups/");
       console.error("Run: kozane db migrate  (creates a backup before migrating)");
@@ -204,10 +204,10 @@ export async function dbRestore(file?: string): Promise<void> {
     console.log();
   }
 
-  const current = dbPath(projectRoot);
+  const current = dbPath(workspaceRoot);
   if (existsSync(current)) {
     try {
-      const safety = await backupDb(projectRoot);
+      const safety = await backupDb(workspaceRoot);
       console.log(`Current database backed up: ${safety}`);
     } catch {
       // current db may be corrupted; proceed anyway

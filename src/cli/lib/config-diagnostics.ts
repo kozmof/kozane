@@ -24,8 +24,8 @@ export type ConfigReport = {
   notes: ConfigNote[];
 };
 
-export function configPath(projectRoot: string): string {
-  return join(projectRoot, KOZANE_DIR, CONFIG_FILE);
+export function configPath(workspaceRoot: string): string {
+  return join(workspaceRoot, KOZANE_DIR, CONFIG_FILE);
 }
 
 function fileError(path: string, message: string): ConfigReport {
@@ -76,8 +76,8 @@ function defaultNotes(parsed: Record<string, unknown>): ConfigNote[] {
  * required keys, unknown keys, invalid values — instead of stopping at the first problem
  * the way `readConfig` has to. Backs `kozane doctor config`.
  */
-export function diagnoseConfig(projectRoot: string): ConfigReport {
-  const path = configPath(projectRoot);
+export function diagnoseConfig(workspaceRoot: string): ConfigReport {
+  const path = configPath(workspaceRoot);
 
   let raw: string;
   try {

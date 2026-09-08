@@ -154,11 +154,11 @@ describe("layer CLI flow", () => {
     expect(list).toMatch(/^\S+\s+1\s+1\s+Draft$/m);
   }, 30_000);
 
-  it("refuses to move a card onto a layer of another project", () => {
+  it("refuses to move a card onto a layer of another namespace", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "project", "create", "Other");
-    cli(root, "layer", "add", "--project", projectIdOf(root, "Other"), "Theirs");
+    cli(root, "namespace", "create", "Other");
+    cli(root, "layer", "add", "--namespace", namespaceIdOf(root, "Other"), "Theirs");
     const cardId = outputField(cli(root, "card", "add", "Stays home"), "id");
 
     const result = runCli(root, "card", "layer", cardId, "Theirs");
@@ -177,11 +177,11 @@ describe("layer CLI flow", () => {
     expect(result.stderr).toContain("Cannot delete the default layer");
   }, 30_000);
 
-  function projectIdOf(root: string, name: string): string {
-    const line = cli(root, "project", "list")
+  function namespaceIdOf(root: string, name: string): string {
+    const line = cli(root, "namespace", "list")
       .split("\n")
       .find((row) => row.includes(name));
-    if (!line) throw new Error(`No project named ${name} in:\n${cli(root, "project", "list")}`);
+    if (!line) throw new Error(`No namespace named ${name} in:\n${cli(root, "namespace", "list")}`);
     return line.trim().split(/\s+/)[0];
   }
 

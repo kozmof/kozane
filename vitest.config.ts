@@ -68,7 +68,7 @@ export default defineConfig({
         "src/cli/commands/**",
         // Filesystem discovery/configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
-        "src/cli/lib/project.ts",
+        "src/cli/lib/workspace.ts",
         "src/cli/lib/taskspace-scan.ts",
         // Command scaffolding: finds the workspace, opens its database, and exits the
         // process on failure. Exercised by every subprocess test in src/cli/*.e2e.test.ts,

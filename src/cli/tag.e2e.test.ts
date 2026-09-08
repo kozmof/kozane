@@ -134,7 +134,7 @@ describe("tag CLI flow", () => {
    * A path is relative to a taskspace and says nothing on its own. The index page had always
    * headed its file rows with the taskspace they were found in; the terminal printed the bare
    * path, so two taskspaces each holding a `README.md` drew two rows nothing could tell
-   * apart — and a project draws every unplaced taskspace as well as its own, so a second one
+   * apart — and a namespace draws every unplaced taskspace as well as its own, so a second one
    * is not an unusual workspace.
    */
   it("says which taskspace a file row was found in", () => {

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { cpSync, existsSync, rmSync, writeFileSync } from "node:fs";
-import { requireWorkspace } from "../lib/project.js";
+import { requireWorkspace } from "../lib/workspace.js";
 import { dbUrl } from "../lib/config.js";
 import { requireCurrentMigrations } from "../lib/db.js";
 import { createStaticServer } from "../lib/static-server.js";

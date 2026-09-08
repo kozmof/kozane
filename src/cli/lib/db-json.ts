@@ -7,8 +7,8 @@ import { chunked, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 6;
-// Version 2 predates `project.is_default` (migration 0003). Such a file is still
-// importable; every project comes back non-default, which is what version 2 recorded.
+// Version 2 predates `namespace.is_default` (migration 0003). Such a file is still
+// importable; every namespace comes back non-default, which is what version 2 recorded.
 const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
 
 /**
@@ -18,14 +18,14 @@ const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
  * The order and the sort are decisions the schema does not hold, so they are written here.
  * The *columns* are not: they are read off the Drizzle table below, because a column added
  * to the schema and not to this list is silently dropped by `kozane db export` — which is
- * how `project.is_default` was lost after migration 0003 — and a list restated by hand
+ * how `namespace.is_default` was lost after migration 0003 — and a list restated by hand
  * could only ever be checked against the schema after the fact. Drizzle reports them in
  * declaration order, which is the order this list held them in.
  */
 const TABLE_ORDER = [
-  { name: "project", orderBy: ["id"] },
+  { name: "namespace", orderBy: ["id"] },
   { name: "scope", orderBy: ["id"] },
-  { name: "bundle", orderBy: ["id"] },
+  { name: "partition", orderBy: ["id"] },
   { name: "layer", orderBy: ["id"] },
   { name: "warp", orderBy: ["id"] },
   { name: "taskspace", orderBy: ["id"] },
@@ -151,7 +151,7 @@ function isJsonScalar(value: unknown): value is JsonScalar {
 /** Fills in columns added after `version`, so older exports validate against TABLES. */
 function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
   if (version < 3) {
-    for (const row of tables.project ?? []) {
+    for (const row of tables.namespace ?? []) {
       if (typeof row === "object" && row !== null && !("is_default" in row)) row.is_default = 0;
     }
   }
@@ -185,45 +185,51 @@ function upgradeCardTimestamps(tables: Partial<TableRows>): void {
 
 /**
  * Versions before 4 predate layers (migration 0005). Rebuild what that migration does:
- * a default `Base` layer per project, with every card placed on its project's layer.
+ * a default `Base` layer per namespace, with every card placed on its namespace's layer.
  */
 function upgradeLayers(tables: Partial<TableRows>): void {
   if (tables.layer === undefined) tables.layer = [];
-  const layerIdByProject = new Map<string, string>();
+  const layerIdByNamespace = new Map<string, string>();
   // A dump that already carries layers (an older version number on a newer export, say)
-  // keeps them: only projects without one get a rebuilt default layer.
+  // keeps them: only namespaces without one get a rebuilt default layer.
   for (const layer of tables.layer) {
-    if (typeof layer.project_id === "string" && typeof layer.id === "string" && layer.is_default) {
-      layerIdByProject.set(layer.project_id, layer.id);
+    if (
+      typeof layer.namespace_id === "string" &&
+      typeof layer.id === "string" &&
+      layer.is_default
+    ) {
+      layerIdByNamespace.set(layer.namespace_id, layer.id);
     }
   }
-  for (const project of tables.project ?? []) {
-    const projectId = project.id;
-    if (typeof projectId !== "string" || layerIdByProject.has(projectId)) continue;
+  for (const namespace of tables.namespace ?? []) {
+    const namespaceId = namespace.id;
+    if (typeof namespaceId !== "string" || layerIdByNamespace.has(namespaceId)) continue;
     const layerId = uuidv7();
-    layerIdByProject.set(projectId, layerId);
+    layerIdByNamespace.set(namespaceId, layerId);
     tables.layer.push({
       id: layerId,
-      project_id: projectId,
+      namespace_id: namespaceId,
       name: DEFAULT_LAYER_NAME,
       position: 0,
       is_default: 1,
     });
   }
 
-  const projectIdByBundle = new Map<string, string>();
-  for (const bundle of tables.bundle ?? []) {
-    if (typeof bundle.id === "string" && typeof bundle.project_id === "string") {
-      projectIdByBundle.set(bundle.id, bundle.project_id);
+  const namespaceIdByPartition = new Map<string, string>();
+  for (const partition of tables.partition ?? []) {
+    if (typeof partition.id === "string" && typeof partition.namespace_id === "string") {
+      namespaceIdByPartition.set(partition.id, partition.namespace_id);
     }
   }
 
   for (const card of tables.card ?? []) {
     if ("layer_id" in card && card.layer_id !== null) continue;
-    const projectId =
-      typeof card.bundle_id === "string" ? projectIdByBundle.get(card.bundle_id) : undefined;
-    const layerId = projectId ? layerIdByProject.get(projectId) : undefined;
-    // A card whose bundle or project is missing from the dump would fail the NOT NULL
+    const namespaceId =
+      typeof card.partition_id === "string"
+        ? namespaceIdByPartition.get(card.partition_id)
+        : undefined;
+    const layerId = namespaceId ? layerIdByNamespace.get(namespaceId) : undefined;
+    // A card whose partition or namespace is missing from the dump would fail the NOT NULL
     // insert anyway; leave it unset so parseDump reports the malformed row instead.
     if (layerId) card.layer_id = layerId;
   }
@@ -335,31 +341,31 @@ export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
  * clearly, so every foreign key in the export is checked here.
  */
 function validateDumpRefs(tables: TableRows): void {
-  const projectIds = new Set(tables.project.map((r) => r.id as string));
-  const bundleIds = new Set(tables.bundle.map((r) => r.id as string));
+  const namespaceIds = new Set(tables.namespace.map((r) => r.id as string));
+  const partitionIds = new Set(tables.partition.map((r) => r.id as string));
   const layerIds = new Set(tables.layer.map((r) => r.id as string));
   const cardIds = new Set(tables.card.map((r) => r.id as string));
   const glueIds = new Set(tables.glue.map((r) => r.id as string));
   const scopeIds = new Set(tables.scope.map((r) => r.id as string));
   const taskspaceIds = new Set(tables.taskspace.map((r) => r.id as string));
 
-  if (tables.project.filter((row) => Number(row.is_default) === 1).length > 1)
-    throw new Error("project: more than one project is marked as the default");
-  for (const row of tables.bundle) {
-    if (!projectIds.has(row.project_id as string))
-      throw new Error(`bundle ${row.id}: references unknown project_id ${row.project_id}`);
+  if (tables.namespace.filter((row) => Number(row.is_default) === 1).length > 1)
+    throw new Error("namespace: more than one namespace is marked as the default");
+  for (const row of tables.partition) {
+    if (!namespaceIds.has(row.namespace_id as string))
+      throw new Error(`partition ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
   for (const row of tables.layer) {
-    if (!projectIds.has(row.project_id as string))
-      throw new Error(`layer ${row.id}: references unknown project_id ${row.project_id}`);
+    if (!namespaceIds.has(row.namespace_id as string))
+      throw new Error(`layer ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
   for (const row of tables.warp) {
-    if (!projectIds.has(row.project_id as string))
-      throw new Error(`warp ${row.id}: references unknown project_id ${row.project_id}`);
+    if (!namespaceIds.has(row.namespace_id as string))
+      throw new Error(`warp ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
   for (const row of tables.card) {
-    if (!bundleIds.has(row.bundle_id as string))
-      throw new Error(`card ${row.id}: references unknown bundle_id ${row.bundle_id}`);
+    if (!partitionIds.has(row.partition_id as string))
+      throw new Error(`card ${row.id}: references unknown partition_id ${row.partition_id}`);
     // `card.layer_id` is NOT NULL, so a null arriving here is caught by the same check
     // and reported as the unknown reference it is rather than as a constraint failure.
     if (!layerIds.has(row.layer_id as string))
@@ -368,8 +374,8 @@ function validateDumpRefs(tables: TableRows): void {
       throw new Error(`card ${row.id}: references unknown taskspace_id ${row.taskspace_id}`);
   }
   for (const row of tables.taskspace) {
-    if (row.project_id !== null && !projectIds.has(row.project_id as string))
-      throw new Error(`taskspace ${row.id}: references unknown project_id ${row.project_id}`);
+    if (row.namespace_id !== null && !namespaceIds.has(row.namespace_id as string))
+      throw new Error(`taskspace ${row.id}: references unknown namespace_id ${row.namespace_id}`);
     if (row.scope_id !== null && !scopeIds.has(row.scope_id as string))
       throw new Error(`taskspace ${row.id}: references unknown scope_id ${row.scope_id}`);
   }

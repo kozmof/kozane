@@ -3,7 +3,7 @@ import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
 import { createDb } from "../../db/client.js";
-import { createProject } from "../../db/api/project.js";
+import { createNamespace } from "../../db/api/namespace.js";
 
 /**
  * Keeps `.kozane/` out of a repository the workspace happens to sit in.
@@ -40,27 +40,27 @@ function writeIgnoreFile(kozaneDir: string): void {
 }
 
 export async function init(): Promise<void> {
-  const projectRoot = process.cwd();
-  const kozaneDir = join(projectRoot, KOZANE_DIR);
+  const workspaceRoot = process.cwd();
+  const kozaneDir = join(workspaceRoot, KOZANE_DIR);
 
   if (existsSync(kozaneDir)) {
     console.error(`Kozane workspace already exists at ${kozaneDir}`);
     process.exit(1);
   }
 
-  const workspaceName = basename(resolve(projectRoot));
+  const workspaceName = basename(resolve(workspaceRoot));
 
   mkdirSync(kozaneDir, { recursive: true });
   writeIgnoreFile(kozaneDir);
 
   const config = defaultConfig(workspaceName);
-  writeConfig(projectRoot, config);
+  writeConfig(workspaceRoot, config);
 
   console.log(`Initializing Kozane workspace "${workspaceName}"...`);
 
-  await runMigrations(dbUrl(projectRoot));
-  const db = await createDb(dbUrl(projectRoot));
-  await createProject({ db, name: "main", isDefault: true });
+  await runMigrations(dbUrl(workspaceRoot));
+  const db = await createDb(dbUrl(workspaceRoot));
+  await createNamespace({ db, name: "main", isDefault: true });
 
   console.log(`
 Kozane initialized.
@@ -69,6 +69,6 @@ Kozane initialized.
   Config   : ${KOZANE_DIR}/config.json
   Database : ${KOZANE_DIR}/kozane.db
 
-Default project: main
+Default namespace: main
 `);
 }

@@ -1,21 +1,21 @@
 import { cardTable } from "../../db/schema.js";
 import { addLayer, getAllLayers, reorderLayers, updateLayerName } from "../../db/api/layer.js";
 import { deleteLayerWithReassign } from "../../db/api/composite.js";
-import { resolveProjectId } from "../lib/project-selection.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { shortId } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import { inArray } from "drizzle-orm";
 
-type LayerOptions = { project?: string };
+type LayerOptions = { namespace?: string };
 
 export async function layerAdd(name: string, options: LayerOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Layer name cannot be empty.");
-    const projectId = await resolveProjectId(db, options.project);
-    const { id, position } = await addLayer({ db, projectId, name: trimmedName });
-    const layerIds = (await getAllLayers({ db, projectId })).map((layer) => layer.id);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const { id, position } = await addLayer({ db, namespaceId, name: trimmedName });
+    const layerIds = (await getAllLayers({ db, namespaceId })).map((layer) => layer.id);
     console.log("Layer added.");
     console.log(`  id      : ${shortId(id, layerIds)}`);
     console.log(`  name    : ${trimmedName}`);
@@ -25,8 +25,8 @@ export async function layerAdd(name: string, options: LayerOptions = {}): Promis
 
 export async function layerList(options: LayerOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const projectId = await resolveProjectId(db, options.project);
-    const layers = await getAllLayers({ db, projectId });
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const layers = await getAllLayers({ db, namespaceId });
     if (layers.length === 0) {
       console.log("No layers found.");
       return;
@@ -55,10 +55,10 @@ export async function layerRename(
   await runWorkspaceCommand(async ({ db }) => {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Layer name cannot be empty.");
-    const projectId = await resolveProjectId(db, options.project);
-    const layers = await getAllLayers({ db, projectId });
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const layers = await getAllLayers({ db, namespaceId });
     const resolvedId = resolveLayerRef(layers, layerId);
-    await updateLayerName({ db, projectId, layerId: resolvedId, name: trimmedName });
+    await updateLayerName({ db, namespaceId, layerId: resolvedId, name: trimmedName });
     console.log("Layer renamed.");
     console.log(
       `  id  : ${shortId(
@@ -79,8 +79,8 @@ export async function layerMove(
     if (direction !== "up" && direction !== "down") {
       throw new Error(`Direction must be "up" or "down", not "${direction}".`);
     }
-    const projectId = await resolveProjectId(db, options.project);
-    const layers = await getAllLayers({ db, projectId });
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const layers = await getAllLayers({ db, namespaceId });
     const resolvedId = resolveLayerRef(layers, layerId);
     // getAllLayers is bottom to top, so "up" is one step later in the list.
     const ids = layers.map((layer) => layer.id);
@@ -91,7 +91,7 @@ export async function layerMove(
     }
     const reordered = [...ids];
     [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    const result = await reorderLayers({ db, projectId, layerIds: reordered });
+    const result = await reorderLayers({ db, namespaceId, layerIds: reordered });
     if (!result.ok) throw new Error(`Failed to reorder layers (${result.reason}).`);
     console.log(`Layer moved ${direction}.`);
     console.log(`  id      : ${shortId(resolvedId, ids)}`);
@@ -101,13 +101,13 @@ export async function layerMove(
 
 export async function layerDelete(layerId: string, options: LayerOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const projectId = await resolveProjectId(db, options.project);
-    const layers = await getAllLayers({ db, projectId });
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    const layers = await getAllLayers({ db, namespaceId });
     const layerIds = layers.map((layer) => layer.id);
     const resolvedId = resolveLayerRef(layers, layerId);
-    await deleteLayerWithReassign({ db, projectId, layerId: resolvedId });
+    await deleteLayerWithReassign({ db, namespaceId, layerId: resolvedId });
     console.log("Layer deleted.");
     console.log(`  id: ${shortId(resolvedId, layerIds)}`);
-    console.log("Cards on this layer moved to the project's default layer.");
+    console.log("Cards on this layer moved to the namespace's default layer.");
   });
 }

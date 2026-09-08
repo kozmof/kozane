@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { addProject } from "../../db/api/project.js";
-import { addBundle } from "../../db/api/bundle.js";
+import { addNamespace } from "../../db/api/namespace.js";
+import { addPartition } from "../../db/api/partition.js";
 import { addLayer } from "../../db/api/layer.js";
 import { addCard } from "../../db/api/card.js";
 import { createTestDB } from "../../test-utils/db.js";
@@ -19,14 +19,14 @@ afterEach(() => {
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "Here" });
-  await addLayer({ db, projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "General", isDefault: true });
-  return { db, projectId, bundleId };
+  const namespaceId = await addNamespace({ db, name: "Here" });
+  await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "General", isDefault: true });
+  return { db, namespaceId, partitionId };
 }
 
 function printable(id: string, overrides: Partial<PrintableCard> = {}): PrintableCard {
-  return { id, bundle: "General", content: "Alpha", posX: 24, posY: 48, ...overrides };
+  return { id, partition: "General", content: "Alpha", posX: 24, posY: 48, ...overrides };
 }
 
 /** The line `printCards` writes for one card, with its id abbreviated as the CLI prints it. */
@@ -42,9 +42,9 @@ describe("printCards", () => {
     expect(await lineFor(db, [])).toEqual(["No cards found."]);
   });
 
-  it("prints id, bundle, position and text", async () => {
-    const { db, bundleId } = await setup();
-    const id = await addCard({ db, bundleId, content: "Alpha" });
+  it("prints id, partition, position and text", async () => {
+    const { db, partitionId } = await setup();
+    const id = await addCard({ db, partitionId, content: "Alpha" });
 
     const [line] = await lineFor(db, [printable(id)]);
 
@@ -52,8 +52,8 @@ describe("printCards", () => {
   });
 
   it("puts an extra column between the position and the text when asked for one", async () => {
-    const { db, bundleId } = await setup();
-    const id = await addCard({ db, bundleId, content: "Alpha" });
+    const { db, partitionId } = await setup();
+    const id = await addCard({ db, partitionId, content: "Alpha" });
 
     const [line] = await lineFor(db, [printable(id)], () => "12px");
 
@@ -63,8 +63,8 @@ describe("printCards", () => {
   it("keeps a multi-line card on one line", async () => {
     // A listing is one row per card, so a card holding newlines must not become three rows
     // that read as three cards.
-    const { db, bundleId } = await setup();
-    const id = await addCard({ db, bundleId, content: "one\ntwo" });
+    const { db, partitionId } = await setup();
+    const id = await addCard({ db, partitionId, content: "one\ntwo" });
 
     const [line] = await lineFor(db, [printable(id, { content: "one\r\ntwo\nthree" })]);
 
@@ -75,9 +75,9 @@ describe("printCards", () => {
   it("abbreviates against every card in the workspace, not the ones being printed", async () => {
     // The id printed for a card is the one `kozane card show` takes whichever command
     // printed it, which is only true if the abbreviation is drawn against the whole set.
-    const { db, bundleId } = await setup();
-    const shown = await addCard({ db, bundleId, content: "Shown" });
-    const hidden = await addCard({ db, bundleId, content: "Hidden" });
+    const { db, partitionId } = await setup();
+    const shown = await addCard({ db, partitionId, content: "Shown" });
+    const hidden = await addCard({ db, partitionId, content: "Hidden" });
 
     const [line] = await lineFor(db, [printable(shown)]);
 

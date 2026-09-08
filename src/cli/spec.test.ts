@@ -24,7 +24,7 @@ const SPEC_PATH = resolve("spec/cli.md");
  *
  * Empty, and the check below is what keeps it that way: a command added without a section
  * fails rather than quietly joining a list of exemptions. It held fifteen entries — every
- * `bundle` and `warp` subcommand, the two `scope` membership commands, and seven of
+ * `partition` and `warp` subcommand, the two `scope` membership commands, and seven of
  * `card` — each of them something a user could run today against no specified behaviour.
  * They are written up now.
  *

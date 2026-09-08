@@ -33,8 +33,8 @@ export function defaultConfig(name: string): WorkspaceConfig {
  * the same rules (db/internal/config.ts), so the two can never disagree on validity.
  * `kozane doctor config` reports every problem instead of only the first.
  */
-export function readConfig(projectRoot: string): WorkspaceConfig {
-  const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
+export function readConfig(workspaceRoot: string): WorkspaceConfig {
+  const configPath = join(workspaceRoot, KOZANE_DIR, CONFIG_FILE);
   const raw = readFileSync(configPath, "utf-8");
   const parsed: unknown = JSON.parse(raw);
   if (typeof parsed !== "object" || parsed === null) {
@@ -56,22 +56,22 @@ export function readConfig(projectRoot: string): WorkspaceConfig {
  * place, two configs of the same length written inside one filesystem timestamp tick are
  * indistinguishable, and the second would go unread.
  */
-export function writeConfig(projectRoot: string, config: WorkspaceConfig): void {
-  const configPath = join(projectRoot, KOZANE_DIR, CONFIG_FILE);
+export function writeConfig(workspaceRoot: string, config: WorkspaceConfig): void {
+  const configPath = join(workspaceRoot, KOZANE_DIR, CONFIG_FILE);
   writeFileAtomic(configPath, JSON.stringify(config, null, 2) + "\n");
 }
 
-export function dbPath(projectRoot: string): string {
-  return join(projectRoot, KOZANE_DIR, DB_FILE);
+export function dbPath(workspaceRoot: string): string {
+  return join(workspaceRoot, KOZANE_DIR, DB_FILE);
 }
 
-export function dbUrl(projectRoot: string): string {
-  return `file:${dbPath(projectRoot)}`;
+export function dbUrl(workspaceRoot: string): string {
+  return `file:${dbPath(workspaceRoot)}`;
 }
 
 /** Database used by interactive CLI commands for the active workspace session. */
-export function commandDbUrl(projectRoot: string): string {
-  const state = activeServerProcess(projectRoot);
+export function commandDbUrl(workspaceRoot: string): string {
+  const state = activeServerProcess(workspaceRoot);
   if (state?.memory && state.databaseUrl) return state.databaseUrl;
-  return dbUrl(projectRoot);
+  return dbUrl(workspaceRoot);
 }

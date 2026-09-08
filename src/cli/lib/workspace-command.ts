@@ -2,12 +2,12 @@ import { createDb } from "../../db/client.js";
 import type { DB } from "../../db/tx.js";
 import { commandDbUrl, type WorkspaceConfig } from "./config.js";
 import { requireCurrentMigrations } from "./db.js";
-import { requireWorkspace } from "./project.js";
+import { requireWorkspace } from "./workspace.js";
 
 /**
  * Ends the command with a message rather than a stack trace. The one place the CLI turns
  * a thrown error into an exit code — it used to be copied verbatim into `card.ts`,
- * `layer.ts` and `scope.ts`, and written out inline again twice in `project.ts`.
+ * `layer.ts` and `scope.ts`, and written out inline again twice in `namespace.ts`.
  */
 export function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
@@ -54,9 +54,9 @@ export type WorkspaceCommandOptions = {
  * The database is always {@link commandDbUrl}, which is the fix this exists to make
  * permanent. That resolver points at the temporary database of a running `kozane open
  * --memory` server, and `card`, `layer`, `scope`, `taskspace` and `status` used it while
- * `project` did not — so with a memory server up, `kozane card add` wrote to the session
- * while `kozane project list` read the disk, and `kozane project create` made a project
- * the open board could never show. `spec/cli.md` says project-dependent commands use the
+ * `namespace` did not — so with a memory server up, `kozane card add` wrote to the session
+ * while `kozane namespace list` read the disk, and `kozane namespace create` made a namespace
+ * the open board could never show. `spec/cli.md` says namespace-dependent commands use the
  * session database; now they cannot do otherwise.
  *
  * Not for `db`, `doctor` or `net ssg`: those deliberately target the on-disk database even

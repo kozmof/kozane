@@ -9,8 +9,8 @@ import { contentTypeFor, createStaticServer, resolveRequest } from "./static-ser
 const root = mkdtempSync(join(tmpdir(), "kozane-static-"));
 writeFileSync(join(root, "index.html"), "<h1>home</h1>");
 writeFileSync(join(root, "404.html"), "<h1>missing</h1>");
-mkdirSync(join(root, "project"));
-writeFileSync(join(root, "project", "index.html"), "<h1>project page</h1>");
+mkdirSync(join(root, "namespace"));
+writeFileSync(join(root, "namespace", "index.html"), "<h1>namespace page</h1>");
 mkdirSync(join(root, "_app"));
 writeFileSync(join(root, "_app", "app.css"), "body{}");
 
@@ -27,24 +27,24 @@ describe("resolveRequest", () => {
   });
 
   it("redirects an extensionless directory to a trailing slash", async () => {
-    expect(await resolveRequest(root, "/project")).toEqual({
+    expect(await resolveRequest(root, "/namespace")).toEqual({
       kind: "redirect",
-      location: "/project/",
+      location: "/namespace/",
     });
   });
 
   it("keeps a query string across that redirect", async () => {
-    // The exported project page reads `?warp=` to decide where its board opens, so a link
+    // The exported namespace page reads `?warp=` to decide where its board opens, so a link
     // that arrives without the slash must not lose it on the way.
-    expect(await resolveRequest(root, "/project?warp=w1")).toEqual({
+    expect(await resolveRequest(root, "/namespace?warp=w1")).toEqual({
       kind: "redirect",
-      location: "/project/?warp=w1",
+      location: "/namespace/?warp=w1",
     });
   });
 
   it("serves the directory index once the slash is present", async () => {
-    const r = await resolveRequest(root, "/project/");
-    expect(r).toMatchObject({ kind: "file", path: join(root, "project", "index.html") });
+    const r = await resolveRequest(root, "/namespace/");
+    expect(r).toMatchObject({ kind: "file", path: join(root, "namespace", "index.html") });
   });
 
   it("serves a static asset with a sensible content type", async () => {
@@ -86,24 +86,24 @@ describe("createStaticServer", () => {
     expect(await res.text()).toContain("home");
   });
 
-  it("redirects /project to /project/ then serves the page", async () => {
-    const redirect = await fetch(origin + "/project", { redirect: "manual" });
+  it("redirects /namespace to /namespace/ then serves the page", async () => {
+    const redirect = await fetch(origin + "/namespace", { redirect: "manual" });
     expect(redirect.status).toBe(301);
-    expect(redirect.headers.get("location")).toBe("/project/");
+    expect(redirect.headers.get("location")).toBe("/namespace/");
 
-    const followed = await fetch(origin + "/project/");
+    const followed = await fetch(origin + "/namespace/");
     expect(followed.status).toBe(200);
-    expect(await followed.text()).toContain("project page");
+    expect(await followed.text()).toContain("namespace page");
   });
 
   it("carries a query string through the redirect and back to the page", async () => {
-    const redirect = await fetch(origin + "/project?warp=w1", { redirect: "manual" });
+    const redirect = await fetch(origin + "/namespace?warp=w1", { redirect: "manual" });
     expect(redirect.status).toBe(301);
-    expect(redirect.headers.get("location")).toBe("/project/?warp=w1");
+    expect(redirect.headers.get("location")).toBe("/namespace/?warp=w1");
 
     const followed = await fetch(origin + redirect.headers.get("location")!);
     expect(followed.status).toBe(200);
-    expect(await followed.text()).toContain("project page");
+    expect(await followed.text()).toContain("namespace page");
   });
 
   it("returns the 404.html fallback for unknown paths", async () => {

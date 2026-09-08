@@ -125,19 +125,19 @@ const BY_GAP = ["0s  untouched", "28d  reconsidered", "90d  oldest"];
  */
 async function seedThreeCards(root: string, taskspaceId: string | null = null): Promise<void> {
   await withDb(root, async (client) => {
-    const [bundle, layer] = await Promise.all([
-      client.execute("SELECT id FROM bundle LIMIT 1"),
+    const [partition, layer] = await Promise.all([
+      client.execute("SELECT id FROM partition LIMIT 1"),
       client.execute("SELECT id FROM layer LIMIT 1"),
     ]);
-    const bundleId = bundle.rows[0].id as string;
+    const partitionId = partition.rows[0].id as string;
     const layerId = layer.rows[0].id as string;
     await client.batch(
       THREE_CARDS.map(({ content, created, updated }) => ({
-        sql: `INSERT INTO card (id, bundle_id, layer_id, taskspace_id, content, pos_x, pos_y, z_index, created_at, updated_at)
+        sql: `INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, z_index, created_at, updated_at)
               VALUES (?, ?, ?, ?, ?, 0, 0, 0, ?, ?)`,
         args: [
           content,
-          bundleId,
+          partitionId,
           layerId,
           taskspaceId,
           content,
@@ -199,18 +199,18 @@ describe("kozane card list --sort", () => {
     cli(root, "init");
     await seedThreeCards(root);
 
-    // No time column: `<id>  <bundle>  (<x>, <y>)  <text>` is what it has always printed,
+    // No time column: `<id>  <partition>  (<x>, <y>)  <text>` is what it has always printed,
     // and what everything parsing this output expects.
     expect(listed(root).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
   }, 90_000);
 
   /**
    * The scope path: `card list` run in a taskspace directory lists that taskspace's scope
-   * members, through a different query from the project listing — one that selects the card
+   * members, through a different query from the namespace listing — one that selects the card
    * columns wholesale rather than naming them. It has to sort and print identically, which
    * is the claim `ordered` and `timeColumn` in `cardList` are there to make true.
    */
-  it("sorts a scoped taskspace listing the way it sorts a project listing", async () => {
+  it("sorts a scoped taskspace listing the way it sorts a namespace listing", async () => {
     const root = tempWorkspace();
     cli(root, "init");
     cli(root, "scope", "add", "Sort scope");
@@ -268,12 +268,12 @@ describe("kozane card list --sort", () => {
     expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
   }, 60_000);
 
-  it("refuses a --taskspace combined with --project the same way", () => {
+  it("refuses a --taskspace combined with --namespace the same way", () => {
     const root = tempWorkspace();
     cli(root, "init");
 
-    expect(refusal(root, "card", "list", "--taskspace", ".", "--project", "abc")).toBe(
-      "Error: --taskspace cannot be combined with --project or --bundle.",
+    expect(refusal(root, "card", "list", "--taskspace", ".", "--namespace", "abc")).toBe(
+      "Error: --taskspace cannot be combined with --namespace or --partition.",
     );
   }, 60_000);
 
@@ -302,15 +302,45 @@ describe("kozane card list --sort", () => {
     // migration keeps this fixture rolling back to 0010 rather than to whatever the newest
     // migration is.
     //
-    // The index drops come first, and 0013's has to: `card_bundle_updated` is built on
+    // The index drops come first, and 0013's has to: `card_partition_updated` is built on
     // `updated_at`, and SQLite refuses to drop a column an index still names — "error in
-    // index card_bundle_updated after drop column". An index over a column this fixture
+    // index card_partition_updated after drop column". An index over a column this fixture
     // removes belongs above the ALTERs; one over a column it keeps may sit anywhere.
+    // 0014 is one of the migrations the journal now disclaims, and it is the one that needs
+    // more than a dropped index: it renames the tables, so re-applying it over a database
+    // that already carries the new names fails on `no such table: project`. The middle block
+    // is that migration in reverse, and it has to reach the indexes too — SQLite renames the
+    // table under an index but never the index itself, and 0014 drops each old name without
+    // an `IF EXISTS`. Only `card_partition_updated` is left out, because the line above
+    // already dropped it and 0013 puts it back.
     await withDb(root, async (client) => {
       await client.batch(
         [
-          "DROP INDEX IF EXISTS card_bundle_updated",
+          "DROP INDEX IF EXISTS card_partition_updated",
           "DROP INDEX IF EXISTS glue_rel_glue",
+
+          "ALTER TABLE `namespace` RENAME TO `project`",
+          "ALTER TABLE `partition` RENAME TO `bundle`",
+          "ALTER TABLE `bundle` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `layer` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `warp` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `taskspace` RENAME COLUMN `namespace_id` TO `project_id`",
+          "ALTER TABLE `card` RENAME COLUMN `partition_id` TO `bundle_id`",
+          "DROP INDEX IF EXISTS `namespace_one_default`",
+          "CREATE UNIQUE INDEX `project_one_default` ON `project` (`is_default`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `partition_one_default_per_namespace`",
+          "CREATE UNIQUE INDEX `bundle_one_default_per_project` ON `bundle` (`project_id`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `partition_name_per_namespace`",
+          "CREATE UNIQUE INDEX `bundle_name_per_project` ON `bundle` (`project_id`,`name`)",
+          "DROP INDEX IF EXISTS `layer_one_default_per_namespace`",
+          "CREATE UNIQUE INDEX `layer_one_default_per_project` ON `layer` (`project_id`) WHERE is_default = 1",
+          "DROP INDEX IF EXISTS `layer_name_per_namespace`",
+          "CREATE UNIQUE INDEX `layer_name_per_project` ON `layer` (`project_id`,`name`)",
+          "DROP INDEX IF EXISTS `warp_namespace`",
+          "CREATE INDEX `warp_project` ON `warp` (`project_id`)",
+          "DROP INDEX IF EXISTS `card_partition`",
+          "CREATE INDEX `card_bundle` ON `card` (`bundle_id`)",
+
           "ALTER TABLE card DROP COLUMN created_at",
           "ALTER TABLE card DROP COLUMN updated_at",
           `DELETE FROM __drizzle_migrations WHERE created_at >= ${CARD_TIMESTAMPS_MIGRATION_WHEN}`,
@@ -356,14 +386,14 @@ describe("kozane card list --sort", () => {
     expect(cli(root, "doctor")).toContain("✓  Card timestamps valid");
 
     await withDb(root, async (client) => {
-      const [bundle, layer] = await Promise.all([
-        client.execute("SELECT id FROM bundle LIMIT 1"),
+      const [partition, layer] = await Promise.all([
+        client.execute("SELECT id FROM partition LIMIT 1"),
         client.execute("SELECT id FROM layer LIMIT 1"),
       ]);
       await client.execute({
-        sql: `INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index)
+        sql: `INSERT INTO card (id, partition_id, layer_id, content, pos_x, pos_y, z_index)
               VALUES ('epoch', ?, ?, 'inserted by hand', 0, 0, 0)`,
-        args: [bundle.rows[0].id, layer.rows[0].id],
+        args: [partition.rows[0].id, layer.rows[0].id],
       });
     });
 
@@ -384,7 +414,7 @@ describe("kozane card list --sort", () => {
    * The other end of the same hole. The columns are plain integers, so a hand-written
    * `INSERT` can put a number in them that no `Date` can represent — and `toISOString`
    * throws `RangeError: Invalid time value` on such a date. That reached the user as one
-   * line of error in place of the listing: every sound card in the project hidden in order
+   * line of error in place of the listing: every sound card in the namespace hidden in order
    * to report a problem with one of them.
    */
   it("lists a card whose timestamp no date can be read from, and reports it", async () => {

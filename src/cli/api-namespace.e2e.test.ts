@@ -10,7 +10,7 @@ const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("ts
 const tempRoots: string[] = [];
 
 function tempWorkspace(): string {
-  const root = mkdtempSync(join(tmpdir(), "kozane-api-project-e2e-"));
+  const root = mkdtempSync(join(tmpdir(), "kozane-api-namespace-e2e-"));
   tempRoots.push(root);
   return root;
 }
@@ -75,31 +75,31 @@ describe("API key CLI flow", () => {
   }, 30_000);
 });
 
-describe("project, status, and doctor CLI flow", () => {
-  it("changes the default project and uses it for subsequent card commands", () => {
+describe("namespace, status, and doctor CLI flow", () => {
+  it("changes the default namespace and uses it for subsequent card commands", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "New default"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "New default"));
 
-    expect(cli(root, "project", "default", projectId)).toContain("Default project changed.");
-    const projects = cli(root, "project", "list");
-    expect(projects).toMatch(/New default\s+\(default\)/);
-    expect(projects).not.toMatch(/main\s+\(default\)/);
+    expect(cli(root, "namespace", "default", namespaceId)).toContain("Default namespace changed.");
+    const namespaces = cli(root, "namespace", "list");
+    expect(namespaces).toMatch(/New default\s+\(default\)/);
+    expect(namespaces).not.toMatch(/main\s+\(default\)/);
 
     cli(root, "card", "add", "Implicitly routed");
-    expect(cli(root, "card", "list", "--project", projectId)).toContain("Implicitly routed");
+    expect(cli(root, "card", "list", "--namespace", namespaceId)).toContain("Implicitly routed");
 
-    const missing = runCli(root, "project", "default", "ffff");
+    const missing = runCli(root, "namespace", "default", "ffff");
     expect(missing.status).not.toBe(0);
-    expect(missing.stderr).toContain("Project not found: ffff");
+    expect(missing.stderr).toContain("Namespace not found: ffff");
   }, 30_000);
 
   it("reports workspace entity counts and healthy diagnostics", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Counted"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Counted"));
     const scopeId = outputId(cli(root, "scope", "add", "Counted scope"));
-    cli(root, "card", "add", "Counted card", "--project", projectId);
+    cli(root, "card", "add", "Counted card", "--namespace", namespaceId);
     cli(
       root,
       "taskspace",
@@ -107,14 +107,14 @@ describe("project, status, and doctor CLI flow", () => {
       "counted-taskspace",
       "--scope",
       scopeId,
-      "--project",
-      projectId,
+      "--namespace",
+      namespaceId,
     );
 
     const status = cli(root, "status");
     expect(status).toContain("Opening      : stopped");
-    expect(status).toContain("Projects     : 2");
-    expect(status).toContain("Bundles      : 2");
+    expect(status).toContain("Namespaces     : 2");
+    expect(status).toContain("Partitions      : 2");
     expect(status).toContain("Cards        : 1");
     expect(status).toContain("Scopes       : 1");
     expect(status).toContain("Taskspaces   : 1");
@@ -131,7 +131,7 @@ describe("project, status, and doctor CLI flow", () => {
 
   it("fails clearly outside a workspace and for an invalid workspace config", () => {
     const outside = tempWorkspace();
-    for (const command of [["status"], ["doctor"], ["project", "list"]]) {
+    for (const command of [["status"], ["doctor"], ["namespace", "list"]]) {
       const result = runCli(outside, ...command);
       expect(result.status).not.toBe(0);
       expect(result.stdout + result.stderr).toContain("Kozane workspace");

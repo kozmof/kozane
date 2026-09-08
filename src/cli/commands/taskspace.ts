@@ -14,14 +14,14 @@ import {
 } from "../lib/taskspace-scan.js";
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
-import { resolveProjectId } from "../lib/project-selection.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import {
   addTaskspace,
   deleteTaskspace,
   getAllTaskspaces,
-  getTaskspacesInProject,
+  getTaskspacesInNamespace,
 } from "../../db/api/taskspace.js";
-import { getAllProjects } from "../../db/api/project.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
 import { getAllScopes } from "../../db/api/scope.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ async function scanWithin(
         pathKind === "project_relative" ? relative(root, taskspace.path) : taskspace.path;
       await db.insert(taskspaceTable).values({
         id: taskspace.taskspaceId,
-        projectId: taskspace.projectId || undefined,
+        namespaceId: taskspace.namespaceId || undefined,
         name: basename(taskspace.path),
         path: storedPath,
         pathKind,
@@ -171,7 +171,7 @@ async function scanWithin(
 
 // ─── taskspace create ──────────────────────────────────────────────────────────────
 
-type CreateOptions = { scope?: string | false; project?: string; dir?: string };
+type CreateOptions = { scope?: string | false; namespace?: string; dir?: string };
 
 export async function taskspaceCreate(name: string, options: CreateOptions = {}): Promise<void> {
   if (options.scope === undefined) {
@@ -207,11 +207,11 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       : ("absolute" as const);
     const storedPath = pathKind === "project_relative" ? relative(root, targetDir) : targetDir;
 
-    const projectId = await resolveProjectId(db, options.project);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
 
     const id = await addTaskspace({
       db,
-      projectId,
+      namespaceId,
       scopeId,
       name,
       path: storedPath,
@@ -226,7 +226,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
         kind: TASKSPACE_MARKER_KIND,
         version: TASKSPACE_MARKER_VERSION,
         taskspaceId: id,
-        projectId: projectId ?? "",
+        namespaceId: namespaceId ?? "",
       };
       writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
     } catch (e) {
@@ -252,32 +252,32 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
 
 // ─── taskspace list ────────────────────────────────────────────────────────────────
 
-export type TaskspaceListOptions = { project?: string };
+export type TaskspaceListOptions = { namespace?: string };
 
 /**
- * Every taskspace in the workspace, with the project and scope each one sits under.
+ * Every taskspace in the workspace, with the namespace and scope each one sits under.
  *
- * Workspace-wide on purpose: a board draws only its own project's taskspaces and the
- * unassigned ones, so this is where a taskspace created from another project is visible at
- * all. `--project` narrows it to exactly what that project's board would show, unassigned
+ * Workspace-wide on purpose: a board draws only its own namespace's taskspaces and the
+ * unassigned ones, so this is where a taskspace created from another namespace is visible at
+ * all. `--namespace` narrows it to exactly what that namespace's board would show, unassigned
  * rows included.
  */
 export async function taskspaceList(options: TaskspaceListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
     // Short IDs are drawn against every taskspace in the workspace, so the ID printed for a
-    // row is the same one whether or not --project narrowed the list.
+    // row is the same one whether or not --namespace narrowed the list.
     const all = await getAllTaskspaces({ db });
     const taskspaceIds = all.map(({ id }) => id);
 
-    const projectId = options.project ? await resolveProjectId(db, options.project) : null;
-    const taskspaces = projectId ? await getTaskspacesInProject({ db, projectId }) : all;
+    const namespaceId = options.namespace ? await resolveNamespaceId(db, options.namespace) : null;
+    const taskspaces = namespaceId ? await getTaskspacesInNamespace({ db, namespaceId }) : all;
     if (taskspaces.length === 0) {
-      console.log(projectId ? "No taskspaces found in this project." : "No taskspaces found.");
+      console.log(namespaceId ? "No taskspaces found in this namespace." : "No taskspaces found.");
       return;
     }
 
-    const projectNameById = new Map(
-      (await getAllProjects({ db })).map((project) => [project.id, project.name]),
+    const namespaceNameById = new Map(
+      (await getAllNamespaces({ db })).map((namespace) => [namespace.id, namespace.name]),
     );
     const scopeNameById = new Map(
       (await getAllScopes({ db })).map((scope) => [scope.id, scope.name]),
@@ -285,9 +285,9 @@ export async function taskspaceList(options: TaskspaceListOptions = {}): Promise
 
     for (const taskspace of taskspaces) {
       // An em dash in either column is a real state, not missing data: a taskspace with no
-      // project shows on every board, and one with no scope gathers no cards.
-      const project = taskspace.projectId
-        ? (projectNameById.get(taskspace.projectId) ?? taskspace.projectId)
+      // namespace shows on every board, and one with no scope gathers no cards.
+      const namespace = taskspace.namespaceId
+        ? (namespaceNameById.get(taskspace.namespaceId) ?? taskspace.namespaceId)
         : "—";
       const scope = taskspace.scopeId
         ? (scopeNameById.get(taskspace.scopeId) ?? taskspace.scopeId)
@@ -296,7 +296,7 @@ export async function taskspaceList(options: TaskspaceListOptions = {}): Promise
         ? resolveTaskspacePath(taskspace.path, taskspace.pathKind, root)
         : "(no path)";
       console.log(
-        `${shortId(taskspace.id, taskspaceIds)}  ${taskspace.name || "(unnamed)"}  ${project}  ${scope}  ${path}`,
+        `${shortId(taskspace.id, taskspaceIds)}  ${taskspace.name || "(unnamed)"}  ${namespace}  ${scope}  ${path}`,
       );
     }
   });

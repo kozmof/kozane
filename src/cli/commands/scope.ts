@@ -2,15 +2,15 @@ import {
   addScope,
   deleteScope,
   getAllScopes,
-  getScopeProjectUsage,
-  getScopesInProject,
+  getScopeNamespaceUsage,
+  getScopesInNamespace,
 } from "../../db/api/scope.js";
-import { getAllProjects } from "../../db/api/project.js";
-import { resolveProjectId } from "../lib/project-selection.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
+import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
-import { addScopeMembers, removeScopeMembersFromProject } from "../../db/api/scope-rel.js";
-import { bundleTable, cardTable } from "../../db/schema.js";
+import { addScopeMembers, removeScopeMembersFromNamespace } from "../../db/api/scope-rel.js";
+import { partitionTable, cardTable } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 
 export async function scopeAdd(name: string): Promise<void> {
@@ -25,44 +25,46 @@ export async function scopeAdd(name: string): Promise<void> {
   });
 }
 
-export type ScopeListOptions = { project?: string };
+export type ScopeListOptions = { namespace?: string };
 
 /**
- * Every scope in the workspace and the projects each one reaches.
+ * Every scope in the workspace and the namespaces each one reaches.
  *
- * Workspace-wide on purpose: a board draws only its own project's scopes, so this is where
- * a scope shared with — or stranded in — another project is visible at all. `--project`
- * narrows it to exactly what that project's board would show.
+ * Workspace-wide on purpose: a board draws only its own namespace's scopes, so this is where
+ * a scope shared with — or stranded in — another namespace is visible at all. `--namespace`
+ * narrows it to exactly what that namespace's board would show.
  */
 export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     // Short IDs are always drawn against every scope in the workspace, so the ID printed
-    // for a scope is the same one whether or not --project narrowed the list.
+    // for a scope is the same one whether or not --namespace narrowed the list.
     const allScopes = await getAllScopes({ db });
     const scopeIds = allScopes.map((scope) => scope.id);
 
-    const projectId = options.project ? await resolveProjectId(db, options.project) : null;
-    const scopes = projectId ? await getScopesInProject({ db, projectId }) : allScopes;
+    const namespaceId = options.namespace ? await resolveNamespaceId(db, options.namespace) : null;
+    const scopes = namespaceId ? await getScopesInNamespace({ db, namespaceId }) : allScopes;
     if (scopes.length === 0) {
-      console.log(projectId ? "No scopes found in this project." : "No scopes found.");
+      console.log(namespaceId ? "No scopes found in this namespace." : "No scopes found.");
       return;
     }
 
-    const projects = await getAllProjects({ db });
-    const projectNameById = new Map(projects.map((project) => [project.id, project.name]));
-    const usage = await getScopeProjectUsage({ db });
-    const projectsByScope = new Map<string, string[]>();
-    for (const { scopeId, projectId: usedBy } of usage) {
-      const names = projectsByScope.get(scopeId) ?? [];
-      names.push(projectNameById.get(usedBy) ?? usedBy);
-      projectsByScope.set(scopeId, names);
+    const namespaces = await getAllNamespaces({ db });
+    const namespaceNameById = new Map(
+      namespaces.map((namespace) => [namespace.id, namespace.name]),
+    );
+    const usage = await getScopeNamespaceUsage({ db });
+    const namespacesByScope = new Map<string, string[]>();
+    for (const { scopeId, namespaceId: usedBy } of usage) {
+      const names = namespacesByScope.get(scopeId) ?? [];
+      names.push(namespaceNameById.get(usedBy) ?? usedBy);
+      namespacesByScope.set(scopeId, names);
     }
 
     for (const scope of scopes) {
-      // "(unused)" rather than a blank column: a scope no project has reached yet is
+      // "(unused)" rather than a blank column: a scope no namespace has reached yet is
       // visible from every board, and that is worth saying rather than leaving to be read
       // as missing data.
-      const where = projectsByScope.get(scope.id)?.sort().join(", ") ?? "(unused)";
+      const where = namespacesByScope.get(scope.id)?.sort().join(", ") ?? "(unused)";
       console.log(`${shortId(scope.id, scopeIds)}  ${scope.name}  ${where}`);
     }
   });
@@ -80,7 +82,7 @@ export async function scopeDelete(scopeId: string): Promise<void> {
   });
 }
 
-type ScopeMembersOptions = { project?: string };
+type ScopeMembersOptions = { namespace?: string };
 
 async function changeScopeMembers(
   requestedScopeId: string,
@@ -89,7 +91,7 @@ async function changeScopeMembers(
   action: "add" | "remove",
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const projectId = await resolveProjectId(db, options.project);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
     const scopes = await getAllScopes({ db });
     const scopeId = resolveShortId(
       requestedScopeId,
@@ -97,19 +99,19 @@ async function changeScopeMembers(
       "Scope",
     );
     const cards = await db
-      .select({ id: cardTable.id, projectId: bundleTable.projectId })
+      .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id));
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
     const allCardIds = cards.map(({ id }) => id);
     const cardIds = requestedCardIds.map((id) => resolveShortId(id, allCardIds, "Card"));
     const result =
       action === "add"
-        ? await addScopeMembers({ db, scopeId, projectId, cardIds })
-        : await removeScopeMembersFromProject({ db, scopeId, projectId, cardIds });
+        ? await addScopeMembers({ db, scopeId, namespaceId, cardIds })
+        : await removeScopeMembersFromNamespace({ db, scopeId, namespaceId, cardIds });
     if (!result.ok)
       throw new Error(
         result.reason === "foreign-cards"
-          ? "Cards must belong to the selected project."
+          ? "Cards must belong to the selected namespace."
           : "Scope not found.",
       );
     console.log(

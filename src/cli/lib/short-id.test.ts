@@ -44,24 +44,24 @@ describe("shortIdMap", () => {
 
 describe("resolveShortId", () => {
   it("resolves short and full IDs", () => {
-    expect(resolveShortId("17b8", [first, third], "Project")).toBe(first);
-    expect(resolveShortId("17b86d2a", [first, third], "Project")).toBe(first);
-    expect(resolveShortId(first, [first, third], "Project")).toBe(first);
-    expect(resolveShortId(first.replaceAll("-", ""), [first, third], "Project")).toBe(first);
+    expect(resolveShortId("17b8", [first, third], "Namespace")).toBe(first);
+    expect(resolveShortId("17b86d2a", [first, third], "Namespace")).toBe(first);
+    expect(resolveShortId(first, [first, third], "Namespace")).toBe(first);
+    expect(resolveShortId(first.replaceAll("-", ""), [first, third], "Namespace")).toBe(first);
   });
 
   // Resolution is independent of the displayed width, so IDs copied from older
   // output — or typed with fewer characters — keep working.
   it("accepts prefixes shorter than the displayed short ID", () => {
-    const projectId = "019ed7a8-e997-720b-b31d-eb155d6dc15e";
-    expect(resolveShortId("eb15", [projectId], "Project")).toBe(projectId);
-    expect(resolveShortId("e", [projectId], "Project")).toBe(projectId);
+    const namespaceId = "019ed7a8-e997-720b-b31d-eb155d6dc15e";
+    expect(resolveShortId("eb15", [namespaceId], "Namespace")).toBe(namespaceId);
+    expect(resolveShortId("e", [namespaceId], "Namespace")).toBe(namespaceId);
   });
 
   it("rejects missing and ambiguous IDs", () => {
-    expect(() => resolveShortId("ffff", [first], "Project")).toThrow("Project not found");
-    expect(() => resolveShortId("17b8", [first, second], "Project")).toThrow(
-      "Ambiguous project ID",
+    expect(() => resolveShortId("ffff", [first], "Namespace")).toThrow("Namespace not found");
+    expect(() => resolveShortId("17b8", [first, second], "Namespace")).toThrow(
+      "Ambiguous namespace ID",
     );
   });
 });

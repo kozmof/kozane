@@ -76,13 +76,13 @@ describe("taskspace CLI flow", () => {
     expect(duplicate.stderr).toContain("already contains a Kozane taskspace");
   }, 30_000);
 
-  it("accepts an explicit project and rejects an unknown project", () => {
+  it("accepts an explicit namespace and rejects an unknown namespace", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const projectId = outputId(cli(root, "project", "create", "Second"));
+    const namespaceId = outputId(cli(root, "namespace", "create", "Second"));
 
     expect(
-      cli(root, "taskspace", "create", "selected", "--no-scope", "--project", projectId),
+      cli(root, "taskspace", "create", "selected", "--no-scope", "--namespace", namespaceId),
     ).toContain("Taskspace created.");
     const unknown = runCli(
       root,
@@ -90,11 +90,11 @@ describe("taskspace CLI flow", () => {
       "create",
       "unknown",
       "--no-scope",
-      "--project",
+      "--namespace",
       "ffff",
     );
     expect(unknown.status).not.toBe(0);
-    expect(unknown.stderr).toContain("Project not found: ffff");
+    expect(unknown.stderr).toContain("Namespace not found: ffff");
   }, 30_000);
 
   it("detects and applies moved, missing, and orphan taskspace changes", () => {
