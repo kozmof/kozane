@@ -5,8 +5,8 @@ import {
   rectAnchor,
   scopeRail,
   scopeRailRows,
-  tagBundleIndex,
-  tagBundleTargets,
+  tagPartitionIndex,
+  tagPartitionTargets,
   HUB_RADIUS,
 } from "./graph.js";
 import type { Rect } from "./treemap.js";
@@ -67,7 +67,7 @@ describe("placeHubs", () => {
     expect(hub.point.x).toBeCloseTo(AREA.width / 2, 6);
   });
 
-  it("keeps two scopes over the same bundles apart", () => {
+  it("keeps two scopes over the same partitions apart", () => {
     const toward = [{ x: 600, y: 100 }];
     const hubs = placeHubs(
       [
@@ -167,7 +167,7 @@ describe("curve", () => {
   });
 });
 
-describe("tagBundleTargets", () => {
+describe("tagPartitionTargets", () => {
   const index = {
     perf: { b1: 2 },
     "perf:cache": { b1: 1, b2: 3 },
@@ -176,43 +176,43 @@ describe("tagBundleTargets", () => {
     docs: { b4: 5 },
   };
 
-  it("gathers a tag's own bundles and everything under it", () => {
-    expect([...tagBundleTargets(index, "perf").keys()].sort()).toEqual(["b1", "b2", "b3", "b5"]);
+  it("gathers a tag's own partitions and everything under it", () => {
+    expect([...tagPartitionTargets(index, "perf").keys()].sort()).toEqual(["b1", "b2", "b3", "b5"]);
   });
 
   it("gathers a subcategory without its parent's other branches", () => {
-    expect([...tagBundleTargets(index, "perf:cache").keys()].sort()).toEqual(["b1", "b2", "b3"]);
+    expect([...tagPartitionTargets(index, "perf:cache").keys()].sort()).toEqual(["b1", "b2", "b3"]);
   });
 
-  it("adds the weight of every level that reaches one bundle", () => {
-    expect(tagBundleTargets(index, "perf").get("b1")).toBe(3);
+  it("adds the weight of every level that reaches one partition", () => {
+    expect(tagPartitionTargets(index, "perf").get("b1")).toBe(3);
   });
 
   it("matches by level, not by characters", () => {
-    expect(tagBundleTargets({ perfect: { b9: 1 } }, "perf").size).toBe(0);
+    expect(tagPartitionTargets({ perfect: { b9: 1 } }, "perf").size).toBe(0);
   });
 
   it("normalizes the tag it is asked about", () => {
-    expect([...tagBundleTargets(index, "PERF:Cache").keys()].sort()).toEqual(["b1", "b2", "b3"]);
+    expect([...tagPartitionTargets(index, "PERF:Cache").keys()].sort()).toEqual(["b1", "b2", "b3"]);
   });
 
   it("answers with nothing for a tag nothing carries", () => {
-    expect(tagBundleTargets(index, "ghost").size).toBe(0);
+    expect(tagPartitionTargets(index, "ghost").size).toBe(0);
   });
 });
 
-describe("tagBundleIndex", () => {
-  it("joins tag hits to their cached bundle dimension and counts each card once", () => {
+describe("tagPartitionIndex", () => {
+  it("joins tag hits to their cached partition dimension and counts each card once", () => {
     const hits = [
       { tag: "perf", source: { kind: "card" as const, cardId: "c1" }, excerpt: "one" },
       { tag: "perf", source: { kind: "card" as const, cardId: "c1" }, excerpt: "again" },
       { tag: "perf", source: { kind: "card" as const, cardId: "c2" }, excerpt: "two" },
     ];
     const cards = {
-      c1: { projectId: "p1", bundleId: "b1", updatedDay: "2026-09-05" },
-      c2: { projectId: "p1", bundleId: "b2", updatedDay: "2026-09-04" },
+      c1: { namespaceId: "p1", partitionId: "b1", updatedDay: "2026-09-05" },
+      c2: { namespaceId: "p1", partitionId: "b2", updatedDay: "2026-09-04" },
     };
 
-    expect(tagBundleIndex(hits, cards).index.perf).toEqual({ b1: 1, b2: 1 });
+    expect(tagPartitionIndex(hits, cards).index.perf).toEqual({ b1: 1, b2: 1 });
   });
 });

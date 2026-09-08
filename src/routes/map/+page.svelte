@@ -25,7 +25,7 @@
     isDefaultView,
     type MapView,
   } from "./lib/view.js";
-  import { tagBundleIndex, tagBundleTargets } from "./lib/graph.js";
+  import { tagPartitionIndex, tagPartitionTargets } from "./lib/graph.js";
   import {
     childrenShown,
     tagLineOrigin,
@@ -39,12 +39,12 @@
   import {
     activityCells,
     activityRangeLabel,
-    bundlesForDay,
+    partitionsForDay,
     tagHitsForDay,
   } from "./lib/activity.js";
 
   /**
-   * The whole workspace in one picture: every project a rectangle, its bundles inside it
+   * The whole workspace in one picture: every namespace a rectangle, its partitions inside it
    * sized by the cards they hold, the scopes that cross between them a graph under the
    * packing, and the tags the tree they spell.
    *
@@ -79,19 +79,19 @@
     return requested ? normalizeTag(requested) : null;
   });
 
-  const selectedProjectId = $derived(
-    data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
+  const selectedNamespaceId = $derived(
+    data.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
   );
-  const selectedProject = $derived(data.projects.find(({ id }) => id === selectedProjectId) ?? null);
+  const selectedNamespace = $derived(data.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null);
   const selectedDay = $derived(
     data.day ?? (browser ? page.url.searchParams.get("day") : null),
   );
 
-  // The two halves of one decision — see `bundlesForDay`, which says why they are not two.
-  const displayedBundles = $derived(bundlesForDay(data.bundles, data.activity, selectedDay));
+  // The two halves of one decision — see `partitionsForDay`, which says why they are not two.
+  const displayedPartitions = $derived(partitionsForDay(data.partitions, data.activity, selectedDay));
   const displayedTagHits = $derived(tagHitsForDay(data.tagHits, data.tagCards, selectedDay));
   const tree = $derived(buildTagTree(displayedTagHits));
-  const mapTags = $derived(tagBundleIndex(displayedTagHits, data.tagCards));
+  const mapTags = $derived(tagPartitionIndex(displayedTagHits, data.tagCards));
 
   const heatmap = $derived(
     activityCells(
@@ -140,8 +140,8 @@
    */
   const layout = $derived(
     buildMapLayout({
-      projects: data.drawn,
-      bundles: displayedBundles,
+      namespaces: data.drawn,
+      partitions: displayedPartitions,
       scopes: data.scopes,
       area: viewedArea(size, view),
     }),
@@ -152,7 +152,7 @@
    *
    * Every pointer that goes down on the map pans it, wherever it landed — the packing covers
    * the whole box, so a drag that only worked on the gaps between rectangles would have
-   * almost nowhere to start. A bundle is a link, though, so `travelled` remembers whether
+   * almost nowhere to start. A partition is a link, though, so `travelled` remembers whether
    * this gesture moved far enough to have been a drag, and the click that follows is
    * swallowed if it did. Otherwise every attempt to pan from a rectangle would open its
    * board.
@@ -191,7 +191,7 @@
     if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
   }
 
-  /** Swallows the click that ends a drag, so panning off a bundle does not open its board.
+  /** Swallows the click that ends a drag, so panning off a partition does not open its board.
    *  In the capture phase, which is the only place it is still ahead of the link. */
   function onClickCapture(event: MouseEvent) {
     if (!travelled) return;
@@ -225,11 +225,11 @@
     return () => el.removeEventListener("wheel", onWheel);
   });
 
-  /** Which bundles the active tag reaches, rolled up over its subcategories — see
-   *  `tagBundleTargets`. Empty when nothing is selected or hovered, which is the ordinary
+  /** Which partitions the active tag reaches, rolled up over its subcategories — see
+   *  `tagPartitionTargets`. Empty when nothing is selected or hovered, which is the ordinary
    *  state of the page. */
   const targets = $derived(
-    selectedTag ? tagBundleTargets(mapTags.index, selectedTag) : new Map(),
+    selectedTag ? tagPartitionTargets(mapTags.index, selectedTag) : new Map(),
   );
 
   /**
@@ -256,15 +256,15 @@
 
   const tagHref = (tag: string | null) => {
     const params = new URLSearchParams();
-    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
     if (tag) params.set("tag", tag);
     if (selectedDay) params.set("day", selectedDay);
     const query = params.toString();
     return query ? `${base}/map?${query}` : `${base}/map`;
   };
-  const projectHref = (projectId: string | null) => {
+  const namespaceHref = (namespaceId: string | null) => {
     const params = new URLSearchParams();
-    if (projectId) params.set("projectId", projectId);
+    if (namespaceId) params.set("namespaceId", namespaceId);
     if (selectedTag) params.set("tag", selectedTag);
     if (selectedDay) params.set("day", selectedDay);
     const query = params.toString();
@@ -272,7 +272,7 @@
   };
   const dayHref = (day: string | null) => {
     const params = new URLSearchParams();
-    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
     if (selectedTag) params.set("tag", selectedTag);
     if (day) params.set("day", day);
     const query = params.toString();
@@ -295,22 +295,22 @@
   const countDescription = (node: TagNode) =>
     `${node.total.cards} card${node.total.cards === 1 ? "" : "s"}`;
 
-  /** Whether a bundle is drawn at full strength: everything is, until a tag is reaching
-   *  somewhere and this bundle is not one of the places. */
-  const lit = (bundleId: string) => !dimming || targets.has(bundleId);
+  /** Whether a partition is drawn at full strength: everything is, until a tag is reaching
+   *  somewhere and this partition is not one of the places. */
+  const lit = (partitionId: string) => !dimming || targets.has(partitionId);
 
   /**
    * Enough room to read a label in. Below this the rectangle is drawn and left unlabelled
    * rather than carrying text wider than itself.
    *
    * Asked of the rectangle as drawn, which is what makes zooming worth doing: the label is
-   * the same size at every zoom, so a bundle too small to carry one grows into it rather
+   * the same size at every zoom, so a partition too small to carry one grows into it rather
    * than growing its text along with itself.
    *
    * The two measures come from `map-layout.ts` rather than being written here, because the empty
-   * strip is sized to clear them — see `PROJECT_EMPTY_STRIP_HEIGHT`. Kept in this file, they
+   * strip is sized to clear them — see `NAMESPACE_EMPTY_STRIP_HEIGHT`. Kept in this file, they
    * were a threshold the geometry could not read, and the strip cleared them by luck until it
-   * stopped: an empty project used to reach the page too short to carry its own name, and so
+   * stopped: an empty namespace used to reach the page too short to carry its own name, and so
    * was drawn as an unlabelled box belonging to nothing.
    */
   const roomForLabel = (rect: { width: number; height: number }) =>
@@ -352,7 +352,7 @@
    * The links out of the map, which are icons and carry no text of their own.
    *
    * `neutral.iconDim` at rest, an icon's weight rather than a label's — and the balance
-   * matters more here than on the project list, because this band is over the map itself:
+   * matters more here than on the namespace list, because this band is over the map itself:
    * heavier and the icons read as part of the drawing underneath, lighter and they vanish
    * into it.
    *
@@ -381,7 +381,7 @@
 </script>
 
 <svelte:head>
-  <title>{selectedProject ? `Map · ${selectedProject.name}` : "Map"}</title>
+  <title>{selectedNamespace ? `Map · ${selectedNamespace.name}` : "Map"}</title>
 </svelte:head>
 
 {#snippet branch(nodes: TagNode[], depth: number)}
@@ -452,45 +452,45 @@
       "& a": { pointerEvents: "auto" },
     })}
   >
-    <!-- Back to the project list, or to one project's board when the map has been narrowed
+    <!-- Back to the namespace list, or to one namespace's board when the map has been narrowed
          to it. The icon is the same drawing either way, so the name is what says which — and
          it is worth the room, because the two destinations are not interchangeable and the
          picture alone cannot tell them apart. The same link the tag index carries. -->
     <a
-      href="{base}/{selectedProjectId ?? ''}"
-      title={selectedProject ? undefined : "Projects"}
-      aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
+      href="{base}/{selectedNamespaceId ?? ''}"
+      title={selectedNamespace ? undefined : "Namespaces"}
+      aria-label={selectedNamespace ? `Back to ${selectedNamespace.name}` : "All namespaces"}
       class={headerLinkClass}
     >
-      <NavIcon kind="projects" />
-      {#if selectedProject}
-        <span>{selectedProject.name}</span>
+      <NavIcon kind="namespaces" />
+      {#if selectedNamespace}
+        <span>{selectedNamespace.name}</span>
       {/if}
     </a>
     <a href="{base}/tags" title="Tags" aria-label="Tags" class={headerLinkClass}>
       <NavIcon kind="tags" />
     </a>
 
-    <!-- Which project the map is narrowed to, and the way to change it. Picking the project
+    <!-- Which namespace the map is narrowed to, and the way to change it. Picking the namespace
          already selected clears the narrowing, which is the way back to the whole workspace.
          The same control the tag index carries, in the same place. -->
     <nav
-      aria-label="Project"
+      aria-label="Namespace"
       class={css({
         display: "flex",
         gap: "10px",
         marginLeft: "auto",
         // Sideways rather than onto a second line — see `MAP_HEADER_HEIGHT`. A workspace of
-        // thirty projects scrolls its list; it does not take a second band off the map.
+        // thirty namespaces scrolls its list; it does not take a second band off the map.
         overflowX: "auto",
         whiteSpace: "nowrap",
         scrollbarWidth: "none",
       })}
     >
-      {#each data.projects as project (project.id)}
-        {@const selected = selectedProjectId === project.id}
+      {#each data.namespaces as namespace (namespace.id)}
+        {@const selected = selectedNamespaceId === namespace.id}
         <a
-          href={projectHref(selected ? null : project.id)}
+          href={namespaceHref(selected ? null : namespace.id)}
           aria-current={selected ? "page" : undefined}
           class={css({
             textDecoration: "none",
@@ -499,7 +499,7 @@
           })}
           style={selected ? "color: var(--colors-ink-black); font-weight: 600" : ""}
         >
-          {project.name}
+          {namespace.name}
         </a>
       {/each}
     </nav>
@@ -591,50 +591,50 @@
           height={size.height}
           viewBox="0 0 {size.width} {size.height}"
           aria-label={selectedDay
-            ? `Projects and bundles by cards changed on ${selectedDay}`
-            : "Projects and bundles by card count, with the scopes and tags that cross between them"}
+            ? `Namespaces and partitions by cards changed on ${selectedDay}`
+            : "Namespaces and partitions by card count, with the scopes and tags that cross between them"}
           class={css({ display: "block" })}
         >
-          {#each layout.projects as project (project.id)}
+          {#each layout.namespaces as namespace (namespace.id)}
             <g opacity={dimming ? 0.55 : 1}>
-              <!-- A project holding no cards anywhere is drawn as the outline an empty
-                   bundle is, and for the same reason: it is in the map because leaving it
+              <!-- A namespace holding no cards anywhere is drawn as the outline an empty
+                   partition is, and for the same reason: it is in the map because leaving it
                    out would say it does not exist, and it should not be mistaken for a
-                   project that merely packed small. -->
+                   namespace that merely packed small. -->
               <rect
-                x={project.rect.x}
-                y={project.rect.y}
-                width={project.rect.width}
-                height={project.rect.height}
+                x={namespace.rect.x}
+                y={namespace.rect.y}
+                width={namespace.rect.width}
+                height={namespace.rect.height}
                 rx="2"
-                fill={project.empty ? "transparent" : "var(--colors-ink-white)"}
+                fill={namespace.empty ? "transparent" : "var(--colors-ink-white)"}
                 stroke="var(--colors-neutral-border)"
-                stroke-dasharray={project.empty ? "2 2" : undefined}
+                stroke-dasharray={namespace.empty ? "2 2" : undefined}
               />
-              {#if roomForLabel(project.rect)}
+              {#if roomForLabel(namespace.rect)}
                 <text
-                  x={project.rect.x + 8}
-                  y={project.rect.y + 14}
+                  x={namespace.rect.x + 8}
+                  y={namespace.rect.y + 14}
                   font-size="11"
                   font-family="var(--fonts-mono)"
                   fill="var(--colors-neutral-muted)"
-                >{project.name}</text>
+                >{namespace.name}</text>
               {/if}
             </g>
           {/each}
 
-          {#each layout.bundles as placed (placed.bundle.id)}
+          {#each layout.partitions as placed (placed.partition.id)}
             {@const rect = placed.rect}
-            <a href="{base}/{placed.bundle.projectId}" aria-label="{placed.bundle.name}, {placed.bundle.cards} cards, in the project it belongs to">
-              <g opacity={lit(placed.bundle.id) ? 1 : 0.25}>
+            <a href="{base}/{placed.partition.namespaceId}" aria-label="{placed.partition.name}, {placed.partition.cards} cards, in the namespace it belongs to">
+              <g opacity={lit(placed.partition.id) ? 1 : 0.25}>
                 <rect
                   x={rect.x}
                   y={rect.y}
                   width={rect.width}
                   height={rect.height}
                   rx="2"
-                  fill={placed.empty ? "transparent" : placed.bundle.bg}
-                  stroke={placed.bundle.dot}
+                  fill={placed.empty ? "transparent" : placed.partition.bg}
+                  stroke={placed.partition.dot}
                   stroke-width={placed.empty ? 1 : 0.5}
                   stroke-dasharray={placed.empty ? "2 2" : undefined}
                 />
@@ -644,7 +644,7 @@
                     y={rect.y + 14}
                     font-size="11"
                     fill="var(--colors-ink-content)"
-                  >{placed.bundle.name}</text>
+                  >{placed.partition.name}</text>
                   {#if rect.height >= 34}
                     <text
                       x={rect.x + 6}
@@ -652,7 +652,7 @@
                       font-size="10"
                       font-family="var(--fonts-mono)"
                       fill="var(--colors-neutral-muted)"
-                    >{placed.bundle.cards}</text>
+                    >{placed.partition.cards}</text>
                   {/if}
                 {/if}
               </g>
@@ -660,7 +660,7 @@
           {/each}
 
           <!-- The scope graph. Quiet by default: it is drawn over the packing, and a scope
-               reaching six bundles is six lines that would otherwise compete with the
+               reaching six partitions is six lines that would otherwise compete with the
                rectangles they cross. Hovering a hub raises its own. -->
           {#each layout.scopes as scope (scope.id)}
             <g class={css({ _hover: { opacity: "1 !important" } })} opacity={dimming ? 0.2 : 0.6}>
@@ -845,13 +845,13 @@
     <div class={css({ srOnly: true })}>
       <h2>What the map shows</h2>
       <ul>
-        {#each layout.projects as project (project.id)}
+        {#each layout.namespaces as namespace (namespace.id)}
           <li>
-            {project.name}: {project.cards} card{project.cards === 1 ? "" : "s"}
+            {namespace.name}: {namespace.cards} card{namespace.cards === 1 ? "" : "s"}
             <ul>
-              {#each layout.bundles.filter((b) => b.bundle.projectId === project.id) as placed (placed.bundle.id)}
+              {#each layout.partitions.filter((b) => b.partition.namespaceId === namespace.id) as placed (placed.partition.id)}
                 <li>
-                  {placed.bundle.name}: {placed.bundle.cards} card{placed.bundle.cards === 1
+                  {placed.partition.name}: {placed.partition.cards} card{placed.partition.cards === 1
                     ? ""
                     : "s"}
                 </li>

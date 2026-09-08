@@ -3,7 +3,7 @@ import {
   ACTIVITY_WEEKS,
   activityCells,
   activityRangeLabel,
-  bundlesForDay,
+  partitionsForDay,
   tagHitsForDay,
   validActivityDay,
 } from "./activity.js";
@@ -86,39 +86,39 @@ describe("validActivityDay", () => {
   });
 });
 
-describe("bundlesForDay", () => {
-  const bundles = [
+describe("partitionsForDay", () => {
+  const partitions = [
     { id: "b1", name: "One", cards: 10 },
     { id: "b2", name: "Two", cards: 4 },
   ];
   const activity = [
-    { day: "2026-03-01", bundleId: "b1", cards: 3 },
-    { day: "2026-03-02", bundleId: "b1", cards: 1 },
-    { day: "2026-03-02", bundleId: "b2", cards: 5 },
+    { day: "2026-03-01", partitionId: "b1", cards: 3 },
+    { day: "2026-03-02", partitionId: "b1", cards: 1 },
+    { day: "2026-03-02", partitionId: "b2", cards: 5 },
   ];
 
-  it("leaves the bundles alone when no day is chosen", () => {
-    expect(bundlesForDay(bundles, activity, null)).toBe(bundles);
+  it("leaves the partitions alone when no day is chosen", () => {
+    expect(partitionsForDay(partitions, activity, null)).toBe(partitions);
   });
 
-  it("re-sizes each bundle by what changed on the day", () => {
-    expect(bundlesForDay(bundles, activity, "2026-03-02")).toEqual([
+  it("re-sizes each partition by what changed on the day", () => {
+    expect(partitionsForDay(partitions, activity, "2026-03-02")).toEqual([
       { id: "b1", name: "One", cards: 1 },
       { id: "b2", name: "Two", cards: 5 },
     ]);
   });
 
-  it("keeps a bundle with no change that day, at zero", () => {
+  it("keeps a partition with no change that day, at zero", () => {
     // Dropping it would make the rectangle vanish rather than empty, and the packing is of
     // the workspace whichever day is being looked at.
-    expect(bundlesForDay(bundles, activity, "2026-03-01")).toEqual([
+    expect(partitionsForDay(partitions, activity, "2026-03-01")).toEqual([
       { id: "b1", name: "One", cards: 3 },
       { id: "b2", name: "Two", cards: 0 },
     ]);
   });
 
   it("carries the rest of each row through untouched", () => {
-    const [first] = bundlesForDay(bundles, activity, "2026-03-01");
+    const [first] = partitionsForDay(partitions, activity, "2026-03-01");
     expect(first.name).toBe("One");
   });
 });
@@ -136,8 +136,8 @@ describe("tagHitsForDay", () => {
   };
   const hits = [cardHit("c1"), cardHit("c2"), fileHit];
   const tagCards = {
-    c1: { projectId: "p", bundleId: "b", updatedDay: "2026-03-01" },
-    c2: { projectId: "p", bundleId: "b", updatedDay: "2026-03-02" },
+    c1: { namespaceId: "p", partitionId: "b", updatedDay: "2026-03-01" },
+    c2: { namespaceId: "p", partitionId: "b", updatedDay: "2026-03-02" },
   };
 
   it("leaves the hits alone when no day is chosen", () => {

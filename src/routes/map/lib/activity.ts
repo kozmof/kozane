@@ -64,7 +64,7 @@ export function validActivityDay(value: string): boolean {
 /**
  * Narrowing the map to one day of the activity grid.
  *
- * Two filters and they have to agree: clicking a day re-sizes the bundle rectangles by what
+ * Two filters and they have to agree: clicking a day re-sizes the partition rectangles by what
  * changed that day, *and* narrows the tag tree to the cards that changed that day. Written
  * inline on the page they were two `$derived` blocks that happened to test the same thing
  * two different ways — one against the `activity` rows, one against `tagCards` — with
@@ -75,25 +75,25 @@ export function validActivityDay(value: string): boolean {
  * input untouched.
  */
 
-/** One row of the map's bundle list — whatever it carries, plus the count the map sizes by. */
-type CountedBundle = { id: string; cards: number };
+/** One row of the map's partition list — whatever it carries, plus the count the map sizes by. */
+type CountedPartition = { id: string; cards: number };
 
 /**
- * The bundles as they are drawn: sized by the whole of their contents, or by what changed
- * on `day` when one is chosen. A bundle with no change that day is kept, at zero — dropping
+ * The partitions as they are drawn: sized by the whole of their contents, or by what changed
+ * on `day` when one is chosen. A partition with no change that day is kept, at zero — dropping
  * it would make the rectangle vanish rather than empty, and the packing is of the workspace
  * whichever day is being looked at.
  */
-export function bundlesForDay<T extends CountedBundle>(
-  bundles: T[],
-  activity: { day: string; bundleId: string; cards: number }[],
+export function partitionsForDay<T extends CountedPartition>(
+  partitions: T[],
+  activity: { day: string; partitionId: string; cards: number }[],
   day: string | null,
 ): T[] {
-  if (!day) return bundles;
+  if (!day) return partitions;
   const counts = new Map(
-    activity.filter((row) => row.day === day).map(({ bundleId, cards }) => [bundleId, cards]),
+    activity.filter((row) => row.day === day).map(({ partitionId, cards }) => [partitionId, cards]),
   );
-  return bundles.map((bundle) => ({ ...bundle, cards: counts.get(bundle.id) ?? 0 }));
+  return partitions.map((partition) => ({ ...partition, cards: counts.get(partition.id) ?? 0 }));
 }
 
 /**

@@ -1,4 +1,4 @@
-import { clampZoom } from "../../[projectId]/lib/project-page.js";
+import { clampZoom } from "../../[namespaceId]/lib/namespace-page.js";
 import type { Point, Rect } from "./treemap.js";
 
 /**
@@ -10,12 +10,12 @@ import type { Point, Rect } from "./treemap.js";
  * been drawn into; zoomed to 200% it is a rectangle twice that size, positioned by the pan.
  *
  * The difference is what happens to everything that is measured in pixels rather than in
- * cards. A `<g transform>` scales the lot — a project's title band, the gaps between
- * rectangles, the labels, the scope rail — so zooming in to read a small bundle's name
+ * cards. A `<g transform>` scales the lot — a namespace's title band, the gaps between
+ * rectangles, the labels, the scope rail — so zooming in to read a small partition's name
  * enlarges the name along with the box and it is no more readable than it was. Laying out
  * into a larger rectangle scales only what is proportional to card counts, which is exactly
  * the part zooming in is for: the boxes grow, the type stays the size type should be, and a
- * bundle too small to be labelled becomes large enough to carry its label.
+ * partition too small to be labelled becomes large enough to carry its label.
  *
  * Squarifying is scale-invariant, so this is safe: multiplying the area by a constant
  * multiplies every candidate row's worst aspect ratio by nothing at all, and the algorithm
@@ -46,7 +46,7 @@ export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
  * How large the rectangles are when the map opens, as a multiple of the size the box would
  * fit them at.
  *
- * Half, because the canvas is the whole window: fitted, a workspace of a few projects is a
+ * Half, because the canvas is the whole window: fitted, a workspace of a few namespaces is a
  * handful of rectangles each the size of a dinner plate, which says nothing more than the
  * same shapes at half the size and leaves nowhere to go but in. Opening at half gives the
  * map room around it, and it makes the zoom control a control in both directions rather than
@@ -134,7 +134,7 @@ export function clampView(view: MapView, size: Size): MapView {
  * The view zoomed to `zoom`, with `at` — a point in the box, in its own pixels — left where
  * it was.
  *
- * That is what makes a wheel zoom feel attached to the pointer: the bundle under the cursor
+ * That is what makes a wheel zoom feel attached to the pointer: the partition under the cursor
  * is the one that stays put, rather than the top-left corner, so zooming in on something is
  * done by pointing at it.
  */

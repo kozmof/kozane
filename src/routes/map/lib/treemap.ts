@@ -53,12 +53,12 @@ export const rectCenter = ({ x, y, width, height }: Rect): Point => ({
  * How tall the strip along the bottom of a rectangle is when something has to go in it, and
  * how much of the rectangle it may take. A strip is for the items that have no area to be
  * given; it must be tall enough to be seen and small enough that a workspace of mostly empty
- * bundles does not turn the map into a row of them.
+ * partitions does not turn the map into a row of them.
  *
  * The height is what a caller may override, because "tall enough to be seen" is a question
- * about what is going in the strip rather than about the packing. A bundle laid there is a
- * dashed outline, and 18px is room for one; a *project* laid there is a rectangle that still
- * has to carry its own name, and needs more — see `PROJECT_EMPTY_STRIP_HEIGHT` in
+ * about what is going in the strip rather than about the packing. A partition laid there is a
+ * dashed outline, and 18px is room for one; a *namespace* laid there is a rectangle that still
+ * has to carry its own name, and needs more — see `NAMESPACE_EMPTY_STRIP_HEIGHT` in
  * `map-layout.ts`. The fraction is deliberately not overridable: it is the promise that the strip
  * stays a footnote, and it holds against whatever height a caller asks for.
  */
@@ -75,7 +75,7 @@ export type SquarifyOptions = {
 /**
  * Descending by value, with {@link compareIds} as the tiebreak.
  *
- * The tiebreak is the point. Squarifying is order-dependent, so two bundles holding the same
+ * The tiebreak is the point. Squarifying is order-dependent, so two partitions holding the same
  * number of cards decide which of them the algorithm reaches first — and if that came out of
  * SQLite's row order, the same workspace could pack differently between the server's render
  * and the browser's, and the map would visibly rearrange itself on hydration. `compareIds` is
@@ -154,17 +154,17 @@ function placeRow<T extends TreemapItem>(
  *
  * **Order is fixed** — see {@link ordered}.
  *
- * **Zero has no area.** A bundle holding no cards cannot be given a rectangle in proportion
+ * **Zero has no area.** A partition holding no cards cannot be given a rectangle in proportion
  * to nothing, and the two obvious ways out are both wrong on a page whose subject is what a
- * workspace holds: dropping it makes an empty bundle invisible rather than empty, and
+ * workspace holds: dropping it makes an empty partition invisible rather than empty, and
  * packing `value + 1` distorts every other rectangle to give it something to show. So the
  * zero-valued items are laid into a strip along the bottom instead, split evenly, and marked
  * `empty` so the page can draw them as the outlines they are. The strip is capped at a
- * quarter of the height: a workspace of a hundred empty bundles and two full ones is still a
+ * quarter of the height: a workspace of a hundred empty partitions and two full ones is still a
  * map of the two full ones.
  *
  * A rectangle with nothing positive in it is *all* strip, which is the same rule read from
- * the other end — a project whose every bundle is empty is drawn as those bundles, not as a
+ * the other end — a namespace whose every partition is empty is drawn as those partitions, not as a
  * blank.
  */
 export function squarify<T extends TreemapItem>(

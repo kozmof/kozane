@@ -41,26 +41,26 @@
     return requested ? normalizeTag(requested) : null;
   });
 
-  /** Null gathers the whole workspace, which is what this page does with no `?projectId=`. */
-  const selectedProjectId = $derived(
-    data.projectId ?? (browser ? page.url.searchParams.get("projectId") : null),
+  /** Null gathers the whole workspace, which is what this page does with no `?namespaceId=`. */
+  const selectedNamespaceId = $derived(
+    data.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
   );
 
-  const selectedProject = $derived(
-    data.projects.find(({ id }) => id === selectedProjectId) ?? null,
+  const selectedNamespace = $derived(
+    data.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null,
   );
 
   /**
-   * Whether a hit belongs to the selected project. The same rule the board draws by: a card
-   * belongs to the project its bundle does, and a taskspace to its own project *or* to none
-   * at all — an unplaced taskspace appears on every board, so it belongs to every project's
+   * Whether a hit belongs to the selected namespace. The same rule the board draws by: a card
+   * belongs to the namespace its partition does, and a taskspace to its own namespace *or* to none
+   * at all — an unplaced taskspace appears on every board, so it belongs to every namespace's
    * index too.
    */
-  function inSelectedProject(hit: TagHit): boolean {
-    if (!selectedProjectId) return true;
-    if (hit.source.kind === "card") return data.cardProjects[hit.source.cardId] === selectedProjectId;
-    const owner = data.taskspaces[hit.source.taskspaceId]?.projectId;
-    return owner === selectedProjectId || owner === null;
+  function inSelectedNamespace(hit: TagHit): boolean {
+    if (!selectedNamespaceId) return true;
+    if (hit.source.kind === "card") return data.cardNamespaces[hit.source.cardId] === selectedNamespaceId;
+    const owner = data.taskspaces[hit.source.taskspaceId]?.namespaceId;
+    return owner === selectedNamespaceId || owner === null;
   }
 
   /**
@@ -68,7 +68,7 @@
    * caps by, so an export and the live page list alike.
    *
    * The selection is a no-op on the live page — the server sent exactly this set — and is the
-   * real one in a static export, where every hit of every project was baked in. One path
+   * real one in a static export, where every hit of every namespace was baked in. One path
    * rather than a branch that only one of the two ever takes.
    *
    * Handed to `capHitsByKind` rather than run as a `filter` before it, so an export holding
@@ -83,7 +83,7 @@
     return capHitsByKind(
       data.hits,
       TAG_HITS_SHOWN_MAX,
-      (hit) => matches(hit.tag) && inSelectedProject(hit),
+      (hit) => matches(hit.tag) && inSelectedNamespace(hit),
     );
   });
   const shownCount = $derived(shown.cards.length + shown.files.length);
@@ -122,12 +122,12 @@
    * what selecting it would list.
    *
    * Only a static export ever has anything to narrow: the live server already built the tree
-   * from the project it was asked about, so on that path this is false and the tree it sent
+   * from the namespace it was asked about, so on that path this is false and the tree it sent
    * is already the right one.
    */
-  const narrowsProject = $derived(selectedProjectId !== null && data.projectId === null);
+  const narrowsNamespace = $derived(selectedNamespaceId !== null && data.namespaceId === null);
   const tree = $derived(
-    narrowsProject ? buildTagTree(data.hits.filter(inSelectedProject)) : data.tree,
+    narrowsNamespace ? buildTagTree(data.hits.filter(inSelectedNamespace)) : data.tree,
   );
 
   /**
@@ -144,19 +144,19 @@
   const fileRowsByTaskspace = $derived(groupHitsByTaskspace(shown.files));
 
   /**
-   * Project names by id, built once rather than searched per row. It was a linear `find`
+   * Namespace names by id, built once rather than searched per row. It was a linear `find`
    * called from inside an `{#each}`, so drawing a tag with two hundred cards on it walked the
-   * project list two hundred times. Nothing anyone would have measured at this size; it is a
+   * namespace list two hundred times. Nothing anyone would have measured at this size; it is a
    * shape worth not having on the page that exists to draw a lot of rows at once.
    *
    * Taskspaces need no map of their own: the loader sends them as a record already keyed by
    * id, which is what `TagIndex.taskspaces` is.
    */
-  const projectNames = $derived(new Map(data.projects.map(({ id, name }) => [id, name])));
+  const namespaceNames = $derived(new Map(data.namespaces.map(({ id, name }) => [id, name])));
 
   const taskspaceName = (id: string) => data.taskspaces[id]?.name || "taskspace";
-  const projectName = (id: string | null | undefined) =>
-    (id !== null && id !== undefined ? projectNames.get(id) : undefined) ?? "";
+  const namespaceName = (id: string | null | undefined) =>
+    (id !== null && id !== undefined ? namespaceNames.get(id) : undefined) ?? "";
 
   /** The taskspaces the gather could not open, or none from an export built before the page
    *  said anything about them. See where they are drawn, at the foot of the hits. */
@@ -164,44 +164,44 @@
 
   /** The workspace default, which is where an unplaced taskspace's file is opened: it is on
    *  every board, so no one of them is more its own than another. */
-  const defaultProjectId = $derived(
-    data.projects.find(({ isDefault }) => isDefault)?.id ?? data.projects[0]?.id ?? null,
+  const defaultNamespaceId = $derived(
+    data.namespaces.find(({ isDefault }) => isDefault)?.id ?? data.namespaces[0]?.id ?? null,
   );
 
-  /** `?projectId=` is kept across tag links, so narrowing to a project survives browsing the
+  /** `?namespaceId=` is kept across tag links, so narrowing to a namespace survives browsing the
    *  tree. Both parameters are optional and independent: either, both, or neither. */
   const tagHref = (tag: string) => {
     const params = new URLSearchParams();
-    if (selectedProjectId) params.set("projectId", selectedProjectId);
+    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
     params.set("tag", tag);
     return `${base}/tags?${params}`;
   };
-  const projectHref = (projectId: string | null) => {
+  const namespaceHref = (namespaceId: string | null) => {
     const params = new URLSearchParams();
-    if (projectId) params.set("projectId", projectId);
+    if (namespaceId) params.set("namespaceId", namespaceId);
     if (selectedTag) params.set("tag", selectedTag);
     const query = params.toString();
     return query ? `${base}/tags?${query}` : `${base}/tags`;
   };
 
   /**
-   * A board link needs a board. A card names its own project; a file names its taskspace's,
+   * A board link needs a board. A card names its own namespace; a file names its taskspace's,
    * falling back to the selected one and then to the default for an unplaced taskspace.
    *
    * Null where there is no board to name, and the card case can reach that too — the loader
    * takes the same care over this lookup, because `Record<string, string>` says it cannot
-   * miss when it can. A card whose project is not among the data drew `/undefined?card=…`,
+   * miss when it can. A card whose namespace is not among the data drew `/undefined?card=…`,
    * which is a row that looks right and goes nowhere.
    */
   const cardHref = (cardId: string) => {
-    const projectId = data.cardProjects[cardId];
-    return projectId ? `${base}/${projectId}?card=${cardId}` : null;
+    const namespaceId = data.cardNamespaces[cardId];
+    return namespaceId ? `${base}/${namespaceId}?card=${cardId}` : null;
   };
   const fileHref = (taskspaceId: string, path: string) => {
-    const projectId =
-      data.taskspaces[taskspaceId]?.projectId ?? selectedProjectId ?? defaultProjectId;
-    return projectId
-      ? `${base}/${projectId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
+    const namespaceId =
+      data.taskspaces[taskspaceId]?.namespaceId ?? selectedNamespaceId ?? defaultNamespaceId;
+    return namespaceId
+      ? `${base}/${namespaceId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
       : null;
   };
 
@@ -303,7 +303,7 @@
 </script>
 
 <svelte:head>
-  <title>{selectedProject ? `Tags · ${selectedProject.name}` : "Tags"}</title>
+  <title>{selectedNamespace ? `Tags · ${selectedNamespace.name}` : "Tags"}</title>
 </svelte:head>
 
 {#snippet hitRow(href: string | null, shape: string, body: Snippet)}
@@ -322,7 +322,7 @@
       <li>
         <!-- `aria-current` rather than the weight and background alone, which is the whole
              of what said "this one" before: a screen reader was given a tree of identical
-             rows, and the project nav in the header above marks its selection this way
+             rows, and the namespace nav in the header above marks its selection this way
              already. -->
         <a
           href={tagHref(node.tag)}
@@ -363,14 +363,14 @@
       fontFamily: "mono",
     })}
   >
-    <!-- Back to the project list, or to one project's board when the page has been narrowed
+    <!-- Back to the namespace list, or to one namespace's board when the page has been narrowed
          to it. The icon is the same drawing either way, so the name is what says which — and
          it is worth the room, because the two destinations are not interchangeable and the
          picture alone cannot tell them apart. -->
     <a
-      href="{base}/{selectedProjectId ?? ''}"
-      title={selectedProject ? undefined : "Projects"}
-      aria-label={selectedProject ? `Back to ${selectedProject.name}` : "All projects"}
+      href="{base}/{selectedNamespaceId ?? ''}"
+      title={selectedNamespace ? undefined : "Namespaces"}
+      aria-label={selectedNamespace ? `Back to ${selectedNamespace.name}` : "All namespaces"}
       class={css({
         display: "flex",
         alignItems: "center",
@@ -391,23 +391,23 @@
         },
       })}
     >
-      <NavIcon kind="projects" />
-      {#if selectedProject}
-        <span>{selectedProject.name}</span>
+      <NavIcon kind="namespaces" />
+      {#if selectedNamespace}
+        <span>{selectedNamespace.name}</span>
       {/if}
     </a>
 
-    <!-- Which project the index is narrowed to, and the way to change it. Picking the
-         project already selected clears the narrowing, which is the way back to the whole
+    <!-- Which namespace the index is narrowed to, and the way to change it. Picking the
+         namespace already selected clears the narrowing, which is the way back to the whole
          workspace now that it has no row of its own. -->
     <nav
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
     >
-      {#each data.projects as project (project.id)}
-        {@const selected = selectedProjectId === project.id}
+      {#each data.namespaces as namespace (namespace.id)}
+        {@const selected = selectedNamespaceId === namespace.id}
         <a
-          href={projectHref(selected ? null : project.id)}
+          href={namespaceHref(selected ? null : namespace.id)}
           aria-current={selected ? "page" : undefined}
           class={css({
             textDecoration: "none",
@@ -416,7 +416,7 @@
           })}
           style={selected ? "color: var(--colors-ink-black); font-weight: 600" : ""}
         >
-          {project.name}
+          {namespace.name}
         </a>
       {/each}
     </nav>
@@ -470,12 +470,12 @@
               {#each cardRows as { key, source, hits } (key)}
                 {@const cardId = source.cardId}
                 <!-- Two lookups that can each miss, and the second is indexed by the result
-                     of the first: a card whose bundle row was not among what the loader read
-                     would otherwise index `data.bundles` by `undefined`. The `{#if}` below
-                     already draws nothing for a missing bundle; this is what keeps the step
+                     of the first: a card whose partition row was not among what the loader read
+                     would otherwise index `data.partitions` by `undefined`. The `{#if}` below
+                     already draws nothing for a missing partition; this is what keeps the step
                      between the two records from being the thing that decides it. -->
-                {@const bundleId = data.cardBundleIds[cardId]}
-                {@const bundle = bundleId ? data.bundles[bundleId] : undefined}
+                {@const partitionId = data.cardPartitionIds[cardId]}
+                {@const partition = partitionId ? data.partitions[partitionId] : undefined}
                 <li>
                   {#snippet cardBody()}
                     <span class={excerptClass}>{hits[0].excerpt}</span>
@@ -489,17 +489,17 @@
                         color: "neutral.subtle",
                       })}
                     >
-                      {#if bundle}
+                      {#if partition}
                         <span
-                          style="background: {bundle.dot}"
+                          style="background: {partition.dot}"
                           class={css({ width: "8px", height: "8px", borderRadius: "999px" })}
                         ></span>
-                        {bundle.name}
+                        {partition.name}
                       {/if}
                       <!-- Only when gathering across the workspace, where which board a card
                            is on is the thing a row cannot otherwise say. -->
-                      {#if !selectedProjectId}
-                        <span>{projectName(data.cardProjects[cardId])}</span>
+                      {#if !selectedNamespaceId}
+                        <span>{namespaceName(data.cardNamespaces[cardId])}</span>
                       {/if}
                       <span class={css({ fontFamily: "mono" })}>{taggedWith(hits).join(" ")}</span>
                     </span>

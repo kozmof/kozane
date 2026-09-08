@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { addProject } from "$db/api/project";
-import { addBundle } from "$db/api/bundle";
+import { addNamespace } from "$db/api/namespace";
+import { addPartition } from "$db/api/partition";
 import { addLayer } from "$db/api/layer";
 import { addCard, addCards } from "$db/api/card";
 import { addTaskspace } from "$db/api/taskspace";
@@ -23,10 +23,10 @@ import { load } from "./+page.server.js";
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "P" });
-  const { id: layerId } = await addLayer({ db, projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "B" });
-  return { db, projectId, bundleId, layerId };
+  const namespaceId = await addNamespace({ db, name: "P" });
+  const { id: layerId } = await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "B" });
+  return { db, namespaceId, partitionId, layerId };
 }
 
 const run = (db: DB, query = "") =>
@@ -38,18 +38,18 @@ const run = (db: DB, query = "") =>
     hits: { tag: string }[];
     cardTotal: number | null;
     fileTotal: number | null;
-    taskspaces: Record<string, { name: string; projectId: string | null }>;
+    taskspaces: Record<string, { name: string; namespaceId: string | null }>;
     tree: { tag: string }[];
-    projectId: string | null;
-    cardProjects: Record<string, string>;
-    bundles: Record<string, { name: string }>;
-    cardBundleIds: Record<string, string>;
+    namespaceId: string | null;
+    cardNamespaces: Record<string, string>;
+    partitions: Record<string, { name: string }>;
+    cardPartitionIds: Record<string, string>;
   }>;
 
 describe("GET /tags", () => {
   it("answers with the tree and no hits until a tag is named", async () => {
-    const { db, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'perf work" });
+    const { db, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "'perf work" });
 
     const data = await run(db);
 
@@ -60,10 +60,10 @@ describe("GET /tags", () => {
   });
 
   it("answers with a named tag's hits, and its subcategories", async () => {
-    const { db, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'perf" });
-    await addCard({ db, bundleId, content: "'perf:cache" });
-    await addCard({ db, bundleId, content: "'other" });
+    const { db, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "'perf" });
+    await addCard({ db, partitionId, content: "'perf:cache" });
+    await addCard({ db, partitionId, content: "'other" });
 
     const data = await run(db, "?tag=perf");
 
@@ -72,8 +72,8 @@ describe("GET /tags", () => {
   });
 
   it("reads the tag as the index stores it, whatever case it was asked in", async () => {
-    const { db, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'Perf" });
+    const { db, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "'Perf" });
 
     const data = await run(db, "?tag=PERF");
 
@@ -81,37 +81,37 @@ describe("GET /tags", () => {
     expect(data.hits).toHaveLength(1);
   });
 
-  // A `?projectId=` naming nothing would otherwise gather nothing and read as a workspace
+  // A `?namespaceId=` naming nothing would otherwise gather nothing and read as a workspace
   // with no tags in it.
-  it("refuses a project that is not there rather than answering empty", async () => {
+  it("refuses a namespace that is not there rather than answering empty", async () => {
     const { db } = await setup();
 
-    await expect(run(db, "?projectId=nope")).rejects.toMatchObject({ status: 404 });
+    await expect(run(db, "?namespaceId=nope")).rejects.toMatchObject({ status: 404 });
   });
 
-  it("narrows to the project it was given", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const otherId = await addProject({ db, name: "Other" });
-    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
-    const otherBundle = await addBundle({ db, projectId: otherId, name: "B" });
-    await addCard({ db, bundleId, content: "'perf mine" });
-    await addCard({ db, bundleId: otherBundle, content: "'perf theirs" });
+  it("narrows to the namespace it was given", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const otherId = await addNamespace({ db, name: "Other" });
+    await addLayer({ db, namespaceId: otherId, name: "Base", isDefault: true });
+    const otherPartition = await addPartition({ db, namespaceId: otherId, name: "B" });
+    await addCard({ db, partitionId, content: "'perf mine" });
+    await addCard({ db, partitionId: otherPartition, content: "'perf theirs" });
 
     expect((await run(db, "?tag=perf")).hits).toHaveLength(2);
 
-    const narrowed = await run(db, `?tag=perf&projectId=${projectId}`);
-    expect(narrowed.projectId).toBe(projectId);
+    const narrowed = await run(db, `?tag=perf&namespaceId=${namespaceId}`);
+    expect(narrowed.namespaceId).toBe(namespaceId);
     expect(narrowed.hits.map((hit) => hit)).toHaveLength(1);
   });
 
   /** The tree above the list counts every hit, so a capped list has to report what it is a
    *  part of — otherwise the two numbers on the page read as a disagreement. */
   it("caps the list it sends and says how many there were", async () => {
-    const { db, bundleId, layerId } = await setup();
+    const { db, partitionId, layerId } = await setup();
     const over = TAG_HITS_SHOWN_MAX + 20;
     await addCards({
       db,
-      bundleId,
+      partitionId,
       layerId,
       cards: Array.from({ length: over }, (_, i) => ({
         content: `'perf card ${i}`,
@@ -126,16 +126,16 @@ describe("GET /tags", () => {
     expect(data.cardTotal).toBe(over);
   });
 
-  /** Which bundle a card is in is deliberately not on a hit, so the page joins it back for
+  /** Which partition a card is in is deliberately not on a hit, so the page joins it back for
    *  the hits it is actually showing. */
-  it("names the bundle of each card it sends", async () => {
-    const { db, bundleId } = await setup();
-    const cardId = await addCard({ db, bundleId, content: "'perf" });
+  it("names the partition of each card it sends", async () => {
+    const { db, partitionId } = await setup();
+    const cardId = await addCard({ db, partitionId, content: "'perf" });
 
     const data = await run(db, "?tag=perf");
 
-    expect(data.cardBundleIds[cardId]).toBe(bundleId);
-    expect(data.bundles[bundleId].name).toBe("B");
+    expect(data.cardPartitionIds[cardId]).toBe(partitionId);
+    expect(data.partitions[partitionId].name).toBe("B");
   });
 
   /**
@@ -144,15 +144,15 @@ describe("GET /tags", () => {
    * label a page of two hundred. An export is the exception and is covered below: it bakes
    * every hit and cannot know which keys the browser will end up needing.
    */
-  it("sends the project of the cards it is showing, and not of the others", async () => {
-    const { db, bundleId } = await setup();
-    const shown = await addCard({ db, bundleId, content: "'perf" });
-    const other = await addCard({ db, bundleId, content: "'unrelated" });
+  it("sends the namespace of the cards it is showing, and not of the others", async () => {
+    const { db, partitionId } = await setup();
+    const shown = await addCard({ db, partitionId, content: "'perf" });
+    const other = await addCard({ db, partitionId, content: "'unrelated" });
 
     const data = await run(db, "?tag=perf");
 
-    expect(data.cardProjects).toHaveProperty(shown);
-    expect(data.cardProjects).not.toHaveProperty(other);
+    expect(data.cardNamespaces).toHaveProperty(shown);
+    expect(data.cardNamespaces).not.toHaveProperty(other);
   });
 });
 
@@ -181,14 +181,14 @@ describe("as a static export", () => {
     (await import("$db/internal/config"))._resetWorkspaceRootForTest();
     const { load } = await import("./+page.server.js");
     return (await load({ locals: { db }, url: new URL("http://localhost/tags") } as never)) as {
-      taskspaces: Record<string, { name: string; projectId: string | null }>;
+      taskspaces: Record<string, { name: string; namespaceId: string | null }>;
       hits: unknown[];
     };
   }
 
   /**
    * A taskspace's name is the name of a directory on someone's machine, and an export is
-   * published. `loadProjectSnapshot` holds exactly this line for the board; this page was
+   * published. `loadNamespaceSnapshot` holds exactly this line for the board; this page was
    * shipping `getAllTaskspaces` unconditionally, which contradicted it and
    * `docs/security-matrix.md` with it — and shipped nothing usable either, since a plain
    * export carries no file hits for a name to label.
@@ -198,8 +198,8 @@ describe("as a static export", () => {
    * that, and both are now about the walk rather than about a separate condition.
    */
   it("names no taskspaces at all", async () => {
-    const { db, projectId } = await setup();
-    await addTaskspace({ db, projectId, name: "client-work", path: "client-work" });
+    const { db, namespaceId } = await setup();
+    await addTaskspace({ db, namespaceId, name: "client-work", path: "client-work" });
 
     expect((await loadUnderSsg(db)).taskspaces).toEqual({});
   });
@@ -212,10 +212,10 @@ describe("as a static export", () => {
     mkdirSync(join(root, "client-work"), { recursive: true });
     writeFileSync(join(root, "client-work", "notes.md"), "'perf in a file\n");
 
-    const { db, projectId } = await setup();
+    const { db, namespaceId } = await setup();
     const taskspaceId = await addTaskspace({
       db,
-      projectId,
+      namespaceId,
       name: "client-work",
       path: "client-work",
     });
@@ -225,14 +225,14 @@ describe("as a static export", () => {
       KOZANE_WORKSPACE_ROOT: root,
     });
 
-    expect(data.taskspaces[taskspaceId]).toEqual({ name: "client-work", projectId });
+    expect(data.taskspaces[taskspaceId]).toEqual({ name: "client-work", namespaceId });
   });
 
   /** An export has no query string, so it bakes every hit and the browser selects. */
   it("bakes every card hit rather than waiting to be asked for one tag", async () => {
-    const { db, bundleId } = await setup();
-    await addCard({ db, bundleId, content: "'perf" });
-    await addCard({ db, bundleId, content: "'other" });
+    const { db, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "'perf" });
+    await addCard({ db, partitionId, content: "'other" });
 
     expect((await loadUnderSsg(db)).hits).toHaveLength(2);
   });

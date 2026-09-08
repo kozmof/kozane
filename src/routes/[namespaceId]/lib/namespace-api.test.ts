@@ -1,0 +1,245 @@
+import { describe, expect, it, vi } from "vitest";
+import {
+  patchCardPositions,
+  createCard,
+  updateCard,
+  deleteCard,
+  deleteCards,
+  glueCards,
+  unglueCards,
+  createPartition,
+  deletePartition,
+  createScope,
+  deleteScope,
+  addCardsToScope,
+  removeCardsFromScope,
+  batchReassignPartition,
+  moveCardsToNamespace,
+  createTaskspace,
+  parseWarp,
+} from "./namespace-api.js";
+
+function makeFetcher() {
+  const response = new Response(null, { status: 200 });
+  return { fetcher: vi.fn().mockResolvedValue(response), response };
+}
+
+describe("patchCardPositions", () => {
+  it("sends card positions to the namespace cards collection endpoint", async () => {
+    const response = new Response(null, { status: 200 });
+    const fetcher = vi.fn().mockResolvedValue(response);
+    const positions = [
+      { cardId: "card-1", posX: 24, posY: 48 },
+      { cardId: "card-2", posX: 72, posY: 96 },
+    ];
+
+    await expect(patchCardPositions(fetcher, "namespace-1", positions)).resolves.toBe(response);
+
+    expect(fetcher).toHaveBeenCalledWith("/namespace-1/api/cards", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ positions }),
+    });
+  });
+});
+
+describe("createCard", () => {
+  it("POSTs card data to the namespace cards endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    const card = { partitionId: "b-1", content: "Hello", posX: 10, posY: 20 };
+    await expect(createCard(fetcher, "p-1", card)).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(card),
+    });
+  });
+});
+
+describe("updateCard", () => {
+  it("PATCHes card fields to the specific card endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    const patch = { content: "Updated" };
+    await expect(updateCard(fetcher, "p-1", "c-1", patch)).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/c-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+  });
+});
+
+describe("deleteCard", () => {
+  it("sends DELETE to the specific card endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(deleteCard(fetcher, "p-1", "c-1")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/c-1", { method: "DELETE" });
+  });
+});
+
+describe("glueCards", () => {
+  it("POSTs cardIds to the glues endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(glueCards(fetcher, "p-1", ["c-1", "c-2"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/glues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"] }),
+    });
+  });
+});
+
+describe("unglueCards", () => {
+  it("sends DELETE with cardIds to the glues endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(unglueCards(fetcher, "p-1", ["c-1", "c-2"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/glues", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"] }),
+    });
+  });
+});
+
+describe("createPartition", () => {
+  it("POSTs partition name to the partitions endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(createPartition(fetcher, "p-1", "My Partition")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/partitions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "My Partition" }),
+    });
+  });
+});
+
+describe("deletePartition", () => {
+  it("sends DELETE to the specific partition endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(deletePartition(fetcher, "p-1", "b-1")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/partitions/b-1", { method: "DELETE" });
+  });
+});
+
+describe("createScope", () => {
+  it("POSTs scope name to the scopes endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(createScope(fetcher, "p-1", "My Scope")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/scopes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "My Scope" }),
+    });
+  });
+});
+
+describe("deleteScope", () => {
+  it("sends DELETE to the specific scope endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(deleteScope(fetcher, "p-1", "s-1")).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/scopes/s-1", { method: "DELETE" });
+  });
+});
+
+describe("addCardsToScope", () => {
+  it("POSTs cardIds to the scope members endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(addCardsToScope(fetcher, "p-1", "s-1", ["c-1", "c-2"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/scopes/s-1/members", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"] }),
+    });
+  });
+});
+
+describe("removeCardsFromScope", () => {
+  it("sends DELETE with cardIds to the scope members endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(removeCardsFromScope(fetcher, "p-1", "s-1", ["c-1"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/scopes/s-1/members", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1"] }),
+    });
+  });
+});
+
+describe("deleteCards", () => {
+  it("sends DELETE with cardIds to the cards endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(deleteCards(fetcher, "p-1", ["c-1", "c-2"])).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"] }),
+    });
+  });
+});
+
+describe("batchReassignPartition", () => {
+  it("PATCHes cardIds and partitionId to the cards/partition endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(batchReassignPartition(fetcher, "p-1", ["c-1", "c-2"], "b-1")).resolves.toBe(
+      response,
+    );
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/partition", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"], partitionId: "b-1" }),
+    });
+  });
+});
+
+describe("moveCardsToNamespace", () => {
+  it("POSTs cardIds and targetNamespaceId to the cards/move endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    await expect(moveCardsToNamespace(fetcher, "p-1", ["c-1", "c-2"], "p-2")).resolves.toBe(
+      response,
+    );
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/cards/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cardIds: ["c-1", "c-2"], targetNamespaceId: "p-2" }),
+    });
+  });
+});
+
+describe("createTaskspace", () => {
+  it("POSTs taskspace data to the taskspaces endpoint", async () => {
+    const { fetcher, response } = makeFetcher();
+    const taskspace = { name: "my-taskspace", scopeId: "s-1" };
+    await expect(createTaskspace(fetcher, "p-1", taskspace)).resolves.toBe(response);
+    expect(fetcher).toHaveBeenCalledWith("/p-1/api/taskspaces", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(taskspace),
+    });
+  });
+});
+
+describe("parseWarp", () => {
+  it("accepts the row a warp POST answers with", () => {
+    const row = { id: "w-1", namespaceId: "p-1", posX: 120, posY: 240 };
+    expect(parseWarp(row)).toEqual(row);
+  });
+
+  it("keeps only the fields a warp has", () => {
+    expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: 1, posY: 2, name: "nope" })).toEqual({
+      id: "w-1",
+      namespaceId: "p-1",
+      posX: 1,
+      posY: 2,
+    });
+  });
+
+  it("rejects a body that is not a warp", () => {
+    expect(parseWarp(null)).toBeNull();
+    expect(parseWarp("w-1")).toBeNull();
+    expect(parseWarp({ ok: true })).toBeNull();
+    expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: "120", posY: 240 })).toBeNull();
+    expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: 120 })).toBeNull();
+    expect(parseWarp({ id: 1, namespaceId: "p-1", posX: 120, posY: 240 })).toBeNull();
+    expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: NaN, posY: 240 })).toBeNull();
+  });
+});

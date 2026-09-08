@@ -25,8 +25,8 @@ const fileHit = (taskspaceId: string, path: string, line: number, tag: string): 
 
 function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
   return {
-    projectId: null,
-    projects: [{ id: "p1", name: "Project One", isDefault: true }],
+    namespaceId: null,
+    namespaces: [{ id: "p1", name: "Namespace One", isDefault: true }],
     tree: buildTagTree(hits),
     tag: "perf",
     hits,
@@ -35,13 +35,13 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
     truncated: [],
     missing: [],
     cardsTruncated: false,
-    cardProjects: { c1: "p1", c2: "p1" },
+    cardNamespaces: { c1: "p1", c2: "p1" },
     taskspaces: {
-      t1: { name: "Notes", projectId: "p1" },
-      t2: { name: "Drafts", projectId: "p1" },
+      t1: { name: "Notes", namespaceId: "p1" },
+      t2: { name: "Drafts", namespaceId: "p1" },
     },
-    cardBundleIds: { c1: "b1", c2: "b1" },
-    bundles: { b1: { name: "General", dot: "#abc" } },
+    cardPartitionIds: { c1: "b1", c2: "b1" },
+    partitions: { b1: { name: "General", dot: "#abc" } },
     ...over,
   };
 }
@@ -56,7 +56,7 @@ const hrefOf = (text: string) => screen.getByText(text).closest("a")?.getAttribu
 describe("tag index page", () => {
   /**
    * The way out is an icon, and the icon is the same drawing whether it leads to the whole
-   * project list or to one project's board. Narrowed to a project it leads to that board, so
+   * namespace list or to one namespace's board. Narrowed to a namespace it leads to that board, so
    * the name is shown beside the picture — nothing in the drawing could say which of the two
    * you are about to get.
    */
@@ -64,11 +64,11 @@ describe("tag index page", () => {
     const backLink = (container: HTMLElement, href: string) =>
       [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
 
-    it("shows the project it goes back to when the index is narrowed to one", () => {
-      const { container } = draw([cardHit("c1", "perf", "caching work")], { projectId: "p1" });
+    it("shows the namespace it goes back to when the index is narrowed to one", () => {
+      const { container } = draw([cardHit("c1", "perf", "caching work")], { namespaceId: "p1" });
       const back = backLink(container, "/p1")!;
-      expect(back.textContent?.trim()).toBe("Project One");
-      expect(back.getAttribute("aria-label")).toBe("Back to Project One");
+      expect(back.textContent?.trim()).toBe("Namespace One");
+      expect(back.getAttribute("aria-label")).toBe("Back to Namespace One");
       expect(back.querySelector("svg")).not.toBeNull();
     });
 
@@ -76,7 +76,7 @@ describe("tag index page", () => {
       const { container } = draw([cardHit("c1", "perf", "caching work")]);
       const back = backLink(container, "/")!;
       expect(back.textContent?.trim()).toBe("");
-      expect(back.getAttribute("aria-label")).toBe("All projects");
+      expect(back.getAttribute("aria-label")).toBe("All namespaces");
       expect(back.querySelector("svg")).not.toBeNull();
     });
   });
@@ -87,7 +87,7 @@ describe("tag index page", () => {
     expect(hrefOf("caching work")).toBe("/p1?card=c1");
   });
 
-  it("names the bundle a card is in", () => {
+  it("names the partition a card is in", () => {
     draw([cardHit("c1", "perf", "caching work")]);
 
     expect(screen.getByText("General")).toBeTruthy();
@@ -277,7 +277,7 @@ describe("tag index page", () => {
    */
   /**
    * The tree marks its selection with a background and a weight, which is nothing to a
-   * reader who cannot see it — and the project nav in the same header already says
+   * reader who cannot see it — and the namespace nav in the same header already says
    * `aria-current`, so the page was answering the same question two ways.
    */
   it("marks the selected tag in the tree as the current one", () => {
@@ -297,8 +297,8 @@ describe("tag index page", () => {
     expect(screen.getByText("1 card, 1 file")).toBeTruthy();
   });
 
-  it("draws no link for a card whose project it was not told", () => {
-    draw([cardHit("c9", "perf", "orphaned")], { cardProjects: {} });
+  it("draws no link for a card whose namespace it was not told", () => {
+    draw([cardHit("c9", "perf", "orphaned")], { cardNamespaces: {} });
 
     expect(hrefOf("orphaned")).toBeNull();
   });

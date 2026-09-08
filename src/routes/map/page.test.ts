@@ -8,8 +8,8 @@ import type { TagHit } from "$lib/types";
 
 /**
  * The page draws rectangles it links away from and lines it draws on a selection, and both
- * are things that can look right and be wrong: a rectangle labelled with one bundle's name
- * and sized by another's count, or a tag lighting the bundles of the tag above it.
+ * are things that can look right and be wrong: a rectangle labelled with one partition's name
+ * and sized by another's count, or a tag lighting the partitions of the tag above it.
  *
  * The geometry itself is `lib/map-layout.test.ts` — this is about what ends up in the document.
  */
@@ -27,9 +27,9 @@ const TODAY = "2026-09-06";
 /** A day inside the grid but not the selected one: the card a day filter has to leave out. */
 const EARLIER = "2026-09-04";
 
-const bundle = (id: string, projectId: string, name: string, cards: number) => ({
+const partition = (id: string, namespaceId: string, name: string, cards: number) => ({
   id,
-  projectId,
+  namespaceId,
   name,
   isDefault: false,
   cards,
@@ -46,35 +46,35 @@ const cardHit = (cardId: string, tag: string): TagHit => ({
 function pageData(over: Record<string, unknown> = {}) {
   const hits = [cardHit("c1", "perf"), cardHit("c2", "perf:cache"), cardHit("c3", "docs")];
   return {
-    projectId: null,
-    projects: [
-      { id: "p1", name: "Project One", isDefault: true },
-      { id: "p2", name: "Project Two", isDefault: false },
+    namespaceId: null,
+    namespaces: [
+      { id: "p1", name: "Namespace One", isDefault: true },
+      { id: "p2", name: "Namespace Two", isDefault: false },
     ],
     drawn: [
-      { id: "p1", name: "Project One" },
-      { id: "p2", name: "Project Two" },
+      { id: "p1", name: "Namespace One" },
+      { id: "p2", name: "Namespace Two" },
     ],
-    bundles: [
-      bundle("b1", "p1", "General", 8),
-      bundle("b2", "p1", "Drafts", 2),
-      bundle("b3", "p2", "Notes", 4),
+    partitions: [
+      partition("b1", "p1", "General", 8),
+      partition("b2", "p1", "Drafts", 2),
+      partition("b3", "p2", "Notes", 4),
     ],
     scopes: [
       {
         id: "s1",
         name: "Release plan",
         spokes: [
-          { kind: "bundle", id: "b1", cards: 3 },
-          { kind: "bundle", id: "b3", cards: 1 },
+          { kind: "partition", id: "b1", cards: 3 },
+          { kind: "partition", id: "b3", cards: 1 },
         ],
       },
     ],
     tagHits: hits,
     tagCards: {
-      c1: { projectId: "p1", bundleId: "b1", updatedDay: TODAY },
-      c2: { projectId: "p2", bundleId: "b3", updatedDay: EARLIER },
-      c3: { projectId: "p1", bundleId: "b2", updatedDay: TODAY },
+      c1: { namespaceId: "p1", partitionId: "b1", updatedDay: TODAY },
+      c2: { namespaceId: "p2", partitionId: "b3", updatedDay: EARLIER },
+      c3: { namespaceId: "p1", partitionId: "b2", updatedDay: TODAY },
     },
     tag: null,
     cardsTruncated: false,
@@ -140,18 +140,18 @@ describe("map page", () => {
 
     it("links an activity square to a day while preserving other filters", () => {
       draw({
-        projectId: "p1",
+        namespaceId: "p1",
         tag: "perf",
-        activity: [{ day: today, bundleId: "b1", cards: 2 }],
+        activity: [{ day: today, partitionId: "b1", cards: 2 }],
       });
       const link = screen.getByRole("link", { name: `${today}: 2 card changes` });
-      expect(link.getAttribute("href")).toBe(`/map?projectId=p1&tag=perf&day=${today}`);
+      expect(link.getAttribute("href")).toBe(`/map?namespaceId=p1&tag=perf&day=${today}`);
     });
 
-    it("filters bundle counts to the selected day and offers a clear link", () => {
+    it("filters partition counts to the selected day and offers a clear link", () => {
       const { container } = draw({
         day: today,
-        activity: [{ day: today, bundleId: "b1", cards: 3 }],
+        activity: [{ day: today, partitionId: "b1", cards: 3 }],
       });
       expect(rectOf(container, "General")?.textContent).toContain("3");
       expect(
@@ -168,13 +168,13 @@ describe("map page", () => {
       expect(screen.queryByText(/^\d{4}-\d{2}-\d{2} ~ \d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
     });
 
-    it("filters tag counts and tag-to-bundle links to the selected day", () => {
+    it("filters tag counts and tag-to-partition links to the selected day", () => {
       const { container } = draw({
         day: today,
         tag: "perf",
         activity: [
-          { day: today, bundleId: "b1", cards: 1 },
-          { day: today, bundleId: "b2", cards: 1 },
+          { day: today, partitionId: "b1", cards: 1 },
+          { day: today, partitionId: "b2", cards: 1 },
         ],
       });
 
@@ -194,26 +194,26 @@ describe("map page", () => {
     });
   });
 
-  it("draws a rectangle for every project and every bundle", () => {
+  it("draws a rectangle for every namespace and every partition", () => {
     const { container } = draw();
-    // A project's name is in the header nav and in the picture and in the words beside it,
+    // A namespace's name is in the header nav and in the picture and in the words beside it,
     // so the picture is asked about specifically.
-    expect(mapSvg(container)?.textContent).toContain("Project One");
+    expect(mapSvg(container)?.textContent).toContain("Namespace One");
     expect(screen.getByText("General")).toBeInTheDocument();
     expect(screen.getByText("Notes")).toBeInTheDocument();
-    // Two projects, three bundles, and none of them zero-sized.
+    // Two namespaces, three partitions, and none of them zero-sized.
     const rects = mapParts(container, "svg rect");
     expect(rects).toHaveLength(5);
     for (const rect of rects) expect(Number(rect.getAttribute("width"))).toBeGreaterThan(0);
   });
 
-  it("labels a bundle with the number of cards its area comes from", () => {
+  it("labels a partition with the number of cards its area comes from", () => {
     const { container } = draw();
     expect(rectOf(container, "General")?.textContent).toContain("8");
     expect(rectOf(container, "Drafts")?.textContent).toContain("2");
   });
 
-  it("links a bundle to the board of the project it belongs to", () => {
+  it("links a partition to the board of the namespace it belongs to", () => {
     const { container } = draw();
     const link = [...container.querySelectorAll("a")].find((a) =>
       a.getAttribute("aria-label")?.startsWith("Notes"),
@@ -222,23 +222,23 @@ describe("map page", () => {
   });
 
   /**
-   * A project holding no cards anywhere has no area to be given and lands in the strip along
-   * the bottom. It has to arrive there saying which project it is and looking like the empty
+   * A namespace holding no cards anywhere has no area to be given and lands in the strip along
+   * the bottom. It has to arrive there saying which namespace it is and looking like the empty
    * thing it is — drawn nameless and solid, as it once was, two of them read as a pair of
-   * rectangles belonging to no project at all.
+   * rectangles belonging to no namespace at all.
    */
-  describe("a project with no cards in it", () => {
+  describe("a namespace with no cards in it", () => {
     const withEmpty = () =>
       draw({
-        projects: [
-          { id: "p1", name: "Project One", isDefault: true },
+        namespaces: [
+          { id: "p1", name: "Namespace One", isDefault: true },
           { id: "p3", name: "Nothing Yet", isDefault: false },
         ],
         drawn: [
-          { id: "p1", name: "Project One" },
+          { id: "p1", name: "Namespace One" },
           { id: "p3", name: "Nothing Yet" },
         ],
-        bundles: [bundle("b1", "p1", "General", 8), bundle("b4", "p3", "General", 0)],
+        partitions: [partition("b1", "p1", "General", 8), partition("b4", "p3", "General", 0)],
         scopes: [],
       });
 
@@ -247,7 +247,7 @@ describe("map page", () => {
       expect(mapSvg(container)?.textContent).toContain("Nothing Yet");
     });
 
-    it("is drawn as an outline, so it is not read as a project that packed small", () => {
+    it("is drawn as an outline, so it is not read as a namespace that packed small", () => {
       const { container } = withEmpty();
       const empty = mapParts(container, "svg > g > rect").find(
         (rect) => rect.getAttribute("stroke-dasharray") === "2 2",
@@ -261,7 +261,7 @@ describe("map page", () => {
   /**
    * The links out are icons now, so the anchor has to carry the name the picture no longer
    * does — and the back link is the same picture whether it leads to the whole list or to
-   * one project's board.
+   * one namespace's board.
    */
   describe("the way out", () => {
     const linkTo = (container: HTMLElement, href: string) =>
@@ -270,7 +270,7 @@ describe("map page", () => {
     it("names each link, since neither of them says anything in words", () => {
       const { container } = draw();
       for (const [href, name] of [
-        ["/", "All projects"],
+        ["/", "All namespaces"],
         ["/tags", "Tags"],
       ]) {
         const link = linkTo(container, href);
@@ -282,36 +282,36 @@ describe("map page", () => {
       }
     });
 
-    /** The list of projects beside them stays words: it is a set of choices to read, not a
-     *  way out, and three project names are not three pictures. */
-    it("leaves the project narrowing in words", () => {
+    /** The list of namespaces beside them stays words: it is a set of choices to read, not a
+     *  way out, and three namespace names are not three pictures. */
+    it("leaves the namespace narrowing in words", () => {
       const { container } = draw();
-      expect(linkTo(container, "/map?projectId=p1")?.textContent?.trim()).toBe("Project One");
+      expect(linkTo(container, "/map?namespaceId=p1")?.textContent?.trim()).toBe("Namespace One");
     });
 
     /**
-     * Narrowed, the link no longer leads to the project list — it leads to one board — and
+     * Narrowed, the link no longer leads to the namespace list — it leads to one board — and
      * the icon is the same drawing either way. So the name is shown rather than left to the
      * label: the two destinations are not interchangeable, and nothing in the picture says
      * which one you are about to get.
      */
-    it("shows the project it goes back to when the map is narrowed to one", () => {
-      const { container } = draw({ projectId: "p1" });
+    it("shows the namespace it goes back to when the map is narrowed to one", () => {
+      const { container } = draw({ namespaceId: "p1" });
       const back = linkTo(container, "/p1")!;
-      expect(back.textContent?.trim()).toBe("Project One");
-      expect(back.getAttribute("aria-label")).toBe("Back to Project One");
+      expect(back.textContent?.trim()).toBe("Namespace One");
+      expect(back.getAttribute("aria-label")).toBe("Back to Namespace One");
       // Still a picture and a name, not a name on its own.
       expect(back.querySelector("svg")).not.toBeNull();
     });
 
-    /** Unnarrowed there is no project to name, and the icon stands alone. */
+    /** Unnarrowed there is no namespace to name, and the icon stands alone. */
     it("shows no name when it leads to the whole list", () => {
       const { container } = draw();
       expect(linkTo(container, "/")?.textContent?.trim()).toBe("");
     });
   });
 
-  it("draws a hub for each scope, named, with a line per bundle it reaches", () => {
+  it("draws a hub for each scope, named, with a line per partition it reaches", () => {
     const { container } = draw();
     expect(screen.getByText("Release plan")).toBeInTheDocument();
     expect(mapParts(container, "svg circle")).toHaveLength(1);
@@ -347,10 +347,10 @@ describe("map page", () => {
       expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe("/map");
     });
 
-    it("keeps the project narrowing when a tag is picked", () => {
-      draw({ projectId: "p1" });
+    it("keeps the namespace narrowing when a tag is picked", () => {
+      draw({ namespaceId: "p1" });
       expect(screen.getByText("docs").closest("a")?.getAttribute("href")).toBe(
-        "/map?projectId=p1&tag=docs",
+        "/map?namespaceId=p1&tag=docs",
       );
     });
 
@@ -361,13 +361,13 @@ describe("map page", () => {
   });
 
   describe("selecting a tag", () => {
-    it("draws a line to each bundle the tag reaches", () => {
+    it("draws a line to each partition the tag reaches", () => {
       const { container } = draw({ tag: "docs" });
       expect(tagPaths(container)).toHaveLength(1);
     });
 
     /** `'perf` gathers what `'perf:cache` gathers, which is the whole point of a
-     *  subcategory — so selecting the parent reaches both bundles. */
+     *  subcategory — so selecting the parent reaches both partitions. */
     it("reaches everything under the tag, not only what carries it exactly", () => {
       const { container } = draw({ tag: "perf" });
       expect(tagPaths(container)).toHaveLength(2);
@@ -406,7 +406,7 @@ describe("map page", () => {
       await fireEvent.scroll(panel);
       await tick();
 
-      // The whole line is redrawn — where it lands on the bundle follows where it left from —
+      // The whole line is redrawn — where it lands on the partition follows where it left from —
       // so it is the near end that is checked, and it has moved by exactly the scroll.
       const [x, y] = startsAt().split(" ").slice(1).map(Number);
       expect(x).toBe(TAG_PANEL_LEFT + TAG_PANEL_WIDTH);
@@ -469,9 +469,9 @@ describe("map page", () => {
   describe("what it says when there is little to say", () => {
     it("draws nothing rather than an empty box for an empty workspace", () => {
       const { container } = draw({
-        projects: [],
+        namespaces: [],
         drawn: [],
-        bundles: [],
+        partitions: [],
         scopes: [],
         tagHits: [],
         tagCards: {},
@@ -494,7 +494,7 @@ describe("map page", () => {
   it("says the same thing in words for a reader who cannot see it", () => {
     draw();
     const summary = screen.getByRole("heading", { name: "What the map shows" }).parentElement!;
-    expect(summary.textContent).toContain("Project One: 10 cards");
+    expect(summary.textContent).toContain("Namespace One: 10 cards");
     expect(summary.textContent).toContain("General: 8 cards");
     expect(summary.textContent).toContain("Release plan: reaches 2 of them");
   });
@@ -503,7 +503,7 @@ describe("map page", () => {
 /**
  * Moving the map about. The arithmetic is `lib/view.test.ts`; these are about the gestures
  * reaching it — and about the one thing that can only go wrong here, which is a drag across a
- * bundle opening that bundle's board when it should have panned.
+ * partition opening that partition's board when it should have panned.
  */
 describe("panning and zooming", () => {
   const surface = (container: HTMLElement) =>
@@ -552,8 +552,8 @@ describe("panning and zooming", () => {
   });
 
   /**
-   * The packing covers the whole box, so a drag almost always begins on a bundle — and a
-   * bundle is a link. Without this, panning the map would open a board instead.
+   * The packing covers the whole box, so a drag almost always begins on a partition — and a
+   * partition is a link. Without this, panning the map would open a board instead.
    */
   it("does not follow the link a drag began on", async () => {
     const { container } = draw();
@@ -622,21 +622,21 @@ describe("panning and zooming", () => {
 });
 
 /**
- * What zooming a treemap is actually for. A bundle can be too small to carry its name at the
+ * What zooming a treemap is actually for. A partition can be too small to carry its name at the
  * size the map opens at, and the way to read it is to zoom in — which only works because the
  * boxes grow and the type does not. Zoom implemented as a transform over the finished drawing
  * would enlarge the name along with the box and leave it exactly as unreadable.
  */
 describe("zooming into something too small to read", () => {
-  // A long tail of bundles, as a real project has. The last of them is drawn about 44px
+  // A long tail of partitions, as a real namespace has. The last of them is drawn about 44px
   // wide at the size these tests render at — under the width a label needs, and over it once
   // the map has been zoomed the whole way in.
   const counts = [500, 380, 250, 120, 60, 30, 14, 7, 3, 1];
   const tiny = () =>
     draw({
-      drawn: [{ id: "p1", name: "Project One" }],
-      bundles: counts.map((cards, i) =>
-        bundle(`b${i}`, "p1", i === counts.length - 1 ? "Scraps" : `Bundle ${i}`, cards),
+      drawn: [{ id: "p1", name: "Namespace One" }],
+      partitions: counts.map((cards, i) =>
+        partition(`b${i}`, "p1", i === counts.length - 1 ? "Scraps" : `Partition ${i}`, cards),
       ),
       scopes: [],
       tagHits: [],
@@ -646,9 +646,9 @@ describe("zooming into something too small to read", () => {
   const labelled = (container: HTMLElement, name: string) =>
     mapParts(container, "svg text").some((t) => t.textContent === name);
 
-  it("leaves a bundle unlabelled while its rectangle is too small for the label", () => {
+  it("leaves a partition unlabelled while its rectangle is too small for the label", () => {
     const { container } = tiny();
-    expect(labelled(container, "Bundle 0")).toBe(true);
+    expect(labelled(container, "Partition 0")).toBe(true);
     expect(labelled(container, "Scraps")).toBe(false);
   });
 

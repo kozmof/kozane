@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad, RequestEvent } from "./$types";
 import { fail } from "@sveltejs/kit";
-import { createProject, getAllProjects } from "../db/api/project.js";
+import { createNamespace, getAllNamespaces } from "../db/api/namespace.js";
 import { getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
 
@@ -10,26 +10,26 @@ export const prerender = process.env.KOZANE_SSG === "1";
 const readonly = process.env.KOZANE_READONLY === "1";
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const projects = await getAllProjects({ db: locals.db });
+  const namespaces = await getAllNamespaces({ db: locals.db });
   return {
-    projects,
+    namespaces,
     workspaceRoot: readonly ? null : getWorkspaceRoot(),
     readonly,
   };
 };
 
-const projectActions = {
+const namespaceActions = {
   default: async ({ locals, request }: RequestEvent) => {
     const form = await request.formData();
     const submitted = form.get("name");
     const name = typeof submitted === "string" ? submitted.trim() : "";
 
-    if (!name) return fail(400, { error: "Project name is required." });
+    if (!name) return fail(400, { error: "Namespace name is required." });
     if (name.length > NAME_MAX) {
-      return fail(400, { error: `Project name must be ${NAME_MAX} characters or fewer.` });
+      return fail(400, { error: `Namespace name must be ${NAME_MAX} characters or fewer.` });
     }
 
-    await createProject({ db: locals.db, name });
+    await createNamespace({ db: locals.db, name });
     return { success: true };
   },
 } satisfies Actions;
@@ -40,4 +40,4 @@ const projectActions = {
  * The cast keeps the page's `form` type describing what the action returns, which is what a
  * non-static build always has.
  */
-export const actions = (readonly ? undefined : projectActions) as typeof projectActions;
+export const actions = (readonly ? undefined : namespaceActions) as typeof namespaceActions;

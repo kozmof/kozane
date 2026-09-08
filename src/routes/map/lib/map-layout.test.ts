@@ -4,15 +4,15 @@ import {
   tagLinks,
   LABEL_MIN_HEIGHT,
   LABEL_MIN_WIDTH,
-  type LayoutBundle,
+  type LayoutPartition,
   type MapLayoutInput,
 } from "./map-layout.js";
 
 const AREA = { x: 0, y: 0, width: 1200, height: 800 };
 
-const bundle = (id: string, projectId: string, cards: number): LayoutBundle => ({
+const partition = (id: string, namespaceId: string, cards: number): LayoutPartition => ({
   id,
-  projectId,
+  namespaceId,
   name: id,
   cards,
   bg: "oklch(93% 0.055 264)",
@@ -20,8 +20,8 @@ const bundle = (id: string, projectId: string, cards: number): LayoutBundle => (
 });
 
 const input = (over: Partial<MapLayoutInput> = {}): MapLayoutInput => ({
-  projects: [{ id: "p1", name: "One" }],
-  bundles: [bundle("b1", "p1", 3), bundle("b2", "p1", 1)],
+  namespaces: [{ id: "p1", name: "One" }],
+  partitions: [partition("b1", "p1", 3), partition("b2", "p1", 1)],
   scopes: [],
   area: AREA,
   ...over,
@@ -31,38 +31,38 @@ const rectOf = (layout: ReturnType<typeof buildMapLayout>, id: string) => layout
 const areaOf = (r: { width: number; height: number }) => r.width * r.height;
 
 describe("buildMapLayout", () => {
-  it("draws nothing for a workspace with no projects", () => {
-    const layout = buildMapLayout(input({ projects: [], bundles: [] }));
-    expect(layout.projects).toEqual([]);
-    expect(layout.bundles).toEqual([]);
+  it("draws nothing for a workspace with no namespaces", () => {
+    const layout = buildMapLayout(input({ namespaces: [], partitions: [] }));
+    expect(layout.namespaces).toEqual([]);
+    expect(layout.partitions).toEqual([]);
   });
 
-  it("packs every project and every bundle", () => {
+  it("packs every namespace and every partition", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "p1", name: "One" },
           { id: "p2", name: "Two" },
         ],
-        bundles: [bundle("b1", "p1", 3), bundle("b2", "p1", 1), bundle("b3", "p2", 2)],
+        partitions: [partition("b1", "p1", 3), partition("b2", "p1", 1), partition("b3", "p2", 2)],
       }),
     );
-    expect(layout.projects.map(({ id }) => id).sort()).toEqual(["p1", "p2"]);
-    expect(layout.bundles.map(({ bundle: b }) => b.id).sort()).toEqual(["b1", "b2", "b3"]);
+    expect(layout.namespaces.map(({ id }) => id).sort()).toEqual(["p1", "p2"]);
+    expect(layout.partitions.map(({ partition: b }) => b.id).sort()).toEqual(["b1", "b2", "b3"]);
   });
 
-  it("keeps every bundle inside its own project", () => {
+  it("keeps every partition inside its own namespace", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "p1", name: "One" },
           { id: "p2", name: "Two" },
         ],
-        bundles: [bundle("b1", "p1", 5), bundle("b3", "p2", 2)],
+        partitions: [partition("b1", "p1", 5), partition("b3", "p2", 2)],
       }),
     );
-    for (const { bundle: b, rect } of layout.bundles) {
-      const parent = rectOf(layout, b.projectId);
+    for (const { partition: b, rect } of layout.partitions) {
+      const parent = rectOf(layout, b.namespaceId);
       expect(rect.x).toBeGreaterThanOrEqual(parent.x - 1e-6);
       expect(rect.y).toBeGreaterThanOrEqual(parent.y - 1e-6);
       expect(rect.x + rect.width).toBeLessThanOrEqual(parent.x + parent.width + 1e-6);
@@ -70,45 +70,45 @@ describe("buildMapLayout", () => {
     }
   });
 
-  /** A project's area is the cards its bundles hold, so a busier project is a bigger box. */
-  it("sizes a project by the cards its bundles hold", () => {
+  /** A namespace's area is the cards its partitions hold, so a busier namespace is a bigger box. */
+  it("sizes a namespace by the cards its partitions hold", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "big", name: "Big" },
           { id: "small", name: "Small" },
         ],
-        bundles: [bundle("b1", "big", 9), bundle("b2", "small", 1)],
+        partitions: [partition("b1", "big", 9), partition("b2", "small", 1)],
       }),
     );
     expect(areaOf(rectOf(layout, "big"))).toBeGreaterThan(areaOf(rectOf(layout, "small")) * 4);
   });
 
-  it("sizes a bundle by its own cards", () => {
+  it("sizes a partition by its own cards", () => {
     const layout = buildMapLayout(input());
     expect(areaOf(rectOf(layout, "b1"))).toBeGreaterThan(areaOf(rectOf(layout, "b2")));
   });
 
-  it("draws a project with no cards at all rather than dropping it", () => {
+  it("draws a namespace with no cards at all rather than dropping it", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "p1", name: "One" },
           { id: "fresh", name: "Fresh" },
         ],
       }),
     );
-    const fresh = layout.projects.find(({ id }) => id === "fresh");
+    const fresh = layout.namespaces.find(({ id }) => id === "fresh");
     expect(fresh?.empty).toBe(true);
     expect(fresh?.rect.height).toBeGreaterThan(0);
   });
 
   /** The strip is sized off the label thresholds, so what lands in it can say what it is. An
-   *  unlabelled box at the foot of the map reads as belonging to no project at all. */
-  it("leaves a project in the empty strip room for its own name", () => {
+   *  unlabelled box at the foot of the map reads as belonging to no namespace at all. */
+  it("leaves a namespace in the empty strip room for its own name", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "p1", name: "One" },
           { id: "fresh", name: "Fresh" },
           { id: "fresher", name: "Fresher" },
@@ -116,24 +116,24 @@ describe("buildMapLayout", () => {
       }),
     );
     for (const id of ["fresh", "fresher"]) {
-      const placed = layout.projects.find((p) => p.id === id);
+      const placed = layout.namespaces.find((p) => p.id === id);
       expect(placed?.empty).toBe(true);
       expect(placed?.rect.height).toBeGreaterThanOrEqual(LABEL_MIN_HEIGHT);
       expect(placed?.rect.width).toBeGreaterThanOrEqual(LABEL_MIN_WIDTH);
     }
   });
 
-  /** The strip is taller than a bundle's, and the cap is what stops that mattering. */
+  /** The strip is taller than a partition's, and the cap is what stops that mattering. */
   it("still holds the empty strip to a quarter of the map", () => {
     const layout = buildMapLayout(
       input({
-        projects: [
+        namespaces: [
           { id: "p1", name: "One" },
           ...Array.from({ length: 30 }, (_, i) => ({ id: `e${i}`, name: `E${i}` })),
         ],
       }),
     );
-    const full = layout.projects.find(({ id }) => id === "p1")!;
+    const full = layout.namespaces.find(({ id }) => id === "p1")!;
     expect(full.rect.height).toBeGreaterThan(AREA.height * 0.7);
   });
 
@@ -146,18 +146,18 @@ describe("buildMapLayout", () => {
     const withScope = () =>
       buildMapLayout(
         input({
-          projects: [
+          namespaces: [
             { id: "p1", name: "One" },
             { id: "p2", name: "Two" },
           ],
-          bundles: [bundle("b1", "p1", 4), bundle("b3", "p2", 4)],
+          partitions: [partition("b1", "p1", 4), partition("b3", "p2", 4)],
           scopes: [
             {
               id: "s1",
               name: "Shared",
               spokes: [
-                { kind: "bundle", id: "b1", cards: 2 },
-                { kind: "bundle", id: "b3", cards: 1 },
+                { kind: "partition", id: "b1", cards: 2 },
+                { kind: "partition", id: "b3", cards: 1 },
               ],
             },
           ],
@@ -167,12 +167,12 @@ describe("buildMapLayout", () => {
     it("reserves a rail below the packing and keeps the rectangles out of it", () => {
       const layout = withScope();
       expect(layout.rail.height).toBeGreaterThan(0);
-      for (const { rect } of layout.bundles) {
+      for (const { rect } of layout.partitions) {
         expect(rect.y + rect.height).toBeLessThanOrEqual(layout.rail.y + 1e-6);
       }
     });
 
-    it("puts the hub in the rail with a path to each bundle it reaches", () => {
+    it("puts the hub in the rail with a path to each partition it reaches", () => {
       const [scope] = withScope().scopes;
       expect(scope.spokes.map(({ id }) => id).sort()).toEqual(["b1", "b3"]);
       for (const { path } of scope.spokes) expect(path.startsWith("M ")).toBe(true);
@@ -186,8 +186,8 @@ describe("buildMapLayout", () => {
               id: "s1",
               name: "Half here",
               spokes: [
-                { kind: "bundle", id: "b1", cards: 1 },
-                { kind: "bundle", id: "elsewhere", cards: 1 },
+                { kind: "partition", id: "b1", cards: 1 },
+                { kind: "partition", id: "elsewhere", cards: 1 },
               ],
             },
           ],
@@ -196,14 +196,16 @@ describe("buildMapLayout", () => {
       expect(layout.scopes[0].spokes.map(({ id }) => id)).toEqual(["b1"]);
     });
 
-    it("draws a taskspace-only scope against the project rectangle", () => {
+    it("draws a taskspace-only scope against the namespace rectangle", () => {
       const layout = buildMapLayout(
         input({
-          scopes: [{ id: "s1", name: "Files", spokes: [{ kind: "project", id: "p1", cards: 0 }] }],
+          scopes: [
+            { id: "s1", name: "Files", spokes: [{ kind: "namespace", id: "p1", cards: 0 }] },
+          ],
         }),
       );
       expect(layout.scopes[0].spokes).toHaveLength(1);
-      expect(layout.scopes[0].spokes[0].kind).toBe("project");
+      expect(layout.scopes[0].spokes[0].kind).toBe("namespace");
     });
   });
 
@@ -217,7 +219,7 @@ describe("buildMapLayout", () => {
 describe("tagLinks", () => {
   const layout = buildMapLayout(input());
 
-  it("draws one path per bundle the tag reaches", () => {
+  it("draws one path per partition the tag reaches", () => {
     const links = tagLinks(
       layout,
       { x: 0, y: 100 },
@@ -235,7 +237,7 @@ describe("tagLinks", () => {
     expect(link.cards).toBe(7);
   });
 
-  it("says nothing about a bundle that is not on the map", () => {
+  it("says nothing about a partition that is not on the map", () => {
     expect(tagLinks(layout, { x: 0, y: 0 }, new Map([["ghost", 1]]))).toEqual([]);
   });
 

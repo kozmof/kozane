@@ -12,7 +12,7 @@ import {
   zoomPercent,
   type MapView,
 } from "./view.js";
-import { buildMapLayout, type LayoutBundle } from "./map-layout.js";
+import { buildMapLayout, type LayoutPartition } from "./map-layout.js";
 
 const SIZE = { width: 1200, height: 800 };
 
@@ -137,9 +137,9 @@ describe("pannedBy", () => {
  * be a different map each time you looked.
  */
 describe("what a zoom does to the packing", () => {
-  const bundle = (id: string, projectId: string, cards: number): LayoutBundle => ({
+  const partition = (id: string, namespaceId: string, cards: number): LayoutPartition => ({
     id,
-    projectId,
+    namespaceId,
     name: id,
     cards,
     bg: "#fff",
@@ -147,15 +147,15 @@ describe("what a zoom does to the packing", () => {
   });
   const layoutAt = (view: MapView) =>
     buildMapLayout({
-      projects: [
+      namespaces: [
         { id: "p1", name: "One" },
         { id: "p2", name: "Two" },
       ],
-      bundles: [
-        bundle("b1", "p1", 9),
-        bundle("b2", "p1", 4),
-        bundle("b3", "p1", 1),
-        bundle("b4", "p2", 6),
+      partitions: [
+        partition("b1", "p1", 9),
+        partition("b2", "p1", 4),
+        partition("b3", "p1", 1),
+        partition("b4", "p2", 6),
       ],
       scopes: [],
       area: viewedArea(SIZE, view),
@@ -166,21 +166,23 @@ describe("what a zoom does to the packing", () => {
     const zoomed = layoutAt({ zoom: 2, panX: 0, panY: 0 });
 
     // Same rectangles in the same order, and each one bigger than it was.
-    expect(zoomed.bundles.map((b) => b.bundle.id)).toEqual(fitted.bundles.map((b) => b.bundle.id));
-    for (const [i, placed] of zoomed.bundles.entries()) {
-      expect(placed.rect.width).toBeGreaterThan(fitted.bundles[i].rect.width);
+    expect(zoomed.partitions.map((b) => b.partition.id)).toEqual(
+      fitted.partitions.map((b) => b.partition.id),
+    );
+    for (const [i, placed] of zoomed.partitions.entries()) {
+      expect(placed.rect.width).toBeGreaterThan(fitted.partitions[i].rect.width);
     }
   });
 
   /** Which is the point of doing it this way: the box grows, the title band does not, so a
-   *  bundle too small to be labelled at 100% becomes large enough to carry one. */
+   *  partition too small to be labelled at 100% becomes large enough to carry one. */
   it("grows the boxes without growing what is measured in pixels", () => {
     const fitted = layoutAt(FITTED_VIEW);
     const zoomed = layoutAt({ zoom: 2, panX: 0, panY: 0 });
     const inset = (l: ReturnType<typeof layoutAt>) => {
-      const project = l.projects.find(({ id }) => id === "p1")!;
-      const first = l.bundles.find((b) => b.bundle.projectId === "p1")!;
-      return first.rect.y - project.rect.y;
+      const namespace = l.namespaces.find(({ id }) => id === "p1")!;
+      const first = l.partitions.find((b) => b.partition.namespaceId === "p1")!;
+      return first.rect.y - namespace.rect.y;
     };
     expect(inset(zoomed)).toBeCloseTo(inset(fitted), 6);
   });

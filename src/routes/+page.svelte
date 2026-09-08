@@ -35,12 +35,12 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <!-- The two views that are of the workspace rather than of one project, and so belong on
+  <!-- The two views that are of the workspace rather than of one namespace, and so belong on
        the one page above them all.
 
-       The tag index reaches across every project: a tag written on a card links to it, but
+       The tag index reaches across every namespace: a tag written on a card links to it, but
        that is only a way in once there is a tag to click and only ever to that one tag. The
-       map is the other: every project's rectangle at once, which no board can show and which
+       map is the other: every namespace's rectangle at once, which no board can show and which
        is also what makes this link the only way to reach it — SvelteKit's prerender crawler
        finds the route from here. -->
   <div
@@ -65,24 +65,24 @@
     </nav>
   </div>
 
-  {#if data.projects.length === 0}
+  {#if data.namespaces.length === 0}
     {#if data.readonly}
       <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>
-        No projects yet. Run
+        No namespaces yet. Run
         <code class={css({ fontFamily: "mono", fontSize: "12px", backgroundColor: "neutral.bg", padding: "2px 6px", borderRadius: "2px" })}>
-          kozane project create &lt;name&gt;
+          kozane namespace create &lt;name&gt;
         </code>
         to create one.
       </p>
     {:else}
-      <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>No projects yet.</p>
+      <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>No namespaces yet.</p>
     {/if}
   {:else}
     <ul class={css({ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" })}>
-      {#each data.projects as project (project.id)}
+      {#each data.namespaces as namespace (namespace.id)}
         <li>
           <a
-            href="{base}/{project.id}"
+            href="{base}/{namespace.id}"
             class={css({
               color: "ink.black",
               textDecoration: "none",
@@ -102,8 +102,8 @@
               _hover: { borderColor: "neutral.muted" },
             })}
           >
-            <span>{project.name}</span>
-            {#if project.isDefault}
+            <span>{namespace.name}</span>
+            {#if namespace.isDefault}
               <span
                 class={css({
                   color: "neutral.muted",
@@ -135,7 +135,7 @@
         return async ({ update }) => {
           await update();
           submitting = false;
-          // Refocus so several projects can be created without reaching for the mouse.
+          // Refocus so several namespaces can be created without reaching for the mouse.
           nameInput?.focus();
         };
       }}
@@ -146,9 +146,9 @@
           bind:this={nameInput}
           name="name"
           type="text"
-          aria-label="New project name"
+          aria-label="New namespace name"
           class={css({
-            // Matches a project row's metrics, so the create line is the same height as
+            // Matches a namespace row's metrics, so the create line is the same height as
             // the entries above it.
             fontSize: "14px",
             fontFamily: "inherit",
@@ -166,8 +166,8 @@
         <button
           type="submit"
           disabled={submitting}
-          title="Create project"
-          aria-label="Create project"
+          title="Create namespace"
+          aria-label="Create namespace"
           class={css({
             // Square, and centred against the taller input by the row's `align-items`.
             // Nudged a pixel up from there: geometric centre reads low next to the input's

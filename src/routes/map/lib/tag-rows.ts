@@ -5,7 +5,7 @@ import type { Point } from "./treemap.js";
  * Where each tag sits in the panel over the map, worked out from the tree rather than
  * measured off the page.
  *
- * The map draws a line from a tag's row to the bundles it reaches, so it has to know how far
+ * The map draws a line from a tag's row to the partitions it reaches, so it has to know how far
  * down the panel that row is. Reading it back out of the DOM was the obvious way and the
  * wrong one: the server renders this page before any row exists, and a static export renders
  * it on a machine with no browser at all, so every line would have started from the corner
@@ -21,7 +21,7 @@ import type { Point } from "./treemap.js";
  *
  * A fixed height rather than whatever the header comes out at, because the canvas fills the
  * window and everything else is drawn over it: a header free to grow would take that room
- * from the map silently, and {@link TAG_PANEL_TOP} is measured from below it. The project
+ * from the map silently, and {@link TAG_PANEL_TOP} is measured from below it. The namespace
  * list inside it scrolls sideways rather than wrapping onto a second line, for the same
  * reason.
  */

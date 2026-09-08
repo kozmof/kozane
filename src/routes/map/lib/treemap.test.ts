@@ -71,7 +71,7 @@ describe("squarify", () => {
   });
 
   describe("items with no value", () => {
-    it("draws an empty bundle in the strip instead of dropping it", () => {
+    it("draws an empty partition in the strip instead of dropping it", () => {
       const cells = byId(squarify([item("full", 10), item("empty", 0)], AREA));
       expect(cells.empty.empty).toBe(true);
       expect(cells.empty.rect.height).toBeGreaterThan(0);

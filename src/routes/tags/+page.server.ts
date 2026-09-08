@@ -1,8 +1,8 @@
 import type { PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
-import { getAllProjects, getProject } from "$db/api/project";
-import { getAllBundles } from "$db/api/bundle";
-import { getCardBundleNames } from "$db/api/card";
+import { getAllNamespaces, getNamespace } from "$db/api/namespace";
+import { getAllPartitions } from "$db/api/partition";
+import { getCardPartitionNames } from "$db/api/card";
 import type { AnyDB } from "$db/client";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
@@ -12,15 +12,15 @@ import { applyPalette } from "$lib/palette";
 import type { TagHit } from "$lib/types";
 
 // Static export: one tag index for the whole workspace. A static route, so unlike the board
-// there are no `entries` to generate — and unlike the board it is not per-project, because
-// which project is being looked at is a query parameter now, and a prerender has no query.
+// there are no `entries` to generate — and unlike the board it is not per-namespace, because
+// which namespace is being looked at is a query parameter now, and a prerender has no query.
 export const prerender = process.env.KOZANE_SSG === "1";
 // `--include-scoped-files`. A file hit names a path inside the workspace and quotes a line
 // of that file, so an export carries file tags only when it was built to carry files at
 // all — the same opt-in that governs the taskspace panel. Card tags are board content and
 // go out with the rest of it.
 // The same flag governs whether the export may *name* a taskspace at all, for the reason
-// `loadProjectSnapshot` gates its taskspaces behind `includeScopes`: a taskspace's name is
+// `loadNamespaceSnapshot` gates its taskspaces behind `includeScopes`: a taskspace's name is
 // the name of a directory on someone's machine, and an export is published. This page was
 // reading `getAllTaskspaces` unconditionally and shipping every one of them, which
 // contradicted that and `docs/security-matrix.md` with it — and shipped nothing usable
@@ -106,38 +106,41 @@ function narrow<T>(record: Record<string, T>, keys: Iterable<string>): Record<st
 }
 
 /**
- * Bundle names and colours for the cards being shown, keyed by bundle.
+ * Partition names and colours for the cards being shown, keyed by partition.
  *
- * Per project, because the palette is assigned by position within a project's own bundles —
- * the same `applyPalette` over the same `getAllBundles` order the board uses, so a bundle's
- * dot is the same colour here as it is there. Read only for the projects that actually have
- * a card in the list, which is one of them whenever a project is selected.
+ * Per namespace, because the palette is assigned by position within a namespace's own partitions —
+ * the same `applyPalette` over the same `getAllPartitions` order the board uses, so a partition's
+ * dot is the same colour here as it is there. Read only for the namespaces that actually have
+ * a card in the list, which is one of them whenever a namespace is selected.
  */
-async function bundlesForProjects(
+async function partitionsForNamespaces(
   db: AnyDB,
-  projectIds: string[],
+  namespaceIds: string[],
 ): Promise<Record<string, { name: string; dot: string }>> {
-  // Read together rather than one project after the next. Nothing here depends on anything
-  // else here — each project's palette is assigned within its own bundles — and gathering
-  // across a workspace asks about as many projects as it has.
+  // Read together rather than one namespace after the next. Nothing here depends on anything
+  // else here — each namespace's palette is assigned within its own partitions — and gathering
+  // across a workspace asks about as many namespaces as it has.
   const palettes = await Promise.all(
-    projectIds.map(async (projectId) => applyPalette(await getAllBundles({ db, projectId }))),
+    namespaceIds.map(async (namespaceId) =>
+      applyPalette(await getAllPartitions({ db, namespaceId })),
+    ),
   );
 
-  const byBundle: Record<string, { name: string; dot: string }> = {};
-  for (const bundles of palettes) {
-    for (const bundle of bundles) byBundle[bundle.id] = { name: bundle.name, dot: bundle.dot };
+  const byPartition: Record<string, { name: string; dot: string }> = {};
+  for (const partitions of palettes) {
+    for (const partition of partitions)
+      byPartition[partition.id] = { name: partition.name, dot: partition.dot };
   }
-  return byBundle;
+  return byPartition;
 }
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   const { db } = locals;
 
   // Both are read from the query rather than the path: the index is one page over the whole
-  // workspace, and `?projectId=` narrows it. A prerender has no query, so both are null
+  // workspace, and `?namespaceId=` narrows it. A prerender has no query, so both are null
   // there and the page reads them from the URL in the browser instead.
-  const requestedProject = prerender ? null : url.searchParams.get("projectId");
+  const requestedNamespace = prerender ? null : url.searchParams.get("namespaceId");
   const requestedTag = prerender ? null : url.searchParams.get("tag");
   const tag = requestedTag ? normalizeTag(requestedTag) : null;
 
@@ -145,22 +148,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // decides whether file hits are baked in at all.
   const includeFiles = prerender ? includeScopedFiles : true;
 
-  // Checked rather than passed through: a `?projectId=` naming nothing would otherwise
+  // Checked rather than passed through: a `?namespaceId=` naming nothing would otherwise
   // quietly gather nothing at all and read as a workspace with no tags in it.
-  if (requestedProject && !(await getProject({ db, projectId: requestedProject })))
-    throw error(404, "Project not found");
+  if (requestedNamespace && !(await getNamespace({ db, namespaceId: requestedNamespace })))
+    throw error(404, "Namespace not found");
 
-  const [index, projects] = await Promise.all([
+  const [index, namespaces] = await Promise.all([
     loadTagIndex({
       db,
-      ...(requestedProject ? { projectId: requestedProject } : {}),
+      ...(requestedNamespace ? { namespaceId: requestedNamespace } : {}),
       includeFiles,
       // Kept between requests, so clicking from one tag to the next does not re-run the card
       // query and re-read every taskspace file to produce the set it just produced. Skipped
       // where there is no workspace to keep it in, which is a prerender building an export.
       ...cacheLocation(),
     }),
-    getAllProjects({ db }),
+    getAllNamespaces({ db }),
   ]);
 
   const { hits, cardTotal, fileTotal } = selectHits(index.hits, tag);
@@ -170,22 +173,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   // `flatMap` over an optional read, rather than `map(...).filter(Boolean)`. Every card
   // carrying a hit has an entry — `getCardTagHits` writes one before it writes the hit — but
   // a lookup can still miss, and `filter(Boolean)` narrows nothing, so the one thing standing
-  // between an absent entry and `getAllBundles({ projectId: undefined })` would be a filter
-  // the types could not see. `CardTagHits.cardProjects` says the value is optional now, so
+  // between an absent entry and `getAllPartitions({ namespaceId: undefined })` would be a filter
+  // the types could not see. `CardTagHits.cardNamespaces` says the value is optional now, so
   // this is the type being followed rather than an annotation working around it.
-  const shownProjects = [
+  const shownNamespaces = [
     ...new Set(
       shownCardIds.flatMap((cardId) => {
-        const projectId = index.cardProjects[cardId];
-        return projectId ? [projectId] : [];
+        const namespaceId = index.cardNamespaces[cardId];
+        return namespaceId ? [namespaceId] : [];
       }),
     ),
   ];
   // Both read the cards being shown and neither reads the other, so they go together — the
   // last round trip of the load rather than the last two.
-  const [cardBundles, bundles] = await Promise.all([
-    getCardBundleNames({ db, cardIds: shownCardIds }),
-    bundlesForProjects(db, shownProjects),
+  const [cardPartitions, partitions] = await Promise.all([
+    getCardPartitionNames({ db, cardIds: shownCardIds }),
+    partitionsForNamespaces(db, shownNamespaces),
   ]);
 
   // Only what the rows being sent actually name, except in an export — see `narrow`. The
@@ -199,9 +202,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   ]);
 
   return {
-    projectId: requestedProject,
+    namespaceId: requestedNamespace,
     // Named so the page can title itself and offer the way back to a board.
-    projects: projects.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
+    namespaces: namespaces.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
     // Built from every hit, always: the tree is this page's index, and one narrowed to the
     // selected tag would be a tree with a single branch.
     tree: buildTagTree(index.hits),
@@ -222,12 +225,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
      *  inside it, and drawn beside it too: to a reader whose tag is missing, "not every card
      *  was read" and "not every file was read" are one fact. See `TagIndex.cardsTruncated`. */
     cardsTruncated: index.cardsTruncated,
-    cardProjects: prerender ? index.cardProjects : narrow(index.cardProjects, shownCardIds),
-    // For labelling hits. Which bundle a card is in, and the name of the taskspace a file
+    cardNamespaces: prerender ? index.cardNamespaces : narrow(index.cardNamespaces, shownCardIds),
+    // For labelling hits. Which partition a card is in, and the name of the taskspace a file
     // sits in, are both things a hit deliberately does not carry — see the note on
     // `TagSource` — so they are joined here, for the hits actually being shown.
-    cardBundleIds: Object.fromEntries(cardBundles.map((row) => [row.cardId, row.bundleId])),
-    bundles,
+    cardPartitionIds: Object.fromEntries(
+      cardPartitions.map((row) => [row.cardId, row.partitionId]),
+    ),
+    partitions,
     // Empty in a plain export, because such an export walks no taskspace and so has none to
     // name. Nothing on the page needs it there either: the only rows a name labels are file
     // rows, which such an export does not carry.

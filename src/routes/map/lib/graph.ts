@@ -5,8 +5,8 @@ import { MAP_TAG_LINKS_MAX } from "$lib/constants";
 import type { Point, Rect } from "./treemap.js";
 
 /**
- * The lines drawn over the map's packing: a scope's spokes to the bundles it reaches, and the
- * selected tag's links to the bundles that carry it.
+ * The lines drawn over the map's packing: a scope's spokes to the partitions it reaches, and the
+ * selected tag's links to the partitions that carry it.
  *
  * Pure, for the reason `treemap.ts` is — the server and the browser both lay this out, and a
  * hub that landed somewhere different between the two would jump on hydration.
@@ -59,7 +59,7 @@ export function scopeRail(count: number, area: Rect): Rect {
 
 export type HubInput = {
   id: string;
-  /** Where this scope's spokes are going — the anchors on the bundles it reaches. */
+  /** Where this scope's spokes are going — the anchors on the partitions it reaches. */
   toward: Point[];
 };
 
@@ -69,13 +69,13 @@ export type HubPlacement = { id: string; point: Point };
  * Where each scope's node sits in the rail.
  *
  * Under the middle of what it reaches, so a spoke is as short and as vertical as the rail
- * allows: a hub starts at the mean x of its own anchors. Two scopes over the same bundles
+ * allows: a hub starts at the mean x of its own anchors. Two scopes over the same partitions
  * would then sit on top of each other, so the row is swept left to right pushing each hub to
  * at least {@link HUB_MIN_GAP} past the one before it, and then right to left to bring back
  * anything the first sweep pushed off the end.
  *
  * Hubs are dealt across the rows rather than chunked into them — sorted by x, then row
- * `index % rows`. Chunking would put every hub of the left-hand projects in the top row and
+ * `index % rows`. Chunking would put every hub of the left-hand namespaces in the top row and
  * leave the bottom row under the right-hand ones, which is the crossing pattern the rows were
  * added to avoid; dealing gives every row the full width to spread over.
  *
@@ -161,7 +161,7 @@ export function rectAnchor(rect: Rect, toward: Point): Point {
  * them.
  *
  * Curved rather than straight, and the reason is legibility rather than decoration: several
- * spokes from one hub to bundles in a row of one project are near-parallel straight lines
+ * spokes from one hub to partitions in a row of one namespace are near-parallel straight lines
  * that overlap for most of their length, while a bow proportional to the distance separates
  * them. The bow is a fixed fraction, so the path is a function of its endpoints alone and
  * needs no state to stay put between renders.
@@ -175,55 +175,55 @@ export function curve(from: Point, to: Point, bow = 0.14): string {
 }
 
 /**
- * Cards per bundle, per tag exactly as written. The shape the map loader sends and the only
+ * Cards per partition, per tag exactly as written. The shape the map loader sends and the only
  * thing the tag graph is drawn from — see `MAP_TAG_LINKS_MAX`.
  */
-export type TagBundleIndex = Record<string, Record<string, number> | undefined>;
-export type MapTagCard = { projectId: string; bundleId: string; updatedDay: string };
+export type TagPartitionIndex = Record<string, Record<string, number> | undefined>;
+export type MapTagCard = { namespaceId: string; partitionId: string; updatedDay: string };
 
 /**
- * Exact written tags to bundle counts, derived from the cached card dimensions the map
+ * Exact written tags to partition counts, derived from the cached card dimensions the map
  * receives. Keeping card ids until this step lets a caller first filter hits by change day
  * while still counting a card only once when the same tag occurs on several lines.
  */
-export function tagBundleIndex(
+export function tagPartitionIndex(
   hits: TagHit[],
   cardData: Record<string, MapTagCard | undefined>,
-): { index: TagBundleIndex; truncated: boolean } {
+): { index: TagPartitionIndex; truncated: boolean } {
   const cards = new Map<string, Map<string, Set<string>>>();
   let pairs = 0;
   let truncated = false;
 
   for (const hit of hits) {
     if (hit.source.kind !== "card") continue;
-    const bundleId = cardData[hit.source.cardId]?.bundleId;
-    if (!bundleId) continue;
+    const partitionId = cardData[hit.source.cardId]?.partitionId;
+    if (!partitionId) continue;
 
-    let byBundle = cards.get(hit.tag);
-    if (!byBundle) cards.set(hit.tag, (byBundle = new Map()));
-    let members = byBundle.get(bundleId);
+    let byPartition = cards.get(hit.tag);
+    if (!byPartition) cards.set(hit.tag, (byPartition = new Map()));
+    let members = byPartition.get(partitionId);
     if (!members) {
       if (pairs >= MAP_TAG_LINKS_MAX) {
         truncated = true;
         continue;
       }
       pairs++;
-      byBundle.set(bundleId, (members = new Set()));
+      byPartition.set(partitionId, (members = new Set()));
     }
     members.add(hit.source.cardId);
   }
 
-  const index: TagBundleIndex = {};
-  for (const [tag, byBundle] of cards) {
+  const index: TagPartitionIndex = {};
+  for (const [tag, byPartition] of cards) {
     const counts: Record<string, number> = {};
-    for (const [bundleId, members] of byBundle) counts[bundleId] = members.size;
+    for (const [partitionId, members] of byPartition) counts[partitionId] = members.size;
     index[tag] = counts;
   }
   return { index, truncated };
 }
 
 /**
- * The bundles a tag reaches, each with the weight of the line to draw to it.
+ * The partitions a tag reaches, each with the weight of the line to draw to it.
  *
  * Rolled up over subcategories with {@link tagMatcher}, so `'perf` reaches everything
  * `'perf:cache` and `'perf:cache:invalidation` reach — the same rule the tag index, the CLI
@@ -236,17 +236,17 @@ export function tagBundleIndex(
  * `'perf:disk` is two entries under `'perf`, and summing them counts it twice — which is
  * why `buildTagTree` tallies sets of sources rather than adding numbers. Distinguishing
  * them here would mean shipping the card ids the aggregate exists to avoid shipping, and the
- * line does not need it: what it decides is which bundles are linked and how heavily. The
+ * line does not need it: what it decides is which partitions are linked and how heavily. The
  * true count is in the tree beside it, where it is exact, and the page draws this as a line
  * rather than printing it as a number.
  */
-export function tagBundleTargets(index: TagBundleIndex, tag: string): Map<string, number> {
+export function tagPartitionTargets(index: TagPartitionIndex, tag: string): Map<string, number> {
   const matches = tagMatcher(tag);
   const totals = new Map<string, number>();
-  for (const [written, bundles] of Object.entries(index)) {
-    if (!bundles || !matches(written)) continue;
-    for (const [bundleId, cards] of Object.entries(bundles)) {
-      totals.set(bundleId, (totals.get(bundleId) ?? 0) + cards);
+  for (const [written, partitions] of Object.entries(index)) {
+    if (!partitions || !matches(written)) continue;
+    for (const [partitionId, cards] of Object.entries(partitions)) {
+      totals.set(partitionId, (totals.get(partitionId) ?? 0) + cards);
     }
   }
   return totals;
