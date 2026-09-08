@@ -2,7 +2,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { TASKSPACE_MARKER_KIND, TASKSPACE_MARKER_VERSION } from "../../lib/taskspace-marker.js";
+import {
+  TASKSPACE_MARKER_KIND,
+  TASKSPACE_MARKER_VERSION,
+  TASKSPACE_MARKER_VERSION_1,
+} from "../../lib/taskspace-marker.js";
 import { readTaskspaceMarker } from "./taskspace-marker.js";
 
 const dirs: string[] = [];
@@ -45,5 +49,25 @@ describe("readTaskspaceMarker", () => {
     expect(() => readTaskspaceMarker(dir)).toThrow("Taskspace marker not found");
     writeFileSync(join(dir, ".taskspace.json"), "not json");
     expect(() => readTaskspaceMarker(dir)).toThrow("Invalid taskspace marker");
+  });
+
+  // Every marker written before the rename is one of these, so the message it gets is the
+  // whole of what a user has to go on — "Invalid taskspace marker" would describe a
+  // well-formed file as broken and leave them looking for the corruption.
+  it("names the rename when refusing a marker written before it", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kozane-marker-test-"));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, ".taskspace.json"),
+      JSON.stringify({
+        kind: TASKSPACE_MARKER_KIND,
+        version: TASKSPACE_MARKER_VERSION_1,
+        taskspaceId: "taskspace-1",
+        projectId: "p-1",
+      }),
+    );
+
+    expect(() => readTaskspaceMarker(dir)).toThrow(/predates the rename/);
+    expect(() => readTaskspaceMarker(dir)).toThrow(/kozane taskspace create/);
   });
 });

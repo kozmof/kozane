@@ -162,94 +162,27 @@ describe("db JSON export/import", () => {
     expect(dump.tables.namespace[0].is_default).toBe(1);
   });
 
-  it("imports a version 2 export without the default namespace column", async () => {
-    const sourceUrl = await migratedDbUrl("v2-source.db");
-    const targetUrl = await migratedDbUrl("v2-target.db");
-    await seedDb(sourceUrl);
+  // The four tests that stood here imported a version 2, 3, 4 and 5 dump apiece, each one
+  // checking the upgrade step that filled in what its version predated. Those steps are gone
+  // along with the ability to read those dumps, so what is left to state is the refusal — and
+  // that it explains itself, because the file being refused is somebody's backup.
+  it.each([2, 3, 4, 5, 6])(
+    "refuses a version %i export, taken before the rename",
+    async (version) => {
+      const dbUrl = await migratedDbUrl(`v${version}-refused.db`);
+      const legacy = { ...(await exportDbJson(dbUrl)), version };
 
-    const dump = await exportDbJson(sourceUrl);
-    const legacy = {
-      ...dump,
-      version: 2,
-      tables: {
-        ...dump.tables,
-        namespace: dump.tables.namespace.map(({ id, name }) => ({ id, name })),
-      },
-    };
+      await expect(importDbJson(dbUrl, legacy)).rejects.toThrow(
+        /predates the rename of "project" to "namespace"/,
+      );
+    },
+  );
 
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ namespace: 1 });
-    expect((await exportDbJson(targetUrl)).tables.namespace[0].is_default).toBe(0);
-  });
+  it("tells the holder of an old dump what to do with it", async () => {
+    const dbUrl = await migratedDbUrl("old-dump-advice.db");
+    const legacy = { ...(await exportDbJson(dbUrl)), version: 6 };
 
-  it("imports a version 3 export by rebuilding the default layer", async () => {
-    const sourceUrl = await migratedDbUrl("v3-source.db");
-    const targetUrl = await migratedDbUrl("v3-target.db");
-    await seedDb(sourceUrl);
-
-    const dump = await exportDbJson(sourceUrl);
-    const { layer: _layer, warp: _warp, ...tablesWithoutLayer } = dump.tables;
-    const legacy = {
-      ...dump,
-      version: 3,
-      tables: {
-        ...tablesWithoutLayer,
-        card: dump.tables.card.map(({ layer_id: _layerId, ...card }) => card),
-      },
-    };
-
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ layer: 1, card: 2 });
-
-    const imported = await exportDbJson(targetUrl);
-    expect(imported.tables.layer).toMatchObject([
-      { namespace_id: "namespace-1", name: "Base", position: 0, is_default: 1 },
-    ]);
-    const baseLayerId = imported.tables.layer[0].id;
-    expect(imported.tables.card.map(({ layer_id }) => layer_id)).toEqual([
-      baseLayerId,
-      baseLayerId,
-    ]);
-  });
-
-  it("imports a version 4 export, which predates warps", async () => {
-    const sourceUrl = await migratedDbUrl("v4-source.db");
-    const targetUrl = await migratedDbUrl("v4-target.db");
-    await seedDb(sourceUrl);
-
-    const dump = await exportDbJson(sourceUrl);
-    const { warp: _warp, ...tablesWithoutWarp } = dump.tables;
-    const legacy = { ...dump, version: 4, tables: tablesWithoutWarp };
-
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ warp: 0, namespace: 1 });
-    expect((await exportDbJson(targetUrl)).tables.warp).toEqual([]);
-  });
-
-  it("imports a version 5 export, which predates the card timestamps", async () => {
-    const sourceUrl = await migratedDbUrl("v5-source.db");
-    const targetUrl = await migratedDbUrl("v5-target.db");
-    await seedDb(sourceUrl);
-
-    const dump = await exportDbJson(sourceUrl);
-    const legacy = {
-      ...dump,
-      version: 5,
-      tables: {
-        ...dump.tables,
-        card: dump.tables.card.map(
-          ({ created_at: _createdAt, updated_at: _updatedAt, ...card }) => card,
-        ),
-      },
-    };
-
-    await expect(importDbJson(targetUrl, legacy)).resolves.toMatchObject({ card: 2 });
-
-    // A dump carrying no history is filled the way migration 0011 fills the rows already in
-    // a database: both columns at the moment of the import, which reads as created now and
-    // never since edited, so `kozane card list --sort gap` reports `0s` for these cards.
-    const importedAt = Math.floor(Date.now() / 1000);
-    for (const card of (await exportDbJson(targetUrl)).tables.card) {
-      expect(card.created_at).toBe(card.updated_at);
-      expect(card.created_at).toBeGreaterThan(importedAt - 600);
-    }
+    await expect(importDbJson(dbUrl, legacy)).rejects.toThrow(/kozane db migrate/);
   });
 
   it("rejects an export version this build cannot read", async () => {

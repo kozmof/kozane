@@ -4,6 +4,7 @@ import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
+  TASKSPACE_MARKER_VERSION_1,
   type TaskspaceMarker,
 } from "../../lib/taskspace-marker.js";
 
@@ -33,6 +34,24 @@ export function readTaskspaceMarker(
   } catch {
     throw new Error(`Invalid taskspace marker: ${markerPath}`);
   }
+  // Named before the general check below, which would otherwise answer a marker written by
+  // any earlier Kozane with "invalid" — it is not malformed, it is the previous format, and
+  // the difference is the whole of what the reader can do about it.
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    "kind" in parsed &&
+    parsed.kind === TASKSPACE_MARKER_KIND &&
+    "version" in parsed &&
+    parsed.version === TASKSPACE_MARKER_VERSION_1
+  ) {
+    throw new Error(
+      `Taskspace marker at ${markerPath} predates the rename of "project" to "namespace" ` +
+        `and cannot be read. Delete it and recreate the taskspace with ` +
+        `"kozane taskspace create".`,
+    );
+  }
+
   if (
     typeof parsed !== "object" ||
     parsed === null ||

@@ -2,14 +2,27 @@ import { createClient, type InValue } from "@libsql/client";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../db/schema.js";
-import { v7 as uuidv7 } from "uuid";
-import { chunked, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
+import { chunked } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 6;
-// Version 2 predates `namespace.is_default` (migration 0003). Such a file is still
-// importable; every namespace comes back non-default, which is what version 2 recorded.
-const OLDEST_SUPPORTED_IMPORT_VERSION = 2;
+const EXPORT_VERSION = 7;
+/**
+ * Version 7 is the first written after `project` and `bundle` became `namespace` and
+ * `partition`, and it is also the oldest that can be read.
+ *
+ * The floor used to be 2, and every version between carried an upgrade step: filling
+ * `is_default`, rebuilding the default layers, defaulting the warps, filling the card
+ * timestamps. Those are gone. The rename is not a column a step can fill in — a version 6
+ * dump names its tables `project` and `bundle` throughout, and reading one would mean
+ * carrying a translation of every table and foreign key in the file, indefinitely, for
+ * dumps taken before a beta rename.
+ *
+ * So an older dump is refused rather than half-read. The cost is real and is the point of
+ * saying so here: a dump is a user's backup, and one taken before this release can no
+ * longer be imported by `kozane db import`. A workspace still on the old schema should be
+ * migrated instead — migration 0014 renames the database in place and keeps every row.
+ */
+const OLDEST_SUPPORTED_IMPORT_VERSION = 7;
 
 /**
  * The tables a dump carries, in the order rows may be inserted: a table's foreign keys all
@@ -148,93 +161,6 @@ function isJsonScalar(value: unknown): value is JsonScalar {
   );
 }
 
-/** Fills in columns added after `version`, so older exports validate against TABLES. */
-function upgradeDumpTables(version: number, tables: Partial<TableRows>): void {
-  if (version < 3) {
-    for (const row of tables.namespace ?? []) {
-      if (typeof row === "object" && row !== null && !("is_default" in row)) row.is_default = 0;
-    }
-  }
-  if (version < 4) upgradeLayers(tables);
-  // Versions before 5 predate warps (migration 0006). There is nothing to rebuild: a
-  // workspace exported then simply had none.
-  if (version < 5) tables.warp ??= [];
-  // Versions before 6 predate the card timestamps (migration 0011). The dump records no
-  // history for these cards, so they are filled the way that migration fills the rows
-  // already in a database: both columns at the moment of the import, which reads as created
-  // now and never since edited.
-  if (version < 6) upgradeCardTimestamps(tables);
-}
-
-/**
- * Fills `card.created_at` / `card.updated_at` on a dump taken before they existed. Written
- * in seconds, matching `integer({ mode: "timestamp" })` and the `unixepoch()` the migration
- * uses. A row that somehow carries a value already keeps it, so a newer export mislabelled
- * with an older version number is not overwritten.
- *
- * One `now` for the whole dump rather than one per card: an import is a single moment, and
- * cards that arrived together should not be separable by a second's drift they never had.
- */
-function upgradeCardTimestamps(tables: Partial<TableRows>): void {
-  const now = Math.floor(Date.now() / 1000);
-  for (const card of tables.card ?? []) {
-    card.created_at ??= now;
-    card.updated_at ??= now;
-  }
-}
-
-/**
- * Versions before 4 predate layers (migration 0005). Rebuild what that migration does:
- * a default `Base` layer per namespace, with every card placed on its namespace's layer.
- */
-function upgradeLayers(tables: Partial<TableRows>): void {
-  if (tables.layer === undefined) tables.layer = [];
-  const layerIdByNamespace = new Map<string, string>();
-  // A dump that already carries layers (an older version number on a newer export, say)
-  // keeps them: only namespaces without one get a rebuilt default layer.
-  for (const layer of tables.layer) {
-    if (
-      typeof layer.namespace_id === "string" &&
-      typeof layer.id === "string" &&
-      layer.is_default
-    ) {
-      layerIdByNamespace.set(layer.namespace_id, layer.id);
-    }
-  }
-  for (const namespace of tables.namespace ?? []) {
-    const namespaceId = namespace.id;
-    if (typeof namespaceId !== "string" || layerIdByNamespace.has(namespaceId)) continue;
-    const layerId = uuidv7();
-    layerIdByNamespace.set(namespaceId, layerId);
-    tables.layer.push({
-      id: layerId,
-      namespace_id: namespaceId,
-      name: DEFAULT_LAYER_NAME,
-      position: 0,
-      is_default: 1,
-    });
-  }
-
-  const namespaceIdByPartition = new Map<string, string>();
-  for (const partition of tables.partition ?? []) {
-    if (typeof partition.id === "string" && typeof partition.namespace_id === "string") {
-      namespaceIdByPartition.set(partition.id, partition.namespace_id);
-    }
-  }
-
-  for (const card of tables.card ?? []) {
-    if ("layer_id" in card && card.layer_id !== null) continue;
-    const namespaceId =
-      typeof card.partition_id === "string"
-        ? namespaceIdByPartition.get(card.partition_id)
-        : undefined;
-    const layerId = namespaceId ? layerIdByNamespace.get(namespaceId) : undefined;
-    // A card whose partition or namespace is missing from the dump would fail the NOT NULL
-    // insert anyway; leave it unset so parseDump reports the malformed row instead.
-    if (layerId) card.layer_id = layerId;
-  }
-}
-
 function parseDump(input: unknown): DbJsonDump {
   if (typeof input !== "object" || input === null) {
     throw new Error("Import file must contain a JSON object");
@@ -242,12 +168,18 @@ function parseDump(input: unknown): DbJsonDump {
 
   const dump = input as Partial<DbJsonDump>;
   if (dump.kind !== EXPORT_KIND) throw new Error("Import file is not a Kozane database export");
-  if (
-    typeof dump.version !== "number" ||
-    dump.version < OLDEST_SUPPORTED_IMPORT_VERSION ||
-    dump.version > EXPORT_VERSION
-  ) {
+  if (typeof dump.version !== "number" || dump.version > EXPORT_VERSION) {
     throw new Error(`Unsupported Kozane database export version: ${String(dump.version)}`);
+  }
+  // Said in full rather than as "unsupported version". A dump below the floor is a backup
+  // someone is holding, and the bare version number gives them nothing to do about it.
+  if (dump.version < OLDEST_SUPPORTED_IMPORT_VERSION) {
+    throw new Error(
+      `Kozane database export version ${String(dump.version)} predates the rename of ` +
+        `"project" to "namespace" and "bundle" to "partition", and cannot be imported. ` +
+        `Import it with Kozane 0.10 or earlier and then run "kozane db migrate", which ` +
+        `renames the database in place and keeps every row.`,
+    );
   }
   if (typeof dump.exportedAt !== "string") throw new Error("Import file is missing exportedAt");
   if (typeof dump.migrations !== "object" || dump.migrations === null) {
@@ -264,8 +196,6 @@ function parseDump(input: unknown): DbJsonDump {
   if (typeof dump.tables !== "object" || dump.tables === null) {
     throw new Error("Import file is missing tables");
   }
-
-  upgradeDumpTables(dump.version, dump.tables as Partial<TableRows>);
 
   for (const table of TABLES) {
     const rows = (dump.tables as Partial<TableRows>)[table.name];

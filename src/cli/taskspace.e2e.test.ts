@@ -58,9 +58,12 @@ describe("taskspace CLI flow", () => {
     const target = join(root, "nested", "explicit");
     const output = cli(root, "taskspace", "create", "unscoped", "--no-scope", "--dir", target);
     expect(output).toContain(`path : ${target}`);
+    // Written out rather than taken from the constant, so that a bump to the on-disk format
+    // has to be made here too. Version 2 is the rename: the field beside these is
+    // `namespaceId`, and a version 1 file naming a `projectId` is refused outright.
     expect(JSON.parse(readFileSync(join(target, ".taskspace.json"), "utf-8"))).toMatchObject({
       kind: "kozane.taskspace",
-      version: 1,
+      version: 2,
     });
 
     const duplicate = runCli(
