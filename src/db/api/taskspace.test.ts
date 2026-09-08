@@ -4,33 +4,33 @@ import {
   addTaskspace,
   getTaskspace,
   getAllTaskspaces,
-  getTaskspacesInProject,
+  getTaskspacesInNamespace,
   updateTaskspace,
   deleteTaskspace,
 } from "./taskspace.js";
-import { addProject } from "./project.js";
+import { addNamespace } from "./namespace.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "P" });
+  const namespaceId = await addNamespace({ db, name: "P" });
   const scopeId = await addScope({ db, name: "S" });
-  return { db, projectId, scopeId };
+  return { db, namespaceId, scopeId };
 }
 
 describe("addTaskspace", () => {
   it("returns a non-empty id", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     expect(id).toBeTruthy();
   });
 
   it("stores the provided name and path", async () => {
-    const { db, projectId, scopeId } = await setup();
+    const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({
       db,
-      projectId,
+      namespaceId,
       scopeId,
       name: "my-taskspace",
       path: "packages/core",
@@ -41,30 +41,30 @@ describe("addTaskspace", () => {
   });
 
   it("defaults name to empty string", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.name).toBe("");
   });
 
   it("defaults pathKind to project_relative", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.pathKind).toBe("project_relative");
   });
 
   it("stores lastSeenAt when provided", async () => {
-    const { db, projectId, scopeId } = await setup();
+    const { db, namespaceId, scopeId } = await setup();
     const now = new Date(Math.floor(Date.now() / 1000) * 1000);
-    const id = await addTaskspace({ db, projectId, scopeId, lastSeenAt: now });
+    const id = await addTaskspace({ db, namespaceId, scopeId, lastSeenAt: now });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.lastSeenAt?.getTime()).toBe(now.getTime());
   });
 
   it("stores absolute pathKind when specified", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId, pathKind: "absolute" });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId, pathKind: "absolute" });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.pathKind).toBe("absolute");
   });
@@ -72,8 +72,8 @@ describe("addTaskspace", () => {
 
 describe("getTaskspace", () => {
   it("returns the taskspace by id", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId, name: "wc1" });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId, name: "wc1" });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.id).toBe(id);
     expect(taskspace?.scopeId).toBe(scopeId);
@@ -92,9 +92,9 @@ describe("getAllTaskspaces", () => {
   });
 
   it("returns all taskspaces", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id1 = await addTaskspace({ db, projectId, scopeId, name: "wc1" });
-    const id2 = await addTaskspace({ db, projectId, scopeId, name: "wc2" });
+    const { db, namespaceId, scopeId } = await setup();
+    const id1 = await addTaskspace({ db, namespaceId, scopeId, name: "wc1" });
+    const id2 = await addTaskspace({ db, namespaceId, scopeId, name: "wc2" });
     const all = await getAllTaskspaces({ db });
     expect(all.map((w) => w.id)).toEqual(expect.arrayContaining([id1, id2]));
     expect(all).toHaveLength(2);
@@ -103,15 +103,15 @@ describe("getAllTaskspaces", () => {
 
 describe("updateTaskspace", () => {
   it("updates name", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId, name: "old" });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId, name: "old" });
     await updateTaskspace({ db, taskspaceId: id, name: "new" });
     expect((await getTaskspace({ db, taskspaceId: id }))?.name).toBe("new");
   });
 
   it("updates path and pathKind", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     await updateTaskspace({ db, taskspaceId: id, path: "/abs/path", pathKind: "absolute" });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
     expect(taskspace?.path).toBe("/abs/path");
@@ -119,8 +119,8 @@ describe("updateTaskspace", () => {
   });
 
   it("updates lastSeenAt", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     // SQLite stores timestamps as integer seconds, so floor to the nearest second
     const now = new Date(Math.floor(Date.now() / 1000) * 1000);
     await updateTaskspace({ db, taskspaceId: id, lastSeenAt: now });
@@ -138,8 +138,8 @@ describe("updateTaskspace", () => {
 
 describe("deleteTaskspace", () => {
   it("removes the taskspace", async () => {
-    const { db, projectId, scopeId } = await setup();
-    const id = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, scopeId } = await setup();
+    const id = await addTaskspace({ db, namespaceId, scopeId });
     await deleteTaskspace({ db, taskspaceId: id });
     expect(await getTaskspace({ db, taskspaceId: id })).toBeUndefined();
   });
@@ -150,48 +150,52 @@ describe("deleteTaskspace", () => {
   });
 });
 
-describe("getTaskspacesInProject", () => {
+describe("getTaskspacesInNamespace", () => {
   const names = (rows: { name: string }[]) => rows.map((r) => r.name).sort();
 
-  async function twoProjects() {
+  async function twoNamespaces() {
     const d = await createTestDB();
-    const p1 = await addProject({ db: d, name: "P1" });
-    const p2 = await addProject({ db: d, name: "P2" });
+    const p1 = await addNamespace({ db: d, name: "P1" });
+    const p2 = await addNamespace({ db: d, name: "P2" });
     return { d, p1, p2 };
   }
 
-  it("returns this project's taskspaces and not another project's", async () => {
-    const { d, p1, p2 } = await twoProjects();
-    await addTaskspace({ db: d, projectId: p1, name: "mine" });
-    await addTaskspace({ db: d, projectId: p2, name: "theirs" });
+  it("returns this namespace's taskspaces and not another namespace's", async () => {
+    const { d, p1, p2 } = await twoNamespaces();
+    await addTaskspace({ db: d, namespaceId: p1, name: "mine" });
+    await addTaskspace({ db: d, namespaceId: p2, name: "theirs" });
 
-    expect(names(await getTaskspacesInProject({ db: d, projectId: p1 }))).toEqual(["mine"]);
-    expect(names(await getTaskspacesInProject({ db: d, projectId: p2 }))).toEqual(["theirs"]);
+    expect(names(await getTaskspacesInNamespace({ db: d, namespaceId: p1 }))).toEqual(["mine"]);
+    expect(names(await getTaskspacesInNamespace({ db: d, namespaceId: p2 }))).toEqual(["theirs"]);
   });
 
-  it("returns a taskspace with no project to every project", async () => {
-    const { d, p1, p2 } = await twoProjects();
-    // A reattach from a marker naming no project leaves project_id null; that row is
+  it("returns a taskspace with no namespace to every namespace", async () => {
+    const { d, p1, p2 } = await twoNamespaces();
+    // A reattach from a marker naming no namespace leaves namespace_id null; that row is
     // unplaced rather than somebody else's, so it must not be invisible everywhere.
     await addTaskspace({ db: d, name: "unassigned" });
 
-    expect(names(await getTaskspacesInProject({ db: d, projectId: p1 }))).toEqual(["unassigned"]);
-    expect(names(await getTaskspacesInProject({ db: d, projectId: p2 }))).toEqual(["unassigned"]);
+    expect(names(await getTaskspacesInNamespace({ db: d, namespaceId: p1 }))).toEqual([
+      "unassigned",
+    ]);
+    expect(names(await getTaskspacesInNamespace({ db: d, namespaceId: p2 }))).toEqual([
+      "unassigned",
+    ]);
   });
 
-  it("returns an empty list for a project with nothing of its own", async () => {
-    const { d, p1, p2 } = await twoProjects();
-    await addTaskspace({ db: d, projectId: p2, name: "theirs" });
+  it("returns an empty list for a namespace with nothing of its own", async () => {
+    const { d, p1, p2 } = await twoNamespaces();
+    await addTaskspace({ db: d, namespaceId: p2, name: "theirs" });
 
-    expect(await getTaskspacesInProject({ db: d, projectId: p1 })).toEqual([]);
+    expect(await getTaskspacesInNamespace({ db: d, namespaceId: p1 })).toEqual([]);
   });
 
   it("carries the scope attachment through", async () => {
-    const { d, p1 } = await twoProjects();
+    const { d, p1 } = await twoNamespaces();
     const scopeId = await addScope({ db: d, name: "S" });
-    await addTaskspace({ db: d, projectId: p1, scopeId, name: "scoped" });
+    await addTaskspace({ db: d, namespaceId: p1, scopeId, name: "scoped" });
 
-    const [row] = await getTaskspacesInProject({ db: d, projectId: p1 });
+    const [row] = await getTaskspacesInNamespace({ db: d, namespaceId: p1 });
     expect(row.scopeId).toBe(scopeId);
   });
 });

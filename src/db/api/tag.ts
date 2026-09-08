@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, like, type SQL } from "drizzle-orm";
-import { bundleTable, cardTable } from "../schema.js";
+import { partitionTable, cardTable } from "../schema.js";
 import type { NeedsDB } from "./types.js";
 import type { TagHit } from "../../lib/types.js";
 import { scanTagLines } from "../../lib/tag.js";
@@ -10,15 +10,18 @@ export type CardTagHits = {
   /**
    * The map-facing dimensions of each tagged card, kept beside rather than repeated on
    * every line-level hit. This is persisted with the tag cache, so the treemap can regroup
-   * one cached gather by bundle and UTC change day without querying the cards again.
+   * one cached gather by partition and UTC change day without querying the cards again.
    */
-  cardData: Record<string, { projectId: string; bundleId: string; updatedDay: string } | undefined>;
+  cardData: Record<
+    string,
+    { namespaceId: string; partitionId: string; updatedDay: string } | undefined
+  >;
   /**
-   * Which project each card named above belongs to.
+   * Which namespace each card named above belongs to.
    *
-   * Beside the hits rather than on them, per the note on `TagSource`: a card's project is
-   * `bundle.project_id`, so putting it on every hit would be a second copy of a column the
-   * card already has. It is returned at all because the index gathers across projects, and
+   * Beside the hits rather than on them, per the note on `TagSource`: a card's namespace is
+   * `partition.namespace_id`, so putting it on every hit would be a second copy of a column the
+   * card already has. It is returned at all because the index gathers across namespaces, and
    * a hit then has to be able to say which board it came from — the join is already made
    * here, so making it again in the caller would be a second query for a column in hand.
    *
@@ -29,7 +32,7 @@ export type CardTagHits = {
    * copy is narrowed to the cards actually being shown. Each had a hand-written
    * `string | undefined` annotation to work around the type; the type now says it.
    */
-  cardProjects: Record<string, string | undefined>;
+  cardNamespaces: Record<string, string | undefined>;
   /**
    * Whether {@link TAG_CARD_HITS_MAX} was reached, so `hits` is a prefix of what the cards
    * hold rather than all of it.
@@ -61,9 +64,9 @@ type NotLikeWildcard<T extends string> = T extends "%" | "_" ? never : T;
 const SIGIL_PATTERN: NotLikeWildcard<typeof TAG_SIGIL> = TAG_SIGIL;
 
 type GetCardTagHits = NeedsDB & {
-  /** Narrows to one project. Omitted, every card in the workspace is read — which is what
-   *  the tag index does when no project is selected. */
-  projectId?: string;
+  /** Narrows to one namespace. Omitted, every card in the workspace is read — which is what
+   *  the tag index does when no namespace is selected. */
+  namespaceId?: string;
   /** How many hits to take before stopping, defaulting to {@link TAG_CARD_HITS_MAX}.
    *  Overridable so a test can reach the ceiling without putting a hundred thousand tags in
    *  the database, the same way `TaskspaceScanLimits` opens the file walk's. */
@@ -95,7 +98,7 @@ type GetCardTagHits = NeedsDB & {
  */
 export async function getCardTagHits({
   db,
-  projectId,
+  namespaceId,
   hitsMax = TAG_CARD_HITS_MAX,
   rowsPage = TAG_CARD_ROWS_PAGE,
 }: GetCardTagHits): Promise<CardTagHits> {
@@ -103,12 +106,12 @@ export async function getCardTagHits({
   // into JavaScript to be parsed. Necessary rather than sufficient — `don't` comes back and
   // finds nothing — which is the right way round for a prefilter.
   const holdsSigil = like(cardTable.content, `%${SIGIL_PATTERN}%`);
-  const where: SQL | undefined = projectId
-    ? and(holdsSigil, eq(bundleTable.projectId, projectId))
+  const where: SQL | undefined = namespaceId
+    ? and(holdsSigil, eq(partitionTable.namespaceId, namespaceId))
     : holdsSigil;
 
   const hits: TagHit[] = [];
-  const cardProjects: Record<string, string> = {};
+  const cardNamespaces: Record<string, string> = {};
   const cardData: CardTagHits["cardData"] = {};
   let truncated = false;
   // Where the last page ended. Ordered by the same column it pages on, which is what makes
@@ -121,12 +124,12 @@ export async function getCardTagHits({
       .select({
         id: cardTable.id,
         content: cardTable.content,
-        projectId: bundleTable.projectId,
-        bundleId: cardTable.bundleId,
+        namespaceId: partitionTable.namespaceId,
+        partitionId: cardTable.partitionId,
         updatedAt: cardTable.updatedAt,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(after === undefined ? where : and(where, gt(cardTable.id, after)))
       .orderBy(asc(cardTable.id))
       .limit(rowsPage);
@@ -149,10 +152,10 @@ export async function getCardTagHits({
       }
       const found = scanTagLines(row.content);
       if (found.length === 0) continue;
-      cardProjects[row.id] = row.projectId;
+      cardNamespaces[row.id] = row.namespaceId;
       cardData[row.id] = {
-        projectId: row.projectId,
-        bundleId: row.bundleId,
+        namespaceId: row.namespaceId,
+        partitionId: row.partitionId,
         updatedDay: row.updatedAt.toISOString().slice(0, 10),
       };
       for (const { tag, excerpt } of found) {
@@ -170,5 +173,5 @@ export async function getCardTagHits({
     if (rows.length < rowsPage) break;
   }
 
-  return { hits, cardData, cardProjects, truncated };
+  return { hits, cardData, cardNamespaces, truncated };
 }

@@ -7,10 +7,10 @@
  * together. What they share is an invariant no single-table module can hold: deleting a card
  * must dissolve a glue group the deletion would leave with one member; squashing one must
  * insert the pieces, carry the scope memberships over, and remove the original or none of
- * it; deleting a bundle must move its cards before the cascade takes them.
+ * it; deleting a partition must move its cards before the cascade takes them.
  *
  * So each of these opens the transaction, and the modules it calls into take `AnyDB` and run
- * inside it. The alternative — a card function reaching into glue, a bundle function reaching
+ * inside it. The alternative — a card function reaching into glue, a partition function reaching
  * into card — is the import cycle this module exists instead of.
  *
  * A function belongs here when leaving it out would let a partial write be observed. A
@@ -22,26 +22,32 @@ import { withTx, type DB, type AnyDB } from "../tx.js";
 import {
   addCard,
   newCardStamps,
-  reassignBundleCards,
+  reassignPartitionCards,
   reassignLayerCards,
-  cardsBelongToProject,
-  getCardBundleNames,
+  cardsBelongToNamespace,
+  getCardPartitionNames,
   getCardLayerNames,
 } from "./card.js";
-import { deleteBundle, getBundle, getDefaultBundle, getAllBundles, addBundle } from "./bundle.js";
+import {
+  deletePartition,
+  getPartition,
+  getDefaultPartition,
+  getAllPartitions,
+  addPartition,
+} from "./partition.js";
 import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "./layer.js";
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
 import {
   NotFoundError,
-  DefaultBundleError,
+  DefaultPartitionError,
   DefaultLayerError,
   columnCount,
   type CardBatchResult,
 } from "./utils.js";
 import { and, eq, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, scopeRelTable } from "../schema.js";
+import { partitionTable, cardTable, scopeRelTable } from "../schema.js";
 import type { Card } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
@@ -49,14 +55,14 @@ import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 type CreateCardFromTaskspace = {
   db: DB;
   taskspaceId: string;
-  bundleId: string;
+  partitionId: string;
   content: string;
 };
 
 type CreateCardInTaskspaceContext = {
   db: AnyDB;
   taskspaceId: string;
-  bundleId: string;
+  partitionId: string;
   content: string;
 };
 
@@ -69,12 +75,12 @@ type CreateCardInTaskspaceContext = {
 export async function createCardInTaskspaceContext({
   db,
   taskspaceId,
-  bundleId,
+  partitionId,
   content,
 }: CreateCardInTaskspaceContext): Promise<string> {
   const taskspace = await getTaskspace({ db, taskspaceId });
   if (!taskspace) throw new NotFoundError(`Taskspace taskspaceId=${taskspaceId}`);
-  const cardId = await addCard({ db, bundleId, content, taskspaceId });
+  const cardId = await addCard({ db, partitionId, content, taskspaceId });
   if (taskspace.scopeId) {
     await addScopeRel({ db, scopeId: taskspace.scopeId, cardId });
   }
@@ -82,7 +88,7 @@ export async function createCardInTaskspaceContext({
 }
 
 /**
- * Creates a card in the given bundle within a taskspace context.
+ * Creates a card in the given partition within a taskspace context.
  * If the taskspace is still attached to a scope, the new card is
  * simultaneously registered in scope_rel (auto-add, 7-1), making the
  * "originated" and "gathered" relationships consistent from creation time.
@@ -91,33 +97,33 @@ export async function createCardInTaskspaceContext({
 export async function createCardFromTaskspace({
   db,
   taskspaceId,
-  bundleId,
+  partitionId,
   content,
 }: CreateCardFromTaskspace): Promise<string> {
   return withTx(db, (tx) =>
-    createCardInTaskspaceContext({ db: tx, taskspaceId, bundleId, content }),
+    createCardInTaskspaceContext({ db: tx, taskspaceId, partitionId, content }),
   );
 }
 
-type DeleteProjectCards = { db: DB; projectId: string; cardIds: string[] };
+type DeleteNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /**
- * Deletes cards after verifying every one belongs to projectId, dissolving any glue
+ * Deletes cards after verifying every one belongs to namespaceId, dissolving any glue
  * group the removal would leave degenerate. Refuses if any card is not owned.
  *
  * The unglue step is not optional: deleting a card cascades its glue_rel row away
  * without going through glue.ts, which would strand the surviving partner of a
  * two-card group in a group of one — a card the UI still offers to "unglue".
  */
-export async function deleteProjectCards({
+export async function deleteNamespaceCards({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-}: DeleteProjectCards): Promise<CardBatchResult> {
+}: DeleteNamespaceCards): Promise<CardBatchResult> {
   if (cardIds.length === 0) return { ok: true };
   const uniqueIds = [...new Set(cardIds)];
   return withTx(db, async (tx) => {
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds: uniqueIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds: uniqueIds });
     if (!owned.ok) return owned;
     await unglueCardsInTx({ db: tx, cardIds: uniqueIds });
     await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
@@ -125,9 +131,9 @@ export async function deleteProjectCards({
   });
 }
 
-type SquashProjectCard = {
+type SquashNamespaceCard = {
   db: DB;
-  projectId: string;
+  namespaceId: string;
   cardId: string;
   canvasWidth: number;
   canvasHeight: number;
@@ -139,33 +145,33 @@ export type SquashCardResult =
 
 /**
  * Replaces a card with one card per segment of its text, in the manner of
- * `kozane card squash`: the pieces inherit its bundle, layer, taskspace, width, and scope
+ * `kozane card squash`: the pieces inherit its partition, layer, taskspace, width, and scope
  * memberships, are laid out from where it sat, and the card itself is removed. All in one
  * transaction, so a failure leaves the original whole rather than half of it on the board.
  *
  * Refuses a card whose text yields a single segment — squashing it would delete and
  * recreate the same card under a new id, breaking any reference to the old one for nothing.
  *
- * The source leaves its glue group on the way out, for the reason `deleteProjectCards`
+ * The source leaves its glue group on the way out, for the reason `deleteNamespaceCards`
  * gives. The pieces start unglued: they are one card's worth of text, not a group someone
  * arranged.
  */
-export async function squashProjectCard({
+export async function squashNamespaceCard({
   db,
-  projectId,
+  namespaceId,
   cardId,
   canvasWidth,
   canvasHeight,
-}: SquashProjectCard): Promise<SquashCardResult> {
+}: SquashNamespaceCard): Promise<SquashCardResult> {
   return withTx(db, async (tx) => {
-    const inProject = and(
-      eq(cardTable.bundleId, bundleTable.id),
-      eq(bundleTable.projectId, projectId),
+    const inNamespace = and(
+      eq(cardTable.partitionId, partitionTable.id),
+      eq(partitionTable.namespaceId, namespaceId),
     );
     const source = await tx
       .select({
         id: cardTable.id,
-        bundleId: cardTable.bundleId,
+        partitionId: cardTable.partitionId,
         layerId: cardTable.layerId,
         taskspaceId: cardTable.taskspaceId,
         content: cardTable.content,
@@ -175,7 +181,7 @@ export async function squashProjectCard({
         width: cardTable.width,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, inProject)
+      .innerJoin(partitionTable, inNamespace)
       .where(eq(cardTable.id, cardId))
       .get();
     if (!source) return { ok: false, reason: "not-found" };
@@ -187,7 +193,7 @@ export async function squashProjectCard({
     const occupied = await tx
       .select({ id: cardTable.id, posX: cardTable.posX, posY: cardTable.posY })
       .from(cardTable)
-      .innerJoin(bundleTable, inProject);
+      .innerJoin(partitionTable, inNamespace);
     const positions = squashCardPositions(
       // Not the source's own slot: it is about to be deleted, so the first piece takes the
       // place the card the user was looking at had.
@@ -203,7 +209,7 @@ export async function squashProjectCard({
     const stamps = newCardStamps();
     const rows = contents.map((content, index) => ({
       ...stamps,
-      bundleId: source.bundleId,
+      partitionId: source.partitionId,
       layerId: source.layerId,
       taskspaceId: source.taskspaceId,
       content,
@@ -236,25 +242,25 @@ export async function squashProjectCard({
   });
 }
 
-type MoveCardsToProject = {
+type MoveCardsToNamespace = {
   db: DB;
-  sourceProjectId: string;
-  targetProjectId: string;
+  sourceNamespaceId: string;
+  targetNamespaceId: string;
   cardIds: string[];
 };
 
 type RemapCardsByName = {
   /** Each card paired with the name of the thing it currently belongs to. */
   current: { cardId: string; name: string }[];
-  /** Candidates in the target project, matched against `current` by name. */
+  /** Candidates in the target namespace, matched against `current` by name. */
   targets: { id: string; name: string }[];
   create: (name: string) => Promise<string>;
   assign: (targetId: string, cardIds: string[]) => Promise<void>;
 };
 
 /**
- * Re-points cards at the same-named row in another project, creating it when the target
- * has none. Both of a card's owners — its bundle and its layer — are per-project ids that
+ * Re-points cards at the same-named row in another namespace, creating it when the target
+ * has none. Both of a card's owners — its partition and its layer — are per-namespace ids that
  * cannot survive a move, and both are preserved this way.
  */
 async function remapCardsByName({
@@ -282,98 +288,103 @@ async function remapCardsByName({
 }
 
 /**
- * Moves cards from one project to another, preserving bundle and layer names.
- * For each unique source name, a matching bundle/layer is found in the target
- * project or created if absent. All updates are atomic.
- * Refuses if any card does not belong to sourceProjectId.
+ * Moves cards from one namespace to another, preserving partition and layer names.
+ * For each unique source name, a matching partition/layer is found in the target
+ * namespace or created if absent. All updates are atomic.
+ * Refuses if any card does not belong to sourceNamespaceId.
  */
-export async function moveCardsToProject({
+export async function moveCardsToNamespace({
   db,
-  sourceProjectId,
-  targetProjectId,
+  sourceNamespaceId,
+  targetNamespaceId,
   cardIds,
-}: MoveCardsToProject): Promise<CardBatchResult> {
+}: MoveCardsToNamespace): Promise<CardBatchResult> {
   if (cardIds.length === 0) return { ok: true };
   return withTx(db, async (tx) => {
-    const owned = await cardsBelongToProject({ db: tx, projectId: sourceProjectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId: sourceNamespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    const cardBundles = await getCardBundleNames({ db: tx, cardIds });
+    const cardPartitions = await getCardPartitionNames({ db: tx, cardIds });
     await remapCardsByName({
-      current: cardBundles.map(({ cardId, bundleName }) => ({ cardId, name: bundleName })),
-      targets: await getAllBundles({ db: tx, projectId: targetProjectId }),
-      create: (name) => addBundle({ db: tx, projectId: targetProjectId, name }),
-      assign: async (bundleId, ids) => {
-        await tx.update(cardTable).set({ bundleId }).where(inArray(cardTable.id, ids));
+      current: cardPartitions.map(({ cardId, partitionName }) => ({ cardId, name: partitionName })),
+      targets: await getAllPartitions({ db: tx, namespaceId: targetNamespaceId }),
+      create: (name) => addPartition({ db: tx, namespaceId: targetNamespaceId, name }),
+      assign: async (partitionId, ids) => {
+        await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, ids));
       },
     });
 
     const cardLayers = await getCardLayerNames({ db: tx, cardIds });
     await remapCardsByName({
       current: cardLayers.map(({ cardId, layerName }) => ({ cardId, name: layerName })),
-      targets: await getAllLayers({ db: tx, projectId: targetProjectId }),
-      create: async (name) => (await addLayer({ db: tx, projectId: targetProjectId, name })).id,
+      targets: await getAllLayers({ db: tx, namespaceId: targetNamespaceId }),
+      create: async (name) => (await addLayer({ db: tx, namespaceId: targetNamespaceId, name })).id,
       assign: async (layerId, ids) => {
         await tx.update(cardTable).set({ layerId }).where(inArray(cardTable.id, ids));
       },
     });
 
-    // Cards moved cross-project must leave their glue groups: a glue group
-    // spanning two projects is never visible in the UI and leaves stale rows.
+    // Cards moved cross-namespace must leave their glue groups: a glue group
+    // spanning two namespaces is never visible in the UI and leaves stale rows.
     await unglueCardsInTx({ db: tx, cardIds });
 
     return { ok: true };
   });
 }
 
-type DeleteBundleWithReassign = { db: DB; projectId: string; bundleId: string };
+type DeletePartitionWithReassign = { db: DB; namespaceId: string; partitionId: string };
 
 /**
- * Deletes a non-default bundle and reassigns its cards to the project's default
- * bundle, atomically. Throws NotFoundError if the bundle doesn't exist.
+ * Deletes a non-default partition and reassigns its cards to the namespace's default
+ * partition, atomically. Throws NotFoundError if the partition doesn't exist.
  */
-export async function deleteBundleWithReassign({
+export async function deletePartitionWithReassign({
   db,
-  projectId,
-  bundleId,
-}: DeleteBundleWithReassign): Promise<{ defaultBundleId: string }> {
+  namespaceId,
+  partitionId,
+}: DeletePartitionWithReassign): Promise<{ defaultPartitionId: string }> {
   return withTx(db, async (tx) => {
-    const bundle = await getBundle({ db: tx, projectId, bundleId });
-    if (!bundle) throw new NotFoundError(`Bundle projectId=${projectId} bundleId=${bundleId}`);
-    if (bundle.isDefault) throw new DefaultBundleError();
+    const partition = await getPartition({ db: tx, namespaceId, partitionId });
+    if (!partition)
+      throw new NotFoundError(`Partition namespaceId=${namespaceId} partitionId=${partitionId}`);
+    if (partition.isDefault) throw new DefaultPartitionError();
 
-    const defaultBundle = await getDefaultBundle({ db: tx, projectId });
-    if (!defaultBundle) throw new Error("No default bundle found for this project");
+    const defaultPartition = await getDefaultPartition({ db: tx, namespaceId });
+    if (!defaultPartition) throw new Error("No default partition found for this namespace");
 
-    await reassignBundleCards({ db: tx, fromBundleId: bundleId, toBundleId: defaultBundle.id });
-    await deleteBundle({ db: tx, projectId, bundleId });
+    await reassignPartitionCards({
+      db: tx,
+      fromPartitionId: partitionId,
+      toPartitionId: defaultPartition.id,
+    });
+    await deletePartition({ db: tx, namespaceId, partitionId });
 
-    return { defaultBundleId: defaultBundle.id };
+    return { defaultPartitionId: defaultPartition.id };
   });
 }
 
-type DeleteLayerWithReassign = { db: DB; projectId: string; layerId: string };
+type DeleteLayerWithReassign = { db: DB; namespaceId: string; layerId: string };
 
 /**
- * Deletes a non-default layer and moves its cards to the project's default layer,
+ * Deletes a non-default layer and moves its cards to the namespace's default layer,
  * atomically. Without the reassign, deleting a layer would cascade its cards away.
  * Throws NotFoundError if the layer doesn't exist, DefaultLayerError for the default one.
  */
 export async function deleteLayerWithReassign({
   db,
-  projectId,
+  namespaceId,
   layerId,
 }: DeleteLayerWithReassign): Promise<{ defaultLayerId: string }> {
   return withTx(db, async (tx) => {
-    const layer = await getLayer({ db: tx, projectId, layerId });
-    if (!layer) throw new NotFoundError(`Layer projectId=${projectId} layerId=${layerId}`);
+    const layer = await getLayer({ db: tx, namespaceId, layerId });
+    if (!layer) throw new NotFoundError(`Layer namespaceId=${namespaceId} layerId=${layerId}`);
     if (layer.isDefault) throw new DefaultLayerError();
 
-    const defaultLayer = await getDefaultLayer({ db: tx, projectId });
-    if (!defaultLayer) throw new Error("No default layer found for this project");
+    const defaultLayer = await getDefaultLayer({ db: tx, namespaceId });
+    if (!defaultLayer) throw new Error("No default layer found for this namespace");
 
     await reassignLayerCards({ db: tx, fromLayerId: layerId, toLayerId: defaultLayer.id });
-    await deleteLayer({ db: tx, projectId, layerId });
+    await deleteLayer({ db: tx, namespaceId, layerId });
 
     return { defaultLayerId: defaultLayer.id };
   });

@@ -4,16 +4,16 @@ import { createTestDB } from "../../test-utils/db.js";
 import {
   createCardInTaskspaceContext,
   createCardFromTaskspace,
-  deleteProjectCards,
-  moveCardsToProject,
-  squashProjectCard,
+  deleteNamespaceCards,
+  moveCardsToNamespace,
+  squashNamespaceCard,
 } from "./composite.js";
-import { deleteBundleWithReassign, deleteLayerWithReassign } from "./composite.js";
-import { addProject } from "./project.js";
-import { addBundle, getAllBundles, getBundle } from "./bundle.js";
+import { deletePartitionWithReassign, deleteLayerWithReassign } from "./composite.js";
+import { addNamespace } from "./namespace.js";
+import { addPartition, getAllPartitions, getPartition } from "./partition.js";
 import { addScope } from "./scope.js";
 import { addTaskspace } from "./taskspace.js";
-import { addCard, getAllCards, getCard, getCardBundleNames, updateCard } from "./card.js";
+import { addCard, getAllCards, getCard, getCardPartitionNames, updateCard } from "./card.js";
 import { addScopeRel, getAllCardsByScope } from "./scope-rel.js";
 import { BATCH_MAX } from "../../lib/constants.js";
 import { getGlueRelsByCards, glueCards } from "./glue.js";
@@ -23,54 +23,58 @@ import { addLayer, getAllLayers, getDefaultLayer, getLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "P" });
-  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "B" });
+  const namespaceId = await addNamespace({ db, name: "P" });
+  await addLayer({ db, namespaceId: namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "B" });
   const scopeId = await addScope({ db, name: "S" });
-  return { db, projectId, bundleId, scopeId };
+  return { db, namespaceId, partitionId, scopeId };
 }
 
-describe("deleteProjectCards", () => {
+describe("deleteNamespaceCards", () => {
   it("accepts an empty cardIds array", async () => {
-    const { db, projectId } = await setup();
-    await expect(deleteProjectCards({ db, projectId, cardIds: [] })).resolves.toEqual({
+    const { db, namespaceId } = await setup();
+    await expect(deleteNamespaceCards({ db, namespaceId, cardIds: [] })).resolves.toEqual({
       ok: true,
     });
   });
 
-  it("deletes all cards when all belong to the project", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const c1 = await addCard({ db, bundleId, content: "A" });
-    const c2 = await addCard({ db, bundleId, content: "B" });
+  it("deletes all cards when all belong to the namespace", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const c1 = await addCard({ db, partitionId, content: "A" });
+    const c2 = await addCard({ db, partitionId, content: "B" });
 
-    const ok = await deleteProjectCards({ db, projectId, cardIds: [c1, c2] });
+    const ok = await deleteNamespaceCards({ db, namespaceId, cardIds: [c1, c2] });
 
     expect(ok).toEqual({ ok: true });
-    expect(await getCard({ db, bundleId, cardId: c1 })).toBeUndefined();
-    expect(await getCard({ db, bundleId, cardId: c2 })).toBeUndefined();
+    expect(await getCard({ db, partitionId, cardId: c1 })).toBeUndefined();
+    expect(await getCard({ db, partitionId, cardId: c2 })).toBeUndefined();
   });
 
-  it("names the cards, and deletes none, when one does not belong to the project", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const ownCard = await addCard({ db, bundleId, content: "Mine" });
-    const otherProjectId = await addProject({ db, name: "Other" });
-    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
-    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
-    const foreignCard = await addCard({ db, bundleId: otherBundleId, content: "Theirs" });
+  it("names the cards, and deletes none, when one does not belong to the namespace", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const ownCard = await addCard({ db, partitionId, content: "Mine" });
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    await addLayer({ db, namespaceId: otherNamespaceId, name: "Base", isDefault: true });
+    const otherPartitionId = await addPartition({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "Other",
+    });
+    const foreignCard = await addCard({ db, partitionId: otherPartitionId, content: "Theirs" });
 
-    const ok = await deleteProjectCards({ db, projectId, cardIds: [ownCard, foreignCard] });
+    const ok = await deleteNamespaceCards({ db, namespaceId, cardIds: [ownCard, foreignCard] });
 
     expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
-    expect(await getCard({ db, bundleId, cardId: ownCard })).toBeDefined();
+    expect(await getCard({ db, partitionId, cardId: ownCard })).toBeDefined();
   });
 
   it("dissolves the glue group when deleting one member of a pair", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const kept = await addCard({ db, bundleId, content: "Kept" });
-    const removed = await addCard({ db, bundleId, content: "Removed" });
+    const { db, namespaceId, partitionId } = await setup();
+    const kept = await addCard({ db, partitionId, content: "Kept" });
+    const removed = await addCard({ db, partitionId, content: "Removed" });
     const glueId = await glueCards({ db, cardIds: [kept, removed] });
 
-    await deleteProjectCards({ db, projectId, cardIds: [removed] });
+    await deleteNamespaceCards({ db, namespaceId, cardIds: [removed] });
 
     // The survivor must not be left alone in a group the UI still offers to unglue.
     expect(await getGlueRelsByCards({ db, cardIds: [kept] })).toEqual([]);
@@ -78,24 +82,24 @@ describe("deleteProjectCards", () => {
   });
 
   it("removes the glue group when deleting every member", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const c1 = await addCard({ db, bundleId, content: "A" });
-    const c2 = await addCard({ db, bundleId, content: "B" });
+    const { db, namespaceId, partitionId } = await setup();
+    const c1 = await addCard({ db, partitionId, content: "A" });
+    const c2 = await addCard({ db, partitionId, content: "B" });
     await glueCards({ db, cardIds: [c1, c2] });
 
-    await deleteProjectCards({ db, projectId, cardIds: [c1, c2] });
+    await deleteNamespaceCards({ db, namespaceId, cardIds: [c1, c2] });
 
     expect(await db.select().from(glueTable)).toEqual([]);
   });
 
   it("leaves a three-card group intact when only one member is deleted", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const c1 = await addCard({ db, bundleId, content: "A" });
-    const c2 = await addCard({ db, bundleId, content: "B" });
-    const c3 = await addCard({ db, bundleId, content: "C" });
+    const { db, namespaceId, partitionId } = await setup();
+    const c1 = await addCard({ db, partitionId, content: "A" });
+    const c2 = await addCard({ db, partitionId, content: "B" });
+    const c3 = await addCard({ db, partitionId, content: "C" });
     const glueId = await glueCards({ db, cardIds: [c1, c2, c3] });
 
-    await deleteProjectCards({ db, projectId, cardIds: [c1] });
+    await deleteNamespaceCards({ db, namespaceId, cardIds: [c1] });
 
     const remaining = await getGlueRelsByCards({ db, cardIds: [c2, c3] });
     expect(remaining).toHaveLength(2);
@@ -107,38 +111,38 @@ describe("deleteProjectCards", () => {
 // connection boundary — createCardFromTaskspace wraps this in a real transaction.
 describe("createCardInTaskspaceContext", () => {
   it("creates a card and returns its id", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId, scopeId });
     const cardId = await createCardInTaskspaceContext({
       db,
       taskspaceId: wcId,
-      bundleId,
+      partitionId,
       content: "Hi",
     });
     expect(cardId).toBeTruthy();
   });
 
-  it("card is stored in the correct bundle with the taskspaceId set", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, projectId, scopeId });
+  it("card is stored in the correct partition with the taskspaceId set", async () => {
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId, scopeId });
     const cardId = await createCardInTaskspaceContext({
       db,
       taskspaceId: wcId,
-      bundleId,
+      partitionId,
       content: "Content",
     });
-    const card = await getCard({ db, bundleId, cardId });
+    const card = await getCard({ db, partitionId, cardId });
     expect(card?.content).toBe("Content");
     expect(card?.taskspaceId).toBe(wcId);
   });
 
   it("auto-adds the card to the scope when taskspace has a scope", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId, scopeId });
     const cardId = await createCardInTaskspaceContext({
       db,
       taskspaceId: wcId,
-      bundleId,
+      partitionId,
       content: "Scoped",
     });
     const scopeCards = await getAllCardsByScope({ db, scopeId });
@@ -146,25 +150,25 @@ describe("createCardInTaskspaceContext", () => {
   });
 
   it("does NOT add to scope when taskspace has no scope", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, projectId });
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId });
 
     const cardId = await createCardInTaskspaceContext({
       db,
       taskspaceId: wcId,
-      bundleId,
+      partitionId,
       content: "X",
     });
 
-    expect(await getCard({ db, bundleId, cardId })).toBeDefined();
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
     const scopeCards = await getAllCardsByScope({ db, scopeId });
     expect(scopeCards.map((c) => c.id)).not.toContain(cardId);
   });
 
   it("throws NotFoundError for a missing taskspaceId", async () => {
-    const { db, bundleId } = await setup();
+    const { db, partitionId } = await setup();
     await expect(
-      createCardInTaskspaceContext({ db, taskspaceId: "ghost", bundleId, content: "Hi" }),
+      createCardInTaskspaceContext({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 });
@@ -174,12 +178,12 @@ describe("createCardInTaskspaceContext", () => {
 // libsql :memory: transactions use a fresh connection internally.
 describe("createCardFromTaskspace", () => {
   it("returns a card id", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, projectId, scopeId });
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId, scopeId });
     const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
-      bundleId,
+      partitionId,
       content: "Tx",
     });
     expect(typeof cardId).toBe("string");
@@ -187,273 +191,282 @@ describe("createCardFromTaskspace", () => {
   });
 
   it("throws NotFoundError for a missing taskspaceId", async () => {
-    const { db, bundleId } = await setup();
+    const { db, partitionId } = await setup();
     await expect(
-      createCardFromTaskspace({ db, taskspaceId: "ghost", bundleId, content: "Hi" }),
+      createCardFromTaskspace({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 });
 
-describe("deleteBundleWithReassign", () => {
-  it("reassigns cards to the default bundle before deleting the bundle", async () => {
-    const { db, projectId } = await setup();
-    const defaultBundleId = await addBundle({
+describe("deletePartitionWithReassign", () => {
+  it("reassigns cards to the default partition before deleting the partition", async () => {
+    const { db, namespaceId } = await setup();
+    const defaultPartitionId = await addPartition({
       db,
-      projectId,
+      namespaceId,
       name: "Default",
       isDefault: true,
     });
-    const bundleId = await addBundle({ db, projectId, name: "Feature" });
-    const cardId = await addCard({ db, bundleId, content: "Move me" });
+    const partitionId = await addPartition({ db, namespaceId, name: "Feature" });
+    const cardId = await addCard({ db, partitionId, content: "Move me" });
 
-    await expect(deleteBundleWithReassign({ db, projectId, bundleId })).resolves.toEqual({
-      defaultBundleId,
+    await expect(deletePartitionWithReassign({ db, namespaceId, partitionId })).resolves.toEqual({
+      defaultPartitionId,
     });
 
-    expect(await getBundle({ db, projectId, bundleId })).toBeUndefined();
-    expect((await getCard({ db, bundleId: defaultBundleId, cardId }))?.content).toBe("Move me");
-    expect(await getAllCards({ db, bundleId })).toEqual([]);
-  });
-
-  it("throws NotFoundError for a missing bundle", async () => {
-    const { db, projectId } = await setup();
-    await expect(deleteBundleWithReassign({ db, projectId, bundleId: "ghost" })).rejects.toThrow(
-      NotFoundError,
+    expect(await getPartition({ db, namespaceId, partitionId })).toBeUndefined();
+    expect((await getCard({ db, partitionId: defaultPartitionId, cardId }))?.content).toBe(
+      "Move me",
     );
+    expect(await getAllCards({ db, partitionId })).toEqual([]);
   });
 
-  it("rejects deleting the default bundle", async () => {
-    const { db, projectId } = await setup();
-    const defaultBundleId = await addBundle({
+  it("throws NotFoundError for a missing partition", async () => {
+    const { db, namespaceId } = await setup();
+    await expect(
+      deletePartitionWithReassign({ db, namespaceId, partitionId: "ghost" }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("rejects deleting the default partition", async () => {
+    const { db, namespaceId } = await setup();
+    const defaultPartitionId = await addPartition({
       db,
-      projectId,
+      namespaceId,
       name: "Default",
       isDefault: true,
     });
 
     await expect(
-      deleteBundleWithReassign({ db, projectId, bundleId: defaultBundleId }),
-    ).rejects.toThrow("Cannot delete the default bundle");
+      deletePartitionWithReassign({ db, namespaceId, partitionId: defaultPartitionId }),
+    ).rejects.toThrow("Cannot delete the default partition");
   });
 
-  it("throws when no default bundle exists", async () => {
-    const { db, projectId, bundleId } = await setup();
-    await expect(deleteBundleWithReassign({ db, projectId, bundleId })).rejects.toThrow(
-      "No default bundle found for this project",
+  it("throws when no default partition exists", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    await expect(deletePartitionWithReassign({ db, namespaceId, partitionId })).rejects.toThrow(
+      "No default partition found for this namespace",
     );
   });
 });
 
 describe("deleteLayerWithReassign", () => {
   it("moves cards to the default layer before deleting the layer", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const defaultLayer = await getDefaultLayer({ db, projectId });
-    const { id: layerId } = await addLayer({ db, projectId, name: "Draft" });
-    const cardId = await addCard({ db, bundleId, layerId, content: "Move me" });
+    const { db, namespaceId, partitionId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, namespaceId });
+    const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
+    const cardId = await addCard({ db, partitionId, layerId, content: "Move me" });
 
-    await expect(deleteLayerWithReassign({ db, projectId, layerId })).resolves.toEqual({
+    await expect(deleteLayerWithReassign({ db, namespaceId, layerId })).resolves.toEqual({
       defaultLayerId: defaultLayer!.id,
     });
 
-    expect(await getLayer({ db, projectId, layerId })).toBeUndefined();
+    expect(await getLayer({ db, namespaceId, layerId })).toBeUndefined();
     // Reassigned, not cascaded away with the layer.
-    expect(await getCard({ db, bundleId, cardId })).toMatchObject({
+    expect(await getCard({ db, partitionId, cardId })).toMatchObject({
       content: "Move me",
       layerId: defaultLayer!.id,
     });
   });
 
   it("throws NotFoundError for a missing layer", async () => {
-    const { db, projectId } = await setup();
-    await expect(deleteLayerWithReassign({ db, projectId, layerId: "ghost" })).rejects.toThrow(
+    const { db, namespaceId } = await setup();
+    await expect(deleteLayerWithReassign({ db, namespaceId, layerId: "ghost" })).rejects.toThrow(
       NotFoundError,
     );
   });
 
   it("rejects deleting the default layer", async () => {
-    const { db, projectId } = await setup();
-    const defaultLayer = await getDefaultLayer({ db, projectId });
+    const { db, namespaceId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, namespaceId });
 
     await expect(
-      deleteLayerWithReassign({ db, projectId, layerId: defaultLayer!.id }),
+      deleteLayerWithReassign({ db, namespaceId, layerId: defaultLayer!.id }),
     ).rejects.toThrow("Cannot delete the default layer");
   });
 });
 
-describe("moveCardsToProject", () => {
+describe("moveCardsToNamespace", () => {
   async function setupMove() {
     const db = await createTestDB();
-    const srcId = await addProject({ db, name: "Source" });
-    await addLayer({ db, projectId: srcId, name: "Base", isDefault: true });
-    const dstId = await addProject({ db, name: "Destination" });
-    await addLayer({ db, projectId: dstId, name: "Base", isDefault: true });
-    const srcBundle = await addBundle({ db, projectId: srcId, name: "General" });
-    return { db, srcId, dstId, srcBundle };
+    const srcId = await addNamespace({ db, name: "Source" });
+    await addLayer({ db, namespaceId: srcId, name: "Base", isDefault: true });
+    const dstId = await addNamespace({ db, name: "Destination" });
+    await addLayer({ db, namespaceId: dstId, name: "Base", isDefault: true });
+    const srcPartition = await addPartition({ db, namespaceId: srcId, name: "General" });
+    return { db, srcId, dstId, srcPartition };
   }
 
   it("accepts an empty cardIds array without touching the DB", async () => {
     const { db, srcId, dstId } = await setupMove();
     await expect(
-      moveCardsToProject({ db, sourceProjectId: srcId, targetProjectId: dstId, cardIds: [] }),
+      moveCardsToNamespace({ db, sourceNamespaceId: srcId, targetNamespaceId: dstId, cardIds: [] }),
     ).resolves.toEqual({ ok: true });
   });
 
-  it("moves a card to an existing same-name bundle in the target project", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const dstBundle = await addBundle({ db, projectId: dstId, name: "General" });
-    const cardId = await addCard({ db, bundleId: srcBundle, content: "Hello" });
+  it("moves a card to an existing same-name partition in the target namespace", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const dstPartition = await addPartition({ db, namespaceId: dstId, name: "General" });
+    const cardId = await addCard({ db, partitionId: srcPartition, content: "Hello" });
 
-    const ok = await moveCardsToProject({
+    const ok = await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [cardId],
     });
 
     expect(ok).toEqual({ ok: true });
-    expect(await getCard({ db, bundleId: dstBundle, cardId })).toMatchObject({ content: "Hello" });
-    expect(await getCard({ db, bundleId: srcBundle, cardId })).toBeUndefined();
+    expect(await getCard({ db, partitionId: dstPartition, cardId })).toMatchObject({
+      content: "Hello",
+    });
+    expect(await getCard({ db, partitionId: srcPartition, cardId })).toBeUndefined();
   });
 
-  it("maps the card onto the same-named layer in the target project", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const { id: srcLayer } = await addLayer({ db, projectId: srcId, name: "Draft" });
+  it("maps the card onto the same-named layer in the target namespace", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const { id: srcLayer } = await addLayer({ db, namespaceId: srcId, name: "Draft" });
     const cardId = await addCard({
       db,
-      bundleId: srcBundle,
+      partitionId: srcPartition,
       layerId: srcLayer,
       content: "Layered",
     });
 
-    await moveCardsToProject({
+    await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [cardId],
     });
 
-    // The layer is per-project, so a matching one is created in the target.
-    const dstLayers = await getAllLayers({ db, projectId: dstId });
+    // The layer is per-namespace, so a matching one is created in the target.
+    const dstLayers = await getAllLayers({ db, namespaceId: dstId });
     const dstDraft = dstLayers.find(({ name }) => name === "Draft");
     expect(dstDraft).toBeDefined();
-    const dstBundles = await getAllBundles({ db, projectId: dstId });
-    expect(await getCard({ db, bundleId: dstBundles[0].id, cardId })).toMatchObject({
+    const dstPartitions = await getAllPartitions({ db, namespaceId: dstId });
+    expect(await getCard({ db, partitionId: dstPartitions[0].id, cardId })).toMatchObject({
       layerId: dstDraft!.id,
     });
   });
 
-  it("reuses an existing same-named layer in the target project", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const { id: srcLayer } = await addLayer({ db, projectId: srcId, name: "Draft" });
-    const { id: dstLayer } = await addLayer({ db, projectId: dstId, name: "Draft" });
-    const cardId = await addCard({ db, bundleId: srcBundle, layerId: srcLayer, content: "Reuse" });
-
-    await moveCardsToProject({
+  it("reuses an existing same-named layer in the target namespace", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const { id: srcLayer } = await addLayer({ db, namespaceId: srcId, name: "Draft" });
+    const { id: dstLayer } = await addLayer({ db, namespaceId: dstId, name: "Draft" });
+    const cardId = await addCard({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      partitionId: srcPartition,
+      layerId: srcLayer,
+      content: "Reuse",
+    });
+
+    await moveCardsToNamespace({
+      db,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [cardId],
     });
 
-    expect(await getAllLayers({ db, projectId: dstId })).toHaveLength(2);
-    const dstBundles = await getAllBundles({ db, projectId: dstId });
-    expect(await getCard({ db, bundleId: dstBundles[0].id, cardId })).toMatchObject({
+    expect(await getAllLayers({ db, namespaceId: dstId })).toHaveLength(2);
+    const dstPartitions = await getAllPartitions({ db, namespaceId: dstId });
+    expect(await getCard({ db, partitionId: dstPartitions[0].id, cardId })).toMatchObject({
       layerId: dstLayer,
     });
   });
 
-  it("creates a new bundle in the target project when no name match exists", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const cardId = await addCard({ db, bundleId: srcBundle, content: "New bundle card" });
+  it("creates a new partition in the target namespace when no name match exists", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const cardId = await addCard({ db, partitionId: srcPartition, content: "New partition card" });
 
-    const ok = await moveCardsToProject({
+    const ok = await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [cardId],
     });
 
     expect(ok).toEqual({ ok: true });
-    const dstBundles = await getAllBundles({ db, projectId: dstId });
-    expect(dstBundles).toHaveLength(1);
-    expect(dstBundles[0].name).toBe("General");
-    expect(await getCard({ db, bundleId: dstBundles[0].id, cardId })).toMatchObject({
-      content: "New bundle card",
+    const dstPartitions = await getAllPartitions({ db, namespaceId: dstId });
+    expect(dstPartitions).toHaveLength(1);
+    expect(dstPartitions[0].name).toBe("General");
+    expect(await getCard({ db, partitionId: dstPartitions[0].id, cardId })).toMatchObject({
+      content: "New partition card",
     });
   });
 
-  it("routes cards from different source bundles to their own named bundles in target", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const srcBundle2 = await addBundle({ db, projectId: srcId, name: "Research" });
-    const c1 = await addCard({ db, bundleId: srcBundle, content: "General card" });
-    const c2 = await addCard({ db, bundleId: srcBundle2, content: "Research card" });
+  it("routes cards from different source partitions to their own named partitions in target", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const srcPartition2 = await addPartition({ db, namespaceId: srcId, name: "Research" });
+    const c1 = await addCard({ db, partitionId: srcPartition, content: "General card" });
+    const c2 = await addCard({ db, partitionId: srcPartition2, content: "Research card" });
 
-    await moveCardsToProject({
+    await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [c1, c2],
     });
 
-    const dstBundles = await getAllBundles({ db, projectId: dstId });
-    const dstGeneral = dstBundles.find((b) => b.name === "General")!;
-    const dstResearch = dstBundles.find((b) => b.name === "Research")!;
+    const dstPartitions = await getAllPartitions({ db, namespaceId: dstId });
+    const dstGeneral = dstPartitions.find((b) => b.name === "General")!;
+    const dstResearch = dstPartitions.find((b) => b.name === "Research")!;
     expect(dstGeneral).toBeDefined();
     expect(dstResearch).toBeDefined();
-    expect(await getCard({ db, bundleId: dstGeneral.id, cardId: c1 })).toMatchObject({
+    expect(await getCard({ db, partitionId: dstGeneral.id, cardId: c1 })).toMatchObject({
       content: "General card",
     });
-    expect(await getCard({ db, bundleId: dstResearch.id, cardId: c2 })).toMatchObject({
+    expect(await getCard({ db, partitionId: dstResearch.id, cardId: c2 })).toMatchObject({
       content: "Research card",
     });
   });
 
-  it("does not create a duplicate target bundle when two source cards share a bundle name", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const c1 = await addCard({ db, bundleId: srcBundle, content: "Card 1" });
-    const c2 = await addCard({ db, bundleId: srcBundle, content: "Card 2" });
+  it("does not create a duplicate target partition when two source cards share a partition name", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const c1 = await addCard({ db, partitionId: srcPartition, content: "Card 1" });
+    const c2 = await addCard({ db, partitionId: srcPartition, content: "Card 2" });
 
-    await moveCardsToProject({
+    await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [c1, c2],
     });
 
-    const dstBundles = await getAllBundles({ db, projectId: dstId });
-    expect(dstBundles).toHaveLength(1);
+    const dstPartitions = await getAllPartitions({ db, namespaceId: dstId });
+    expect(dstPartitions).toHaveLength(1);
   });
 
-  it("names the cards when any does not belong to the source project", async () => {
-    const { db, srcId, dstId, srcBundle } = await setupMove();
-    const ownCard = await addCard({ db, bundleId: srcBundle, content: "Mine" });
-    const otherId = await addProject({ db, name: "Third" });
-    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
-    const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
-    const foreignCard = await addCard({ db, bundleId: otherBundle, content: "Not mine" });
+  it("names the cards when any does not belong to the source namespace", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const ownCard = await addCard({ db, partitionId: srcPartition, content: "Mine" });
+    const otherId = await addNamespace({ db, name: "Third" });
+    await addLayer({ db, namespaceId: otherId, name: "Base", isDefault: true });
+    const otherPartition = await addPartition({ db, namespaceId: otherId, name: "X" });
+    const foreignCard = await addCard({ db, partitionId: otherPartition, content: "Not mine" });
 
-    const ok = await moveCardsToProject({
+    const ok = await moveCardsToNamespace({
       db,
-      sourceProjectId: srcId,
-      targetProjectId: dstId,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
       cardIds: [ownCard, foreignCard],
     });
 
     expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
     // own card must remain in source (transaction rolled back)
-    const rows = await getCardBundleNames({ db, cardIds: [ownCard] });
-    expect(rows[0].bundleId).toBe(srcBundle);
+    const rows = await getCardPartitionNames({ db, cardIds: [ownCard] });
+    expect(rows[0].partitionId).toBe(srcPartition);
   });
 });
 
-describe("squashProjectCard", () => {
+describe("squashNamespaceCard", () => {
   const CANVAS = { canvasWidth: 5600, canvasHeight: 4000 };
 
   async function squashSetup() {
     const base = await setup();
     const cardId = await addCard({
       db: base.db,
-      bundleId: base.bundleId,
+      partitionId: base.partitionId,
       content: "First thought. Second thought. 第三の考え。",
       posX: 1000,
       posY: 500,
@@ -463,9 +476,9 @@ describe("squashProjectCard", () => {
   }
 
   it("replaces the card with one card per segment", async () => {
-    const { db, projectId, bundleId, cardId } = await squashSetup();
+    const { db, namespaceId, partitionId, cardId } = await squashSetup();
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -474,14 +487,14 @@ describe("squashProjectCard", () => {
       "Second thought",
       "第三の考え",
     ]);
-    expect(await getCard({ db, bundleId, cardId })).toBeUndefined();
-    expect(await getAllCards({ db, bundleId })).toHaveLength(3);
+    expect(await getCard({ db, partitionId, cardId })).toBeUndefined();
+    expect(await getAllCards({ db, partitionId })).toHaveLength(3);
   });
 
   it("lays the pieces out from where the card sat, the first one in its place", async () => {
-    const { db, projectId, cardId } = await squashSetup();
+    const { db, namespaceId, cardId } = await squashSetup();
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok && result.cards.map(({ posX, posY }) => ({ posX, posY }))).toEqual([
       { posX: 1000, posY: 500 },
@@ -491,34 +504,34 @@ describe("squashProjectCard", () => {
   });
 
   it("skips a slot another card already sits on", async () => {
-    const { db, projectId, bundleId, cardId } = await squashSetup();
-    await addCard({ db, bundleId, content: "In the way", posX: 1280, posY: 500 });
+    const { db, namespaceId, partitionId, cardId } = await squashSetup();
+    await addCard({ db, partitionId, content: "In the way", posX: 1280, posY: 500 });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok && result.cards.map(({ posX }) => posX)).toEqual([1000, 1560, 1840]);
   });
 
-  it("gives the pieces the card's bundle, layer, taskspace, width, and stacking", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const layerId = (await getDefaultLayer({ db, projectId }))!.id;
+  it("gives the pieces the card's partition, layer, taskspace, width, and stacking", async () => {
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const layerId = (await getDefaultLayer({ db, namespaceId }))!.id;
     const taskspaceId = await addTaskspace({ db, name: "T", scopeId, path: "/tmp/t" });
     const cardId = await addCard({
       db,
-      bundleId,
+      partitionId,
       layerId,
       taskspaceId,
       content: "One. Two",
       zIndex: 4,
     });
-    await updateCard({ db, cardId, bundleId, width: 320 });
+    await updateCard({ db, cardId, partitionId, width: 320 });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     for (const card of result.cards) {
-      expect(card.bundleId).toBe(bundleId);
+      expect(card.partitionId).toBe(partitionId);
       expect(card.layerId).toBe(layerId);
       expect(card.taskspaceId).toBe(taskspaceId);
       expect(card.width).toBe(320);
@@ -533,9 +546,9 @@ describe("squashProjectCard", () => {
    * list --sort created` cannot separate pieces of one squash by a second's drift.
    */
   it("stamps every piece as new, at one moment", async () => {
-    const { db, projectId, cardId } = await squashSetup();
+    const { db, namespaceId, cardId } = await squashSetup();
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -546,24 +559,24 @@ describe("squashProjectCard", () => {
   });
 
   it("gathers the pieces into every scope the card was in", async () => {
-    const { db, projectId, bundleId, scopeId, cardId } = await squashSetup();
+    const { db, namespaceId, partitionId, scopeId, cardId } = await squashSetup();
     await addScopeRel({ db, scopeId, cardId });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     const gathered = await getAllCardsByScope({ db, scopeId });
     expect(gathered.map(({ id }) => id).sort()).toEqual(
       (result.ok ? result.cards.map(({ id }) => id) : []).sort(),
     );
-    expect(await getAllCards({ db, bundleId })).toHaveLength(3);
+    expect(await getAllCards({ db, partitionId })).toHaveLength(3);
   });
 
   it("dissolves the glue group the card leaves behind", async () => {
-    const { db, projectId, bundleId, cardId } = await squashSetup();
-    const partner = await addCard({ db, bundleId, content: "Partner" });
+    const { db, namespaceId, partitionId, cardId } = await squashSetup();
+    const partner = await addCard({ db, partitionId, content: "Partner" });
     const glueId = await glueCards({ db, cardIds: [cardId, partner] });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok).toBe(true);
     // The partner must not be left alone in a group the UI still offers to unglue, and the
@@ -573,70 +586,70 @@ describe("squashProjectCard", () => {
   });
 
   it("refuses a card whose text yields a single segment, leaving it alone", async () => {
-    const { db, projectId, bundleId } = await setup();
-    const cardId = await addCard({ db, bundleId, content: "One indivisible thought" });
+    const { db, namespaceId, partitionId } = await setup();
+    const cardId = await addCard({ db, partitionId, content: "One indivisible thought" });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result).toEqual({ ok: false, reason: "indivisible" });
-    expect(await getCard({ db, bundleId, cardId })).toBeDefined();
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
   });
 
-  it("refuses a card that belongs to another project", async () => {
-    const { db, projectId } = await setup();
-    const otherId = await addProject({ db, name: "Other" });
-    await addLayer({ db, projectId: otherId, name: "Base", isDefault: true });
-    const otherBundle = await addBundle({ db, projectId: otherId, name: "X" });
-    const foreign = await addCard({ db, bundleId: otherBundle, content: "One. Two" });
+  it("refuses a card that belongs to another namespace", async () => {
+    const { db, namespaceId } = await setup();
+    const otherId = await addNamespace({ db, name: "Other" });
+    await addLayer({ db, namespaceId: otherId, name: "Base", isDefault: true });
+    const otherPartition = await addPartition({ db, namespaceId: otherId, name: "X" });
+    const foreign = await addCard({ db, partitionId: otherPartition, content: "One. Two" });
 
-    const result = await squashProjectCard({ db, projectId, cardId: foreign, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId: foreign, ...CANVAS });
 
     expect(result).toEqual({ ok: false, reason: "not-found" });
-    expect(await getCard({ db, bundleId: otherBundle, cardId: foreign })).toBeDefined();
+    expect(await getCard({ db, partitionId: otherPartition, cardId: foreign })).toBeDefined();
   });
 
   it("creates a set too large for one insert statement", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
+    const { db, namespaceId, partitionId, scopeId } = await setup();
     const cardId = await addCard({
       db,
-      bundleId,
+      partitionId,
       content: Array.from({ length: 250 }, (_, i) => `Piece ${i}`).join(". "),
     });
     await addScopeRel({ db, scopeId, cardId });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok && result.cards).toHaveLength(250);
-    expect(await getAllCards({ db, bundleId })).toHaveLength(250);
+    expect(await getAllCards({ db, partitionId })).toHaveLength(250);
     // The scope memberships are batched the same way the cards are.
     expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(250);
   });
 
   it("refuses a card that would split into more cards than one request may carry", async () => {
-    const { db, projectId, bundleId } = await setup();
+    const { db, namespaceId, partitionId } = await setup();
     const cardId = await addCard({
       db,
-      bundleId,
+      partitionId,
       content: Array.from({ length: BATCH_MAX + 1 }, (_, i) => `Piece ${i}`).join(". "),
     });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result).toEqual({ ok: false, reason: "too-many" });
-    expect(await getCard({ db, bundleId, cardId })).toBeDefined();
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
   });
 
   it("keeps the pieces on the board when the card sits against its edge", async () => {
-    const { db, projectId, bundleId } = await setup();
+    const { db, namespaceId, partitionId } = await setup();
     const cardId = await addCard({
       db,
-      bundleId,
+      partitionId,
       content: "One. Two. Three",
       posX: CANVAS.canvasWidth - 10,
       posY: CANVAS.canvasHeight,
     });
 
-    const result = await squashProjectCard({ db, projectId, cardId, ...CANVAS });
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;

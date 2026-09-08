@@ -7,23 +7,23 @@ import {
   SQLITE_VARIABLE_MAX,
 } from "../../test-utils/db.js";
 import type { DB } from "../tx.js";
-import { addProject } from "./project.js";
-import { addBundle } from "./bundle.js";
+import { addNamespace } from "./namespace.js";
+import { addPartition } from "./partition.js";
 import { addCard } from "./card.js";
-import { getGlueRelsByCards, getGlueRelsByProject, glueCards, unglueCards } from "./glue.js";
+import { getGlueRelsByCards, getGlueRelsByNamespace, glueCards, unglueCards } from "./glue.js";
 import { glueTable } from "../schema.js";
 import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 import { addLayer } from "./layer.js";
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "P" });
-  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "B" });
-  const cardA = await addCard({ db, bundleId, content: "A" });
-  const cardB = await addCard({ db, bundleId, content: "B" });
-  const cardC = await addCard({ db, bundleId, content: "C" });
-  return { db, bundleId, cardA, cardB, cardC };
+  const namespaceId = await addNamespace({ db, name: "P" });
+  await addLayer({ db, namespaceId: namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "B" });
+  const cardA = await addCard({ db, partitionId, content: "A" });
+  const cardB = await addCard({ db, partitionId, content: "B" });
+  const cardC = await addCard({ db, partitionId, content: "C" });
+  return { db, partitionId, cardA, cardB, cardC };
 }
 
 describe("getGlueRelsByCards", () => {
@@ -136,7 +136,7 @@ describe("glueCards over the insert batch size", () => {
 
   it("glues a group spanning several insert batches into one glue group", async () => {
     const db = await createTestDB();
-    const { cardIds } = await projectWithCards(db, "P", groupSize);
+    const { cardIds } = await namespaceWithCards(db, "P", groupSize);
 
     const glueId = await glueCards({ db, cardIds });
 
@@ -154,59 +154,59 @@ describe("glueCards over the insert batch size", () => {
   });
 });
 
-/** A project of `cardCount` cards, built through {@link seedCards}. */
-async function projectWithCards(db: DB, name: string, cardCount: number) {
-  const projectId = await addProject({ db, name });
-  const { id: layerId } = await addLayer({ db, projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: `${name}-bundle` });
-  const cardIds = await seedCards(db, { bundleId, layerId, count: cardCount, prefix: name });
-  return { projectId, bundleId, cardIds };
+/** A namespace of `cardCount` cards, built through {@link seedCards}. */
+async function namespaceWithCards(db: DB, name: string, cardCount: number) {
+  const namespaceId = await addNamespace({ db, name });
+  const { id: layerId } = await addLayer({ db, namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: `${name}-partition` });
+  const cardIds = await seedCards(db, { partitionId, layerId, count: cardCount, prefix: name });
+  return { namespaceId, partitionId, cardIds };
 }
 
 const byCardId = (rels: { cardId: string }[]) =>
   [...rels].sort((a, b) => a.cardId.localeCompare(b.cardId));
 
-describe("getGlueRelsByProject", () => {
-  it("returns nothing for a project whose cards are all unglued", async () => {
+describe("getGlueRelsByNamespace", () => {
+  it("returns nothing for a namespace whose cards are all unglued", async () => {
     const db = await createTestDB();
-    const { projectId } = await projectWithCards(db, "P", 3);
-    expect(await getGlueRelsByProject({ db, projectId })).toEqual([]);
+    const { namespaceId } = await namespaceWithCards(db, "P", 3);
+    expect(await getGlueRelsByNamespace({ db, namespaceId })).toEqual([]);
   });
 
-  it("agrees with getGlueRelsByCards handed every card of the project", async () => {
+  it("agrees with getGlueRelsByCards handed every card of the namespace", async () => {
     const db = await createTestDB();
-    const { projectId, cardIds } = await projectWithCards(db, "P", 4);
+    const { namespaceId, cardIds } = await namespaceWithCards(db, "P", 4);
     await glueCards({ db, cardIds: [cardIds[0], cardIds[1]] });
     await glueCards({ db, cardIds: [cardIds[2], cardIds[3]] });
 
-    const byProject = await getGlueRelsByProject({ db, projectId });
+    const byNamespace = await getGlueRelsByNamespace({ db, namespaceId });
 
-    expect(byProject).toHaveLength(4);
-    expect(byCardId(byProject)).toEqual(byCardId(await getGlueRelsByCards({ db, cardIds })));
+    expect(byNamespace).toHaveLength(4);
+    expect(byCardId(byNamespace)).toEqual(byCardId(await getGlueRelsByCards({ db, cardIds })));
   });
 
-  it("leaves another project's glue rows out", async () => {
+  it("leaves another namespace's glue rows out", async () => {
     const db = await createTestDB();
-    const mine = await projectWithCards(db, "mine", 2);
-    const theirs = await projectWithCards(db, "theirs", 2);
+    const mine = await namespaceWithCards(db, "mine", 2);
+    const theirs = await namespaceWithCards(db, "theirs", 2);
     await glueCards({ db, cardIds: mine.cardIds });
     await glueCards({ db, cardIds: theirs.cardIds });
 
-    const rels = await getGlueRelsByProject({ db, projectId: mine.projectId });
+    const rels = await getGlueRelsByNamespace({ db, namespaceId: mine.namespaceId });
 
     expect(new Set(rels.map((rel) => rel.cardId))).toEqual(new Set(mine.cardIds));
   });
 
   // Why this function exists at all. `getGlueRelsByCards` binds one parameter per card, and
-  // the board handed it every card in the project on every page load and every poll — so a
-  // project this size did not load slowly, it did not load. Selecting by project binds one
+  // the board handed it every card in the namespace on every page load and every poll — so a
+  // namespace this size did not load slowly, it did not load. Selecting by namespace binds one
   // parameter whatever the board holds, which takes the row count out of the question.
-  it("reads a project holding more cards than one statement could name", async () => {
+  it("reads a namespace holding more cards than one statement could name", async () => {
     const db = await createTestDB();
-    const { projectId, cardIds } = await projectWithCards(db, "big", SQLITE_VARIABLE_MAX + 1);
+    const { namespaceId, cardIds } = await namespaceWithCards(db, "big", SQLITE_VARIABLE_MAX + 1);
     await glueCards({ db, cardIds: cardIds.slice(0, 2) });
 
     await expect(getGlueRelsByCards({ db, cardIds }).catch(isTooManyVariables)).resolves.toBe(true);
-    await expect(getGlueRelsByProject({ db, projectId })).resolves.toHaveLength(2);
+    await expect(getGlueRelsByNamespace({ db, namespaceId })).resolves.toHaveLength(2);
   });
 });

@@ -30,43 +30,43 @@ export async function createTestDB(dbPath?: string): Promise<DB> {
  * How many bound parameters SQLite will take in one statement.
  *
  * Confirmed against the driver rather than taken from the documentation: 32,766 is accepted
- * and 32,767 is refused. The reads that select by project exist because the ones that
+ * and 32,767 is refused. The reads that select by namespace exist because the ones that
  * select by id list cannot clear this on a board of any size, so a test crossing it is the
  * only one that actually distinguishes them.
  */
 export const SQLITE_VARIABLE_MAX = 32_766;
 
 /**
- * Inserts `count` cards onto one bundle and layer in a single statement.
+ * Inserts `count` cards onto one partition and layer in a single statement.
  *
  * `addCards` would be the honest way to build a fixture, and is — up to a few hundred rows.
  * Crossing {@link SQLITE_VARIABLE_MAX} takes tens of thousands, which through the data API
  * is a couple of hundred round trips and through `addCard` tens of thousands. Nothing that
  * reads these rows parses an id or looks at the content, so a recursive CTE producing rows
- * that merely exist and belong to the bundle is the whole of what is needed.
+ * that merely exist and belong to the partition is the whole of what is needed.
  *
  * Returns the ids in insertion order.
  */
 export async function seedCards(
   db: AnyDB,
-  { bundleId, layerId, count, prefix = "card" }: SeedCards,
+  { partitionId, layerId, count, prefix = "card" }: SeedCards,
 ): Promise<string[]> {
   if (count <= 0) return [];
   await db.run(sql`
     WITH RECURSIVE seq(n) AS (
       SELECT 1 UNION ALL SELECT n + 1 FROM seq WHERE n < ${count}
     )
-    INSERT INTO card (id, bundle_id, layer_id, content, pos_x, pos_y, z_index, created_at, updated_at)
-    SELECT ${prefix} || '-' || n, ${bundleId}, ${layerId}, 'card ' || n, 0, 0, 0, unixepoch(), unixepoch() FROM seq
+    INSERT INTO card (id, partition_id, layer_id, content, pos_x, pos_y, z_index, created_at, updated_at)
+    SELECT ${prefix} || '-' || n, ${partitionId}, ${layerId}, 'card ' || n, 0, 0, 0, unixepoch(), unixepoch() FROM seq
   `);
   return Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`);
 }
 
 type SeedCards = {
-  bundleId: string;
+  partitionId: string;
   layerId: string;
   count: number;
-  /** Distinguishes one seeded bundle's ids from another's within a test. */
+  /** Distinguishes one seeded partition's ids from another's within a test. */
   prefix?: string;
 };
 

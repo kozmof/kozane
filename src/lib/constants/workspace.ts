@@ -17,10 +17,10 @@
 export const PATH_KINDS = ["project_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
-/** Name of the default layer every project is created with. */
+/** Name of the default layer every namespace is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
-/** Name of the default bundle every project is created with. */
-export const DEFAULT_BUNDLE_NAME = "General";
+/** Name of the default partition every namespace is created with. */
+export const DEFAULT_PARTITION_NAME = "General";
 export const DEFAULT_SERVER_HOST = "127.0.0.1";
 /**
  * Default port for `kozane open`. Picked to stay clear of ports popular tools take by

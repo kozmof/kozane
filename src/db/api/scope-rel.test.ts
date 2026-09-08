@@ -10,15 +10,15 @@ import {
   addScopeRels,
   removeScopeRel,
   getAllCardsByScope,
-  getCardsByScopeWithBundleName,
+  getCardsByScopeWithPartitionName,
   addScopeMembers,
   removeScopeMembers,
-  removeScopeMembersFromProject,
+  removeScopeMembersFromNamespace,
   getScopeRelsByCards,
-  getScopeRelsByProject,
+  getScopeRelsByNamespace,
 } from "./scope-rel.js";
-import { addProject } from "./project.js";
-import { addBundle } from "./bundle.js";
+import { addNamespace } from "./namespace.js";
+import { addPartition } from "./partition.js";
 import { addCard } from "./card.js";
 import { addScope } from "./scope.js";
 import { NotFoundError } from "./utils.js";
@@ -30,12 +30,12 @@ const sortRels = (rels: { scopeId: string; cardId: string }[]) =>
 
 async function setup() {
   const db = await createTestDB();
-  const projectId = await addProject({ db, name: "P" });
-  await addLayer({ db, projectId: projectId, name: "Base", isDefault: true });
-  const bundleId = await addBundle({ db, projectId, name: "B" });
+  const namespaceId = await addNamespace({ db, name: "P" });
+  await addLayer({ db, namespaceId: namespaceId, name: "Base", isDefault: true });
+  const partitionId = await addPartition({ db, namespaceId, name: "B" });
   const scopeId = await addScope({ db, name: "S" });
-  const cardId = await addCard({ db, bundleId, content: "Card A" });
-  return { db, projectId, bundleId, scopeId, cardId };
+  const cardId = await addCard({ db, partitionId, content: "Card A" });
+  return { db, namespaceId, partitionId, scopeId, cardId };
 }
 
 describe("addScopeRels", () => {
@@ -46,11 +46,11 @@ describe("addScopeRels", () => {
   });
 
   it("files every card into the scope in one call", async () => {
-    const { db, bundleId, scopeId } = await setup();
+    const { db, partitionId, scopeId } = await setup();
     const cardIds = [
-      await addCard({ db, bundleId, content: "one" }),
-      await addCard({ db, bundleId, content: "two" }),
-      await addCard({ db, bundleId, content: "three" }),
+      await addCard({ db, partitionId, content: "one" }),
+      await addCard({ db, partitionId, content: "two" }),
+      await addCard({ db, partitionId, content: "three" }),
     ];
     await addScopeRels({ db, scopeId, cardIds });
     const members = await getAllCardsByScope({ db, scopeId });
@@ -66,10 +66,10 @@ describe("addScopeRels", () => {
   });
 
   it("files more cards than one statement carries", async () => {
-    const { db, bundleId, scopeId } = await setup();
+    const { db, partitionId, scopeId } = await setup();
     const cardIds: string[] = [];
     for (let index = 0; index < INSERT_CHUNK_MAX + 5; index++)
-      cardIds.push(await addCard({ db, bundleId, content: `c${index}` }));
+      cardIds.push(await addCard({ db, partitionId, content: `c${index}` }));
     await addScopeRels({ db, scopeId, cardIds });
     expect(await getAllCardsByScope({ db, scopeId })).toHaveLength(cardIds.length);
   });
@@ -112,8 +112,8 @@ describe("getAllCardsByScope", () => {
   });
 
   it("returns cards that are members of the scope", async () => {
-    const { db, bundleId, scopeId, cardId } = await setup();
-    const c2 = await addCard({ db, bundleId, content: "Card B" });
+    const { db, partitionId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, partitionId, content: "Card B" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: c2 });
     const cards = await getAllCardsByScope({ db, scopeId });
@@ -122,53 +122,58 @@ describe("getAllCardsByScope", () => {
   });
 });
 
-describe("getCardsByScopeWithBundleName", () => {
-  it("returns cards with bundleName and glueId fields", async () => {
+describe("getCardsByScopeWithPartitionName", () => {
+  it("returns cards with partitionName and glueId fields", async () => {
     const { db, scopeId, cardId } = await setup();
     await addScopeRel({ db, scopeId, cardId });
-    const cards = await getCardsByScopeWithBundleName({ db, scopeId });
+    const cards = await getCardsByScopeWithPartitionName({ db, scopeId });
     expect(cards).toHaveLength(1);
     expect(cards[0].id).toBe(cardId);
-    expect(cards[0].bundleName).toBe("B");
+    expect(cards[0].partitionName).toBe("B");
     expect(cards[0].glueId).toBeNull();
   });
 
   it("returns empty array when scope has no members", async () => {
     const { db, scopeId } = await setup();
-    expect(await getCardsByScopeWithBundleName({ db, scopeId })).toEqual([]);
+    expect(await getCardsByScopeWithPartitionName({ db, scopeId })).toEqual([]);
   });
 });
 
 describe("addScopeMembers", () => {
   it("adds multiple cards at once", async () => {
-    const { db, bundleId, projectId, scopeId, cardId } = await setup();
-    const c2 = await addCard({ db, bundleId, content: "Card B" });
-    const ok = await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId, c2] });
+    const { db, partitionId, namespaceId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, partitionId, content: "Card B" });
+    const ok = await addScopeMembers({ db, scopeId, namespaceId, cardIds: [cardId, c2] });
     expect(ok).toEqual({ ok: true });
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards.map((c) => c.id)).toEqual(expect.arrayContaining([cardId, c2]));
   });
 
-  it("names the cards when a cardId does not belong to the project", async () => {
+  it("names the cards when a cardId does not belong to the namespace", async () => {
     const db = await createTestDB();
-    const p1 = await addProject({ db, name: "P1" });
-    await addLayer({ db, projectId: p1, name: "Base", isDefault: true });
-    const p2 = await addProject({ db, name: "P2" });
-    await addLayer({ db, projectId: p2, name: "Base", isDefault: true });
-    const b1 = await addBundle({ db, projectId: p1, name: "B1" });
-    const b2 = await addBundle({ db, projectId: p2, name: "B2" });
+    const p1 = await addNamespace({ db, name: "P1" });
+    await addLayer({ db, namespaceId: p1, name: "Base", isDefault: true });
+    const p2 = await addNamespace({ db, name: "P2" });
+    await addLayer({ db, namespaceId: p2, name: "Base", isDefault: true });
+    const b1 = await addPartition({ db, namespaceId: p1, name: "B1" });
+    const b2 = await addPartition({ db, namespaceId: p2, name: "B2" });
     const scopeId = await addScope({ db, name: "S" });
-    const cardInP1 = await addCard({ db, bundleId: b1, content: "C1" });
-    const cardInP2 = await addCard({ db, bundleId: b2, content: "C2" });
-    // Trying to add a card from p2 while claiming project p1
-    const ok = await addScopeMembers({ db, scopeId, projectId: p1, cardIds: [cardInP1, cardInP2] });
+    const cardInP1 = await addCard({ db, partitionId: b1, content: "C1" });
+    const cardInP2 = await addCard({ db, partitionId: b2, content: "C2" });
+    // Trying to add a card from p2 while claiming namespace p1
+    const ok = await addScopeMembers({
+      db,
+      scopeId,
+      namespaceId: p1,
+      cardIds: [cardInP1, cardInP2],
+    });
     expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
   });
 
   it("is idempotent — adding the same cards again does not duplicate them", async () => {
-    const { db, projectId, scopeId, cardId } = await setup();
-    await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId] });
-    const ok = await addScopeMembers({ db, scopeId, projectId, cardIds: [cardId] });
+    const { db, namespaceId, scopeId, cardId } = await setup();
+    await addScopeMembers({ db, scopeId, namespaceId, cardIds: [cardId] });
+    const ok = await addScopeMembers({ db, scopeId, namespaceId, cardIds: [cardId] });
     expect(ok).toEqual({ ok: true });
     const cards = await getAllCardsByScope({ db, scopeId });
     expect(cards).toHaveLength(1);
@@ -180,13 +185,18 @@ describe("scope membership refusals", () => {
   // so the DELETE route told a caller its cards were foreign when the scope was what did not
   // exist. The reason is now carried out of the transaction that decided it.
   it("names the scope rather than the cards when the scope does not exist", async () => {
-    const { db, projectId, cardId } = await setup();
+    const { db, namespaceId, cardId } = await setup();
 
     await expect(
-      addScopeMembers({ db, scopeId: "no-such-scope", projectId, cardIds: [cardId] }),
+      addScopeMembers({ db, scopeId: "no-such-scope", namespaceId, cardIds: [cardId] }),
     ).resolves.toEqual({ ok: false, reason: "foreign-scope" });
     await expect(
-      removeScopeMembersFromProject({ db, scopeId: "no-such-scope", projectId, cardIds: [cardId] }),
+      removeScopeMembersFromNamespace({
+        db,
+        scopeId: "no-such-scope",
+        namespaceId,
+        cardIds: [cardId],
+      }),
     ).resolves.toEqual({ ok: false, reason: "foreign-scope" });
   });
 });
@@ -208,8 +218,8 @@ describe("getScopeRelsByCards", () => {
 
 describe("removeScopeMembers", () => {
   it("removes all requested cards from the scope", async () => {
-    const { db, bundleId, scopeId, cardId } = await setup();
-    const c2 = await addCard({ db, bundleId, content: "Card B" });
+    const { db, partitionId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, partitionId, content: "Card B" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: c2 });
 
@@ -219,17 +229,17 @@ describe("removeScopeMembers", () => {
   });
 });
 
-describe("removeScopeMembersFromProject", () => {
-  it("removes members when every card belongs to the project", async () => {
-    const { db, projectId, bundleId, scopeId, cardId } = await setup();
-    const c2 = await addCard({ db, bundleId, content: "Card B" });
+describe("removeScopeMembersFromNamespace", () => {
+  it("removes members when every card belongs to the namespace", async () => {
+    const { db, namespaceId, partitionId, scopeId, cardId } = await setup();
+    const c2 = await addCard({ db, partitionId, content: "Card B" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: c2 });
 
-    const ok = await removeScopeMembersFromProject({
+    const ok = await removeScopeMembersFromNamespace({
       db,
       scopeId,
-      projectId,
+      namespaceId,
       cardIds: [cardId, c2],
     });
 
@@ -237,19 +247,23 @@ describe("removeScopeMembersFromProject", () => {
     expect(await getAllCardsByScope({ db, scopeId })).toEqual([]);
   });
 
-  it("does not remove anything when a card belongs to another project", async () => {
-    const { db, projectId, scopeId, cardId } = await setup();
-    const otherProjectId = await addProject({ db, name: "Other" });
-    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
-    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
-    const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
+  it("does not remove anything when a card belongs to another namespace", async () => {
+    const { db, namespaceId, scopeId, cardId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    await addLayer({ db, namespaceId: otherNamespaceId, name: "Base", isDefault: true });
+    const otherPartitionId = await addPartition({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "Other",
+    });
+    const otherCardId = await addCard({ db, partitionId: otherPartitionId, content: "elsewhere" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: otherCardId });
 
-    const ok = await removeScopeMembersFromProject({
+    const ok = await removeScopeMembersFromNamespace({
       db,
       scopeId,
-      projectId,
+      namespaceId,
       cardIds: [cardId, otherCardId],
     });
 
@@ -258,51 +272,55 @@ describe("removeScopeMembersFromProject", () => {
   });
 });
 
-describe("getScopeRelsByProject", () => {
-  it("returns nothing for a project whose cards are in no scope", async () => {
-    const { db, projectId } = await setup();
-    expect(await getScopeRelsByProject({ db, projectId })).toEqual([]);
+describe("getScopeRelsByNamespace", () => {
+  it("returns nothing for a namespace whose cards are in no scope", async () => {
+    const { db, namespaceId } = await setup();
+    expect(await getScopeRelsByNamespace({ db, namespaceId })).toEqual([]);
   });
 
-  it("agrees with getScopeRelsByCards handed every card of the project", async () => {
-    const { db, projectId, bundleId, scopeId, cardId } = await setup();
-    const second = await addCard({ db, bundleId, content: "Card B" });
+  it("agrees with getScopeRelsByCards handed every card of the namespace", async () => {
+    const { db, namespaceId, partitionId, scopeId, cardId } = await setup();
+    const second = await addCard({ db, partitionId, content: "Card B" });
     const otherScopeId = await addScope({ db, name: "S2" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: second });
     await addScopeRel({ db, scopeId: otherScopeId, cardId });
 
-    const byProject = await getScopeRelsByProject({ db, projectId });
+    const byNamespace = await getScopeRelsByNamespace({ db, namespaceId });
 
-    expect(byProject).toHaveLength(3);
-    expect(sortRels(byProject)).toEqual(
+    expect(byNamespace).toHaveLength(3);
+    expect(sortRels(byNamespace)).toEqual(
       sortRels(await getScopeRelsByCards({ db, cardIds: [cardId, second] })),
     );
   });
 
-  // A scope is deliberately cross-project, so this is the case that separates "the scopes
-  // this board draws" from "every row in the table": another project's card filed into the
-  // same scope must not arrive on this project's board.
-  it("leaves another project's memberships of a shared scope out", async () => {
-    const { db, projectId, scopeId, cardId } = await setup();
-    const otherProjectId = await addProject({ db, name: "Other" });
-    await addLayer({ db, projectId: otherProjectId, name: "Base", isDefault: true });
-    const otherBundleId = await addBundle({ db, projectId: otherProjectId, name: "Other" });
-    const otherCardId = await addCard({ db, bundleId: otherBundleId, content: "elsewhere" });
+  // A scope is deliberately cross-namespace, so this is the case that separates "the scopes
+  // this board draws" from "every row in the table": another namespace's card filed into the
+  // same scope must not arrive on this namespace's board.
+  it("leaves another namespace's memberships of a shared scope out", async () => {
+    const { db, namespaceId, scopeId, cardId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    await addLayer({ db, namespaceId: otherNamespaceId, name: "Base", isDefault: true });
+    const otherPartitionId = await addPartition({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "Other",
+    });
+    const otherCardId = await addCard({ db, partitionId: otherPartitionId, content: "elsewhere" });
     await addScopeRel({ db, scopeId, cardId });
     await addScopeRel({ db, scopeId, cardId: otherCardId });
 
-    expect(await getScopeRelsByProject({ db, projectId })).toEqual([{ scopeId, cardId }]);
+    expect(await getScopeRelsByNamespace({ db, namespaceId })).toEqual([{ scopeId, cardId }]);
   });
 
   // `scope_rel` is the table that grows fastest, so it is the one that reaches SQLite's
   // parameter ceiling first — and reaching it stopped the board loading rather than slowing
-  // it down. Selecting by project binds one parameter however many cards there are.
-  it("reads a project holding more cards than one statement could name", async () => {
-    const { db, projectId, bundleId, scopeId } = await setup();
-    const layerId = (await getDefaultLayer({ db, projectId }))!.id;
+  // it down. Selecting by namespace binds one parameter however many cards there are.
+  it("reads a namespace holding more cards than one statement could name", async () => {
+    const { db, namespaceId, partitionId, scopeId } = await setup();
+    const layerId = (await getDefaultLayer({ db, namespaceId }))!.id;
     const cardIds = await seedCards(db, {
-      bundleId,
+      partitionId,
       layerId,
       count: SQLITE_VARIABLE_MAX + 1,
       prefix: "big",
@@ -312,6 +330,6 @@ describe("getScopeRelsByProject", () => {
     await expect(getScopeRelsByCards({ db, cardIds }).catch(isTooManyVariables)).resolves.toBe(
       true,
     );
-    await expect(getScopeRelsByProject({ db, projectId })).resolves.toHaveLength(3);
+    await expect(getScopeRelsByNamespace({ db, namespaceId })).resolves.toHaveLength(3);
   });
 });

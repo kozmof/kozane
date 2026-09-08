@@ -1,81 +1,84 @@
 import { layerTable } from "../schema.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import type { NeedsProject, NeedsProjectLayer, Layer } from "./types.js";
+import type { NeedsNamespace, NeedsNamespaceLayer, Layer } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 /** Ordered the way the canvas stacks them: lowest position first, id as the tiebreak. */
-export async function getAllLayers({ db, projectId }: NeedsProject): Promise<Layer[]> {
+export async function getAllLayers({ db, namespaceId }: NeedsNamespace): Promise<Layer[]> {
   return db
     .select()
     .from(layerTable)
-    .where(eq(layerTable.projectId, projectId))
+    .where(eq(layerTable.namespaceId, namespaceId))
     .orderBy(asc(layerTable.position), asc(layerTable.id));
 }
 
-type GetLayer = NeedsProjectLayer;
-export async function getLayer({ db, projectId, layerId }: GetLayer): Promise<Layer | undefined> {
-  // projectId is redundant for the lookup (layerId is a UUID) but is checked as a
-  // defence-in-depth access boundary, the same way getBundle does it.
+type GetLayer = NeedsNamespaceLayer;
+export async function getLayer({ db, namespaceId, layerId }: GetLayer): Promise<Layer | undefined> {
+  // namespaceId is redundant for the lookup (layerId is a UUID) but is checked as a
+  // defence-in-depth access boundary, the same way getPartition does it.
   return db
     .select()
     .from(layerTable)
-    .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)))
+    .where(and(eq(layerTable.namespaceId, namespaceId), eq(layerTable.id, layerId)))
     .get();
 }
 
-export async function getDefaultLayer({ db, projectId }: NeedsProject): Promise<Layer | undefined> {
+export async function getDefaultLayer({
+  db,
+  namespaceId,
+}: NeedsNamespace): Promise<Layer | undefined> {
   return db
     .select()
     .from(layerTable)
-    .where(and(eq(layerTable.projectId, projectId), eq(layerTable.isDefault, true)))
+    .where(and(eq(layerTable.namespaceId, namespaceId), eq(layerTable.isDefault, true)))
     .get();
 }
 
-type AddLayer = NeedsProject & { name: string; isDefault?: boolean };
+type AddLayer = NeedsNamespace & { name: string; isDefault?: boolean };
 
-/** Appends the layer on top of the project's existing ones (position = current max + 1). */
+/** Appends the layer on top of the namespace's existing ones (position = current max + 1). */
 export async function addLayer({
   db,
-  projectId,
+  namespaceId,
   name,
   isDefault = false,
 }: AddLayer): Promise<{ id: string; position: number }> {
   assertNameWithinLimit(name, "Layer name");
   // The next position is computed inside the INSERT rather than read first: two concurrent
   // creates would otherwise see the same max and both claim it. Nested transactions are not
-  // available here either — addLayer is itself called from inside one (moveCardsToProject).
+  // available here either — addLayer is itself called from inside one (moveCardsToNamespace).
   const [row] = await db
     .insert(layerTable)
     .values({
-      projectId,
+      namespaceId,
       name,
       isDefault,
-      position: sql`(SELECT COALESCE(MAX(${layerTable.position}), -1) + 1 FROM ${layerTable} WHERE ${layerTable.projectId} = ${projectId})`,
+      position: sql`(SELECT COALESCE(MAX(${layerTable.position}), -1) + 1 FROM ${layerTable} WHERE ${layerTable.namespaceId} = ${namespaceId})`,
     })
     .returning({ id: layerTable.id, position: layerTable.position });
   return { id: row.id, position: row.position };
 }
 
-type DeleteLayer = NeedsProjectLayer;
+type DeleteLayer = NeedsNamespaceLayer;
 
 /**
  * Deletes the layer row itself, which cascades every card on it away with it. Callers
- * that mean "remove this layer from the project" want `deleteLayerWithReassign` in
+ * that mean "remove this layer from the namespace" want `deleteLayerWithReassign` in
  * composite.ts, which rehomes the cards on the default layer first.
  */
-export async function deleteLayer({ db, projectId, layerId }: DeleteLayer): Promise<void> {
+export async function deleteLayer({ db, namespaceId, layerId }: DeleteLayer): Promise<void> {
   const deleted = await db
     .delete(layerTable)
-    .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)))
+    .where(and(eq(layerTable.namespaceId, namespaceId), eq(layerTable.id, layerId)))
     .returning({ id: layerTable.id });
-  assertFound(deleted, `Layer projectId=${projectId} layerId=${layerId}`);
+  assertFound(deleted, `Layer namespaceId=${namespaceId} layerId=${layerId}`);
 }
 
-type ReorderLayers = { db: DB; projectId: string; layerIds: string[] };
+type ReorderLayers = { db: DB; namespaceId: string; layerIds: string[] };
 
 /**
- * Why a reorder was refused. `stale` means the project has a different number of layers
+ * Why a reorder was refused. `stale` means the namespace has a different number of layers
  * than the caller listed — someone else added or deleted one — and is the only reason a
  * reload fixes on its own.
  */
@@ -83,17 +86,17 @@ export type ReorderRejection = "duplicate" | "stale" | "foreign";
 export type ReorderResult = { ok: true } | { ok: false; reason: ReorderRejection };
 
 /**
- * Renumbers a project's layers from `layerIds`, which must list every layer of the
- * project exactly once, bottom to top. A list that does not match the project's layers
+ * Renumbers a namespace's layers from `layerIds`, which must list every layer of the
+ * namespace exactly once, bottom to top. A list that does not match the namespace's layers
  * renumbers nothing rather than half of it, and says which way it failed to match.
  */
 export async function reorderLayers({
   db,
-  projectId,
+  namespaceId,
   layerIds,
 }: ReorderLayers): Promise<ReorderResult> {
   return withTx(db, async (tx) => {
-    const existing = await getAllLayers({ db: tx, projectId });
+    const existing = await getAllLayers({ db: tx, namespaceId });
     const requested = new Set(layerIds);
     if (requested.size !== layerIds.length) return { ok: false, reason: "duplicate" };
     if (requested.size !== existing.length) return { ok: false, reason: "stale" };
@@ -101,7 +104,7 @@ export async function reorderLayers({
 
     // One statement rather than one per layer. Same shape as the position and zIndex
     // updates in card.ts, including the ELSE, and safe for the same reason: the checks
-    // above prove `layerIds` is exactly this project's layer set, so no row the WHERE
+    // above prove `layerIds` is exactly this namespace's layer set, so no row the WHERE
     // matches lacks a WHEN. `position` carries no unique index, so there is no
     // half-applied ordering to collide with along the way either.
     //
@@ -114,15 +117,15 @@ export async function reorderLayers({
       .set({
         position: sql`CASE ${layerTable.id} ${sql.join(whens, sql` `)} ELSE ${layerTable.position} END`,
       })
-      .where(and(eq(layerTable.projectId, projectId), inArray(layerTable.id, layerIds)));
+      .where(and(eq(layerTable.namespaceId, namespaceId), inArray(layerTable.id, layerIds)));
     return { ok: true };
   });
 }
 
-type UpdateLayerName = NeedsProjectLayer & { name: string };
+type UpdateLayerName = NeedsNamespaceLayer & { name: string };
 export async function updateLayerName({
   db,
-  projectId,
+  namespaceId,
   layerId,
   name,
 }: UpdateLayerName): Promise<void> {
@@ -130,7 +133,7 @@ export async function updateLayerName({
   const updated = await db
     .update(layerTable)
     .set({ name })
-    .where(and(eq(layerTable.projectId, projectId), eq(layerTable.id, layerId)))
+    .where(and(eq(layerTable.namespaceId, namespaceId), eq(layerTable.id, layerId)))
     .returning({ id: layerTable.id });
-  assertFound(updated, `Layer projectId=${projectId} layerId=${layerId}`);
+  assertFound(updated, `Layer namespaceId=${namespaceId} layerId=${layerId}`);
 }

@@ -1,8 +1,8 @@
 import type { InferSelectModel } from "drizzle-orm";
 import type { AnyDB, Tx } from "../client.js";
 import type {
-  projectTable,
-  bundleTable,
+  namespaceTable,
+  partitionTable,
   layerTable,
   cardTable,
   scopeTable,
@@ -25,22 +25,22 @@ export type NeedsDB = { db: AnyDB };
  * differently for no reason.
  */
 export type NeedsTx = { db: Tx };
-export type NeedsProject = NeedsDB & { projectId: string };
-export type NeedsBundle = NeedsDB & { bundleId: string };
+export type NeedsNamespace = NeedsDB & { namespaceId: string };
+export type NeedsPartition = NeedsDB & { partitionId: string };
 /**
- * A project and a batch of its cards — the shape every operation acting on a selection
+ * A namespace and a batch of its cards — the shape every operation acting on a selection
  * takes, and the reason they can share one ownership check and one rejection vocabulary.
  * See {@link BatchRejection} in `utils.ts`.
  */
-export type NeedsProjectCards = NeedsProject & { cardIds: string[] };
-export type NeedsProjectBundle = NeedsProject & { bundleId: string };
-export type NeedsProjectLayer = NeedsProject & { layerId: string };
-export type NeedsProjectWarp = NeedsProject & { warpId: string };
+export type NeedsNamespaceCards = NeedsNamespace & { cardIds: string[] };
+export type NeedsNamespacePartition = NeedsNamespace & { partitionId: string };
+export type NeedsNamespaceLayer = NeedsNamespace & { layerId: string };
+export type NeedsNamespaceWarp = NeedsNamespace & { warpId: string };
 export type NeedsScope = NeedsDB & { scopeId: string };
 export type NeedsTaskspace = NeedsDB & { taskspaceId: string };
 
-export type Project = InferSelectModel<typeof projectTable>;
-export type Bundle = InferSelectModel<typeof bundleTable>;
+export type Namespace = InferSelectModel<typeof namespaceTable>;
+export type Partition = InferSelectModel<typeof partitionTable>;
 export type Layer = InferSelectModel<typeof layerTable>;
 export type Card = InferSelectModel<typeof cardTable>;
 export type Scope = InferSelectModel<typeof scopeTable>;

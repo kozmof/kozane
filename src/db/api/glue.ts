@@ -1,8 +1,8 @@
-import { bundleTable, cardTable, glueTable, glueRelTable } from "../schema.js";
+import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
 import { count, eq, getTableColumns, inArray } from "drizzle-orm";
-import type { GlueRel, NeedsDB, NeedsProject, NeedsTx } from "./types.js";
+import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
-import { cardsBelongToProject } from "./card.js";
+import { cardsBelongToNamespace } from "./card.js";
 import { chunked } from "../../lib/constants.js";
 import { columnCount, type BatchRefusal } from "./utils.js";
 
@@ -10,13 +10,13 @@ import { columnCount, type BatchRefusal } from "./utils.js";
  * The glue rows of a named handful of cards. For a caller that already holds the ids and
  * knows how many there are — a route acting on a selection, which `BATCH_MAX` caps.
  *
- * Not for the board: see {@link getGlueRelsByProject}.
+ * Not for the board: see {@link getGlueRelsByNamespace}.
  *
  * Deliberately *not* batched through `readByIds`, unlike the id-list reads in `card.ts`.
  * Batching it would make handing it a whole board work — slowly, at a round trip per two
  * thousand cards, once a second for as long as a tab is open. The hard failure is the point:
  * every caller here is a bounded selection, and the one that was not is why
- * {@link getGlueRelsByProject} exists. See the test that pins this.
+ * {@link getGlueRelsByNamespace} exists. See the test that pins this.
  */
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -24,33 +24,36 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
 }
 
 /**
- * Every glue row of a project's cards, selected by the project rather than by naming them.
+ * Every glue row of a namespace's cards, selected by the namespace rather than by naming them.
  *
- * The same answer {@link getGlueRelsByCards} gives when handed every card of a project, and
+ * The same answer {@link getGlueRelsByCards} gives when handed every card of a namespace, and
  * the reason it is a separate function is the "every": that form binds one SQL parameter
  * per card, and the board asks for it on every page load and every snapshot poll. SQLite
  * refuses a statement past its variable limit — and builds the whole thing in memory before
- * finding out — so a project large enough stops loading rather than loading slowly. It is
+ * finding out — so a namespace large enough stops loading rather than loading slowly. It is
  * the one read that took an id list nothing bounded: `BATCH_MAX` caps what a *request* may
  * name, and this list came out of the database.
  *
  * The join binds one parameter whatever the board holds, and walks indexes the schema
- * already has at every step: `bundle`'s primary key from `card`, and `glue_rel`'s from the
+ * already has at every step: `partition`'s primary key from `card`, and `glue_rel`'s from the
  * card side, whose `card_id` is itself the primary key.
  */
-export async function getGlueRelsByProject({ db, projectId }: NeedsProject): Promise<GlueRel[]> {
+export async function getGlueRelsByNamespace({
+  db,
+  namespaceId,
+}: NeedsNamespace): Promise<GlueRel[]> {
   return db
     .select(getTableColumns(glueRelTable))
     .from(glueRelTable)
     .innerJoin(cardTable, eq(cardTable.id, glueRelTable.cardId))
-    .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId))
-    .where(eq(bundleTable.projectId, projectId));
+    .innerJoin(partitionTable, eq(partitionTable.id, cardTable.partitionId))
+    .where(eq(partitionTable.namespaceId, namespaceId));
 }
 
 /**
  * Dissolves any of `glueIds` left holding fewer than two cards, for callers that removed
- * the cards themselves. Deleting a card through a cascade — a project going away takes its
- * bundles, their cards, and those cards' `glue_rel` rows with it — never passes through
+ * the cards themselves. Deleting a card through a cascade — a namespace going away takes its
+ * partitions, their cards, and those cards' `glue_rel` rows with it — never passes through
  * this module, so the parent `glue` rows would survive with nothing pointing at them.
  * Collect the ids before the cascade; they cannot be found afterwards.
  */
@@ -156,7 +159,7 @@ export async function unglueCardsInTx({
   await unglueCardsCore(db, cardIds);
 }
 
-type GlueProjectCards = { db: DB; projectId: string; cardIds: string[] };
+type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /**
  * The new group, or the refusal. A tagged result rather than the `string | null` this was:
@@ -167,33 +170,33 @@ type GlueProjectCards = { db: DB; projectId: string; cardIds: string[] };
  */
 export type GlueResult = { ok: true; glueId: string } | BatchRefusal<"foreign-cards">;
 
-/** Glues cards together after verifying all belong to projectId. */
-export async function glueProjectCards({
+/** Glues cards together after verifying all belong to namespaceId. */
+export async function glueNamespaceCards({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-}: GlueProjectCards): Promise<GlueResult> {
+}: GlueNamespaceCards): Promise<GlueResult> {
   return withTx(db, async (tx) => {
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
     return { ok: true, glueId: await glueCardsCore(tx, cardIds) };
   });
 }
 
-type UnglueProjectCards = { db: DB; projectId: string; cardIds: string[] };
+type UnglueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /** The cards left ungrouped, or the refusal. See {@link GlueResult}. */
 export type UnglueResult = { ok: true; clearedCardIds: string[] } | BatchRefusal<"foreign-cards">;
 
-/** Unglues cards after verifying all belong to projectId. */
-export async function unglueProjectCards({
+/** Unglues cards after verifying all belong to namespaceId. */
+export async function unglueNamespaceCards({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-}: UnglueProjectCards): Promise<UnglueResult> {
+}: UnglueNamespaceCards): Promise<UnglueResult> {
   if (cardIds.length === 0) return { ok: true, clearedCardIds: [] };
   return withTx(db, async (tx) => {
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
     return { ok: true, clearedCardIds: await unglueCardsCore(tx, cardIds) };
   });

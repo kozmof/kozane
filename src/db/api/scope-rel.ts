@@ -1,8 +1,8 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
-import { bundleTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
-import type { NeedsDB, NeedsProject, NeedsScope, Card, ScopeRel } from "./types.js";
+import { partitionTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
+import type { NeedsDB, NeedsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound, columnCount, type BatchRefusal } from "./utils.js";
-import { cardsBelongToProject } from "./card.js";
+import { cardsBelongToNamespace } from "./card.js";
 import { withTx, type DB } from "../tx.js";
 import { chunked } from "../../lib/constants.js";
 
@@ -16,21 +16,21 @@ export async function getAllCardsByScope({ db, scopeId }: NeedsScope): Promise<C
     .where(eq(scopeRelTable.scopeId, scopeId));
 }
 
-export type CardWithBundleName = Card & { bundleName: string; glueId: string | null };
+export type CardWithPartitionName = Card & { partitionName: string; glueId: string | null };
 
-export async function getCardsByScopeWithBundleName({
+export async function getCardsByScopeWithPartitionName({
   db,
   scopeId,
-}: NeedsScope): Promise<CardWithBundleName[]> {
+}: NeedsScope): Promise<CardWithPartitionName[]> {
   return db
     .select({
       ...getTableColumns(cardTable),
-      bundleName: bundleTable.name,
+      partitionName: partitionTable.name,
       glueId: glueRelTable.glueId,
     })
     .from(cardTable)
     .innerJoin(scopeRelTable, eq(scopeRelTable.cardId, cardTable.id))
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+    .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
     .leftJoin(glueRelTable, eq(glueRelTable.cardId, cardTable.id))
     .where(eq(scopeRelTable.scopeId, scopeId));
 }
@@ -66,12 +66,12 @@ export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Prom
       .onConflictDoNothing();
 }
 
-type AddScopeMembers = { db: DB; scopeId: string; projectId: string; cardIds: string[] };
+type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: string[] };
 
 /**
  * Refused two ways, and a caller that could only be told "no" reported the wrong one. Both
  * of these used to answer `false` for a missing scope and for foreign cards alike, and the
- * DELETE route worded that as "Some cards do not belong to this project" — said of a
+ * DELETE route worded that as "Some cards do not belong to this namespace" — said of a
  * request whose cards were perfectly fine and whose *scope* was the thing that did not
  * exist.
  */
@@ -81,7 +81,7 @@ export type ScopeMemberResult = { ok: true } | BatchRefusal<"foreign-cards" | "f
 export async function addScopeMembers({
   db,
   scopeId,
-  projectId,
+  namespaceId,
   cardIds,
 }: AddScopeMembers): Promise<ScopeMemberResult> {
   return withTx(db, async (tx) => {
@@ -92,7 +92,7 @@ export async function addScopeMembers({
       .get();
     if (!scope) return { ok: false, reason: "foreign-scope" };
 
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
     // Chunked, where this used to build one statement from every card the request named:
@@ -121,19 +121,19 @@ export async function removeScopeMembers({
     .where(and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, cardIds)));
 }
 
-type RemoveScopeMembersFromProject = {
+type RemoveScopeMembersFromNamespace = {
   db: DB;
   scopeId: string;
   cardIds: string[];
-  projectId: string;
+  namespaceId: string;
 };
 /** Bulk-removes cards from a scope, after verifying the scope and every card belong here. */
-export async function removeScopeMembersFromProject({
+export async function removeScopeMembersFromNamespace({
   db,
   scopeId,
-  projectId,
+  namespaceId,
   cardIds,
-}: RemoveScopeMembersFromProject): Promise<ScopeMemberResult> {
+}: RemoveScopeMembersFromNamespace): Promise<ScopeMemberResult> {
   return withTx(db, async (tx) => {
     const scope = await tx
       .select({ id: scopeTable.id })
@@ -142,7 +142,7 @@ export async function removeScopeMembersFromProject({
       .get();
     if (!scope) return { ok: false, reason: "foreign-scope" };
 
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
     await removeScopeMembers({ db: tx, scopeId, cardIds });
@@ -154,7 +154,7 @@ type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
 
 /**
  * The scope memberships of a named handful of cards, for a caller that already holds the
- * ids and knows how many there are. Not for the board: see {@link getScopeRelsByProject}.
+ * ids and knows how many there are. Not for the board: see {@link getScopeRelsByNamespace}.
  */
 export async function getScopeRelsByCards({
   db,
@@ -165,18 +165,21 @@ export async function getScopeRelsByCards({
 }
 
 /**
- * Every scope membership of a project's cards, selected by the project rather than by
- * naming them. The counterpart to `getGlueRelsByProject`, for the same reason and on the
+ * Every scope membership of a namespace's cards, selected by the namespace rather than by
+ * naming them. The counterpart to `getGlueRelsByNamespace`, for the same reason and on the
  * table that grows fastest — see the note there.
  *
  * Reaches `scope_rel` through `scope_rel_card`, which the schema declares precisely because
  * the primary key leads with `scope_id` and so cannot answer a lookup by card.
  */
-export async function getScopeRelsByProject({ db, projectId }: NeedsProject): Promise<ScopeRel[]> {
+export async function getScopeRelsByNamespace({
+  db,
+  namespaceId,
+}: NeedsNamespace): Promise<ScopeRel[]> {
   return db
     .select(getTableColumns(scopeRelTable))
     .from(scopeRelTable)
     .innerJoin(cardTable, eq(cardTable.id, scopeRelTable.cardId))
-    .innerJoin(bundleTable, eq(bundleTable.id, cardTable.bundleId))
-    .where(eq(bundleTable.projectId, projectId));
+    .innerJoin(partitionTable, eq(partitionTable.id, cardTable.partitionId))
+    .where(eq(partitionTable.namespaceId, namespaceId));
 }

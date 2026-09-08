@@ -1,7 +1,13 @@
-import { bundleTable, cardTable, layerTable } from "../schema.js";
+import { partitionTable, cardTable, layerTable } from "../schema.js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import type { NeedsDB, NeedsBundle, NeedsProject, NeedsProjectCards, Card } from "./types.js";
+import type {
+  NeedsDB,
+  NeedsPartition,
+  NeedsNamespace,
+  NeedsNamespaceCards,
+  Card,
+} from "./types.js";
 import type { CardData } from "../../lib/types.js";
 import { BATCH_MAX, WARP_HINT_MAX_CHARS, chunked } from "../../lib/constants.js";
 import { compareIds } from "../../lib/order.js";
@@ -16,18 +22,21 @@ import { withTx, type DB } from "../tx.js";
 
 // ── Simple operations (no ownership check) ────────────────────────────────────
 
-export async function cardsInProject({
+export async function cardsInNamespace({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-}: NeedsProjectCards): Promise<string[]> {
+}: NeedsNamespaceCards): Promise<string[]> {
   const rows = await readByIds(cardIds, (batch) =>
     db
       .select({ id: cardTable.id })
       .from(cardTable)
       .innerJoin(
-        bundleTable,
-        and(eq(cardTable.bundleId, bundleTable.id), eq(bundleTable.projectId, projectId)),
+        partitionTable,
+        and(
+          eq(cardTable.partitionId, partitionTable.id),
+          eq(partitionTable.namespaceId, namespaceId),
+        ),
       )
       .where(inArray(cardTable.id, batch)),
   );
@@ -35,54 +44,57 @@ export async function cardsInProject({
 }
 
 /**
- * Whether every id names a card of this project, as the refusal a caller can return.
+ * Whether every id names a card of this namespace, as the refusal a caller can return.
  *
  * The check five of these operations open with, written once. Each of them was spelling out
- * the same `cardsInProject(...)` call and the same length comparison, and comparing against
+ * the same `cardsInNamespace(...)` call and the same length comparison, and comparing against
  * whichever of `cardIds` or a deduplicated copy of it the function happened to hold — which
  * is a real difference: `inArray` collapses duplicates, so a list naming one card twice
  * comes back one short and reads as unowned. Deduplicating here means a caller cannot get
  * that wrong by forgetting to.
  */
-export async function cardsBelongToProject({
+export async function cardsBelongToNamespace({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-}: NeedsProjectCards): Promise<CardBatchResult> {
+}: NeedsNamespaceCards): Promise<CardBatchResult> {
   const wanted = [...new Set(cardIds)];
-  const owned = await cardsInProject({ db, projectId, cardIds: wanted });
+  const owned = await cardsInNamespace({ db, namespaceId, cardIds: wanted });
   return owned.length === wanted.length ? { ok: true } : { ok: false, reason: "foreign-cards" };
 }
 
-export async function getAllCards({ db, bundleId }: NeedsBundle): Promise<Card[]> {
-  return db.select().from(cardTable).where(eq(cardTable.bundleId, bundleId));
+export async function getAllCards({ db, partitionId }: NeedsPartition): Promise<Card[]> {
+  return db.select().from(cardTable).where(eq(cardTable.partitionId, partitionId));
 }
 
 /**
- * The ids of every card in a project, and nothing else about them.
+ * The ids of every card in a namespace, and nothing else about them.
  *
- * For the callers that want a project's cards only in order to number them —
- * {@link shortIdMap} draws its short ids against the whole project, so the id printed for a
+ * For the callers that want a namespace's cards only in order to number them —
+ * {@link shortIdMap} draws its short ids against the whole namespace, so the id printed for a
  * card is the one `kozane card show` takes whichever command printed it. That is the entire
  * requirement, and reading the rows to meet it read every card's `content` as well.
  *
- * One statement, in place of the `getAllBundles` then `getAllCards`-per-bundle that
- * `kozane tag show` was doing: a project of thirty bundles cost thirty-one round trips and
+ * One statement, in place of the `getAllPartitions` then `getAllCards`-per-partition that
+ * `kozane tag show` was doing: a namespace of thirty partitions cost thirty-one round trips and
  * came back with the text of every card in it, to build a map of ids.
  */
-export async function getProjectCardIds({ db, projectId }: NeedsProject): Promise<string[]> {
+export async function getNamespaceCardIds({ db, namespaceId }: NeedsNamespace): Promise<string[]> {
   const rows = await db
     .select({ id: cardTable.id })
     .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .where(eq(bundleTable.projectId, projectId));
+    .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+    .where(eq(partitionTable.namespaceId, namespaceId));
   return rows.map(({ id }) => id);
 }
 
-type GetCardsByBundles = NeedsDB & { bundleIds: string[] };
-export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): Promise<Card[]> {
-  if (bundleIds.length === 0) return [];
-  return db.select().from(cardTable).where(inArray(cardTable.bundleId, bundleIds));
+type GetCardsByPartitions = NeedsDB & { partitionIds: string[] };
+export async function getCardsByPartitions({
+  db,
+  partitionIds,
+}: GetCardsByPartitions): Promise<Card[]> {
+  if (partitionIds.length === 0) return [];
+  return db.select().from(cardTable).where(inArray(cardTable.partitionId, partitionIds));
 }
 
 /**
@@ -107,7 +119,7 @@ export async function getCardsByBundles({ db, bundleIds }: GetCardsByBundles): P
 const CARD_DATA_SELECTION = {
   id: cardTable.id,
   content: cardTable.content,
-  bundleId: cardTable.bundleId,
+  partitionId: cardTable.partitionId,
   layerId: cardTable.layerId,
   posX: cardTable.posX,
   posY: cardTable.posY,
@@ -117,26 +129,26 @@ const CARD_DATA_SELECTION = {
 } satisfies Record<keyof CardData, AnyColumn>;
 
 /**
- * The cards of a project's bundles, narrowed to what a board draws.
+ * The cards of a namespace's partitions, narrowed to what a board draws.
  *
  * The read behind both halves of the snapshot — the page load and the once-a-second poll —
- * which is the pair `loadProjectSnapshot` exists to keep identical. It used to select the
+ * which is the pair `loadNamespaceSnapshot` exists to keep identical. It used to select the
  * whole row: the poll's reader rebuilt each card from the fields it knows, so the two paths
  * already agreed on what the *client* kept, and disagreed on what crossed the wire.
  */
-export async function getCardDataByBundles({
+export async function getCardDataByPartitions({
   db,
-  bundleIds,
-}: GetCardsByBundles): Promise<CardData[]> {
-  if (bundleIds.length === 0) return [];
+  partitionIds,
+}: GetCardsByPartitions): Promise<CardData[]> {
+  if (partitionIds.length === 0) return [];
   return db
     .select(CARD_DATA_SELECTION)
     .from(cardTable)
-    .where(inArray(cardTable.bundleId, bundleIds));
+    .where(inArray(cardTable.partitionId, partitionIds));
 }
 
 export type CardMarker = {
-  projectId: string;
+  namespaceId: string;
   posX: number;
   posY: number;
   zIndex: number;
@@ -155,13 +167,13 @@ export type CardMarker = {
    */
   width: number | null;
 };
-type GetCardMarkers = NeedsDB & { projectIds: string[] };
+type GetCardMarkers = NeedsDB & { namespaceIds: string[] };
 
 /**
  * How much of a card's text this reads. A hint is at most {@link WARP_HINT_MAX_CHARS}
  * characters once its whitespace is collapsed, so several times that is more than enough
  * to build one, while a card may hold ten thousand — and every card of every
- * project with a warp is read to place one palette row.
+ * namespace with a warp is read to place one palette row.
  *
  * The single case this changes: a card whose first {@link HINT_SOURCE_MAX_CHARS}
  * characters are all whitespace reads as blank here, and a blank card lends no hint. How
@@ -171,8 +183,8 @@ type GetCardMarkers = NeedsDB & { projectIds: string[] };
 const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
 
 /**
- * Just enough of every card in `projectIds` to say what is near a point: the warp palette
- * names a warp after the card closest to it, and pulling whole rows for several projects
+ * Just enough of every card in `namespaceIds` to say what is near a point: the warp palette
+ * names a warp after the card closest to it, and pulling whole rows for several namespaces
  * to read three columns is not worth it.
  *
  * Bounded by width of row, not by count of rows. Three of the four edges could be narrowed
@@ -189,14 +201,14 @@ const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
  * runs on the whole column rather than the opening below, which only ever discards rows
  * the caller would have discarded anyway.
  */
-export async function getCardMarkersByProjects({
+export async function getCardMarkersByNamespaces({
   db,
-  projectIds,
+  namespaceIds,
 }: GetCardMarkers): Promise<CardMarker[]> {
-  if (projectIds.length === 0) return [];
+  if (namespaceIds.length === 0) return [];
   return db
     .select({
-      projectId: bundleTable.projectId,
+      namespaceId: partitionTable.namespaceId,
       posX: cardTable.posX,
       posY: cardTable.posY,
       zIndex: cardTable.zIndex,
@@ -207,36 +219,41 @@ export async function getCardMarkersByProjects({
       width: cardTable.width,
     })
     .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .where(and(inArray(bundleTable.projectId, projectIds), sql`trim(${cardTable.content}) <> ''`));
+    .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+    .where(
+      and(inArray(partitionTable.namespaceId, namespaceIds), sql`trim(${cardTable.content}) <> ''`),
+    );
 }
 
-type GetCard = NeedsBundle & { cardId: string };
-export async function getCard({ db, bundleId, cardId }: GetCard): Promise<Card | undefined> {
+type GetCard = NeedsPartition & { cardId: string };
+export async function getCard({ db, partitionId, cardId }: GetCard): Promise<Card | undefined> {
   return db
     .select()
     .from(cardTable)
-    .where(and(eq(cardTable.bundleId, bundleId), eq(cardTable.id, cardId)))
+    .where(and(eq(cardTable.partitionId, partitionId), eq(cardTable.id, cardId)))
     .get();
 }
 
 /**
- * The default layer of the project the bundle belongs to. Every project has one
- * (created alongside its default bundle, and backfilled by migration 0005), so a
+ * The default layer of the namespace the partition belongs to. Every namespace has one
+ * (created alongside its default partition, and backfilled by migration 0005), so a
  * caller that does not care about layers still writes a valid `card.layer_id`.
  */
-export async function defaultLayerIdForBundle({ db, bundleId }: NeedsBundle): Promise<string> {
+export async function defaultLayerIdForPartition({
+  db,
+  partitionId,
+}: NeedsPartition): Promise<string> {
   const row = await db
     .select({ id: layerTable.id })
     .from(layerTable)
-    .innerJoin(bundleTable, eq(bundleTable.projectId, layerTable.projectId))
-    .where(and(eq(bundleTable.id, bundleId), eq(layerTable.isDefault, true)))
+    .innerJoin(partitionTable, eq(partitionTable.namespaceId, layerTable.namespaceId))
+    .where(and(eq(partitionTable.id, partitionId), eq(layerTable.isDefault, true)))
     .get();
-  if (!row) throw new Error(`No default layer found for bundle bundleId=${bundleId}`);
+  if (!row) throw new Error(`No default layer found for partition partitionId=${partitionId}`);
   return row.id;
 }
 
-type AddCard = NeedsBundle & {
+type AddCard = NeedsPartition & {
   content: string;
   layerId?: string;
   taskspaceId?: string;
@@ -265,7 +282,7 @@ export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
 
 export async function addCard({
   db,
-  bundleId,
+  partitionId,
   content,
   layerId,
   taskspaceId,
@@ -277,8 +294,8 @@ export async function addCard({
     .insert(cardTable)
     .values({
       ...newCardStamps(),
-      bundleId,
-      layerId: layerId ?? (await defaultLayerIdForBundle({ db, bundleId })),
+      partitionId,
+      layerId: layerId ?? (await defaultLayerIdForPartition({ db, partitionId })),
       content,
       taskspaceId,
       ...(posX !== undefined && { posX }),
@@ -289,22 +306,22 @@ export async function addCard({
   return row.id;
 }
 
-type AddCards = NeedsBundle & {
+type AddCards = NeedsPartition & {
   layerId: string;
   cards: { content: string; posX: number; posY: number }[];
 };
 
 /**
- * Inserts many cards onto one bundle and layer, in {@link chunked} statements rather than
+ * Inserts many cards onto one partition and layer, in {@link chunked} statements rather than
  * one round trip each. `kozane card squash` turns a pasted file into a card per sentence,
  * which is the one CLI path that writes cards by the hundred; the board's squash endpoint
- * batches the same way (see `squashProjectCard`).
+ * batches the same way (see `squashNamespaceCard`).
  *
  * Returns the new ids in the order the rows were given, which is the order the text reads.
  * `layerId` is required rather than defaulted: every caller here has already resolved one,
  * and looking it up per chunk is the round trip this exists to avoid.
  */
-export async function addCards({ db, bundleId, layerId, cards }: AddCards): Promise<string[]> {
+export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
   // Outside the loop: one moment for every card of this call, not one per chunk. See
   // {@link newCardStamps} — a squash long enough to be split into several statements is
@@ -314,7 +331,7 @@ export async function addCards({ db, bundleId, layerId, cards }: AddCards): Prom
   for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
       .insert(cardTable)
-      .values(batch.map((card) => ({ ...stamps, bundleId, layerId, ...card })))
+      .values(batch.map((card) => ({ ...stamps, partitionId, layerId, ...card })))
       .returning({ id: cardTable.id });
     ids.push(...rows.map(({ id }) => id));
   }
@@ -323,13 +340,13 @@ export async function addCards({ db, bundleId, layerId, cards }: AddCards): Prom
 
 // Card deletion lives in composite.ts: removing a card cascades its glue_rel rows
 // away, so the delete has to be paired with glue-group cleanup, and glue.ts cannot
-// be imported from here without a cycle. See `deleteProjectCards`.
+// be imported from here without a cycle. See `deleteNamespaceCards`.
 
-// ── Project-scoped transactional operations (verify ownership before mutating) ─
+// ── Namespace-scoped transactional operations (verify ownership before mutating) ─
 
-type GetCardBundleNames = NeedsDB & { cardIds: string[] };
+type GetCardPartitionNames = NeedsDB & { cardIds: string[] };
 /**
- * The bundle each of `cardIds` is in.
+ * The partition each of `cardIds` is in.
  *
  * In statement-sized batches through {@link readByIds}, because an `IN` list is subject to
  * the same SQLite variable ceiling an `INSERT` is. Every caller but one hands this a handful
@@ -340,46 +357,48 @@ type GetCardBundleNames = NeedsDB & { cardIds: string[] };
  * {@link readByIds} for why the batch is sized by {@link BATCH_MAX} rather than by
  * `chunked`'s row-count default.
  */
-export async function getCardBundleNames({
+export async function getCardPartitionNames({
   db,
   cardIds,
-}: GetCardBundleNames): Promise<{ cardId: string; bundleId: string; bundleName: string }[]> {
+}: GetCardPartitionNames): Promise<
+  { cardId: string; partitionId: string; partitionName: string }[]
+> {
   return readByIds(cardIds, (batch) =>
     db
       .select({
         cardId: cardTable.id,
-        bundleId: bundleTable.id,
-        bundleName: bundleTable.name,
+        partitionId: partitionTable.id,
+        partitionName: partitionTable.name,
       })
       .from(cardTable)
-      .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
+      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(inArray(cardTable.id, batch)),
   );
 }
 
-export type CardChangeCount = { day: string; bundleId: string; cards: number };
+export type CardChangeCount = { day: string; partitionId: string; cards: number };
 
 /**
- * Daily content-change counts by bundle. Card creation counts as the first change because
+ * Daily content-change counts by partition. Card creation counts as the first change because
  * new cards begin with matching created/updated timestamps; arrangement-only writes do not
  * appear because those deliberately leave updated_at unchanged.
  */
 export async function getCardChangeCounts({
   db,
-  projectIds,
-}: NeedsDB & { projectIds?: string[] }): Promise<CardChangeCount[]> {
-  if (projectIds?.length === 0) return [];
+  namespaceIds,
+}: NeedsDB & { namespaceIds?: string[] }): Promise<CardChangeCount[]> {
+  if (namespaceIds?.length === 0) return [];
   const day = sql<string>`strftime('%Y-%m-%d', ${cardTable.updatedAt}, 'unixepoch')`;
   const query = db
     .select({
       day,
-      bundleId: cardTable.bundleId,
+      partitionId: cardTable.partitionId,
       cards: sql<number>`count(*)`,
     })
     .from(cardTable)
-    .innerJoin(bundleTable, eq(cardTable.bundleId, bundleTable.id))
-    .groupBy(day, cardTable.bundleId);
-  return projectIds ? query.where(inArray(bundleTable.projectId, projectIds)) : query;
+    .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+    .groupBy(day, cardTable.partitionId);
+  return namespaceIds ? query.where(inArray(partitionTable.namespaceId, namespaceIds)) : query;
 }
 
 type GetCardLayerNames = NeedsDB & { cardIds: string[] };
@@ -400,16 +419,16 @@ export async function getCardLayerNames({
   );
 }
 
-type ReassignBundleCards = NeedsDB & { fromBundleId: string; toBundleId: string };
-export async function reassignBundleCards({
+type ReassignPartitionCards = NeedsDB & { fromPartitionId: string; toPartitionId: string };
+export async function reassignPartitionCards({
   db,
-  fromBundleId,
-  toBundleId,
-}: ReassignBundleCards): Promise<void> {
+  fromPartitionId,
+  toPartitionId,
+}: ReassignPartitionCards): Promise<void> {
   await db
     .update(cardTable)
-    .set({ bundleId: toBundleId })
-    .where(eq(cardTable.bundleId, fromBundleId));
+    .set({ partitionId: toPartitionId })
+    .where(eq(cardTable.partitionId, fromPartitionId));
 }
 
 type ReassignLayerCards = NeedsDB & { fromLayerId: string; toLayerId: string };
@@ -423,8 +442,8 @@ export async function reassignLayerCards({
 
 type UpdateCard = NeedsDB & {
   cardId: string;
-  bundleId: string;
-  newBundleId?: string;
+  partitionId: string;
+  newPartitionId?: string;
   layerId?: string;
   content?: string;
   posX?: number;
@@ -439,7 +458,7 @@ type UpdateCard = NeedsDB & {
 type CardUpdate = Partial<
   Pick<
     typeof cardTable.$inferInsert,
-    "content" | "posX" | "posY" | "zIndex" | "width" | "bundleId" | "layerId"
+    "content" | "posX" | "posY" | "zIndex" | "width" | "partitionId" | "layerId"
   >
 > & {
   /**
@@ -473,8 +492,8 @@ function contentUpdatedAt(content: string): SQL {
 export async function updateCard({
   db,
   cardId,
-  bundleId,
-  newBundleId,
+  partitionId,
+  newPartitionId,
   layerId,
   content,
   posX,
@@ -484,9 +503,9 @@ export async function updateCard({
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
   // `updatedAt` follows a card's text and nothing else. The rest of what this function can
-  // change — where the card sits, how wide it is drawn, which bundle or layer holds it — is
+  // change — where the card sits, how wide it is drawn, which partition or layer holds it — is
   // arrangement rather than revision, and leaves the timestamp alone. See the column's own
-  // note in `schema.ts`, and `updateProjectCardPositions` below, which writes positions by
+  // note in `schema.ts`, and `updateNamespaceCardPositions` below, which writes positions by
   // the hundred and likewise does not bump it.
   if (content !== undefined) {
     fields.content = content;
@@ -496,14 +515,14 @@ export async function updateCard({
   if (posY !== undefined) fields.posY = posY;
   if (zIndex !== undefined) fields.zIndex = zIndex;
   if (width !== undefined) fields.width = width;
-  if (newBundleId !== undefined) fields.bundleId = newBundleId;
+  if (newPartitionId !== undefined) fields.partitionId = newPartitionId;
   if (layerId !== undefined) fields.layerId = layerId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
 
   const updated = await db
     .update(cardTable)
     .set(fields)
-    .where(and(eq(cardTable.id, cardId), eq(cardTable.bundleId, bundleId)))
+    .where(and(eq(cardTable.id, cardId), eq(cardTable.partitionId, partitionId)))
     .returning({ id: cardTable.id });
   assertFound(updated, `Card cardId=${cardId}`);
 }
@@ -543,7 +562,7 @@ function caseUpdateBatches<T>(rows: T[], columns: number): T[][] {
 // the WHERE without a matching WHEN is left as it was. The two are built from the same
 // list and cannot diverge today; the ELSE is what keeps the failure mode of a future
 // divergence "this row was not moved" rather than "NULL into a NOT NULL column", which
-// aborts the whole statement. The row-count assertion in `updateProjectCardPositions`
+// aborts the whole statement. The row-count assertion in `updateNamespaceCardPositions`
 // still fails the transaction if it ever happens, so it cannot pass silently either.
 function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; posY: SQL } {
   const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
@@ -559,23 +578,23 @@ function dedupePositions(positions: CardPositionUpdate[]): CardPositionUpdate[] 
   return [...new Map(positions.map((p) => [p.cardId, p])).values()];
 }
 
-type UpdateProjectCardPositions = {
+type UpdateNamespaceCardPositions = {
   db: DB;
-  projectId: string;
+  namespaceId: string;
   positions: CardPositionUpdate[];
 };
 
-export async function updateProjectCardPositions({
+export async function updateNamespaceCardPositions({
   db,
-  projectId,
+  namespaceId,
   positions,
-}: UpdateProjectCardPositions): Promise<CardBatchResult> {
+}: UpdateNamespaceCardPositions): Promise<CardBatchResult> {
   if (positions.length === 0) return { ok: true };
   const unique = dedupePositions(positions);
 
   return withTx(db, async (tx) => {
     const cardIds = unique.map((p) => p.cardId);
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
     // Two columns written by CASE, so the batch is sized at that width; see
@@ -595,7 +614,7 @@ export async function updateProjectCardPositions({
         .returning({ id: cardTable.id });
       if (updated.length !== batch.length)
         throw new Error(
-          `updateProjectCardPositions: expected ${batch.length} updates, got ${updated.length}`,
+          `updateNamespaceCardPositions: expected ${batch.length} updates, got ${updated.length}`,
         );
     }
 
@@ -605,7 +624,7 @@ export async function updateProjectCardPositions({
 
 type ReassignCardsToLayer = {
   db: DB;
-  projectId: string;
+  namespaceId: string;
   cardIds: string[];
   layerId: string;
 };
@@ -613,7 +632,7 @@ type ReassignCardsToLayer = {
 export type CardStacking = { cardId: string; zIndex: number };
 /**
  * Refused for one of two reasons, and they are different things to be told: the cards are
- * not this project's, or the layer is not. The caller used to get a bare `{ ok: false }`
+ * not this namespace's, or the layer is not. The caller used to get a bare `{ ok: false }`
  * and so could only name one of them — the route worked around that by looking the layer up
  * itself first, outside the transaction that then looked it up again.
  */
@@ -628,8 +647,8 @@ function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
 }
 
 /**
- * Moves cards onto another layer of their own project. Refuses when a card is not in the
- * project or the layer is not either — a card must never end up on a layer its project
+ * Moves cards onto another layer of their own namespace. Refuses when a card is not in the
+ * namespace or the layer is not either — a card must never end up on a layer its namespace
  * cannot see.
  *
  * A card arriving from elsewhere is restacked above what the target layer already holds.
@@ -642,7 +661,7 @@ function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
  */
 export async function reassignCardsToLayer({
   db,
-  projectId,
+  namespaceId,
   cardIds,
   layerId,
 }: ReassignCardsToLayer): Promise<ReassignLayerResult> {
@@ -655,11 +674,11 @@ export async function reassignCardsToLayer({
     const layer = await tx
       .select({ id: layerTable.id })
       .from(layerTable)
-      .where(and(eq(layerTable.id, layerId), eq(layerTable.projectId, projectId)))
+      .where(and(eq(layerTable.id, layerId), eq(layerTable.namespaceId, namespaceId)))
       .get();
     if (!layer) return { ok: false, reason: "foreign-layer" };
 
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
     const requested = await tx
@@ -700,37 +719,39 @@ export async function reassignCardsToLayer({
   });
 }
 
-type ReassignCardsToBundle = {
+type ReassignCardsToPartition = {
   db: DB;
-  projectId: string;
+  namespaceId: string;
   cardIds: string[];
-  bundleId: string;
+  partitionId: string;
 };
 
 /** Refused the two ways {@link ReassignLayerResult} is, for the same reason. */
-export type ReassignBundleResult = { ok: true } | BatchRefusal<"foreign-cards" | "foreign-bundle">;
+export type ReassignPartitionResult =
+  | { ok: true }
+  | BatchRefusal<"foreign-cards" | "foreign-partition">;
 
-export async function reassignCardsToBundle({
+export async function reassignCardsToPartition({
   db,
-  projectId,
+  namespaceId,
   cardIds,
-  bundleId,
-}: ReassignCardsToBundle): Promise<ReassignBundleResult> {
+  partitionId,
+}: ReassignCardsToPartition): Promise<ReassignPartitionResult> {
   if (cardIds.length === 0) return { ok: true };
 
   return withTx(db, async (tx) => {
     // Destination first, as in `reassignCardsToLayer`; see the note there.
-    const bundle = await tx
-      .select({ id: bundleTable.id })
-      .from(bundleTable)
-      .where(and(eq(bundleTable.id, bundleId), eq(bundleTable.projectId, projectId)))
+    const partition = await tx
+      .select({ id: partitionTable.id })
+      .from(partitionTable)
+      .where(and(eq(partitionTable.id, partitionId), eq(partitionTable.namespaceId, namespaceId)))
       .get();
-    if (!bundle) return { ok: false, reason: "foreign-bundle" };
+    if (!partition) return { ok: false, reason: "foreign-partition" };
 
-    const owned = await cardsBelongToProject({ db: tx, projectId, cardIds });
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    await tx.update(cardTable).set({ bundleId }).where(inArray(cardTable.id, cardIds));
+    await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, cardIds));
 
     return { ok: true };
   });

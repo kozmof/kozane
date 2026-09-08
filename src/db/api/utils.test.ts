@@ -27,7 +27,9 @@ describe("assertFound", () => {
   });
 
   it("throws with the label in the message", () => {
-    expect(() => assertFound([], "Bundle bundleId=xyz")).toThrow("Bundle bundleId=xyz not found");
+    expect(() => assertFound([], "Partition partitionId=xyz")).toThrow(
+      "Partition partitionId=xyz not found",
+    );
   });
 });
 

@@ -1,5 +1,5 @@
 import type {
-  Bundle,
+  Partition,
   Card,
   GlueRel,
   Layer,
@@ -15,14 +15,22 @@ import type {
 // `ui.defaultCardWidth`, which is most of them.
 export type CardData = Pick<
   Card,
-  "id" | "content" | "bundleId" | "layerId" | "posX" | "posY" | "taskspaceId" | "zIndex" | "width"
+  | "id"
+  | "content"
+  | "partitionId"
+  | "layerId"
+  | "posX"
+  | "posY"
+  | "taskspaceId"
+  | "zIndex"
+  | "width"
 >;
 
 export interface CardWithGlue extends CardData {
   glueId: string | null;
 }
 
-export interface BundleWithColor {
+export interface PartitionWithColor {
   id: string;
   name: string;
   bg: string;
@@ -126,7 +134,7 @@ export interface TaskspaceFileTree {
  * card path and the file path differ at all: one grammar reads both (`scanTagLines` in
  * `lib/tag.ts`), and each caller wraps what comes back in the source it knows.
  *
- * Identity, and nothing a row already holds. A card's bundle, position, and layer are
+ * Identity, and nothing a row already holds. A card's partition, position, and layer are
  * columns of `card`, so a reader that wants them joins by `cardId` against cards it has
  * already got — the board keeps every one of them in its snapshot. Copying them in here
  * would put a second, staler copy of those columns behind every occurrence of every tag.
@@ -187,28 +195,28 @@ export interface TagHit {
 export type TagScanTruncation = WalkTruncation | "budget" | "hits" | "too-large";
 
 /**
- * Everything a project board is drawn from. The snapshot endpoint answers with this and
+ * Everything a namespace board is drawn from. The snapshot endpoint answers with this and
  * the client reloads into it, so the two cannot drift into different shapes.
  *
  * It lives here rather than beside the client state that consumes it because a server
  * route also has to name it, and a `+server.ts` reaching into a `.svelte.ts` module points
  * the dependency the wrong way round.
  */
-export interface ProjectDataSnapshot {
-  project: { id: string };
+export interface NamespaceDataSnapshot {
+  namespace: { id: string };
   cards: CardWithGlue[];
-  bundles: Bundle[];
+  partitions: Partition[];
   layers: Layer[];
   warps: Warp[];
   /**
-   * Not every scope in the workspace: the ones this project has reason to draw, as
-   * `getScopesInProject` decides. A scope another project alone is working in is absent,
+   * Not every scope in the workspace: the ones this namespace has reason to draw, as
+   * `getScopesInNamespace` decides. A scope another namespace alone is working in is absent,
    * and the client must not treat this as the full list — `kozane scope list` is that.
    */
   scopes: Scope[];
   scopeRels: ScopeRel[];
   glueRels: GlueRel[];
-  /** Likewise narrowed: this project's taskspaces, plus the ones assigned to no project. */
+  /** Likewise narrowed: this namespace's taskspaces, plus the ones assigned to no namespace. */
   taskspaces: TaskspaceSummary[];
   /**
    * Present only in a static export built with `--include-scoped-files`: one file tree per
@@ -218,4 +226,4 @@ export interface ProjectDataSnapshot {
   taskspaceFiles?: Record<string, TaskspaceFileTree>;
 }
 
-export type { Bundle, Layer, Scope, ScopeRel, GlueRel, Warp } from "../db/api/types.js";
+export type { Partition, Layer, Scope, ScopeRel, GlueRel, Warp } from "../db/api/types.js";

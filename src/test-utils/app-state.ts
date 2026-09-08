@@ -2,5 +2,5 @@
 // Vite/SvelteKit build. Only `page.url` is used by the components under test; a test that
 // needs a different URL assigns to it before rendering.
 export const page = {
-  url: new URL("http://localhost/project-1"),
+  url: new URL("http://localhost/namespace-1"),
 };
