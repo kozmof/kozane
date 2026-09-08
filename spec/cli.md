@@ -1486,7 +1486,7 @@ Behavior:
 1. Inserts a `taskspace` DB record → gets a stable UUID.
 2. Creates the target directory.
 3. Writes `<dir>/.taskspace.json` with the stable ID.
-4. Stores the path in the DB (`project_relative` if inside workspace root, `absolute` otherwise).
+4. Stores the path in the DB (`workspace_relative` if inside workspace root, `absolute` otherwise).
 
 Output:
 
@@ -1630,10 +1630,10 @@ and exits with code `1`.
 
 ## Path storage policy
 
-| Location relative to workspace root | Stored `path_kind` | Stored `path`            |
-| --------------------------------- | ------------------ | ------------------------ |
-| Inside workspace root               | `project_relative` | relative path from root  |
-| Outside workspace root              | `absolute`         | absolute filesystem path |
+| Location relative to workspace root | Stored `path_kind`   | Stored `path`            |
+| ----------------------------------- | -------------------- | ------------------------ |
+| Inside workspace root               | `workspace_relative` | relative path from root  |
+| Outside workspace root              | `absolute`           | absolute filesystem path |
 
 This keeps repo-local paths portable across machines while still supporting
 taskspaces placed anywhere on the filesystem.
@@ -1642,17 +1642,17 @@ taskspaces placed anywhere on the filesystem.
 
 ## Database schema (taskspace)
 
-| Column         | Type                | Notes                            |
-| -------------- | ------------------- | -------------------------------- |
-| `id`           | text PK             | UUID v7, stable identity         |
-| `namespace_id`   | text FK → namespace   | nullable, cascade delete         |
-| `scope_id`     | text FK → scope     | nullable, set null on delete     |
-| `name`         | text                | display name                     |
-| `path`         | text                | current known filesystem path    |
-| `path_kind`    | text enum           | `project_relative` \| `absolute` |
-| `last_seen_at` | integer (timestamp) | set by `taskspace scan`          |
-| `created_at`   | integer (timestamp) | set on insert                    |
-| `updated_at`   | integer (timestamp) | set on every update              |
+| Column           | Type                | Notes                                |
+| ---------------- | ------------------- | ------------------------------------ |
+| `id`             | text PK             | UUID v7, stable identity             |
+| `namespace_id`   | text FK → namespace | nullable, cascade delete             |
+| `scope_id`       | text FK → scope     | nullable, set null on delete         |
+| `name`           | text                | display name                         |
+| `path`           | text                | current known filesystem path        |
+| `path_kind`      | text enum           | `workspace_relative` \| `absolute`   |
+| `last_seen_at`   | integer (timestamp) | set by `taskspace scan`              |
+| `created_at`     | integer (timestamp) | set on insert                        |
+| `updated_at`     | integer (timestamp) | set on every update                  |
 
 ---
 

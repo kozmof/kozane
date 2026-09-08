@@ -71,7 +71,7 @@ export type TaskspaceRecord = {
   id: string;
   name: string | null;
   path: string | null;
-  pathKind: "project_relative" | "absolute";
+  pathKind: "workspace_relative" | "absolute";
 };
 
 export type TaskspaceDiff = {

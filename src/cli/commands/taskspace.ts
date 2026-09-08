@@ -101,10 +101,10 @@ async function scanWithin(
     console.log(`    new: ${scanned.path}`);
     if (options.apply) {
       const pathKind = scanned.path.startsWith(root)
-        ? ("project_relative" as const)
+        ? ("workspace_relative" as const)
         : ("absolute" as const);
       const storedPath =
-        pathKind === "project_relative" ? relative(root, scanned.path) : scanned.path;
+        pathKind === "workspace_relative" ? relative(root, scanned.path) : scanned.path;
       await db
         .update(taskspaceTable)
         .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
@@ -117,10 +117,10 @@ async function scanWithin(
     console.log(`  orphan  ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}`);
     if (options.apply && options.reattach) {
       const pathKind = taskspace.path.startsWith(root)
-        ? ("project_relative" as const)
+        ? ("workspace_relative" as const)
         : ("absolute" as const);
       const storedPath =
-        pathKind === "project_relative" ? relative(root, taskspace.path) : taskspace.path;
+        pathKind === "workspace_relative" ? relative(root, taskspace.path) : taskspace.path;
       await db.insert(taskspaceTable).values({
         id: taskspace.taskspaceId,
         namespaceId: taskspace.namespaceId || undefined,
@@ -203,9 +203,9 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     }
 
     const pathKind = targetDir.startsWith(root)
-      ? ("project_relative" as const)
+      ? ("workspace_relative" as const)
       : ("absolute" as const);
-    const storedPath = pathKind === "project_relative" ? relative(root, targetDir) : targetDir;
+    const storedPath = pathKind === "workspace_relative" ? relative(root, targetDir) : targetDir;
 
     const namespaceId = await resolveNamespaceId(db, options.namespace);
 

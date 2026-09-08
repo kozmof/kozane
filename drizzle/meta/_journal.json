@@ -106,6 +106,13 @@
       "when": 1788861946337,
       "tag": "0014_namespace_partition",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1788867101653,
+      "tag": "0015_workspace_relative",
+      "breakpoints": true
     }
   ]
 }

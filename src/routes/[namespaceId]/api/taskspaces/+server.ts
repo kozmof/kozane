@@ -36,7 +36,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     throw error(400, "Taskspace path must be inside the workspace root");
 
   // The guard above ensures targetDir is always inside the workspace root,
-  // so the path is always stored as project_relative. Absolute paths are
+  // so the path is always stored as workspace_relative. Absolute paths are
   // only produced by the CLI (kozane taskspace create --dir <outside-root>).
 
   const id = await addTaskspace({
@@ -45,7 +45,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     scopeId,
     name,
     path: storedPath,
-    pathKind: "project_relative",
+    pathKind: "workspace_relative",
   });
 
   let targetCreated = false;
@@ -85,5 +85,5 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     throw error(500, "Failed to initialize taskspace directory");
   }
 
-  return json({ id, path: storedPath, pathKind: "project_relative" });
+  return json({ id, path: storedPath, pathKind: "workspace_relative" });
 };

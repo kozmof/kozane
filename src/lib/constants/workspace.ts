@@ -14,7 +14,7 @@
  * what to do with the value. A leaf module is the one place both can reach without either
  * importing the other.
  */
-export const PATH_KINDS = ["project_relative", "absolute"] as const;
+export const PATH_KINDS = ["workspace_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
 /** Name of the default layer every namespace is created with. */

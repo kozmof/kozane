@@ -40,7 +40,7 @@ const taskspace = (id: string): TaskspaceSummary => ({
   name: id,
   scopeId: null,
   path: null,
-  pathKind: "project_relative",
+  pathKind: "workspace_relative",
 });
 
 const card = (id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue => ({

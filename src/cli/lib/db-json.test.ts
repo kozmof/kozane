@@ -60,7 +60,7 @@ async function seedDb(dbUrl: string): Promise<void> {
             "scope-1",
             "Main",
             ".kozane/taskspaces/main",
-            "project_relative",
+            "workspace_relative",
             1_800_000_000_000,
             1_700_000_000_000,
             1_700_000_000_001,

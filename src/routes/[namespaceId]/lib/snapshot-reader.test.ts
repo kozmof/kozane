@@ -27,7 +27,7 @@ function fullSnapshot(): NamespaceDataSnapshot {
     scopeRels: [{ scopeId: "s1", cardId: "c1" }],
     glueRels: [{ glueId: "g1", cardId: "c1" }],
     taskspaces: [
-      { id: "t1", name: "draft", scopeId: "s1", path: "draft", pathKind: "project_relative" },
+      { id: "t1", name: "draft", scopeId: "s1", path: "draft", pathKind: "workspace_relative" },
     ],
   };
 }

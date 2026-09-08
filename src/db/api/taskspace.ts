@@ -76,7 +76,7 @@ export async function addTaskspace({
   namespaceId,
   name = "",
   path,
-  pathKind = "project_relative",
+  pathKind = "workspace_relative",
   lastSeenAt,
 }: AddTaskspace): Promise<string> {
   assertNameWithinLimit(name, "Taskspace name");

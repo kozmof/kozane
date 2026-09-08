@@ -145,7 +145,7 @@ export const taskspaceTable = sqliteTable(
     }),
     name: text().notNull().default(""),
     path: text("path"),
-    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("project_relative"),
+    pathKind: text("path_kind", { enum: PATH_KINDS }).notNull().default("workspace_relative"),
     lastSeenAt: integer("last_seen_at", { mode: "timestamp" }),
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()

@@ -95,7 +95,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     const { id, path, pathKind } = await res.json();
     expect(id).toBeTruthy();
     expect(path).toBe("my-draft");
-    expect(pathKind).toBe("project_relative");
+    expect(pathKind).toBe("workspace_relative");
 
     const markerPath = join(tmpRoot, "my-draft", TASKSPACE_MARKER_FILE);
     expect(existsSync(markerPath)).toBe(true);

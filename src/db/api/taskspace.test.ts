@@ -47,11 +47,11 @@ describe("addTaskspace", () => {
     expect(taskspace?.name).toBe("");
   });
 
-  it("defaults pathKind to project_relative", async () => {
+  it("defaults pathKind to workspace_relative", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId });
     const taskspace = await getTaskspace({ db, taskspaceId: id });
-    expect(taskspace?.pathKind).toBe("project_relative");
+    expect(taskspace?.pathKind).toBe("workspace_relative");
   });
 
   it("stores lastSeenAt when provided", async () => {

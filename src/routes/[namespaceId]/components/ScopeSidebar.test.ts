@@ -10,7 +10,7 @@ const TASKSPACE = {
   name: "demo",
   scopeId: SCOPE.id,
   path: "demo",
-  pathKind: "project_relative" as const,
+  pathKind: "workspace_relative" as const,
 };
 
 function listingResponse(names: string[]): Response {
