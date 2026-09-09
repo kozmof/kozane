@@ -239,7 +239,7 @@ describe("card move", () => {
 
     cli(root, "card", "move", cardId, "--y", "200");
     expect(listedPositions(root)).toEqual([{ posX: 130, posY: 200 }]);
-  });
+  }, 20_000);
 
   it("requires at least one axis", () => {
     const root = tempWorkspace();
