@@ -1,7 +1,19 @@
 # Kozane
 
-Kozane is a workspace for short texts.
-It builds on the kozane method (こざね法), a way of organizing thoughts on small cards developed by the Japanese anthropologist Tadao Umesao.
+Kozane provides data structures for organizing text and modeling thinking processes.
+The names of these structures do not imply fixed intentions; different use cases may
+use them in different ways.
+
+The name "Kozane" comes from こざね法 (kozane method), developed by Japanese anthropologist Tadao Umesao.
+
+## Structures
+
+- **Namespace:** A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
+- **Partition:** A sub-container assigned to each card. Every namespace has a default partition named "General."
+- **Card:** A unit of text.
+- **Layer:** A way to arrange cards in layers.
+- **Scope:** A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
+- **Warp:** A saved point to jump to. Warps are not related to cards.
 
 ## Status
 
@@ -82,7 +94,7 @@ Namespace, partition, layer, and scope options also work with piped files:
 cat foo.txt | kozane card squash --namespace eb155d6 --partition 72ac1f8 --scope e3ee90b
 ```
 
-A layer is a surface cards sit on, so a set of cards can be worked on with the rest of the board dimmed behind it. Every namespace starts with a `Base` layer:
+Every namespace starts with a `Base` layer. For example:
 
 ```sh
 kozane layer list
@@ -97,9 +109,8 @@ A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
 ## Tagging
 
-Write a tag anywhere in a card and it gathers that card with everything else carrying it —
-taskspace files included, since a tag is just text and a file is too. A tag opens with an
-apostrophe and subcategorizes with colons:
+A tag is text that begins with an apostrophe. Tags may use colons to form
+subcategories, and can appear in cards or taskspace files:
 
 ```sh
 kozane card add "caching work 'perf:cache"
@@ -113,26 +124,20 @@ kozane tag list          # every tag in the namespace, as a tree, with counts
 kozane tag show perf     # the cards and files under it, subcategories included
 ```
 
-Nothing is created to make a tag exist. It is in the workspace for as long as some text
-holds it, and gone once that text is. Ordinary punctuation stays punctuation: `don't` is a
-word and `'quoted'` is a quoted word, and neither becomes a tag.
+A tag exists only while it appears in text. Ordinary punctuation remains punctuation:
+neither `don't` nor `'quoted'` is treated as a tag.
 
-In the browser, the tag index is at `/tags`, linked from the namespace list and from every
-tag written on a card. It lists every tag in the workspace and what each one gathers. Add
-`?namespaceId=<id>` to narrow it to one namespace; without it, the index reaches across every
-namespace at once — which nothing else in the UI does, and which is the point of a label that
-lives in the text rather than in a table. `?files=0`, or the "Cards only" link on the page,
-leaves taskspace files out — the same switch as `--no-files` above.
+The browser tag index is available at `/tags`. Add `?namespaceId=<id>` to limit it to one
+namespace. Use `?files=0`, or select "Cards only," to exclude taskspace files. The CLI
+equivalent is `--no-files`.
 
 ## Seeing across namespaces
 
-The browser has one page above the boards: the map at `/map`, reached from the icon in the
-corner of the namespace list. Every namespace is a rectangle, the partitions inside it are sized by
-how many cards they hold, each scope is a node with a line to every partition it reaches, and
-the tags are a tree you can pick from to see where each one lives. It is read-only, and it
-reaches every namespace at once.
+The read-only map at `/map` shows namespaces, partitions, scopes, and tags across the
+workspace.
 
-A board shows the scopes and taskspaces its own namespace uses, plus any not yet claimed by a namespace. A scope another namespace alone is working in stays off it. The CLI is the workspace-wide view:
+A board shows the scopes and taskspaces associated with its namespace, along with any that
+have not been assigned to a namespace. The CLI provides a workspace-wide view:
 
 ```sh
 kozane scope list                    # every scope, and the namespaces each one reaches
