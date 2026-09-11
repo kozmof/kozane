@@ -1,11 +1,13 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
+  import { beforeNavigate } from "$app/navigation";
   import EditorSurface, { type EditorMode } from "./EditorSurface.svelte";
   import type {
     EditorSession,
     EditorSessionContext,
   } from "../lib/editor/editor-session.svelte.js";
   import { createVimState, handleVimKey, type VimState } from "../lib/editor/vim.js";
+  import { guardUnsavedLeave, UNSAVED_LEAVE_PROMPT } from "../lib/editor/leave-guard.js";
 
   let {
     session,
@@ -102,6 +104,16 @@
     session.close();
     onClose();
   }
+
+  // The ways out that never touch the panel: a link to another page, the back button, a
+  // warp to another namespace, and the tab's own close box. Registered once, at init, as
+  // `beforeNavigate` requires, and so it asks about whatever file is open at the time
+  // rather than the one open now. A confirm() rather than the banner above because a
+  // navigation has to be answered on the spot — cancelling it to put a question on screen
+  // would mean re-issuing it afterwards, which the back button has no honest way to do.
+  beforeNavigate((nav) =>
+    guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT)),
+  );
 
   function onSurfaceKey(event: KeyboardEvent): boolean {
     if (!vimMode || !session.doc) return false;

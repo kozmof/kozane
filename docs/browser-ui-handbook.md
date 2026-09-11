@@ -340,6 +340,11 @@ Over an unsaved change all three ask first, offering to keep editing or to
 discard and close, since closing ends the editing session and takes its undo
 history with it. A second `Esc` backs out of the question.
 
+Leaving the page asks too. A link to another page, the back button, and a warp
+to another namespace each put up a confirmation over an unsaved file and stay
+put if it is declined; closing or reloading the tab gets the browser's own
+"leave site?" dialog, whose wording is the browser's and not ours.
+
 Drag the panel's left edge to make it wider or narrower, or focus the edge and
 use `←` and `→`. The width lasts as long as the tab is open, including across
 closing one file and opening another, and starts from the default again after a

@@ -1,8 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "../lib/editor/editor-session.svelte.js";
+import { beforeNavigate } from "$app/navigation";
+
+// Mocked rather than left to the test stub so the registered guard can be called: there is
+// no router here to deliver a navigation to it.
+vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn() }));
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
 
@@ -433,5 +438,61 @@ describe("FileEditor closing", () => {
 
     await session.open(ctx, { ...REF, path: "other.md" });
     await waitFor(() => expect(screen.queryByText("This file has unsaved changes.")).toBeNull());
+  });
+});
+
+describe("FileEditor leaving the page", () => {
+  /** The guard the last render handed to `beforeNavigate`. */
+  function guard() {
+    const registered = vi.mocked(beforeNavigate).mock.calls.at(-1)?.[0];
+    if (!registered) throw new Error("no navigation guard was registered");
+    return registered as (nav: { type: string; cancel: () => void }) => void;
+  }
+
+  function navigate(type: string) {
+    const nav = { type, cancel: vi.fn() };
+    guard()(nav);
+    return nav;
+  }
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("lets a navigation go when nothing is unsaved", async () => {
+    await mount();
+    await screen.findByRole("dialog");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    expect(navigate("link").cancel).not.toHaveBeenCalled();
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it("stops a navigation away from an unsaved file when the question is declined", async () => {
+    const { session } = await mount();
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    expect(navigate("link").cancel).toHaveBeenCalledOnce();
+    expect(asked).toHaveBeenCalledOnce();
+    expect(session.isOpen).toBe(true);
+  });
+
+  it("lets the navigation through once it is confirmed", async () => {
+    const { session } = await mount();
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+
+    expect(navigate("link").cancel).not.toHaveBeenCalled();
+  });
+
+  it("cancels a closing tab so the browser puts its own question up", async () => {
+    const { session } = await mount();
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+
+    expect(navigate("leave").cancel).toHaveBeenCalledOnce();
+    expect(asked).not.toHaveBeenCalled();
   });
 });

@@ -6,9 +6,14 @@ import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 import { goto, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 
-// The page navigates between namespaces and tidies its own URL; both are the router's job,
-// which does not exist outside a real SvelteKit app.
-vi.mock("$app/navigation", () => ({ goto: vi.fn(), replaceState: vi.fn() }));
+// The page navigates between namespaces, tidies its own URL, and guards an unsaved file
+// against a navigation away; all three are the router's job, which does not exist outside a
+// real SvelteKit app.
+vi.mock("$app/navigation", () => ({
+  goto: vi.fn(),
+  replaceState: vi.fn(),
+  beforeNavigate: vi.fn(),
+}));
 
 const data = {
   namespace: { id: "namespace-1", name: "Namespace", isDefault: true },
