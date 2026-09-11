@@ -1,10 +1,11 @@
 import { CANVAS_W } from "./constants.js";
 
 /**
- * Splits on `. ` (a period followed by a space), `。`, or a blank line. A period without a
- * space after it is left alone, so `example.com` survives as one word.
+ * Splits on a period followed by whitespace — a space or a line break alike — on `。`, or on
+ * a blank line. A period with a non-space after it is left alone, so `example.com` survives
+ * as one word.
  */
-export const DEFAULT_SQUASH_PATTERN = String.raw`\. |。|\r?\n[ \t]*\r?\n`;
+export const DEFAULT_SQUASH_PATTERN = String.raw`\.\s|。|\r?\n[ \t]*\r?\n`;
 
 export function splitCardContent(content: string, pattern = DEFAULT_SQUASH_PATTERN): string[] {
   return content

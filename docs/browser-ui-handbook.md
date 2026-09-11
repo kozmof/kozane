@@ -189,11 +189,12 @@ A card you wrote in one go often holds several thoughts. Squashing splits it int
 one card per thought, which is the kozane method's own move: small cards you can
 arrange.
 
-Select one card and press `s`, or click "Squash". The text is split on `. ` (a
-period followed by a space), `。`, or a blank line — the same rule
-`kozane card squash` uses, so dots inside `example.com` are left alone. Each
-segment becomes a card, and the original is removed. The whole thing is one
-transaction: either every piece is on the board or the card is untouched.
+Select one card and press `s`, or click "Squash". The text is split on a period
+followed by whitespace — a space or a line break alike — on `。`, or on a blank
+line, the same rule `kozane card squash` uses, so dots inside `example.com` are
+left alone. Each segment becomes a card, and the original is removed. The whole
+thing is one transaction: either every piece is on the board or the card is
+untouched.
 
 The first piece takes the place the card was in, and the rest are laid out to its
 right and below, skipping positions other cards already sit on. Because the split

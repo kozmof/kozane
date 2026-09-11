@@ -12,6 +12,15 @@ describe("splitCardContent", () => {
     ]);
   });
 
+  it("splits on a period that ends a line", () => {
+    expect(splitCardContent("abc.\ncdf")).toEqual(["abc", "cdf"]);
+    expect(splitCardContent("abc.\r\ncdf")).toEqual(["abc", "cdf"]);
+  });
+
+  it("keeps a period that a line break does not follow", () => {
+    expect(splitCardContent("example.com\nis a site")).toEqual(["example.com\nis a site"]);
+  });
+
   it("accepts a custom separator regex", () => {
     expect(splitCardContent("first | second,third", String.raw`\s*[|,]\s*`)).toEqual([
       "first",

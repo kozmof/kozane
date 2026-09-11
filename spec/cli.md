@@ -594,10 +594,10 @@ kozane card add "Investigate caching" --namespace eb155d6 --scope e3ee90b --x 48
 
 Splits text using a configurable JavaScript regular expression, trims each segment,
 and adds every non-empty segment as a separate card. The default pattern splits on
-`. ` (a period followed by a space), `。`, or a blank line, preserving dots inside
-values such as `example.com`. Generated cards are placed on unoccupied grid positions
-instead of being stacked at the same coordinates. Pass the text as an argument or pipe
-it through standard input:
+a period followed by whitespace (a space or a line break), on `。`, or on a blank
+line, preserving dots inside values such as `example.com`. Generated cards are placed
+on unoccupied grid positions instead of being stacked at the same coordinates. Pass
+the text as an argument or pipe it through standard input:
 
 ```bash
 kozane card squash "First thought. 第二の考え。 Third thought."
