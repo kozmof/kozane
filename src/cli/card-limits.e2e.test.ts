@@ -74,27 +74,47 @@ afterEach(() => {
   for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+/**
+ * A limit `card add` can actually be handed, since it takes its text as a command-line
+ * argument: Linux refuses any single argument of 128 KB or more (`MAX_ARG_STRLEN`), which is
+ * well below the built-in {@link CONTENT_MAX}. So the boundary is exercised here against a
+ * workspace that set its own limit, and the default itself is pinned in `constants.test.ts`.
+ * Far enough under the ceiling to hold in any encoding — a Japanese character is three bytes.
+ *
+ * `card squash` is not subject to this and does test the default, because it reads stdin.
+ */
+const ARGV_SAFE_MAX = 20_000;
+
 describe("card add", () => {
   it("accepts text at the limit", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    expect(cli(root, "card", "add", "x".repeat(CONTENT_MAX))).toContain("Card added.");
+    configureUi(root, { contentMax: ARGV_SAFE_MAX });
+    expect(cli(root, "card", "add", "x".repeat(ARGV_SAFE_MAX))).toContain("Card added.");
   });
 
   it("refuses text past the limit, in the same words the API uses", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    const result = run(root, ["card", "add", "x".repeat(CONTENT_MAX + 1)]);
+    configureUi(root, { contentMax: ARGV_SAFE_MAX });
+    const result = run(root, ["card", "add", "x".repeat(ARGV_SAFE_MAX + 1)]);
     expect(result.status).not.toBe(0);
-    expect(result.stderr).toContain(`content must be a string under ${CONTENT_MAX} characters`);
+    expect(result.stderr).toContain(`content must be a string under ${ARGV_SAFE_MAX} characters`);
     expect(cli(root, "card", "list")).toContain("No cards found.");
   });
 
-  it("accepts text the built-in default would refuse once ui.contentMax is raised", () => {
+  // Both directions around one length, which is what shows the setting is read rather than
+  // a constant being consulted: the same text is refused under one limit and taken under a
+  // higher one.
+  it("accepts text a lower ui.contentMax would refuse once it is raised", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    configureUi(root, { contentMax: 20_000 });
-    expect(cli(root, "card", "add", "x".repeat(CONTENT_MAX + 1))).toContain("Card added.");
+    configureUi(root, { contentMax: 5_000 });
+    const refused = run(root, ["card", "add", "x".repeat(8_000)]);
+    expect(refused.status).not.toBe(0);
+
+    configureUi(root, { contentMax: 10_000 });
+    expect(cli(root, "card", "add", "x".repeat(8_000))).toContain("Card added.");
   });
 
   it("refuses text the built-in default would accept once ui.contentMax is lowered", () => {

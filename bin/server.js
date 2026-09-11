@@ -31,6 +31,10 @@
  *
  * ## What is deliberately not ported
  *
+ * `BODY_SIZE_LIMIT` is ported in the sense that matters: it is still the adapter reading it,
+ * and still overridable, but a workspace that has not set one gets a ceiling sized from
+ * `ui.contentMax` instead of the adapter's 512K. See the block below.
+ *
  * `index.js` also supports systemd socket activation (`LISTEN_PID`/`LISTEN_FDS`) and
  * `SOCKET_PATH`. Kozane starts its own server on a host and port — `kozane open` spawns
  * this file with HOST and PORT set — and nothing in the CLI, the docs, or the security
@@ -40,9 +44,33 @@
  */
 
 import http from "node:http";
-import { handler } from "../build/handler.js";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../dist/lib/constants.js";
 import { canonicalLoopbackOrigin } from "../dist/lib/server/security.js";
+import { bodySizeLimitFor, contentMax } from "../dist/lib/server/content-limit.js";
+
+/**
+ * The body ceiling has to be in the environment before the handler module is evaluated:
+ * adapter-node reads `BODY_SIZE_LIMIT` once, at its own module scope, and its 512K default
+ * is smaller than one card of this workspace's `ui.contentMax`. Left at the default, a long
+ * card is refused by the transport before any endpoint sees it — see {@link bodySizeLimitFor}.
+ *
+ * Hence the dynamic import below. This is the ordering hazard the note above describes for
+ * HOST, met the other way round: not a race won by loading order, but a write that plainly
+ * happens first, with the import that reads it moved after it where that is visible.
+ *
+ * An explicit setting wins, the way it does for every other variable here. A workspace whose
+ * config cannot be read falls back to the adapter's own default rather than failing to start:
+ * the request that would need the room is the one that reports the problem.
+ */
+if (process.env.BODY_SIZE_LIMIT === undefined) {
+  try {
+    process.env.BODY_SIZE_LIMIT = String(bodySizeLimitFor(contentMax()));
+  } catch {
+    // No workspace to read, or an unreadable one. `hooks.server.ts` is what says so.
+  }
+}
+
+const { handler } = await import("../build/handler.js");
 
 /**
  * A non-negative integer from the environment, or `fallback`. Mirrors adapter-node's

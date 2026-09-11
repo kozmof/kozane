@@ -167,10 +167,13 @@ export const TAG_CARD_HITS_MAX = 100_000;
  * Keyed on the id, and not by offset: `card.id` is a uuidv7 primary key, so the index already
  * orders it and each page costs a seek rather than a re-count of everything skipped.
  *
- * Sized against `ui.contentMax`, which is what one row can cost — a thousand rows of the
- * 10,000-character default is a few tens of megabytes at worst and far less in practice,
- * against a local statement per page that a workspace of any ordinary size runs once or
- * twice.
+ * Sized against `ui.contentMax`, which is what one row can cost, and the figure moved when
+ * that default rose to 200,000: a thousand rows all at the limit is now several hundred
+ * megabytes at worst where it used to be a few tens. It takes a thousand cards each holding
+ * a full limit's worth of text and an apostrophe to reach, which is why this is still a row
+ * count rather than a character budget — but it is the number to revisit if `ui.contentMax`
+ * rises again, against a local statement per page that a workspace of any ordinary size
+ * runs once or twice.
  */
 export const TAG_CARD_ROWS_PAGE = 1_000;
 

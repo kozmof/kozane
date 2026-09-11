@@ -8,8 +8,16 @@
  * How much text one card holds by default. The workspace may raise or lower it with
  * `ui.contentMax`, so this is the fallback rather than the limit — read the setting
  * through `lib/server/content-limit.ts` and pass it to {@link contentLimitIssue}.
+ *
+ * Counted in UTF-16 code units, which is what `String.length` counts: a CJK character is
+ * one, an emoji past the BMP is two.
+ *
+ * The transport has to be able to carry what this accepts. A card of this length is far
+ * larger than the HTTP body limit adapter-node defaults to, so `bin/server.js` sizes that
+ * limit from this rather than leaving the browser refused at a ceiling no endpoint names.
+ * See {@link bodySizeLimitFor}.
  */
-export const CONTENT_MAX = 10_000;
+export const CONTENT_MAX = 200_000;
 /**
  * Why this card's text is past `contentMax`, or null when it is not, in the wording both
  * writers refuse it with. The HTTP routes turn it into a 400 and `kozane card add` into a

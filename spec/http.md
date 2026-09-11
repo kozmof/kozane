@@ -45,7 +45,7 @@ JSON is `400 Request body must be valid JSON`; one that parses to an array or a 
 `400 Request body must be a JSON object`.
 
 Names (`name` fields) are trimmed, must be non-blank, and are at most 255 characters. Card
-text is at most the workspace's configured `content.max` (default 10,000 characters). Id
+text is at most the workspace's configured `content.max` (default 200,000 characters). Id
 arrays must contain non-empty strings, must not repeat an id, and must hold at most 2,000
 items — an oversized list is refused as a list rather than partway into a statement.
 

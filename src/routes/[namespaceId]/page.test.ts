@@ -405,6 +405,62 @@ describe("Namespace page", () => {
   });
 });
 
+describe("Composer failures", () => {
+  /** Types into the composer and submits, which is the path a new card takes. */
+  async function compose(text: string) {
+    const textarea = screen.getByLabelText("Write a card");
+    await fireEvent.input(textarea, { target: { value: text } });
+    await fireEvent.click(screen.getByRole("button", { name: "Create card" }));
+  }
+
+  // The limit the browser cannot foresee. Refusing with a fixed "Failed to create card"
+  // left the writer retyping the same card to find out what was wrong with it, while the
+  // CLI printed the reason for the same refusal.
+  it("reports why the server refused a card, not just that it did", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: "content must be a string under 200000 characters" }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
+
+    await compose("far too much text");
+
+    expect(
+      await screen.findByText("content must be a string under 200000 characters"),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to its own wording when the refusal carries none", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetch);
+    render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
+
+    await compose("a card");
+
+    expect(await screen.findByText("Failed to create card")).toBeInTheDocument();
+  });
+
+  it("reports why an edit was refused", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ message: "content must be a string under 200000 characters" }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
+
+    // Double-click is what opens a card for editing; a single click only selects it.
+    await fireEvent.dblClick(screen.getByRole("button", { name: "Card: Alpha" }));
+    const textarea = await screen.findByLabelText("Edit card");
+    await fireEvent.input(textarea, { target: { value: "far too much text" } });
+    await fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      await screen.findByText("content must be a string under 200000 characters"),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("Card width", () => {
   /** Selects Alpha and arms its resize handle with the configured shortcut. */
   async function armAlpha() {

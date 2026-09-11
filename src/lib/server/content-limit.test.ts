@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { contentMax, contentMaxForRoot } from "./content-limit.js";
+import { bodySizeLimitFor, contentMax, contentMaxForRoot } from "./content-limit.js";
 import { _resetWorkspaceRootForTest } from "../../db/internal/config.js";
 import { CONTENT_MAX } from "../constants.js";
 
@@ -58,6 +58,34 @@ describe("contentMaxForRoot", () => {
   it("agrees with the environment-resolved limit for the same workspace", () => {
     writeConfig({ name: "w", ui: { contentMax: 12_345 } });
     expect(contentMaxForRoot(root)).toBe(contentMax());
+  });
+});
+
+describe("bodySizeLimitFor", () => {
+  /** adapter-node's own default, which is the ceiling this exists to get out from under. */
+  const ADAPTER_DEFAULT = 512 * 1024;
+
+  it("leaves room for a card of the limit at its worst byte cost", () => {
+    // Three bytes a character is ordinary Japanese; six is a card of control characters,
+    // each escaped to `\u00XX`. Both have to fit, or the transport refuses what the
+    // endpoint would have stored.
+    for (const bytesPerUnit of [1, 3, 4, 6]) {
+      expect(bodySizeLimitFor(CONTENT_MAX)).toBeGreaterThan(CONTENT_MAX * bytesPerUnit);
+    }
+  });
+
+  it("clears the adapter's default at the built-in limit", () => {
+    expect(bodySizeLimitFor(CONTENT_MAX)).toBeGreaterThan(ADAPTER_DEFAULT);
+  });
+
+  // The floor of `ui.contentMax`'s range. A workspace that lowers the limit to a tweet
+  // still has to be able to receive one, envelope and all.
+  it("stays usable for the smallest limit a workspace may set", () => {
+    expect(bodySizeLimitFor(100)).toBeGreaterThan(64 * 1024);
+  });
+
+  it("grows with the limit it is sized from", () => {
+    expect(bodySizeLimitFor(1_000_000)).toBeGreaterThan(bodySizeLimitFor(CONTENT_MAX));
   });
 });
 

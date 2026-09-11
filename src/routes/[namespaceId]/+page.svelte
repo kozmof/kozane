@@ -318,7 +318,10 @@
   async function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
     if (id) {
       const res = await updateCard(s.mutationFetcher, data.namespace.id, id, { content, partitionId });
-      if (!res.ok) { s.setError("Failed to save card"); return; }
+      // The server's own message, not a fixed one: a refusal this composer cannot foresee —
+      // text past `ui.contentMax` above all — is the reason the writer needs, and a bare
+      // "failed" leaves them retyping the same card to find out.
+      if (!res.ok) { s.setError(await failureMessage(res, "Failed to save card")); return; }
       s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, partitionId } : c));
       s.selection.composerCard = null;
     } else {
@@ -336,8 +339,9 @@
         ...(scopeId && { scopeId }),
         ...(layerId && { layerId }),
       });
-      if (!res.ok) { s.setError("Failed to create card"); return; }
+      if (!res.ok) { s.setError(await failureMessage(res, "Failed to create card")); return; }
       const created: CardWithGlue | null = await res.json().catch(() => null);
+      // An answer that is not a row, where the fallback is all there is to say.
       if (!created) { s.setError("Failed to create card"); return; }
       // The stored row, not a local reconstruction: the server clamps posX/posY to the
       // canvas, so a card composed at the edge would otherwise jump on the next poll.

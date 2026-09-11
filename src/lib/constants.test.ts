@@ -69,9 +69,10 @@ describe("contentLimitIssue", () => {
   // The limit is the workspace's `ui.contentMax`, not the built-in default, so the
   // message has to name whichever one the caller passed.
   it("holds text to a raised limit and says so", () => {
-    expect(contentLimitIssue("x".repeat(CONTENT_MAX + 1), 20_000)).toBeNull();
-    expect(contentLimitIssue("x".repeat(20_001), 20_000)).toBe(
-      "content must be a string under 20000 characters",
+    const raised = CONTENT_MAX * 2;
+    expect(contentLimitIssue("x".repeat(CONTENT_MAX + 1), raised)).toBeNull();
+    expect(contentLimitIssue("x".repeat(raised + 1), raised)).toBe(
+      `content must be a string under ${raised} characters`,
     );
   });
 
@@ -145,7 +146,7 @@ describe("constants", () => {
     expect(CANVAS_H).toBe(4000);
   });
 
-  it("CONTENT_MAX is 10000", () => {
-    expect(CONTENT_MAX).toBe(10_000);
+  it("CONTENT_MAX is 200000", () => {
+    expect(CONTENT_MAX).toBe(200_000);
   });
 });

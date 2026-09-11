@@ -1327,7 +1327,7 @@ Taskspace created.
     "removeWarpShortcut": "x",
     "canvasWidth": 5600,
     "canvasHeight": 4000,
-    "contentMax": 10000
+    "contentMax": 200000
   }
 }
 ```
@@ -1354,11 +1354,17 @@ goes on tracking it. Both are held to the same 40–1200 range.
 inside them. A card or a warp written past the edge is clamped to it, and the response
 reports the position as stored rather than as sent.
 
-`ui.contentMax` is how much text one card may hold, in characters, within a 100–1000000
-range. Both writers enforce it: the card endpoints answer `400`, and `kozane card add`
+`ui.contentMax` is how much text one card may hold, within a 100–1000000 range. It counts
+UTF-16 code units, the way `String.length` does: a CJK character is one, an emoji past the
+BMP is two. Both writers enforce it: the card endpoints answer `400`, and `kozane card add`
 and `kozane card squash` exit non-zero without writing anything. `card squash` holds each
 segment to it separately and names the one that was too long. Raising it is not free —
 the board's once-a-second poll carries every card's whole text.
+
+The HTTP body ceiling is sized from it at startup, so a card the endpoint would accept is
+never refused by the transport first. Set `BODY_SIZE_LIMIT` to override that, in the
+adapter's own notation (`512K`, `2M`); a workspace that sets neither gets room for one card
+of `ui.contentMax` at the worst byte cost an escaped character can reach.
 
 ---
 
