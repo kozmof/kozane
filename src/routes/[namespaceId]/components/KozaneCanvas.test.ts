@@ -80,6 +80,9 @@ function makeProps(overrides: Overrides = {}) {
     warpMarkerSize: 24,
     initialCenter: null,
     onFocusWarp: vi.fn(),
+    onPersistWarpPosition: vi.fn(
+      async (_warpId: string, _position: { posX: number; posY: number }) => true,
+    ),
     showFooters: true,
     zoom: 1,
     zoomStep: 0.1,
@@ -458,6 +461,116 @@ describe("KozaneCanvas dragging", () => {
     expect(props.cards[0].posX).toBe(10);
     expect(props.onPersistPositions).not.toHaveBeenCalled();
     expect(props.onPositionActivityStart).not.toHaveBeenCalled();
+  });
+});
+
+describe("KozaneCanvas warp dragging", () => {
+  function warpEl(container: HTMLElement, id: string): HTMLElement {
+    const found = container.querySelector<HTMLElement>(`[data-warp-id="${id}"]`);
+    if (!found) throw new Error(`no warp "${id}"`);
+    return found;
+  }
+
+  it("moves the marker by the pointer's travel and saves where it landed", async () => {
+    const warps = [warp("w1")];
+    const props = makeProps({ warps });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(160, 140);
+    up();
+    await settle();
+
+    // 100 + 60 and 100 + 40, landing where the pointer did: a warp marks a point someone
+    // chose, so nothing snaps it to the card grid on the way.
+    expect(warps[0]).toMatchObject({ posX: 160, posY: 140 });
+    expect(props.onPersistWarpPosition).toHaveBeenCalledWith("w1", { posX: 160, posY: 140 });
+  });
+
+  // Pressing a marker has always focused its warp, which is what the remove shortcut acts
+  // on. Arming a drag must not have taken that away.
+  it("focuses the warp on the press itself", () => {
+    const props = makeProps({ warps: [warp("w1")] });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+
+    expect(props.onFocusWarp).toHaveBeenCalledWith("w1");
+  });
+
+  it("does not save a press that never travelled", async () => {
+    const props = makeProps({ warps: [warp("w1")] });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(102, 101);
+    up();
+    await settle();
+
+    expect(props.onPersistWarpPosition).not.toHaveBeenCalled();
+  });
+
+  it("holds a marker dragged past the edge on the board", async () => {
+    const warps = [warp("w1")];
+    const props = makeProps({ warps });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(-500, -500);
+    up();
+    await settle();
+
+    expect(warps[0]).toMatchObject({ posX: 0, posY: 0 });
+    expect(props.onPersistWarpPosition).toHaveBeenCalledWith("w1", { posX: 0, posY: 0 });
+  });
+
+  it("holds the snapshot poll off for the length of the drag", async () => {
+    const props = makeProps({ warps: [warp("w1")] });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(160, 140);
+    expect(props.onPositionActivityStart).toHaveBeenCalledTimes(1);
+    expect(props.onPositionActivityEnd).not.toHaveBeenCalled();
+
+    up();
+    await settle();
+    expect(props.onPositionActivityEnd).toHaveBeenCalledTimes(1);
+  });
+
+  // The marker is already drawn where it was dropped, so a refused save has to put it back
+  // and say so. No harness here, unlike the card rollback: this writes through the row.
+  it("puts the marker back where it was when the save fails", async () => {
+    const warps = [warp("w1")];
+    const props = makeProps({
+      warps,
+      onPersistWarpPosition: vi.fn(async (_warpId: string, _position: unknown) => false),
+    });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(400, 400);
+    up();
+    await settle();
+
+    expect(warps[0]).toMatchObject({ posX: 100, posY: 100 });
+    expect(props.onError).toHaveBeenCalledWith("Failed to save warp position");
+  });
+
+  it("leaves a marker where it is on a read-only board, and still focuses it", async () => {
+    const warps = [warp("w1")];
+    const props = makeProps({ warps, readonly: true });
+    const { container } = render(KozaneCanvas, props);
+
+    down(warpEl(container, "w1"), 100, 100);
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(warps[0]).toMatchObject({ posX: 100, posY: 100 });
+    expect(props.onPersistWarpPosition).not.toHaveBeenCalled();
+    expect(props.onPositionActivityStart).not.toHaveBeenCalled();
+    expect(props.onFocusWarp).toHaveBeenCalledWith("w1");
   });
 });
 

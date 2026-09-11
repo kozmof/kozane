@@ -77,6 +77,10 @@ there after a reload and in another tab.
   on it. The direction pressed does not matter, since all four open the same list.
   Each row has a remove button, which is the only way to remove another namespace's
   warps without going there.
+- Move — drag a marker. It follows the pointer and stays where it is dropped,
+  without snapping to the card grid: a warp marks a point someone picked, not a
+  slot in a layout. Dragging one does not renumber it, since the numbers follow
+  the order the warps were made. A read-only export holds its markers fixed.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
   marker to select it without moving. The remaining warps renumber.
 - Show or hide — press `Shift+A`. Setting a warp, or warping to one, shows the

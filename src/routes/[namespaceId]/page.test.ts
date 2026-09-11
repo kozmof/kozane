@@ -1128,6 +1128,31 @@ describe("Warps", () => {
     expect(screen.queryByLabelText("Warp 2")).not.toBeInTheDocument();
   });
 
+  it("moves a warp by dragging its marker, and keeps the row the server stored", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "warp-1", namespaceId: "namespace-1", posX: 1850, posY: 1050 }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage();
+
+    // Warp 1 sits at world (1800, 1000) on a canvas scrolled to (1000, 700), which puts it
+    // at client (800, 300). Fifty pixels down and right of that, at zoom 1, is (1850, 1050).
+    const marker = screen.getByLabelText("Warp 1");
+    await fireEvent.mouseDown(marker, { button: 0, clientX: 800, clientY: 300 });
+    await fireEvent.mouseMove(window, { clientX: 850, clientY: 350 });
+    await fireEvent.mouseUp(window);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps/warp-1", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ posX: 1850, posY: 1050 }),
+    });
+    // Half the marker's 14px diameter back from the centre it was dropped on.
+    await waitFor(() => expect(screen.getByLabelText("Warp 1")).toHaveStyle({ left: "1843px" }));
+  });
+
   it("numbers the markers in creation order", () => {
     renderPage();
 

@@ -287,6 +287,14 @@ would scroll to a place the viewport can never reach.
 
 Answers the whole stored warp. `404` when the namespace does not exist.
 
+### `PATCH /[namespaceId]/api/warps/[warpId]`
+
+Moves a warp, which is what dragging its marker does. Body: `posX`, `posY`, both required
+and clamped and rounded exactly as `POST /warps` does it. A warp's number is its place in
+creation order, which a move leaves alone.
+
+Answers the whole stored warp. `404` when it is not this namespace's.
+
 ### `DELETE /[namespaceId]/api/warps/[warpId]`
 
 Deletes a warp. `404` when it is not this namespace's.

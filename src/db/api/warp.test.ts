@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createTestDB } from "../../test-utils/db.js";
-import { addWarp, getAllWarps, getAllWorkspaceWarps, deleteWarp } from "./warp.js";
+import { addWarp, getAllWarps, getAllWorkspaceWarps, moveWarp, deleteWarp } from "./warp.js";
 import { addNamespace, deleteNamespace } from "./namespace.js";
 import { NotFoundError } from "./utils.js";
 
@@ -82,6 +82,65 @@ describe("getAllWorkspaceWarps", () => {
     const { db } = await setup();
 
     expect(await getAllWorkspaceWarps({ db })).toEqual([]);
+  });
+});
+
+describe("moveWarp", () => {
+  it("returns the row at its new position", async () => {
+    const { db, namespaceId } = await setup();
+    const warp = await addWarp({ db, namespaceId, posX: 10, posY: 20 });
+
+    const moved = await moveWarp({ db, namespaceId, warpId: warp.id, posX: 300, posY: 400 });
+
+    expect(moved).toMatchObject({ id: warp.id, namespaceId, posX: 300, posY: 400 });
+    expect(await getAllWarps({ db, namespaceId })).toMatchObject([{ posX: 300, posY: 400 }]);
+  });
+
+  it("leaves the other warps where they are", async () => {
+    const { db, namespaceId } = await setup();
+    const first = await addWarp({ db, namespaceId, posX: 0, posY: 0 });
+    const second = await addWarp({ db, namespaceId, posX: 100, posY: 100 });
+
+    await moveWarp({ db, namespaceId, warpId: first.id, posX: 50, posY: 60 });
+
+    expect(await getAllWarps({ db, namespaceId })).toMatchObject([
+      { id: first.id, posX: 50, posY: 60 },
+      { id: second.id, posX: 100, posY: 100 },
+    ]);
+  });
+
+  // The number a marker shows is its place in creation order, so a move must not reorder
+  // them: dragging warp 1 past warp 2 leaves it warp 1.
+  it("keeps the creation order its numbering rests on", async () => {
+    const { db, namespaceId } = await setup();
+    const first = await addWarp({ db, namespaceId, posX: 0, posY: 0 });
+    const second = await addWarp({ db, namespaceId, posX: 100, posY: 100 });
+
+    await moveWarp({ db, namespaceId, warpId: first.id, posX: 900, posY: 900 });
+
+    expect((await getAllWarps({ db, namespaceId })).map(({ id }) => id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+  });
+
+  it("throws when the warp does not exist", async () => {
+    const { db, namespaceId } = await setup();
+
+    await expect(
+      moveWarp({ db, namespaceId, warpId: "missing", posX: 0, posY: 0 }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("refuses to move a warp through another namespace", async () => {
+    const { db, namespaceId } = await setup();
+    const otherId = await addNamespace({ db, name: "Other" });
+    const warp = await addWarp({ db, namespaceId, posX: 10, posY: 20 });
+
+    await expect(
+      moveWarp({ db, namespaceId: otherId, warpId: warp.id, posX: 300, posY: 400 }),
+    ).rejects.toThrow(NotFoundError);
+    expect(await getAllWarps({ db, namespaceId })).toMatchObject([{ posX: 10, posY: 20 }]);
   });
 });
 

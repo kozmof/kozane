@@ -31,6 +31,24 @@ export async function addWarp({ db, namespaceId, posX, posY }: AddWarp): Promise
   return row;
 }
 
+type MoveWarp = NeedsNamespaceWarp & { posX: number; posY: number };
+
+/**
+ * Puts a warp somewhere else on the board. The whole stored row comes back, so a caller
+ * that drew the marker where the pointer let go can correct it to what was kept.
+ */
+export async function moveWarp({ db, namespaceId, warpId, posX, posY }: MoveWarp): Promise<Warp> {
+  // namespaceId is checked alongside the id for the reason deleteWarp checks it: the id
+  // alone would do, and the pair is the access boundary.
+  const updated = await db
+    .update(warpTable)
+    .set({ posX, posY })
+    .where(and(eq(warpTable.namespaceId, namespaceId), eq(warpTable.id, warpId)))
+    .returning();
+  assertFound(updated, `Warp namespaceId=${namespaceId} warpId=${warpId}`);
+  return updated[0];
+}
+
 type DeleteWarp = NeedsNamespaceWarp;
 
 export async function deleteWarp({ db, namespaceId, warpId }: DeleteWarp): Promise<void> {

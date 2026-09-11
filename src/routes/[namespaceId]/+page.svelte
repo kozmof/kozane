@@ -12,6 +12,8 @@
     patchCardPositions,
     fetchWarpDirectory,
     parseWarpEntries,
+    parseWarp,
+    moveWarp,
     deleteWarp,
     failureMessage,
   } from "./lib/namespace-api.js";
@@ -349,6 +351,26 @@
     return res.ok;
   }
 
+  /**
+   * The canvas has already moved the marker, the way a card drag moves a card: this only
+   * saves it, and answers whether the save took so the canvas can put the old position
+   * back if it did not.
+   *
+   * The stored row is written back on the way through for the reason `handleSetWarp` keeps
+   * it — the server clamps to the canvas, so a warp dropped at the very edge would
+   * otherwise sit a pixel off what was kept until the next poll corrected it.
+   */
+  async function handlePersistWarpPosition(
+    warpId: string,
+    position: { posX: number; posY: number },
+  ): Promise<boolean> {
+    const res = await moveWarp(s.mutationFetcher, data.namespace.id, warpId, position);
+    if (!res.ok) return false;
+    const stored = parseWarp(await res.json().catch(() => null));
+    if (stored) s.warps = s.warps.map((w) => (w.id === warpId ? stored : w));
+    return true;
+  }
+
   /** Shows the card's resize handle, or takes it away when it is the one already showing. */
   function handleResizeToggle(cardId: string) {
     s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
@@ -568,12 +590,13 @@
       {partitionColorById}
       selection={s.selection}
       {scopeCardIds}
-      warps={s.warps}
+      bind:warps={s.warps}
       focusedWarpId={s.focusedWarpId}
       {warpsVisible}
       warpMarkerSize={data.uiConfig.warpMarkerSize}
       initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
       onFocusWarp={focusWarp}
+      onPersistWarpPosition={handlePersistWarpPosition}
       {showFooters}
       bind:zoom
       zoomStep={data.uiConfig.zoomStep}

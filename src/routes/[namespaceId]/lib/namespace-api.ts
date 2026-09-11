@@ -203,6 +203,16 @@ export function parseWarp(value: unknown): Warp | null {
   return { id, namespaceId, posX, posY };
 }
 
+/** Moves an existing warp. `posX`/`posY` are where it is being dropped. */
+export function moveWarp(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  warpId: string,
+  position: { posX: number; posY: number },
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/warps/${warpId}`), "PATCH", position);
+}
+
 export function deleteWarp(
   fetcher: typeof fetch,
   namespaceId: string,

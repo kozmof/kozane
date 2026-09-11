@@ -43,12 +43,13 @@
     partitionColorById,
     selection,
     scopeCardIds,
-    warps,
+    warps = $bindable(),
     focusedWarpId,
     warpsVisible,
     warpMarkerSize,
     initialCenter = null,
     onFocusWarp,
+    onPersistWarpPosition,
     showFooters,
     zoom = $bindable(),
     zoomStep,
@@ -93,6 +94,15 @@
      */
     initialCenter?: { posX: number; posY: number } | null;
     onFocusWarp: (warpId: string) => void;
+    /**
+     * Saves where a marker was dropped, answering whether it took — the same contract as
+     * {@link onPersistPositions}: the drag has already moved the warp, and a refusal is
+     * what puts it back.
+     */
+    onPersistWarpPosition: (
+      warpId: string,
+      position: { posX: number; posY: number },
+    ) => Promise<boolean>;
     showFooters: boolean;
     zoom: number;
     zoomStep: number;
@@ -121,6 +131,7 @@
   let lastPlacementScroll: { left: number; top: number } | null = null;
   let lastListPosition: { posX: number; posY: number } | null = null;
   let draggingId = $state<string | null>(null);
+  let draggingWarpId = $state<string | null>(null);
   let isPanning = $state(false);
   let selectionRect = $state(null as { x: number; y: number; w: number; h: number } | null);
   let dragPointer: { x: number; y: number } | null = null;
@@ -209,6 +220,24 @@
     if (selection.selectedCards.size === 1 && selection.selectedCards.has(armed)) return;
     selection.resizingCardId = null;
   });
+
+  /**
+   * The marker being dragged. Separate from `dragState` rather than folded into it: a warp
+   * is not on a layer, is never glued to anything, and does not snap to the grid, so the
+   * two share only the shape of a drag and none of its substance.
+   */
+  let warpDragState: {
+    warpId: string;
+    /** Pointer to marker centre, in world pixels, so the mark does not jump to the pointer. */
+    offsetX: number;
+    offsetY: number;
+    startX: number;
+    startY: number;
+    /** Where it sat before the drag, to put back if the save fails. */
+    prevX: number;
+    prevY: number;
+    moved: boolean;
+  } | null = null;
 
   let panState: {
     startX: number;
@@ -504,6 +533,55 @@
     }
   }
 
+  /**
+   * A press on a marker. It focuses the warp whatever else follows — that is what a click
+   * on one has always meant — and then arms a drag, which comes to nothing unless the
+   * pointer actually moves.
+   */
+  function handleWarpMouseDown(e: MouseEvent, warpId: string) {
+    onFocusWarp(warpId);
+    if (readonly || e.button !== 0 || dragState || resizeState) return;
+    const warp = warps.find((w) => w.id === warpId);
+    if (!warp) return;
+    const rect = canvasEl.getBoundingClientRect();
+    warpDragState = {
+      warpId,
+      offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - warp.posX,
+      offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - warp.posY,
+      startX: e.clientX,
+      startY: e.clientY,
+      prevX: warp.posX,
+      prevY: warp.posY,
+      moved: false,
+    };
+    draggingWarpId = warpId;
+    // Counted as position activity for the reason a card drag is: the poll replaces the
+    // warp list wholesale, and a marker being dragged would snap back to its stored place.
+    onPositionActivityStart();
+  }
+
+  function updateDraggedWarp(clientX: number, clientY: number) {
+    if (!warpDragState) return;
+    const { warpId, offsetX, offsetY } = warpDragState;
+    const rect = canvasEl.getBoundingClientRect();
+    // Rounded and held on the board here, which is what the server will store anyway, so
+    // the marker does not shift under the pointer when the save answers. No grid snap: a
+    // warp marks a point someone chose to come back to, not a slot in a layout, and the
+    // key that sets one drops it under the pointer unrounded to any grid.
+    const rawX = (clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
+    const rawY = (clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
+    const x = clamp(Math.round(rawX), 0, canvasWidth);
+    const y = clamp(Math.round(rawY), 0, canvasHeight);
+    // Written through the row rather than into a replacement array, for the reason
+    // `updateDraggedCard` gives: this runs on every pointer move.
+    for (const w of warps) {
+      if (w.id !== warpId) continue;
+      w.posX = x;
+      w.posY = y;
+      break;
+    }
+  }
+
   export function handleCardClick(e: MouseEvent, cardId: string) {
     if (readonly || dragState?.moved) return;
     if (selection.composerCard && selection.composerCard.id !== cardId) selection.composerCard = null;
@@ -587,6 +665,13 @@
         }
         updateDraggedCard(e.clientX, e.clientY);
       }
+      if (warpDragState) {
+        const { startX, startY } = warpDragState;
+        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+          warpDragState.moved = true;
+        }
+        updateDraggedWarp(e.clientX, e.clientY);
+      }
       if (resizeState) {
         resizePointerX = e.clientX;
         if (Math.abs(e.clientX - resizeState.startClientX) > 4) resizeState.moved = true;
@@ -637,6 +722,33 @@
               return c;
             });
             onError("Failed to save card position");
+          }
+        } else {
+          onPositionActivityEnd();
+        }
+      }
+      if (warpDragState) {
+        const { warpId, moved, prevX, prevY } = warpDragState;
+        warpDragState = null;
+        draggingWarpId = null;
+        const dropped = moved ? warps.find((w) => w.id === warpId) : undefined;
+        if (dropped) {
+          const sent = { posX: dropped.posX, posY: dropped.posY };
+          let ok = false;
+          try {
+            ok = await onPersistWarpPosition(warpId, sent);
+          } finally {
+            onPositionActivityEnd();
+          }
+          if (!ok) {
+            // Only put the position back if the marker still holds the one that failed to
+            // save: a poll or another drag may have moved on since the request went out.
+            const current = warps.find((w) => w.id === warpId);
+            if (current && current.posX === sent.posX && current.posY === sent.posY) {
+              current.posX = prevX;
+              current.posY = prevY;
+            }
+            onError("Failed to save warp position");
           }
         } else {
           onPositionActivityEnd();
@@ -808,10 +920,12 @@
         {#each warps as warp, index (warp.id)}
           <WarpMarker
             {warp}
+            draggable={!readonly}
+            dragging={draggingWarpId === warp.id}
             label={index + 1}
             focused={warp.id === focusedWarpId}
             size={warpMarkerSize}
-            onFocus={() => onFocusWarp(warp.id)}
+            onMouseDown={(e) => handleWarpMouseDown(e, warp.id)}
           />
         {/each}
       {/if}
