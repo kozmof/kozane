@@ -49,8 +49,24 @@ The cookie is not marked `Secure`, which is correct for loopback HTTP because
 the traffic never leaves the host. `kozane open` sets the server `ORIGIN` to the
 loopback URL so the login form passes SvelteKit's cross-site check.
 
-That URL becomes the browser launcher's command line, where other local users
-can read it; `--no-open` and the login page avoid that.
+`ORIGIN` names one spelling, and a loopback server answers to three:
+`http://localhost:5173`, `http://127.0.0.1:5173` and `http://[::1]:5173` are the
+same server, but the check compares origins as strings. So `bin/server.js`
+rewrites the `Origin` header of a request that arrived under another of those
+names before the check sees it — HTTP and a loopback host on both sides.
+Same-port aliases are accepted. When local port forwarding exposes a different
+port (for example, localhost:5174 forwarding to 127.0.0.1:5173), the incoming
+`Origin` must match the request's `Host` header. Browsers set that header from
+the destination URL; a form from an unrelated origin cannot choose it.
+Forwarded-host headers are not trusted. Missing origins and mismatched ports
+without a matching Host are still refused.
+Without the rewrite, a workspace opened at `localhost` while `ORIGIN` said
+`127.0.0.1` still drew every page and took every canvas edit — those are `GET`s
+and JSON — and answered `403` only to the create-namespace form, the
+application's one HTML form.
+
+The URL `kozane open` opens becomes the browser launcher's command line, where
+other local users can read it; `--no-open` and the login page avoid that.
 
 ### Host checking without a key
 

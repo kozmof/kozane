@@ -1,3 +1,4 @@
+import { request } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { networkInterfaces, tmpdir } from "node:os";
@@ -147,6 +148,9 @@ try {
       KOZANE_WORKSPACE_ROOT: workspace,
       HOST: "127.0.0.1",
       PORT: port,
+      // What `kozane open` sets for a loopback binding, and what the form checks below are
+      // about: without it the Node adapter assumes https and refuses every form POST.
+      ORIGIN: baseUrl,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -174,6 +178,67 @@ try {
     throw new Error(`unauthenticated health request returned ${unauthorized.status}`);
   }
 
+  // The workspace page's create-namespace form, which is the whole of the application's
+  // HTML-form surface and so the whole of what SvelteKit's CSRF check governs. `bin/server.js`
+  // canonicalizes a loopback origin before the handler sees it, and only unit tests reach
+  // that function — a server started with the wrong `ORIGIN` plumbing fails nowhere else.
+  // node:http preserves Host, unlike Node fetch, so this can model a forwarded request.
+  const createNamespace = (origin, host) =>
+    new Promise((resolveRequest, rejectRequest) => {
+      const req = request(
+        baseUrl,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${apiKey}`,
+            accept: "application/json",
+            "content-type": "application/x-www-form-urlencoded",
+            "x-sveltekit-action": "true",
+            origin,
+            ...(host ? { host } : {}),
+          },
+        },
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("error", rejectRequest);
+          res.on("end", () =>
+            resolveRequest(new Response(Buffer.concat(chunks), { status: res.statusCode })),
+          );
+        },
+      );
+      req.on("error", rejectRequest);
+      req.end(new URLSearchParams({ name: `Smoke ${origin}` }).toString());
+    });
+
+  // The address bar says `localhost`; `ORIGIN` says `127.0.0.1`. Same server, and this is
+  // the spelling the browser sends.
+  const otherSpelling = await createNamespace(`http://localhost:${port}`);
+  if (!otherSpelling.ok) {
+    throw new Error(
+      `create-namespace form from another loopback spelling returned ${otherSpelling.status}`,
+    );
+  }
+  // A local tunnel preserves the browser's Host but changes the destination port.
+  const forwardedHost = `localhost:${Number(port) + 1}`;
+  const forwarded = await createNamespace(`http://${forwardedHost}`, forwardedHost);
+  const forwardedResult = await forwarded.json();
+  if (forwarded.status !== 200 || forwardedResult.type !== "success") {
+    throw new Error(`forwarded create-namespace form failed: ${JSON.stringify(forwardedResult)}`);
+  }
+  const mismatched = await createNamespace(`http://localhost:${Number(port) + 2}`, forwardedHost);
+  if (mismatched.status !== 403) {
+    throw new Error(`cross-site forwarded form returned ${mismatched.status}`);
+  }
+
+  // And the reason it is a rewrite rather than the check turned off.
+  for (const origin of [`http://localhost:${Number(port) + 1}`, "http://attacker.example"]) {
+    const foreign = await createNamespace(origin);
+    if (foreign.status !== 403) {
+      throw new Error(`cross-site form POST from ${origin} returned ${foreign.status}`);
+    }
+  }
+
   cli("db", "export");
 
   // Last, and against a stopped server: it needs the port to itself.
@@ -182,7 +247,7 @@ try {
   await checkLoopbackDefault(Number(port) + 1);
 
   console.log(
-    "Production smoke test passed: package CLI, database, authenticated server, export, and loopback default.",
+    "Production smoke test passed: package CLI, database, authenticated server, form origins, export, and loopback default.",
   );
 } finally {
   if (server && !server.killed) server.kill("SIGTERM");

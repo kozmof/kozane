@@ -42,6 +42,7 @@
 import http from "node:http";
 import { handler } from "../build/handler.js";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../dist/lib/constants.js";
+import { canonicalLoopbackOrigin } from "../dist/lib/server/security.js";
 
 /**
  * A non-negative integer from the environment, or `fallback`. Mirrors adapter-node's
@@ -70,6 +71,12 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
 }
 
 const server = http.createServer((req, res) => {
+  // Before the handler, because SvelteKit's CSRF check runs inside it and ahead of
+  // `hooks.server.ts`, so there is nowhere further in that a form POST can be rescued. What
+  // is rescued, and what is left refused, is `canonicalLoopbackOrigin`'s to decide.
+  const origin = canonicalLoopbackOrigin(req.headers.origin, process.env.ORIGIN, req.headers.host);
+  if (origin) req.headers.origin = origin;
+
   // The `next` adapter-node's middleware calls when no route matched. Under `index.js` polka
   // supplies one; here it is this, and it has to exist — without it an unmatched request
   // leaves the socket open until it times out.

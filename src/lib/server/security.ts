@@ -79,6 +79,39 @@ export function isAllowedRequestHost(
     .includes(normalized);
 }
 
+/** An `http:` loopback origin, parsed, or null for anything else. */
+function parseLoopbackOrigin(value: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "http:") return null;
+  return isLoopbackHost(url.hostname) ? url : null;
+}
+
+/**
+ * Normalize a loopback form origin to the origin pinned by the Node adapter.
+ * Local port forwarding may expose localhost:5174 while the server binds 127.0.0.1:5173.
+ * For a different port, require Origin to match the request's Host exactly: browsers
+ * cannot choose Host independently of the request URL. Do not trust forwarded headers.
+ * Same-port loopback aliases remain supported. Missing and non-loopback origins are
+ * left to SvelteKit's CSRF check.
+ */
+export function canonicalLoopbackOrigin(
+  requestOrigin: string | undefined,
+  pinnedOrigin: string | undefined,
+  requestHost?: string,
+): string | null {
+  if (!requestOrigin || !pinnedOrigin) return null;
+  const pinned = parseLoopbackOrigin(pinnedOrigin);
+  const incoming = parseLoopbackOrigin(requestOrigin);
+  if (!pinned || !incoming) return null;
+  if (pinned.port !== incoming.port && requestHost !== incoming.host) return null;
+  return incoming.origin === pinned.origin ? null : pinned.origin;
+}
+
 /**
  * Why the authentication throttle will not do what it looks like it does, or null when it
  * will.

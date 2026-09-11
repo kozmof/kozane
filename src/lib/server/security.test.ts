@@ -5,6 +5,7 @@ import {
   _resetAuthFailuresForTest,
   applySecurityHeaders,
   clearAuthFailures,
+  canonicalLoopbackOrigin,
   isAllowedRequestHost,
   isBrowserNavigation,
   isLoopbackHost,
@@ -135,6 +136,72 @@ describe("request host allowlist", () => {
 
   it("rejects everything unnamed when no allow list is set", () => {
     expect(isAllowedRequestHost("evil.test", undefined)).toBe(false);
+  });
+});
+
+describe("loopback origin canonicalization", () => {
+  const pinned = "http://127.0.0.1:5173";
+
+  // The bug this exists for: the workspace page's create-namespace form, submitted from a
+  // browser sitting on one loopback name against a server that pinned another.
+  it("rewrites another spelling of the same server to the pinned origin", () => {
+    expect(canonicalLoopbackOrigin("http://localhost:5173", pinned)).toBe(pinned);
+    expect(canonicalLoopbackOrigin("http://[::1]:5173", pinned)).toBe(pinned);
+    expect(canonicalLoopbackOrigin("http://127.0.0.1:5173", "http://localhost:5173")).toBe(
+      "http://localhost:5173",
+    );
+  });
+
+  it("accepts a forwarded loopback port when Origin matches Host", () => {
+    expect(canonicalLoopbackOrigin("http://localhost:5174", pinned, "localhost:5174")).toBe(pinned);
+    expect(canonicalLoopbackOrigin("http://[::1]:5174", pinned, "[::1]:5174")).toBe(pinned);
+  });
+
+  it("rejects a different port unless the request Host matches the origin", () => {
+    for (const host of [
+      undefined,
+      "localhost:5173",
+      "127.0.0.1:5174",
+      "evil.test:5174",
+      "localhost:5174/",
+      "user@localhost:5174",
+    ]) {
+      expect(canonicalLoopbackOrigin("http://localhost:5174", pinned, host)).toBeNull();
+    }
+    expect(canonicalLoopbackOrigin("http://evil.test:5174", pinned, "evil.test:5174")).toBeNull();
+    expect(canonicalLoopbackOrigin("null", pinned, "localhost:5174")).toBeNull();
+  });
+
+  it("leaves an origin that already matches alone", () => {
+    expect(canonicalLoopbackOrigin(pinned, pinned)).toBeNull();
+  });
+
+  // Everything below still reaches SvelteKit's check, and is still refused by it.
+  it("refuses to speak for another port on this machine", () => {
+    expect(canonicalLoopbackOrigin("http://localhost:5174", pinned)).toBeNull();
+    expect(canonicalLoopbackOrigin("http://localhost", pinned)).toBeNull();
+  });
+
+  it("refuses a host that is not loopback, however it is spelled", () => {
+    expect(canonicalLoopbackOrigin("http://attacker.example:5173", pinned)).toBeNull();
+    expect(canonicalLoopbackOrigin("http://127.0.0.1.evil.test:5173", pinned)).toBeNull();
+  });
+
+  it("refuses a scheme that is not http, on either side", () => {
+    expect(canonicalLoopbackOrigin("https://localhost:5173", pinned)).toBeNull();
+    expect(canonicalLoopbackOrigin("http://localhost:5173", "https://127.0.0.1:5173")).toBeNull();
+  });
+
+  it("refuses an origin that is missing, empty, or the literal null a sandbox sends", () => {
+    expect(canonicalLoopbackOrigin(undefined, pinned)).toBeNull();
+    expect(canonicalLoopbackOrigin("", pinned)).toBeNull();
+    expect(canonicalLoopbackOrigin("null", pinned)).toBeNull();
+  });
+
+  // A remote binding configures ORIGIN through the reverse proxy, or not at all.
+  it("does nothing when no origin is pinned", () => {
+    expect(canonicalLoopbackOrigin("http://localhost:5173", undefined)).toBeNull();
+    expect(canonicalLoopbackOrigin("http://localhost:5173", "")).toBeNull();
   });
 });
 
