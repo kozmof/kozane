@@ -390,23 +390,6 @@
     return res.ok;
   }
 
-  async function handleStackOrderChange(cardId: string, direction: "front" | "back") {
-    const card = s.cards.find((item) => item.id === cardId);
-    if (!card) return;
-    const previous = card.zIndex;
-    // Stacking is relative to the card's own layer: layer order decides the rest.
-    const layerCards = s.cards.filter((item) => item.layerId === card.layerId);
-    const zIndex = direction === "front" ? maxZIndex(layerCards) + 1 : minZIndex(layerCards) - 1;
-    s.cards = s.cards.map((item) => (item.id === cardId ? { ...item, zIndex } : item));
-    const res = await updateCard(s.mutationFetcher, data.namespace.id, cardId, { zIndex });
-    if (!res.ok) {
-      s.cards = s.cards.map((item) =>
-        item.id === cardId && item.zIndex === zIndex ? { ...item, zIndex: previous } : item,
-      );
-      s.setError("Failed to change card stacking order");
-    }
-  }
-
   /** Fills the palette in with warps another tab or the CLI has set since the page loaded. */
   async function refreshWarpDirectory() {
     // A static export has no endpoint to ask, and nothing can have changed under it.
@@ -677,7 +660,7 @@
       otherNamespaces={data.otherNamespaces}
       onMoveToNamespace={actions.handleMoveSelectionToNamespace}
       onSelectionLayerChange={actions.handleSelectionLayerChange}
-      onStackOrderChange={handleStackOrderChange}
+      onStackOrderChange={actions.handleStackOrderChange}
       onResizeToggle={handleResizeToggle}
       onSquashCard={actions.handleSquashCard}
       resizingCardId={s.selection.resizingCardId}

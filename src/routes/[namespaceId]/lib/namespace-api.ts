@@ -312,6 +312,18 @@ export function batchReassignLayer(
   return jsonRequest(fetcher, apiUrl(namespaceId, "/cards/layer"), "PATCH", { cardIds, layerId });
 }
 
+export function batchChangeStackOrder(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  cardIds: string[],
+  direction: "front" | "back",
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, "/cards/stacking"), "PATCH", {
+    cardIds,
+    direction,
+  });
+}
+
 export function moveCardsToNamespace(
   fetcher: typeof fetch,
   namespaceId: string,

@@ -153,6 +153,18 @@ Answers `{ ok: true, stacking: [{ cardId, zIndex }] }`. Arriving cards are resta
 the target layer's own, so the client is told what they ended up with rather than left
 holding a `zIndex` from the layer they came from.
 
+### `PATCH /[namespaceId]/api/cards/stacking`
+
+Moves many cards to the front or back of their own layer's stack, together — a glue group
+above all, which is not required to share one layer. Body: `cardIds`, `direction`
+(`"front"` or `"back"`).
+
+Answers `{ ok: true, stacking: [{ cardId, zIndex }] }`, the same shape a layer move answers
+with: the cards are grouped by whichever layer each is actually on and restacked within it,
+so a group spanning more than one layer needs telling apart by layer, not just by id.
+
+`400` naming which was wrong: the cards, or `direction` itself.
+
 ### `POST /[namespaceId]/api/cards/move`
 
 Moves many cards to another namespace, with their partition and layer resolved on the far

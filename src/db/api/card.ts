@@ -719,6 +719,99 @@ export async function reassignCardsToLayer({
   });
 }
 
+type ReassignCardsStackOrder = {
+  db: DB;
+  namespaceId: string;
+  cardIds: string[];
+  direction: "front" | "back";
+};
+
+/** Refused the one way a glue group's cards can be: some do not belong to this namespace. */
+export type ReassignStackOrderResult =
+  | { ok: true; stacking: CardStacking[] }
+  | BatchRefusal<"foreign-cards">;
+
+/**
+ * Moves cards to the front or back of their own layer's stack, together.
+ *
+ * A glue group is not required to share a layer — nothing enforces that — so the cards are
+ * grouped by whichever layer they are actually on and restacked within it. Their order
+ * relative to each other survives the move, the same way {@link reassignCardsToLayer} keeps
+ * it for cards arriving on a new layer: read the group's current zIndex order once, then
+ * hand out a consecutive run of values above (or below) whatever that layer already holds,
+ * in that order.
+ */
+export async function reassignCardsStackOrder({
+  db,
+  namespaceId,
+  cardIds,
+  direction,
+}: ReassignCardsStackOrder): Promise<ReassignStackOrderResult> {
+  if (cardIds.length === 0) return { ok: true, stacking: [] };
+
+  return withTx(db, async (tx) => {
+    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+    if (!owned.ok) return owned;
+
+    const requested = await tx
+      .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
+      .from(cardTable)
+      .where(inArray(cardTable.id, [...new Set(cardIds)]));
+
+    const byLayer = new Map<string, typeof requested>();
+    for (const card of requested) {
+      const group = byLayer.get(card.layerId);
+      if (group) group.push(card);
+      else byLayer.set(card.layerId, [card]);
+    }
+
+    const stacking: CardStacking[] = [];
+    for (const [layerId, group] of byLayer) {
+      const resident = await tx
+        .select({ zIndex: cardTable.zIndex })
+        .from(cardTable)
+        .where(eq(cardTable.layerId, layerId));
+      // Folded rather than spread into Math.max/min, which throws on a large enough layer,
+      // and seeded at 0 so an empty layer starts where a first card would.
+      const top = resident.reduce(
+        (highest, { zIndex }) => (zIndex > highest ? zIndex : highest),
+        0,
+      );
+      const bottom = resident.reduce(
+        (lowest, { zIndex }) => (zIndex < lowest ? zIndex : lowest),
+        0,
+      );
+
+      const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));
+      if (direction === "front") {
+        ordered.forEach((card, index) =>
+          stacking.push({ cardId: card.id, zIndex: top + 1 + index }),
+        );
+      } else {
+        // Handed out from the bottom up in the same order, so the card that was already
+        // lowest in the group stays lowest rather than landing on top of its own group.
+        const n = ordered.length;
+        ordered.forEach((card, index) =>
+          stacking.push({ cardId: card.id, zIndex: bottom - (n - index) }),
+        );
+      }
+    }
+
+    for (const batch of caseUpdateBatches(stacking, 1))
+      await tx
+        .update(cardTable)
+        .set({ zIndex: buildZIndexCaseWhen(batch) })
+        .where(
+          inArray(
+            cardTable.id,
+            batch.map(({ cardId }) => cardId),
+          ),
+        );
+
+    return { ok: true, stacking };
+  });
+}
+
 type ReassignCardsToPartition = {
   db: DB;
   namespaceId: string;

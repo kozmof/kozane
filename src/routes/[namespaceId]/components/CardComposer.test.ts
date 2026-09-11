@@ -348,8 +348,8 @@ describe("CardComposer — selection mode", () => {
     await user.keyboard("v{Home}{End}{Backspace}q");
 
     expect(writeText).toHaveBeenCalledWith("card-1");
-    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, "card-1", "front");
-    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, "card-1", "back");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, ["card-1"], "front");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, ["card-1"], "back");
     expect(onDeleteSelected).toHaveBeenCalledWith(["card-1"]);
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -516,15 +516,29 @@ describe("CardComposer — card stacking order", () => {
     });
     await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
     await user.click(screen.getByRole("button", { name: "Send to back ([)" }));
-    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, "card-layer", "front");
-    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, "card-layer", "back");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(1, ["card-layer"], "front");
+    expect(onStackOrderChange).toHaveBeenNthCalledWith(2, ["card-layer"], "back");
   });
 
-  it("hides layer actions for multiple selected cards", () => {
+  it("hides layer actions for an unglued multi-card selection", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "other" }] }),
     });
     expect(screen.queryByRole("button", { name: "Bring to front (])" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Send to back ([)" })).not.toBeInTheDocument();
+  });
+
+  it("moves a whole glue group to the front or back together", async () => {
+    const user = userEvent.setup();
+    const onStackOrderChange = vi.fn();
+    const glued = { ...selectedCard, glueId: "glue-1" };
+    render(CardComposer, {
+      props: makeProps({
+        selectedCards: [glued, { ...glued, id: "other" }],
+        onStackOrderChange,
+      }),
+    });
+    await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
+    expect(onStackOrderChange).toHaveBeenCalledWith(["card-layer", "other"], "front");
   });
 });

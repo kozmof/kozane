@@ -27,7 +27,7 @@
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToNamespace?: (cardIds: string[], targetNamespaceId: string) => void;
     onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
-    onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
+    onStackOrderChange?: (cardIds: string[], direction: "front" | "back") => void;
     /** Shows or hides the card's resize handle. The drag itself belongs to the canvas. */
     onResizeToggle?: (cardId: string) => void;
     /** Replaces the card with one card per segment of its text. */
@@ -185,8 +185,8 @@
     let handled = true;
     if (e.key === shortcuts.clearSelectionShortcut) onCancel();
     else if (e.key === shortcuts.copyCardIdShortcut && selectedCards.length === 1) copySelectedCardId();
-    else if (e.key === shortcuts.bringCardToFrontShortcut && selectedCards.length === 1) onStackOrderChange?.(selectedCards[0].id, "front");
-    else if (e.key === shortcuts.sendCardToBackShortcut && selectedCards.length === 1) onStackOrderChange?.(selectedCards[0].id, "back");
+    else if (e.key === shortcuts.bringCardToFrontShortcut && (selectedCards.length === 1 || allGlued)) onStackOrderChange?.(ids, "front");
+    else if (e.key === shortcuts.sendCardToBackShortcut && (selectedCards.length === 1 || allGlued)) onStackOrderChange?.(ids, "back");
     else if (e.key === shortcuts.glueCardsShortcut && selectedCards.length >= 2) {
       if (allGlued) onUnglueSelected?.(ids);
       else onGlueSelected?.(ids);
@@ -288,10 +288,14 @@
         {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
       </button>
     {/if}
+    {#if selectedCards.length === 1 || allGlued}
+      <div class={css({ display: "contents" })}>
+        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
+        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+      </div>
+    {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards[0].id, "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
         <button
           class={css({ flex: "1", padding: "8px 12px", background: "ink.white", borderRadius: "4px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", border: "1px solid" })}
           style:border-color={resizingCardId === selectedCards[0].id ? "var(--colors-select-accent)" : "var(--colors-neutral-border)"}

@@ -23,7 +23,7 @@
     onDeleteSelected?: (cardIds: string[]) => void;
     onMoveToNamespace?: (cardIds: string[], targetNamespaceId: string) => void;
     onSelectionLayerChange?: (cardIds: string[], layerId: string) => void;
-    onStackOrderChange?: (cardId: string, direction: "front" | "back") => void;
+    onStackOrderChange?: (cardIds: string[], direction: "front" | "back") => void;
     onResizeToggle?: (cardId: string) => void;
     onSquashCard?: (cardId: string) => void;
     resizingCardId?: string | null;

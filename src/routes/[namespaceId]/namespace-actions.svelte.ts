@@ -409,6 +409,32 @@ export function createNamespaceActions(state: NamespaceState) {
     state.activeLayerId = layerId;
   }
 
+  /**
+   * `cardIds` is one card for a plain selection, or a whole glue group when the selected
+   * card is glued — the composer sends whichever the selection actually is. A group is not
+   * guaranteed to share a layer (nothing enforces that), so the server restacks each layer
+   * it finds them on separately and reports where every card landed, the same `stacking`
+   * shape a layer move answers with.
+   */
+  async function handleStackOrderChange(cardIds: string[], direction: "front" | "back") {
+    const res = await api.batchChangeStackOrder(
+      state.mutationFetcher,
+      state.namespaceId,
+      cardIds,
+      direction,
+    );
+    if (!res.ok) {
+      state.setError(await api.failureMessage(res, "Failed to change card stacking order"));
+      return;
+    }
+    const parsed = await res.json().catch(() => null);
+    const zIndexByCardId = readStacking(parsed);
+    state.cards = state.cards.map((c) => {
+      const zIndex = zIndexByCardId.get(c.id);
+      return zIndex === undefined ? c : { ...c, zIndex };
+    });
+  }
+
   async function handleCreateScope() {
     const name = state.sidebar.newScopeName.trim();
     if (!name) return;
@@ -537,6 +563,7 @@ export function createNamespaceActions(state: NamespaceState) {
     handleRenameLayer,
     handleReorderLayers,
     handleSelectionLayerChange,
+    handleStackOrderChange,
     handleSetWarp,
     handleRemoveWarp,
     handleCreateScope,
