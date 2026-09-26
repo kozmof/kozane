@@ -32,6 +32,17 @@
     onResizeToggle?: (cardId: string) => void;
     /** Replaces the card with one card per segment of its text. */
     onSquashCard?: (cardId: string) => void;
+    /** Opens the file palette on the selection. Absent where there is nothing to open. */
+    onOpenFilePalette?: () => void;
+    /**
+     * Hands the keyboard to something in front of this bar — the file palette, which is the
+     * one overlay that is open *while* cards are selected.
+     *
+     * The palette stops the keys typed into it from reaching here, but only those: a press
+     * with focus anywhere else would still arrive, and `Delete` arriving would delete the
+     * very cards the panel in front is about.
+     */
+    suspendShortcuts?: boolean;
     /** The card currently showing one, so the button can read as the toggle it is. */
     resizingCardId?: string | null;
     shortcuts?: UiConfig;
@@ -58,6 +69,8 @@
     onSelectionLayerChange,
     onStackOrderChange,
     onResizeToggle,
+    onOpenFilePalette,
+    suspendShortcuts = false,
     onSquashCard,
     resizingCardId = null,
     shortcuts = DEFAULT_UI_CONFIG,
@@ -178,6 +191,7 @@
 
   function handleSelectionShortcut(e: KeyboardEvent) {
     if (mode !== "selection") return;
+    if (suspendShortcuts) return;
     const target = e.target as HTMLElement;
     if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
 
@@ -198,6 +212,8 @@
       onResizeToggle?.(selectedCards[0].id);
     } else if (e.key === shortcuts.squashCardShortcut && squashableCard) {
       onSquashCard?.(squashableCard.id);
+    } else if (e.key === shortcuts.openFilePaletteShortcut && onOpenFilePalette) {
+      onOpenFilePalette();
     } else if (e.key === shortcuts.deleteCardsShortcut) onDeleteSelected?.(ids);
     else handled = false;
 
@@ -230,6 +246,17 @@
       selectedCards.every((c) => c.glueId !== null && c.glueId === selectedCards[0].glueId),
   );
 </script>
+
+<!-- Every action button's shortcut lands here: a bare mark in the corner rather than
+     another bordered control competing with the button it belongs to. Purely visual — each
+     button carries its own `aria-label` with the shortcut in it, so this is hidden rather
+     than left to however a given screen reader flattens an absolutely positioned child. -->
+{#snippet shortcutHint(key: string)}
+  <span
+    aria-hidden="true"
+    class={css({ position: "absolute", top: "0", right: "0", padding: "4px 6px 0 0", fontSize: "9.5px", lineHeight: "1", color: "currentColor", opacity: "0.55", fontFamily: "mono", pointerEvents: "none" })}
+  >({key})</span>
+{/snippet}
 
 <svelte:window onkeydown={handleSelectionShortcut} />
 
@@ -276,7 +303,7 @@
     <div class={css({ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px" })}>
     {#if selectedCards.length === 1}
       <button
-        class={css({ width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+        class={css({ position: "relative", width: "100%", minWidth: "0", padding: "7px 8px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "11.5px", color: copyStatus === "error" ? "state.error" : "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
         aria-label={"Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
         title={selectedCards[0].id}
         onclick={copySelectedCardId}
@@ -285,32 +312,43 @@
           <rect x="4" y="1" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.2" />
           <path d="M8 8v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h2" stroke="currentColor" stroke-width="1.2" />
         </svg>
-        {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID (" + shortcuts.copyCardIdShortcut + ")"}
+        {copyStatus === "copied" ? "Copied ID" : copyStatus === "error" ? "Copy failed" : "Copy card ID"}
+        {@render shortcutHint(shortcuts.copyCardIdShortcut)}
       </button>
     {/if}
     {#if selectedCards.length === 1 || allGlued}
       <div class={css({ display: "contents" })}>
-        <button class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "front")}>Bring to front ({shortcuts.bringCardToFrontShortcut})</button>
-        <button class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })} onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "back")}>Send to back ({shortcuts.sendCardToBackShortcut})</button>
+        <button
+          class={css({ position: "relative", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })}
+          aria-label={`Bring to front (${shortcuts.bringCardToFrontShortcut})`}
+          onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "front")}
+        >Bring to front{@render shortcutHint(shortcuts.bringCardToFrontShortcut)}</button>
+        <button
+          class={css({ position: "relative", flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit" })}
+          aria-label={`Send to back (${shortcuts.sendCardToBackShortcut})`}
+          onclick={() => onStackOrderChange?.(selectedCards.map((c) => c.id), "back")}
+        >Send to back{@render shortcutHint(shortcuts.sendCardToBackShortcut)}</button>
       </div>
     {/if}
     {#if selectedCards.length === 1}
       <div class={css({ display: "contents" })}>
         <button
-          class={css({ flex: "1", padding: "8px 12px", background: "ink.white", borderRadius: "4px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", border: "1px solid" })}
+          class={css({ position: "relative", flex: "1", padding: "8px 12px", background: "ink.white", borderRadius: "4px", cursor: "pointer", fontSize: "12px", fontFamily: "inherit", border: "1px solid" })}
           style:border-color={resizingCardId === selectedCards[0].id ? "var(--colors-select-accent)" : "var(--colors-neutral-border)"}
           style:color={resizingCardId === selectedCards[0].id ? "var(--colors-select-accent)" : "var(--colors-ink-black)"}
           aria-pressed={resizingCardId === selectedCards[0].id}
+          aria-label={`${resizingCardId === selectedCards[0].id ? "Done resizing" : "Resize"} (${shortcuts.resizeCardShortcut})`}
           onclick={() => onResizeToggle?.(selectedCards[0].id)}
-        >{resizingCardId === selectedCards[0].id ? "Done resizing" : "Resize"} ({shortcuts.resizeCardShortcut})</button>
+        >{resizingCardId === selectedCards[0].id ? "Done resizing" : "Resize"}{@render shortcutHint(shortcuts.resizeCardShortcut)}</button>
         <button
-          class={css({ minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", fontSize: "12px", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
+          class={css({ position: "relative", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", fontSize: "12px", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
           style:cursor={squashableCard ? "pointer" : "default"}
           style:color={squashableCard ? "var(--colors-ink-black)" : "var(--colors-neutral-faded)"}
           title={squashableCard
             ? "Replace this card with one card per sentence"
             : "This card has nothing to split on"}
           disabled={!squashableCard}
+          aria-label={`Squash (${shortcuts.squashCardShortcut})`}
           onclick={() => squashableCard && onSquashCard?.(squashableCard.id)}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -318,7 +356,7 @@
             <rect x="1.5" y="7.5" width="9" height="3.5" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
             <path d="M1 6h10" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1.5" stroke-linecap="round"/>
           </svg>
-          Squash ({shortcuts.squashCardShortcut})
+          Squash{@render shortcutHint(shortcuts.squashCardShortcut)}
         </button>
       </div>
     {/if}
@@ -327,7 +365,8 @@
       <div class={css({ display: "contents" })}>
         {#if allGlued}
           <button
-            class={css({ flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+            class={css({ position: "relative", flex: "1", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+            aria-label={`Unglue all (${shortcuts.glueCardsShortcut})`}
             onclick={() => onUnglueSelected?.(selectedCards.map((c) => c.id))}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -335,11 +374,12 @@
               <circle cx="10" cy="6" r="2" stroke="currentColor" stroke-width="1.3" />
               <line x1="4" y1="6" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" stroke-dasharray="2 1.5" />
             </svg>
-            Unglue all ({shortcuts.glueCardsShortcut})
+            Unglue all{@render shortcutHint(shortcuts.glueCardsShortcut)}
           </button>
         {:else}
           <button
-            class={css({ flex: "1", padding: "8px 12px", background: "ink.black", border: "1px solid transparent", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.light", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
+            class={css({ position: "relative", flex: "1", padding: "8px 12px", background: "ink.black", border: "1px solid transparent", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.light", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" })}
+            aria-label={`Glue (${shortcuts.glueCardsShortcut})`}
             onclick={() => onGlueSelected?.(selectedCards.map((c) => c.id))}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -347,13 +387,14 @@
               <circle cx="10" cy="6" r="2" fill="currentColor" />
               <line x1="4" y1="6" x2="8" y2="6" stroke="currentColor" stroke-width="1.3" />
             </svg>
-            Glue ({shortcuts.glueCardsShortcut})
+            Glue{@render shortcutHint(shortcuts.glueCardsShortcut)}
           </button>
         {/if}
         {#if primaryCard?.glueId}
           <button
-            class={css({ padding: "8px 12px", background: "select.bg", border: "1px solid token(colors.select.accent)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "select.text", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px", "&:hover": { background: "select.accent", color: "ink.white" } })}
+            class={css({ position: "relative", padding: "8px 12px", background: "select.bg", border: "1px solid token(colors.select.accent)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "select.text", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "5px", "&:hover": { background: "select.accent", color: "ink.white" } })}
             title="Remove this card from its glue group"
+            aria-label={`Unglue this (${shortcuts.unglueCardShortcut})`}
             onclick={() => onUnglueOne?.(primaryCard!.id)}
           >
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -362,30 +403,34 @@
               <line x1="8" y1="4" x2="11" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
               <line x1="11" y1="4" x2="8" y2="8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
             </svg>
-            Unglue this ({shortcuts.unglueCardShortcut})
+            Unglue this{@render shortcutHint(shortcuts.unglueCardShortcut)}
           </button>
         {/if}
       </div>
     {/if}
     <!-- Move to namespace -->
     {#if otherNamespaces.length > 0}
-      <div class={css({ position: "relative" })} style:grid-column={selectedCards.length === 1 ? "span 2" : "auto"}>
+      <div class={css({ position: "relative" })}>
         <button
-          class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+          class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+          title="Move to namespace"
+          aria-label={`Move to namespace (${shortcuts.moveCardsShortcut})`}
           onclick={() => (showNamespacePicker = !showNamespacePicker)}
         >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
             <path d="M1 9V4l4-3 4 3v5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
             <rect x="4" y="6" width="4" height="3" rx="0.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M9 6h2M11 6v3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
           </svg>
-          Move to namespace ({shortcuts.moveCardsShortcut})
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style:transform={showNamespacePicker ? "rotate(180deg)" : "none"} style:transition="transform 0.15s">
+          <!-- Never truncated: the label is worth more than the row it costs. -->
+          <span class={css({ flex: "1", minWidth: "0", textAlign: "left" })}>Move to namespace</span>
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style:transform={showNamespacePicker ? "rotate(180deg)" : "none"} style="flex-shrink:0" style:transition="transform 0.15s">
             <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
+          {@render shortcutHint(shortcuts.moveCardsShortcut)}
         </button>
         {#if showNamespacePicker}
-          <div class={css({ position: "absolute", bottom: "100%", left: "0", right: "0", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
+          <div class={css({ position: "absolute", bottom: "100%", left: "0", minWidth: "100%", width: "max-content", maxWidth: "220px", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
             {#each otherNamespaces as namespace (namespace.id)}
               <button
                 class={css({ width: "100%", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", textAlign: "left", display: "block", "&:hover": { background: "ink.lighter" } })}
@@ -399,18 +444,35 @@
         {/if}
       </div>
     {/if}
+    <!-- Opens the file palette on this selection. -->
+    {#if onOpenFilePalette}
+      <button
+        class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "neutral.icon" } })}
+        title="Edit a file"
+        aria-label={`Edit a file (${shortcuts.openFilePaletteShortcut})`}
+        onclick={onOpenFilePalette}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
+          <path d="M3 1.5h3.2l2.3 2.3v6.7H3z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          <path d="M6 1.7v2.4h2.4" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+        </svg>
+        Edit a file{@render shortcutHint(shortcuts.openFilePaletteShortcut)}
+      </button>
+    {/if}
     <!-- Delete: always visible in selection mode -->
     <button
-      style:grid-column={otherNamespaces.length === 0 ? "1 / -1" : "auto"}
-      class={css({ width: "100%", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
+      class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
+      title={`Delete ${selectedCards.length === 1 ? "card" : selectedCards.length + " cards"}`}
+      aria-label={`Delete ${selectedCards.length === 1 ? "card" : selectedCards.length + " cards"} (${shortcuts.deleteCardsShortcut})`}
       onclick={() => onDeleteSelected?.(selectedCards.map((c) => c.id))}
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="flex-shrink:0">
         <path d="M4.5 2h3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         <path d="M1.5 4h9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         <path d="M2.5 4l.7 6h5.6l.7-6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      Delete {selectedCards.length === 1 ? "card" : selectedCards.length + " cards"} ({shortcuts.deleteCardsShortcut})
+      <span class={css({ minWidth: "0" })}>Delete {selectedCards.length === 1 ? "card" : selectedCards.length + " cards"}</span>
+      {@render shortcutHint(shortcuts.deleteCardsShortcut)}
     </button>
     </div>
   {:else}

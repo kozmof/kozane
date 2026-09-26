@@ -6,6 +6,7 @@
     TaskspaceTreeContext,
     TaskspaceTreeState,
   } from "../lib/taskspace-tree.svelte.js";
+  import { scopeLinkState } from "../lib/scope-link.js";
   import TaskspaceCreateButtons from "./TaskspaceCreateButtons.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
@@ -254,7 +255,9 @@
         </div>
 
         {#if !readonly && selectedCards.size > 0}
-          {@const allInScope = [...selectedCards].every((cid) => scopeRels.some((r) => r.scopeId === scope.id && r.cardId === cid))}
+          <!-- Two-state here where the file palette draws three: this button is the end of
+               what you were doing, and a half-linked selection still has adding left to do. -->
+          {@const allInScope = scopeLinkState(scopeRels, scope.id, selectedCards) === "all"}
           <button
             class={css({
               width: "100%",
@@ -275,7 +278,7 @@
             })}
             onclick={() => allInScope ? onRemoveFromScope(scope.id) : onAddToScope(scope.id)}
           >
-            <span>{allInScope ? "Remove from scope" : "Add to scope"}</span>
+            <span>{allInScope ? "Unlink" : "Link"}</span>
             <span>{allInScope ? "−" : "→"}</span>
           </button>
         {/if}

@@ -92,6 +92,7 @@ const data = {
     resizeCardShortcut: "r",
     squashCardShortcut: "s",
     deleteCardsShortcut: "Delete",
+    openFilePaletteShortcut: "o",
     setWarpShortcut: "w",
     toggleWarpsShortcut: "W",
     removeWarpShortcut: "q",
@@ -402,6 +403,59 @@ describe("Namespace page", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument(),
     );
+  });
+
+  /** Selects one card, which is what puts the selection bar and its shortcuts in play. */
+  async function selectAlpha() {
+    render(NamespacePage, {
+      props: { data, params: { namespaceId: "namespace-1" }, form: null },
+    });
+    await fireEvent.click(screen.getByRole("button", { name: "Card: Alpha" }));
+  }
+
+  it("opens the file palette from the selection shortcut", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await selectAlpha();
+
+    expect(screen.queryByRole("dialog", { name: "Edit a file" })).toBeNull();
+    await fireEvent.keyDown(window, { key: "o" });
+
+    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+  });
+
+  it("opens it from the selection bar button too", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    await selectAlpha();
+
+    await fireEvent.click(screen.getByRole("button", { name: /Edit a file/ }));
+
+    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+  });
+
+  // The palette is the one overlay open while cards are selected, so the composer's own
+  // window handler is live behind it. Without the suspend the cards the panel is about
+  // would be deleted out from under it.
+  it("does not delete the selection while the palette is over it", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetch);
+    await selectAlpha();
+    await fireEvent.keyDown(window, { key: "o" });
+
+    await fireEvent.keyDown(window, { key: "Delete" });
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
+  });
+
+  it("gives the palette no shortcut when nothing is selected", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(NamespacePage, {
+      props: { data, params: { namespaceId: "namespace-1" }, form: null },
+    });
+
+    await fireEvent.keyDown(window, { key: "o" });
+
+    expect(screen.queryByRole("dialog", { name: "Edit a file" })).toBeNull();
   });
 });
 

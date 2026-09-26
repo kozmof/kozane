@@ -35,6 +35,7 @@ export type UiConfig = {
   resizeCardShortcut: string;
   squashCardShortcut: string;
   deleteCardsShortcut: string;
+  openFilePaletteShortcut: string;
   setWarpShortcut: string;
   toggleWarpsShortcut: string;
   removeWarpShortcut: string;
@@ -77,6 +78,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   resizeCardShortcut: "r",
   squashCardShortcut: "s",
   deleteCardsShortcut: "Delete",
+  openFilePaletteShortcut: "e",
   setWarpShortcut: "a",
   // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
   toggleWarpsShortcut: "A",
@@ -140,6 +142,7 @@ export const UI_SHORTCUT_FIELDS = [
   "resizeCardShortcut",
   "squashCardShortcut",
   "deleteCardsShortcut",
+  "openFilePaletteShortcut",
   "setWarpShortcut",
   "toggleWarpsShortcut",
   "removeWarpShortcut",

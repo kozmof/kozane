@@ -27,6 +27,7 @@ vi.mock("./lib/namespace-api", () => ({
   addCardsToScope: vi.fn(),
   removeCardsFromScope: vi.fn(),
   createTaskspace: vi.fn(),
+  createTaskspaceFile: vi.fn(),
 }));
 
 import * as api from "./lib/namespace-api.js";
@@ -154,5 +155,196 @@ describe("optimistic rollback", () => {
 
     expect(state.selection.primarySelectedId).toBe("card-2");
     expect(state.selection.selectedCards.has("card-1")).toBe(true);
+  });
+});
+
+/** A response carrying a body, for the actions that read one. */
+function answered(body: unknown, ok = true): Response {
+  return { ok, json: async () => body } as unknown as Response;
+}
+
+describe("handleLinkScope", () => {
+  it("adds the selection to the scope and keeps it selected", async () => {
+    const state = stateWith([card("card-1"), card("card-2")]);
+    state.selection.selectedCards = new Set(["card-1", "card-2"]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.addCardsToScope).mockResolvedValue(answered({ ok: true }));
+
+    expect(await actions.handleLinkScope("s1")).toBe(true);
+
+    expect(state.scopeRels).toEqual([
+      { scopeId: "s1", cardId: "card-1" },
+      { scopeId: "s1", cardId: "card-2" },
+    ]);
+    // The whole reason this is not `handleAddToScope`: the palette is about the selection,
+    // and linking from it must not empty the panel doing the linking.
+    expect(state.selection.selectedCards).toEqual(new Set(["card-1", "card-2"]));
+  });
+
+  it("does not duplicate a card already in the scope", async () => {
+    const state = stateWith([card("card-1"), card("card-2")]);
+    state.selection.selectedCards = new Set(["card-1", "card-2"]);
+    state.scopeRels = [{ scopeId: "s1", cardId: "card-1" }];
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.addCardsToScope).mockResolvedValue(answered({ ok: true }));
+
+    await actions.handleLinkScope("s1");
+
+    expect(state.scopeRels).toEqual([
+      { scopeId: "s1", cardId: "card-1" },
+      { scopeId: "s1", cardId: "card-2" },
+    ]);
+  });
+
+  it("reports the server's own wording and links nothing", async () => {
+    const state = stateWith([card("card-1")]);
+    state.selection.selectedCards = new Set(["card-1"]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.addCardsToScope).mockResolvedValue(failed);
+    vi.mocked(api.failureMessage).mockResolvedValue("Scope not found");
+
+    expect(await actions.handleLinkScope("s1")).toBe(false);
+    expect(state.lastError).toBe("Scope not found");
+    expect(state.scopeRels).toEqual([]);
+  });
+
+  it("does nothing with an empty selection", async () => {
+    const actions = createNamespaceActions(stateWith([]));
+    expect(await actions.handleLinkScope("s1")).toBe(false);
+    expect(api.addCardsToScope).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleCreateScopeWithFile", () => {
+  const names = { scope: "work", taskspace: "notes", file: "plan.md" };
+
+  function succeedingState() {
+    const state = stateWith([card("card-1")]);
+    state.selection.selectedCards = new Set(["card-1"]);
+    vi.mocked(api.createScope).mockResolvedValue(answered({ id: "s1" }));
+    vi.mocked(api.createTaskspace).mockResolvedValue(
+      answered({ id: "t1", path: "notes", pathKind: "workspace_relative" }),
+    );
+    vi.mocked(api.createTaskspaceFile).mockResolvedValue(answered({ path: "plan.md" }));
+    vi.mocked(api.addCardsToScope).mockResolvedValue(answered({ ok: true }));
+    return state;
+  }
+
+  it("creates the scope, taskspace and file, links the cards, and says what to open", async () => {
+    const state = succeedingState();
+    const actions = createNamespaceActions(state);
+
+    expect(await actions.handleCreateScopeWithFile(names)).toEqual({
+      taskspaceId: "t1",
+      taskspaceName: "notes",
+      path: "plan.md",
+    });
+
+    expect(state.scopes).toEqual([{ id: "s1", name: "work" }]);
+    expect(state.taskspaces).toEqual([
+      { id: "t1", name: "notes", scopeId: "s1", path: "notes", pathKind: "workspace_relative" },
+    ]);
+    expect(state.scopeRels).toEqual([{ scopeId: "s1", cardId: "card-1" }]);
+    expect(state.selection.selectedCards).toEqual(new Set(["card-1"]));
+  });
+
+  it("links the cards last, after the file is there", async () => {
+    const state = succeedingState();
+    const actions = createNamespaceActions(state);
+    const order: string[] = [];
+    vi.mocked(api.createTaskspaceFile).mockImplementation(async () => {
+      order.push("file");
+      return answered({ path: "plan.md" });
+    });
+    vi.mocked(api.addCardsToScope).mockImplementation(async () => {
+      order.push("link");
+      return answered({ ok: true });
+    });
+
+    await actions.handleCreateScopeWithFile(names);
+    expect(order).toEqual(["file", "link"]);
+  });
+
+  it("surfaces why a scope name was refused rather than a fixed message", async () => {
+    const state = stateWith([card("card-1")]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.createScope).mockResolvedValue(failed);
+    vi.mocked(api.failureMessage).mockResolvedValue('A scope named "work" already exists');
+
+    expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
+    expect(state.lastError).toBe('A scope named "work" already exists');
+    expect(state.scopes).toEqual([]);
+    expect(api.createTaskspace).not.toHaveBeenCalled();
+  });
+
+  it("takes the new scope back down when the taskspace cannot be made", async () => {
+    const state = stateWith([card("card-1")]);
+    state.selection.selectedCards = new Set(["card-1"]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.createScope).mockResolvedValue(answered({ id: "s1" }));
+    vi.mocked(api.createTaskspace).mockResolvedValue(failed);
+    vi.mocked(api.deleteScope).mockResolvedValue(answered({ ok: true }));
+    vi.mocked(api.failureMessage).mockResolvedValue("Taskspace directory already exists");
+
+    expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
+
+    expect(api.deleteScope).toHaveBeenCalledWith(expect.anything(), "namespace-1", "s1");
+    expect(state.scopes).toEqual([]);
+    expect(state.lastError).toBe("Taskspace directory already exists");
+    expect(api.createTaskspaceFile).not.toHaveBeenCalled();
+  });
+
+  it("keeps the scope and taskspace when only the file fails", async () => {
+    const state = succeedingState();
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.createTaskspaceFile).mockResolvedValue(failed);
+    vi.mocked(api.failureMessage).mockResolvedValue("File already exists");
+
+    expect(await actions.handleCreateScopeWithFile(names)).toBeNull();
+
+    expect(state.lastError).toBe("File already exists");
+    expect(state.scopes).toHaveLength(1);
+    expect(state.taskspaces).toHaveLength(1);
+    expect(api.deleteScope).not.toHaveBeenCalled();
+  });
+
+  it("still opens the file when only the link fails", async () => {
+    const state = succeedingState();
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.addCardsToScope).mockResolvedValue(failed);
+    vi.mocked(api.failureMessage).mockResolvedValue("Scope not found");
+
+    expect(await actions.handleCreateScopeWithFile(names)).not.toBeNull();
+    expect(state.lastError).toBe("Scope not found");
+  });
+
+  it("refuses a blank name without asking the server", async () => {
+    const actions = createNamespaceActions(stateWith([]));
+
+    expect(await actions.handleCreateScopeWithFile({ ...names, file: "  " })).toBeNull();
+    expect(api.createScope).not.toHaveBeenCalled();
+  });
+
+  it("trims the names it sends", async () => {
+    const state = succeedingState();
+    const actions = createNamespaceActions(state);
+
+    await actions.handleCreateScopeWithFile({
+      scope: " work ",
+      taskspace: " notes ",
+      file: " plan.md ",
+    });
+
+    expect(api.createScope).toHaveBeenCalledWith(expect.anything(), "namespace-1", "work");
+    expect(api.createTaskspace).toHaveBeenCalledWith(expect.anything(), "namespace-1", {
+      name: "notes",
+      scopeId: "s1",
+    });
+    expect(api.createTaskspaceFile).toHaveBeenCalledWith(
+      expect.anything(),
+      "namespace-1",
+      "t1",
+      "plan.md",
+    );
   });
 });

@@ -26,6 +26,8 @@
     onStackOrderChange?: (cardIds: string[], direction: "front" | "back") => void;
     onResizeToggle?: (cardId: string) => void;
     onSquashCard?: (cardId: string) => void;
+    onOpenFilePalette?: () => void;
+    suspendShortcuts?: boolean;
     resizingCardId?: string | null;
     shortcuts: UiConfig;
   }
@@ -52,6 +54,8 @@
     onStackOrderChange,
     onResizeToggle,
     onSquashCard,
+    onOpenFilePalette,
+    suspendShortcuts = false,
     resizingCardId = null,
     shortcuts,
   }: Props = $props();
@@ -98,6 +102,8 @@
     {onStackOrderChange}
     {onResizeToggle}
     {onSquashCard}
+    {onOpenFilePalette}
+    {suspendShortcuts}
     {resizingCardId}
     {shortcuts}
   />

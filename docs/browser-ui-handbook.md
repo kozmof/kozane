@@ -150,6 +150,7 @@ showing the selection count. The actions and their keyboard shortcuts:
 | Move to namespace  | `m`      | Another namespace exists           |
 | Resize             | `r`      | Exactly one card selected          |
 | Squash             | `s`      | One card whose text splits         |
+| Edit a file        | `e`      | Any selection                      |
 | Delete             | `Delete` | Any selection                      |
 | Clear selection    | `Esc`    | Any selection                      |
 
@@ -293,9 +294,9 @@ namespaces reach each one.
   Click again to clear.
 - Create — type a name in the input at the bottom of the panel and press `Enter`
   or `+`.
-- Add or remove cards — select cards, then use each scope's "Add to scope" or
-  "Remove from scope" button. The label reflects whether the whole selection is
-  already in that scope.
+- Add or remove cards — select cards, then use each scope's "Link" or "Unlink"
+  button. The label reflects whether the whole selection is already in that
+  scope.
 - Delete — hover a scope and click the `×`. This removes this namespace's cards
   from the scope. The cards themselves are kept, and the scope disappears
   workspace-wide only once nothing anywhere refers to it — no cards in any
@@ -332,6 +333,44 @@ something a read confined to the taskspace can do.
 The tree does not refresh on its own — live sync watches the database, not the
 disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
 than 500 entries is cut off, and the panel says so at the end of the listing.
+
+### Opening a file from a selection
+
+Selecting cards and pressing `e` — or the action bar's "Edit a file" — puts up a
+panel listing every scope this board draws, each with its taskspaces and their
+files. It is the short way to an editor: the right panel shows one scope's
+taskspaces at a time and only while that scope is focused, so reaching a file
+there means focusing a scope first and unfolding your way down.
+
+Clicking a file opens it in the editor and nothing else. Scopes start unfolded,
+and so does every taskspace's tree — nothing here needs the extra click the
+right panel asks for before showing files. Click a scope's name to fold it
+away when the board has more of them than you want to look at, or a
+taskspace's to fold just that one. The new-file and new-folder controls work
+here exactly as they do in the right panel, and a file made from this panel
+opens straight away.
+
+Each scope also says how it stands with the selection. A scope holding every
+selected card reads "Linked"; otherwise there is a button to link them, saying
+how many are left when some are already in. Linking here leaves the cards
+selected, unlike the right panel's "Link", because the selection is what the
+panel is about.
+
+The row of three fields at the bottom is the other short path: name a scope, a
+taskspace, and a file, and all three are created, the selected cards are linked
+to the new scope, and the editor opens on the empty file. `Enter` moves from
+Scope to Taskspace to File; press it in the File field, or use Create, to
+make all three.
+
+Two things can refuse it, and both say so in their own words. Scope names are
+unique across the whole workspace, and a taskspace claims a directory named after
+it, so a name already taken on disk is refused too. If the taskspace cannot be
+made, the scope created a moment earlier is removed again rather than left
+behind; past that point what succeeded is kept, and the tree's own controls
+finish the job.
+
+Press `Esc` or click outside to close. The panel holds the keyboard while it is
+up, so the selection behind it is safe.
 
 ### Adding a file or folder
 

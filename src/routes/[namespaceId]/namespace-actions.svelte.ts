@@ -523,6 +523,127 @@ export function createNamespaceActions(state: NamespaceState) {
     state.selection.selectedCards = new Set();
   }
 
+  /**
+   * Adds the selected cards to `scopeId` and leaves them selected.
+   *
+   * The difference from {@link handleAddToScope} is the whole reason this exists: that one
+   * clears the selection when it succeeds, which is right for the sidebar — the button is
+   * the end of what you were doing — and wrong for the file palette, where the selection is
+   * the subject of the panel and every row is about it. Linking from there and watching the
+   * panel empty itself would be the panel undoing its own premise.
+   *
+   * Answers whether the link took, so the palette can report it without a second source of
+   * truth about what happened.
+   */
+  async function handleLinkScope(scopeId: string): Promise<boolean> {
+    if (state.selection.selectedCards.size === 0) return false;
+    const cardIds = [...state.selection.selectedCards];
+    const res = await api.addCardsToScope(
+      state.mutationFetcher,
+      state.namespaceId,
+      scopeId,
+      cardIds,
+    );
+    if (!res.ok) {
+      state.setError(await api.failureMessage(res, "Failed to link cards to scope"));
+      return false;
+    }
+    state.scopeRels = [
+      ...state.scopeRels,
+      ...cardIds
+        .filter((cid) => !state.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
+        .map((cardId) => ({ scopeId, cardId })),
+    ];
+    return true;
+  }
+
+  /**
+   * The whole of the palette's second flow: a scope, a taskspace inside it, one empty file
+   * inside that, and the selected cards linked to the scope — in that order, over four
+   * endpoints that already exist.
+   *
+   * Ordered so that the step most likely to fail comes before anything is linked. Both
+   * early steps refuse for reasons worth reading — a scope name is unique across the whole
+   * workspace, and a taskspace claims a directory named after it — so every failure here
+   * carries the server's own wording rather than the fixed strings the older scope and
+   * taskspace handlers use, which would turn "a scope named X already exists" into "Failed
+   * to create scope" and leave the reader to guess.
+   *
+   * A taskspace that cannot be made takes its scope down with it. The scope was created a
+   * moment ago for this taskspace alone, and leaving an empty one behind would be litter
+   * from a flow that visibly did not finish. Past that point nothing is undone: a scope and
+   * a taskspace are useful on their own, and the tree's own controls finish the job.
+   *
+   * Answers what to open, or null when there is nothing to open.
+   */
+  async function handleCreateScopeWithFile(names: {
+    scope: string;
+    taskspace: string;
+    file: string;
+  }): Promise<{ taskspaceId: string; taskspaceName: string; path: string } | null> {
+    const scopeName = names.scope.trim();
+    const taskspaceName = names.taskspace.trim();
+    const fileName = names.file.trim();
+    if (!scopeName || !taskspaceName || !fileName) {
+      state.setError("A scope, taskspace, and file name are all required");
+      return null;
+    }
+
+    const scopeRes = await api.createScope(state.mutationFetcher, state.namespaceId, scopeName);
+    const scope = scopeRes.ok ? await scopeRes.json().catch(() => null) : null;
+    if (!scope?.id) {
+      state.setError(await api.failureMessage(scopeRes, "Failed to create scope"));
+      return null;
+    }
+    const scopeId = scope.id as string;
+    state.scopes = [...state.scopes, { id: scopeId, name: scopeName }];
+
+    const taskspaceRes = await api.createTaskspace(state.mutationFetcher, state.namespaceId, {
+      name: taskspaceName,
+      scopeId,
+    });
+    const taskspace = taskspaceRes.ok ? await taskspaceRes.json().catch(() => null) : null;
+    if (!taskspace?.id) {
+      const message = await api.failureMessage(taskspaceRes, "Failed to create taskspace");
+      // Undone rather than left behind: this scope was made for this taskspace, a moment
+      // ago, and has nothing else in it. A rollback that itself fails is not worth a second
+      // message — the scope is in the sidebar, where it can be deleted.
+      await api.deleteScope(state.mutationFetcher, state.namespaceId, scopeId);
+      state.scopes = state.scopes.filter((existing) => existing.id !== scopeId);
+      state.setError(message);
+      return null;
+    }
+    const taskspaceId = taskspace.id as string;
+    state.taskspaces = [
+      ...state.taskspaces,
+      {
+        id: taskspaceId,
+        name: taskspaceName,
+        scopeId,
+        path: taskspace.path,
+        pathKind: taskspace.pathKind,
+      },
+    ];
+
+    const fileRes = await api.createTaskspaceFile(
+      state.mutationFetcher,
+      state.namespaceId,
+      taskspaceId,
+      fileName,
+    );
+    const file = fileRes.ok ? await fileRes.json().catch(() => null) : null;
+    if (typeof file?.path !== "string") {
+      state.setError(await api.failureMessage(fileRes, "Failed to create file"));
+      return null;
+    }
+
+    // Last, so that nothing above has to unpick a membership to roll back. A link that
+    // fails is reported and left there: the file exists and is worth opening regardless.
+    await handleLinkScope(scopeId);
+
+    return { taskspaceId, taskspaceName, path: file.path };
+  }
+
   async function handleRemoveFromScope(scopeId: string) {
     if (state.selection.selectedCards.size === 0) return;
     const cardIds = [...state.selection.selectedCards];
@@ -571,5 +692,7 @@ export function createNamespaceActions(state: NamespaceState) {
     handleAddToScope,
     handleRemoveFromScope,
     handleCreateTaskspace,
+    handleLinkScope,
+    handleCreateScopeWithFile,
   };
 }

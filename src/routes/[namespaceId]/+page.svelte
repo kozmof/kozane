@@ -45,6 +45,7 @@
   import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
+  import FilePalette from "./components/FilePalette.svelte";
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
   import { InFlight } from "./lib/in-flight.js";
   import { startSnapshotPoll } from "./lib/snapshot-poll.js";
@@ -77,6 +78,9 @@
   let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let warpPaletteOpen = $state(false);
+  // The file palette, opened from a selection. Unlike the warp palette it is up *while*
+  // cards are selected, which is why the composer is told to stand down below.
+  let filePaletteOpen = $state(false);
   // The taskspace file the editor has open, if any. One at a time: the panel is a place to
   // work on a file, not a set of tabs, and a second one would want somewhere to put them.
   const editor = new EditorSession();
@@ -415,6 +419,35 @@
     s.focusedWarpId = warpId;
   }
 
+  const editorContext = $derived({
+    fetcher: s.fetcher,
+    namespaceId: s.namespaceId,
+    staticFiles,
+  });
+
+  /**
+   * Opens a file picked in the palette.
+   *
+   * The palette is closed first, as a warp jump closes its own: the editor takes the
+   * keyboard and listens for a press outside itself, and a panel still standing in front of
+   * it would be read as "outside" by the one and fight it for focus by the other.
+   */
+  function handlePaletteOpenFile(taskspaceId: string, taskspaceName: string, path: string) {
+    filePaletteOpen = false;
+    editor.open(editorContext, { taskspaceId, taskspaceName, path });
+  }
+
+  /** Creates the scope, taskspace and file, then opens the file that came of it. */
+  async function handlePaletteCreate(names: {
+    scope: string;
+    taskspace: string;
+    file: string;
+  }) {
+    const made = await actions.handleCreateScopeWithFile(names);
+    if (!made) return; // the action has already said why
+    handlePaletteOpenFile(made.taskspaceId, made.taskspaceName, made.path);
+  }
+
   function handleWarpJump(entry: WarpListEntry) {
     warpPaletteOpen = false;
     if (entry.namespaceId === s.namespaceId) {
@@ -468,6 +501,7 @@
   function handleKeydown(e: KeyboardEvent) {
     // The palette owns the keyboard while it is open, including the key that closes it.
     if (warpPaletteOpen) return;
+    if (filePaletteOpen) return;
     // So does the editor. Its own handler stops propagation, but a click on the panel
     // chrome — a button rather than the text — leaves focus somewhere that does not, and
     // the board must not act on a key aimed at an open file.
@@ -603,7 +637,23 @@
       {readonly}
     />
 
-    {#if warpPaletteOpen}
+    {#if filePaletteOpen}
+    <FilePalette
+      scopes={s.scopes}
+      scopeRels={s.scopeRels}
+      taskspaces={s.taskspaces}
+      selectedCards={s.selection.selectedCards}
+      tree={s.taskspaceTree}
+      ctx={editorContext}
+      {readonly}
+      onOpenFile={handlePaletteOpenFile}
+      onLinkScope={actions.handleLinkScope}
+      onCreate={handlePaletteCreate}
+      onClose={() => (filePaletteOpen = false)}
+    />
+  {/if}
+
+  {#if warpPaletteOpen}
       <WarpPalette
         entries={warpEntries}
         focusedWarpId={s.focusedWarpId}
@@ -663,6 +713,8 @@
       onStackOrderChange={actions.handleStackOrderChange}
       onResizeToggle={handleResizeToggle}
       onSquashCard={actions.handleSquashCard}
+      onOpenFilePalette={() => (filePaletteOpen = true)}
+      suspendShortcuts={filePaletteOpen}
       resizingCardId={s.selection.resizingCardId}
       shortcuts={data.uiConfig}
     />

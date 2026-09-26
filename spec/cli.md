@@ -1322,6 +1322,7 @@ Taskspace created.
     "resizeCardShortcut": "r",
     "squashCardShortcut": "s",
     "deleteCardsShortcut": "Delete",
+    "openFilePaletteShortcut": "e",
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",
     "removeWarpShortcut": "x",
