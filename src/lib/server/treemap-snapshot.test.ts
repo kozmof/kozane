@@ -41,7 +41,7 @@ const cached = (db: Awaited<ReturnType<typeof createTestDB>>, includeScopes = tr
 describe("treemap snapshot cache", () => {
   it("stores activity, partition counts, scope graph, and tag dimensions together", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    const cardId = await addCard({ db, partitionId, content: "work 'perf" });
+    const cardId = await addCard({ db, partitionId, content: "work :perf" });
     const scopeId = await addScope({ db, name: "Release" });
     await addScopeRel({ db, scopeId, cardId });
 
@@ -72,7 +72,7 @@ describe("treemap snapshot cache", () => {
     const { db, partitionId } = await setup();
     expect((await cached(db)).partitions.find(({ id }) => id === partitionId)?.cards).toBe(0);
 
-    const cardId = await addCard({ db, partitionId, content: "new 'docs" });
+    const cardId = await addCard({ db, partitionId, content: "new :docs" });
     const rebuilt = await cached(db);
 
     expect(rebuilt.partitions.find(({ id }) => id === partitionId)?.cards).toBe(1);

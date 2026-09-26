@@ -8,7 +8,7 @@
 import { TASKSPACE_SSG_DEPTH_MAX } from "./taskspace.js";
 
 /** The character that opens a tag. See `lib/tag.ts` for the grammar it starts. */
-export const TAG_SIGIL = "'";
+export const TAG_SIGIL = ":";
 
 /**
  * How long one level of a tag may be, in characters. A candidate with a longer level is not
@@ -16,14 +16,14 @@ export const TAG_SIGIL = "'";
  *
  * It is a real limit rather than a formality, and Japanese is why. English prose ends a tag
  * at the next space, so a runaway one is unusual; 日本語 is written without spaces, so
- * `'分類` followed by the rest of a sentence runs to the next punctuation mark, and this is
+ * `:分類` followed by the rest of a sentence runs to the next punctuation mark, and this is
  * what stops that from becoming a tag nobody meant to write. Kozane is built on the kozane
  * method, so that is not an edge case here.
  */
 export const TAG_SEGMENT_CHARS_MAX = 64;
 
 /**
- * How many levels deep a tag may go: `'foo:bar:baz` is three. Subcategories are for
+ * How many levels deep a tag may go: `:foo:bar:baz` is three. Subcategories are for
  * narrowing a subject, and a tag past this is a path being kept in a card rather than a
  * category — the same judgement {@link TAG_SEGMENT_CHARS_MAX} makes about length.
  */
@@ -152,15 +152,15 @@ export const TAG_CARD_HITS_MAX = 100_000;
  *
  * {@link TAG_CARD_HITS_MAX} bounds what the gather *keeps*; this bounds what it holds in
  * order to decide. The two are not the same ceiling and the gap between them was the whole
- * of what was left unbounded: the query asked for every card in the workspace holding an
- * apostrophe, materialized `content` for all of them, and only then counted hits in a loop
+ * of what was left unbounded: the query asked for every card in the workspace holding a
+ * colon, materialized `content` for all of them, and only then counted hits in a loop
  * — so a workspace past the hit ceiling read its way to that ceiling through every card
  * anyway. The file side has always charged for a file's bytes *before* reading it; this is
  * the same discipline on the other source.
  *
  * Read as pages keyed on the card id rather than as one statement with a row limit, because
  * a row limit is the wrong ceiling to state: the prefilter is deliberately generous — a card
- * reading `don't` comes back and yields nothing — so a cap on rows would stop the gather
+ * reading `9:30` comes back and yields nothing — so a cap on rows would stop the gather
  * short of tags that are there, and report a truncation for a workspace that has none. Paging
  * keeps the hit ceiling exact and bounds only how much is in hand at once.
  *
@@ -170,7 +170,7 @@ export const TAG_CARD_HITS_MAX = 100_000;
  * Sized against `ui.contentMax`, which is what one row can cost, and the figure moved when
  * that default rose to 200,000: a thousand rows all at the limit is now several hundred
  * megabytes at worst where it used to be a few tens. It takes a thousand cards each holding
- * a full limit's worth of text and an apostrophe to reach, which is why this is still a row
+ * a full limit's worth of text and a colon to reach, which is why this is still a row
  * count rather than a character budget — but it is the number to revisit if `ui.contentMax`
  * rises again, against a local statement per page that a workspace of any ordinary size
  * runs once or twice.

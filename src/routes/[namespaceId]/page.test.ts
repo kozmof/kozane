@@ -1770,7 +1770,7 @@ describe("Warps", () => {
         "fetch",
         vi.fn().mockResolvedValue({
           ok: true,
-          json: async () => ({ content: "See 'perf here.", signature: "sig-1" }),
+          json: async () => ({ content: "See :perf here.", signature: "sig-1" }),
         }),
       );
 

@@ -22,74 +22,74 @@ const tags = (text: string) => scanTagLines(text).map(({ tag }) => tag);
 
 describe("scanTagLines", () => {
   it("finds a plain tag", () => {
-    expect(tags("a 'foo tag")).toEqual(["foo"]);
+    expect(tags("a :foo tag")).toEqual(["foo"]);
   });
 
   it("finds a subcategorized tag whole", () => {
-    expect(tags("'foo:bar:baz")).toEqual(["foo:bar:baz"]);
+    expect(tags(":foo:bar:baz")).toEqual(["foo:bar:baz"]);
   });
 
   it("finds a tag at the very start of a line", () => {
-    expect(tags("'foo leads")).toEqual(["foo"]);
+    expect(tags(":foo leads")).toEqual(["foo"]);
   });
 
   it("finds a tag opened after a bracket", () => {
-    expect(tags("('foo) ['bar] {'baz}")).toEqual(["foo", "bar", "baz"]);
+    expect(tags("(:foo) [:bar] {:baz}")).toEqual(["foo", "bar", "baz"]);
   });
 
   it("ends a tag at a trailing colon", () => {
-    expect(tags("'foo: and on")).toEqual(["foo"]);
+    expect(tags(":foo: and on")).toEqual(["foo"]);
   });
 
-  it("leaves an apostrophe inside a word alone", () => {
-    expect(tags("don't tag x'foo")).toEqual([]);
+  it("leaves a colon inside a word alone", () => {
+    expect(tags("9:30 tag x:foo")).toEqual([]);
   });
 
-  it("leaves a quoted word as text", () => {
-    expect(tags("a 'quoted' word")).toEqual([]);
+  it("has no closing-sigil rule, unlike the apostrophe sigil this replaced", () => {
+    expect(tags("a :quoted: word")).toEqual(["quoted"]);
   });
 
-  it("ignores a bare apostrophe with no body", () => {
-    expect(tags("'' and ' and ':")).toEqual([]);
+  it("ignores a bare sigil with no body", () => {
+    expect(tags(":: and : and ::")).toEqual([]);
   });
 
   it("finds several tags on one line", () => {
-    expect(tags("'perf and 'perf:cache")).toEqual(["perf", "perf:cache"]);
+    expect(tags(":perf and :perf:cache")).toEqual(["perf", "perf:cache"]);
   });
 
   it("reports a tag written twice on one line only once", () => {
-    expect(tags("'foo then 'foo again")).toEqual(["foo"]);
+    expect(tags(":foo then :foo again")).toEqual(["foo"]);
   });
 
   it("reports the same tag on two lines twice", () => {
-    expect(scanTagLines("'foo\n'foo")).toEqual([
-      { tag: "foo", line: 1, excerpt: "'foo" },
-      { tag: "foo", line: 2, excerpt: "'foo" },
+    expect(scanTagLines(":foo\n:foo")).toEqual([
+      { tag: "foo", line: 1, excerpt: ":foo" },
+      { tag: "foo", line: 2, excerpt: ":foo" },
     ]);
   });
 
   it("normalizes case", () => {
-    expect(tags("'Foo:Bar")).toEqual(["foo:bar"]);
+    expect(tags(":Foo:Bar")).toEqual(["foo:bar"]);
   });
 
   it("tags Japanese text", () => {
-    expect(tags("メモ 'こざね:分類 です")).toEqual(["こざね:分類"]);
+    expect(tags("メモ :こざね:分類 です")).toEqual(["こざね:分類"]);
   });
 
   it("tags digits and the punctuation the body allows", () => {
-    expect(tags("'2024 'a-b 'a_b")).toEqual(["2024", "a-b", "a_b"]);
+    expect(tags(":2024 :a-b :a_b")).toEqual(["2024", "a-b", "a_b"]);
   });
 
   it("counts lines from one, across CRLF as well as LF", () => {
-    expect(scanTagLines("first\r\nsecond 'foo").map(({ line }) => line)).toEqual([2]);
+    expect(scanTagLines("first\r\nsecond :foo").map(({ line }) => line)).toEqual([2]);
   });
 
   it("carries the whole line as the excerpt, trimmed", () => {
-    expect(scanTagLines("   padded 'foo line   ")[0].excerpt).toEqual("padded 'foo line");
+    expect(scanTagLines("   padded :foo line   ")[0].excerpt).toEqual("padded :foo line");
   });
 
   it("cuts a long excerpt and marks it", () => {
-    const line = `'foo ${"x".repeat(TAG_EXCERPT_CHARS_MAX * 2)}`;
+    const line = `:foo ${"x".repeat(TAG_EXCERPT_CHARS_MAX * 2)}`;
     const { excerpt } = scanTagLines(line)[0];
     expect(excerpt).toHaveLength(TAG_EXCERPT_CHARS_MAX + 1);
     expect(excerpt.endsWith("…")).toBe(true);
@@ -104,7 +104,7 @@ describe("scanTagLines", () => {
   it("cuts a long excerpt without splitting a character in half", () => {
     // The emoji is the 200th character and the 200th and 201st code units, so a cut by unit
     // lands inside it and a cut by character lands after it.
-    const line = `'foo ${"x".repeat(TAG_EXCERPT_CHARS_MAX - 6)}\u{1F600}${"y".repeat(20)}`;
+    const line = `:foo ${"x".repeat(TAG_EXCERPT_CHARS_MAX - 6)}\u{1F600}${"y".repeat(20)}`;
     const { excerpt } = scanTagLines(line)[0];
 
     expect([...excerpt]).toHaveLength(TAG_EXCERPT_CHARS_MAX + 1);
@@ -126,26 +126,26 @@ describe("scanTagLines", () => {
    * draw — the renderer having always treated the URL as one piece.
    */
   describe("URLs", () => {
-    it("leaves an apostrophe inside a URL alone", () => {
-      expect(tags("see https://example.com/it's/fine")).toEqual([]);
+    it("leaves a colon inside a URL alone", () => {
+      expect(tags("see https://example.com/it:is/fine")).toEqual([]);
     });
 
     it("leaves one opened after a bracket inside a URL alone", () => {
-      expect(tags("see https://example.com/('foo)")).toEqual([]);
+      expect(tags("see https://example.com/(:foo)")).toEqual([]);
     });
 
     it("still finds a tag written beside a URL", () => {
-      expect(tags("see https://example.com 'foo")).toEqual(["foo"]);
+      expect(tags("see https://example.com :foo")).toEqual(["foo"]);
     });
 
     /** Trailing punctuation is not part of the URL, on either side of the grammar, so a tag
      *  after the sentence's full stop is still a tag. */
     it("still finds a tag after a URL that ended a sentence", () => {
-      expect(tags("see https://example.com. 'foo")).toEqual(["foo"]);
+      expect(tags("see https://example.com. :foo")).toEqual(["foo"]);
     });
 
     it("finds a tag on a line whose URL comes after it", () => {
-      expect(tags("'foo at https://example.com")).toEqual(["foo"]);
+      expect(tags(":foo at https://example.com")).toEqual(["foo"]);
     });
 
     /**
@@ -158,50 +158,50 @@ describe("scanTagLines", () => {
      * — the renderer having always cut.
      */
     it("ends a tag at the URL it runs into, rather than reading through it", () => {
-      expect(tags("'todo:https://example.com/issue/1")).toEqual(["todo"]);
-      expect(tags("notes 'refhttps://x.com")).toEqual(["ref"]);
+      expect(tags(":todo:https://example.com/issue/1")).toEqual(["todo"]);
+      expect(tags("notes :refhttps://x.com")).toEqual(["ref"]);
     });
 
     /** The other half of the same rule: with nothing but the sigil left in front of the
-     *  address, there is no tag at all. Quoting a URL used to put `http` in the tree of every
-     *  workspace where anyone did it. */
-    it("reads a quoted URL as no tag, not as 'http", () => {
-      expect(tags("see 'http://example.com'")).toEqual([]);
-      expect(tags("read 'https://docs.example.com later")).toEqual([]);
+     *  address, there is no tag at all. A tag written right up against a URL used to put
+     *  `http` in the tree of every workspace where anyone did it. */
+    it("does not read a URL's scheme as a tag when only the sigil precedes it", () => {
+      expect(tags("see :http://example.com")).toEqual([]);
+      expect(tags("read :https://docs.example.com later")).toEqual([]);
     });
 
-    /** A URL is a boundary, not a joiner: what follows one starts a text of its own, and an
-     *  apostrophe there opens a tag only if the characters between say it may. */
+    /** A URL is a boundary, not a joiner: what follows one starts a text of its own, and a
+     *  colon there opens a tag only if the characters between say it may. */
     it("does not let a URL's last character open a tag after it", () => {
-      expect(tags("(https://x.com)'foo")).toEqual([]);
-      expect(tags("https://x.com/'foo")).toEqual([]);
+      expect(tags("(https://x.com):foo")).toEqual([]);
+      expect(tags("https://x.com/:foo")).toEqual([]);
     });
   });
 
   describe("limits", () => {
     it("takes a level of exactly the maximum length", () => {
       const level = "a".repeat(TAG_SEGMENT_CHARS_MAX);
-      expect(tags(`'${level}`)).toEqual([level]);
+      expect(tags(`:${level}`)).toEqual([level]);
     });
 
     it("rejects an over-long level whole rather than cutting it short", () => {
-      expect(tags(`'${"a".repeat(TAG_SEGMENT_CHARS_MAX + 1)}`)).toEqual([]);
+      expect(tags(`:${"a".repeat(TAG_SEGMENT_CHARS_MAX + 1)}`)).toEqual([]);
     });
 
     it("takes a tag of exactly the maximum depth", () => {
       const tag = Array.from({ length: TAG_LEVELS_MAX }, (_, i) => `l${i}`).join(":");
-      expect(tags(`'${tag}`)).toEqual([tag]);
+      expect(tags(`:${tag}`)).toEqual([tag]);
     });
 
     it("rejects an over-deep tag whole rather than truncating it", () => {
       const tag = Array.from({ length: TAG_LEVELS_MAX + 1 }, (_, i) => `l${i}`).join(":");
-      expect(tags(`'${tag}`)).toEqual([]);
+      expect(tags(`:${tag}`)).toEqual([]);
     });
 
     // The bounded body in TAG_RE is what keeps this linear. Unbounded, the lookaheads send
     // the engine back through the whole run at every position.
     it("scans a pathological line without hanging", () => {
-      const line = `'${"a".repeat(20_000)}'`;
+      const line = `:${"a".repeat(20_000)}:`;
       const started = Date.now();
       expect(tags(line)).toEqual([]);
       expect(Date.now() - started).toBeLessThan(1_000);
@@ -279,8 +279,8 @@ describe("groupHitRows", () => {
 
   it("names each distinct tag once, sigil and all, in one order", () => {
     expect(taggedWith([cardHit("c1", "perf:cache"), cardHit("c1", "perf")])).toEqual([
-      "'perf",
-      "'perf:cache",
+      ":perf",
+      ":perf:cache",
     ]);
   });
 });

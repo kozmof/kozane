@@ -10,14 +10,14 @@
  *
  * Two copies is what there was, and the divergence was real rather than theoretical: the
  * segmenter matched URLs first and scanned tags only in what was left, while the scanner
- * behind the index read the whole line. A URL holding `('` therefore gathered a card under a
+ * behind the index read the whole line. A URL holding `(:` therefore gathered a card under a
  * tag the card itself did not draw — the one disagreement the shared grammar exists to make
  * impossible.
  *
  * Sharing the module was not by itself enough to make it impossible, which is worth writing
  * down because it looked as though it were. Both ends read these spans, but one *cut* at them
  * and the other only asked whether a match had started inside one — so a tag running into an
- * address (`'todo:https://x.com`) still parted the two. Both now cut, and the segmenter is
+ * address (`:todo:https://x.com`) still parted the two. Both now cut, and the segmenter is
  * handed the spans the grammar cut by rather than finding its own.
  */
 

@@ -50,20 +50,20 @@ describe("tag CLI flow", () => {
   it("lists a card's tags as a tree", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "caching work 'perf:cache and 'perf");
+    cli(root, "card", "add", "caching work :perf:cache and :perf");
 
     const output = cli(root, "tag", "list");
 
-    expect(output).toContain("'perf");
-    expect(output).toContain("'cache");
+    expect(output).toContain(":perf");
+    expect(output).toContain(":cache");
     // One card, however many of its tags reach the node.
-    expect(output).toMatch(/'perf\s+1 card/);
+    expect(output).toMatch(/:perf\s+1 card/);
   }, 30_000);
 
-  it("leaves prose apostrophes out of the index", () => {
+  it("leaves a colon that is not a tag out of the index", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "don't tag this, and 'quoted' stays text");
+    cli(root, "card", "add", "meeting at 3:45, nothing else here");
 
     expect(cli(root, "tag", "list")).toContain("No tags found");
   }, 30_000);
@@ -71,46 +71,46 @@ describe("tag CLI flow", () => {
   it("gathers a tag from a card and a taskspace file together", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "caching work 'perf:cache");
+    cli(root, "card", "add", "caching work :perf:cache");
     cli(root, "taskspace", "create", "notes", "--no-scope");
-    writeFileSync(join(root, "notes", "README.md"), "intro\nSee 'perf:cache for the plan.\n");
+    writeFileSync(join(root, "notes", "README.md"), "intro\nSee :perf:cache for the plan.\n");
 
     const output = cli(root, "tag", "show", "perf");
 
-    expect(output).toContain("caching work 'perf:cache");
+    expect(output).toContain("caching work :perf:cache");
     expect(output).toContain("README.md:2");
   }, 30_000);
 
   it("gathers subcategories under their parent", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "deep 'foo:bar:baz");
+    cli(root, "card", "add", "deep :foo:bar:baz");
 
-    expect(cli(root, "tag", "show", "foo")).toContain("deep 'foo:bar:baz");
+    expect(cli(root, "tag", "show", "foo")).toContain("deep :foo:bar:baz");
   }, 30_000);
 
   it("does not gather a tag that merely starts the same way", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "'foobar is not under foo");
+    cli(root, "card", "add", ":foobar is not under foo");
 
-    expect(cli(root, "tag", "show", "foo")).toContain("No cards or files under 'foo");
+    expect(cli(root, "tag", "show", "foo")).toContain("No cards or files under :foo");
   }, 30_000);
 
   it("takes the tag with or without its sigil", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "tagged 'perf");
+    cli(root, "card", "add", "tagged :perf");
 
-    expect(cli(root, "tag", "show", "'perf")).toContain("tagged 'perf");
-    expect(cli(root, "tag", "show", "perf")).toContain("tagged 'perf");
+    expect(cli(root, "tag", "show", ":perf")).toContain("tagged :perf");
+    expect(cli(root, "tag", "show", "perf")).toContain("tagged :perf");
   }, 30_000);
 
   it("skips taskspace files with --no-files", () => {
     const root = tempWorkspace();
     cli(root, "init");
     cli(root, "taskspace", "create", "notes", "--no-scope");
-    writeFileSync(join(root, "notes", "README.md"), "See 'perf here.\n");
+    writeFileSync(join(root, "notes", "README.md"), "See :perf here.\n");
 
     expect(cli(root, "tag", "show", "perf")).toContain("README.md");
     expect(cli(root, "tag", "show", "perf", "--no-files")).toContain("No cards or files");
@@ -121,7 +121,7 @@ describe("tag CLI flow", () => {
     cli(root, "init");
     cli(root, "taskspace", "create", "notes", "--no-scope");
     // Past TAG_HITS_SHOWN_MAX, on lines of one file, so each is its own row.
-    const lines = Array.from({ length: 205 }, (_, i) => `line ${i} 'everywhere`).join("\n");
+    const lines = Array.from({ length: 205 }, (_, i) => `line ${i} :everywhere`).join("\n");
     writeFileSync(join(root, "notes", "README.md"), `${lines}\n`);
 
     const output = cli(root, "tag", "show", "everywhere");
@@ -142,8 +142,8 @@ describe("tag CLI flow", () => {
     cli(root, "init");
     cli(root, "taskspace", "create", "notes", "--no-scope");
     cli(root, "taskspace", "create", "drafts", "--no-scope");
-    writeFileSync(join(root, "notes", "README.md"), "See 'perf here.\n");
-    writeFileSync(join(root, "drafts", "README.md"), "Also 'perf here.\n");
+    writeFileSync(join(root, "notes", "README.md"), "See :perf here.\n");
+    writeFileSync(join(root, "drafts", "README.md"), "Also :perf here.\n");
 
     const output = cli(root, "tag", "show", "perf");
 
@@ -162,7 +162,7 @@ describe("tag CLI flow", () => {
   it("names a taskspace whose directory is gone, and how to drop the record", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "caching work 'perf");
+    cli(root, "card", "add", "caching work :perf");
     cli(root, "taskspace", "create", "notes", "--no-scope");
     rmSync(join(root, "notes"), { recursive: true, force: true });
 
@@ -177,13 +177,13 @@ describe("tag CLI flow", () => {
   it("lists a card found under two tags once", () => {
     const root = tempWorkspace();
     cli(root, "init");
-    cli(root, "card", "add", "caching work 'perf:cache and 'perf");
+    cli(root, "card", "add", "caching work :perf:cache and :perf");
 
     const lines = cli(root, "tag", "show", "perf")
       .split("\n")
       .filter((line) => line.includes("caching work"));
 
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain("'perf 'perf:cache");
+    expect(lines[0]).toContain(":perf :perf:cache");
   }, 30_000);
 });

@@ -20,7 +20,7 @@ const cardHit = (cardId: string, tag: string, excerpt: string): TagHit => ({
 const fileHit = (taskspaceId: string, path: string, line: number, tag: string): TagHit => ({
   tag,
   source: { kind: "file", taskspaceId, path, line },
-  excerpt: `a line with '${tag} in it`,
+  excerpt: `a line with :${tag} in it`,
 });
 
 function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
@@ -104,7 +104,7 @@ describe("tag index page", () => {
 
     expect(screen.getAllByText("caching work")).toHaveLength(1);
     expect(hrefOf("caching work")).toBe("/p1?card=c1");
-    expect(screen.getByText("'perf 'perf:cache")).toBeTruthy();
+    expect(screen.getByText(":perf :perf:cache")).toBeTruthy();
   });
 
   it("links a file row to the board that draws its taskspace, on that file", () => {

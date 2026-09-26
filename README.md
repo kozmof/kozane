@@ -109,23 +109,24 @@ A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
 ## Tagging
 
-A tag is text that begins with an apostrophe. Tags may use colons to form
-subcategories, and can appear in cards or taskspace files:
+A tag is text that begins with a colon. A colon also separates subcategories, so
+a tag can nest without a second character:
 
 ```sh
-kozane card add "caching work 'perf:cache"
+kozane card add "caching work :perf:cache"
 ```
 
-`'perf` gathers everything under it, so it finds that card and anything written
-`'perf:cache` or `'perf:cache:invalidation`:
+`:perf` gathers everything under it, so it finds that card and anything written
+`:perf:cache` or `:perf:cache:invalidation`:
 
 ```sh
 kozane tag list          # every tag in the namespace, as a tree, with counts
 kozane tag show perf     # the cards and files under it, subcategories included
 ```
 
-A tag exists only while it appears in text. Ordinary punctuation remains punctuation:
-neither `don't` nor `'quoted'` is treated as a tag.
+A tag exists only while it appears in text, and only where a colon opens a word: it
+has to sit at the start of a line, after whitespace, or after an opening bracket, so
+ordinary punctuation like `3:45` or `key: value` is never mistaken for one.
 
 The browser tag index is available at `/tags`. Add `?namespaceId=<id>` to limit it to one
 namespace. Use `?files=0`, or select "Cards only," to exclude taskspace files. The CLI

@@ -40,7 +40,7 @@ const partition = (id: string, namespaceId: string, name: string, cards: number)
 const cardHit = (cardId: string, tag: string): TagHit => ({
   tag,
   source: { kind: "card", cardId },
-  excerpt: `a card with '${tag}`,
+  excerpt: `a card with :${tag}`,
 });
 
 function pageData(over: Record<string, unknown> = {}) {
@@ -366,7 +366,7 @@ describe("map page", () => {
       expect(tagPaths(container)).toHaveLength(1);
     });
 
-    /** `'perf` gathers what `'perf:cache` gathers, which is the whole point of a
+    /** `:perf` gathers what `:perf:cache` gathers, which is the whole point of a
      *  subcategory — so selecting the parent reaches both partitions. */
     it("reaches everything under the tag, not only what carries it exactly", () => {
       const { container } = draw({ tag: "perf" });

@@ -17,7 +17,7 @@ import {
   type TagCounts,
   type TagNode,
 } from "../../lib/tag.js";
-import { TAG_HITS_SHOWN_MAX } from "../../lib/constants.js";
+import { TAG_HITS_SHOWN_MAX, TAG_SIGIL } from "../../lib/constants.js";
 import {
   loadTagIndex,
   type TagIndexTaskspaces,
@@ -53,7 +53,7 @@ const countLabel = ({ cards, files }: TagCounts): string =>
  *  would be typed into a card to write it. */
 function printTree(nodes: TagNode[], depth = 0): void {
   for (const node of nodes) {
-    console.log(`${"  ".repeat(depth)}'${node.name}  ${countLabel(node.total)}`);
+    console.log(`${"  ".repeat(depth)}${TAG_SIGIL}${node.name}  ${countLabel(node.total)}`);
     printTree(node.children, depth + 1);
   }
 }
@@ -80,7 +80,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
 
     const tree = buildTagTree(hits);
     if (tree.length === 0) {
-      console.log("No tags found. Write 'like:this in a card or a taskspace file.");
+      console.log(`No tags found. Write ${TAG_SIGIL}like:this in a card or a taskspace file.`);
       return;
     }
     printTree(tree);
@@ -153,7 +153,7 @@ function cappedNote(shown: number, total: number, noun: string): void {
  * What one tag gathers: the cards it is written on and the taskspace files it appears in.
  *
  * A tag gathers its subcategories, so `kozane tag show foo` includes everything written
- * `'foo:bar:baz` — the same rule the index page filters by, via the same `tagMatches`.
+ * `:foo:bar:baz` — the same rule the index page filters by, via the same `tagMatches`.
  *
  * Capped at {@link TAG_HITS_SHOWN_MAX} per kind, through the same `capHitsByKind` the page
  * caps with. It was uncapped, on the reasoning that a terminal can be piped to `less` — but
@@ -165,9 +165,10 @@ function cappedNote(shown: number, total: number, noun: string): void {
  */
 export async function tagShow(tag: string, options: TagShowOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
-    // The sigil is optional here: `kozane tag show 'foo` is what someone reading a card
-    // would type, and most shells eat the quote unless it is escaped — so both forms work.
-    const query = normalizeTag(tag.replace(/^'/, ""));
+    // The sigil is optional here: `kozane tag show :foo` is what someone reading a card
+    // would type, and `kozane tag show foo` is what someone typing from memory would — so
+    // both forms work.
+    const query = normalizeTag(tag.replace(/^:/, ""));
     if (!query) throw new Error("Tag cannot be empty.");
 
     const namespaceId = await resolveNamespaceId(db, options.namespace);
@@ -187,7 +188,7 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     // same question it was when there was a filtered array to ask it of.
     const shown = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) => matches(hit.tag));
     if (shown.cardTotal === 0 && shown.fileTotal === 0) {
-      console.log(`No cards or files under '${query}.`);
+      console.log(`No cards or files under ${TAG_SIGIL}${query}.`);
       return;
     }
 
@@ -218,7 +219,7 @@ async function printCardHits(
 
   console.log("Cards:");
   // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
-  // for the terminal and the index page alike. A card written `'perf:cache and 'perf` matches
+  // for the terminal and the index page alike. A card written `:perf:cache and :perf` matches
   // a search for `perf` twice, and printing it twice says the tag is on two cards.
   for (const { source, hits: rows } of groupHitRows(cardHits)) {
     const id = shortIds.get(source.cardId) ?? source.cardId;

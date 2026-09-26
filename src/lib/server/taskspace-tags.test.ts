@@ -43,14 +43,14 @@ describe("scanTaskspaceTags", () => {
   });
 
   it("finds a tag in a file, with its path and line", () => {
-    write(join(dir, "notes.md"), "intro\ncaching 'perf:cache here\n");
+    write(join(dir, "notes.md"), "intro\ncaching :perf:cache here\n");
 
     expect(scan(dir)).toEqual({
       hits: [
         {
           tag: "perf:cache",
           source: { kind: "file", taskspaceId: TASKSPACE_ID, path: "notes.md", line: 2 },
-          excerpt: "caching 'perf:cache here",
+          excerpt: "caching :perf:cache here",
         },
       ],
       truncated: [],
@@ -72,7 +72,7 @@ describe("scanTaskspaceTags", () => {
 
   it("recurses into subdirectories, and reports the path from the taskspace root", () => {
     mkdirSync(join(dir, "src", "deep"), { recursive: true });
-    write(join(dir, "src", "deep", "a.txt"), "'foo");
+    write(join(dir, "src", "deep", "a.txt"), ":foo");
 
     expect(scan(dir).hits[0].source).toEqual({
       kind: "file",
@@ -83,16 +83,16 @@ describe("scanTaskspaceTags", () => {
   });
 
   it("gathers across several files", () => {
-    write(join(dir, "a.md"), "'one");
-    write(join(dir, "b.md"), "'two");
+    write(join(dir, "a.md"), ":one");
+    write(join(dir, "b.md"), ":two");
 
     expect(tagsOf(scan(dir).hits)).toEqual(["one", "two"]);
   });
 
   it("skips dot-entries, so a .git or an .env is never scanned", () => {
     mkdirSync(join(dir, ".git"), { recursive: true });
-    write(join(dir, ".git", "config"), "'secret");
-    write(join(dir, ".env"), "'secret");
+    write(join(dir, ".git", "config"), ":secret");
+    write(join(dir, ".env"), ":secret");
 
     expect(scan(dir).hits).toEqual([]);
   });
@@ -100,7 +100,7 @@ describe("scanTaskspaceTags", () => {
   it("does not follow a symlink out of the taskspace", () => {
     const outside = join(tmpdir(), `kozane-outside-${randomUUID()}`);
     mkdirSync(outside, { recursive: true });
-    write(join(outside, "secret.md"), "'elsewhere");
+    write(join(outside, "secret.md"), ":elsewhere");
     try {
       symlinkSync(outside, join(dir, "link"));
       expect(scan(dir).hits).toEqual([]);
@@ -137,7 +137,7 @@ describe("scanTaskspaceTags", () => {
   it.skipIf(process.getuid?.() === 0)(
     "reports a directory below the root that could not be listed as a truncation",
     () => {
-      write(join(dir, "notes.md"), "'mine");
+      write(join(dir, "notes.md"), ":mine");
       mkdirSync(join(dir, "locked"));
       chmodSync(join(dir, "locked"), 0o000);
 
@@ -157,7 +157,7 @@ describe("scanTaskspaceTags", () => {
 
   it("passes over a file that is not UTF-8 text", () => {
     writeFileSync(join(dir, "binary.bin"), Buffer.from([0x00, 0x01, 0x02]));
-    write(join(dir, "notes.md"), "'foo");
+    write(join(dir, "notes.md"), ":foo");
 
     const result = scan(dir);
     expect(tagsOf(result.hits)).toEqual(["foo"]);
@@ -169,7 +169,7 @@ describe("scanTaskspaceTags", () => {
       mkdirSync(join(dir, name, "nested"), { recursive: true });
       write(join(dir, name, "nested", "partition.js"), "import x from 'generated'\n");
     }
-    write(join(dir, "notes.md"), "'mine");
+    write(join(dir, "notes.md"), ":mine");
 
     // Skipped, not truncated: what is left is the whole tree as this scan defines it, so a
     // taskspace with a node_modules in it must not warn on every page load.
@@ -178,7 +178,7 @@ describe("scanTaskspaceTags", () => {
         {
           tag: "mine",
           source: { kind: "file", taskspaceId: TASKSPACE_ID, path: "notes.md", line: 1 },
-          excerpt: "'mine",
+          excerpt: ":mine",
         },
       ],
       truncated: [],
@@ -191,7 +191,7 @@ describe("scanTaskspaceTags", () => {
   it("skips those names at any depth, not only at the root", () => {
     mkdirSync(join(dir, "packages", "app", "node_modules"), { recursive: true });
     write(join(dir, "packages", "app", "node_modules", "dep.js"), "from 'vendored'\n");
-    write(join(dir, "packages", "app", "notes.md"), "'mine");
+    write(join(dir, "packages", "app", "notes.md"), ":mine");
 
     expect(tagsOf(scan(dir).hits)).toEqual(["mine"]);
   });
@@ -199,8 +199,8 @@ describe("scanTaskspaceTags", () => {
   describe("limits", () => {
     it("stops at the depth limit and says so", () => {
       mkdirSync(join(dir, "a", "b"), { recursive: true });
-      write(join(dir, "a", "b", "deep.md"), "'deep");
-      write(join(dir, "shallow.md"), "'shallow");
+      write(join(dir, "a", "b", "deep.md"), ":deep");
+      write(join(dir, "shallow.md"), ":shallow");
 
       const result = scan(dir, { depth: 1 });
       expect(tagsOf(result.hits)).toEqual(["shallow"]);
@@ -208,7 +208,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("stops at the node limit and says so", () => {
-      for (let i = 0; i < 5; i++) write(join(dir, `f${i}.md`), `'tag${i}`);
+      for (let i = 0; i < 5; i++) write(join(dir, `f${i}.md`), `:tag${i}`);
 
       const result = scan(dir, { nodes: 2 });
       expect(result.hits).toHaveLength(2);
@@ -216,7 +216,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("leaves a file past the byte budget unread, and says so", () => {
-      write(join(dir, "big.md"), `'big ${"x".repeat(200)}`);
+      write(join(dir, "big.md"), `:big ${"x".repeat(200)}`);
 
       const result = scan(dir, { bytes: 10 });
       expect(result.hits).toEqual([]);
@@ -232,7 +232,7 @@ describe("scanTaskspaceTags", () => {
     it("does not spend the byte budget on a file it is going to refuse anyway", () => {
       // Over TASKSPACE_FILE_BYTES_MAX, and named so it is walked before the file below.
       writeFileSync(join(dir, "a-big.bin"), Buffer.alloc(2 * 1024 * 1024, 0x41));
-      write(join(dir, "b-notes.md"), "'mine");
+      write(join(dir, "b-notes.md"), ":mine");
 
       const result = scan(dir, { bytes: 2 * 1024 * 1024 });
       expect(tagsOf(result.hits)).toEqual(["mine"]);
@@ -252,7 +252,7 @@ describe("scanTaskspaceTags", () => {
     /**
      * The ceiling the other budgets do not imply. Bytes and entries bound what is *read*, and
      * the number of tags that reading produces is not a fixed fraction of either: a file of
-     * `'a` lines yields a hit every three bytes, so a byte budget spent exactly as intended
+     * `:a` lines yields a hit every three bytes, so a byte budget spent exactly as intended
      * can still produce millions of them.
      *
      * That was not a slow page. The hits of every taskspace are gathered into one array, and
@@ -262,7 +262,7 @@ describe("scanTaskspaceTags", () => {
      * place.
      */
     it("stops at the hit ceiling and says so", () => {
-      write(join(dir, "many.md"), Array.from({ length: 20 }, (_, i) => `'t${i}`).join("\n"));
+      write(join(dir, "many.md"), Array.from({ length: 20 }, (_, i) => `:t${i}`).join("\n"));
 
       const result = scan(dir, { hits: 5 });
       expect(result.hits).toHaveLength(5);
@@ -272,7 +272,7 @@ describe("scanTaskspaceTags", () => {
     /** Exact rather than per-file. One generated file can hold more tags on its own than the
      *  whole scan carries, so checking only between files would let it through in full. */
     it("holds the ceiling exactly, within a single file", () => {
-      write(join(dir, "one.md"), Array.from({ length: 500 }, (_, i) => `'t${i}`).join("\n"));
+      write(join(dir, "one.md"), Array.from({ length: 500 }, (_, i) => `:t${i}`).join("\n"));
 
       expect(scan(dir, { hits: 3 }).hits).toHaveLength(3);
     });
@@ -280,8 +280,8 @@ describe("scanTaskspaceTags", () => {
     /** Once full there is nowhere for the rest of the tree to be read into, so the walk stops
      *  rather than spending bytes and syscalls on hits that would only be dropped. */
     it("stops walking once it is full", () => {
-      write(join(dir, "a.md"), "'one\n'two");
-      write(join(dir, "b.md"), `'three ${"x".repeat(500)}`);
+      write(join(dir, "a.md"), ":one\n:two");
+      write(join(dir, "b.md"), `:three ${"x".repeat(500)}`);
 
       const result = scan(dir, { hits: 2, bytes: 1000 });
       expect(tagsOf(result.hits)).toEqual(["one", "two"]);
@@ -290,7 +290,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("does not report the ceiling for a taskspace that sits under it", () => {
-      write(join(dir, "notes.md"), "'one\n'two");
+      write(join(dir, "notes.md"), ":one\n:two");
 
       const result = scan(dir, { hits: 5 });
       expect(tagsOf(result.hits)).toEqual(["one", "two"]);
@@ -300,7 +300,7 @@ describe("scanTaskspaceTags", () => {
 
   describe("the cache", () => {
     it("answers the same on a second scan of an unchanged tree", () => {
-      write(join(dir, "notes.md"), "'foo");
+      write(join(dir, "notes.md"), ":foo");
 
       const first = scan(dir);
       const second = scan(dir);
@@ -312,12 +312,12 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("does not spend budget re-reading an unchanged file", () => {
-      write(join(dir, "a.md"), "'one");
-      write(join(dir, "b.md"), "'two");
+      write(join(dir, "a.md"), ":one");
+      write(join(dir, "b.md"), ":two");
       // Enough for exactly one of the two, so what the second file costs is what this is
       // measuring: the first scan spends it all on `a.md` and cannot afford `b.md`, and the
       // second gets `a.md` free from the cache and can.
-      const bytes = "'one".length;
+      const bytes = ":one".length;
 
       const first = scan(dir, { bytes });
       expect(tagsOf(first.hits)).toEqual(["one"]);
@@ -330,24 +330,24 @@ describe("scanTaskspaceTags", () => {
 
     it("picks up a file rewritten since it was cached", () => {
       const path = join(dir, "notes.md");
-      write(path, "'before", 60);
+      write(path, ":before", 60);
       expect(tagsOf(scan(dir).hits)).toEqual(["before"]);
 
-      write(path, "'after");
+      write(path, ":after");
       expect(tagsOf(scan(dir).hits)).toEqual(["after"]);
     });
 
     it("picks up a file added since the last scan", () => {
-      write(join(dir, "a.md"), "'one");
+      write(join(dir, "a.md"), ":one");
       expect(tagsOf(scan(dir).hits)).toEqual(["one"]);
 
-      write(join(dir, "b.md"), "'two");
+      write(join(dir, "b.md"), ":two");
       expect(tagsOf(scan(dir).hits)).toEqual(["one", "two"]);
     });
 
     it("forgets a file deleted since the last scan", () => {
       const path = join(dir, "notes.md");
-      write(path, "'foo");
+      write(path, ":foo");
       expect(tagsOf(scan(dir).hits)).toEqual(["foo"]);
 
       rmSync(path);
@@ -360,7 +360,7 @@ describe("scanTaskspaceTags", () => {
      * by every file that has ever been in it.
      */
     it("forgets the stored entry for a file that is gone, not just its hits", () => {
-      write(join(dir, "notes.md"), "'foo");
+      write(join(dir, "notes.md"), ":foo");
       scan(dir);
       expect(Object.keys(exportTaskspaceTagCache(dir) ?? {})).toEqual(["notes.md"]);
 
@@ -375,8 +375,8 @@ describe("scanTaskspaceTags", () => {
     /** A scan that stopped early did not reach directories that are still there, so "not
      *  seen" cannot mean "no longer there" — pruning on it would discard good entries. */
     it("keeps stored entries when the walk did not finish", () => {
-      write(join(dir, "a.md"), "'one");
-      write(join(dir, "b.md"), "'two");
+      write(join(dir, "a.md"), ":one");
+      write(join(dir, "b.md"), ":two");
       scan(dir);
 
       const truncated = scan(dir, { nodes: 1 });
@@ -393,8 +393,8 @@ describe("scanTaskspaceTags", () => {
      */
     it("forgets a file gone from a directory it listed, though the walk stopped elsewhere", () => {
       mkdirSync(join(dir, "sub"));
-      write(join(dir, "notes.md"), "'one");
-      write(join(dir, "sub", "deep.md"), "'two");
+      write(join(dir, "notes.md"), ":one");
+      write(join(dir, "sub", "deep.md"), ":two");
       scan(dir);
       expect(Object.keys(exportTaskspaceTagCache(dir) ?? {}).sort()).toEqual([
         "notes.md",
@@ -427,7 +427,7 @@ describe("scanTaskspaceTags", () => {
         { length: TASKSPACE_DIR_ENTRIES_MAX + 2 },
         (_, i) => `f${String(i).padStart(4, "0")}.md`,
       );
-      for (const name of names) write(join(sub, name), "'one");
+      for (const name of names) write(join(sub, name), ":one");
 
       expect(scan(dir).truncated).toContain("entries");
       expect(exportTaskspaceTagCache(dir)).toHaveProperty(["sub/f0000.md"]);
@@ -445,8 +445,8 @@ describe("scanTaskspaceTags", () => {
       const other = join(tmpdir(), `kozane-taskspace-tags-other-${randomUUID()}`);
       mkdirSync(other, { recursive: true });
       try {
-        write(join(dir, "notes.md"), "'here");
-        write(join(other, "notes.md"), "'there");
+        write(join(dir, "notes.md"), ":here");
+        write(join(other, "notes.md"), ":there");
 
         expect(tagsOf(scan(dir).hits)).toEqual(["here"]);
         expect(tagsOf(scan(other).hits)).toEqual(["there"]);
@@ -469,7 +469,7 @@ describe("scanTaskspaceTags", () => {
       const scanFresh = (base: string, n: number) => {
         const path = join(base, `ts-${n}`);
         mkdirSync(path, { recursive: true });
-        write(join(path, "notes.md"), `'tag${n}`);
+        write(join(path, "notes.md"), `:tag${n}`);
         scan(path);
         return path;
       };
@@ -514,7 +514,7 @@ describe("scanTaskspaceTags", () => {
      */
     describe("its bound on files within one taskspace", () => {
       it("keeps the most recently seen files and forgets the rest", () => {
-        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `'tag-${name}`);
+        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `:tag-${name}`);
 
         scan(dir, { files: 2 });
 
@@ -524,18 +524,18 @@ describe("scanTaskspaceTags", () => {
       });
 
       it("never drops a file the scan it is running has just parsed", () => {
-        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `'tag-${name}`);
+        for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `:tag-${name}`);
 
         // Every file still reports its tags, whatever the cache went on to keep: eviction is
         // about what the next scan is spared, never about what this one answers with.
-        // `'tag-a.md` is the tag `tag-a`: a `.` is not a tag character, so it closes the tag
+        // `:tag-a.md` is the tag `tag-a`: a `.` is not a tag character, so it closes the tag
         // and the extension is left as text.
         expect(tagsOf(scan(dir, { files: 1 }).hits)).toEqual(["tag-a", "tag-b", "tag-c"]);
       });
 
       it("keeps a file that is still there over one that has gone, across scans", () => {
-        write(join(dir, "a.md"), "'gone");
-        write(join(dir, "b.md"), "'kept");
+        write(join(dir, "a.md"), ":gone");
+        write(join(dir, "b.md"), ":kept");
         scan(dir, { files: 2 });
 
         rmSync(join(dir, "a.md"));
@@ -558,8 +558,8 @@ describe("scanTaskspaceTags", () => {
       const other = join(tmpdir(), `kozane-taskspace-tags-pool-${randomUUID()}`);
       mkdirSync(other, { recursive: true });
       try {
-        write(join(dir, "notes.md"), "'first");
-        write(join(other, "notes.md"), "'second");
+        write(join(dir, "notes.md"), ":first");
+        write(join(other, "notes.md"), ":second");
 
         // Enough for the first taskspace's file and nothing after it.
         const pool = { bytes: 8, nodes: 100 };
@@ -574,7 +574,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("charges the pool nothing for a file answered from the cache", () => {
-      write(join(dir, "notes.md"), "'first");
+      write(join(dir, "notes.md"), ":first");
       scan(dir);
 
       const pool = { bytes: 0, nodes: 100 };
@@ -586,7 +586,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("lets a taskspace spend no more than its own ceiling, however full the pool", () => {
-      write(join(dir, "notes.md"), "'first and some more text to pay for");
+      write(join(dir, "notes.md"), ":first and some more text to pay for");
 
       const pool = { bytes: 1_000_000, nodes: 100 };
       const scanned = scanTaskspaceTags(dir, TASKSPACE_ID, { bytes: 4 }, pool);

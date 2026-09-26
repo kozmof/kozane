@@ -102,8 +102,8 @@ export async function getCardTagHits({
   hitsMax = TAG_CARD_HITS_MAX,
   rowsPage = TAG_CARD_ROWS_PAGE,
 }: GetCardTagHits): Promise<CardTagHits> {
-  // A card with no apostrophe cannot hold a tag, so SQLite drops it before any of it crosses
-  // into JavaScript to be parsed. Necessary rather than sufficient — `don't` comes back and
+  // A card with no colon cannot hold a tag, so SQLite drops it before any of it crosses
+  // into JavaScript to be parsed. Necessary rather than sufficient — `9:30` comes back and
   // finds nothing — which is the right way round for a prefilter.
   const holdsSigil = like(cardTable.content, `%${SIGIL_PATTERN}%`);
   const where: SQL | undefined = namespaceId

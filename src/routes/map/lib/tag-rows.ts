@@ -52,7 +52,7 @@ export const TAG_ROW_HEIGHT = 24;
 
 /**
  * Whether a node's children are drawn under it: the top level always is, and a deeper one
- * only while the active tag is inside it — so arriving on `'foo:bar:baz` opens the tree down
+ * only while the active tag is inside it — so arriving on `:foo:bar:baz` opens the tree down
  * to it rather than showing a collapsed root.
  *
  * Exported because the page's markup and {@link visibleTagRows} must agree about it exactly.

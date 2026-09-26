@@ -935,13 +935,13 @@ kozane tag list [--namespace <namespaceId>]
 ```
 
 A count is of distinct cards and files, not of occurrences: a card written
-`'perf:cache and 'perf` is one card under `'perf`. A parent's count includes everything
-under it, so `'perf` counts what `'perf:cache` holds as well.
+`:perf:cache and :perf` is one card under `:perf`. A parent's count includes everything
+under it, so `:perf` counts what `:perf:cache` holds as well.
 
 ```bash
 kozane tag list
-'perf  1 card, 1 file
-  'cache  1 card, 1 file
+:perf  1 card, 1 file
+  :cache  1 card, 1 file
 ```
 
 Taskspace files are read as part of this. A taskspace that could not be read in full is
@@ -984,8 +984,8 @@ kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
 The tag may be given with or without its sigil — `kozane tag show perf` and
-`kozane tag show \'perf` are the same request — because most shells eat an unescaped
-apostrophe. `--no-files` lists cards alone and skips the disk walk entirely.
+`kozane tag show :perf` are the same request — since typing it the way it reads on a card is
+as natural as typing it bare. `--no-files` lists cards alone and skips the disk walk entirely.
 
 Each card row carries its short ID, the tags it matched by, and its text. Each file row
 carries the path and line, the tags matched, and the line the tag sits on. A card found
@@ -999,10 +999,10 @@ browser's tag index heads its file rows the same way.
 ```bash
 kozane tag show perf
 Cards:
-  4a6f1fb  'perf 'perf:cache  caching work 'perf:cache and 'perf
+  4a6f1fb  :perf :perf:cache  caching work :perf:cache and :perf
 Files:
   notes:
-    README.md:3  'perf:cache  See 'perf:cache for the plan.
+    README.md:3  :perf:cache  See :perf:cache for the plan.
 ```
 
 ---

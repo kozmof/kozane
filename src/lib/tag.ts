@@ -15,70 +15,72 @@ import { scanUrls, type UrlSpan } from "./urls.js";
  * helpers at the foot of the file are here for the same reason: the terminal and the page
  * draw the same rows, so they group and label them with the same code.
  *
- * A tag is `'foo`, and subcategorizes as `'foo:bar:baz`:
+ * A tag is `:foo`, and subcategorizes as `:foo:bar:baz`:
  *
  * ```
- * sigil     '   preceded by start-of-line, whitespace, or an opening ( [ {
+ * sigil     :   preceded by start-of-line, whitespace, or an opening ( [ {
  * body      segment ( ":" segment )*
  * segment   [\p{L}\p{N}_-]+
  * ```
  *
- * The sigil is an apostrophe, which ordinary prose also uses, so three rules keep writing
- * from becoming tagging:
+ * The sigil and the level separator are the same character, and that is not a conflict: the
+ * pattern consumes the sigil once, before the body is matched at all, so `:foo:bar:baz` is
+ * read as sigil `:` followed by the body `foo:bar:baz`, which `splitTag` then breaks into
+ * `["foo", "bar", "baz"]` the same as any other tag.
  *
- * - **A word boundary opens it.** `don't` and `x'foo` are words with an apostrophe in them,
- *   not tags.
- * - **A closing apostrophe cancels it.** `'quoted'` is a quoted word, so it is left as text.
- * - **A URL is an address, not text.** An apostrophe inside `http://…` opens nothing, so
- *   `http://example.com/('foo)` is one link rather than a link and a tag. Unlike the two
- *   rules above this one is not in the pattern — it cannot be, since the pattern is asked
- *   about one candidate at a time and a URL is a span around it. A URL's characters are
- *   therefore *cut out* before the pattern is asked anything: `scanTagMatches` below reads
- *   the gaps between the spans `lib/urls.ts` finds, each as its own text, so an address is
- *   not merely stepped over but is not there to be read.
+ * A colon is ordinary punctuation too, so two rules keep writing from becoming tagging:
+ *
+ * - **A word boundary opens it.** The lookbehind requires the sigil to sit at the start of a
+ *   line, after whitespace, or after an opening `( [ {`. That is what a colon almost always
+ *   fails, on its own, in running text: `12:30`, `key: value`, and `it's 3:45` all have their
+ *   colon preceded by a letter or digit, not whitespace, so none of them opens a tag.
+ * - **A URL is an address, not text.** A colon inside `http://…` opens nothing, so
+ *   `http://example.com/(:foo)` is one link rather than a link and a tag. This rule is not in
+ *   the pattern — it cannot be, since the pattern is asked about one candidate at a time and a
+ *   URL is a span around it. A URL's characters are therefore *cut out* before the pattern is
+ *   asked anything: `scanTagMatches` below reads the gaps between the spans `lib/urls.ts`
+ *   finds, each as its own text, so an address is not merely stepped over but is not there to
+ *   be read.
  *
  *   Cut rather than stepped over, and the difference is the whole of the rule. Testing where
  *   a match *started* let a candidate that began outside a URL and ran into one through, so
- *   `see 'http://example.com'` gathered the tag `http` and `'todo:https://example.com`
- *   gathered `todo:https` — neither of which the card drew, because the renderer had always
- *   cut. The junk tag existed only in the index, and `'todo`, the one the writer meant,
- *   only on the card. Cutting is what the renderer was already doing; doing it here too is
- *   what makes the two one decision rather than two that nearly agree.
+ *   `see http://example.com` gathered a stray tag out of the scheme separator, and
+ *   `:todo:https://example.com` gathered `todo:https` — neither of which the card drew,
+ *   because the renderer had always cut. The junk tag existed only in the index, and `:todo`,
+ *   the one the writer meant, only on the card. Cutting is what the renderer was already
+ *   doing; doing it here too is what makes the two one decision rather than two that nearly
+ *   agree.
  *
  *   It is a rule of the grammar rather than of the renderer, deliberately:
  *   `lib/text-segments.ts` already had to know where URLs were in order to draw them as
  *   anchors, and when only it knew, a card was gathered under a tag the card itself did not
  *   draw. See `lib/urls.ts`.
  *
- * The second rule reaches one token, and deliberately: `'a phrase'` still tags `a`, because
- * deciding otherwise means scanning ahead for a closing quote that may be on another line,
- * or may be an apostrophe in a word, and guessing wrong in either direction is worse than
- * the small amount of noise this leaves. A tag nobody meant is one row in the index; a tag
- * silently swallowed is a card that cannot be found.
+ * There is no rule that cancels a tag once opened — nothing plays the role `'quoted'` played
+ * for the apostrophe sigil, because a colon does not pair up the way a quote mark does.
+ * `:foo:` is just the tag `foo` followed by a colon, the same as `:foo,` or `:foo.` — the
+ * trailing lookahead only asks that the body has genuinely run out of word characters, not
+ * that anything closes it.
  *
- * ## What that costs in a file, which is a decision and not an oversight
+ * ## What that costs, which is a decision and not an oversight
  *
- * The rules above were weighed against prose, and a taskspace file is often not prose. In
- * source code `'…'` is a string delimiter, and the closing rule reaches exactly the literals
- * that fit in one token: `from 'drizzle-orm'` and `import x from 'y'` yield nothing, because
- * the closing quote sits where a word character would have to be. What gets through is the
- * multi-token literal, which yields its *first* word and only that — `echo 'hello world'`
- * yields `hello`, and `it('does a thing', …)` yields `does`. So the noise is narrower than
- * "every quoted string in the file", and is drawn from a vocabulary of sentence openers
- * rather than of identifiers.
+ * A word boundary is the only thing standing between prose and code here, and code uses a
+ * leading colon for its own reasons: it is Ruby, Elixir, and Clojure's symbol and keyword
+ * syntax (`{ id: :active }`, `[:a, :b]`), and it opens colon emoticons (`:D`, `:P`). Each of
+ * those sits at a word boundary — after whitespace or a bracket — so each reads as a tag.
  *
- * Scanned across a working tree that is still real noise, and it is left in rather
- * than legislated away here, because every rule that would remove it — matching quotes across
- * a line, knowing which files are code, requiring two characters — either swallows tags
- * someone wrote or makes the grammar answer differently depending on where the text was
- * found, and one grammar for both sources is the property this module exists to hold.
+ * That is real noise and it is left in rather than legislated away here, for the same reason
+ * the quoted-string noise the apostrophe sigil let through was: excluding it means either
+ * knowing which files are Ruby/Elixir/Clojure/Lisp, or narrowing the word-boundary rule in a
+ * way that would just as readily swallow a tag someone meant to write, and one grammar for
+ * every source is the property this module exists to hold.
  *
  * It is bounded on the other side instead, where the cost actually arises: the file scan does
  * not walk `node_modules`, `build`, `dist`, or the rest of `TAG_SCAN_SKIP_DIRS` in
  * `lib/constants.ts`, where compiled and vendored code lives and where nearly all of this
- * noise was measured.
- * A quoted literal in hand-written source still becomes a tag; it sits in the tree unread,
- * next to the tags that were meant.
+ * kind of noise was measured for the apostrophe sigil, and the same bound applies here.
+ * A symbol literal or emoticon in hand-written source still becomes a tag; it sits in the
+ * tree unread, next to the tags that were meant.
  */
 
 // Bounded rather than `+` on purpose, and it does two jobs. It enforces
@@ -87,37 +89,36 @@ import { scanUrls, type UrlSpan } from "./urls.js";
 // backtracking: the trailing lookaheads reject a candidate by failing after the body has
 // been matched, which sends the engine back through the body looking for a shorter one, and
 // an unbounded body would make that O(n) per position — quadratic over a file of the size
-// the scanner is handed, from a line of nothing but apostrophes and letters.
+// the scanner is handed, from a line of nothing but colons and letters.
 const SEGMENT = String.raw`[\p{L}\p{N}_-]{1,${TAG_SEGMENT_CHARS_MAX}}`;
 
 /**
  * The two lookaheads are what make an over-long or over-deep candidate *no tag at all*
  * rather than a truncated one:
  *
- * - `(?![\p{L}\p{N}_'-])` — the body must have run out of word characters on its own. A
+ * - `(?![\p{L}\p{N}_-])` — the body must have run out of word characters on its own. A
  *   65-character run therefore matches nothing, because every shorter body the engine backs
- *   off to is still followed by a letter. It is also what cancels `'quoted'`, since a body
- *   followed by an apostrophe fails the same test.
+ *   off to is still followed by a letter.
  * - `(?!:[\p{L}\p{N}_-])` — no further level may be waiting. A ninth level fails here and
  *   keeps failing as the engine backs off level by level, so the whole candidate is
  *   rejected. A `:` *not* followed by a word character is allowed through, which is what
- *   lets `'foo:` be the tag `foo` with a colon after it.
+ *   lets `:foo:` be the tag `foo` with a colon after it.
  */
 const TAG_RE = new RegExp(
   String.raw`(?<=^|[\s(\[{])${TAG_SIGIL}(${SEGMENT}(?::${SEGMENT}){0,${TAG_LEVELS_MAX - 1}})` +
-    String.raw`(?![\p{L}\p{N}_'-])(?!:[\p{L}\p{N}_-])`,
+    String.raw`(?![\p{L}\p{N}_-])(?!:[\p{L}\p{N}_-])`,
   "gu",
 );
 
 /**
- * A tag as it is compared and indexed: lowercased, so `'Foo` and `'foo` are one tag, and
+ * A tag as it is compared and indexed: lowercased, so `:Foo` and `:foo` are one tag, and
  * NFC-normalized, so a composed and a decomposed spelling of the same accented or Japanese
  * text do not become two tags in the index over a difference nothing renders — `é` written
  * as one code point and as `e` plus a combining acute, or a kana and its dakuten.
  *
  * NFC and not NFKC, which is the compatibility form, and the difference is visible in
- * exactly the script this limit was set for. NFC folds nothing about *width*: `'Ｆｏｏ` and
- * `'Foo` are two tags here, and so are `'ｱｲｳ` and `'アイウ`, though a Japanese IME will
+ * exactly the script this limit was set for. NFC folds nothing about *width*: `:Ｆｏｏ` and
+ * `:Foo` are two tags here, and so are `:ｱｲｳ` and `:アイウ`, though a Japanese IME will
  * produce either half of each pair depending on how it was left. NFKC would fold both, and
  * is not used because it does not stop there — it also flattens `①` to `1`, `㍿` to five
  * kana, and every ligature and superscript to its parts, so tags that are genuinely
@@ -213,8 +214,8 @@ export function scanTagPositions(text: string, urls?: UrlSpan[]): TagPosition[] 
  *
  * A URL is cut out rather than stepped over. The text is split at the spans `urls` names and
  * each gap is matched as its own text, so the pattern is never shown an address at all — and
- * a candidate running *into* one stops at its edge. `'todo:https://x.com` is the tag `todo`,
- * matched in the gap `'todo:`; `see 'http://x.com'` is no tag, because its gap is `see '` and
+ * a candidate running *into* one stops at its edge. `:todo:https://x.com` is the tag `todo`,
+ * matched in the gap `:todo:`; `see :http://x.com` is no tag, because its gap is `see :` and
  * nothing follows the sigil. See the URL rule in the module note.
  *
  * Offsets are into `text` as given, not into the gap a match was found in: a renderer cuts
@@ -300,7 +301,7 @@ export function scanTagLines(text: string): TagLineHit[] {
   const lines = text.split(/\r?\n/);
 
   for (const [index, line] of lines.entries()) {
-    // Cheapest possible skip, and most lines take it: a line with no apostrophe cannot hold
+    // Cheapest possible skip, and most lines take it: a line with no colon cannot hold
     // a tag, and the scanner is handed whole files.
     if (!line.includes(TAG_SIGIL)) continue;
 
@@ -508,7 +509,7 @@ function freezeNodes(nodes: Iterable<MutableNode>): TagNode[] {
  * The hierarchy a flat list of hits describes.
  *
  * Every level of every tag becomes a node, whether or not anyone wrote that level on its
- * own: `'foo:bar` alone still produces a `foo` with no hits of its own and one underneath
+ * own: `:foo:bar` alone still produces a `foo` with no hits of its own and one underneath
  * it, because a tree that skipped it would have no way to draw where `bar` hangs from. That
  * is what `own` and `total` separate — `own` is what was written here, `total` is what
  * selecting this tag on the index page gathers.
@@ -617,7 +618,7 @@ export function groupHitsByTaskspace<T extends { source: TagSource }>(
 
 /**
  * The distinct tags a row matched by, sigil and all, sorted — so a card found under both
- * `'perf` and `'perf:cache` says which, in one order rather than in whichever the hits
+ * `:perf` and `:perf:cache` says which, in one order rather than in whichever the hits
  * happened to arrive in.
  */
 export function taggedWith(hits: { tag: string }[]): string[] {

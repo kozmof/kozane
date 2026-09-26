@@ -37,7 +37,7 @@ describe("getCardTagHits", () => {
 
   it("returns a hit naming the card it came from", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    const cardId = await addCard({ db, partitionId, content: "caching work 'perf:cache" });
+    const cardId = await addCard({ db, partitionId, content: "caching work :perf:cache" });
 
     const result = await getCardTagHits({ db, namespaceId });
     expect(result).toMatchObject({
@@ -45,7 +45,7 @@ describe("getCardTagHits", () => {
         {
           tag: "perf:cache",
           source: { kind: "card", cardId },
-          excerpt: "caching work 'perf:cache",
+          excerpt: "caching work :perf:cache",
         },
       ],
       cardData: { [cardId]: { namespaceId, partitionId } },
@@ -57,15 +57,15 @@ describe("getCardTagHits", () => {
 
   it("returns every tag on a card", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'perf and 'perf:cache\nand 'docs" });
+    await addCard({ db, partitionId, content: ":perf and :perf:cache\nand :docs" });
 
     const { hits } = await getCardTagHits({ db, namespaceId });
     expect(sorted(hits.map(({ tag }) => tag))).toEqual(["docs", "perf", "perf:cache"]);
   });
 
-  it("skips a card whose apostrophe is not a tag", async () => {
+  it("skips a card whose colon is not a tag", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "don't tag this, and 'quoted' stays text" });
+    await addCard({ db, partitionId, content: "meeting at 3:45, nothing else here" });
 
     const { hits, cardNamespaces } = await getCardTagHits({ db, namespaceId });
     expect(hits).toEqual([]);
@@ -73,7 +73,7 @@ describe("getCardTagHits", () => {
     expect(cardNamespaces).toEqual({});
   });
 
-  it("skips a card with no apostrophe at all", async () => {
+  it("skips a card with no colon at all", async () => {
     const { db, namespaceId, partitionId } = await setup();
     await addCard({ db, partitionId, content: "nothing to see here" });
 
@@ -83,8 +83,8 @@ describe("getCardTagHits", () => {
   it("gathers across every partition of the namespace", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const otherPartitionId = await addPartition({ db, namespaceId, name: "Other" });
-    await addCard({ db, partitionId, content: "'one" });
-    await addCard({ db, partitionId: otherPartitionId, content: "'two" });
+    await addCard({ db, partitionId, content: ":one" });
+    await addCard({ db, partitionId: otherPartitionId, content: ":two" });
 
     const { hits } = await getCardTagHits({ db, namespaceId });
     expect(sorted(hits.map(({ tag }) => tag))).toEqual(["one", "two"]);
@@ -93,8 +93,8 @@ describe("getCardTagHits", () => {
   it("does not reach into another namespace when one is named", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const other = await addSecondNamespace(db);
-    await addCard({ db, partitionId, content: "'mine" });
-    await addCard({ db, partitionId: other.partitionId, content: "'theirs" });
+    await addCard({ db, partitionId, content: ":mine" });
+    await addCard({ db, partitionId: other.partitionId, content: ":theirs" });
 
     const { hits } = await getCardTagHits({ db, namespaceId });
     expect(hits.map(({ tag }) => tag)).toEqual(["mine"]);
@@ -103,8 +103,8 @@ describe("getCardTagHits", () => {
   it("gathers every namespace when none is named", async () => {
     const { db, partitionId } = await setup();
     const other = await addSecondNamespace(db);
-    await addCard({ db, partitionId, content: "'mine" });
-    await addCard({ db, partitionId: other.partitionId, content: "'theirs" });
+    await addCard({ db, partitionId, content: ":mine" });
+    await addCard({ db, partitionId: other.partitionId, content: ":theirs" });
 
     const { hits } = await getCardTagHits({ db });
     expect(sorted(hits.map(({ tag }) => tag))).toEqual(["mine", "theirs"]);
@@ -113,8 +113,8 @@ describe("getCardTagHits", () => {
   it("says which namespace each card belongs to", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const other = await addSecondNamespace(db);
-    const mine = await addCard({ db, partitionId, content: "'mine" });
-    const theirs = await addCard({ db, partitionId: other.partitionId, content: "'theirs" });
+    const mine = await addCard({ db, partitionId, content: ":mine" });
+    const theirs = await addCard({ db, partitionId: other.partitionId, content: ":theirs" });
 
     const { cardNamespaces } = await getCardTagHits({ db });
     expect(cardNamespaces).toEqual({ [mine]: namespaceId, [theirs]: other.namespaceId });
@@ -122,8 +122,8 @@ describe("getCardTagHits", () => {
 
   it("normalizes a tag's case, so one tag written two ways is one tag", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'Perf" });
-    await addCard({ db, partitionId, content: "'perf" });
+    await addCard({ db, partitionId, content: ":Perf" });
+    await addCard({ db, partitionId, content: ":perf" });
 
     const { hits } = await getCardTagHits({ db, namespaceId });
     expect(hits.map(({ tag }) => tag)).toEqual(["perf", "perf"]);
@@ -137,7 +137,7 @@ describe("getCardTagHits", () => {
   describe("the hit ceiling", () => {
     it("stops at the ceiling and says so", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `'tag${i}` });
+      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `:tag${i}` });
 
       const { hits, truncated } = await getCardTagHits({ db, namespaceId, hitsMax: 2 });
 
@@ -149,7 +149,7 @@ describe("getCardTagHits", () => {
      *  on its own than the whole gather carries. */
     it("holds the ceiling exactly, within a single card", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "'one\n'two\n'three" });
+      await addCard({ db, partitionId, content: ":one\n:two\n:three" });
 
       const { hits, truncated } = await getCardTagHits({ db, namespaceId, hitsMax: 2 });
 
@@ -159,7 +159,7 @@ describe("getCardTagHits", () => {
 
     it("does not report a ceiling a gather sits under", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "'perf" });
+      await addCard({ db, partitionId, content: ":perf" });
 
       expect((await getCardTagHits({ db, namespaceId, hitsMax: 2 })).truncated).toBe(false);
     });
@@ -170,7 +170,7 @@ describe("getCardTagHits", () => {
   describe("reading in pages", () => {
     it("gathers across page boundaries", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      for (let i = 0; i < 7; i++) await addCard({ db, partitionId, content: `'tag${i}` });
+      for (let i = 0; i < 7; i++) await addCard({ db, partitionId, content: `:tag${i}` });
 
       const { hits, truncated } = await getCardTagHits({ db, namespaceId, rowsPage: 2 });
 
@@ -190,7 +190,7 @@ describe("getCardTagHits", () => {
      *  gather that stopped there would silently drop everything after it. */
     it("reads on past a page that came back exactly full", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `'tag${i}` });
+      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `:tag${i}` });
 
       const { hits } = await getCardTagHits({ db, namespaceId, rowsPage: 2 });
 
@@ -203,8 +203,8 @@ describe("getCardTagHits", () => {
       const { db, namespaceId, partitionId } = await setup();
       // Written first, so they fill the earlier pages: ids are uuidv7, which the read orders
       // by, and are therefore in creation order.
-      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `don't ${i}` });
-      await addCard({ db, partitionId, content: "'perf" });
+      for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `time 3:4${i}` });
+      await addCard({ db, partitionId, content: ":perf" });
 
       const { hits } = await getCardTagHits({ db, namespaceId, rowsPage: 2 });
 
@@ -213,7 +213,7 @@ describe("getCardTagHits", () => {
 
     it("stops at the hit ceiling without reading the pages after it", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      for (let i = 0; i < 6; i++) await addCard({ db, partitionId, content: `'tag${i}` });
+      for (let i = 0; i < 6; i++) await addCard({ db, partitionId, content: `:tag${i}` });
 
       const { hits, truncated } = await getCardTagHits({
         db,

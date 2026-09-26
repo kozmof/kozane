@@ -225,15 +225,15 @@ export function tagPartitionIndex(
 /**
  * The partitions a tag reaches, each with the weight of the line to draw to it.
  *
- * Rolled up over subcategories with {@link tagMatcher}, so `'perf` reaches everything
- * `'perf:cache` and `'perf:cache:invalidation` reach — the same rule the tag index, the CLI
+ * Rolled up over subcategories with {@link tagMatcher}, so `:perf` reaches everything
+ * `:perf:cache` and `:perf:cache:invalidation` reach — the same rule the tag index, the CLI
  * and the card renderer use, reached for rather than restated. That is why the index is
  * keyed by the exact tag: rolling up here costs one pass over the keys and keeps one entry
  * per tag in what crosses the wire, where pre-rolling would store every tag's cards again
  * under each of its ancestors.
  *
- * **A weight, and not a count of cards.** One card carrying both `'perf:cache` and
- * `'perf:disk` is two entries under `'perf`, and summing them counts it twice — which is
+ * **A weight, and not a count of cards.** One card carrying both `:perf:cache` and
+ * `:perf:disk` is two entries under `:perf`, and summing them counts it twice — which is
  * why `buildTagTree` tallies sets of sources rather than adding numbers. Distinguishing
  * them here would mean shipping the card ids the aggregate exists to avoid shipping, and the
  * line does not need it: what it decides is which partitions are linked and how heavily. The

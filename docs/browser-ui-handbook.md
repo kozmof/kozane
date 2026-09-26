@@ -387,28 +387,29 @@ from, so the rows stay inert there and clicking one does nothing.
 
 ## Tags
 
-A tag is a word you write inside a card, opened with an apostrophe: `'perf`. It gathers
+A tag is a word you write inside a card, opened with a colon: `:perf`. It gathers
 that card with everything else carrying the same tag — including taskspace files, since a
 tag is just text and a file is too.
 
-Subcategorize with colons. `'perf:cache` sits under `'perf`, and `'perf` gathers it: pick
+Subcategorize with more colons. `:perf:cache` sits under `:perf`, and `:perf` gathers it: pick
 the parent to see everything beneath it, or the child to narrow down. There is nothing to
 set up first. A tag exists because someone wrote it, and stops existing when the last text
 holding it is edited or deleted.
 
-An apostrophe is ordinary punctuation too, so `don't` is a word and `'quoted'` is a quoted
-word — neither becomes a tag. A tag opens after a space or at the start of a line, and a
-closing apostrophe cancels it. A link is an address rather than text, so
-`https://example.com/it's/fine` is one link and no tag — and a tag written against a link
-stops where it starts, which makes `'todo:https://example.com` the tag `'todo` and
-`'https://example.com` no tag rather than the tag `'https`. Levels take letters, digits,
+A colon is ordinary punctuation too, so `3:45` and `key: value` stay plain text — a tag only
+opens after a space, an opening bracket, or at the start of a line, which a colon in the
+middle of a word never is. A link is an address rather than text, so
+`https://example.com/it:is/fine` is one link and no tag — and a tag written against a link
+stops where it starts, which makes `:todo:https://example.com` the tag `:todo` and
+`:https://example.com` no tag rather than the tag `:https`. Levels take letters, digits,
 `-`, and `_`, up to 64 characters each and 8 levels deep; past either, it is not treated as
-a tag at all. `'Perf` and `'perf` are the same tag.
+a tag at all. `:Perf` and `:perf` are the same tag.
 
-The cancelling rule reaches one word, so an apostrophe opening something longer is still a
-tag: `'a phrase'` gathers under `'a`, and so do `'til` and `'90s`. The rule errs this way on
-purpose — a tag nobody meant is one row you can ignore, while a tag quietly swallowed is a
-card you cannot find.
+There is no rule that closes a tag once it opens — nothing plays the part a closing quote
+mark would, because a colon does not pair up the way one does. That does cost something in a
+taskspace of source code: `:foo` is also how Ruby, Elixir, and Clojure write a symbol or a
+keyword argument, so a file in one of those languages can pick up tags nobody meant to write.
+The tree over such a taskspace can carry that noise alongside the tags that were meant.
 
 Tags in a card's text are drawn as links. Click one to open the tag index.
 
@@ -434,9 +435,10 @@ narrowed to that card's namespace.
 **Cards only**, beside the namespace names, puts the taskspace files down and leaves the tags
 written on cards. It adds `?files=0` to the URL and skips the disk walk rather than hiding
 what it found, so it is also the quickest the page gets. It is the answer for a taskspace
-that is a source checkout: a tag is just text, so every multi-word quoted string in one
-opens a tag under its first word — `echo 'hello world'` gathers under `'hello` — and the tree
-over such a taskspace is largely that. **Include files** puts them back.
+that is a source checkout: a tag is just text, so a symbol or keyword argument in a language
+that writes those with a leading colon opens a tag the same as a word someone wrote on
+purpose — `{ id: :active }` gathers under `:active` — and the tree over such a taskspace can
+be largely that. **Include files** puts them back.
 `kozane tag show --no-files` is the same switch in the terminal.
 
 - Cards show their text and partition, and their namespace when you are looking across the
@@ -444,7 +446,7 @@ over such a taskspace is largely that. **Include files** puts them back.
 - Files show the path, the line number, and the line the tag is on. Click one to open it in
   the file editor.
 
-Counts are of distinct cards and files. A card carrying `'perf` twice is one card, and it
+Counts are of distinct cards and files. A card carrying `:perf` twice is one card, and it
 appears once in the list, labelled with each tag it matched.
 
 Taskspace files are read when you open the page, within the same limits the taskspace panel
@@ -531,7 +533,7 @@ you would want it for: a partition too small to be named where the map opens bec
 enough to carry its name. The gaps between rectangles and the band each namespace's name sits
 in stay put too — only the part that stands for cards grows.
 
-The tags are on the left, as a tree over the map: `'perf` with `'perf:cache` beneath it,
+The tags are on the left, as a tree over the map: `:perf` with `:perf:cache` beneath it,
 the way a directory holds a subdirectory. The number beside each is how many cards it
 gathers, that tag and everything under it. A tree taller than the window scrolls inside its
 own panel, and the lines follow their rows as it does. Click a tag to draw a line from its

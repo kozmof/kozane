@@ -26,7 +26,7 @@ type Span = { index: number; length: number; text: string; href?: string; tag?: 
  *
  * It used to cut at the URLs first and re-scan each remaining piece for tags, which is where
  * the two readings of a card diverged: a piece's first character looked like the start of a
- * text to the segmenter and like the middle of one to the index, so `see 'http://x.com'` was
+ * text to the segmenter and like the middle of one to the index, so `see :http://x.com` was
  * drawn with no tag and gathered under `http`. The cut belongs to the grammar now, and this
  * asks it rather than repeating it. See the URL rule in `lib/tag.ts`.
  */
@@ -46,7 +46,7 @@ export function segmentText(text: string): TextSegment[] {
   let cursor = 0;
   for (const { index, length, text: span, href, tag } of spans) {
     // Trailing punctuation is not part of a URL, so the characters between one span and the
-    // next fall through here as plain text — which is where "see http://x.com. 'foo" gets
+    // next fall through here as plain text — which is where "see http://x.com. :foo" gets
     // its period back.
     if (index > cursor) segments.push({ text: text.slice(cursor, index) });
     segments.push(href ? { text: span, href } : { text: span, tag });

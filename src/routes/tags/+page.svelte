@@ -101,8 +101,8 @@
    * over a list that also holds files would be a second disagreement in place of the first.
    *
    * Counted in *hits*, and said so — the word is what makes the number true rather than a
-   * third disagreement. The cap is applied before `groupHitRows`, so a card carrying `'perf`
-   * and `'perf:cache` is two of what is counted here, one row below, and one card in the
+   * third disagreement. The cap is applied before `groupHitRows`, so a card carrying `:perf`
+   * and `:perf:cache` is two of what is counted here, one row below, and one card in the
    * tree beside it; calling that "cards" made the notice contradict both. `kozane tag show`
    * says "card hits" for exactly this reason, and now says it in the same words.
    */
@@ -131,8 +131,8 @@
   );
 
   /**
-   * One row per card, not per hit. A card written `'perf:cache and 'perf` matches a search
-   * for `'perf` twice, and two rows would read as two cards. What counts as a row is
+   * One row per card, not per hit. A card written `:perf:cache and :perf` matches a search
+   * for `:perf` twice, and two rows would read as two cards. What counts as a row is
    * `groupHitRows` in `$lib/tag`, which the terminal groups by too.
    */
   const cardRows = $derived(groupHitRows(shown.cards));
@@ -205,7 +205,7 @@
       : null;
   };
 
-  /** A node is open while the selected tag is inside it, so arriving on `'foo:bar:baz` by
+  /** A node is open while the selected tag is inside it, so arriving on `:foo:bar:baz` by
    *  link opens the tree down to it rather than showing a collapsed root. */
   const isOpen = (node: TagNode) => !!selectedTag && tagMatches(node.tag, selectedTag);
 
@@ -439,8 +439,8 @@
         {#if !selectedTag}
           <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>
             Pick a tag to see what it gathers. A tag gathers its subcategories too, so
-            <code class={css({ fontFamily: "mono" })}>'foo</code> holds everything under
-            <code class={css({ fontFamily: "mono" })}>'foo:bar</code>.
+            <code class={css({ fontFamily: "mono" })}>:foo</code> holds everything under
+            <code class={css({ fontFamily: "mono" })}>:foo:bar</code>.
           </p>
         {:else}
           <h2 class={css({ fontSize: "15px", fontFamily: "mono", marginBottom: "16px" })}>

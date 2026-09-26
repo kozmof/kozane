@@ -234,7 +234,7 @@ describe("GET /map", () => {
   describe("the tag graph", () => {
     it("spells the tree from the tags written on cards", async () => {
       const { db, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "caching work 'perf:cache" });
+      await addCard({ db, partitionId, content: "caching work :perf:cache" });
 
       const [root] = tree(await run(db));
       expect(root.tag).toBe("perf");
@@ -244,9 +244,9 @@ describe("GET /map", () => {
     it("says which partitions a tag reaches, and how many of their cards carry it", async () => {
       const { db, namespaceId, partitionId } = await setup();
       const other = await addPartition({ db, namespaceId, name: "Other" });
-      await addCard({ db, partitionId, content: "'perf here" });
-      await addCard({ db, partitionId, content: "'perf again" });
-      await addCard({ db, partitionId: other, content: "'perf over here" });
+      await addCard({ db, partitionId, content: ":perf here" });
+      await addCard({ db, partitionId, content: ":perf again" });
+      await addCard({ db, partitionId: other, content: ":perf over here" });
 
       expect(tagPartitions(await run(db)).perf).toEqual({ [partitionId]: 2, [other]: 1 });
     });
@@ -255,14 +255,14 @@ describe("GET /map", () => {
      *  is two hits and one card. The graph counts cards, as the tree does. */
     it("counts a card once however many times it writes the tag", async () => {
       const { db, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "'perf on this line\nand 'perf on this one" });
+      await addCard({ db, partitionId, content: ":perf on this line\nand :perf on this one" });
 
       expect(tagPartitions(await run(db)).perf).toEqual({ [partitionId]: 1 });
     });
 
     it("keeps subcategories apart, and leaves rolling them up to the page", async () => {
       const { db, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "'perf:cache" });
+      await addCard({ db, partitionId, content: ":perf:cache" });
 
       const index = tagPartitions(await run(db));
       expect(index["perf:cache"]).toEqual({ [partitionId]: 1 });
@@ -280,14 +280,14 @@ describe("GET /map", () => {
       const other = await addNamespace({ db, name: "Other" });
       await addLayer({ db, namespaceId: other, name: "Base", isDefault: true });
       const theirs = await addPartition({ db, namespaceId: other, name: "Theirs" });
-      await addCard({ db, partitionId: theirs, content: "'elsewhere" });
+      await addCard({ db, partitionId: theirs, content: ":elsewhere" });
 
       expect(tree(await run(db, `?namespaceId=${namespaceId}`))).toEqual([]);
     });
 
     it("reports nothing truncated for an ordinary workspace", async () => {
       const { db, partitionId } = await setup();
-      await addCard({ db, partitionId, content: "'perf" });
+      await addCard({ db, partitionId, content: ":perf" });
 
       const data = await run(db);
       expect(tagPartitionIndex(data.tagHits, data.tagCards).truncated).toBe(false);
@@ -323,7 +323,7 @@ describe("as a static export", () => {
     await addScopeRel({
       db,
       scopeId,
-      cardId: await addCard({ db, partitionId, content: "'perf" }),
+      cardId: await addCard({ db, partitionId, content: ":perf" }),
     });
     return { db, namespaceId, partitionId };
   }

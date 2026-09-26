@@ -49,7 +49,7 @@ const run = (db: DB, query = "") =>
 describe("GET /tags", () => {
   it("answers with the tree and no hits until a tag is named", async () => {
     const { db, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'perf work" });
+    await addCard({ db, partitionId, content: ":perf work" });
 
     const data = await run(db);
 
@@ -61,9 +61,9 @@ describe("GET /tags", () => {
 
   it("answers with a named tag's hits, and its subcategories", async () => {
     const { db, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'perf" });
-    await addCard({ db, partitionId, content: "'perf:cache" });
-    await addCard({ db, partitionId, content: "'other" });
+    await addCard({ db, partitionId, content: ":perf" });
+    await addCard({ db, partitionId, content: ":perf:cache" });
+    await addCard({ db, partitionId, content: ":other" });
 
     const data = await run(db, "?tag=perf");
 
@@ -73,7 +73,7 @@ describe("GET /tags", () => {
 
   it("reads the tag as the index stores it, whatever case it was asked in", async () => {
     const { db, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'Perf" });
+    await addCard({ db, partitionId, content: ":Perf" });
 
     const data = await run(db, "?tag=PERF");
 
@@ -94,8 +94,8 @@ describe("GET /tags", () => {
     const otherId = await addNamespace({ db, name: "Other" });
     await addLayer({ db, namespaceId: otherId, name: "Base", isDefault: true });
     const otherPartition = await addPartition({ db, namespaceId: otherId, name: "B" });
-    await addCard({ db, partitionId, content: "'perf mine" });
-    await addCard({ db, partitionId: otherPartition, content: "'perf theirs" });
+    await addCard({ db, partitionId, content: ":perf mine" });
+    await addCard({ db, partitionId: otherPartition, content: ":perf theirs" });
 
     expect((await run(db, "?tag=perf")).hits).toHaveLength(2);
 
@@ -114,7 +114,7 @@ describe("GET /tags", () => {
       partitionId,
       layerId,
       cards: Array.from({ length: over }, (_, i) => ({
-        content: `'perf card ${i}`,
+        content: `:perf card ${i}`,
         posX: 0,
         posY: i,
       })),
@@ -130,7 +130,7 @@ describe("GET /tags", () => {
    *  the hits it is actually showing. */
   it("names the partition of each card it sends", async () => {
     const { db, partitionId } = await setup();
-    const cardId = await addCard({ db, partitionId, content: "'perf" });
+    const cardId = await addCard({ db, partitionId, content: ":perf" });
 
     const data = await run(db, "?tag=perf");
 
@@ -146,8 +146,8 @@ describe("GET /tags", () => {
    */
   it("sends the namespace of the cards it is showing, and not of the others", async () => {
     const { db, partitionId } = await setup();
-    const shown = await addCard({ db, partitionId, content: "'perf" });
-    const other = await addCard({ db, partitionId, content: "'unrelated" });
+    const shown = await addCard({ db, partitionId, content: ":perf" });
+    const other = await addCard({ db, partitionId, content: ":unrelated" });
 
     const data = await run(db, "?tag=perf");
 
@@ -210,7 +210,7 @@ describe("as a static export", () => {
     mkdirSync(join(root, ".kozane"), { recursive: true });
     writeFileSync(join(root, ".kozane", "config.json"), "{}");
     mkdirSync(join(root, "client-work"), { recursive: true });
-    writeFileSync(join(root, "client-work", "notes.md"), "'perf in a file\n");
+    writeFileSync(join(root, "client-work", "notes.md"), ":perf in a file\n");
 
     const { db, namespaceId } = await setup();
     const taskspaceId = await addTaskspace({
@@ -231,8 +231,8 @@ describe("as a static export", () => {
   /** An export has no query string, so it bakes every hit and the browser selects. */
   it("bakes every card hit rather than waiting to be asked for one tag", async () => {
     const { db, partitionId } = await setup();
-    await addCard({ db, partitionId, content: "'perf" });
-    await addCard({ db, partitionId, content: "'other" });
+    await addCard({ db, partitionId, content: ":perf" });
+    await addCard({ db, partitionId, content: ":other" });
 
     expect((await loadUnderSsg(db)).hits).toHaveLength(2);
   });
