@@ -226,3 +226,151 @@ describe("TaskspaceTreeState", () => {
     });
   });
 });
+
+describe("TaskspaceTreeState creation", () => {
+  /** Answers the create with `created`, then the re-read of the directory with `listed`. */
+  function createThenList(created: unknown, listed: string[], status = 201) {
+    let call = 0;
+    return vi.fn(async () =>
+      call++ === 0 ? jsonResponse(created, status) : jsonResponse(listing(listed)),
+    );
+  }
+
+  it("posts a new file under the directory being typed into, and says to open it", async () => {
+    const fetcher = createThenList({ path: "src/new.ts", content: "" }, ["new.ts"]);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "src", "file");
+
+    const made = await tree.submitCreate(context(fetcher as never), "new.ts");
+
+    expect(made).toEqual({ taskspaceId: TS, kind: "file", path: "src/new.ts" });
+    expect(fetcher).toHaveBeenNthCalledWith(1, `/namespace-1/api/taskspaces/${TS}/file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "src/new.ts" }),
+    });
+    // The field closes only once the file is actually there.
+    expect(tree.creating).toBeNull();
+    expect(tree.createError).toBeNull();
+  });
+
+  it("posts a new folder to the listing route", async () => {
+    const fetcher = createThenList({ path: "docs", entries: [], truncated: false }, ["docs"]);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "directory");
+
+    const made = await tree.submitCreate(context(fetcher as never), "docs");
+
+    expect(made).toEqual({ taskspaceId: TS, kind: "directory", path: "docs" });
+    expect(fetcher).toHaveBeenNthCalledWith(
+      1,
+      `/namespace-1/api/taskspaces/${TS}/files`,
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ path: "docs" }) }),
+    );
+  });
+
+  it("re-reads the directory it created in, so the new row appears", async () => {
+    const fetcher = createThenList({ path: "notes.md", content: "" }, ["notes.md"]);
+    const tree = new TaskspaceTreeState();
+    // Already read once: without the forced re-read the cached listing would be kept and
+    // the file just made would not be on screen until something else refreshed it.
+    tree.nodes[nodeKey(TS, "")] = {
+      entries: [],
+      truncated: null,
+      loading: false,
+      error: null,
+    };
+    tree.beginCreate(TS, "", "file");
+
+    await tree.submitCreate(context(fetcher as never), "notes.md");
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["notes.md"]);
+  });
+
+  it("keeps the field open with the reason when the name is taken", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ message: "File already exists" }, 409));
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    expect(await tree.submitCreate(context(fetcher as never), "README.md")).toBeNull();
+    expect(tree.createError).toBe("File already exists");
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "", kind: "file" });
+    expect(tree.createBusy).toBe(false);
+  });
+
+  it("refuses a name with a separator in it without asking the server", async () => {
+    const fetcher = vi.fn();
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    expect(await tree.submitCreate(context(fetcher as never), "src/new.ts")).toBeNull();
+    expect(tree.createError).toBe("File name cannot contain a path separator");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("refuses a dot-name, which the tree would never draw", async () => {
+    const fetcher = vi.fn();
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "directory");
+
+    expect(await tree.submitCreate(context(fetcher as never), ".git")).toBeNull();
+    expect(tree.createError).toBe("Folder name cannot start with a dot");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("refuses a blank name", async () => {
+    const fetcher = vi.fn();
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    expect(await tree.submitCreate(context(fetcher as never), "   ")).toBeNull();
+    expect(tree.createError).toBe("File name is required");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("trims the name before sending it", async () => {
+    const fetcher = createThenList({ path: "notes.md", content: "" }, ["notes.md"]);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    const made = await tree.submitCreate(context(fetcher as never), "  notes.md  ");
+    expect(made?.path).toBe("notes.md");
+  });
+
+  it("does nothing when no field is open", async () => {
+    const fetcher = vi.fn();
+    const tree = new TaskspaceTreeState();
+
+    expect(await tree.submitCreate(context(fetcher as never), "notes.md")).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("reports a request that never arrived rather than throwing", async () => {
+    const fetcher = vi.fn(async () => {
+      throw new Error("offline");
+    });
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    expect(await tree.submitCreate(context(fetcher as never), "notes.md")).toBeNull();
+    expect(tree.createError).toBe("Failed to create file");
+    expect(tree.createBusy).toBe(false);
+  });
+
+  it("drops a field open on a taskspace that is no longer there", () => {
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "", "file");
+
+    tree.prune(["taskspace-2"]);
+    expect(tree.creating).toBeNull();
+  });
+
+  it("keeps a field open on a taskspace that survives a prune", () => {
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "src", "file");
+
+    tree.prune([TS]);
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "src", kind: "file" });
+  });
+});

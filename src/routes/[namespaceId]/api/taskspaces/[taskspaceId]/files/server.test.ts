@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { GET } from "./+server.js";
+import { GET, POST } from "./+server.js";
 import { addNamespace } from "$db/api/namespace.js";
 import { addTaskspace } from "$db/api/taskspace.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
@@ -17,12 +17,43 @@ function event(db: DB, namespaceId: string, taskspaceId: string, path?: string) 
   return { locals: { db }, params: { namespaceId, taskspaceId }, url } as never;
 }
 
+function postEvent(db: DB, namespaceId: string, taskspaceId: string, payload: unknown) {
+  const request = new Request(
+    `http://localhost/${namespaceId}/api/taskspaces/${taskspaceId}/files`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+      headers: { "content-type": "application/json" },
+    },
+  );
+  return { locals: { db }, params: { namespaceId, taskspaceId }, request } as never;
+}
+
 async function expectHttpRejection(value: unknown, status: number, message: string) {
   await expect(Promise.resolve(value)).rejects.toMatchObject({ status, body: { message } });
 }
 
 async function listing(value: unknown): Promise<TaskspaceListing> {
   return (await (value as Promise<Response>)).json();
+}
+
+type Fixture = { db: DB; namespaceId: string; taskspaceId: string; tmpRoot: string };
+
+/** The workspace both describes run against: a `demo` taskspace with a file and a folder. */
+async function makeWorkspace(): Promise<Fixture> {
+  const db = await createTestDB();
+  const namespaceId = await addNamespace({ db, name: "Test Namespace" });
+
+  const tmpRoot = join(tmpdir(), `kozane-files-route-test-${randomUUID()}`);
+  mkdirSync(join(tmpRoot, ".kozane"), { recursive: true });
+  writeFileSync(join(tmpRoot, ".kozane", "config.json"), JSON.stringify({ name: "test" }));
+  mkdirSync(join(tmpRoot, "demo", "src"), { recursive: true });
+  writeFileSync(join(tmpRoot, "demo", "README.md"), "hello");
+  writeFileSync(join(tmpRoot, "demo", ".taskspace.json"), "{}");
+  writeFileSync(join(tmpRoot, "demo", "src", "app.ts"), "export {}");
+
+  const taskspaceId = await addTaskspace({ db, namespaceId, name: "demo", path: "demo" });
+  return { db, namespaceId, taskspaceId, tmpRoot };
 }
 
 describe("GET /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
@@ -33,18 +64,7 @@ describe("GET /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
   let prevEnv: string | undefined;
 
   beforeEach(async () => {
-    db = await createTestDB();
-    namespaceId = await addNamespace({ db, name: "Test Namespace" });
-
-    tmpRoot = join(tmpdir(), `kozane-files-route-test-${randomUUID()}`);
-    mkdirSync(join(tmpRoot, ".kozane"), { recursive: true });
-    writeFileSync(join(tmpRoot, ".kozane", "config.json"), JSON.stringify({ name: "test" }));
-    mkdirSync(join(tmpRoot, "demo", "src"), { recursive: true });
-    writeFileSync(join(tmpRoot, "demo", "README.md"), "hello");
-    writeFileSync(join(tmpRoot, "demo", ".taskspace.json"), "{}");
-    writeFileSync(join(tmpRoot, "demo", "src", "app.ts"), "export {}");
-
-    taskspaceId = await addTaskspace({ db, namespaceId, name: "demo", path: "demo" });
+    ({ db, namespaceId, taskspaceId, tmpRoot } = await makeWorkspace());
 
     prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
     process.env.KOZANE_WORKSPACE_ROOT = tmpRoot;
@@ -165,6 +185,106 @@ describe("GET /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
       GET(event(db, namespaceId, taskspaceId)),
       503,
       "No Kozane workspace found. Run 'kozane init' first.",
+    );
+  });
+});
+
+describe("POST /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
+  let db: DB;
+  let namespaceId: string;
+  let taskspaceId: string;
+  let tmpRoot: string;
+  let prevEnv: string | undefined;
+
+  beforeEach(async () => {
+    ({ db, namespaceId, taskspaceId, tmpRoot } = await makeWorkspace());
+
+    prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
+    process.env.KOZANE_WORKSPACE_ROOT = tmpRoot;
+    _resetWorkspaceRootForTest();
+  });
+
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env.KOZANE_WORKSPACE_ROOT;
+    else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
+    _resetWorkspaceRootForTest();
+    rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("creates a directory and answers 201 with the empty listing of it", async () => {
+    const res = (await POST(postEvent(db, namespaceId, taskspaceId, { path: "docs" }))) as Response;
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ path: "docs", entries: [], truncated: false });
+    expect(lstatSync(join(tmpRoot, "demo", "docs")).isDirectory()).toBe(true);
+  });
+
+  it("creates a directory inside another", async () => {
+    await POST(postEvent(db, namespaceId, taskspaceId, { path: "src/lib" }));
+    expect(lstatSync(join(tmpRoot, "demo", "src", "lib")).isDirectory()).toBe(true);
+  });
+
+  it("answers with a listing the GET of the same path agrees with", async () => {
+    await POST(postEvent(db, namespaceId, taskspaceId, { path: "docs" }));
+    expect(await listing(GET(event(db, namespaceId, taskspaceId, "docs")))).toEqual({
+      path: "docs",
+      entries: [],
+      truncated: false,
+    });
+  });
+
+  it("answers 409 for a name already taken", async () => {
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, { path: "src" })),
+      409,
+      "Directory already exists",
+    );
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, { path: "README.md" })),
+      409,
+      "Directory already exists",
+    );
+  });
+
+  it("answers 400 for a path that leaves the taskspace", async () => {
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, { path: "../owned" })),
+      400,
+      "Path must stay inside the taskspace",
+    );
+    expect(readdirSync(tmpRoot).includes("owned")).toBe(false);
+  });
+
+  it("answers 400 for a dot-entry", async () => {
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, { path: ".git" })),
+      400,
+      "Dot-entries cannot be opened",
+    );
+  });
+
+  it("answers 400 when no path is given", async () => {
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, {})),
+      400,
+      "path is required",
+    );
+  });
+
+  it("answers 404 rather than creating intermediate directories", async () => {
+    await expectHttpRejection(
+      POST(postEvent(db, namespaceId, taskspaceId, { path: "a/b/c" })),
+      404,
+      "Directory not found",
+    );
+    expect(readdirSync(join(tmpRoot, "demo")).includes("a")).toBe(false);
+  });
+
+  it("404s a taskspace another namespace owns", async () => {
+    const other = await addNamespace({ db, name: "Other" });
+    await expectHttpRejection(
+      POST(postEvent(db, other, taskspaceId, { path: "docs" })),
+      404,
+      "Taskspace not found",
     );
   });
 });

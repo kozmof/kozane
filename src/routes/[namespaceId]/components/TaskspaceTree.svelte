@@ -2,7 +2,13 @@
   import { css, cx } from "styled-system/css";
   import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
   import type { TaskspaceTruncation } from "$lib/types";
-  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
+  import type {
+    TaskspaceCreateKind,
+    TaskspaceTreeContext,
+    TaskspaceTreeState,
+  } from "../lib/taskspace-tree.svelte.js";
+  import TaskspaceCreateButtons from "./TaskspaceCreateButtons.svelte";
+  import TaskspaceCreateRow from "./TaskspaceCreateRow.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
 
@@ -13,6 +19,7 @@
     path,
     depth = 0,
     onOpenFile,
+    canCreate = false,
   }: {
     tree: TaskspaceTreeState;
     ctx: TaskspaceTreeContext;
@@ -25,9 +32,35 @@
      * read one with, and the rows stay inert as they always were.
      */
     onOpenFile?: (taskspacePath: string) => void;
+    /**
+     * Whether this tree offers new files and folders. False in a static export, which has
+     * no server to make one with, and false wherever the panel itself is read-only.
+     */
+    canCreate?: boolean;
   } = $props();
 
   const node = $derived(tree.node(taskspaceId, path));
+
+  // The name field belongs to exactly one directory, and this is the level drawing it.
+  const creatingHere = $derived(
+    tree.creating?.taskspaceId === taskspaceId && tree.creating.path === path
+      ? tree.creating.kind
+      : null,
+  );
+
+  async function submitCreate(name: string): Promise<void> {
+    const made = await tree.submitCreate(ctx, name);
+    // A new file goes straight into the editor: naming it was the point at which its
+    // contents were on someone’s mind, and a folder has nothing to open.
+    if (made?.kind === "file") onOpenFile?.(made.path);
+  }
+
+  async function startCreate(directory: string, kind: TaskspaceCreateKind): Promise<void> {
+    // Opened first when it was closed: the field is drawn among the directory’s own rows,
+    // and typing into a folder that is not showing them would be typing into nothing.
+    if (!tree.isExpanded(taskspaceId, directory)) await tree.toggle(ctx, taskspaceId, directory);
+    tree.beginCreate(taskspaceId, directory, kind);
+  }
 
   // Every level indents by the same step, so the depth of a file is legible at a glance in
   // a panel too narrow to show the path it sits under.
@@ -76,6 +109,25 @@
     color: "neutral.subtle",
     fontStyle: "italic",
   });
+
+  // The row and its two controls share a hover, so the controls appear over the row rather
+  // than taking width from a name that is already being ellipsised at this panel width.
+  const rowWrapClass = css({
+    display: "flex",
+    alignItems: "center",
+    position: "relative",
+    "&:hover .hover-reveal": { opacity: "1" },
+  });
+  const createControlsClass = css({
+    position: "absolute",
+    right: "4px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    backgroundColor: "ink.light",
+  });
 </script>
 
 {#snippet fileIcon(isLink: boolean)}
@@ -86,6 +138,21 @@
     {/if}
   </svg>
 {/snippet}
+
+<!-- Above the listing rather than in the place the new entry will sort into: where that
+     is depends on a name not typed yet, and a field that jumps once it is guessed wrong is
+     worse than one that simply stays put. Drawn outside the branches below so that naming a
+     file in a folder still loading does not have to wait for the listing. -->
+{#if creatingHere}
+  <TaskspaceCreateRow
+    kind={creatingHere}
+    {indent}
+    busy={tree.createBusy}
+    error={tree.createError}
+    onSubmit={submitCreate}
+    onCancel={() => tree.cancelCreate()}
+  />
+{/if}
 
 {#if node.error}
   <div class={css({ padding: "3px 6px", fontSize: "11px", color: "state.error" })} style:padding-left={`${indent}px`}>
@@ -102,15 +169,25 @@
   {#each node.entries as entry (entry.name)}
     {@const expanded = tree.isExpanded(taskspaceId, childPath(entry.name))}
     {#if entry.kind === "directory"}
-      <button
-        class={cx(rowBase, clickableClass)}
-        style:padding-left={`${indent}px`}
-        onclick={() => tree.toggle(ctx, taskspaceId, childPath(entry.name))}
-        aria-expanded={expanded}
-      >
-        <TreeArrow {expanded} />
-        <span class={nameClass}>{entry.name}</span>
-      </button>
+      <div class={rowWrapClass}>
+        <button
+          class={cx(rowBase, clickableClass, canCreate && css({ paddingRight: "48px" }))}
+          style:padding-left={`${indent}px`}
+          onclick={() => tree.toggle(ctx, taskspaceId, childPath(entry.name))}
+          aria-expanded={expanded}
+        >
+          <TreeArrow {expanded} />
+          <span class={nameClass}>{entry.name}</span>
+        </button>
+        {#if canCreate}
+          <span class={createControlsClass}>
+            <TaskspaceCreateButtons
+              where="this folder"
+              onCreate={(kind) => startCreate(childPath(entry.name), kind)}
+            />
+          </span>
+        {/if}
+      </div>
       {#if expanded}
         <TaskspaceTree
           {tree}
@@ -119,6 +196,7 @@
           path={childPath(entry.name)}
           depth={depth + 1}
           {onOpenFile}
+          {canCreate}
         />
       {/if}
     {:else if entry.kind === "file" && onOpenFile}

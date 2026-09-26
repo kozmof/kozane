@@ -359,6 +359,19 @@ either.
 `400` for a path that leaves the taskspace, `403` when it cannot be read, `404` for an
 unknown namespace, taskspace, or directory, `503` when there is no workspace.
 
+### `POST /[namespaceId]/api/taskspaces/[taskspaceId]/files`
+
+Creates one directory. Body: `path`, a `/`-separated path relative to the taskspace root.
+
+On this route rather than beside the file creation below because what it makes is a name and
+nothing else, which is what this route deals in. Answers `201` with the new directory in the
+same shape the `GET` above uses — empty, necessarily.
+
+Non-recursive: a parent that is not there is a `404` rather than created. `409` when the name
+is already taken, by a file, a directory, or a symlink; creating never replaces what it
+finds. Otherwise as the listing above — the same containment, and the same refusal of
+dot-entries.
+
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/file`
 
 The text of one file. Query: `path`.
@@ -370,6 +383,21 @@ is listed there: regular files only, under 1MB, valid UTF-8, never a dot-entry.
 Answers the content and the signature it was read at, which a save sends back.
 
 `413` when the file is too large, `415` when it is not text, otherwise as the listing above.
+
+### `POST /[namespaceId]/api/taskspaces/[taskspaceId]/file`
+
+Creates one empty file. Body: `path`.
+
+Answers `201` with the file as the `GET` above would return it — the path, an empty
+`content`, and the `signature` those bytes have — so the editor can open on what comes back
+rather than asking again for a file it just made.
+
+Empty is all it makes. Contents arrive through the `PUT` below, so the rules about what may
+be written apply to the first save as to every later one; a body carrying `content` is a
+`400` rather than quietly ignored.
+
+`409` when something is already at that name. `404` when the parent directory is not there,
+which this never creates. Otherwise as above.
 
 ### `PUT /[namespaceId]/api/taskspaces/[taskspaceId]/file`
 

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { GET, PUT } from "./+server.js";
+import { GET, POST, PUT } from "./+server.js";
 import { addNamespace } from "$db/api/namespace.js";
 import { addTaskspace } from "$db/api/taskspace.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
@@ -19,16 +19,30 @@ function getEvent(db: DB, namespaceId: string, taskspaceId: string, path?: strin
   return { locals: { db }, params: { namespaceId, taskspaceId }, url } as never;
 }
 
-function putEvent(db: DB, namespaceId: string, taskspaceId: string, payload: unknown) {
+function bodyEvent(
+  db: DB,
+  namespaceId: string,
+  taskspaceId: string,
+  method: "POST" | "PUT",
+  payload: unknown,
+) {
   const request = new Request(
     `http://localhost/${namespaceId}/api/taskspaces/${taskspaceId}/file`,
     {
-      method: "PUT",
+      method,
       body: JSON.stringify(payload),
       headers: { "content-type": "application/json" },
     },
   );
   return { locals: { db }, params: { namespaceId, taskspaceId }, request } as never;
+}
+
+function putEvent(db: DB, namespaceId: string, taskspaceId: string, payload: unknown) {
+  return bodyEvent(db, namespaceId, taskspaceId, "PUT", payload);
+}
+
+function postEvent(db: DB, namespaceId: string, taskspaceId: string, payload: unknown) {
+  return bodyEvent(db, namespaceId, taskspaceId, "POST", payload);
 }
 
 async function expectHttpRejection(value: unknown, status: number, message: string) {
@@ -185,6 +199,99 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]/file", () => {
       expect((await body(GET(getEvent(db, namespaceId, unassignedId, "README.md")))).content).toBe(
         "hello\n",
       );
+    });
+  });
+
+  describe("POST", () => {
+    it("creates an empty file and answers 201 with what the editor needs", async () => {
+      const res = (await POST(
+        postEvent(db, namespaceId, taskspaceId, { path: "new.md" }),
+      )) as Response;
+      expect(res.status).toBe(201);
+
+      const file = (await res.json()) as Body;
+      expect(file).toMatchObject({ path: "new.md", content: "" });
+      expect(file.signature).toEqual(expect.any(String));
+      expect(readFileSync(join(demo, "new.md"), "utf-8")).toBe("");
+    });
+
+    it("creates a file in a subdirectory", async () => {
+      await POST(postEvent(db, namespaceId, taskspaceId, { path: "src/new.ts" }));
+      expect(readFileSync(join(demo, "src", "new.ts"), "utf-8")).toBe("");
+    });
+
+    it("hands the editor a signature a save is accepted against", async () => {
+      const created = await body(POST(postEvent(db, namespaceId, taskspaceId, { path: "new.md" })));
+      const saved = await body(
+        PUT(
+          putEvent(db, namespaceId, taskspaceId, {
+            path: "new.md",
+            content: "typed\n",
+            signature: created.signature,
+          }),
+        ),
+      );
+      expect(saved.content).toBe("typed\n");
+      expect(readFileSync(join(demo, "new.md"), "utf-8")).toBe("typed\n");
+    });
+
+    it("answers 409 rather than replacing a file already there", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: "README.md" })),
+        409,
+        "File already exists",
+      );
+      expect(readFileSync(join(demo, "README.md"), "utf-8")).toBe("hello\n");
+    });
+
+    it("answers 409 for a name held by a directory", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: "src" })),
+        409,
+        "File already exists",
+      );
+    });
+
+    it("answers 400 for a path that leaves the taskspace", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: "../outside/owned.txt" })),
+        400,
+        "Path must stay inside the taskspace",
+      );
+      expect(readdirSync(join(tmpRoot, "outside"))).toEqual(["secret.txt"]);
+    });
+
+    it("answers 400 for a dot-entry the tree would never show", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: ".env" })),
+        400,
+        "Dot-entries cannot be opened",
+      );
+    });
+
+    it("answers 400 when no path is given", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, {})),
+        400,
+        "path is required",
+      );
+    });
+
+    it("answers 404 rather than creating the parent directories", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: "nope/deep.txt" })),
+        404,
+        "Directory not found",
+      );
+    });
+
+    it("refuses content rather than silently dropping it", async () => {
+      await expectHttpRejection(
+        POST(postEvent(db, namespaceId, taskspaceId, { path: "new.md", content: "hi" })),
+        400,
+        "content is not accepted here; create the file, then PUT its contents",
+      );
+      expect(readdirSync(demo).includes("new.md")).toBe(false);
     });
   });
 

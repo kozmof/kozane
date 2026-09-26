@@ -193,9 +193,9 @@ deliberately.
 
 ## Taskspace files
 
-The browser UI lists a taskspace directory, and opens and saves the text files in
-it, so the server reads and writes the filesystem on behalf of whoever has the
-page open. What that reaches is bounded.
+The browser UI lists a taskspace directory, opens and saves the text files in it,
+and creates new files and folders in it, so the server reads and writes the
+filesystem on behalf of whoever has the page open. What that reaches is bounded.
 
 Both the listing and the file endpoints are confined the same way. The directory
 comes from the taskspace record and the workspace root; the request chooses only
@@ -254,6 +254,18 @@ containing a dot-entry. The write is atomic — a temporary file, then a rename 
 so a failure leaves the original intact rather than truncated. A save also
 carries the file's identity as it was read, and is refused with 409 if the file
 changed on disk since, so a save cannot silently discard someone else's edit.
+
+**Creating** makes one empty file, or one directory, and nothing else. It never
+replaces what it finds: a name already taken — by a file, a directory, or a
+symlink — is refused with 409, and the kernel, not the check preceding it, is
+what settles two requests racing for one name. It is confined exactly as reading
+and writing are, by the same resolution and the same two boundary checks, so a
+`..`, a symlinked directory along the way, and a dot-entry are refused here as
+there — a dot-file the panel could neither list nor open cannot be created
+either. Neither form creates parent directories: a path whose parent is not
+there is a 404 rather than a tree conjured by one request. Contents arrive only
+through a save, so everything stated above about writing governs what can end up
+in a file made this way.
 
 Two consequences are worth stating plainly.
 

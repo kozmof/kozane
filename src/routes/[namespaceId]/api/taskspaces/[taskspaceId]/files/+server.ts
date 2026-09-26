@@ -1,14 +1,8 @@
-import { error, json } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { getNamespace } from "$db/api/namespace";
-import { getTaskspaceInNamespace } from "$db/api/taskspace";
-import { getWorkspaceRoot } from "$db/internal/config";
-import { resolveTaskspacePath } from "$lib/server/taskspace-path";
-import {
-  listTaskspaceDirectory,
-  TASKSPACE_FILES_STATUS,
-  TaskspaceFilesError,
-} from "$lib/server/taskspace-files";
+import { createTaskspaceDirectory, listTaskspaceDirectory } from "$lib/server/taskspace-files";
+import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
+import { readJsonObject, requireString } from "../../../../lib/request.js";
 
 /**
  * One directory of a taskspace, for the tree the scope panel draws. The panel asks per
@@ -18,36 +12,37 @@ import {
  * Names and metadata only. There is no endpoint that returns the contents of a file.
  */
 export const GET: RequestHandler = async ({ locals, params, url }) => {
-  const { db } = locals;
-
-  if (!(await getNamespace({ db, namespaceId: params.namespaceId })))
-    throw error(404, "Namespace not found");
-
-  // Looked up under the same filter the board draws with — this namespace's taskspaces and
-  // the unassigned ones — so the panel and the endpoints behind it answer about one set.
-  // What keeps a request inside a directory is the boundary `listTaskspaceDirectory` holds
-  // below, which stands however the row was found; this is about the endpoint not quietly
-  // reaching further than the namespace it is addressed to.
-  const taskspace = await getTaskspaceInNamespace({
-    db,
-    namespaceId: params.namespaceId,
-    taskspaceId: params.taskspaceId,
-  });
-  if (!taskspace) throw error(404, "Taskspace not found");
-  if (!taskspace.path) throw error(404, "Taskspace has no directory");
-
-  const root = getWorkspaceRoot();
-  if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
-
   // The base comes from the record and the workspace root alone. The request chooses only
   // where to look within it, and `listTaskspaceDirectory` is what holds it to that.
-  const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+  const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
 
   try {
     return json(listTaskspaceDirectory({ baseDir, subPath: url.searchParams.get("path") ?? "" }));
   } catch (e) {
-    if (e instanceof TaskspaceFilesError) throw error(TASKSPACE_FILES_STATUS[e.reason], e.message);
-    console.error("Failed to list taskspace directory:", e);
-    throw error(500, "Failed to list taskspace directory");
+    rethrowFilesError(e, "Failed to list taskspace directory");
+  }
+};
+
+/**
+ * Creates one directory, and answers with it in the shape `GET` uses — empty, necessarily.
+ * The panel draws the new folder from that answer rather than asking again for a listing
+ * it was just handed.
+ *
+ * On this route rather than beside the file creation on `file/` because what it makes is a
+ * name and nothing else, which is exactly what this route deals in: `file/` is the only
+ * endpoint that carries the contents of anything, and it stays that way.
+ *
+ * Non-recursive and never replacing: a parent that is not there is a `404`, and a name
+ * already taken — by a file, a directory, or a symlink — is a `409`.
+ */
+export const POST: RequestHandler = async ({ locals, params, request }) => {
+  const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
+  const body = await readJsonObject(request);
+  const subPath = requireString(body, "path");
+
+  try {
+    return json(createTaskspaceDirectory({ baseDir, subPath }), { status: 201 });
+  } catch (e) {
+    rethrowFilesError(e, "Failed to create taskspace directory");
   }
 };

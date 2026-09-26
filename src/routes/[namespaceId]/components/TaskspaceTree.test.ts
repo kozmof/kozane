@@ -32,13 +32,17 @@ function fetcherFor(byPath: Record<string, { entries: Entry[]; truncated?: boole
   });
 }
 
-async function mount(byPath: Parameters<typeof fetcherFor>[0], path = "") {
+async function mount(
+  byPath: Parameters<typeof fetcherFor>[0],
+  path = "",
+  props: { canCreate?: boolean; onOpenFile?: (taskspacePath: string) => void } = {},
+) {
   const fetcher = fetcherFor(byPath);
   const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
   const tree = new TaskspaceTreeState();
   await tree.toggle(ctx, TS, path);
-  render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path } });
-  return { tree, fetcher };
+  render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path, ...props } });
+  return { tree, fetcher, ctx };
 }
 
 describe("TaskspaceTree", () => {
@@ -190,5 +194,121 @@ describe("TaskspaceTree opening a file", () => {
     await mountWithOpen({ "": { entries: [{ name: "app.ts", kind: "file" }] } }, undefined);
     expect(screen.queryByRole("button", { name: /app\.ts/ })).toBeNull();
     expect(screen.getByText("app.ts")).toBeInTheDocument();
+  });
+});
+
+describe("TaskspaceTree creation", () => {
+  /** Answers the POST with `created`, and every listing from `byPath` as usual. */
+  function creatingFetcher(
+    byPath: Parameters<typeof fetcherFor>[0],
+    created: unknown,
+    status = 201,
+  ) {
+    const list = fetcherFor(byPath);
+    return vi.fn(async (url: string, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Response(JSON.stringify(created), { status })
+        : list(url as never),
+    );
+  }
+
+  async function mountCreating(
+    byPath: Parameters<typeof fetcherFor>[0],
+    created: unknown,
+    onOpenFile?: (taskspacePath: string) => void,
+    status = 201,
+  ) {
+    const fetcher = creatingFetcher(byPath, created, status);
+    const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    render(TaskspaceTree, {
+      props: { tree, ctx, taskspaceId: TS, path: "", canCreate: true, onOpenFile },
+    });
+    return { tree, fetcher };
+  }
+
+  it("offers no create controls unless the tree is asked to", async () => {
+    await mount({ "": { entries: [{ name: "src", kind: "directory" }] } });
+    expect(screen.queryByRole("button", { name: "New file in this folder" })).toBeNull();
+  });
+
+  it("puts a pair of controls on every directory row", async () => {
+    await mount({ "": { entries: [{ name: "src", kind: "directory" }] } }, "", {
+      canCreate: true,
+    });
+
+    expect(screen.getByRole("button", { name: "New file in this folder" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "New folder in this folder" })).toBeTruthy();
+  });
+
+  it("opens the folder it will create in, and shows the field there", async () => {
+    const { tree, fetcher } = await mount(
+      { "": { entries: [{ name: "src", kind: "directory" }] }, src: { entries: [] } },
+      "",
+      { canCreate: true },
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "New file in this folder" }));
+
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "src", kind: "file" });
+    expect(tree.isExpanded(TS, "src")).toBe(true);
+    // The folder was read on the way, so the field is drawn among rows rather than alone.
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText("New file name")).toBeTruthy();
+  });
+
+  it("creates the file on Enter and hands it to the editor", async () => {
+    const onOpenFile = vi.fn();
+    const { tree } = await mountCreating(
+      { "": { entries: [{ name: "notes.md", kind: "file" }] } },
+      { path: "notes.md", content: "", signature: "1:2:0" },
+      onOpenFile,
+    );
+    tree.beginCreate(TS, "", "file");
+
+    const field = await screen.findByLabelText("New file name");
+    await userEvent.type(field, "notes.md{Enter}");
+
+    expect(onOpenFile).toHaveBeenCalledWith("notes.md");
+    expect(tree.creating).toBeNull();
+  });
+
+  it("creates a folder without sending anything to the editor", async () => {
+    const onOpenFile = vi.fn();
+    const { tree } = await mountCreating(
+      { "": { entries: [{ name: "docs", kind: "directory" }] } },
+      { path: "docs", entries: [], truncated: false },
+      onOpenFile,
+    );
+    tree.beginCreate(TS, "", "directory");
+
+    await userEvent.type(await screen.findByLabelText("New folder name"), "docs{Enter}");
+
+    expect(onOpenFile).not.toHaveBeenCalled();
+    expect(tree.creating).toBeNull();
+  });
+
+  it("shows why a name was refused and keeps the field", async () => {
+    const { tree } = await mountCreating(
+      { "": { entries: [] } },
+      { message: "File already exists" },
+      undefined,
+      409,
+    );
+    tree.beginCreate(TS, "", "file");
+
+    await userEvent.type(await screen.findByLabelText("New file name"), "notes.md{Enter}");
+
+    expect(screen.getByRole("alert").textContent).toContain("File already exists");
+    expect(tree.creating).not.toBeNull();
+  });
+
+  it("puts the field away on Escape", async () => {
+    const { tree } = await mount({ "": { entries: [] } }, "", { canCreate: true });
+    tree.beginCreate(TS, "", "file");
+
+    await userEvent.type(await screen.findByLabelText("New file name"), "{Escape}");
+    expect(tree.creating).toBeNull();
   });
 });

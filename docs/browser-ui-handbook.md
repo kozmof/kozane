@@ -333,6 +333,23 @@ The tree does not refresh on its own — live sync watches the database, not the
 disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
 than 500 entries is cut off, and the panel says so at the end of the listing.
 
+### Adding a file or folder
+
+Hover a taskspace or any folder in its tree for two controls beside it: one adds
+a file, the other a folder. Either opens a name field among that folder's rows,
+opening the folder first if it was closed. Press `Enter` to create, `Esc` to
+give up; clicking elsewhere gives up too.
+
+The field takes one name, not a path — a `/` in it is refused, so what you type
+is always made in the folder the field sits under. Names starting with a dot are
+refused as well, since the tree does not draw dot-entries and the file would
+vanish the moment it existed.
+
+A new file is created empty and opens in the editor straight away, ready to type
+into. A new folder simply appears in the tree. Neither ever replaces anything: a
+name already taken is refused, and the panel says so with the field still open
+over what you typed, so you can correct the name rather than retype it.
+
 ### Editing a file
 
 Click a file to open it in an editor panel over the canvas. Type into it and
@@ -357,8 +374,9 @@ reload.
 Only text files can be opened, and only up to 1 MB. A file larger than that, or
 one that is not valid UTF-8, is refused rather than truncated or mangled: the
 panel writes back what it holds, so anything it could not read exactly is
-something it must not be allowed to save over. Saving replaces an existing file
-and never creates one; there is no way to add a file from the browser.
+something it must not be allowed to save over. Saving only ever replaces a file
+that is already there — a new one is made empty by the tree's own control, as
+above, and everything on this page then governs the first save as any other.
 
 The file is read when it is opened, and the save is checked against what is on
 disk at that moment. If the file changed underneath — another editor, a build, a

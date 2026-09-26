@@ -1,10 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import {
+  createTaskspaceDirectory,
+  createTaskspaceFile,
   listTaskspaceDirectory,
   readTaskspaceFile,
   TaskspaceFilesError,
@@ -340,5 +350,171 @@ describe("readTaskspaceFile / writeTaskspaceFile", () => {
       signature: opened.signature,
     });
     expect(readdirSync(base)).toEqual(["notes.md"]);
+  });
+});
+
+describe("createTaskspaceFile", () => {
+  let root: string;
+  let base: string;
+  let outside: string;
+
+  beforeEach(() => {
+    root = join(tmpdir(), `kozane-create-test-${randomUUID()}`);
+    base = join(root, "taskspace");
+    outside = join(root, "outside");
+    mkdirSync(join(base, "src"), { recursive: true });
+    mkdirSync(outside, { recursive: true });
+    writeFileSync(join(outside, "secret.txt"), "not yours");
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("creates an empty file and answers as the editor would open it", () => {
+    const made = createTaskspaceFile({ baseDir: base, subPath: "notes.md" });
+
+    expect(made.path).toBe("notes.md");
+    expect(made.content).toBe("");
+    expect(readFileSync(join(base, "notes.md"), "utf-8")).toBe("");
+    // The signature is what a save will be checked against, so it has to be the one a read
+    // of the same file produces rather than merely non-null.
+    expect(made.signature).toBe(
+      readTaskspaceFile({ baseDir: base, subPath: "notes.md" }).signature,
+    );
+  });
+
+  it("creates a file in a subdirectory", () => {
+    expect(createTaskspaceFile({ baseDir: base, subPath: "src/app.ts" }).path).toBe("src/app.ts");
+    expect(readFileSync(join(base, "src", "app.ts"), "utf-8")).toBe("");
+  });
+
+  it("saves into a file it just created", () => {
+    const made = createTaskspaceFile({ baseDir: base, subPath: "notes.md" });
+    writeTaskspaceFile({
+      baseDir: base,
+      subPath: "notes.md",
+      content: "first\n",
+      signature: made.signature,
+    });
+    expect(readFileSync(join(base, "notes.md"), "utf-8")).toBe("first\n");
+  });
+
+  it("refuses a name already taken by a file", () => {
+    writeFileSync(join(base, "notes.md"), "mine\n");
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "notes.md" })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+    expect(readFileSync(join(base, "notes.md"), "utf-8")).toBe("mine\n");
+  });
+
+  it("refuses a name already taken by a directory", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "src" })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+  });
+
+  it("refuses a name held by a symlink rather than following it", () => {
+    symlinkSync(join(outside, "secret.txt"), join(base, "link.txt"), "file");
+
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "link.txt" })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+    expect(readFileSync(join(outside, "secret.txt"), "utf-8")).toBe("not yours");
+  });
+
+  it("refuses a path that walks out of the taskspace", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "../outside/owned.txt" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+    expect(readdirSync(outside)).toEqual(["secret.txt"]);
+  });
+
+  it("refuses a dot-entry, which the tree would never show", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: ".env" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+    expect(readdirSync(base)).toEqual(["src"]);
+  });
+
+  it("refuses a path holding a NUL byte", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "no\0pe.txt" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+  });
+
+  it("does not create the parent directories of the file", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "nope/deep.txt" })).toThrow(
+      expect.objectContaining({ reason: "not-found" }),
+    );
+    expect(readdirSync(base)).toEqual(["src"]);
+  });
+
+  it("refuses an empty path", () => {
+    expect(() => createTaskspaceFile({ baseDir: base, subPath: "" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+  });
+});
+
+describe("createTaskspaceDirectory", () => {
+  let root: string;
+  let base: string;
+  let outside: string;
+
+  beforeEach(() => {
+    root = join(tmpdir(), `kozane-mkdir-test-${randomUUID()}`);
+    base = join(root, "taskspace");
+    outside = join(root, "outside");
+    mkdirSync(join(base, "src"), { recursive: true });
+    mkdirSync(outside, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it("creates a directory and answers with the empty listing of it", () => {
+    const made = createTaskspaceDirectory({ baseDir: base, subPath: "docs" });
+
+    expect(made).toEqual({ path: "docs", entries: [], truncated: false });
+    expect(lstatSync(join(base, "docs")).isDirectory()).toBe(true);
+    // The same shape the listing endpoint answers with, so the panel can draw from either.
+    expect(listTaskspaceDirectory({ baseDir: base, subPath: "docs" })).toEqual(made);
+  });
+
+  it("creates a directory inside another", () => {
+    expect(createTaskspaceDirectory({ baseDir: base, subPath: "src/lib" }).path).toBe("src/lib");
+    expect(lstatSync(join(base, "src", "lib")).isDirectory()).toBe(true);
+  });
+
+  it("refuses a name already taken", () => {
+    writeFileSync(join(base, "README.md"), "hello");
+    expect(() => createTaskspaceDirectory({ baseDir: base, subPath: "src" })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+    expect(() => createTaskspaceDirectory({ baseDir: base, subPath: "README.md" })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+  });
+
+  it("refuses a path that walks out of the taskspace", () => {
+    expect(() => createTaskspaceDirectory({ baseDir: base, subPath: "../outside/owned" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it("refuses a dot-entry", () => {
+    expect(() => createTaskspaceDirectory({ baseDir: base, subPath: ".git" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+  });
+
+  it("does not create intermediate directories", () => {
+    expect(() => createTaskspaceDirectory({ baseDir: base, subPath: "a/b/c" })).toThrow(
+      expect.objectContaining({ reason: "not-found" }),
+    );
+    expect(readdirSync(base)).toEqual(["src"]);
   });
 });

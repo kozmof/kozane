@@ -1,50 +1,12 @@
 import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { getNamespace } from "$db/api/namespace";
-import { getTaskspaceInNamespace } from "$db/api/taskspace";
-import { getWorkspaceRoot } from "$db/internal/config";
-import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import {
+  createTaskspaceFile,
   readTaskspaceFile,
-  TASKSPACE_FILES_STATUS,
-  TaskspaceFilesError,
   writeTaskspaceFile,
 } from "$lib/server/taskspace-files";
+import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { optionalString, readJsonObject, requireString } from "../../../../lib/request.js";
-
-/**
- * The taskspace directory one request is confined to, resolved from the record and the
- * workspace root alone. The request chooses only where to look within it, and
- * `readTaskspaceFile`/`writeTaskspaceFile` are what hold it to that.
- *
- * The row is fetched through `getTaskspaceInNamespace`, so a namespace's endpoint answers only
- * about the taskspaces that namespace's board draws. That is not what keeps a request inside
- * a directory — the functions above hold that boundary however the row was found — but
- * every other namespace-scoped endpoint here refuses a row belonging to another namespace, and
- * being the one that does not is a difference nothing gains from.
- *
- * The same lookup the sibling `files/` route makes.
- */
-async function taskspaceBaseDir(locals: App.Locals, namespaceId: string, taskspaceId: string) {
-  const { db } = locals;
-
-  if (!(await getNamespace({ db, namespaceId }))) throw error(404, "Namespace not found");
-
-  const taskspace = await getTaskspaceInNamespace({ db, namespaceId, taskspaceId });
-  if (!taskspace) throw error(404, "Taskspace not found");
-  if (!taskspace.path) throw error(404, "Taskspace has no directory");
-
-  const root = getWorkspaceRoot();
-  if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
-
-  return resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
-}
-
-function rethrow(e: unknown, whatFailed: string): never {
-  if (e instanceof TaskspaceFilesError) throw error(TASKSPACE_FILES_STATUS[e.reason], e.message);
-  console.error(`${whatFailed}:`, e);
-  throw error(500, whatFailed);
-}
 
 /**
  * The text of one file of a taskspace, for the editor the scope panel opens.
@@ -59,7 +21,34 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
   try {
     return json(readTaskspaceFile({ baseDir, subPath: url.searchParams.get("path") ?? "" }));
   } catch (e) {
-    rethrow(e, "Failed to read taskspace file");
+    rethrowFilesError(e, "Failed to read taskspace file");
+  }
+};
+
+/**
+ * Creates one empty file and answers with it as the editor would have opened it —
+ * `path`, an empty `content`, and the `signature` those empty bytes have — so the panel can
+ * go straight into editing without a second request for a file it just made.
+ *
+ * Empty is all it makes. Content arrives through `PUT` like every other save, so the rules
+ * about what may be written are applied to the first one as to the rest; a body carrying
+ * `content` is refused rather than quietly ignored, since silently dropping what someone
+ * sent is worse than telling them where it goes.
+ *
+ * `409` when something is already at that name: creating never replaces what it finds, and
+ * a client that meant to overwrite has `PUT` and a signature for saying so.
+ */
+export const POST: RequestHandler = async ({ locals, params, request }) => {
+  const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
+  const body = await readJsonObject(request);
+  const subPath = requireString(body, "path");
+  if (optionalString(body, "content") !== undefined)
+    throw error(400, "content is not accepted here; create the file, then PUT its contents");
+
+  try {
+    return json(createTaskspaceFile({ baseDir, subPath }), { status: 201 });
+  } catch (e) {
+    rethrowFilesError(e, "Failed to create taskspace file");
   }
 };
 
@@ -85,6 +74,6 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
   try {
     return json(writeTaskspaceFile({ baseDir, subPath, content, signature }));
   } catch (e) {
-    rethrow(e, "Failed to save taskspace file");
+    rethrowFilesError(e, "Failed to save taskspace file");
   }
 };

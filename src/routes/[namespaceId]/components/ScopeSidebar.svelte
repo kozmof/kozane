@@ -1,7 +1,12 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { Scope, ScopeRel, TaskspaceSummary } from "$lib/types";
-  import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
+  import type {
+    TaskspaceCreateKind,
+    TaskspaceTreeContext,
+    TaskspaceTreeState,
+  } from "../lib/taskspace-tree.svelte.js";
+  import TaskspaceCreateButtons from "./TaskspaceCreateButtons.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
   import TreeArrow from "./TreeArrow.svelte";
 
@@ -114,6 +119,16 @@
     return cx("scope-delete", scopeDeleteBase, focused ? scopeDeleteFocusedClass : scopeDeleteClass);
   }
 
+  /**
+   * Opens the name field at the root of `taskspaceId`, expanding it first if it was closed:
+   * the field is drawn among the taskspace’s own rows, so a closed one has nowhere to show it.
+   */
+  async function startCreate(taskspaceId: string, kind: TaskspaceCreateKind): Promise<void> {
+    if (!taskspaceTree.isExpanded(taskspaceId, ""))
+      await taskspaceTree.toggle(treeContext, taskspaceId, "");
+    taskspaceTree.beginCreate(taskspaceId, "", kind);
+  }
+
   const taskspaceRowClass = css({
     display: "flex",
     alignItems: "center",
@@ -132,17 +147,23 @@
   });
   const taskspaceRowButtonClass = css({
     cursor: "pointer",
-    paddingRight: "24px",
+    paddingRight: "68px",
     "&:hover": { backgroundColor: "neutral.bg" },
   });
   const taskspaceNameClass = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
-  const taskspaceRefreshClass = css({
+  const taskspaceActionsClass = css({
     position: "absolute",
     right: "4px",
     top: "50%",
     transform: "translateY(-50%)",
-    width: "16px",
-    height: "16px",
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    backgroundColor: "ink.light",
+  });
+  const taskspaceRefreshClass = css({
+    width: "20px",
+    height: "20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -150,7 +171,7 @@
     border: "none",
     cursor: "pointer",
     borderRadius: "2px",
-    fontSize: "11px",
+    fontSize: "13px",
     color: "neutral.subtle",
     opacity: "0",
     transition: "opacity 0.12s, color 0.12s",
@@ -271,7 +292,7 @@
                      always were. -->
                 {@const browsable = !readonly || treeContext.staticFiles?.[taskspace.id] !== undefined}
                 <div class={css({ display: "flex", flexDirection: "column", gap: "1px" })}>
-                  <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .taskspace-refresh": { opacity: "1" } })}>
+                  <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .hover-reveal": { opacity: "1" } })}>
                     {#if browsable}
                       <button
                         class={cx(taskspaceRowClass, taskspaceRowButtonClass)}
@@ -281,12 +302,23 @@
                         <TreeArrow {expanded} />
                         <span class={taskspaceNameClass}>{taskspace.name}</span>
                       </button>
-                      {#if expanded && !readonly}
-                        <button
-                          class={cx("taskspace-refresh", taskspaceRefreshClass)}
-                          title="Re-read this taskspace from disk"
-                          onclick={(e) => { e.stopPropagation(); taskspaceTree.refresh(treeContext, taskspace.id); }}
-                        >⟳</button>
+                      {#if !readonly}
+                        <span class={taskspaceActionsClass}>
+                          <!-- The taskspace root gets the same pair every folder under it
+                               has, because the root is the folder most files are made in
+                               and reaching it through the tree would mean opening nothing. -->
+                          <TaskspaceCreateButtons
+                            where="this taskspace"
+                            onCreate={(kind) => startCreate(taskspace.id, kind)}
+                          />
+                          {#if expanded}
+                            <button
+                              class={cx("hover-reveal", taskspaceRefreshClass)}
+                              title="Re-read this taskspace from disk"
+                              onclick={(e) => { e.stopPropagation(); taskspaceTree.refresh(treeContext, taskspace.id); }}
+                            >⟳</button>
+                          {/if}
+                        </span>
                       {/if}
                     {:else}
                       <div class={taskspaceRowClass}>
@@ -303,6 +335,7 @@
                       path=""
                       onOpenFile={onOpenFile &&
                         ((filePath) => onOpenFile(taskspace.id, taskspace.name, filePath))}
+                      canCreate={!readonly}
                     />
                   {/if}
                 </div>

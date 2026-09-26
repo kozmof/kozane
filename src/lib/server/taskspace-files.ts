@@ -1,4 +1,12 @@
-import { type Dirent, lstatSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import {
+  type Dirent,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
@@ -9,6 +17,7 @@ export type TaskspaceFilesReason =
   | "invalid-path"
   | "not-found"
   | "forbidden"
+  | "exists"
   | "too-large"
   | "not-text"
   | "stale";
@@ -25,6 +34,10 @@ export const TASKSPACE_FILES_STATUS: Record<TaskspaceFilesReason, number> = {
   "invalid-path": 400,
   forbidden: 403,
   "not-found": 404,
+  // Something is already at that name. A conflict rather than a bad request, for the same
+  // reason `stale` is one: nothing about what was sent is wrong, and it is the state on
+  // disk that refuses it. Creating never replaces what it finds.
+  exists: 409,
   // The file changed on disk since the editor read it. A conflict rather than a bad
   // request: nothing about what was sent is wrong, only the version it was sent against.
   stale: 409,
@@ -163,7 +176,8 @@ export function listTaskspaceDirectory({
 }
 
 /**
- * The taskspace-relative path of one file, resolved and held inside the taskspace.
+ * The taskspace-relative path of one entry — a file or a directory, existing or not yet —
+ * resolved and held inside the taskspace.
  *
  * The boundary is the same one {@link listTaskspaceDirectory} holds, and for the same
  * reason: the caller supplies `baseDir` from the taskspace record, and the request chooses
@@ -175,13 +189,18 @@ export function listTaskspaceDirectory({
  * would still be readable by anyone who typed the name, and the tree hiding them would be
  * decoration rather than a boundary.
  */
-function resolveTaskspaceFile(baseDir: string, subPath: string): { real: string; base: string } {
+function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string; base: string } {
   let realBase: string;
   try {
     realBase = realpathSync(baseDir);
   } catch (e) {
     throw mapFsError(e, "Taskspace directory not found");
   }
+
+  // Refused before anything is resolved: `resolve()` throws a plain TypeError on a NUL, which
+  // is not a TaskspaceFilesError and would reach the route as a 500 rather than a 400.
+  if (subPath.includes("\0"))
+    throw new TaskspaceFilesError("invalid-path", "Path must not contain a NUL byte");
 
   const segments = subPath.split("/").filter((segment) => segment !== "");
   if (segments.length === 0) throw new TaskspaceFilesError("invalid-path", "No file named");
@@ -282,7 +301,7 @@ type TaskspaceFileTarget = {
  * true of the code as well as of the answer.
  */
 export function readTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
-  const { real, base } = resolveTaskspaceFile(baseDir, subPath);
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
   statRegularFile(real);
 
   let bytes: Uint8Array;
@@ -311,9 +330,10 @@ export type WriteTaskspaceFile = TaskspaceFileTarget & {
 /**
  * Saves `content` over an existing text file of a taskspace.
  *
- * Only over an existing one. There is no affordance in the panel for creating a file, and
- * an endpoint that writes to a path nobody has seen is a larger thing to hold inside a
- * boundary than one that writes back to a file the tree already listed.
+ * Only over an existing one. Creating is {@link createTaskspaceFile}, which makes an empty
+ * file and nothing more, so that a save is always a save: this function decides what may
+ * be written — the size cap, valid UTF-8, the signature check — and there is no second
+ * path into a file that restates any of it.
  *
  * The write goes through {@link writeFileAtomic}, so a failure leaves the original intact
  * rather than truncated, and the rename it ends with is what makes the returned signature
@@ -325,7 +345,7 @@ export function writeTaskspaceFile({
   content,
   signature,
 }: WriteTaskspaceFile): TaskspaceFile {
-  const { real, base } = resolveTaskspaceFile(baseDir, subPath);
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
   statRegularFile(real);
 
   if (content.includes("\0"))
@@ -352,4 +372,91 @@ export function writeTaskspaceFile({
     content,
     signature: fileSignature(real),
   };
+}
+
+/**
+ * Refuses the path if anything is already there.
+ *
+ * `lstat` rather than `stat`, so a dangling symlink counts as occupied: creating over one
+ * would follow it, and a link pointing out of the taskspace is exactly what the boundary
+ * exists to refuse. The check is advisory — between it and the syscall that follows, the
+ * name may be taken by something else — which is why both creators below ask the kernel
+ * for exclusivity as well, and this is only here to answer with the reason rather than
+ * with a bare `EEXIST`.
+ */
+function assertNothingAt(real: string, what: string): void {
+  try {
+    lstatSync(real);
+  } catch {
+    return; // nothing there, which is the whole requirement
+  }
+  throw new TaskspaceFilesError("exists", `${what} already exists`);
+}
+
+/**
+ * Creates one empty text file in a taskspace, for the editor to open on.
+ *
+ * Empty, and only ever empty. The panel creates a file and then saves into it through
+ * {@link writeTaskspaceFile}, so the rules about what may be written — the size cap, valid
+ * UTF-8, the signature check against what is on disk — are stated in one place and applied
+ * to the first save as to every later one. A create that also carried content would be a
+ * second, quieter way into the same file with its own copy of those rules.
+ *
+ * It never replaces anything. `wx` is what actually guarantees that: the existence check
+ * above answers with a reason, but two requests racing for one name are separated by the
+ * kernel, and the loser is refused rather than truncating the winner's file.
+ *
+ * The boundary is the one {@link readTaskspaceFile} holds — same resolver, so a `..`, a
+ * symlinked directory along the way, and a dot-entry are refused here exactly as they are
+ * there. A file whose parent directory does not exist is `not-found` rather than created:
+ * creating the parents would let one request make a tree nobody has seen.
+ */
+export function createTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
+  assertNothingAt(real, "File");
+
+  try {
+    writeFileSync(real, "", { flag: "wx" });
+  } catch (e) {
+    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    if (code === "EEXIST") throw new TaskspaceFilesError("exists", "File already exists");
+    throw mapFsError(e, "Directory not found");
+  }
+
+  return {
+    path: relative(base, real).split(sep).join("/"),
+    content: "",
+    signature: fileSignature(real),
+  };
+}
+
+/**
+ * Creates one directory in a taskspace, and answers with it as the tree draws it.
+ *
+ * A {@link TaskspaceListing} rather than a bare acknowledgement, and the same shape
+ * {@link listTaskspaceDirectory} returns, so the panel can put the new folder on screen
+ * from the answer it already has. It is empty, necessarily — nothing else could be true of
+ * a directory a moment after `mkdir`.
+ *
+ * Non-recursive. A parent that is not there is `not-found`, for the reason
+ * {@link createTaskspaceFile} gives: one request should not be able to conjure a tree.
+ * `mkdir` is itself exclusive, so as there, a race loses rather than quietly succeeding
+ * against a name somebody else just took.
+ */
+export function createTaskspaceDirectory({
+  baseDir,
+  subPath,
+}: TaskspaceFileTarget): TaskspaceListing {
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
+  assertNothingAt(real, "Directory");
+
+  try {
+    mkdirSync(real);
+  } catch (e) {
+    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    if (code === "EEXIST") throw new TaskspaceFilesError("exists", "Directory already exists");
+    throw mapFsError(e, "Directory not found");
+  }
+
+  return { path: relative(base, real).split(sep).join("/"), entries: [], truncated: false };
 }

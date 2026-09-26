@@ -359,6 +359,41 @@ export function fetchTaskspaceFiles(
 }
 
 /**
+ * Creates one empty file in a taskspace. Answers as {@link fetchTaskspaceFile} would for it,
+ * so the editor can open on what comes back rather than asking again; `409` when something
+ * is already at that name.
+ *
+ * Empty is all it makes — the first save goes through {@link saveTaskspaceFile} like every
+ * later one.
+ */
+export function createTaskspaceFile(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+  path: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file`), "POST", {
+    path,
+  });
+}
+
+/**
+ * Creates one directory in a taskspace, and answers with the (empty) listing of it. On the
+ * `files` route because a folder is a name and nothing more, which is what that route deals
+ * in. `404` when its parent is not there, `409` when the name is taken.
+ */
+export function createTaskspaceFolder(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+  path: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/files`), "POST", {
+    path,
+  });
+}
+
+/**
  * The text of one taskspace file, for the editor. A sibling of {@link fetchTaskspaceFiles}
  * and deliberately a different endpoint: that one answers with names and metadata, and
  * this is the only one that returns what is in a file.
