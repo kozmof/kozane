@@ -26,7 +26,7 @@ function listingResponse(names: string[]): Response {
 
 function mount(overrides: Record<string, unknown> = {}) {
   const fetcher = vi.fn(async () => listingResponse(["README.md"]));
-  render(ScopeSidebar, {
+  const rendered = render(ScopeSidebar, {
     props: {
       visible: true,
       panelWidth: 240,
@@ -44,13 +44,12 @@ function mount(overrides: Record<string, unknown> = {}) {
       onDeleteScope: () => {},
       onAddToScope: () => {},
       onRemoveFromScope: () => {},
-      framedScopeIds: new Set<string>(),
-      onRemoveScopeArea: () => {},
+      frameCountByScopeId: new Map<string, number>(),
       onCreateTaskspace: () => {},
       ...overrides,
     },
   });
-  return { fetcher };
+  return { ...rendered, fetcher };
 }
 
 describe("ScopeSidebar taskspaces", () => {
@@ -131,8 +130,7 @@ describe("ScopeSidebar taskspaces", () => {
         onDeleteScope: () => {},
         onAddToScope: () => {},
         onRemoveFromScope: () => {},
-        framedScopeIds: new Set<string>(),
-        onRemoveScopeArea: () => {},
+        frameCountByScopeId: new Map<string, number>(),
         onCreateTaskspace: () => {},
         onOpenFile,
         readonly: true,
@@ -180,28 +178,44 @@ describe("ScopeSidebar focus state", () => {
 });
 
 describe("ScopeSidebar scope areas", () => {
-  function frameButton(): HTMLElement {
-    return screen.getByRole("button", { name: /frame/i });
+  /** The panel's frame indicator for the one scope these tests mount. */
+  function frameMark(container: HTMLElement): HTMLElement | null {
+    return container.querySelector<HTMLElement>("[title^='Framed']");
   }
 
-  it("shows no frame button for a scope that has none", () => {
-    // A frame is put on the board by drawing one there, so there is nothing for a button to
-    // do here. Its absence is also how the panel says the scope is unframed.
-    mount();
+  it("says nothing for a scope with no frames", () => {
+    const { container } = mount();
+    expect(frameMark(container)).toBeNull();
+  });
+
+  it("marks a scope framed once without a number", () => {
+    const { container } = mount({ frameCountByScopeId: new Map([[SCOPE.id, 1]]) });
+
+    // The glyph alone is the whole story at one, and a "1" beside it would only invite the
+    // question of what else it could have been.
+    expect(frameMark(container)?.textContent?.trim()).toBe("▣");
+    expect(frameMark(container)).toHaveAttribute("title", "Framed once on this board");
+  });
+
+  it("counts the frames when a scope has more than one", () => {
+    const { container } = mount({ frameCountByScopeId: new Map([[SCOPE.id, 3]]) });
+
+    expect(frameMark(container)?.textContent?.trim()).toBe("▣3");
+    expect(frameMark(container)).toHaveAttribute("title", "Framed in 3 places on this board");
+  });
+
+  // It reports rather than acts: a scope may be framed in several places, so the panel has
+  // no way to say which one a button would mean. Removal lives on each frame.
+  it("offers no button to remove a frame", () => {
+    mount({ frameCountByScopeId: new Map([[SCOPE.id, 2]]) });
     expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();
   });
 
-  it("offers to remove the frame of a scope that has one", async () => {
-    const onRemoveScopeArea = vi.fn();
-    mount({ framedScopeIds: new Set([SCOPE.id]), onRemoveScopeArea });
-
-    await userEvent.click(frameButton());
-
-    expect(onRemoveScopeArea).toHaveBeenCalledWith(SCOPE.id);
-  });
-
-  it("offers no frame button on a read-only board", () => {
-    mount({ framedScopeIds: new Set([SCOPE.id]), readonly: true });
-    expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();
+  it("shows nothing on a read-only board", () => {
+    const { container } = mount({
+      frameCountByScopeId: new Map([[SCOPE.id, 1]]),
+      readonly: true,
+    });
+    expect(frameMark(container)).toBeNull();
   });
 });

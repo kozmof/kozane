@@ -12,6 +12,7 @@
     resizing = false,
     onMouseDown,
     onResizeMouseDown,
+    onRemove,
   }: {
     area: ScopeArea;
     /** The scope's name, drawn on the frame's tab. */
@@ -28,6 +29,14 @@
     onMouseDown: (event: MouseEvent) => void;
     /** The press on the corner handle, which the canvas turns into a resize. */
     onResizeMouseDown: (event: MouseEvent) => void;
+    /**
+     * Takes this frame off the board.
+     *
+     * On the frame rather than in the side panel, because a scope may be framed in several
+     * places and the panel has no way to say which one you mean. Here the answer is the one
+     * you clicked.
+     */
+    onRemove: () => void;
   } = $props();
 
   // The tab sits above the frame rather than inside it, so it never covers a card in the
@@ -116,6 +125,45 @@
   >
     {name}
   </button>
+
+  {#if draggable}
+    <!-- Rides at the right-hand end of the tab, outside the tab's own button so a press on
+         it is a removal rather than the start of a drag. -->
+    <button
+      class={css({
+        position: "absolute",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "16px",
+        border: "none",
+        background: "none",
+        cursor: "pointer",
+        fontSize: "12px",
+        lineHeight: "1",
+        opacity: "0",
+        transition: "opacity 0.12s, color 0.12s",
+        "&:hover, &:focus-visible": { opacity: "1", color: "state.error" },
+        "[data-scope-area-id]:hover &": { opacity: "0.7" },
+      })}
+      aria-label="Remove frame {name}"
+      title="Remove this frame. The scope keeps its cards."
+      style:left="calc(100% + 4px)"
+      style:top="-{TAB_HEIGHT}px"
+      style:height="{TAB_HEIGHT}px"
+      style:pointer-events="auto"
+      style:color={focused ? accent : "var(--colors-neutral-secondary)"}
+      onmousedown={(e) => {
+        // The tab beside this one arms a drag on mousedown; this must not.
+        e.stopPropagation();
+        e.preventDefault();
+      }}
+      onclick={(e) => {
+        e.stopPropagation();
+        onRemove();
+      }}>×</button
+    >
+  {/if}
 
   {#if draggable}
     <button

@@ -85,9 +85,11 @@ function makeProps(overrides: Overrides = {}) {
     scopeNameById: new Map<string, string>(),
     activeScopeId: null,
     pendingScopeAreaRect: null,
+    onRemoveScopeArea: vi.fn(),
     onPersistScopeArea: vi.fn(
       async (
         _scopeId: string,
+        _areaId: string,
         _rect: { posX: number; posY: number; width: number; height: number },
       ) => true,
     ),
@@ -763,7 +765,7 @@ describe("KozaneCanvas scope areas", () => {
     // The delta is what snaps to the grid, not the frame's own corner: the frame carries
     // its cards, so moving it by a multiple of the grid leaves everything aligned as it was.
     expect(props.scopeAreas[0]).toMatchObject({ posX: 148, posY: 248 });
-    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", {
+    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a1", {
       posX: 148,
       posY: 248,
       width: 640,
@@ -908,7 +910,7 @@ describe("KozaneCanvas scope areas", () => {
     up();
     await settle();
 
-    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", {
+    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a1", {
       // The origin stays put: a frame that moved while being resized would take its cards'
       // relationship to it with it.
       posX: 100,
@@ -1107,3 +1109,121 @@ describe("KozaneCanvas scope area drawing", () => {
     expect(drawn!.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
   });
 });
+
+/**
+ * Several frames for one scope, which is the case the membership rule has to get right.
+ *
+ * A scope's members are measured against everything it covers, not against each frame in
+ * turn. Asked per frame, a card that merely stopped overlapping one of them would read as
+ * having left the scope it is plainly still sitting in.
+ */
+describe("KozaneCanvas scope areas: several frames per scope", () => {
+  const twoFrames = [
+    scopeArea({ id: "a1", scopeId: "s1", posX: 0, posY: 0, width: 400, height: 400 }),
+    scopeArea({ id: "a2", scopeId: "s1", posX: 1000, posY: 0, width: 400, height: 400 }),
+  ];
+
+  function mountTwo(overrides: Overrides = {}) {
+    return makeProps({
+      scopeAreas: twoFrames,
+      scopeNameById: new Map([["s1", "Now"]]),
+      ...overrides,
+    });
+  }
+
+  it("draws a frame for each", () => {
+    const { container } = render(KozaneCanvas, mountTwo());
+    expect(container.querySelectorAll("[data-scope-area-id]")).toHaveLength(2);
+  });
+
+  it("says nothing when a card moves from one of a scope's frames to another", async () => {
+    const props = mountTwo();
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 50, y: 50, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    // Out of the first frame and into the second — still inside the scope throughout.
+    layOut(el, { x: 1050, y: 50, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
+  });
+
+  it("files a card out only once it has left every frame of the scope", async () => {
+    const props = mountTwo();
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 50, y: 50, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    layOut(el, { x: 2000, y: 2000, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).toHaveBeenCalledWith("s1", {
+      entered: [],
+      exited: ["c1"],
+    });
+  });
+
+  it("keeps a card in the scope when the frame it is not in is shrunk away", async () => {
+    const props = mountTwo();
+    const { container } = render(KozaneCanvas, props);
+    // Inside the second frame only.
+    layOut(cardEl(container, "c1"), { x: 1050, y: 50, w: 240, h: 80 });
+
+    // Shrink the first frame, which the card was never in.
+    down(
+      container.querySelector<HTMLElement>(
+        "[data-scope-area-id='a1'] button[aria-label^='Resize']",
+      )!,
+      0,
+      0,
+    );
+    move(-240, -240);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
+  });
+
+  it("reports the frame that moved, not the scope", async () => {
+    const props = mountTwo();
+    const { container } = render(KozaneCanvas, props);
+
+    down(areaTabFor(container, "a2"), 100, 100);
+    move(148, 148);
+    up();
+    await settle();
+
+    // Keyed by area id: the other frame of the same scope has not moved.
+    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a2", expect.any(Object));
+    expect(props.scopeAreas[0]).toMatchObject({ id: "a1", posX: 0, posY: 0 });
+  });
+
+  it("removes the frame whose button was pressed", async () => {
+    const props = mountTwo();
+    const { container } = render(KozaneCanvas, props);
+
+    const remove = container.querySelector<HTMLElement>(
+      "[data-scope-area-id='a2'] button[aria-label^='Remove frame']",
+    )!;
+    remove.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await settle();
+
+    expect(props.onRemoveScopeArea).toHaveBeenCalledWith("s1", "a2");
+  });
+});
+
+/** The drag tab of one particular frame. */
+function areaTabFor(container: HTMLElement, areaId: string): HTMLElement {
+  const found = container.querySelector<HTMLElement>(
+    `[data-scope-area-id="${areaId}"] button[aria-label^="Scope area"]`,
+  );
+  if (!found) throw new Error(`no tab for area "${areaId}"`);
+  return found;
+}

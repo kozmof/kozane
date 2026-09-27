@@ -738,7 +738,7 @@ export function createNamespaceActions(state: NamespaceState) {
     rect: { posX: number; posY: number; width: number; height: number },
     covers: string[] = [],
   ) {
-    const res = await api.setScopeArea(state.mutationFetcher, state.namespaceId, scopeId, rect);
+    const res = await api.createScopeArea(state.mutationFetcher, state.namespaceId, scopeId, rect);
     if (!res.ok) {
       state.setError(await api.failureMessage(res, "Failed to add scope area"));
       return;
@@ -748,7 +748,9 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError("Failed to add scope area");
       return;
     }
-    state.scopeAreas = [...state.scopeAreas.filter((a) => a.scopeId !== scopeId), stored];
+    // Appended, not replacing the scope's other frames: a scope may be framed in several
+    // places, and drawing another one says so rather than moving the one already there.
+    state.scopeAreas = [...state.scopeAreas, stored];
     if (covers.length > 0) {
       await handleScopeMembershipChange(scopeId, { entered: covers, exited: [] });
     }
@@ -788,10 +790,17 @@ export function createNamespaceActions(state: NamespaceState) {
    * scope is drawn, not what belongs to it, and removing one by accident must not be a way
    * to lose a membership list.
    */
-  async function handleDeleteScopeArea(scopeId: string) {
+  async function handleDeleteScopeArea(scopeId: string, areaId: string) {
     const prev = state.scopeAreas;
-    state.scopeAreas = state.scopeAreas.filter((a) => a.scopeId !== scopeId);
-    const res = await api.deleteScopeArea(state.mutationFetcher, state.namespaceId, scopeId);
+    // By id: the frame removed is the one whose button was clicked, not every frame the
+    // scope happens to have here.
+    state.scopeAreas = state.scopeAreas.filter((a) => a.id !== areaId);
+    const res = await api.deleteScopeArea(
+      state.mutationFetcher,
+      state.namespaceId,
+      scopeId,
+      areaId,
+    );
     if (!res.ok) {
       state.scopeAreas = prev;
       state.setError("Failed to remove scope area");

@@ -27,8 +27,7 @@
     onDeleteScope,
     onAddToScope,
     onRemoveFromScope,
-    framedScopeIds,
-    onRemoveScopeArea,
+    frameCountByScopeId,
     onCreateTaskspace,
     onOpenFile,
     readonly = false,
@@ -51,9 +50,12 @@
     onDeleteScope: (scopeId: string) => void;
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
-    /** The scopes that already have a frame on this board. */
-    framedScopeIds: Set<string>;
-    onRemoveScopeArea: (scopeId: string) => void;
+    /**
+     * How many frames each scope has on this board. Reported rather than acted on: a scope
+     * may be framed in several places, so the panel has no way to say which one a button
+     * would mean — each frame carries its own remove button on the canvas instead.
+     */
+    frameCountByScopeId: Map<string, number>;
     onCreateTaskspace: () => void;
     /**
      * Opens one file of one taskspace in the editor. Absent in a static export that has no
@@ -152,12 +154,18 @@
   });
 
   /**
-   * Always visible, unlike the delete button beside it, which appears on hover: this button
-   * is the only thing in the panel saying the scope is framed at all, and a status you have
-   * to hover to see is a poor way to be told.
+   * Always visible, unlike the delete button beside it, which appears on hover: this is the
+   * only thing in the panel saying the scope is framed at all, and a status you have to
+   * hover to see is a poor way to be told.
    */
   function scopeFrame(focused: boolean) {
     return cx(scopeFrameBase, focused ? scopeFrameFocusedClass : scopeFrameClass);
+  }
+
+  function frameTitle(frames: number): string {
+    return frames === 1
+      ? "Framed once on this board"
+      : `Framed in ${frames} places on this board`;
   }
 
   /**
@@ -286,19 +294,15 @@
             </span>
           </button>
           {#if !readonly}
-          {@const framed = framedScopeIds.has(scope.id)}
-          <!-- Only for a scope that has a frame, and only to take it away. A frame is put on
-               the board by drawing one there (Alt-drag), so there is nothing for this button
-               to do on a scope that has none. The label leaves the scope's own name out: the
-               row button beside this one carries it, and repeating it here would give the
-               panel two buttons answering to the same name. -->
-          {#if framed}
-          <button
-            class={scopeFrame(active)}
-            aria-label="Remove frame"
-            title="Remove this scope's frame from the board"
-            onclick={(e) => { e.stopPropagation(); onRemoveScopeArea(scope.id); }}
-          >▣</button>
+          {@const frames = frameCountByScopeId.get(scope.id) ?? 0}
+          <!-- A report, not a control: frames are drawn on the canvas (Alt-drag) and removed
+               from the frame itself, because a scope may be framed in several places and the
+               panel cannot say which one a button would mean. The number is shown only past
+               one, where the glyph alone stops being the whole story. -->
+          {#if frames > 0}
+          <span class={scopeFrame(active)} title={frameTitle(frames)}>
+            ▣{frames > 1 ? frames : ""}
+          </span>
           {/if}
           <button
             class={scopeDelete(active)}

@@ -4,7 +4,6 @@
 
   let {
     scopes,
-    framedScopeIds,
     cardCount,
     onChoose,
     onCreate,
@@ -12,8 +11,6 @@
   }: {
     /** Already narrowed to this namespace by the snapshot, the same list the panel gets. */
     scopes: Scope[];
-    /** Scopes that already have a frame here, which cannot take a second one. */
-    framedScopeIds: Set<string>;
     /** How many cards the drawn rectangle covers, so the choice is made knowing the cost. */
     cardCount: number;
     onChoose: (scopeId: string) => void;
@@ -24,10 +21,9 @@
   let newName = $state("");
   let inputEl: HTMLInputElement | undefined = $state();
 
-  // A scope may hold one frame per board, so one already framed here is not on offer: a
-  // second would be a second rectangle for the same scope, which the unique index refuses
-  // and the panel could not tell apart.
-  const available = $derived(scopes.filter((scope) => !framedScopeIds.has(scope.id)));
+  // Every scope, including ones already framed here: a scope may be organised in several
+  // places on one board, and framing it again is the ordinary way to say so.
+  const available = $derived(scopes);
 
   export function focusInput() {
     inputEl?.focus();

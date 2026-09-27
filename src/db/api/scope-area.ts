@@ -3,7 +3,8 @@ import { and, asc, eq } from "drizzle-orm";
 import type { NeedsNamespace, ScopeArea } from "./types.js";
 import { assertFound } from "./utils.js";
 
-type NeedsNamespaceScope = NeedsNamespace & { scopeId: string };
+type NeedsNamespaceArea = NeedsNamespace & { scopeId: string; areaId: string };
+type Rect = { posX: number; posY: number; width: number; height: number };
 
 /**
  * The frames drawn on one board, oldest first — uuidv7 ids already hold creation order, and
@@ -23,25 +24,16 @@ export async function getScopeAreasInNamespace({
     .orderBy(asc(scopeAreaTable.id));
 }
 
-type SetScopeArea = NeedsNamespaceScope & {
-  posX: number;
-  posY: number;
-  width: number;
-  height: number;
-};
+type AddScopeArea = NeedsNamespace & { scopeId: string } & Rect;
 
 /**
- * Puts the scope's frame on this board, wherever it was before.
+ * Draws another frame for a scope on this board.
  *
- * One upsert rather than an add and a move, because the two are the same write: the unique
- * index on `(scope_id, namespace_id)` is what makes "there is already a frame here" a conflict
- * to update rather than a second row, and the board has no operation that means "add a frame
- * without knowing whether one is there" — dragging one is the same PUT as creating it.
- *
- * The whole stored row comes back, so a client that drew the frame where the pointer let go
- * can correct it to the clamped rectangle that was kept. Same contract as {@link moveWarp}.
+ * A plain insert, not an upsert: a scope may be framed in several places at once, so there
+ * is nothing here for a second frame to conflict with. Which frame a later move or removal
+ * acts on is settled by its own id.
  */
-export async function setScopeArea({
+export async function addScopeArea({
   db,
   namespaceId,
   scopeId,
@@ -49,31 +41,70 @@ export async function setScopeArea({
   posY,
   width,
   height,
-}: SetScopeArea): Promise<ScopeArea> {
+}: AddScopeArea): Promise<ScopeArea> {
   const [row] = await db
     .insert(scopeAreaTable)
     .values({ namespaceId, scopeId, posX, posY, width, height })
-    .onConflictDoUpdate({
-      target: [scopeAreaTable.scopeId, scopeAreaTable.namespaceId],
-      set: { posX, posY, width, height },
-    })
     .returning();
   return row;
 }
 
+type MoveScopeArea = NeedsNamespaceArea & Rect;
+
 /**
- * Takes the scope's frame off this board. The scope and every card in it are left alone: an
- * area says where a scope is drawn, not what is in it, and a frame removed by accident would
- * otherwise take a membership list with it.
+ * Puts one frame somewhere else on the board, or makes it another size.
+ *
+ * The whole stored row comes back, so a caller that drew the frame where the pointer let go
+ * can correct it to the clamped rectangle that was kept. Same contract as `moveWarp`.
+ *
+ * `namespaceId` and `scopeId` are checked alongside the id, which alone would do: the pair is
+ * the access boundary, the same way `deleteWarp` checks a namespace it does not need.
+ */
+export async function moveScopeArea({
+  db,
+  namespaceId,
+  scopeId,
+  areaId,
+  posX,
+  posY,
+  width,
+  height,
+}: MoveScopeArea): Promise<ScopeArea> {
+  const updated = await db
+    .update(scopeAreaTable)
+    .set({ posX, posY, width, height })
+    .where(
+      and(
+        eq(scopeAreaTable.id, areaId),
+        eq(scopeAreaTable.namespaceId, namespaceId),
+        eq(scopeAreaTable.scopeId, scopeId),
+      ),
+    )
+    .returning();
+  assertFound(updated, `ScopeArea namespaceId=${namespaceId} areaId=${areaId}`);
+  return updated[0];
+}
+
+/**
+ * Takes one frame off the board. The scope keeps every card in it, and keeps its other
+ * frames: an area says where a scope is drawn, not what belongs to it, and removing one by
+ * accident must not be a way to lose a membership list.
  */
 export async function deleteScopeArea({
   db,
   namespaceId,
   scopeId,
-}: NeedsNamespaceScope): Promise<void> {
+  areaId,
+}: NeedsNamespaceArea): Promise<void> {
   const deleted = await db
     .delete(scopeAreaTable)
-    .where(and(eq(scopeAreaTable.namespaceId, namespaceId), eq(scopeAreaTable.scopeId, scopeId)))
+    .where(
+      and(
+        eq(scopeAreaTable.id, areaId),
+        eq(scopeAreaTable.namespaceId, namespaceId),
+        eq(scopeAreaTable.scopeId, scopeId),
+      ),
+    )
     .returning({ id: scopeAreaTable.id });
-  assertFound(deleted, `ScopeArea namespaceId=${namespaceId} scopeId=${scopeId}`);
+  assertFound(deleted, `ScopeArea namespaceId=${namespaceId} areaId=${areaId}`);
 }

@@ -311,35 +311,45 @@ A scope can also be given a frame on the canvas — a rectangle with the scope's
 name on a tab above it. Cards overlapping the frame belong to the scope, so a
 scope can be filled by dragging rather than by selecting and clicking.
 
+A scope can have several frames on one board, or none. A "Now" scope might have
+a cluster by the inbox and another by the archive: the same scope in two places.
+A card inside **any** of a scope's frames belongs to it.
+
 - Add a frame — hold `Alt` and drag a rectangle on the canvas, the same way
   `Shift` drags a selection. On release, a prompt asks which scope the
   rectangle belongs to: pick one from the list, or type a name to make a new
   scope and frame it in one go. Whatever the rectangle covers joins the scope.
   `Escape`, or the `×` on the prompt, discards the rectangle.
 
-  Scopes already framed on this board are left out of the list: a scope has at
-  most one frame per board. A rectangle smaller than 120 canvas pixels on a
-  side is grown to that, so the frame can still be grabbed by its tab
-  afterwards; an `Alt`-click that goes nowhere is discarded without asking.
-- Move it — drag the tab. The cards inside travel with the frame, so a scope
-  can be relocated as a unit, and anything the frame comes to rest on joins it.
-- Resize it — drag the corner handle. Growing the frame takes in what it now
-  covers; shrinking it past a card lets that card out.
-- Drag a card across the edge — dragging one in adds it to the scope, dragging
-  one out removes it.
-- Remove the frame — click the `▣` on the scope's row in the panel. The button
-  is there only for a scope that has a frame here, so it doubles as the panel's
-  way of saying which scopes are framed. The scope keeps every card in it: a
-  frame says where a scope is drawn, not what belongs to it.
+  Every scope on the board is on offer, including ones already framed here —
+  framing a scope again is how you say it is organised in more than one place.
+  A rectangle smaller than 120 canvas pixels on a side is grown to that, so the
+  frame can still be grabbed by its tab afterwards; an `Alt`-click that goes
+  nowhere is discarded without asking.
+- Move one — drag its tab. The cards inside travel with it, so a cluster can be
+  relocated as a unit, and anything the frame comes to rest on joins the scope.
+- Resize one — drag the corner handle. Growing the frame takes in what it now
+  covers; shrinking it past a card lets that card out, unless the card is also
+  inside another frame of the same scope.
+- Drag a card across an edge — dragging one into any of a scope's frames adds
+  it to the scope; dragging one out removes it, once it is outside all of them.
+- Remove one — click the `×` beside its tab. Removal is on the frame rather
+  than in the panel because a scope may be framed in several places, and only
+  the frame itself can say which one you mean. The scope keeps every card in
+  it, and keeps its other frames: a frame says where a scope is drawn, not what
+  belongs to it.
 
-Only cards that actually cross the edge change hands. A card put in a scope
+The panel reports rather than acts: a scope row shows `▣` when the scope is
+framed here, with a count beside it past one.
+
+Only cards that actually cross an edge change hands. A card put in a scope
 from the panel or from `kozane scope add-cards` can sit anywhere on the board,
-and moving it around outside the frame leaves its membership alone.
+and moving it around outside every frame leaves its membership alone.
 
-The frame is drawn under the cards and belongs to no layer, so it never dims
-with one, and clicking, dragging or sweeping a selection over the middle of it
-works exactly as it does on bare canvas. Each board has its own frame for a
-shared scope, or none — the rectangle is this namespace's, the scope is not.
+Frames are drawn under the cards and belong to no layer, so they never dim with
+one, and clicking, dragging or sweeping a selection over the middle of one
+works exactly as it does on bare canvas. Each board has its own frames for a
+shared scope — the rectangles are this namespace's, the scope is not.
 
 ## Taskspaces
 

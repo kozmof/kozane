@@ -15,7 +15,7 @@ import { addNamespace } from "./namespace.js";
 import { addPartition } from "./partition.js";
 import { addCard } from "./card.js";
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
-import { getScopeAreasInNamespace, setScopeArea } from "./scope-area.js";
+import { getScopeAreasInNamespace, addScopeArea } from "./scope-area.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer } from "./layer.js";
 import { addTaskspace, deleteTaskspace, getTaskspace } from "./taskspace.js";
@@ -157,7 +157,7 @@ describe("deleteScopeFromNamespace", () => {
 
   it("takes this namespace's frame away with it", async () => {
     const { d, namespaceId, scopeId } = await setup();
-    await setScopeArea({
+    await addScopeArea({
       db: d,
       namespaceId,
       scopeId,
@@ -183,8 +183,8 @@ describe("deleteScopeFromNamespace", () => {
     await addLayer({ db: d, namespaceId: p2, name: "Base", isDefault: true });
     const scopeId = await addScope({ db: d, name: "Shared" });
     const rect = { posX: 0, posY: 0, width: 640, height: 480 };
-    await setScopeArea({ db: d, namespaceId: p1, scopeId, ...rect });
-    await setScopeArea({ db: d, namespaceId: p2, scopeId, ...rect });
+    await addScopeArea({ db: d, namespaceId: p1, scopeId, ...rect });
+    await addScopeArea({ db: d, namespaceId: p2, scopeId, ...rect });
 
     await deleteScopeFromNamespace({ db: d, namespaceId: p1, scopeId });
 
@@ -319,7 +319,7 @@ describe("getScopesInNamespace", () => {
   it("returns a card-less scope to the namespace it is framed on", async () => {
     const { d, p1, p2 } = await twoNamespaces();
     const scopeId = await addScope({ db: d, name: "Framed" });
-    await setScopeArea({
+    await addScopeArea({
       db: d,
       namespaceId: p1,
       scopeId,

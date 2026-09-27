@@ -297,21 +297,38 @@ export function removeCardsFromScope(
  * coordinates, never a delta: the server clamps it to the canvas and answers with what it
  * kept.
  */
-export function setScopeArea(
+export function createScopeArea(
   fetcher: typeof fetch,
   namespaceId: string,
   scopeId: string,
   rect: { posX: number; posY: number; width: number; height: number },
 ): Promise<Response> {
-  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/area`), "PUT", rect);
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/areas`), "POST", rect);
+}
+
+/** Moves or resizes one frame. `rect` is the whole rectangle, never a delta. */
+export function moveScopeArea(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  scopeId: string,
+  areaId: string,
+  rect: { posX: number; posY: number; width: number; height: number },
+): Promise<Response> {
+  return jsonRequest(
+    fetcher,
+    apiUrl(namespaceId, `/scopes/${scopeId}/areas/${areaId}`),
+    "PATCH",
+    rect,
+  );
 }
 
 export function deleteScopeArea(
   fetcher: typeof fetch,
   namespaceId: string,
   scopeId: string,
+  areaId: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/area`), "DELETE");
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/areas/${areaId}`), "DELETE");
 }
 
 /**

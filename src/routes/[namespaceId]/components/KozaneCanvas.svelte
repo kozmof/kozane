@@ -61,6 +61,7 @@
     activeScopeId,
     pendingScopeAreaRect = $bindable(),
     onPersistScopeArea,
+    onRemoveScopeArea,
     onScopeMembershipChange,
     warps = $bindable(),
     focusedWarpId,
@@ -102,8 +103,9 @@
     selection: SelectionState;
     scopeCardIds: Set<string> | null;
     /**
-     * Where this board's scopes are framed. At most one per scope, and most scopes have none:
-     * a frame is drawn only for a scope someone has given a place to.
+     * Where this board's scopes are framed. A scope may have several frames here, or none:
+     * a frame is drawn only where someone has drawn one, and a scope organised in two places
+     * is framed in two places. A card inside any of a scope's frames belongs to it.
      */
     scopeAreas: ScopeAreaRow[];
     /** The name each frame draws on its tab, by scope id. */
@@ -126,8 +128,11 @@
      */
     onPersistScopeArea: (
       scopeId: string,
+      areaId: string,
       rect: { posX: number; posY: number; width: number; height: number },
     ) => Promise<boolean>;
+    /** Takes one frame off the board. The scope and its other frames are left alone. */
+    onRemoveScopeArea: (scopeId: string, areaId: string) => void;
     /**
      * Files the cards that crossed a frame's edge into the scope, or out of it. Called after
      * the positions behind the crossing are saved, so a card is never filed into a scope at a
@@ -312,6 +317,7 @@
    * every pointer move would pick up whatever the frame happened to be passing over.
    */
   let areaDragState: {
+    areaId: string;
     scopeId: string;
     startX: number;
     startY: number;
@@ -321,12 +327,18 @@
     cardIds: string[];
     cardIdSet: Set<string>;
     cardPrevPositions: Map<string, { x: number; y: number }>;
-    /** Who was inside before the drag — the `before` half of `membershipTransition`. */
+    /**
+     * Who was in the *scope* before the drag, across every frame it has on this board — the
+     * `before` half of `membershipTransition`. Wider than `cardIds`, which is only what this
+     * frame carries: a card sitting in another frame of the same scope is a member throughout,
+     * however this one moves. See `cardIdsInScope`.
+     */
     membersBefore: Set<string>;
     moved: boolean;
   } | null = null;
 
   let areaResizeState: {
+    areaId: string;
     scopeId: string;
     startClientX: number;
     startClientY: number;
@@ -338,8 +350,8 @@
 
   /** Where the pointer was last seen during a frame resize, so the release can snap. */
   let areaResizePointer: { x: number; y: number } | null = null;
-  let draggingAreaScopeId = $state<string | null>(null);
-  let resizingAreaScopeId = $state<string | null>(null);
+  let draggingAreaId = $state<string | null>(null);
+  let resizingAreaId = $state<string | null>(null);
 
   let panState: {
     startX: number;
@@ -574,7 +586,9 @@
       groupIds,
       groupIdSet: new Set(groupIds),
       groupPrevPositions,
-      areaMembersBefore: new Map(scopeAreas.map((a) => [a.scopeId, cardIdsInArea(a)])),
+      // Per scope, not per frame. Built per frame, a scope framed twice would keep only the
+      // last frame's set — so a card in the other one would read as having just arrived.
+      areaMembersBefore: membersByScope(),
       moved: false,
     };
     draggingId = cardId;
@@ -612,6 +626,38 @@
     return cardIdsInRect(areaWorldRect(area));
   }
 
+  /** The scopes drawn on this board, each with the frames it has here. */
+  function areasByScope(): Map<string, ScopeAreaRow[]> {
+    const byScope = new Map<string, ScopeAreaRow[]>();
+    for (const area of scopeAreas) {
+      const existing = byScope.get(area.scopeId);
+      if (existing) existing.push(area);
+      else byScope.set(area.scopeId, [area]);
+    }
+    return byScope;
+  }
+
+  /**
+   * Which cards are inside a scope *anywhere on this board* — the union over its frames.
+   *
+   * The union is what makes several frames per scope behave like one membership. Asked per
+   * frame instead, a card dragged out of one and into another of the same scope would read
+   * as having left and joined in the same breath, and — worse — a card that merely stopped
+   * overlapping one frame while still sitting inside another would be filed out of the scope
+   * it is plainly still in. Membership is a fact about the scope, so it is measured against
+   * everything the scope covers.
+   */
+  function cardIdsInScope(areas: ScopeAreaRow[]): Set<string> {
+    const hit = new Set<string>();
+    for (const area of areas) for (const id of cardIdsInArea(area)) hit.add(id);
+    return hit;
+  }
+
+  /** Who is in each scope on this board right now, by scope id. */
+  function membersByScope(): Map<string, Set<string>> {
+    return new Map([...areasByScope()].map(([scopeId, areas]) => [scopeId, cardIdsInScope(areas)]));
+  }
+
   const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
 
   /**
@@ -622,13 +668,13 @@
    * the warp drop above.
    */
   async function persistArea(
-    scopeId: string,
+    area: ScopeAreaRow,
     sent: { posX: number; posY: number; width: number; height: number },
     prev: { posX: number; posY: number; width: number; height: number },
   ): Promise<boolean> {
-    const ok = await onPersistScopeArea(scopeId, sent);
+    const ok = await onPersistScopeArea(area.scopeId, area.id, sent);
     if (ok) return true;
-    const current = scopeAreas.find((a) => a.scopeId === scopeId);
+    const current = scopeAreas.find((a) => a.id === area.id);
     if (
       current &&
       current.posX === sent.posX &&
@@ -654,12 +700,14 @@
     membersBefore: Map<string, Set<string>>,
   ): { scopeId: string; change: MembershipTransition }[] {
     const changes: { scopeId: string; change: MembershipTransition }[] = [];
-    for (const area of scopeAreas) {
-      const before = membersBefore.get(area.scopeId);
+    // Over the scopes rather than over the frames, so a scope framed in three places is
+    // asked about once, against everything it covers. See `cardIdsInScope`.
+    for (const [scopeId, areas] of areasByScope()) {
+      const before = membersBefore.get(scopeId);
       if (!before) continue;
-      const change = membershipTransition(before, cardIdsInArea(area));
+      const change = membershipTransition(before, cardIdsInScope(areas));
       if (change.entered.length === 0 && change.exited.length === 0) continue;
-      changes.push({ scopeId: area.scopeId, change });
+      changes.push({ scopeId, change });
     }
     return changes;
   }
@@ -670,11 +718,6 @@
     for (const { scopeId, change } of changes) {
       await onScopeMembershipChange(scopeId, change);
     }
-  }
-
-  /** The same, for a gesture that moved one frame rather than the cards. */
-  function scopeAreaChange(scopeId: string, before: Set<string>) {
-    return scopeAreaChanges(new Map([[scopeId, before]]));
   }
 
   /**
@@ -712,46 +755,50 @@
     return [...cardIdsInRect(rect)];
   }
 
-  export function handleScopeAreaMouseDown(e: MouseEvent, scopeId: string) {
+  export function handleScopeAreaMouseDown(e: MouseEvent, areaId: string) {
     if (readonly || e.button !== 0 || dragState || resizeState || areaDragState) return;
-    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    const area = scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
+    // The cards this frame carries are the ones inside *it*; who counts as a member of the
+    // scope is a wider question, and `membersBefore` asks it across all of the scope's frames.
     const cardIds = [...cardIdsInArea(area)];
     areaDragState = {
-      scopeId,
+      areaId,
+      scopeId: area.scopeId,
       startX: e.clientX,
       startY: e.clientY,
       prevRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
       cardIds,
       cardIdSet: new Set(cardIds),
       cardPrevPositions: previousPositions(cards, cardIds),
-      membersBefore: new Set(cardIds),
+      membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
       moved: false,
     };
-    draggingAreaScopeId = scopeId;
+    draggingAreaId = areaId;
     onPositionActivityStart();
   }
 
-  export function handleScopeAreaResizeMouseDown(e: MouseEvent, scopeId: string) {
+  export function handleScopeAreaResizeMouseDown(e: MouseEvent, areaId: string) {
     if (readonly || e.button !== 0 || areaResizeState) return;
-    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    const area = scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
     areaResizeState = {
-      scopeId,
+      areaId,
+      scopeId: area.scopeId,
       startClientX: e.clientX,
       startClientY: e.clientY,
       startRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
-      membersBefore: cardIdsInArea(area),
+      membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
       moved: false,
     };
-    resizingAreaScopeId = scopeId;
+    resizingAreaId = areaId;
     onPositionActivityStart();
   }
 
   function updateDraggedArea(clientX: number, clientY: number, snapToGrid = false) {
     if (!areaDragState) return;
-    const { scopeId, startX, startY, prevRect, cardIdSet, cardPrevPositions } = areaDragState;
-    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    const { areaId, startX, startY, prevRect, cardIdSet, cardPrevPositions } = areaDragState;
+    const area = scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
 
     const rawDx = (clientX - startX) / zoom;
@@ -782,8 +829,8 @@
 
   function updateResizedArea(clientX: number, clientY: number, snapToGrid = false) {
     if (!areaResizeState) return;
-    const { scopeId, startClientX, startClientY, startRect } = areaResizeState;
-    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    const { areaId, startClientX, startClientY, startRect } = areaResizeState;
+    const area = scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
     const next = resizedRect({
       rect: { x: startRect.posX, y: startRect.posY, w: startRect.width, h: startRect.height },
@@ -1163,11 +1210,11 @@
         if (areaDragState.moved && lastPointer) {
           updateDraggedArea(lastPointer.x, lastPointer.y, true);
         }
-        const { scopeId, moved, prevRect, cardIds, cardPrevPositions, membersBefore } =
+        const { areaId, scopeId, moved, prevRect, cardIds, cardPrevPositions, membersBefore } =
           areaDragState;
         areaDragState = null;
-        draggingAreaScopeId = null;
-        const dropped = moved ? scopeAreas.find((a) => a.scopeId === scopeId) : undefined;
+        draggingAreaId = null;
+        const dropped = moved ? scopeAreas.find((a) => a.id === areaId) : undefined;
         if (dropped) {
           const sent = {
             posX: dropped.posX,
@@ -1181,12 +1228,12 @@
           // frame's new rectangle against the cards' old boxes, and report the members it just
           // carried across the board as having left the scope.
           await tick();
-          const areaChanges = scopeAreaChange(scopeId, membersBefore);
+          const areaChanges = scopeAreaChanges(new Map([[scopeId, membersBefore]]));
           let ok = false;
           try {
             // The frame first: the cards were carried by it, and a frame that did not move is
             // a set of cards that should not have moved either.
-            ok = await persistArea(scopeId, sent, prevRect);
+            ok = await persistArea(dropped, sent, prevRect);
             if (ok && positions.length > 0) ok = await onPersistPositions(positions);
           } finally {
             onPositionActivityEnd();
@@ -1213,11 +1260,11 @@
         if (areaResizeState.moved && areaResizePointer) {
           updateResizedArea(areaResizePointer.x, areaResizePointer.y, true);
         }
-        const { scopeId, moved, startRect, membersBefore } = areaResizeState;
+        const { areaId, scopeId, moved, startRect, membersBefore } = areaResizeState;
         areaResizeState = null;
         areaResizePointer = null;
-        resizingAreaScopeId = null;
-        const resized = moved ? scopeAreas.find((a) => a.scopeId === scopeId) : undefined;
+        resizingAreaId = null;
+        const resized = moved ? scopeAreas.find((a) => a.id === areaId) : undefined;
         if (resized) {
           const sent = {
             posX: resized.posX,
@@ -1228,10 +1275,10 @@
           // Nothing moved, but the frame's own edge did, and the release snapped it: the
           // cards it just stopped covering are decided by where that edge came to rest.
           await tick();
-          const areaChanges = scopeAreaChange(scopeId, membersBefore);
+          const areaChanges = scopeAreaChanges(new Map([[scopeId, membersBefore]]));
           let ok = false;
           try {
-            ok = await persistArea(scopeId, sent, startRect);
+            ok = await persistArea(resized, sent, startRect);
           } finally {
             onPositionActivityEnd();
           }
@@ -1363,10 +1410,11 @@
           name={scopeNameById.get(area.scopeId) ?? ""}
           focused={area.scopeId === activeScopeId}
           draggable={!readonly}
-          dragging={draggingAreaScopeId === area.scopeId}
-          resizing={resizingAreaScopeId === area.scopeId}
-          onMouseDown={(e) => handleScopeAreaMouseDown(e, area.scopeId)}
-          onResizeMouseDown={(e) => handleScopeAreaResizeMouseDown(e, area.scopeId)}
+          dragging={draggingAreaId === area.id}
+          resizing={resizingAreaId === area.id}
+          onMouseDown={(e) => handleScopeAreaMouseDown(e, area.id)}
+          onResizeMouseDown={(e) => handleScopeAreaResizeMouseDown(e, area.id)}
+          onRemove={() => onRemoveScopeArea(area.scopeId, area.id)}
         />
       {/each}
       {#each layerGroups as group (group.id)}

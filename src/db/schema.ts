@@ -152,12 +152,15 @@ export const scopeAreaTable = sqliteTable(
     height: integer().notNull(),
   },
   (t) => [
-    // One frame per scope per board: the upsert in `setScopeArea` conflicts on this, which is
-    // what makes "add a frame" and "move the frame" the same write.
-    uniqueIndex("scope_area_scope_namespace").on(t.scopeId, t.namespaceId),
-    // Read by `getScopeAreasInNamespace` on every page load and every snapshot poll, and by
-    // `getScopesInNamespace` once per scope. Same argument as `warp_namespace`: nothing else
-    // here implies an index on this column, and without one both are a full scan per poll.
+    // Deliberately not unique. A scope may be framed in several places on one board — a
+    // cluster by the inbox and another by the archive are the same scope in two placeses —
+    // so a frame is identified by its own id and nothing here constrains how many share a
+    // scope. Leading with `scope_id` so it answers `getScopesInNamespace`'s two questions:
+    // "is this scope framed on this board" and, on the prefix alone, "is it framed anywhere".
+    index("scope_area_scope").on(t.scopeId, t.namespaceId),
+    // Read by `getScopeAreasInNamespace` on every page load and every snapshot poll. Same
+    // argument as `warp_namespace`: nothing else here implies an index on this column, and
+    // without one that read is a full scan per poll per tab.
     index("scope_area_namespace").on(t.namespaceId),
   ],
 );

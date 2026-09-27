@@ -287,14 +287,16 @@ cards.
 
 Removes cards from a scope, the ones belonging to this namespace. Body: `cardIds`.
 
-### `PUT /[namespaceId]/api/scopes/[scopeId]/area`
+### `POST /[namespaceId]/api/scopes/[scopeId]/areas`
 
-Puts the scope's frame on this board, or moves and resizes the one already there. Body:
-`posX`, `posY`, `width`, `height`, all required. Answers the whole stored row.
+Draws another frame for this scope on this board. Body: `posX`, `posY`, `width`, `height`,
+all required. Answers the whole stored row.
 
-One request for both, because a scope has at most one frame per namespace and the board has
-no gesture that means "add a frame" apart from "the frame is here now". A scope may be framed
-on several boards at once; each board's frame is its own.
+A collection, not a singleton. A scope may be framed in several places on one board — a
+cluster by the inbox and another by the archive are the same scope in two places — so this
+adds a frame rather than replacing whatever was there. A card inside any of a scope's frames
+belongs to that scope. A scope may also be framed on several boards at once; each board's
+frames are its own.
 
 The rectangle is clamped to the canvas and rounded before it is stored — whole, so the far
 edge lands on the board too — which is why the stored row comes back rather than an `{ ok }`.
@@ -306,11 +308,21 @@ which is the only place a card's rendered height is known, and filed through the
 
 `400` when any of the four is missing. `404` for an unknown scope.
 
-### `DELETE /[namespaceId]/api/scopes/[scopeId]/area`
+### `PATCH /[namespaceId]/api/scopes/[scopeId]/areas/[areaId]`
 
-Takes the scope's frame off this board. The scope and every card in it are left alone.
+Moves or resizes one frame. Body and clamping as for the `POST`; the rectangle is always
+whole, never a delta. Answers the stored row.
 
-`404` when this board has no frame for that scope.
+The scope in the path is redundant for the lookup — an area id is a UUID — and is checked
+alongside it as an access boundary, the same way the namespace is.
+
+`400` when any of the four is missing. `404` when this board has no such frame.
+
+### `DELETE /[namespaceId]/api/scopes/[scopeId]/areas/[areaId]`
+
+Takes one frame off the board. The scope keeps every card in it, and keeps its other frames.
+
+`404` when this board has no such frame.
 
 ---
 

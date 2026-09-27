@@ -14,7 +14,7 @@
     parseWarpEntries,
     parseWarp,
     moveWarp,
-    setScopeArea,
+    moveScopeArea,
     parseScopeArea,
     deleteWarp,
     failureMessage,
@@ -127,8 +127,13 @@
   );
   /** What each frame writes on its tab. Built from the scopes this board draws. */
   let scopeNameById = $derived(new Map(s.scopes.map((scope) => [scope.id, scope.name])));
-  /** Which scopes already have a frame here: the panel offers to remove those and no others. */
-  let framedScopeIds = $derived(new Set(s.scopeAreas.map((a) => a.scopeId)));
+  /** How many frames each scope has on this board, which is what the panel reports. */
+  let frameCountByScopeId = $derived(
+    s.scopeAreas.reduce(
+      (counts, area) => counts.set(area.scopeId, (counts.get(area.scopeId) ?? 0) + 1),
+      new Map<string, number>(),
+    ),
+  );
   let defaultPartitionId = $derived(s.sidebar.activePartition ?? partitionsWithColors[0]?.id ?? "");
   // One pass over the cards instead of a scan per selected id. A selection is capped at
   // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
@@ -398,12 +403,15 @@
    */
   async function handlePersistScopeArea(
     scopeId: string,
+    areaId: string,
     rect: { posX: number; posY: number; width: number; height: number },
   ): Promise<boolean> {
-    const res = await setScopeArea(s.mutationFetcher, data.namespace.id, scopeId, rect);
+    const res = await moveScopeArea(s.mutationFetcher, data.namespace.id, scopeId, areaId, rect);
     if (!res.ok) return false;
     const stored = parseScopeArea(await res.json().catch(() => null));
-    if (stored) s.scopeAreas = s.scopeAreas.map((a) => (a.scopeId === scopeId ? stored : a));
+    // By id, not by scope: a scope may have several frames here, and the one that moved is
+    // the one that was dragged.
+    if (stored) s.scopeAreas = s.scopeAreas.map((a) => (a.id === areaId ? stored : a));
     return true;
   }
 
@@ -698,6 +706,7 @@
       activeScopeId={s.sidebar.activeScope}
       bind:pendingScopeAreaRect
       onPersistScopeArea={handlePersistScopeArea}
+      onRemoveScopeArea={actions.handleDeleteScopeArea}
       onScopeMembershipChange={actions.handleScopeMembershipChange}
       bind:warps={s.warps}
       focusedWarpId={s.focusedWarpId}
@@ -783,7 +792,6 @@
     {#if !readonly && pendingScopeAreaRect}
     <ScopeAreaPrompt
       scopes={s.scopes}
-      {framedScopeIds}
       cardCount={pendingScopeAreaCardCount}
       onChoose={handleChooseScopeForArea}
       onCreate={handleCreateScopeForArea}
@@ -837,8 +845,7 @@
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
-    {framedScopeIds}
-    onRemoveScopeArea={actions.handleDeleteScopeArea}
+    {frameCountByScopeId}
     onCreateTaskspace={actions.handleCreateTaskspace}
     onOpenFile={!readonly || staticFiles
       ? (taskspaceId, taskspaceName, path) =>

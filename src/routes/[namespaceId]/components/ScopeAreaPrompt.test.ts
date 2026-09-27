@@ -17,7 +17,6 @@ function mount(overrides: Record<string, unknown> = {}) {
   const rendered = render(ScopeAreaPrompt, {
     props: {
       scopes: SCOPES,
-      framedScopeIds: new Set<string>(),
       cardCount: 3,
       onChoose,
       onCreate,
@@ -29,12 +28,12 @@ function mount(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ScopeAreaPrompt", () => {
-  it("offers every scope that is not already framed here", () => {
-    mount({ framedScopeIds: new Set(["s1"]) });
+  it("offers every scope on the board, framed or not", () => {
+    mount();
 
-    // A scope holds one frame per board, so the one already framed is not on offer: a second
-    // would be a second rectangle for the same scope, which the unique index refuses.
-    expect(screen.queryByRole("button", { name: "Now" })).toBeNull();
+    // A scope may be framed in several places at once, so one that already has a frame here
+    // is still on offer: framing it again is how you say it is organised in two places.
+    expect(screen.getByRole("button", { name: "Now" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Later" })).toBeTruthy();
   });
 

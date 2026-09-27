@@ -19,6 +19,7 @@ const AREA: ScopeAreaRow = {
 function mount(overrides: Record<string, unknown> = {}) {
   const onMouseDown = vi.fn();
   const onResizeMouseDown = vi.fn();
+  const onRemove = vi.fn();
   const rendered = render(ScopeArea, {
     props: {
       area: AREA,
@@ -29,10 +30,11 @@ function mount(overrides: Record<string, unknown> = {}) {
       resizing: false,
       onMouseDown,
       onResizeMouseDown,
+      onRemove,
       ...overrides,
     },
   });
-  return { ...rendered, onMouseDown, onResizeMouseDown };
+  return { ...rendered, onMouseDown, onResizeMouseDown, onRemove };
 }
 
 describe("ScopeArea", () => {
