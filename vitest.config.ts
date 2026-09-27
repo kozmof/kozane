@@ -37,6 +37,12 @@ export default defineConfig({
     setupFiles: ["src/test-utils/setup.ts"],
     environment: "jsdom",
     maxWorkers: 4,
+    // Bounds one test, and nothing above it. Vitest has no run-level timeout, and the
+    // `teardownTimeout` watchdog is armed inside `exit()` and unref'd, so it cannot end a run
+    // that never reaches shutdown. Nothing here will stop a wedged run, so never pipe
+    // `vitest run` into a consumer that exits early (`| head`, `| grep -m`): the consumer
+    // leaves, the runner keeps going with nobody waiting on it, and one left that way sat at
+    // 93% CPU for eleven minutes. Redirect to a file and filter the file instead.
     testTimeout: 10_000,
     coverage: {
       provider: "v8",
