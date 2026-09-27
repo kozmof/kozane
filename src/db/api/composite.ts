@@ -3,7 +3,7 @@
  *
  * That is the entire rule for what belongs here, and it is worth writing down because the
  * name says how the module is built rather than what it is for — every function in it is
- * composed of others, which describes half of `db/api` and is not why these eight sit
+ * composed of others, which describes half of `db/api` and is not why these ones sit
  * together. What they share is an invariant no single-table module can hold: deleting a card
  * must dissolve a glue group the deletion would leave with one member; squashing one must
  * insert the pieces, carry the scope memberships over, and remove the original or none of

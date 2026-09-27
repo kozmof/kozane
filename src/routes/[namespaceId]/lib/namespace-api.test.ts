@@ -17,6 +17,10 @@ import {
   moveCardsToNamespace,
   createTaskspace,
   parseWarp,
+  createScopeArea,
+  moveScopeArea,
+  deleteScopeArea,
+  parseScopeArea,
 } from "./namespace-api.js";
 
 function makeFetcher() {
@@ -241,5 +245,144 @@ describe("parseWarp", () => {
     expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: 120 })).toBeNull();
     expect(parseWarp({ id: 1, namespaceId: "p-1", posX: 120, posY: 240 })).toBeNull();
     expect(parseWarp({ id: "w-1", namespaceId: "p-1", posX: NaN, posY: 240 })).toBeNull();
+  });
+});
+
+/**
+ * The scope-area wrappers, which had been the one untested block in this file — 73% of its
+ * statements and 64% of its branches, all of it here. They are thin, but "thin" is what the
+ * rest of the file says too and every other wrapper is covered: what these assert is the URL
+ * each one builds and the method it sends, which is exactly the thing a refactor gets wrong
+ * silently and no type can catch.
+ */
+describe("createScopeArea", () => {
+  it("POSTs the whole rectangle to the scope's areas collection", async () => {
+    const { fetcher, response } = makeFetcher();
+    const rect = { posX: 40, posY: 80, width: 320, height: 240 };
+
+    await expect(createScopeArea(fetcher, "ns-1", "scope-1", rect)).resolves.toBe(response);
+
+    expect(fetcher).toHaveBeenCalledWith("/ns-1/api/scopes/scope-1/areas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rect),
+    });
+  });
+
+  it("sends the rectangle as it stands, without a delta or a wrapper key", () => {
+    const { fetcher } = makeFetcher();
+    void createScopeArea(fetcher, "ns-1", "scope-1", {
+      posX: 0,
+      posY: 0,
+      width: 120,
+      height: 120,
+    });
+
+    const body = JSON.parse((fetcher.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toEqual({ posX: 0, posY: 0, width: 120, height: 120 });
+  });
+});
+
+describe("moveScopeArea", () => {
+  it("PATCHes the whole rectangle to the one frame", async () => {
+    const { fetcher, response } = makeFetcher();
+    const rect = { posX: 12, posY: 24, width: 200, height: 160 };
+
+    await expect(moveScopeArea(fetcher, "ns-1", "scope-1", "area-9", rect)).resolves.toBe(response);
+
+    expect(fetcher).toHaveBeenCalledWith("/ns-1/api/scopes/scope-1/areas/area-9", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rect),
+    });
+  });
+
+  it("addresses the frame by its own id, not by its scope", () => {
+    // A scope may be framed in several places, so the area id is what distinguishes them —
+    // a URL built from the scope alone would move whichever frame the server found first.
+    const { fetcher } = makeFetcher();
+    void moveScopeArea(fetcher, "ns-1", "scope-1", "area-second", {
+      posX: 1,
+      posY: 2,
+      width: 130,
+      height: 140,
+    });
+    expect(fetcher.mock.calls[0][0]).toBe("/ns-1/api/scopes/scope-1/areas/area-second");
+  });
+});
+
+describe("deleteScopeArea", () => {
+  it("DELETEs the one frame and sends no body", async () => {
+    const { fetcher, response } = makeFetcher();
+
+    await expect(deleteScopeArea(fetcher, "ns-1", "scope-1", "area-9")).resolves.toBe(response);
+
+    const [url, init] = fetcher.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/ns-1/api/scopes/scope-1/areas/area-9");
+    expect(init.method).toBe("DELETE");
+    expect(init.body).toBeUndefined();
+  });
+});
+
+describe("parseScopeArea", () => {
+  it("accepts the row a scope-area write answers with", () => {
+    const row = {
+      id: "area-1",
+      scopeId: "scope-1",
+      namespaceId: "ns-1",
+      posX: 40,
+      posY: 80,
+      width: 320,
+      height: 240,
+    };
+    expect(parseScopeArea(row)).toEqual(row);
+  });
+
+  it("keeps only the fields a frame has", () => {
+    expect(
+      parseScopeArea({
+        id: "area-1",
+        scopeId: "scope-1",
+        namespaceId: "ns-1",
+        posX: 1,
+        posY: 2,
+        width: 130,
+        height: 140,
+        name: "nope",
+      }),
+    ).toEqual({
+      id: "area-1",
+      scopeId: "scope-1",
+      namespaceId: "ns-1",
+      posX: 1,
+      posY: 2,
+      width: 130,
+      height: 140,
+    });
+  });
+
+  it("rejects a body that is not a frame", () => {
+    // Each branch of the three guards, because a frame built from a partial body is the
+    // failure the function exists to stop: it would be drawn at `undefined` and would file
+    // every card the next drag touched into the scope.
+    const whole = {
+      id: "area-1",
+      scopeId: "scope-1",
+      namespaceId: "ns-1",
+      posX: 1,
+      posY: 2,
+      width: 130,
+      height: 140,
+    };
+    expect(parseScopeArea(null)).toBeNull();
+    expect(parseScopeArea("area-1")).toBeNull();
+    expect(parseScopeArea({ ok: true })).toBeNull();
+    for (const key of ["id", "scopeId", "namespaceId", "posX", "posY", "width", "height"]) {
+      expect(parseScopeArea({ ...whole, [key]: undefined })).toBeNull();
+    }
+    expect(parseScopeArea({ ...whole, id: 1 })).toBeNull();
+    expect(parseScopeArea({ ...whole, posX: "40" })).toBeNull();
+    expect(parseScopeArea({ ...whole, height: NaN })).toBeNull();
+    expect(parseScopeArea({ ...whole, width: Infinity })).toBeNull();
   });
 });

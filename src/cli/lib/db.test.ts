@@ -10,8 +10,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { backupDb, getMigrationStatus, restoreDb, runMigrations } from "./db";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  backupDb,
+  getMigrationStatus,
+  listBackups,
+  migrationStatusMessage,
+  requireCurrentMigrations,
+  restoreDb,
+  runMigrations,
+} from "./db";
 import { resolveMigrationsFolder } from "../../db/internal/migrations.js";
 
 /** The same folder `getMigrationStatus` reads its journal from. */
@@ -258,5 +266,183 @@ describe("restoreDb", () => {
     await restoreDb(source, target);
 
     expect(readdirSync(root).filter((name) => name.includes(".restore-"))).toEqual([]);
+  });
+});
+
+/**
+ * `listBackups`, `migrationStatusMessage` and `requireCurrentMigrations` — the three exports
+ * this file had been leaving to the subprocess suites, and the reason `cli/lib/db.ts` sat at
+ * 62% of statements and 36% of branches while everything around it was near the thresholds.
+ *
+ * They are the recovery paths: what `kozane db status` prints, what `db restore` chooses
+ * from, and the guard every workspace command opens with. Exercising them only through a
+ * spawned `kozane` meant the wording each failure state produces — which is the entire
+ * product of `migrationStatusMessage` — was asserted nowhere.
+ */
+const ENTRY = { idx: 0, when: 1_700_000_000_000, tag: "0000_init" };
+const LATER = { idx: 1, when: 1_800_000_000_000, tag: "0001_add_width" };
+
+describe("listBackups", () => {
+  it("is empty for a workspace that has never been backed up", () => {
+    // The directory is created by the first backup, so its absence is the ordinary case
+    // rather than an error — `db restore` prints "no backups" from exactly this.
+    expect(listBackups(tempRoot())).toEqual([]);
+  });
+
+  it("is empty for a backup directory with nothing in it", () => {
+    const root = tempRoot();
+    mkdirSync(join(root, ".kozane", "backups"), { recursive: true });
+    expect(listBackups(root)).toEqual([]);
+  });
+
+  it("lists only .db files, oldest name first, as absolute paths", () => {
+    const root = tempRoot();
+    const backups = join(root, ".kozane", "backups");
+    mkdirSync(backups, { recursive: true });
+    // Written out of order, so the sort is doing the work rather than the filesystem.
+    for (const name of ["2024-03-01.db", "2024-01-01.db", "2024-02-01.db"]) {
+      writeFileSync(join(backups, name), "");
+    }
+    // The sidecars a WAL database leaves beside it, and a stray note. None is a backup.
+    for (const name of ["2024-01-01.db-wal", "2024-01-01.db-shm", "README.txt"]) {
+      writeFileSync(join(backups, name), "");
+    }
+
+    expect(listBackups(root)).toEqual([
+      join(backups, "2024-01-01.db"),
+      join(backups, "2024-02-01.db"),
+      join(backups, "2024-03-01.db"),
+    ]);
+  });
+});
+
+describe("migrationStatusMessage", () => {
+  it("reports a current database without a pending count or a remedy", () => {
+    const message = migrationStatusMessage({
+      state: "current",
+      dbPath: "/w/.kozane/kozane.db",
+      latest: ENTRY,
+      applied: ENTRY,
+      pendingCount: 0,
+    });
+
+    expect(message).toContain("Database: /w/.kozane/kozane.db");
+    expect(message).toContain("Status  : current");
+    expect(message).toContain("Latest  : 0000_init (1700000000000)");
+    expect(message).toContain("Applied : 0000_init (1700000000000)");
+    expect(message).not.toContain("Pending");
+    expect(message).not.toContain("Run     :");
+  });
+
+  it("sends a pending database to db migrate", () => {
+    const message = migrationStatusMessage({
+      state: "pending",
+      dbPath: "/w/.kozane/kozane.db",
+      latest: LATER,
+      applied: ENTRY,
+      pendingCount: 1,
+    });
+
+    expect(message).toContain("Pending : 1");
+    expect(message).toContain("Run     : kozane db migrate");
+  });
+
+  it("sends a gapped database to db restore, and says migrate cannot repair it", () => {
+    // The distinction the whole state exists for: drizzle only applies migrations newer than
+    // the newest recorded one, so suggesting `db migrate` here would be advice that does
+    // nothing and reports success.
+    const message = migrationStatusMessage({
+      state: "gapped",
+      dbPath: "/w/.kozane/kozane.db",
+      latest: LATER,
+      applied: LATER,
+      pendingCount: 1,
+      skipped: [ENTRY],
+    });
+
+    expect(message).toContain("Skipped : 0000_init");
+    expect(message).toContain("kozane db restore");
+    expect(message).toContain("kozane db migrate cannot repair this");
+    expect(message).not.toContain("Run     : kozane db migrate");
+  });
+
+  it("says the file is missing for a workspace with no database", () => {
+    const message = migrationStatusMessage({
+      state: "missing",
+      dbPath: "/w/.kozane/kozane.db",
+      latest: ENTRY,
+      applied: null,
+      pendingCount: 1,
+    });
+
+    expect(message).toContain("Detail  : database file is missing");
+    // `applied` is null here, and the label is what keeps that readable.
+    expect(message).toContain("Applied : none");
+  });
+
+  it("carries the error and sends an unreadable database to doctor", () => {
+    const message = migrationStatusMessage({
+      state: "unknown",
+      dbPath: null,
+      latest: null,
+      error: "SQLITE_NOTADB: file is not a database",
+    });
+
+    expect(message).toContain("Database: unknown");
+    expect(message).toContain("Latest  : none");
+    expect(message).toContain("Detail  : SQLITE_NOTADB: file is not a database");
+    expect(message).toContain("Try     : kozane doctor");
+    // The one state with no `applied` field at all, which is why it is skipped rather than
+    // printed as "none".
+    expect(message).not.toContain("Applied");
+  });
+});
+
+describe("requireCurrentMigrations", () => {
+  /** Captures the exit and the log, so the guard can be run without ending the test run. */
+  function trapExit() {
+    const errors: string[] = [];
+    const error = vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
+      errors.push(args.join(" "));
+    });
+    const exit = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`process.exit(${code})`);
+    }) as never);
+    return { errors, restore: () => [error, exit].forEach((spy) => spy.mockRestore()) };
+  }
+
+  it("returns quietly when every migration is applied", async () => {
+    const root = tempRoot();
+    const dbPath = join(root, "current.db");
+    await runMigrations(tempDbUrl(dbPath));
+
+    const { errors, restore } = trapExit();
+    try {
+      await expect(
+        requireCurrentMigrations(tempDbUrl(dbPath), "this command can run"),
+      ).resolves.toBeUndefined();
+      expect(errors).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("names the purpose and exits non-zero for a database that is not current", async () => {
+    // A file that was never migrated: `missing` rather than `pending`, and the guard has to
+    // stop the command either way.
+    const root = tempRoot();
+    const { errors, restore } = trapExit();
+    try {
+      await expect(
+        requireCurrentMigrations(tempDbUrl(join(root, "absent.db")), "cards can be added"),
+      ).rejects.toThrow("process.exit(1)");
+      expect(errors[0]).toBe("Kozane database needs attention before cards can be added.");
+      // Not `db migrate`: the state is not one migrating repairs, and suggesting it is the
+      // mistake `migrationStatusMessage` documents.
+      expect(errors.join("\n")).toContain("kozane db status");
+      expect(errors.join("\n")).not.toContain("Run: kozane db migrate");
+    } finally {
+      restore();
+    }
   });
 });

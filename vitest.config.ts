@@ -58,11 +58,17 @@ export default defineConfig({
       //   provider can attribute back to the component. Including them would not lower the
       //   number honestly, it would add zero statements and zero covered statements and
       //   make the figure mean less. They are covered by the component suites beside them
-      //   (`KozaneCard.test.ts`, `CardComposer.test.ts`, and six more) and by `e2e/`.
+      //   (`KozaneCard.test.ts`, `CardComposer.test.ts`, and every other `*.test.ts` sitting
+      //   next to a `.svelte` file) and by `e2e/`.
       // - **CLI commands.** Genuinely 0% *in this process*, because every one of them is
       //   exercised by spawning `kozane` as a subprocess — `src/cli/*.e2e.test.ts` — which
-      //   v8 cannot instrument from here. Counting them would report code with nine e2e
-      //   suites behind it as untested.
+      //   v8 cannot instrument from here. Counting them would report code with a suite per
+      //   command group behind it as untested.
+      //
+      // Neither bullet names a count any more. Both used to — "six more" components and
+      // "nine" e2e suites — and both had drifted to well under half the real number by the
+      // time anyone read them again. A figure in a comment beside a glob that keeps its own
+      // tally is a figure nothing checks; the globs are what these sentences are about.
       //
       // Everything else is measured, which is what the thresholds hold.
       exclude: [
@@ -72,6 +78,13 @@ export default defineConfig({
         // Exercised by subprocess e2e suites this process cannot measure; see the note above.
         "src/cli/index.ts",
         "src/cli/commands/**",
+        // The command tree itself, for the same reason and with the same evidence. It was
+        // the one member of this group left measured, and it reported the shape that gives
+        // that away: 54% of statements and 1.85% of *functions*. `spec.test.ts` calls
+        // `buildProgram()` and walks the tree, so building it is covered from here — what
+        // cannot be is any action handler, every one of which runs only in a spawned
+        // `kozane`. Branch coverage of 0% is the same fact from the other side.
+        "src/cli/program.ts",
         // Filesystem discovery/configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
         "src/cli/lib/workspace.ts",
@@ -86,8 +99,16 @@ export default defineConfig({
         "src/db/schema.ts",
         // SvelteKit wiring — no logic to assert
         "src/lib/index.ts",
-        // Page load functions require integration/e2e testing
+        // Page and layout load functions require integration/e2e testing.
+        //
+        // Both are named, because the first was once the only one: `*page.server.ts` is this
+        // intent spelled one word too narrowly, and it left `src/routes/+layout.server.ts` —
+        // a single `trailingSlash` export, read only while SvelteKit renders — measured at 0%
+        // with nothing a unit test could do about it. Spelled as two patterns rather than one
+        // clever glob: `+page` and `+layout` share no suffix to match on, and a pattern that
+        // appeared to cover both while covering one is how this was wrong in the first place.
         "src/routes/**/*page.server.ts",
+        "src/routes/**/*layout.server.ts",
         // Not measurable by v8 rather than not tested; see the note above. Every component,
         // wherever it lives — the ones shared across pages sit in `src/lib/components` and
         // v8 can no more attribute their compiled output than it can a route's.
