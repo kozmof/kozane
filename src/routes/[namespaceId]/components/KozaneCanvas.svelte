@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { css } from "styled-system/css";
+  import { token } from "styled-system/tokens";
   import KozaneCard from "./KozaneCard.svelte";
   import ScopeArea from "./ScopeArea.svelte";
   import SelectionRect from "./SelectionRect.svelte";
@@ -1443,7 +1444,7 @@
       {#if scopeAreaDraft ?? pendingScopeAreaRect}
         <SelectionRect
           rect={(scopeAreaDraft ?? pendingScopeAreaRect)!}
-          accent="var(--colors-neutral-iconDim)"
+          accent={token.var("colors.neutral.iconDim")}
         />
       {/if}
     </div>

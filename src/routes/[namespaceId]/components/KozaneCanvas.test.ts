@@ -6,6 +6,7 @@ import { SelectionState } from "../namespace-state.svelte.js";
 import { INACTIVE_LAYER_OPACITY } from "../lib/namespace-page.js";
 import type { CardPositionPatch } from "../lib/namespace-page.js";
 import { PALETTE } from "$lib/palette";
+import { token } from "styled-system/tokens";
 import type { NewCardPlacement } from "$lib/ui-config";
 import type {
   PartitionWithColor,
@@ -1059,6 +1060,40 @@ describe("KozaneCanvas scope area drawing", () => {
     expect(component.readPendingRect()).toBeNull();
   });
 
+  /** The one absolutely-positioned box drawn at these coordinates, if any. */
+  function rectAt(
+    container: HTMLElement,
+    at: { left: string; top: string; width: string },
+  ): HTMLElement | undefined {
+    return [...container.querySelectorAll<HTMLElement>("div")].find(
+      (el) => el.style.left === at.left && el.style.top === at.top && el.style.width === at.width,
+    );
+  }
+
+  /**
+   * The colour is asserted against `token.var` rather than a literal because that is the only
+   * form that can fail usefully. jsdom keeps whatever string it is handed and never resolves
+   * a custom property, so a name that does not exist reads exactly like one that does — which
+   * is why the rectangle was invisible in a real browser and green here.
+   */
+  it("draws the rectangle while it is still being dragged", async () => {
+    const { container } = mountBound();
+
+    down(surface(container), 100, 100, { altKey: true });
+    move(500, 460);
+    // Svelte batches the DOM write; a browser flushes it before the next frame, and here it
+    // takes a tick. The assertion is still about the state *before* the release.
+    await settle();
+
+    // Before the release, which is the whole point: a rectangle you cannot see while pulling
+    // it out is a rectangle you cannot aim.
+    const drawn = rectAt(container, { left: "100px", top: "100px", width: "400px" });
+    expect(drawn).not.toBeUndefined();
+    expect(drawn!.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
+
+    up();
+  });
+
   it("draws the rectangle still waiting for a scope", () => {
     const { container } = render(
       KozaneCanvas,
@@ -1067,9 +1102,8 @@ describe("KozaneCanvas scope area drawing", () => {
 
     // Whatever is drawn for it has to be on screen: the prompt asks about "this rectangle",
     // and an invisible one makes the question unanswerable.
-    const drawn = [...container.querySelectorAll<HTMLElement>("div")].filter(
-      (el) => el.style.left === "40px" && el.style.top === "60px" && el.style.width === "300px",
-    );
-    expect(drawn).toHaveLength(1);
+    const drawn = rectAt(container, { left: "40px", top: "60px", width: "300px" });
+    expect(drawn).not.toBeUndefined();
+    expect(drawn!.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
   });
 });

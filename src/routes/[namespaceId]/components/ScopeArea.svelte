@@ -1,5 +1,6 @@
 <script lang="ts">
   import { css } from "styled-system/css";
+  import { token } from "styled-system/tokens";
   import type { ScopeArea } from "$lib/types";
 
   let {
@@ -33,8 +34,20 @@
   // top-left corner — which is where the first card dragged in tends to land.
   const TAB_HEIGHT = 22;
 
+  /**
+   * What the frame is drawn in — the selection accent when the board is held to this scope,
+   * and an icon-weight grey otherwise. Both states are drawn: a frame is where a scope lives
+   * on the board, which is true whether or not it is the one being filtered to.
+   *
+   * Through `token.var` rather than a hand-written `var(--colors-…)`: Panda kebab-cases the
+   * camelCase half of a token name, so `neutral.iconDim` is `--colors-neutral-icon-dim`, and
+   * spelling it by hand got it wrong. An undefined custom property makes every declaration
+   * that reads it invalid, and CSS drops an invalid declaration silently — so the frame had
+   * no border and no fill and simply did not appear. This form is type-checked against the
+   * same token list `css()` uses, so the next wrong name is a build error instead.
+   */
   const accent = $derived(
-    focused ? "var(--colors-select-accent)" : "var(--colors-neutral-iconDim)",
+    focused ? token.var("colors.select.accent") : token.var("colors.neutral.iconDim"),
   );
 </script>
 

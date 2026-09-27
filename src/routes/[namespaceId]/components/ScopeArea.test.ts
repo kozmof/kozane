@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import ScopeArea from "./ScopeArea.svelte";
+import { token } from "styled-system/tokens";
 import type { ScopeArea as ScopeAreaRow } from "$lib/types";
 
 afterEach(cleanup);
@@ -92,5 +93,40 @@ describe("ScopeArea", () => {
   it("offers no resize handle on a read-only board", () => {
     mount({ draggable: false });
     expect(screen.queryByRole("button", { name: /Resize scope area/ })).toBeNull();
+  });
+});
+
+/**
+ * That the frame is drawn at all, in both states.
+ *
+ * These assert the colour against `token.var` rather than against a literal, which is the
+ * only form of this test that can fail usefully: jsdom keeps whatever string it is handed
+ * and never resolves a custom property, so `style.border` reads the same whether the
+ * variable exists or not. Comparing to the token system catches the one thing that went
+ * wrong here — a name that does not resolve — because the expected value comes from the
+ * same place `css()` gets it.
+ */
+describe("ScopeArea colours", () => {
+  function frameBody(container: HTMLElement): HTMLElement {
+    const found = container.querySelector<HTMLElement>("[data-scope-area-id='a1'] div");
+    if (!found) throw new Error("no frame body");
+    return found;
+  }
+
+  it("draws the frame in a defined colour when the scope is not focused", () => {
+    const { container } = mount({ focused: false });
+    const body = frameBody(container);
+
+    // An unfocused frame is still a frame: it says where the scope lives on the board,
+    // which is true whether or not the board is filtered to it.
+    expect(body.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
+    expect(body.style.background).toContain(token.var("colors.neutral.iconDim"));
+  });
+
+  it("draws the frame in the selection accent when the scope is focused", () => {
+    const { container } = mount({ focused: true });
+    expect(frameBody(container).style.border).toBe(
+      `1px solid ${token.var("colors.select.accent")}`,
+    );
   });
 });
