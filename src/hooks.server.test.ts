@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,7 @@ vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
 import { handle } from "./hooks.server";
 import { AUTH_FAILURE_LIMIT, _resetAuthFailuresForTest } from "./lib/server/security";
+import { SERVER_STATE_FILE } from "./lib/server/runtime-state";
 
 function workspace(apiKey?: string): string {
   const root = mkdtempSync(join(tmpdir(), "kozane-hook-"));
@@ -276,5 +277,51 @@ describe("keyless workspace host gate", () => {
       resolve: vi.fn(async () => new Response("ok")) as never,
     });
     expect(response.status).toBe(200);
+  });
+});
+
+/**
+ * The reservation is released by a `process.once("exit", …)` hook, and a hook per
+ * reservation is a hook Node keeps for the life of the process. Production resolves its
+ * workspace root once and caches it, so it never reserves twice and never noticed; this
+ * suite hands the gate a fresh workspace on every test and did notice — eleven tests in,
+ * Node wrote a `MaxListenersExceededWarning` about a leaked emitter to stderr, in the middle
+ * of a run that otherwise passed clean.
+ */
+describe("workspace reservation release hook", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.HOST = "127.0.0.1";
+  });
+
+  // More workspaces than Node's default listener limit, so a hook per reservation is the
+  // difference between a count of one and a count over the threshold that warns.
+  it("installs one exit listener however many workspaces it serves", async () => {
+    // A fresh module instance, so the count below is the listeners this run installs rather
+    // than whatever the tests above left behind.
+    vi.resetModules();
+    const { handle: freshHandle } = await import("./hooks.server");
+    const before = process.listenerCount("exit");
+
+    const roots: string[] = [];
+    for (let i = 0; i < 12; i += 1) {
+      state.root = workspace();
+      roots.push(state.root);
+      const response = await freshHandle({
+        event: event() as never,
+        resolve: vi.fn(async () => new Response("ok")) as never,
+      });
+      expect(response.status).toBe(200);
+    }
+
+    expect(process.listenerCount("exit")).toBe(before + 1);
+
+    // And that one hook is enough, because only the current reservation is still held: a
+    // workspace this process has moved off is released as it moves, not left reserved by a
+    // server that stopped serving it.
+    for (const root of roots.slice(0, -1)) {
+      expect(existsSync(join(root, ".kozane", SERVER_STATE_FILE))).toBe(false);
+    }
+    expect(existsSync(join(roots[roots.length - 1], ".kozane", SERVER_STATE_FILE))).toBe(true);
   });
 });

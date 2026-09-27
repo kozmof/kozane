@@ -55,6 +55,20 @@ process.env.HOST ??= "127.0.0.1";
 
 let registeredRoot: string | null = null;
 /**
+ * Whether the `exit` hook that releases this process's reservation is in place.
+ *
+ * One listener for the process, installed with the first reservation and reading
+ * {@link registeredRoot} when it runs rather than closing over the root it was installed
+ * for. A listener per reservation is what this was, and `process.once` keeps every handler
+ * it is given: reserve a second workspace and the first hook is still there, waiting to
+ * release a root this process has stopped serving. Production never gets there — the root is
+ * resolved once and cached for the life of the process — but a suite that builds a fresh
+ * workspace per test does, and stacks handlers until Node warns about a leaked emitter at
+ * eleven. Only the current reservation is this process's to release, so one listener is all
+ * there is work for.
+ */
+let exitHookInstalled = false;
+/**
  * Set once the workspace turns out to belong to another server. Remembered rather than
  * rediscovered per request: without it every request races for the same lock file and
  * answers with a fresh 500, which reads as an intermittent fault rather than the one
@@ -92,8 +106,16 @@ function registerRuntimeState(root: string | null): string | null {
     return runtimeStateConflict;
   }
   runtimeStateConflict = null;
+  // A workspace this process has stopped serving is no longer its to hold, and the hook
+  // below only ever releases the current root, so the outgoing one is released here.
+  if (registeredRoot) removeServerState(registeredRoot);
   registeredRoot = root;
-  process.once("exit", () => removeServerState(root));
+  if (!exitHookInstalled) {
+    exitHookInstalled = true;
+    process.once("exit", () => {
+      if (registeredRoot) removeServerState(registeredRoot);
+    });
+  }
   return null;
 }
 
