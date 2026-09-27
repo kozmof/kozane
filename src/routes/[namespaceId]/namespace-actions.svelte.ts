@@ -1,6 +1,7 @@
 import * as api from "./lib/namespace-api.js";
 import type { CardWithGlue, GlueRel } from "$lib/types";
 import type { NamespaceState } from "./namespace-state.svelte.js";
+import type { BoardRect } from "$lib/constants";
 import { readArray, readFiniteNumber, readString, readStringArray } from "./lib/response.js";
 
 /**
@@ -733,11 +734,7 @@ export function createNamespaceActions(state: NamespaceState) {
    * caller works out the rectangle — it is the one that knows where the view is and what is
    * selected — and hands the members it covers along with it.
    */
-  async function handleCreateScopeArea(
-    scopeId: string,
-    rect: { posX: number; posY: number; width: number; height: number },
-    covers: string[] = [],
-  ) {
+  async function handleCreateScopeArea(scopeId: string, rect: BoardRect, covers: string[] = []) {
     const res = await api.createScopeArea(state.mutationFetcher, state.namespaceId, scopeId, rect);
     if (!res.ok) {
       state.setError(await api.failureMessage(res, "Failed to add scope area"));
@@ -764,11 +761,7 @@ export function createNamespaceActions(state: NamespaceState) {
    * user asked for and can frame again, while unwinding it would throw the name away over a
    * failed rectangle.
    */
-  async function handleCreateScopeWithArea(
-    name: string,
-    rect: { posX: number; posY: number; width: number; height: number },
-    covers: string[] = [],
-  ) {
+  async function handleCreateScopeWithArea(name: string, rect: BoardRect, covers: string[] = []) {
     const trimmed = name.trim();
     if (!trimmed) return;
     const res = await api.createScope(state.mutationFetcher, state.namespaceId, trimmed);

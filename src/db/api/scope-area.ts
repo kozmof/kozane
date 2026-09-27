@@ -1,10 +1,14 @@
 import { scopeAreaTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
 import type { NeedsNamespace, ScopeArea } from "./types.js";
+import type { BoardRect } from "../../lib/constants.js";
 import { assertFound } from "./utils.js";
 
 type NeedsNamespaceArea = NeedsNamespace & { scopeId: string; areaId: string };
-type Rect = { posX: number; posY: number; width: number; height: number };
+// The board's rectangle, named in `lib/constants/canvas.ts`. Aliased locally because `Rect` is
+// what the signatures below read best as, and because this module's callers name the type
+// through them rather than by importing it.
+type Rect = BoardRect;
 
 /**
  * The frames drawn on one board, oldest first — uuidv7 ids already hold creation order, and

@@ -6,7 +6,7 @@
   import { page } from "$app/state";
   import { buildTagTree, normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
   import NavIcon from "$lib/components/NavIcon.svelte";
-  import { MAP_DEFAULT_VIEWPORT } from "$lib/constants";
+  import { DRAG_THRESHOLD, MAP_DEFAULT_VIEWPORT } from "$lib/constants";
   import {
     buildMapLayout,
     tagLinks,
@@ -157,7 +157,16 @@
    * swallowed if it did. Otherwise every attempt to pan from a rectangle would open its
    * board.
    */
-  const DRAG_THRESHOLD = 4;
+  // The shared figure, not a local copy of it — this was `const DRAG_THRESHOLD = 4`, the
+  // seventh spelling of the board's click-versus-drag threshold and the only one outside
+  // `KozaneCanvas.svelte`.
+  //
+  // Only the number is shared. The comparison below is this page's own: a Manhattan sum
+  // (`|dx| + |dy|`) rather than the per-axis test `travelled` in `lib/gesture.ts` makes, so a
+  // gesture that creeps diagonally arms slightly sooner here. That is deliberate and left
+  // alone — the map swallows a *click* on a partition link, where the board writes a position
+  // patch, and being a shade eager to call a wobble a pan is the forgiving direction when the
+  // cost of being wrong is opening a board the user did not ask for.
   let dragging = $state(false);
   let travelled = false;
   let origin: { x: number; y: number; view: MapView } | null = null;

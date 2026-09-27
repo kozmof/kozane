@@ -1,5 +1,5 @@
 import { getUiConfigForRoot, getWorkspaceUiConfig } from "../../db/internal/config.js";
-import { clamp, SCOPE_AREA_MIN_SIZE } from "../constants.js";
+import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "../constants.js";
 
 export type CanvasBounds = { canvasWidth: number; canvasHeight: number };
 
@@ -39,7 +39,10 @@ export function clampToCanvas(posX: number, posY: number): { posX: number; posY:
   return clampToBounds(posX, posY, canvasBounds());
 }
 
-export type CanvasRect = { posX: number; posY: number; width: number; height: number };
+// Re-exported rather than declared, so the callers that reach for it through this module —
+// which is where the clamping lives — still name it here. Defined in `lib/constants/canvas.ts`
+// because the browser passes the same rectangle about and must not import from `lib/server`.
+export type { BoardRect };
 
 /**
  * A whole rectangle held inside the board, for a scope area: sized first, then placed.
@@ -54,7 +57,7 @@ export type CanvasRect = { posX: number; posY: number; width: number; height: nu
  * Integers throughout, because the columns are. Rounded here rather than by the caller so an
  * area cannot be stored at a fraction the client then redraws itself against.
  */
-export function clampRectToBounds(rect: CanvasRect, bounds: CanvasBounds): CanvasRect {
+export function clampRectToBounds(rect: BoardRect, bounds: CanvasBounds): BoardRect {
   const { canvasWidth, canvasHeight } = bounds;
   const width = Math.round(clamp(rect.width, SCOPE_AREA_MIN_SIZE, canvasWidth));
   const height = Math.round(clamp(rect.height, SCOPE_AREA_MIN_SIZE, canvasHeight));
@@ -67,6 +70,6 @@ export function clampRectToBounds(rect: CanvasRect, bounds: CanvasBounds): Canva
 }
 
 /** A rectangle held inside {@link canvasBounds}. */
-export function clampRectToCanvas(rect: CanvasRect): CanvasRect {
+export function clampRectToCanvas(rect: BoardRect): BoardRect {
   return clampRectToBounds(rect, canvasBounds());
 }

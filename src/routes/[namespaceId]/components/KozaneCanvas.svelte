@@ -44,8 +44,20 @@
     worldRectToScreenRect,
   } from "../lib/namespace-page.js";
   import type { CardPositionPatch, MembershipTransition } from "../lib/namespace-page.js";
+  import {
+    gestureOrigin,
+    markMoved,
+    markMovedHorizontally,
+    type Gesture,
+    type HorizontalGesture,
+  } from "../lib/gesture.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
-  import { clamp, SCOPE_AREA_MIN_SIZE, SCOPE_AREA_DRAW_MIN } from "$lib/constants";
+  import {
+    clamp,
+    SCOPE_AREA_MIN_SIZE,
+    SCOPE_AREA_DRAW_MIN,
+    type BoardRect,
+  } from "$lib/constants";
 
   let {
     cards = $bindable(),
@@ -129,7 +141,7 @@
     onPersistScopeArea: (
       scopeId: string,
       areaId: string,
-      rect: { posX: number; posY: number; width: number; height: number },
+      rect: BoardRect,
     ) => Promise<boolean>;
     /** Takes one frame off the board. The scope and its other frames are left alone. */
     onRemoveScopeArea: (scopeId: string, areaId: string) => void;
@@ -239,12 +251,10 @@
     ),
   );
 
-  let dragState: {
+  let dragState: (Gesture & {
     cardId: string;
     offsetX: number;
     offsetY: number;
-    startX: number;
-    startY: number;
     prevX: number;
     prevY: number;
     lastX: number;
@@ -263,13 +273,10 @@
      * a card out of one frame and into another.
      */
     areaMembersBefore: Map<string, Set<string>>;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
-  let resizeState: {
+  let resizeState: (HorizontalGesture & {
     cardId: string;
-    /** Where the pointer went down, in client pixels: the drag is measured from here. */
-    startClientX: number;
     /** The width the card was drawn at when the drag began, in canvas pixels. */
     startWidth: number;
     /**
@@ -278,8 +285,7 @@
      * `ui.defaultCardWidth`, and a failed resize has to leave it doing that.
      */
     prevWidth: number | null;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
   // A handle belongs to a card selected on its own. Clear the selection, click another
   // card, or shift-click a second one into it, and the handle goes away with the state
@@ -294,20 +300,18 @@
   /**
    * The marker being dragged. Separate from `dragState` rather than folded into it: a warp
    * is not on a layer, is never glued to anything, and does not snap to the grid, so the
-   * two share only the shape of a drag and none of its substance.
+   * two share only the shape of a drag and none of its substance — which is exactly what
+   * {@link Gesture} is, and all either of them takes from it.
    */
-  let warpDragState: {
+  let warpDragState: (Gesture & {
     warpId: string;
     /** Pointer to marker centre, in world pixels, so the mark does not jump to the pointer. */
     offsetX: number;
     offsetY: number;
-    startX: number;
-    startY: number;
     /** Where it sat before the drag, to put back if the save fails. */
     prevX: number;
     prevY: number;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
   /**
    * The frame being dragged, and what it is carrying.
@@ -316,13 +320,11 @@
    * travel with the frame, so the set cannot change on the way, and re-sweeping the board
    * every pointer move would pick up whatever the frame happened to be passing over.
    */
-  let areaDragState: {
+  let areaDragState: (Gesture & {
     areaId: string;
     scopeId: string;
-    startX: number;
-    startY: number;
     /** Where the frame sat before the drag, to put back if the save fails. */
-    prevRect: { posX: number; posY: number; width: number; height: number };
+    prevRect: BoardRect;
     /** The cards inside it when the drag began, and where each of them was. */
     cardIds: string[];
     cardIdSet: Set<string>;
@@ -334,25 +336,28 @@
      * however this one moves. See `cardIdsInScope`.
      */
     membersBefore: Set<string>;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
-  let areaResizeState: {
+  let areaResizeState: (Gesture & {
     areaId: string;
     scopeId: string;
-    startClientX: number;
-    startClientY: number;
     /** The rectangle the frame was drawn at when the drag began. */
-    startRect: { posX: number; posY: number; width: number; height: number };
+    startRect: BoardRect;
     membersBefore: Set<string>;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
   /** Where the pointer was last seen during a frame resize, so the release can snap. */
   let areaResizePointer: { x: number; y: number } | null = null;
   let draggingAreaId = $state<string | null>(null);
   let resizingAreaId = $state<string | null>(null);
 
+  /**
+   * A drag of the board itself. Not a {@link Gesture}: panning has no click-versus-drag
+   * distinction to draw — a press that goes nowhere scrolls nowhere and there is nothing to
+   * commit or undo — so it carries no `moved`, and its `startX`/`startY` are kept under those
+   * names because the scroll arithmetic below reads them as a plain origin rather than as the
+   * threshold the gesture states measure against.
+   */
   let panState: {
     startX: number;
     startY: number;
@@ -360,26 +365,21 @@
     scrollTop: number;
   } | null = null;
 
-  let rectangleSelectionState: {
-    startClientX: number;
-    startClientY: number;
+  let rectangleSelectionState: (Gesture & {
     startWorldX: number;
     startWorldY: number;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
   /**
    * An Alt-drag that is drawing a scope area. The same shape as the marquee's state, and for
    * the same reason: both are a rectangle pulled out of a point, and neither moves anything
-   * while it is being drawn. What differs is only what the release does with it.
+   * while it is being drawn. What differs is only what the release does with it — and the
+   * threshold it is held to, which is {@link SCOPE_AREA_DRAW_MIN} rather than the default.
    */
-  let scopeAreaDrawState: {
-    startClientX: number;
-    startClientY: number;
+  let scopeAreaDrawState: (Gesture & {
     startWorldX: number;
     startWorldY: number;
-    moved: boolean;
-  } | null = null;
+  }) | null = null;
 
   /** The rectangle being drawn right now, before it is handed over as pending. */
   let scopeAreaDraft = $state(null as { x: number; y: number; w: number; h: number } | null);
@@ -577,8 +577,7 @@
       cardId,
       offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - card.posX,
       offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - card.posY,
-      startX: e.clientX,
-      startY: e.clientY,
+      ...gestureOrigin(e),
       prevX: card.posX,
       prevY: card.posY,
       lastX: card.posX,
@@ -589,7 +588,6 @@
       // Per scope, not per frame. Built per frame, a scope framed twice would keep only the
       // last frame's set — so a card in the other one would read as having just arrived.
       areaMembersBefore: membersByScope(),
-      moved: false,
     };
     draggingId = cardId;
     dragPointer = { x: e.clientX, y: e.clientY };
@@ -669,8 +667,8 @@
    */
   async function persistArea(
     area: ScopeAreaRow,
-    sent: { posX: number; posY: number; width: number; height: number },
-    prev: { posX: number; posY: number; width: number; height: number },
+    sent: BoardRect,
+    prev: BoardRect,
   ): Promise<boolean> {
     const ok = await onPersistScopeArea(area.scopeId, area.id, sent);
     if (ok) return true;
@@ -765,14 +763,12 @@
     areaDragState = {
       areaId,
       scopeId: area.scopeId,
-      startX: e.clientX,
-      startY: e.clientY,
+      ...gestureOrigin(e),
       prevRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
       cardIds,
       cardIdSet: new Set(cardIds),
       cardPrevPositions: previousPositions(cards, cardIds),
       membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
-      moved: false,
     };
     draggingAreaId = areaId;
     onPositionActivityStart();
@@ -785,11 +781,9 @@
     areaResizeState = {
       areaId,
       scopeId: area.scopeId,
-      startClientX: e.clientX,
-      startClientY: e.clientY,
+      ...gestureOrigin(e),
       startRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
       membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
-      moved: false,
     };
     resizingAreaId = areaId;
     onPositionActivityStart();
@@ -797,12 +791,13 @@
 
   function updateDraggedArea(clientX: number, clientY: number, snapToGrid = false) {
     if (!areaDragState) return;
-    const { areaId, startX, startY, prevRect, cardIdSet, cardPrevPositions } = areaDragState;
+    const { areaId, startClientX, startClientY, prevRect, cardIdSet, cardPrevPositions } =
+      areaDragState;
     const area = scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
 
-    const rawDx = (clientX - startX) / zoom;
-    const rawDy = (clientY - startY) / zoom;
+    const rawDx = (clientX - startClientX) / zoom;
+    const rawDy = (clientY - startClientY) / zoom;
     // Measured from where the frame started rather than accumulated per move, so the cards
     // it carries stay exactly where they were relative to it however the pointer wanders.
     const next = movedRect(
@@ -852,9 +847,9 @@
     resizeState = {
       cardId,
       startClientX: e.clientX,
+      moved: false,
       startWidth: widthOf(card),
       prevWidth: card.width,
-      moved: false,
     };
     // Counted as position activity for the same reason a drag is: the live-sync poll
     // replaces the card list wholesale, and a card being resized would snap back to its
@@ -925,11 +920,9 @@
       warpId,
       offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - warp.posX,
       offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - warp.posY,
-      startX: e.clientX,
-      startY: e.clientY,
+      ...gestureOrigin(e),
       prevX: warp.posX,
       prevY: warp.posY,
-      moved: false,
     };
     draggingWarpId = warpId;
     // Counted as position activity for the reason a card drag is: the poll replaces the
@@ -1004,11 +997,9 @@
       pendingScopeAreaRect = null;
       const start = clientToWorld(e.clientX, e.clientY);
       scopeAreaDrawState = {
-        startClientX: e.clientX,
-        startClientY: e.clientY,
+        ...gestureOrigin(e),
         startWorldX: start.x,
         startWorldY: start.y,
-        moved: false,
       };
       scopeAreaDraft = { x: start.x, y: start.y, w: 0, h: 0 };
       return;
@@ -1022,11 +1013,9 @@
       isPanning = false;
       const start = clientToWorld(e.clientX, e.clientY);
       rectangleSelectionState = {
-        startClientX: e.clientX,
-        startClientY: e.clientY,
+        ...gestureOrigin(e),
         startWorldX: start.x,
         startWorldY: start.y,
-        moved: false,
       };
       selectionRect = { x: start.x, y: start.y, w: 0, h: 0 };
       return;
@@ -1047,68 +1036,107 @@
     if (rectangleSelectionState) e.preventDefault();
   }
 
+  // ── Pointer move, one gesture at a time ──────────────────────────────────────
+  //
+  // Each of these returns at once unless its own gesture is open, so `onMove` is the list of
+  // them rather than eight `if` blocks with their bodies inlined. That block ran to sixty
+  // lines and read as one gesture with seven digressions; the only thing they genuinely share
+  // is that the browser delivers a single `mousemove` for all of them.
+  //
+  // Each takes the coordinates rather than the event, because that is all any of them wants
+  // and it is what makes the threshold calls below read as the one question they are:
+  // `markMoved(gesture, clientX, clientY)`, against {@link DRAG_THRESHOLD} unless the gesture
+  // asks for another. The six hand-written copies of that comparison are gone, and with them
+  // the six copies of the bare `4`.
+  //
+  // Every one of them binds its state to a local `const` first. Not ceremony: these are
+  // component-scope `let`s that a release handler sets to null, and a local binding is what
+  // says the whole function is about the one gesture that was open when it started.
+
+  function moveRectangleSelection(clientX: number, clientY: number): void {
+    const gesture = rectangleSelectionState;
+    if (!gesture) return;
+    markMoved(gesture, clientX, clientY);
+    selectionRect = selectionRectFromPoints(
+      { x: gesture.startWorldX, y: gesture.startWorldY },
+      clientToWorld(clientX, clientY),
+    );
+  }
+
+  function moveScopeAreaDraw(clientX: number, clientY: number): void {
+    const gesture = scopeAreaDrawState;
+    if (!gesture) return;
+    // The longer threshold, which is the whole reason this is not `moveRectangleSelection`
+    // with a different target: an Alt-click that was meant as a click must not open a prompt.
+    markMoved(gesture, clientX, clientY, SCOPE_AREA_DRAW_MIN);
+    scopeAreaDraft = selectionRectFromPoints(
+      { x: gesture.startWorldX, y: gesture.startWorldY },
+      clientToWorld(clientX, clientY),
+    );
+  }
+
+  function moveCardDrag(clientX: number, clientY: number): void {
+    const gesture = dragState;
+    if (!gesture) return;
+    dragPointer = { x: clientX, y: clientY };
+    markMoved(gesture, clientX, clientY);
+    updateDraggedCard(clientX, clientY);
+  }
+
+  function moveWarpDrag(clientX: number, clientY: number): void {
+    const gesture = warpDragState;
+    if (!gesture) return;
+    markMoved(gesture, clientX, clientY);
+    updateDraggedWarp(clientX, clientY);
+  }
+
+  function moveScopeAreaDrag(clientX: number, clientY: number): void {
+    const gesture = areaDragState;
+    if (!gesture) return;
+    markMoved(gesture, clientX, clientY);
+    updateDraggedArea(clientX, clientY);
+  }
+
+  function moveScopeAreaResize(clientX: number, clientY: number): void {
+    const gesture = areaResizeState;
+    if (!gesture) return;
+    areaResizePointer = { x: clientX, y: clientY };
+    markMoved(gesture, clientX, clientY);
+    updateResizedArea(clientX, clientY);
+  }
+
+  function moveCardResize(clientX: number): void {
+    const gesture = resizeState;
+    if (!gesture) return;
+    resizePointerX = clientX;
+    // Horizontal only: the handle sits on the card's edge, so a press that slides straight
+    // down is not a resize. See `markMovedHorizontally`.
+    markMovedHorizontally(gesture, clientX);
+    updateResizedCard(clientX);
+  }
+
+  function movePan(clientX: number, clientY: number): void {
+    const pan = panState;
+    if (!pan) return;
+    // No threshold: panning commits nothing, so there is no click to tell a drag from.
+    canvasEl.scrollLeft = pan.scrollLeft - (clientX - pan.startX);
+    canvasEl.scrollTop = pan.scrollTop - (clientY - pan.startY);
+  }
+
   $effect(() => {
     function onMove(e: MouseEvent) {
       lastPointer = { x: e.clientX, y: e.clientY };
-      if (rectangleSelectionState) {
-        const { startClientX, startClientY, startWorldX, startWorldY } = rectangleSelectionState;
-        if (Math.abs(e.clientX - startClientX) > 4 || Math.abs(e.clientY - startClientY) > 4) {
-          rectangleSelectionState.moved = true;
-        }
-        const current = clientToWorld(e.clientX, e.clientY);
-        selectionRect = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
-      }
-      if (scopeAreaDrawState) {
-        const { startClientX, startClientY, startWorldX, startWorldY } = scopeAreaDrawState;
-        if (
-          Math.abs(e.clientX - startClientX) > SCOPE_AREA_DRAW_MIN ||
-          Math.abs(e.clientY - startClientY) > SCOPE_AREA_DRAW_MIN
-        ) {
-          scopeAreaDrawState.moved = true;
-        }
-        const current = clientToWorld(e.clientX, e.clientY);
-        scopeAreaDraft = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
-      }
-      if (dragState) {
-        const { startX, startY } = dragState;
-        dragPointer = { x: e.clientX, y: e.clientY };
-        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
-          dragState.moved = true;
-        }
-        updateDraggedCard(e.clientX, e.clientY);
-      }
-      if (warpDragState) {
-        const { startX, startY } = warpDragState;
-        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
-          warpDragState.moved = true;
-        }
-        updateDraggedWarp(e.clientX, e.clientY);
-      }
-      if (areaDragState) {
-        const { startX, startY } = areaDragState;
-        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
-          areaDragState.moved = true;
-        }
-        updateDraggedArea(e.clientX, e.clientY);
-      }
-      if (areaResizeState) {
-        const { startClientX, startClientY } = areaResizeState;
-        areaResizePointer = { x: e.clientX, y: e.clientY };
-        if (Math.abs(e.clientX - startClientX) > 4 || Math.abs(e.clientY - startClientY) > 4) {
-          areaResizeState.moved = true;
-        }
-        updateResizedArea(e.clientX, e.clientY);
-      }
-      if (resizeState) {
-        resizePointerX = e.clientX;
-        if (Math.abs(e.clientX - resizeState.startClientX) > 4) resizeState.moved = true;
-        updateResizedCard(e.clientX);
-      }
-      if (panState) {
-        const { startX, startY, scrollLeft, scrollTop } = panState;
-        canvasEl.scrollLeft = scrollLeft - (e.clientX - startX);
-        canvasEl.scrollTop = scrollTop - (e.clientY - startY);
-      }
+      // In the order they were written in the block this replaced. Several gestures can be
+      // open at once — a card drag and a pan cannot, but a frame resize and the edge-scroll
+      // it triggers can — so the order is kept rather than reasoned about afresh.
+      moveRectangleSelection(e.clientX, e.clientY);
+      moveScopeAreaDraw(e.clientX, e.clientY);
+      moveCardDrag(e.clientX, e.clientY);
+      moveWarpDrag(e.clientX, e.clientY);
+      moveScopeAreaDrag(e.clientX, e.clientY);
+      moveScopeAreaResize(e.clientX, e.clientY);
+      moveCardResize(e.clientX);
+      movePan(e.clientX, e.clientY);
     }
 
     async function onUp() {

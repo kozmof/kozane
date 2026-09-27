@@ -1,7 +1,11 @@
 import { error } from "@sveltejs/kit";
 import { optionalNumber } from "./request.js";
+import type { BoardRect } from "$lib/constants";
 
-export type AreaRect = { posX: number; posY: number; width: number; height: number };
+// The board's rectangle, named in `lib/constants/canvas.ts`. Kept exported under this name
+// because the two endpoints and their tests already import `AreaRect` from here, and at a
+// request boundary "the area's rectangle" is what it is.
+export type AreaRect = BoardRect;
 
 /**
  * The rectangle a scope-area request carries, or a 400 naming what was missing.

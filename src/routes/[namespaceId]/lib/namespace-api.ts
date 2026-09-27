@@ -2,6 +2,7 @@ import { base } from "$app/paths";
 import type { CardPositionPatch } from "./namespace-page.js";
 import type { ScopeArea, Warp } from "$lib/types.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
+import type { BoardRect } from "$lib/constants";
 import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
 
 /**
@@ -301,7 +302,7 @@ export function createScopeArea(
   fetcher: typeof fetch,
   namespaceId: string,
   scopeId: string,
-  rect: { posX: number; posY: number; width: number; height: number },
+  rect: BoardRect,
 ): Promise<Response> {
   return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/areas`), "POST", rect);
 }
@@ -312,7 +313,7 @@ export function moveScopeArea(
   namespaceId: string,
   scopeId: string,
   areaId: string,
-  rect: { posX: number; posY: number; width: number; height: number },
+  rect: BoardRect,
 ): Promise<Response> {
   return jsonRequest(
     fetcher,

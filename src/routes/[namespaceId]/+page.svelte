@@ -35,6 +35,7 @@
     type WarpListEntry,
   } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
+  import type { BoardRect } from "$lib/constants";
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
@@ -404,7 +405,7 @@
   async function handlePersistScopeArea(
     scopeId: string,
     areaId: string,
-    rect: { posX: number; posY: number; width: number; height: number },
+    rect: BoardRect,
   ): Promise<boolean> {
     const res = await moveScopeArea(s.mutationFetcher, data.namespace.id, scopeId, areaId, rect);
     if (!res.ok) return false;
