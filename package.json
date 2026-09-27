@@ -32,9 +32,9 @@
     "lint:fix": "oxlint --fix",
     "fmt": "oxfmt --threads=1",
     "fmt:check": "oxfmt --check --threads=1",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test": "TMPDIR=/tmp vitest run",
+    "test:watch": "TMPDIR=/tmp vitest",
+    "test:coverage": "TMPDIR=/tmp vitest run --coverage",
     "smoke:production": "node scripts/smoke-production.mjs",
     "smoke:package": "node scripts/smoke-package.mjs",
     "audit:production": "pnpm audit --prod --audit-level high",
@@ -51,7 +51,7 @@
     "clean": "node scripts/clean.mjs",
     "verify": "pnpm check && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build",
-    "test:e2e": "playwright test",
+    "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e"
   },
   "dependencies": {

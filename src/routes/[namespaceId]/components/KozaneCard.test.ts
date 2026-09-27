@@ -285,7 +285,21 @@ describe("KozaneCard", () => {
         }),
       });
 
-      await user.click(screen.getByRole("link", { name: ":perf" }));
+      // jsdom implements no navigation and reports "Not implemented: navigation to another
+      // Document" on stderr when a real `<a href>` is followed — the one line of noise in an
+      // otherwise clean run. Swallowed here rather than globally, and in the *capture* phase
+      // for a reason this very test explains: the card stops the click propagating, which is
+      // what the assertions below check, so a bubble-phase listener would never run. Capture
+      // descends before the target is reached, so this cancels the navigation without seeing
+      // or changing anything the card does. The click, the anchor and its `href` are
+      // untouched.
+      const swallowNavigation = (event: MouseEvent) => event.preventDefault();
+      document.addEventListener("click", swallowNavigation, true);
+      try {
+        await user.click(screen.getByRole("link", { name: ":perf" }));
+      } finally {
+        document.removeEventListener("click", swallowNavigation, true);
+      }
 
       // Same propagation stop a URL carries: following the link must not move the card or
       // change what is selected on the board being left behind.
