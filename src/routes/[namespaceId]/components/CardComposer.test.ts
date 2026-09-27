@@ -210,7 +210,7 @@ describe("CardComposer — selection mode", () => {
     render(CardComposer, { props: makeProps({ selectedCards, onCancel }) });
 
     expect(screen.getByText("2 cards")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Clear selection (Escape)" }));
+    await user.click(screen.getByRole("button", { name: "Clear selection Escape" }));
 
     expect(onCancel).toHaveBeenCalledOnce();
   });
@@ -288,7 +288,7 @@ describe("CardComposer — selection mode", () => {
       props: makeProps({ selectedCards: [selectedCards[0]], onResizeToggle }),
     });
 
-    await user.click(screen.getByRole("button", { name: "Resize (r)" }));
+    await user.click(screen.getByRole("button", { name: "Resize r" }));
     await user.keyboard("r");
 
     expect(onResizeToggle).toHaveBeenNthCalledWith(1, "card-1");
@@ -300,7 +300,7 @@ describe("CardComposer — selection mode", () => {
       props: makeProps({ selectedCards: [selectedCards[0]], resizingCardId: "card-1" }),
     });
 
-    expect(screen.getByRole("button", { name: "Done resizing (r)" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Done resizing r" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
@@ -344,7 +344,7 @@ describe("CardComposer — selection mode", () => {
       }),
     });
 
-    expect(screen.getByRole("button", { name: "Copy card ID (v)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy card ID v" })).toBeInTheDocument();
     await user.keyboard("v{Home}{End}{Backspace}q");
 
     expect(writeText).toHaveBeenCalledWith("card-1");
@@ -471,7 +471,7 @@ describe("CardComposer — copy card ID", () => {
 
   it("shows the copy action for a single selected card", () => {
     render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
-    expect(screen.getByRole("button", { name: "Copy card ID (c)" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy card ID c" })).toBeInTheDocument();
   });
 
   it("copies the full card ID and shows success feedback", async () => {
@@ -483,7 +483,7 @@ describe("CardComposer — copy card ID", () => {
     });
     render(CardComposer, { props: makeProps({ selectedCards: [selectedCard] }) });
 
-    await user.click(screen.getByRole("button", { name: "Copy card ID (c)" }));
+    await user.click(screen.getByRole("button", { name: "Copy card ID c" }));
 
     expect(writeText).toHaveBeenCalledWith(selectedCard.id);
     expect(screen.getByText("Copied ID")).toBeInTheDocument();
@@ -493,7 +493,7 @@ describe("CardComposer — copy card ID", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "card-2" }] }),
     });
-    expect(screen.queryByRole("button", { name: "Copy card ID (c)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy card ID c" })).not.toBeInTheDocument();
   });
 });
 
@@ -514,8 +514,8 @@ describe("CardComposer — card stacking order", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard], onStackOrderChange }),
     });
-    await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
-    await user.click(screen.getByRole("button", { name: "Send to back ([)" }));
+    await user.click(screen.getByRole("button", { name: "Bring to front ]" }));
+    await user.click(screen.getByRole("button", { name: "Send to back [" }));
     expect(onStackOrderChange).toHaveBeenNthCalledWith(1, ["card-layer"], "front");
     expect(onStackOrderChange).toHaveBeenNthCalledWith(2, ["card-layer"], "back");
   });
@@ -524,8 +524,8 @@ describe("CardComposer — card stacking order", () => {
     render(CardComposer, {
       props: makeProps({ selectedCards: [selectedCard, { ...selectedCard, id: "other" }] }),
     });
-    expect(screen.queryByRole("button", { name: "Bring to front (])" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Send to back ([)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bring to front ]" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send to back [" })).not.toBeInTheDocument();
   });
 
   it("moves a whole glue group to the front or back together", async () => {
@@ -538,7 +538,7 @@ describe("CardComposer — card stacking order", () => {
         onStackOrderChange,
       }),
     });
-    await user.click(screen.getByRole("button", { name: "Bring to front (])" }));
+    await user.click(screen.getByRole("button", { name: "Bring to front ]" }));
     expect(onStackOrderChange).toHaveBeenCalledWith(["card-layer", "other"], "front");
   });
 });
