@@ -339,39 +339,6 @@ export function resizedRect({
   };
 }
 
-/**
- * The rectangle a set of cards sits in, padded, or null when none of them could be measured.
- * What "frame the selection" is drawn from — see `handleCreateScopeArea`.
- */
-export function boundingRect(
-  cardEls: Iterable<HTMLElement>,
-  canvasRect: Pick<DOMRect, "left" | "top">,
-  scroll: Point,
-  zoom: number,
-  padding: number,
-): WorldRect | null {
-  let left = Infinity;
-  let top = Infinity;
-  let right = -Infinity;
-  let bottom = -Infinity;
-  for (const el of cardEls) {
-    const box = el.getBoundingClientRect();
-    const start = clientToWorld(box.left, box.top, canvasRect, scroll, zoom);
-    const end = clientToWorld(box.right, box.bottom, canvasRect, scroll, zoom);
-    left = Math.min(left, start.x);
-    top = Math.min(top, start.y);
-    right = Math.max(right, end.x);
-    bottom = Math.max(bottom, end.y);
-  }
-  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
-  return {
-    x: Math.max(0, left - padding),
-    y: Math.max(0, top - padding),
-    w: right - left + padding * 2,
-    h: bottom - top + padding * 2,
-  };
-}
-
 export type Triangle = [Point, Point, Point];
 
 /** How long a pointer may sit still inside the safe triangle before the popover gives up. */

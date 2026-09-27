@@ -83,6 +83,7 @@ function makeProps(overrides: Overrides = {}) {
     scopeAreas: [],
     scopeNameById: new Map<string, string>(),
     activeScopeId: null,
+    pendingScopeAreaRect: null,
     onPersistScopeArea: vi.fn(
       async (
         _scopeId: string,
@@ -345,7 +346,13 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
  * two sources for one list.
  */
 function boundProps(overrides: Overrides = {}) {
-  const { cards, visibleCards: _visible, zoom: _zoom, ...props } = makeProps(overrides);
+  const {
+    cards,
+    visibleCards: _visible,
+    zoom: _zoom,
+    pendingScopeAreaRect: _pending,
+    ...props
+  } = makeProps(overrides);
   return { initialCards: cards, props };
 }
 
@@ -970,5 +977,99 @@ describe("KozaneCanvas scope areas", () => {
 
     expect(props.scopeAreas[0]).toMatchObject({ posX: 100, posY: 200 });
     expect(props.onPersistScopeArea).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Drawing a scope area: Alt-drag pulls a rectangle out of the canvas, and the release hands
+ * it to the page to ask which scope it belongs to.
+ *
+ * The rectangle itself is `selectionRectFromPoints`, tested on its own — what is here is the
+ * gesture: that Alt claims the press from the pan and the marquee, that a click is not a
+ * draw, and that what lands in `pendingScopeAreaRect` is a rectangle the server would accept.
+ */
+describe("KozaneCanvas scope area drawing", () => {
+  function surface(container: HTMLElement): Element {
+    const found = container.querySelector("[data-canvas-surface]");
+    if (!found) throw new Error("no canvas surface");
+    return found;
+  }
+
+  /** An Alt-drag across the board, which is what draws a frame. */
+  function draw(container: HTMLElement, from: [number, number], to: [number, number]) {
+    down(surface(container), from[0], from[1], { altKey: true });
+    move(to[0], to[1]);
+    up();
+  }
+
+  /** Rendered through the harness, which is the only way a binding write is observable. */
+  function mountBound(overrides: Overrides = {}) {
+    const { initialCards, props } = boundProps(overrides);
+    const rendered = render(CanvasBindingHarness, { initialCards, ...props });
+    return { ...rendered, props };
+  }
+
+  it("hands the drawn rectangle over on release", async () => {
+    const { container, component } = mountBound();
+
+    draw(container, [100, 100], [500, 460]);
+    await settle();
+
+    // The rectangle the pointer described, rounded to the integers the columns are.
+    expect(component.readPendingRect()).toEqual({ x: 100, y: 100, w: 400, h: 360 });
+  });
+
+  it("grows a rectangle drawn smaller than the minimum up to it", async () => {
+    const { container, component } = mountBound();
+
+    draw(container, [100, 100], [140, 130]);
+    await settle();
+
+    // Past the draw threshold, so it was meant — and a frame below the minimum could not be
+    // grabbed by its tab afterwards, which is a rectangle you would have to delete.
+    expect(component.readPendingRect()).toMatchObject({ w: 120, h: 120 });
+  });
+
+  it("asks nothing for an Alt-click that went nowhere", async () => {
+    const { container, component } = mountBound();
+
+    draw(container, [100, 100], [104, 102]);
+    await settle();
+
+    expect(component.readPendingRect()).toBeNull();
+  });
+
+  it("does not sweep a selection while drawing", async () => {
+    const selection = new SelectionState();
+    const { container } = mountBound({ selection });
+
+    draw(container, [100, 100], [500, 460]);
+    await settle();
+
+    // Alt is checked before Shift, and a draw moves nothing: the board is left as it was.
+    expect(selection.selectedCards.size).toBe(0);
+  });
+
+  it("ignores a draw on a read-only board", async () => {
+    const { container, component } = mountBound({ readonly: true });
+
+    draw(container, [100, 100], [500, 460]);
+    await settle();
+
+    expect(component.readPendingRect()).toBeNull();
+  });
+
+  it("draws the rectangle still waiting for a scope", () => {
+    const { container } = render(
+      KozaneCanvas,
+      makeProps({ pendingScopeAreaRect: { x: 40, y: 60, w: 300, h: 200 } }),
+    );
+
+    // Whatever is drawn for it has to be on screen: the prompt asks about "this rectangle",
+    // and an invisible one makes the question unanswerable.
+    const drawn = [...container.querySelectorAll<HTMLElement>("div")].filter(
+      (el) => el.style.left === "40px" && el.style.top === "60px" && el.style.width === "300px",
+    );
+    expect(drawn).toHaveLength(1);
   });
 });

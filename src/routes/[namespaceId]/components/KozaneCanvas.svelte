@@ -36,7 +36,6 @@
     cardIdsOverlapping,
     membershipTransition,
     movedRect,
-    boundingRect,
     resizedRect,
     scrollForViewCenter,
     selectionRectFromPoints,
@@ -45,13 +44,7 @@
   } from "../lib/namespace-page.js";
   import type { CardPositionPatch, MembershipTransition } from "../lib/namespace-page.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
-  import {
-    clamp,
-    SCOPE_AREA_MIN_SIZE,
-    SCOPE_AREA_DEFAULT_W,
-    SCOPE_AREA_DEFAULT_H,
-    SCOPE_AREA_PADDING,
-  } from "$lib/constants";
+  import { clamp, SCOPE_AREA_MIN_SIZE, SCOPE_AREA_DRAW_MIN } from "$lib/constants";
 
   let {
     cards = $bindable(),
@@ -65,6 +58,7 @@
     scopeAreas = $bindable(),
     scopeNameById,
     activeScopeId,
+    pendingScopeAreaRect = $bindable(),
     onPersistScopeArea,
     onScopeMembershipChange,
     warps = $bindable(),
@@ -115,6 +109,15 @@
     scopeNameById: Map<string, string>;
     /** The scope the board is filtered to, whose frame is drawn at full strength. */
     activeScopeId: string | null;
+    /**
+     * A rectangle drawn with Alt and not yet given a scope, or null.
+     *
+     * Written by the draw gesture and read by the page, which puts the prompt up beside it.
+     * It stays drawn for as long as the prompt is open — the question being asked is "which
+     * scope does *this* belong to", and the rectangle is the half of that the canvas holds.
+     * The page clears it on answer or cancel.
+     */
+    pendingScopeAreaRect: { x: number; y: number; w: number; h: number } | null;
     /**
      * Saves where a frame was dropped or how big it was made, answering whether it took —
      * the same contract as {@link onPersistWarpPosition}. The drag has already moved the
@@ -351,6 +354,22 @@
     startWorldY: number;
     moved: boolean;
   } | null = null;
+
+  /**
+   * An Alt-drag that is drawing a scope area. The same shape as the marquee's state, and for
+   * the same reason: both are a rectangle pulled out of a point, and neither moves anything
+   * while it is being drawn. What differs is only what the release does with it.
+   */
+  let scopeAreaDrawState: {
+    startClientX: number;
+    startClientY: number;
+    startWorldX: number;
+    startWorldY: number;
+    moved: boolean;
+  } | null = null;
+
+  /** The rectangle being drawn right now, before it is handed over as pending. */
+  let scopeAreaDraft = $state(null as { x: number; y: number; w: number; h: number } | null);
 
   onMount(() => {
     // Landing on a warp is decided before the first paint rather than scrolled to
@@ -658,62 +677,38 @@
   }
 
   /**
-   * Where a new frame should go, and what it would then hold.
+   * The rectangle a drawn frame would be stored as, held on the board.
    *
-   * Around `cardIds` when there are any — framing a selection is the fastest way onto this
-   * feature, and the rectangle is the one already on screen — and otherwise a default-sized
-   * frame in the middle of the view, which is where "set warp" puts a marker.
-   *
-   * Exported rather than computed on the page because both halves are measurements only the
-   * canvas can take: the scroll offset, the zoom, and the rendered height of a card.
+   * Sized first, then placed — the order `clampRectToBounds` uses on the server, so what is
+   * drawn here is what comes back from it. A draw smaller than the minimum is grown to it
+   * rather than refused: the pointer said where, and how small a frame may usefully be is a
+   * separate question from whether one was asked for.
    */
-  export function placeScopeArea(cardIds: string[]): {
-    posX: number;
-    posY: number;
-    width: number;
-    height: number;
-    covers: string[];
-  } {
-    const selected = new Set(cardIds);
-    const els = cardElements().filter((el) => el.dataset.cardId && selected.has(el.dataset.cardId));
-    const bounds =
-      els.length > 0
-        ? boundingRect(
-            els,
-            canvasEl.getBoundingClientRect(),
-            { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
-            zoom,
-            SCOPE_AREA_PADDING,
-          )
-        : null;
-    const centre = getViewCenter();
-    const rect = bounds ?? {
-      x: centre.posX - SCOPE_AREA_DEFAULT_W / 2,
-      y: centre.posY - SCOPE_AREA_DEFAULT_H / 2,
-      w: SCOPE_AREA_DEFAULT_W,
-      h: SCOPE_AREA_DEFAULT_H,
-    };
-    // Sized first, then placed, the same order `clampRectToBounds` uses on the server — so
-    // the rectangle `covers` is measured against is the one that will be stored, rather than
-    // one placed against a width it does not end up having.
+  function heldScopeAreaRect(rect: { x: number; y: number; w: number; h: number }) {
     const w = clamp(rect.w, SCOPE_AREA_MIN_SIZE, canvasWidth);
     const h = clamp(rect.h, SCOPE_AREA_MIN_SIZE, canvasHeight);
-    const held = {
-      x: clamp(rect.x, 0, Math.max(0, canvasWidth - w)),
-      y: clamp(rect.y, 0, Math.max(0, canvasHeight - h)),
-      w,
-      h,
-    };
     return {
-      posX: Math.round(held.x),
-      posY: Math.round(held.y),
-      width: Math.round(held.w),
-      height: Math.round(held.h),
-      // Everything the frame lands on, not only what was selected: a card already sitting
-      // inside the rectangle is inside the frame the moment it is drawn, and leaving it out
-      // would make the frame disagree with itself until something moved.
-      covers: [...cardIdsInRect(held)],
+      x: Math.round(clamp(rect.x, 0, Math.max(0, canvasWidth - w))),
+      y: Math.round(clamp(rect.y, 0, Math.max(0, canvasHeight - h))),
+      w: Math.round(w),
+      h: Math.round(h),
     };
+  }
+
+  /**
+   * Which cards a drawn rectangle covers, for the prompt that turns it into a frame.
+   *
+   * Exported, and asked when the scope is chosen rather than when the rectangle was drawn:
+   * the prompt stays up for as long as it takes to read, and the board does not stop moving
+   * underneath it. Measuring late costs nothing and cannot be stale.
+   */
+  export function cardIdsInWorldRect(rect: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }): string[] {
+    return [...cardIdsInRect(rect)];
   }
 
   export function handleScopeAreaMouseDown(e: MouseEvent, scopeId: string) {
@@ -946,6 +941,30 @@
   }
 
   function handleCanvasMouseDown(e: MouseEvent) {
+    // Alt first, and before the shift branch: Alt-drag draws a scope area, and a press that
+    // happens to carry both should draw one rather than sweep a selection. Neither moves
+    // anything, so there is no harm in the order — only in leaving it unstated.
+    if (!readonly && e.button === 0 && e.altKey) {
+      e.preventDefault();
+      selection.composerCard = null;
+      dragState = null;
+      draggingId = null;
+      panState = null;
+      isPanning = false;
+      // A second draw replaces a rectangle still waiting for a scope: the prompt asks about
+      // one rectangle, and the newer one is the one the pointer just meant.
+      pendingScopeAreaRect = null;
+      const start = clientToWorld(e.clientX, e.clientY);
+      scopeAreaDrawState = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startWorldX: start.x,
+        startWorldY: start.y,
+        moved: false,
+      };
+      scopeAreaDraft = { x: start.x, y: start.y, w: 0, h: 0 };
+      return;
+    }
     if (!readonly && e.button === 0 && e.shiftKey) {
       e.preventDefault();
       selection.composerCard = null;
@@ -991,6 +1010,17 @@
         const current = clientToWorld(e.clientX, e.clientY);
         selectionRect = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
       }
+      if (scopeAreaDrawState) {
+        const { startClientX, startClientY, startWorldX, startWorldY } = scopeAreaDrawState;
+        if (
+          Math.abs(e.clientX - startClientX) > SCOPE_AREA_DRAW_MIN ||
+          Math.abs(e.clientY - startClientY) > SCOPE_AREA_DRAW_MIN
+        ) {
+          scopeAreaDrawState.moved = true;
+        }
+        const current = clientToWorld(e.clientX, e.clientY);
+        scopeAreaDraft = selectionRectFromPoints({ x: startWorldX, y: startWorldY }, current);
+      }
       if (dragState) {
         const { startX, startY } = dragState;
         dragPointer = { x: e.clientX, y: e.clientY };
@@ -1034,6 +1064,15 @@
     }
 
     async function onUp() {
+      if (scopeAreaDrawState) {
+        const { moved } = scopeAreaDrawState;
+        scopeAreaDrawState = null;
+        const drawn = scopeAreaDraft;
+        scopeAreaDraft = null;
+        // A draw that went nowhere was an Alt-click, not a rectangle. Dropped without asking
+        // anything: a prompt nobody meant to open is worse than no frame.
+        if (moved && drawn) pendingScopeAreaRect = heldScopeAreaRect(drawn);
+      }
       if (rectangleSelectionState) {
         if (rectangleSelectionState.moved) {
           applyRectangleSelection();
@@ -1294,6 +1333,7 @@
   class={css({ flex: "1", overflow: "auto", position: "relative", backgroundColor: "ink.canvas", isolation: "isolate", zIndex: "0" })}
   role="presentation"
   bind:this={canvasEl}
+  data-canvas-surface
   onmousedown={handleCanvasMouseDown}
   oncontextmenu={handleCanvasContextMenu}
   style:cursor={draggingId || isPanning ? "grabbing" : "grab"}
@@ -1395,6 +1435,16 @@
 
       {#if selectionRect}
         <SelectionRect rect={selectionRect} />
+      {/if}
+
+      <!-- The frame being drawn, and then the one waiting for a scope. Drawn in the scope
+           accent rather than the selection one, because this rectangle is about to become a
+           thing that stays rather than a sweep that ends at mouseup. -->
+      {#if scopeAreaDraft ?? pendingScopeAreaRect}
+        <SelectionRect
+          rect={(scopeAreaDraft ?? pendingScopeAreaRect)!}
+          accent="var(--colors-neutral-iconDim)"
+        />
       {/if}
     </div>
   </div>

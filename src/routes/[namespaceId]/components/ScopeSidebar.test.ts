@@ -45,7 +45,6 @@ function mount(overrides: Record<string, unknown> = {}) {
       onAddToScope: () => {},
       onRemoveFromScope: () => {},
       framedScopeIds: new Set<string>(),
-      onAddScopeArea: () => {},
       onRemoveScopeArea: () => {},
       onCreateTaskspace: () => {},
       ...overrides,
@@ -133,7 +132,6 @@ describe("ScopeSidebar taskspaces", () => {
         onAddToScope: () => {},
         onRemoveFromScope: () => {},
         framedScopeIds: new Set<string>(),
-        onAddScopeArea: () => {},
         onRemoveScopeArea: () => {},
         onCreateTaskspace: () => {},
         onOpenFile,
@@ -186,34 +184,24 @@ describe("ScopeSidebar scope areas", () => {
     return screen.getByRole("button", { name: /frame/i });
   }
 
-  it("offers to add a frame to a scope that has none", async () => {
-    const onAddScopeArea = vi.fn();
-    mount({ onAddScopeArea });
-
-    await userEvent.click(frameButton());
-
-    expect(onAddScopeArea).toHaveBeenCalledWith(SCOPE.id);
+  it("shows no frame button for a scope that has none", () => {
+    // A frame is put on the board by drawing one there, so there is nothing for a button to
+    // do here. Its absence is also how the panel says the scope is unframed.
+    mount();
+    expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();
   });
 
   it("offers to remove the frame of a scope that has one", async () => {
     const onRemoveScopeArea = vi.fn();
     mount({ framedScopeIds: new Set([SCOPE.id]), onRemoveScopeArea });
 
-    expect(frameButton()).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(frameButton());
 
     expect(onRemoveScopeArea).toHaveBeenCalledWith(SCOPE.id);
   });
 
-  // With a selection up, the frame is drawn around it rather than in the middle of the view,
-  // which is the fastest way onto the feature and worth saying on the button.
-  it("says it will frame the selection when cards are selected", () => {
-    mount({ selectedCards: new Set(["card-1"]) });
-    expect(frameButton()).toHaveAttribute("title", "Frame the selected cards on the board");
-  });
-
   it("offers no frame button on a read-only board", () => {
-    mount({ readonly: true });
+    mount({ framedScopeIds: new Set([SCOPE.id]), readonly: true });
     expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();
   });
 });

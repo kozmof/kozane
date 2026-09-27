@@ -28,7 +28,6 @@
     onAddToScope,
     onRemoveFromScope,
     framedScopeIds,
-    onAddScopeArea,
     onRemoveScopeArea,
     onCreateTaskspace,
     onOpenFile,
@@ -54,8 +53,6 @@
     onRemoveFromScope: (scopeId: string) => void;
     /** The scopes that already have a frame on this board. */
     framedScopeIds: Set<string>;
-    /** Frames the selection when there is one, or the middle of the view when there is not. */
-    onAddScopeArea: (scopeId: string) => void;
     onRemoveScopeArea: (scopeId: string) => void;
     onCreateTaskspace: () => void;
     /**
@@ -128,9 +125,8 @@
     return cx("scope-delete", scopeDeleteBase, focused ? scopeDeleteFocusedClass : scopeDeleteClass);
   }
 
-  // Sits where the delete button sits, one slot to its left, and appears on the same hover.
-  // A frame is the second thing you do to a scope, not the first, so it does not take up a
-  // row of its own.
+  // One slot to the left of the delete button. A frame is a thing a scope either has or has
+  // not got, so this reports rather than offers, and does not take up a row of its own.
   const scopeFrameBase = css({
     position: "absolute",
     right: "26px",
@@ -156,17 +152,12 @@
   });
 
   /**
-   * A scope that already has a frame keeps its button visible rather than revealing it on
-   * hover: the button is then the only thing in the panel saying the frame is there at all,
-   * and a control you have to go looking for is a poor way to be told.
+   * Always visible, unlike the delete button beside it, which appears on hover: this button
+   * is the only thing in the panel saying the scope is framed at all, and a status you have
+   * to hover to see is a poor way to be told.
    */
-  function scopeFrame(focused: boolean, framed: boolean) {
-    return cx(
-      framed ? "" : "scope-delete",
-      scopeFrameBase,
-      !framed && css({ opacity: "0" }),
-      focused ? scopeFrameFocusedClass : scopeFrameClass,
-    );
+  function scopeFrame(focused: boolean) {
+    return cx(scopeFrameBase, focused ? scopeFrameFocusedClass : scopeFrameClass);
   }
 
   /**
@@ -296,24 +287,19 @@
           </button>
           {#if !readonly}
           {@const framed = framedScopeIds.has(scope.id)}
-          <!-- The label leaves the scope's own name out: the row button beside this one
-               carries it, and repeating it here would give the panel two buttons answering to
-               the same name. The title is where the fuller explanation goes. -->
+          <!-- Only for a scope that has a frame, and only to take it away. A frame is put on
+               the board by drawing one there (Alt-drag), so there is nothing for this button
+               to do on a scope that has none. The label leaves the scope's own name out: the
+               row button beside this one carries it, and repeating it here would give the
+               panel two buttons answering to the same name. -->
+          {#if framed}
           <button
-            class={scopeFrame(active, framed)}
-            aria-label={framed ? "Remove frame" : "Add frame"}
-            title={framed
-              ? "Remove this scope's frame from the board"
-              : selectedCards.size > 0
-                ? "Frame the selected cards on the board"
-                : "Add a frame for this scope to the board"}
-            aria-pressed={framed}
-            onclick={(e) => {
-              e.stopPropagation();
-              if (framed) onRemoveScopeArea(scope.id);
-              else onAddScopeArea(scope.id);
-            }}
-          >{framed ? "▣" : "▢"}</button>
+            class={scopeFrame(active)}
+            aria-label="Remove frame"
+            title="Remove this scope's frame from the board"
+            onclick={(e) => { e.stopPropagation(); onRemoveScopeArea(scope.id); }}
+          >▣</button>
+          {/if}
           <button
             class={scopeDelete(active)}
             title="Delete scope"

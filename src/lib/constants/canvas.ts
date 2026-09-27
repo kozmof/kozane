@@ -26,19 +26,16 @@ export const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as
 export const SCOPE_AREA_MIN_SIZE = 120;
 
 /**
- * How big a new scope area is, in canvas pixels, when it is placed at the view centre rather
- * than drawn around a selection. Roughly two default cards across and three down: large enough
- * that the first card dragged in lands well inside it.
+ * How far a scope-area draw has to travel before it is a rectangle rather than a stray click,
+ * in canvas pixels. Below this the draw is abandoned and nothing is asked — an Alt-click that
+ * was meant as a click should not put a prompt on screen.
+ *
+ * Smaller than {@link SCOPE_AREA_MIN_SIZE}, and deliberately: this is the line between "you
+ * drew something" and "you slipped", while that one is the smallest frame that can still be
+ * grabbed and resized afterwards. A rectangle between the two is a real draw, and is grown to
+ * the minimum rather than thrown away.
  */
-export const SCOPE_AREA_DEFAULT_W = 640;
-export const SCOPE_AREA_DEFAULT_H = 480;
-
-/**
- * How much room a scope area drawn around a selection leaves on each side, in canvas pixels.
- * The frame is a container rather than a tight bounding box: a card dropped just outside the
- * cards already there should still land inside it.
- */
-export const SCOPE_AREA_PADDING = 48;
+export const SCOPE_AREA_DRAW_MIN = 12;
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 

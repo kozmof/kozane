@@ -44,6 +44,7 @@
   import LayerControl from "./components/LayerControl.svelte";
   import ScopeControl from "./components/ScopeControl.svelte";
   import FloatingComposer from "./components/FloatingComposer.svelte";
+  import ScopeAreaPrompt from "./components/ScopeAreaPrompt.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
@@ -109,13 +110,7 @@
     isCenteredOn: (posX: number, posY: number) => boolean;
     centerOn: (posX: number, posY: number) => void;
     recenter: () => void;
-    placeScopeArea: (cardIds: string[]) => {
-      posX: number;
-      posY: number;
-      width: number;
-      height: number;
-      covers: string[];
-    };
+    cardIdsInWorldRect: (rect: { x: number; y: number; w: number; h: number }) => string[];
   } = $state()!;
   let composerComponent: { focusInput: () => void } = $state()!;
 
@@ -132,8 +127,8 @@
   );
   /** What each frame writes on its tab. Built from the scopes this board draws. */
   let scopeNameById = $derived(new Map(s.scopes.map((scope) => [scope.id, scope.name])));
-  /** Which scopes already have a frame here, so the sidebar knows which button to offer. */
-  let scopeAreaByScopeId = $derived(new Map(s.scopeAreas.map((a) => [a.scopeId, a])));
+  /** Which scopes already have a frame here: the panel offers to remove those and no others. */
+  let framedScopeIds = $derived(new Set(s.scopeAreas.map((a) => a.scopeId)));
   let defaultPartitionId = $derived(s.sidebar.activePartition ?? partitionsWithColors[0]?.id ?? "");
   // One pass over the cards instead of a scan per selected id. A selection is capped at
   // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
@@ -413,15 +408,49 @@
   }
 
   /**
-   * Puts a frame on the board for a scope: around the selection when there is one, and in
-   * the middle of the view when there is not.
+   * A rectangle drawn on the canvas with Alt, waiting to be told which scope it frames.
    *
-   * The canvas works out both, because both are measurements — the scroll offset, the zoom,
-   * and the rendered height of a card, none of which this page holds.
+   * Held here rather than in the canvas because the prompt is the page's to draw and the
+   * canvas's only job is to say where the pointer went. Bound both ways: the canvas writes
+   * it on release, and clearing it here is what takes the rectangle back off the board.
    */
-  async function handleAddScopeArea(scopeId: string) {
-    const { covers, ...rect } = canvasComponent.placeScopeArea([...s.selection.selectedCards]);
-    await actions.handleCreateScopeArea(scopeId, rect, covers);
+  let pendingScopeAreaRect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
+
+  /**
+   * How many cards the drawn rectangle covers, for the prompt to say so before a scope is
+   * picked. Counted once when the rectangle lands rather than derived, because the answer
+   * comes from measuring the DOM and there is nothing reactive behind it to derive from.
+   *
+   * This is the number shown, not the number acted on: `handleChooseScopeForArea` measures
+   * again at the moment of the answer, which is what the frame is actually built from.
+   */
+  let pendingScopeAreaCardCount = $state(0);
+  $effect(() => {
+    const rect = pendingScopeAreaRect;
+    pendingScopeAreaCardCount = rect ? canvasComponent.cardIdsInWorldRect(rect).length : 0;
+  });
+
+  /** The drawn rectangle as the API takes it. */
+  function pendingRectAsArea(rect: { x: number; y: number; w: number; h: number }) {
+    return { posX: rect.x, posY: rect.y, width: rect.w, height: rect.h };
+  }
+
+  async function handleChooseScopeForArea(scopeId: string) {
+    const rect = pendingScopeAreaRect;
+    if (!rect) return;
+    // Measured now rather than when the rectangle was drawn: the prompt has been up for as
+    // long as it took to read, and a poll may have moved the board underneath it.
+    const covers = canvasComponent.cardIdsInWorldRect(rect);
+    pendingScopeAreaRect = null;
+    await actions.handleCreateScopeArea(scopeId, pendingRectAsArea(rect), covers);
+  }
+
+  async function handleCreateScopeForArea(name: string) {
+    const rect = pendingScopeAreaRect;
+    if (!rect) return;
+    const covers = canvasComponent.cardIdsInWorldRect(rect);
+    pendingScopeAreaRect = null;
+    await actions.handleCreateScopeWithArea(name, pendingRectAsArea(rect), covers);
   }
 
   /** Shows the card's resize handle, or takes it away when it is the one already showing. */
@@ -564,6 +593,14 @@
     // Shift is the exception: it is part of the palette's own chord, and a shortcut may be
     // configured as a capital letter (`toggleWarpsShortcut` is Shift+A by default).
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // A rectangle waiting for a scope is what Escape means while one is up. The prompt
+    // handles the key itself while its input holds focus — the guard above stops anything
+    // typed there reaching the board — and this is the same key with focus anywhere else.
+    if (pendingScopeAreaRect && e.key === "Escape") {
+      e.preventDefault();
+      pendingScopeAreaRect = null;
+      return;
+    }
     if (!readonly && e.key === data.uiConfig.focusCardInputShortcut) {
       e.preventDefault();
       s.selection.composerCard = null;
@@ -659,6 +696,7 @@
       bind:scopeAreas={s.scopeAreas}
       {scopeNameById}
       activeScopeId={s.sidebar.activeScope}
+      bind:pendingScopeAreaRect
       onPersistScopeArea={handlePersistScopeArea}
       onScopeMembershipChange={actions.handleScopeMembershipChange}
       bind:warps={s.warps}
@@ -739,7 +777,19 @@
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />
 
-    {#if !readonly}
+    <!-- Takes the composer's place while it is up: both sit at the bottom centre, and the
+         question "which scope is this rectangle" is the one thing on screen worth answering
+         until it is answered. -->
+    {#if !readonly && pendingScopeAreaRect}
+    <ScopeAreaPrompt
+      scopes={s.scopes}
+      {framedScopeIds}
+      cardCount={pendingScopeAreaCardCount}
+      onChoose={handleChooseScopeForArea}
+      onCreate={handleCreateScopeForArea}
+      onCancel={() => (pendingScopeAreaRect = null)}
+    />
+    {:else if !readonly}
     <FloatingComposer
       bind:this={composerComponent}
       editingCard={s.selection.composerCard}
@@ -787,8 +837,7 @@
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
-    framedScopeIds={new Set(s.scopeAreas.map((a) => a.scopeId))}
-    onAddScopeArea={handleAddScopeArea}
+    {framedScopeIds}
     onRemoveScopeArea={actions.handleDeleteScopeArea}
     onCreateTaskspace={actions.handleCreateTaskspace}
     onOpenFile={!readonly || staticFiles

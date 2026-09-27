@@ -755,6 +755,35 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
+   * Names a new scope and frames it in one go, for a rectangle drawn on a board with nothing
+   * yet to put in it — which is how a scope tends to start.
+   *
+   * The scope is created first and kept even if the frame fails: a named scope is a thing the
+   * user asked for and can frame again, while unwinding it would throw the name away over a
+   * failed rectangle.
+   */
+  async function handleCreateScopeWithArea(
+    name: string,
+    rect: { posX: number; posY: number; width: number; height: number },
+    covers: string[] = [],
+  ) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const res = await api.createScope(state.mutationFetcher, state.namespaceId, trimmed);
+    if (!res.ok) {
+      state.setError(await api.failureMessage(res, "Failed to create scope"));
+      return;
+    }
+    const scopeId = readString(await res.json().catch(() => null), "id");
+    if (scopeId === undefined) {
+      state.setError("Failed to create scope");
+      return;
+    }
+    state.scopes = [...state.scopes, { id: scopeId, name: trimmed }];
+    await handleCreateScopeArea(scopeId, rect, covers);
+  }
+
+  /**
    * Takes the frame off the board. The scope keeps every card in it: a frame says where a
    * scope is drawn, not what belongs to it, and removing one by accident must not be a way
    * to lose a membership list.
@@ -797,6 +826,7 @@ export function createNamespaceActions(state: NamespaceState) {
     handleCreateScopeWithFile,
     handleScopeMembershipChange,
     handleCreateScopeArea,
+    handleCreateScopeWithArea,
     handleDeleteScopeArea,
   };
 }

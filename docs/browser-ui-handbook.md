@@ -129,6 +129,9 @@ card's text and partition. Change the text or pick a different partition, then p
   selection.
 - Shift-drag on empty canvas draws a rectangle, and every card it touches is
   selected.
+- Alt-drag on empty canvas draws a scope area instead — see [Scope
+  areas](#scope-areas). The rectangle is the same gesture; what the release
+  does with it is not.
 - Click empty canvas to clear the selection. So does `Esc`.
 
 The first card in a selection is the primary card, which some actions such as
@@ -308,18 +311,26 @@ A scope can also be given a frame on the canvas — a rectangle with the scope's
 name on a tab above it. Cards overlapping the frame belong to the scope, so a
 scope can be filled by dragging rather than by selecting and clicking.
 
-- Add a frame — hover a scope and click the `▢` beside the `×`. With cards
-  selected, the frame is drawn around them and they join the scope. With
-  nothing selected, it appears in the middle of the view at a default size.
-  Either way, whatever the frame lands on joins the scope.
+- Add a frame — hold `Alt` and drag a rectangle on the canvas, the same way
+  `Shift` drags a selection. On release, a prompt asks which scope the
+  rectangle belongs to: pick one from the list, or type a name to make a new
+  scope and frame it in one go. Whatever the rectangle covers joins the scope.
+  `Escape`, or the `×` on the prompt, discards the rectangle.
+
+  Scopes already framed on this board are left out of the list: a scope has at
+  most one frame per board. A rectangle smaller than 120 canvas pixels on a
+  side is grown to that, so the frame can still be grabbed by its tab
+  afterwards; an `Alt`-click that goes nowhere is discarded without asking.
 - Move it — drag the tab. The cards inside travel with the frame, so a scope
   can be relocated as a unit, and anything the frame comes to rest on joins it.
 - Resize it — drag the corner handle. Growing the frame takes in what it now
   covers; shrinking it past a card lets that card out.
 - Drag a card across the edge — dragging one in adds it to the scope, dragging
   one out removes it.
-- Remove the frame — click the `▣`. The scope keeps every card in it: a frame
-  says where a scope is drawn, not what belongs to it.
+- Remove the frame — click the `▣` on the scope's row in the panel. The button
+  is there only for a scope that has a frame here, so it doubles as the panel's
+  way of saying which scopes are framed. The scope keeps every card in it: a
+  frame says where a scope is drawn, not what belongs to it.
 
 Only cards that actually cross the edge change hands. A card put in a scope
 from the panel or from `kozane scope add-cards` can sit anywhere on the board,
