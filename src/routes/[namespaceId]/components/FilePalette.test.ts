@@ -22,20 +22,21 @@ function taskspace(overrides: Partial<TaskspaceSummary> & { id: string }): Tasks
 
 /** Answers every directory listing with `names`; anything else is a POST and is not used. */
 function fetcherFor(names: string[]) {
-  return vi.fn(async () =>
-    new Response(
-      JSON.stringify({
-        path: "",
-        entries: names.map((name) => ({
-          name,
-          kind: name.includes(".") ? "file" : "directory",
-          size: null,
-          modifiedAt: null,
-        })),
-        truncated: false,
-      }),
-      { status: 200 },
-    ),
+  return vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          path: "",
+          entries: names.map((name) => ({
+            name,
+            kind: name.includes(".") ? "file" : "directory",
+            size: null,
+            modifiedAt: null,
+          })),
+          truncated: false,
+        }),
+        { status: 200 },
+      ),
   );
 }
 
@@ -95,10 +96,7 @@ describe("FilePalette", () => {
   });
 
   it("says Linked, with no button, once every selected card is in the scope", () => {
-    render(
-      FilePalette,
-      { props: makeProps({ scopeRels: [{ scopeId: "s1", cardId: "c1" }] }) },
-    );
+    render(FilePalette, { props: makeProps({ scopeRels: [{ scopeId: "s1", cardId: "c1" }] }) });
 
     expect(screen.getByText("Linked")).toBeTruthy();
     // Research still offers one, so this is about s1 rather than about the control missing.
@@ -164,7 +162,11 @@ describe("FilePalette", () => {
     expect(props.onCreate).not.toHaveBeenCalled();
 
     await userEvent.type(fileField, "plan.md{Enter}");
-    expect(props.onCreate).toHaveBeenCalledWith({ scope: "work", taskspace: "notes", file: "plan.md" });
+    expect(props.onCreate).toHaveBeenCalledWith({
+      scope: "work",
+      taskspace: "notes",
+      file: "plan.md",
+    });
   });
 
   it("closes on Escape", async () => {

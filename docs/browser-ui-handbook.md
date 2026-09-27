@@ -326,6 +326,7 @@ A card inside **any** of a scope's frames belongs to it.
   A rectangle smaller than 120 canvas pixels on a side is grown to that, so the
   frame can still be grabbed by its tab afterwards; an `Alt`-click that goes
   nowhere is discarded without asking.
+
 - Move one — drag its tab. The cards inside travel with it, so a cluster can be
   relocated as a unit, and anything the frame comes to rest on joins the scope.
 - Resize one — drag the corner handle. Growing the frame takes in what it now
