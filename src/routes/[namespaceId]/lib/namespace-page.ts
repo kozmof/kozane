@@ -235,6 +235,143 @@ export function rectsIntersect(a: RectLike, b: RectLike): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
+/**
+ * Which of `cardEls` overlap `screenRect`, by their measured boxes.
+ *
+ * Measured rather than computed from `posX`/`posY`/`width`, because a card has no height to
+ * compute with: `KozaneCard` sets only `left`, `top` and `width`, and what a card is tall
+ * enough to cover is decided by its text. A scope area asks exactly the question the marquee
+ * asks — which cards does this rectangle touch — so it is answered the same way, against the
+ * same `[data-card-id]` elements.
+ *
+ * Screen space, not world space, for the same reason `applyRectangleSelection` works there:
+ * `getBoundingClientRect` reports the zoom already applied, and converting the one rectangle
+ * to match is cheaper and less error-prone than dividing every card's box back out of it.
+ */
+export function cardIdsOverlapping(
+  cardEls: Iterable<HTMLElement>,
+  screenRect: ScreenRect,
+): Set<string> {
+  const hit = new Set<string>();
+  for (const el of cardEls) {
+    const cardId = el.dataset.cardId;
+    if (!cardId) continue;
+    if (rectsIntersect(el.getBoundingClientRect(), screenRect)) hit.add(cardId);
+  }
+  return hit;
+}
+
+/** Which cards crossed a frame's edge, in each direction. */
+export type MembershipTransition = { entered: string[]; exited: string[] };
+
+/**
+ * What a drag did to a scope area's membership: who came in, and who went out.
+ *
+ * A transition rather than a reconciliation, and that is the whole point of it. "Overlapping
+ * means a member" read as a rule about the final state would make "not overlapping means not a
+ * member" true too, and every card sitting outside the frame would be swept out of the scope
+ * by the first drag that touched it — including one put there deliberately by `kozane scope
+ * add-cards`, which has never had anything to do with where the card sits. Comparing before
+ * with after asks only about cards that actually crossed the edge, so a membership nothing
+ * crossed is a membership nothing here has an opinion about.
+ *
+ * `after` is not filtered against `members`: a card already in the scope that is dragged into
+ * the frame is reported as `entered` and the write that follows is an upsert
+ * (`onConflictDoNothing`), which is cheaper than the set difference that would avoid it.
+ */
+export function membershipTransition(
+  before: Set<string>,
+  after: Set<string>,
+): MembershipTransition {
+  const entered: string[] = [];
+  const exited: string[] = [];
+  for (const id of after) if (!before.has(id)) entered.push(id);
+  for (const id of before) if (!after.has(id)) exited.push(id);
+  return { entered, exited };
+}
+
+export type RectBounds = { canvasWidth: number; canvasHeight: number };
+
+/** A scope area moved by a drag, held on the board. */
+export function movedRect(rect: WorldRect, dx: number, dy: number, bounds: RectBounds): WorldRect {
+  return {
+    ...rect,
+    x: clamp(rect.x + dx, 0, Math.max(0, bounds.canvasWidth - rect.w)),
+    y: clamp(rect.y + dy, 0, Math.max(0, bounds.canvasHeight - rect.h)),
+  };
+}
+
+/**
+ * A scope area resized by its bottom-right handle. The origin stays put and only the far
+ * corner follows the pointer, which is what makes the gesture readable — a frame that moved
+ * while being resized would take its cards' relationship to it with it.
+ *
+ * Mirrors `resizedCardWidth`: the delta is divided by the zoom, the grid snap is applied on
+ * release rather than during, and the result is clamped. The server clamps again on the way
+ * in; this is what keeps the rectangle under the pointer honest while it is being dragged.
+ */
+export function resizedRect({
+  rect,
+  deltaX,
+  deltaY,
+  zoom,
+  snapToGrid = false,
+  minSize,
+  bounds,
+}: {
+  rect: WorldRect;
+  deltaX: number;
+  deltaY: number;
+  zoom: number;
+  snapToGrid?: boolean;
+  minSize: number;
+  bounds: RectBounds;
+}): WorldRect {
+  const rawW = rect.w + deltaX / zoom;
+  const rawH = rect.h + deltaY / zoom;
+  const w = snapToGrid ? Math.round(rawW / GRID) * GRID : rawW;
+  const h = snapToGrid ? Math.round(rawH / GRID) * GRID : rawH;
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: clamp(w, minSize, Math.max(minSize, bounds.canvasWidth - rect.x)),
+    h: clamp(h, minSize, Math.max(minSize, bounds.canvasHeight - rect.y)),
+  };
+}
+
+/**
+ * The rectangle a set of cards sits in, padded, or null when none of them could be measured.
+ * What "frame the selection" is drawn from — see `handleCreateScopeArea`.
+ */
+export function boundingRect(
+  cardEls: Iterable<HTMLElement>,
+  canvasRect: Pick<DOMRect, "left" | "top">,
+  scroll: Point,
+  zoom: number,
+  padding: number,
+): WorldRect | null {
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const el of cardEls) {
+    const box = el.getBoundingClientRect();
+    const start = clientToWorld(box.left, box.top, canvasRect, scroll, zoom);
+    const end = clientToWorld(box.right, box.bottom, canvasRect, scroll, zoom);
+    left = Math.min(left, start.x);
+    top = Math.min(top, start.y);
+    right = Math.max(right, end.x);
+    bottom = Math.max(bottom, end.y);
+  }
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  return {
+    x: Math.max(0, left - padding),
+    y: Math.max(0, top - padding),
+    w: right - left + padding * 2,
+    h: bottom - top + padding * 2,
+  };
+}
+
 export type Triangle = [Point, Point, Point];
 
 /** How long a pointer may sit still inside the safe triangle before the popover gives up. */

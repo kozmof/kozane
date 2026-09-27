@@ -1,5 +1,5 @@
 import { getUiConfigForRoot, getWorkspaceUiConfig } from "../../db/internal/config.js";
-import { clamp } from "../constants.js";
+import { clamp, SCOPE_AREA_MIN_SIZE } from "../constants.js";
 
 export type CanvasBounds = { canvasWidth: number; canvasHeight: number };
 
@@ -37,4 +37,36 @@ export function clampToBounds(
 /** A position held inside {@link canvasBounds}. */
 export function clampToCanvas(posX: number, posY: number): { posX: number; posY: number } {
   return clampToBounds(posX, posY, canvasBounds());
+}
+
+export type CanvasRect = { posX: number; posY: number; width: number; height: number };
+
+/**
+ * A whole rectangle held inside the board, for a scope area: sized first, then placed.
+ *
+ * The size is settled before the position because the other order cannot be satisfied — a
+ * rectangle pinned at its corner and then shrunk to fit is a different rectangle from the one
+ * asked for, and on a board narrower than {@link SCOPE_AREA_MIN_SIZE} there is no position at
+ * which the minimum fits. So the size is clamped to the minimum and to the board, and the
+ * corner is then held so the far edge lands on the board too. A frame wider than the canvas
+ * comes back the width of the canvas, at its origin.
+ *
+ * Integers throughout, because the columns are. Rounded here rather than by the caller so an
+ * area cannot be stored at a fraction the client then redraws itself against.
+ */
+export function clampRectToBounds(rect: CanvasRect, bounds: CanvasBounds): CanvasRect {
+  const { canvasWidth, canvasHeight } = bounds;
+  const width = Math.round(clamp(rect.width, SCOPE_AREA_MIN_SIZE, canvasWidth));
+  const height = Math.round(clamp(rect.height, SCOPE_AREA_MIN_SIZE, canvasHeight));
+  return {
+    width,
+    height,
+    posX: Math.round(clamp(rect.posX, 0, Math.max(0, canvasWidth - width))),
+    posY: Math.round(clamp(rect.posY, 0, Math.max(0, canvasHeight - height))),
+  };
+}
+
+/** A rectangle held inside {@link canvasBounds}. */
+export function clampRectToCanvas(rect: CanvasRect): CanvasRect {
+  return clampRectToBounds(rect, canvasBounds());
 }

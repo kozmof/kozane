@@ -300,7 +300,35 @@ namespaces reach each one.
 - Delete — hover a scope and click the `×`. This removes this namespace's cards
   from the scope. The cards themselves are kept, and the scope disappears
   workspace-wide only once nothing anywhere refers to it — no cards in any
-  namespace, and no taskspaces.
+  namespace, no taskspaces, and no frame on any board.
+
+### Scope areas
+
+A scope can also be given a frame on the canvas — a rectangle with the scope's
+name on a tab above it. Cards overlapping the frame belong to the scope, so a
+scope can be filled by dragging rather than by selecting and clicking.
+
+- Add a frame — hover a scope and click the `▢` beside the `×`. With cards
+  selected, the frame is drawn around them and they join the scope. With
+  nothing selected, it appears in the middle of the view at a default size.
+  Either way, whatever the frame lands on joins the scope.
+- Move it — drag the tab. The cards inside travel with the frame, so a scope
+  can be relocated as a unit, and anything the frame comes to rest on joins it.
+- Resize it — drag the corner handle. Growing the frame takes in what it now
+  covers; shrinking it past a card lets that card out.
+- Drag a card across the edge — dragging one in adds it to the scope, dragging
+  one out removes it.
+- Remove the frame — click the `▣`. The scope keeps every card in it: a frame
+  says where a scope is drawn, not what belongs to it.
+
+Only cards that actually cross the edge change hands. A card put in a scope
+from the panel or from `kozane scope add-cards` can sit anywhere on the board,
+and moving it around outside the frame leaves its membership alone.
+
+The frame is drawn under the cards and belongs to no layer, so it never dims
+with one, and clicking, dragging or sweeping a selection over the middle of it
+works exactly as it does on bare canvas. Each board has its own frame for a
+shared scope, or none — the rectangle is this namespace's, the scope is not.
 
 ## Taskspaces
 

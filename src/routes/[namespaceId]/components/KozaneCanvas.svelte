@@ -1,10 +1,18 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { css } from "styled-system/css";
   import KozaneCard from "./KozaneCard.svelte";
+  import ScopeArea from "./ScopeArea.svelte";
   import SelectionRect from "./SelectionRect.svelte";
   import WarpMarker from "./WarpMarker.svelte";
-  import type { CardWithGlue, PartitionWithColor, GlueRel, Layer, Warp } from "$lib/types";
+  import type {
+    CardWithGlue,
+    PartitionWithColor,
+    GlueRel,
+    Layer,
+    ScopeArea as ScopeAreaRow,
+    Warp,
+  } from "$lib/types";
   import type { SelectionState } from "../namespace-state.svelte.js";
   import { PALETTE } from "$lib/palette";
   import {
@@ -25,14 +33,25 @@
     resizedCardWidth,
     verticalListPosition,
     rectsIntersect,
+    cardIdsOverlapping,
+    membershipTransition,
+    movedRect,
+    boundingRect,
+    resizedRect,
     scrollForViewCenter,
     selectionRectFromPoints,
     viewCenterWorld,
     worldRectToScreenRect,
   } from "../lib/namespace-page.js";
-  import type { CardPositionPatch } from "../lib/namespace-page.js";
+  import type { CardPositionPatch, MembershipTransition } from "../lib/namespace-page.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
-  import { clamp } from "$lib/constants";
+  import {
+    clamp,
+    SCOPE_AREA_MIN_SIZE,
+    SCOPE_AREA_DEFAULT_W,
+    SCOPE_AREA_DEFAULT_H,
+    SCOPE_AREA_PADDING,
+  } from "$lib/constants";
 
   let {
     cards = $bindable(),
@@ -43,6 +62,11 @@
     partitionColorById,
     selection,
     scopeCardIds,
+    scopeAreas = $bindable(),
+    scopeNameById,
+    activeScopeId,
+    onPersistScopeArea,
+    onScopeMembershipChange,
     warps = $bindable(),
     focusedWarpId,
     warpsVisible,
@@ -82,6 +106,33 @@
      */
     selection: SelectionState;
     scopeCardIds: Set<string> | null;
+    /**
+     * Where this board's scopes are framed. At most one per scope, and most scopes have none:
+     * a frame is drawn only for a scope someone has given a place to.
+     */
+    scopeAreas: ScopeAreaRow[];
+    /** The name each frame draws on its tab, by scope id. */
+    scopeNameById: Map<string, string>;
+    /** The scope the board is filtered to, whose frame is drawn at full strength. */
+    activeScopeId: string | null;
+    /**
+     * Saves where a frame was dropped or how big it was made, answering whether it took —
+     * the same contract as {@link onPersistWarpPosition}. The drag has already moved the
+     * frame, and a refusal is what puts it back.
+     */
+    onPersistScopeArea: (
+      scopeId: string,
+      rect: { posX: number; posY: number; width: number; height: number },
+    ) => Promise<boolean>;
+    /**
+     * Files the cards that crossed a frame's edge into the scope, or out of it. Called after
+     * the positions behind the crossing are saved, so a card is never filed into a scope at a
+     * position the server refused.
+     */
+    onScopeMembershipChange: (
+      scopeId: string,
+      change: { entered: string[]; exited: string[] },
+    ) => Promise<void>;
     /** In creation order: a warp's number is its place in this list. */
     warps: Warp[];
     focusedWarpId: string | null;
@@ -193,6 +244,16 @@
     /** The same ids as `groupIds`, for the membership test every pointer move makes. */
     groupIdSet: Set<string>;
     groupPrevPositions: Map<string, { x: number; y: number }>;
+    /**
+     * Who was inside each frame when the drag began, by scope id — the `before` half of
+     * `membershipTransition`, read once here rather than on release.
+     *
+     * It has to be read at mousedown: by the time the pointer comes up the cards have already
+     * moved, and the board no longer holds the answer to what was inside before they did.
+     * Every frame, not only the ones under the cards being dragged, because one drag can take
+     * a card out of one frame and into another.
+     */
+    areaMembersBefore: Map<string, Set<string>>;
     moved: boolean;
   } | null = null;
 
@@ -238,6 +299,43 @@
     prevY: number;
     moved: boolean;
   } | null = null;
+
+  /**
+   * The frame being dragged, and what it is carrying.
+   *
+   * `cardIds` is settled at mousedown and not recomputed while the pointer moves: the cards
+   * travel with the frame, so the set cannot change on the way, and re-sweeping the board
+   * every pointer move would pick up whatever the frame happened to be passing over.
+   */
+  let areaDragState: {
+    scopeId: string;
+    startX: number;
+    startY: number;
+    /** Where the frame sat before the drag, to put back if the save fails. */
+    prevRect: { posX: number; posY: number; width: number; height: number };
+    /** The cards inside it when the drag began, and where each of them was. */
+    cardIds: string[];
+    cardIdSet: Set<string>;
+    cardPrevPositions: Map<string, { x: number; y: number }>;
+    /** Who was inside before the drag — the `before` half of `membershipTransition`. */
+    membersBefore: Set<string>;
+    moved: boolean;
+  } | null = null;
+
+  let areaResizeState: {
+    scopeId: string;
+    startClientX: number;
+    startClientY: number;
+    /** The rectangle the frame was drawn at when the drag began. */
+    startRect: { posX: number; posY: number; width: number; height: number };
+    membersBefore: Set<string>;
+    moved: boolean;
+  } | null = null;
+
+  /** Where the pointer was last seen during a frame resize, so the release can snap. */
+  let areaResizePointer: { x: number; y: number } | null = null;
+  let draggingAreaScopeId = $state<string | null>(null);
+  let resizingAreaScopeId = $state<string | null>(null);
 
   let panState: {
     startX: number;
@@ -456,6 +554,7 @@
       groupIds,
       groupIdSet: new Set(groupIds),
       groupPrevPositions,
+      areaMembersBefore: new Map(scopeAreas.map((a) => [a.scopeId, cardIdsInArea(a)])),
       moved: false,
     };
     draggingId = cardId;
@@ -466,6 +565,241 @@
   /** What a card is drawn at: its own width when it has one, the workspace default when not. */
   function widthOf(card: CardWithGlue): number {
     return card.width ?? cardWidth;
+  }
+
+  /** The card elements a rectangle is tested against: every card drawn on the board. */
+  function cardElements(): HTMLElement[] {
+    return [...canvasEl.querySelectorAll<HTMLElement>("[data-card-id]")];
+  }
+
+  /** Which cards overlap `rect`, given in world coordinates. */
+  function cardIdsInRect(rect: { x: number; y: number; w: number; h: number }): Set<string> {
+    const screenRect = worldRectToScreenRect(
+      rect,
+      canvasEl.getBoundingClientRect(),
+      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
+      zoom,
+    );
+    return cardIdsOverlapping(cardElements(), screenRect);
+  }
+
+  function areaWorldRect(area: ScopeAreaRow) {
+    return { x: area.posX, y: area.posY, w: area.width, h: area.height };
+  }
+
+  /** Which cards overlap a frame right now. */
+  function cardIdsInArea(area: ScopeAreaRow): Set<string> {
+    return cardIdsInRect(areaWorldRect(area));
+  }
+
+  const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
+
+  /**
+   * Saves a frame's rectangle, putting it back if the save is refused.
+   *
+   * Only puts it back if the frame still holds the rectangle that failed: a poll or another
+   * drag may have moved on since the request went out. Same guard, and the same reason, as
+   * the warp drop above.
+   */
+  async function persistArea(
+    scopeId: string,
+    sent: { posX: number; posY: number; width: number; height: number },
+    prev: { posX: number; posY: number; width: number; height: number },
+  ): Promise<boolean> {
+    const ok = await onPersistScopeArea(scopeId, sent);
+    if (ok) return true;
+    const current = scopeAreas.find((a) => a.scopeId === scopeId);
+    if (
+      current &&
+      current.posX === sent.posX &&
+      current.posY === sent.posY &&
+      current.width === sent.width &&
+      current.height === sent.height
+    ) {
+      Object.assign(current, prev);
+    }
+    onError("Failed to save scope area");
+    return false;
+  }
+
+  /**
+   * What crossed each frame's edge, given who was inside each of them before.
+   *
+   * Read at the end of a drag rather than tracked during it: a card belongs where it was let
+   * go, and asking mid-drag would file it into every frame it was carried across on the way.
+   * Frames with nothing to report are dropped, so the common drag — one that goes nowhere
+   * near a frame — produces no entries and no requests.
+   */
+  function scopeAreaChanges(
+    membersBefore: Map<string, Set<string>>,
+  ): { scopeId: string; change: MembershipTransition }[] {
+    const changes: { scopeId: string; change: MembershipTransition }[] = [];
+    for (const area of scopeAreas) {
+      const before = membersBefore.get(area.scopeId);
+      if (!before) continue;
+      const change = membershipTransition(before, cardIdsInArea(area));
+      if (change.entered.length === 0 && change.exited.length === 0) continue;
+      changes.push({ scopeId: area.scopeId, change });
+    }
+    return changes;
+  }
+
+  async function applyScopeAreaChanges(
+    changes: { scopeId: string; change: MembershipTransition }[],
+  ) {
+    for (const { scopeId, change } of changes) {
+      await onScopeMembershipChange(scopeId, change);
+    }
+  }
+
+  /** The same, for a gesture that moved one frame rather than the cards. */
+  function scopeAreaChange(scopeId: string, before: Set<string>) {
+    return scopeAreaChanges(new Map([[scopeId, before]]));
+  }
+
+  /**
+   * Where a new frame should go, and what it would then hold.
+   *
+   * Around `cardIds` when there are any — framing a selection is the fastest way onto this
+   * feature, and the rectangle is the one already on screen — and otherwise a default-sized
+   * frame in the middle of the view, which is where "set warp" puts a marker.
+   *
+   * Exported rather than computed on the page because both halves are measurements only the
+   * canvas can take: the scroll offset, the zoom, and the rendered height of a card.
+   */
+  export function placeScopeArea(cardIds: string[]): {
+    posX: number;
+    posY: number;
+    width: number;
+    height: number;
+    covers: string[];
+  } {
+    const selected = new Set(cardIds);
+    const els = cardElements().filter((el) => el.dataset.cardId && selected.has(el.dataset.cardId));
+    const bounds =
+      els.length > 0
+        ? boundingRect(
+            els,
+            canvasEl.getBoundingClientRect(),
+            { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
+            zoom,
+            SCOPE_AREA_PADDING,
+          )
+        : null;
+    const centre = getViewCenter();
+    const rect = bounds ?? {
+      x: centre.posX - SCOPE_AREA_DEFAULT_W / 2,
+      y: centre.posY - SCOPE_AREA_DEFAULT_H / 2,
+      w: SCOPE_AREA_DEFAULT_W,
+      h: SCOPE_AREA_DEFAULT_H,
+    };
+    // Sized first, then placed, the same order `clampRectToBounds` uses on the server — so
+    // the rectangle `covers` is measured against is the one that will be stored, rather than
+    // one placed against a width it does not end up having.
+    const w = clamp(rect.w, SCOPE_AREA_MIN_SIZE, canvasWidth);
+    const h = clamp(rect.h, SCOPE_AREA_MIN_SIZE, canvasHeight);
+    const held = {
+      x: clamp(rect.x, 0, Math.max(0, canvasWidth - w)),
+      y: clamp(rect.y, 0, Math.max(0, canvasHeight - h)),
+      w,
+      h,
+    };
+    return {
+      posX: Math.round(held.x),
+      posY: Math.round(held.y),
+      width: Math.round(held.w),
+      height: Math.round(held.h),
+      // Everything the frame lands on, not only what was selected: a card already sitting
+      // inside the rectangle is inside the frame the moment it is drawn, and leaving it out
+      // would make the frame disagree with itself until something moved.
+      covers: [...cardIdsInRect(held)],
+    };
+  }
+
+  export function handleScopeAreaMouseDown(e: MouseEvent, scopeId: string) {
+    if (readonly || e.button !== 0 || dragState || resizeState || areaDragState) return;
+    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    if (!area) return;
+    const cardIds = [...cardIdsInArea(area)];
+    areaDragState = {
+      scopeId,
+      startX: e.clientX,
+      startY: e.clientY,
+      prevRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
+      cardIds,
+      cardIdSet: new Set(cardIds),
+      cardPrevPositions: previousPositions(cards, cardIds),
+      membersBefore: new Set(cardIds),
+      moved: false,
+    };
+    draggingAreaScopeId = scopeId;
+    onPositionActivityStart();
+  }
+
+  export function handleScopeAreaResizeMouseDown(e: MouseEvent, scopeId: string) {
+    if (readonly || e.button !== 0 || areaResizeState) return;
+    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    if (!area) return;
+    areaResizeState = {
+      scopeId,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      startRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
+      membersBefore: cardIdsInArea(area),
+      moved: false,
+    };
+    resizingAreaScopeId = scopeId;
+    onPositionActivityStart();
+  }
+
+  function updateDraggedArea(clientX: number, clientY: number, snapToGrid = false) {
+    if (!areaDragState) return;
+    const { scopeId, startX, startY, prevRect, cardIdSet, cardPrevPositions } = areaDragState;
+    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    if (!area) return;
+
+    const rawDx = (clientX - startX) / zoom;
+    const rawDy = (clientY - startY) / zoom;
+    // Measured from where the frame started rather than accumulated per move, so the cards
+    // it carries stay exactly where they were relative to it however the pointer wanders.
+    const next = movedRect(
+      { x: prevRect.posX, y: prevRect.posY, w: prevRect.width, h: prevRect.height },
+      snapToGrid ? Math.round(rawDx / GRID) * GRID : rawDx,
+      snapToGrid ? Math.round(rawDy / GRID) * GRID : rawDy,
+      canvasRectBounds,
+    );
+    const dx = next.x - prevRect.posX;
+    const dy = next.y - prevRect.posY;
+    area.posX = next.x;
+    area.posY = next.y;
+
+    // Written through the rows for the reason `updateDraggedCard` gives: this runs on every
+    // pointer move, and replacing the array rebuilds the layer grouping each time.
+    for (const c of cards) {
+      if (!cardIdSet.has(c.id)) continue;
+      const prev = cardPrevPositions.get(c.id);
+      if (!prev) continue;
+      c.posX = Math.max(0, prev.x + dx);
+      c.posY = Math.max(0, prev.y + dy);
+    }
+  }
+
+  function updateResizedArea(clientX: number, clientY: number, snapToGrid = false) {
+    if (!areaResizeState) return;
+    const { scopeId, startClientX, startClientY, startRect } = areaResizeState;
+    const area = scopeAreas.find((a) => a.scopeId === scopeId);
+    if (!area) return;
+    const next = resizedRect({
+      rect: { x: startRect.posX, y: startRect.posY, w: startRect.width, h: startRect.height },
+      deltaX: clientX - startClientX,
+      deltaY: clientY - startClientY,
+      zoom,
+      snapToGrid,
+      minSize: SCOPE_AREA_MIN_SIZE,
+      bounds: canvasRectBounds,
+    });
+    area.width = next.w;
+    area.height = next.h;
   }
 
   export function handleResizeMouseDown(e: MouseEvent, cardId: string) {
@@ -672,6 +1006,21 @@
         }
         updateDraggedWarp(e.clientX, e.clientY);
       }
+      if (areaDragState) {
+        const { startX, startY } = areaDragState;
+        if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) {
+          areaDragState.moved = true;
+        }
+        updateDraggedArea(e.clientX, e.clientY);
+      }
+      if (areaResizeState) {
+        const { startClientX, startClientY } = areaResizeState;
+        areaResizePointer = { x: e.clientX, y: e.clientY };
+        if (Math.abs(e.clientX - startClientX) > 4 || Math.abs(e.clientY - startClientY) > 4) {
+          areaResizeState.moved = true;
+        }
+        updateResizedArea(e.clientX, e.clientY);
+      }
       if (resizeState) {
         resizePointerX = e.clientX;
         if (Math.abs(e.clientX - resizeState.startClientX) > 4) resizeState.moved = true;
@@ -697,6 +1046,7 @@
           updateDraggedCard(dragPointer.x, dragPointer.y, true);
         }
         const { cardId, moved, prevX, prevY, groupIds, groupPrevPositions } = dragState;
+        const areaMembersBefore = dragState.areaMembersBefore;
         dragState = null;
         draggingId = null;
         dragPointer = null;
@@ -704,11 +1054,26 @@
           const allIds = [cardId, ...groupIds];
           const positions = cardPositionPatches(cards, allIds);
           const sentByCardId = new Map(positions.map((p) => [p.cardId, p]));
+          // Measured against the drawn board, which is why the flush comes first: the release
+          // snaps the card to the grid by writing `posX`, and reading a box before Svelte has
+          // put that on screen measures where the card was a moment ago. A snap is only a few
+          // pixels, but a few pixels is the whole question for a card dropped on the edge.
+          //
+          // Before the save rather than after, so a poll cannot replace the list underneath —
+          // `positionActivity` is still open here and closes in the `finally` below. What is
+          // *sent* still waits for the save.
+          await tick();
+          const areaChanges = scopeAreaChanges(areaMembersBefore);
           let ok = false;
           try {
             ok = await onPersistPositions(positions);
           } finally {
             onPositionActivityEnd();
+          }
+          if (ok) {
+            // Only once the positions are stored. A card filed into a scope at a position the
+            // server refused would be a member of it while sitting somewhere else entirely.
+            await applyScopeAreaChanges(areaChanges);
           }
           if (!ok) {
             cards = cards.map((c) => {
@@ -750,6 +1115,89 @@
             }
             onError("Failed to save warp position");
           }
+        } else {
+          onPositionActivityEnd();
+        }
+      }
+      if (areaDragState) {
+        if (areaDragState.moved && lastPointer) {
+          updateDraggedArea(lastPointer.x, lastPointer.y, true);
+        }
+        const { scopeId, moved, prevRect, cardIds, cardPrevPositions, membersBefore } =
+          areaDragState;
+        areaDragState = null;
+        draggingAreaScopeId = null;
+        const dropped = moved ? scopeAreas.find((a) => a.scopeId === scopeId) : undefined;
+        if (dropped) {
+          const sent = {
+            posX: dropped.posX,
+            posY: dropped.posY,
+            width: dropped.width,
+            height: dropped.height,
+          };
+          const positions = cardPositionPatches(cards, cardIds);
+          // The flush matters most here. The frame and everything it carries have moved by
+          // the same delta, and none of it is on screen yet — so measuring now would test the
+          // frame's new rectangle against the cards' old boxes, and report the members it just
+          // carried across the board as having left the scope.
+          await tick();
+          const areaChanges = scopeAreaChange(scopeId, membersBefore);
+          let ok = false;
+          try {
+            // The frame first: the cards were carried by it, and a frame that did not move is
+            // a set of cards that should not have moved either.
+            ok = await persistArea(scopeId, sent, prevRect);
+            if (ok && positions.length > 0) ok = await onPersistPositions(positions);
+          } finally {
+            onPositionActivityEnd();
+          }
+          if (ok) {
+            // A frame dragged over a card that was not in it picks that card up. Nothing
+            // leaves this way: the members travelled with the frame.
+            await applyScopeAreaChanges(areaChanges);
+          } else {
+            for (const c of cards) {
+              const prev = cardPrevPositions.get(c.id);
+              if (prev) {
+                c.posX = prev.x;
+                c.posY = prev.y;
+              }
+            }
+            onError("Failed to save card position");
+          }
+        } else {
+          onPositionActivityEnd();
+        }
+      }
+      if (areaResizeState) {
+        if (areaResizeState.moved && areaResizePointer) {
+          updateResizedArea(areaResizePointer.x, areaResizePointer.y, true);
+        }
+        const { scopeId, moved, startRect, membersBefore } = areaResizeState;
+        areaResizeState = null;
+        areaResizePointer = null;
+        resizingAreaScopeId = null;
+        const resized = moved ? scopeAreas.find((a) => a.scopeId === scopeId) : undefined;
+        if (resized) {
+          const sent = {
+            posX: resized.posX,
+            posY: resized.posY,
+            width: resized.width,
+            height: resized.height,
+          };
+          // Nothing moved, but the frame's own edge did, and the release snapped it: the
+          // cards it just stopped covering are decided by where that edge came to rest.
+          await tick();
+          const areaChanges = scopeAreaChange(scopeId, membersBefore);
+          let ok = false;
+          try {
+            ok = await persistArea(scopeId, sent, startRect);
+          } finally {
+            onPositionActivityEnd();
+          }
+          // Both directions here, unlike a frame drag: growing the frame takes cards in, and
+          // shrinking it past one lets that card out.
+          if (ok) await applyScopeAreaChanges(areaChanges);
         } else {
           onPositionActivityEnd();
         }
@@ -865,6 +1313,21 @@
       style:transform="scale({zoom})"
       style:transform-origin="0 0"
     >
+      <!-- Before the layer wrappers and at z-index 0, so every card draws over its frame.
+           Outside them, so a frame never dims with a layer: the cards it holds can sit on
+           any layer at all, which is the same reason a warp marker is not in the stack. -->
+      {#each scopeAreas as area (area.id)}
+        <ScopeArea
+          {area}
+          name={scopeNameById.get(area.scopeId) ?? ""}
+          focused={area.scopeId === activeScopeId}
+          draggable={!readonly}
+          dragging={draggingAreaScopeId === area.scopeId}
+          resizing={resizingAreaScopeId === area.scopeId}
+          onMouseDown={(e) => handleScopeAreaMouseDown(e, area.scopeId)}
+          onResizeMouseDown={(e) => handleScopeAreaResizeMouseDown(e, area.scopeId)}
+        />
+      {/each}
       {#each layerGroups as group (group.id)}
         <!-- pointer-events pass through the wrapper so cards on layers underneath stay
              clickable and canvas panning still works between them. -->

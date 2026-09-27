@@ -28,6 +28,10 @@ import {
   insideTriangle,
   verticalListPosition,
   rectsIntersect,
+  cardIdsOverlapping,
+  membershipTransition,
+  movedRect,
+  resizedRect,
   selectionRectFromPoints,
   worldRectToScreenRect,
 } from "./namespace-page.js";
@@ -402,6 +406,141 @@ describe("canvas geometry", () => {
         { left: 10, top: 0, right: 20, bottom: 10 },
       ),
     ).toBe(false);
+  });
+});
+
+describe("cardIdsOverlapping", () => {
+  /** A stand-in for a rendered card: the id the sweep reads, and the box it measures. */
+  function cardEl(id: string, box: { left: number; top: number; right: number; bottom: number }) {
+    return {
+      dataset: { cardId: id },
+      getBoundingClientRect: () => box,
+    } as unknown as HTMLElement;
+  }
+
+  const frame = { left: 100, top: 100, right: 300, bottom: 300 };
+
+  it("takes a card that overlaps the frame at all", () => {
+    // Any overlap counts, so a card hanging over the edge is in. Its measured box is what
+    // decides, because a card has no stored height to decide with.
+    const els = [cardEl("in", { left: 280, top: 280, right: 400, bottom: 500 })];
+    expect(cardIdsOverlapping(els, frame)).toEqual(new Set(["in"]));
+  });
+
+  it("leaves out a card that only touches the edge", () => {
+    const els = [cardEl("edge", { left: 300, top: 100, right: 400, bottom: 200 })];
+    expect(cardIdsOverlapping(els, frame)).toEqual(new Set());
+  });
+
+  it("leaves out a card nowhere near it", () => {
+    const els = [cardEl("far", { left: 0, top: 0, right: 50, bottom: 50 })];
+    expect(cardIdsOverlapping(els, frame)).toEqual(new Set());
+  });
+
+  it("ignores an element carrying no card id", () => {
+    const stray = { dataset: {}, getBoundingClientRect: () => frame } as unknown as HTMLElement;
+    expect(cardIdsOverlapping([stray], frame)).toEqual(new Set());
+  });
+});
+
+describe("membershipTransition", () => {
+  it("reports what came in and what went out", () => {
+    expect(membershipTransition(new Set(["a", "b"]), new Set(["b", "c"]))).toEqual({
+      entered: ["c"],
+      exited: ["a"],
+    });
+  });
+
+  it("reports nothing when the frame holds what it held", () => {
+    expect(membershipTransition(new Set(["a"]), new Set(["a"]))).toEqual({
+      entered: [],
+      exited: [],
+    });
+  });
+
+  it("says nothing about a card that was never inside the frame", () => {
+    // The reason this is a transition and not a reconciliation. A card put in the scope by
+    // hand — `kozane scope add-cards`, from anywhere on the board — sits outside the frame,
+    // and dragging it around out there must not file it out of the scope. It was not inside
+    // before and is not inside now, so it is not this function's business either way.
+    expect(membershipTransition(new Set(), new Set())).toEqual({ entered: [], exited: [] });
+  });
+});
+
+describe("movedRect", () => {
+  const bounds = { canvasWidth: 1000, canvasHeight: 800 };
+
+  it("moves the rectangle by the delta", () => {
+    expect(movedRect({ x: 10, y: 20, w: 100, h: 100 }, 5, -5, bounds)).toEqual({
+      x: 15,
+      y: 15,
+      w: 100,
+      h: 100,
+    });
+  });
+
+  it("holds the whole rectangle on the board", () => {
+    expect(movedRect({ x: 900, y: 700, w: 200, h: 200 }, 500, 500, bounds)).toEqual({
+      x: 800,
+      y: 600,
+      w: 200,
+      h: 200,
+    });
+    expect(movedRect({ x: 10, y: 10, w: 100, h: 100 }, -500, -500, bounds)).toEqual({
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 100,
+    });
+  });
+});
+
+describe("resizedRect", () => {
+  const bounds = { canvasWidth: 1000, canvasHeight: 800 };
+  const rect = { x: 100, y: 100, w: 400, h: 300 };
+
+  it("grows from the far corner and leaves the origin where it is", () => {
+    expect(resizedRect({ rect, deltaX: 50, deltaY: 20, zoom: 1, minSize: 120, bounds })).toEqual({
+      x: 100,
+      y: 100,
+      w: 450,
+      h: 320,
+    });
+  });
+
+  it("divides the delta by the zoom, as a card resize does", () => {
+    expect(resizedRect({ rect, deltaX: 100, deltaY: 0, zoom: 2, minSize: 120, bounds })).toEqual({
+      x: 100,
+      y: 100,
+      w: 450,
+      h: 300,
+    });
+  });
+
+  it("stops at the minimum size", () => {
+    expect(
+      resizedRect({ rect, deltaX: -1000, deltaY: -1000, zoom: 1, minSize: 120, bounds }),
+    ).toMatchObject({ w: 120, h: 120 });
+  });
+
+  it("stops at the edge of the board", () => {
+    expect(
+      resizedRect({ rect, deltaX: 5000, deltaY: 5000, zoom: 1, minSize: 120, bounds }),
+    ).toMatchObject({ w: 900, h: 700 });
+  });
+
+  it("snaps to the grid on release", () => {
+    expect(
+      resizedRect({
+        rect,
+        deltaX: 10,
+        deltaY: 10,
+        zoom: 1,
+        snapToGrid: true,
+        minSize: 120,
+        bounds,
+      }),
+    ).toMatchObject({ w: 408, h: 312 });
   });
 });
 

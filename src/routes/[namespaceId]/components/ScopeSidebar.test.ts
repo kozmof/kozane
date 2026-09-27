@@ -44,6 +44,9 @@ function mount(overrides: Record<string, unknown> = {}) {
       onDeleteScope: () => {},
       onAddToScope: () => {},
       onRemoveFromScope: () => {},
+      framedScopeIds: new Set<string>(),
+      onAddScopeArea: () => {},
+      onRemoveScopeArea: () => {},
       onCreateTaskspace: () => {},
       ...overrides,
     },
@@ -129,6 +132,9 @@ describe("ScopeSidebar taskspaces", () => {
         onDeleteScope: () => {},
         onAddToScope: () => {},
         onRemoveFromScope: () => {},
+        framedScopeIds: new Set<string>(),
+        onAddScopeArea: () => {},
+        onRemoveScopeArea: () => {},
         onCreateTaskspace: () => {},
         onOpenFile,
         readonly: true,
@@ -172,5 +178,42 @@ describe("ScopeSidebar focus state", () => {
     cleanup();
     mount();
     expect(scopeButton().querySelector("svg rect")).toBeTruthy();
+  });
+});
+
+describe("ScopeSidebar scope areas", () => {
+  function frameButton(): HTMLElement {
+    return screen.getByRole("button", { name: /frame/i });
+  }
+
+  it("offers to add a frame to a scope that has none", async () => {
+    const onAddScopeArea = vi.fn();
+    mount({ onAddScopeArea });
+
+    await userEvent.click(frameButton());
+
+    expect(onAddScopeArea).toHaveBeenCalledWith(SCOPE.id);
+  });
+
+  it("offers to remove the frame of a scope that has one", async () => {
+    const onRemoveScopeArea = vi.fn();
+    mount({ framedScopeIds: new Set([SCOPE.id]), onRemoveScopeArea });
+
+    expect(frameButton()).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(frameButton());
+
+    expect(onRemoveScopeArea).toHaveBeenCalledWith(SCOPE.id);
+  });
+
+  // With a selection up, the frame is drawn around it rather than in the middle of the view,
+  // which is the fastest way onto the feature and worth saying on the button.
+  it("says it will frame the selection when cards are selected", () => {
+    mount({ selectedCards: new Set(["card-1"]) });
+    expect(frameButton()).toHaveAttribute("title", "Frame the selected cards on the board");
+  });
+
+  it("offers no frame button on a read-only board", () => {
+    mount({ readonly: true });
+    expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();
   });
 });

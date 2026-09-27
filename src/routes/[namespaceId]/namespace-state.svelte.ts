@@ -5,6 +5,7 @@ import type {
   NamespaceDataSnapshot,
   Scope,
   ScopeRel,
+  ScopeArea,
   GlueRel,
   TaskspaceSummary,
   Warp,
@@ -104,6 +105,7 @@ export class NamespaceState {
   focusedWarpId = $state<string | null>(null);
   scopes = $state<Scope[]>([]);
   scopeRels = $state<ScopeRel[]>([]);
+  scopeAreas = $state<ScopeArea[]>([]);
   glueRels = $state<GlueRel[]>([]);
   taskspaces = $state<TaskspaceSummary[]>([]);
 
@@ -127,6 +129,7 @@ export class NamespaceState {
     this.focusedWarpId = null;
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
+    this.scopeAreas = data.scopeAreas;
     this.glueRels = data.glueRels;
     this.taskspaces = data.taskspaces;
     this.selection.reset();
@@ -149,6 +152,7 @@ export class NamespaceState {
     }
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
+    this.scopeAreas = data.scopeAreas;
     this.glueRels = data.glueRels;
     this.taskspaces = data.taskspaces;
     // A taskspace deleted by the CLI or another tab must not leave its directory rows

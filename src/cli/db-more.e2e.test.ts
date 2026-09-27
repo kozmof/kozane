@@ -90,6 +90,10 @@ const ROLLBACK_TO_0004 = [
   "ALTER TABLE __old_card RENAME TO card",
   "DROP TABLE layer",
   "DROP TABLE warp",
+  // Added by 0016, which is one of the migrations the journal delete below marks as never
+  // applied. Left standing, the re-apply fails on `CREATE TABLE scope_area`. Its indexes go
+  // with it, the same as `warp`'s do.
+  "DROP TABLE IF EXISTS scope_area",
   // Indexes added after 0004 belong to the rolled-back migrations too: the journal says they
   // were never applied, so leaving one behind makes the re-apply fail on a name that already
   // exists. Only the ones on tables this fixture leaves standing need naming — `card`'s go

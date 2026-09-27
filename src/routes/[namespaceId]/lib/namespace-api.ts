@@ -1,6 +1,6 @@
 import { base } from "$app/paths";
 import type { CardPositionPatch } from "./namespace-page.js";
-import type { Warp } from "$lib/types.js";
+import type { ScopeArea, Warp } from "$lib/types.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
 import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
 
@@ -289,6 +289,48 @@ export function removeCardsFromScope(
   return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/members`), "DELETE", {
     cardIds,
   });
+}
+
+/**
+ * Puts the scope's frame on this board, or moves and resizes the one already there — one
+ * request for both, matching the endpoint. `rect` is the whole rectangle in world
+ * coordinates, never a delta: the server clamps it to the canvas and answers with what it
+ * kept.
+ */
+export function setScopeArea(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  scopeId: string,
+  rect: { posX: number; posY: number; width: number; height: number },
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/area`), "PUT", rect);
+}
+
+export function deleteScopeArea(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  scopeId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/area`), "DELETE");
+}
+
+/**
+ * The row a scope-area PUT answers with, or null when the body is not one. Kept whole and
+ * drawn, for the reason {@link parseWarp} is: an unexpected body would put a frame at
+ * `undefined` and file every card the next drag touches into it.
+ */
+export function parseScopeArea(value: unknown): ScopeArea | null {
+  const id = readString(value, "id");
+  const scopeId = readString(value, "scopeId");
+  const namespaceId = readString(value, "namespaceId");
+  const posX = readFiniteNumber(value, "posX");
+  const posY = readFiniteNumber(value, "posY");
+  const width = readFiniteNumber(value, "width");
+  const height = readFiniteNumber(value, "height");
+  if (id === undefined || scopeId === undefined || namespaceId === undefined) return null;
+  if (posX === undefined || posY === undefined) return null;
+  if (width === undefined || height === undefined) return null;
+  return { id, scopeId, namespaceId, posX, posY, width, height };
 }
 
 export function batchReassignPartition(

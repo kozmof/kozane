@@ -318,6 +318,10 @@ describe("kozane card list --sort", () => {
         [
           "DROP INDEX IF EXISTS card_partition_updated",
           "DROP INDEX IF EXISTS glue_rel_glue",
+          // 0016's whole table, for the same reason the two index drops above exist: the
+          // journal below disclaims it, so the re-apply runs `CREATE TABLE scope_area`
+          // again and fails on the one still standing. Its indexes go with the table.
+          "DROP TABLE IF EXISTS scope_area",
 
           "ALTER TABLE `namespace` RENAME TO `project`",
           "ALTER TABLE `partition` RENAME TO `bundle`",

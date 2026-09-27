@@ -14,6 +14,7 @@ const SNAPSHOT: NamespaceDataSnapshot = {
   warps: [],
   scopes: [],
   scopeRels: [],
+  scopeAreas: [],
   glueRels: [],
   taskspaces: [],
 };

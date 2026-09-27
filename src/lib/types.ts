@@ -5,6 +5,7 @@ import type {
   Layer,
   Scope,
   ScopeRel,
+  ScopeArea,
   Taskspace,
   Warp,
 } from "../db/api/types.js";
@@ -215,6 +216,12 @@ export interface NamespaceDataSnapshot {
    */
   scopes: Scope[];
   scopeRels: ScopeRel[];
+  /**
+   * Where those scopes are framed on this board. At most one per scope, and most scopes have
+   * none: an area is drawn only for a scope someone has given a place to. Narrowed the same
+   * way `scopes` is — another namespace's frames are not this board's business.
+   */
+  scopeAreas: ScopeArea[];
   glueRels: GlueRel[];
   /** Likewise narrowed: this namespace's taskspaces, plus the ones assigned to no namespace. */
   taskspaces: TaskspaceSummary[];
@@ -226,4 +233,12 @@ export interface NamespaceDataSnapshot {
   taskspaceFiles?: Record<string, TaskspaceFileTree>;
 }
 
-export type { Partition, Layer, Scope, ScopeRel, GlueRel, Warp } from "../db/api/types.js";
+export type {
+  Partition,
+  Layer,
+  Scope,
+  ScopeRel,
+  ScopeArea,
+  GlueRel,
+  Warp,
+} from "../db/api/types.js";

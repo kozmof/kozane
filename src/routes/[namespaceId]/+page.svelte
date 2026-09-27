@@ -14,6 +14,8 @@
     parseWarpEntries,
     parseWarp,
     moveWarp,
+    setScopeArea,
+    parseScopeArea,
     deleteWarp,
     failureMessage,
   } from "./lib/namespace-api.js";
@@ -107,6 +109,13 @@
     isCenteredOn: (posX: number, posY: number) => boolean;
     centerOn: (posX: number, posY: number) => void;
     recenter: () => void;
+    placeScopeArea: (cardIds: string[]) => {
+      posX: number;
+      posY: number;
+      width: number;
+      height: number;
+      covers: string[];
+    };
   } = $state()!;
   let composerComponent: { focusInput: () => void } = $state()!;
 
@@ -121,6 +130,10 @@
       ? new Set(s.scopeRels.filter((r) => r.scopeId === s.sidebar.activeScope).map((r) => r.cardId))
       : null,
   );
+  /** What each frame writes on its tab. Built from the scopes this board draws. */
+  let scopeNameById = $derived(new Map(s.scopes.map((scope) => [scope.id, scope.name])));
+  /** Which scopes already have a frame here, so the sidebar knows which button to offer. */
+  let scopeAreaByScopeId = $derived(new Map(s.scopeAreas.map((a) => [a.scopeId, a])));
   let defaultPartitionId = $derived(s.sidebar.activePartition ?? partitionsWithColors[0]?.id ?? "");
   // One pass over the cards instead of a scan per selected id. A selection is capped at
   // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
@@ -379,6 +392,38 @@
     return true;
   }
 
+  /**
+   * The canvas has already moved or resized the frame: this only saves it, and answers
+   * whether the save took so the canvas can put the old rectangle back if it did not.
+   *
+   * The stored row is written back for the reason `handlePersistWarpPosition` keeps it — the
+   * server clamps to the canvas, so a frame dragged to the very edge would otherwise sit a
+   * few pixels off what was kept until the next poll corrected it, and every card it holds
+   * would be filed against the wrong rectangle in the meantime.
+   */
+  async function handlePersistScopeArea(
+    scopeId: string,
+    rect: { posX: number; posY: number; width: number; height: number },
+  ): Promise<boolean> {
+    const res = await setScopeArea(s.mutationFetcher, data.namespace.id, scopeId, rect);
+    if (!res.ok) return false;
+    const stored = parseScopeArea(await res.json().catch(() => null));
+    if (stored) s.scopeAreas = s.scopeAreas.map((a) => (a.scopeId === scopeId ? stored : a));
+    return true;
+  }
+
+  /**
+   * Puts a frame on the board for a scope: around the selection when there is one, and in
+   * the middle of the view when there is not.
+   *
+   * The canvas works out both, because both are measurements — the scroll offset, the zoom,
+   * and the rendered height of a card, none of which this page holds.
+   */
+  async function handleAddScopeArea(scopeId: string) {
+    const { covers, ...rect } = canvasComponent.placeScopeArea([...s.selection.selectedCards]);
+    await actions.handleCreateScopeArea(scopeId, rect, covers);
+  }
+
   /** Shows the card's resize handle, or takes it away when it is the one already showing. */
   function handleResizeToggle(cardId: string) {
     s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
@@ -611,6 +656,11 @@
       {partitionColorById}
       selection={s.selection}
       {scopeCardIds}
+      bind:scopeAreas={s.scopeAreas}
+      {scopeNameById}
+      activeScopeId={s.sidebar.activeScope}
+      onPersistScopeArea={handlePersistScopeArea}
+      onScopeMembershipChange={actions.handleScopeMembershipChange}
       bind:warps={s.warps}
       focusedWarpId={s.focusedWarpId}
       {warpsVisible}
@@ -737,6 +787,9 @@
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
+    framedScopeIds={new Set(s.scopeAreas.map((a) => a.scopeId))}
+    onAddScopeArea={handleAddScopeArea}
+    onRemoveScopeArea={actions.handleDeleteScopeArea}
     onCreateTaskspace={actions.handleCreateTaskspace}
     onOpenFile={!readonly || staticFiles
       ? (taskspaceId, taskspaceName, path) =>

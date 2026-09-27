@@ -1,4 +1,11 @@
-import { scopeTable, scopeRelTable, cardTable, partitionTable, taskspaceTable } from "../schema.js";
+import {
+  scopeTable,
+  scopeRelTable,
+  scopeAreaTable,
+  cardTable,
+  partitionTable,
+  taskspaceTable,
+} from "../schema.js";
 import {
   and,
   count,
@@ -80,6 +87,16 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
       ),
     );
 
+  // A scope framed on this board is drawn here whether or not anything is in the frame yet.
+  // Without this branch a scope given an area and no cards would vanish from the board that
+  // has its frame on it, which is the one board that must keep it.
+  const areaOfThisNamespace = db
+    .select({ present: sql`1` })
+    .from(scopeAreaTable)
+    .where(
+      and(eq(scopeAreaTable.scopeId, scopeTable.id), eq(scopeAreaTable.namespaceId, namespaceId)),
+    );
+
   const anyCard = db
     .select({ present: sql`1` })
     .from(scopeRelTable)
@@ -90,6 +107,15 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
     .from(taskspaceTable)
     .where(eq(taskspaceTable.scopeId, scopeTable.id));
 
+  // Counted alongside cards and taskspaces, so a scope framed on another board is placed
+  // rather than unattached: an area is a claim on a namespace the same way a scope_rel row
+  // is, and leaving it out would draw someone else's framed scope on every board that has
+  // never touched it.
+  const anyArea = db
+    .select({ present: sql`1` })
+    .from(scopeAreaTable)
+    .where(eq(scopeAreaTable.scopeId, scopeTable.id));
+
   return db
     .select()
     .from(scopeTable)
@@ -97,7 +123,8 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
       or(
         exists(cardOfThisNamespace),
         exists(taskspaceOfThisNamespace),
-        and(notExists(anyCard), notExists(anyTaskspace)),
+        exists(areaOfThisNamespace),
+        and(notExists(anyCard), notExists(anyTaskspace), notExists(anyArea)),
       ),
     );
 }
@@ -262,6 +289,13 @@ export async function deleteScopeFromNamespace({
         and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, namespaceCardSubq)),
       );
 
+    // This namespace's frame goes with this namespace's memberships: the scope is being
+    // removed from this board, and a frame left behind would put it straight back on the
+    // next poll through `getScopesInNamespace`'s area branch. Other boards keep theirs.
+    await tx
+      .delete(scopeAreaTable)
+      .where(and(eq(scopeAreaTable.scopeId, scopeId), eq(scopeAreaTable.namespaceId, namespaceId)));
+
     const stillHasCards = await tx
       .select({ cardId: scopeRelTable.cardId })
       .from(scopeRelTable)
@@ -276,7 +310,19 @@ export async function deleteScopeFromNamespace({
           .where(eq(taskspaceTable.scopeId, scopeId))
           .get();
 
-    if (!stillHasCards && !stillHasTaskspaces) {
+    // A frame on another board counts as a use, for the reason the taskspace check above
+    // gives: it is someone else's setup in progress, and deleting the scope would take their
+    // frame with it through the cascade.
+    const stillHasAreas =
+      stillHasCards || stillHasTaskspaces
+        ? undefined
+        : await tx
+            .select({ id: scopeAreaTable.id })
+            .from(scopeAreaTable)
+            .where(eq(scopeAreaTable.scopeId, scopeId))
+            .get();
+
+    if (!stillHasCards && !stillHasTaskspaces && !stillHasAreas) {
       await tx.delete(scopeTable).where(eq(scopeTable.id, scopeId));
     }
 

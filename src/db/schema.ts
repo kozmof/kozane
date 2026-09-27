@@ -121,6 +121,47 @@ export const scopeTable = sqliteTable(
   ],
 );
 
+/**
+ * Where a scope is drawn on one namespace's canvas: a rectangle, and the cards overlapping it
+ * belong to the scope.
+ *
+ * Its own table rather than four columns on `scope`, for the reason that table's comment
+ * gives for having no `namespace_id`: a scope is placed by what refers to it. Geometry is the
+ * one thing about a scope that cannot be shared — a board is a namespace's own — so a scope
+ * reaching three namespaces has up to three rows here, and a scope nobody has framed has none.
+ *
+ * Membership itself stays in `scope_rel`. This table says where the frame is; crossing its
+ * edge is what writes a row there. Nothing outside the browser reads these coordinates, so a
+ * scope with no area behaves exactly as it did before there was one.
+ */
+export const scopeAreaTable = sqliteTable(
+  "scope_area",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    scopeId: text("scope_id")
+      .notNull()
+      .references(() => scopeTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    namespaceId: text("namespace_id")
+      .notNull()
+      .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    posX: integer("pos_x").notNull().default(0),
+    posY: integer("pos_y").notNull().default(0),
+    width: integer().notNull(),
+    height: integer().notNull(),
+  },
+  (t) => [
+    // One frame per scope per board: the upsert in `setScopeArea` conflicts on this, which is
+    // what makes "add a frame" and "move the frame" the same write.
+    uniqueIndex("scope_area_scope_namespace").on(t.scopeId, t.namespaceId),
+    // Read by `getScopeAreasInNamespace` on every page load and every snapshot poll, and by
+    // `getScopesInNamespace` once per scope. Same argument as `warp_namespace`: nothing else
+    // here implies an index on this column, and without one both are a full scan per poll.
+    index("scope_area_namespace").on(t.namespaceId),
+  ],
+);
+
 export const taskspaceTable = sqliteTable(
   "taskspace",
   {
@@ -306,6 +347,7 @@ export const namespaceRelations = relations(namespaceTable, ({ many }) => ({
   partitions: many(partitionTable),
   layers: many(layerTable),
   warps: many(warpTable),
+  scopeAreas: many(scopeAreaTable),
 }));
 
 export const warpRelations = relations(warpTable, ({ one }) => ({
@@ -358,6 +400,15 @@ export const glueRelRelations = relations(glueRelTable, ({ one }) => ({
 export const scopeRelations = relations(scopeTable, ({ many }) => ({
   taskspaces: many(taskspaceTable),
   scopeRels: many(scopeRelTable),
+  areas: many(scopeAreaTable),
+}));
+
+export const scopeAreaRelations = relations(scopeAreaTable, ({ one }) => ({
+  scope: one(scopeTable, { fields: [scopeAreaTable.scopeId], references: [scopeTable.id] }),
+  namespace: one(namespaceTable, {
+    fields: [scopeAreaTable.namespaceId],
+    references: [namespaceTable.id],
+  }),
 }));
 
 export const taskspaceRelations = relations(taskspaceTable, ({ one, many }) => ({

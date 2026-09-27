@@ -6,6 +6,7 @@ import { getAllPartitions } from "$db/api/partition";
 import { getAllLayers } from "$db/api/layer";
 import { getAllWarps } from "$db/api/warp";
 import { getScopesInNamespace } from "$db/api/scope";
+import { getScopeAreasInNamespace } from "$db/api/scope-area";
 import { getCardDataByPartitions } from "$db/api/card";
 import { getGlueRelsByNamespace } from "$db/api/glue";
 import { getScopeRelsByNamespace } from "$db/api/scope-rel";
@@ -74,11 +75,15 @@ export async function loadNamespaceSnapshot({
   const namespace = await getNamespace({ db, namespaceId });
   if (!namespace) return null;
 
-  const [partitions, layers, warps, scopes, taskspaces] = await Promise.all([
+  const [partitions, layers, warps, scopes, scopeAreas, taskspaces] = await Promise.all([
     getAllPartitions({ db, namespaceId }),
     getAllLayers({ db, namespaceId }),
     getAllWarps({ db, namespaceId }),
     includeScopes ? getScopesInNamespace({ db, namespaceId }) : Promise.resolve([]),
+    // Gated with the scopes rather than sent unconditionally: a frame is the shape of the
+    // organization `includeScopes` exists to keep out of a published export, and its
+    // rectangle says where a scope's cards are even where the scope itself is withheld.
+    includeScopes ? getScopeAreasInNamespace({ db, namespaceId }) : Promise.resolve([]),
     includeScopes ? getTaskspacesInNamespace({ db, namespaceId }) : Promise.resolve([]),
   ]);
 
@@ -148,6 +153,7 @@ export async function loadNamespaceSnapshot({
     warps,
     scopes,
     scopeRels,
+    scopeAreas,
     glueRels,
     taskspaces: namedTaskspaces.map(
       ({ id, name, scopeId, path, pathKind }) =>

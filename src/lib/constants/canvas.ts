@@ -17,6 +17,29 @@ export const CANVAS_H = 4000;
  */
 export const ARROW_KEYS = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"] as const;
 
+/**
+ * The smallest a scope area may be drawn, in canvas pixels. A frame is grabbed by its header
+ * and resized by a corner handle, and below roughly this the two overlap and the frame can no
+ * longer be picked up — a rectangle that cannot be moved or grown again is a rectangle the user
+ * has to delete.
+ */
+export const SCOPE_AREA_MIN_SIZE = 120;
+
+/**
+ * How big a new scope area is, in canvas pixels, when it is placed at the view centre rather
+ * than drawn around a selection. Roughly two default cards across and three down: large enough
+ * that the first card dragged in lands well inside it.
+ */
+export const SCOPE_AREA_DEFAULT_W = 640;
+export const SCOPE_AREA_DEFAULT_H = 480;
+
+/**
+ * How much room a scope area drawn around a selection leaves on each side, in canvas pixels.
+ * The frame is a container rather than a tight bounding box: a card dropped just outside the
+ * cards already there should still land inside it.
+ */
+export const SCOPE_AREA_PADDING = 48;
+
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /**

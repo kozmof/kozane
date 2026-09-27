@@ -7,6 +7,7 @@ import type {
   cardTable,
   scopeTable,
   scopeRelTable,
+  scopeAreaTable,
   glueTable,
   glueRelTable,
   taskspaceTable,
@@ -45,6 +46,7 @@ export type Layer = InferSelectModel<typeof layerTable>;
 export type Card = InferSelectModel<typeof cardTable>;
 export type Scope = InferSelectModel<typeof scopeTable>;
 export type ScopeRel = InferSelectModel<typeof scopeRelTable>;
+export type ScopeArea = InferSelectModel<typeof scopeAreaTable>;
 export type Glue = InferSelectModel<typeof glueTable>;
 export type GlueRel = InferSelectModel<typeof glueRelTable>;
 export type Taskspace = InferSelectModel<typeof taskspaceTable>;

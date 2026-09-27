@@ -5,10 +5,19 @@ import * as schema from "../../db/schema.js";
 import { chunked } from "../../lib/constants.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 7;
+const EXPORT_VERSION = 8;
 /**
  * Version 7 is the first written after `project` and `bundle` became `namespace` and
- * `partition`, and it is also the oldest that can be read.
+ * `partition`, and it is still the oldest that can be read.
+ *
+ * Version 8 added `scope_area`, and did *not* move this floor. A table that did not exist
+ * when a dump was written is not a table the dump half-answers — it is one it has nothing to
+ * say about, and the right reading of a version 7 dump is that no scope had been framed yet.
+ * {@link TABLE_ORDER} records the version each such table arrived in, and `parseDump` reads a
+ * missing one as empty for a dump older than that and demands it for one that is not. That is
+ * the whole of the accommodation: no column is translated and no value is invented.
+ *
+ * The floor exists for something else, which is why it does not move for this:
  *
  * The floor used to be 2, and every version between carried an upgrade step: filling
  * `is_default`, rebuilding the default layers, defaulting the warps, filling the card
@@ -38,6 +47,9 @@ const OLDEST_SUPPORTED_IMPORT_VERSION = 7;
 const TABLE_ORDER = [
   { name: "namespace", orderBy: ["id"] },
   { name: "scope", orderBy: ["id"] },
+  // After both the tables it points at, and before `card`, which it does not point at but
+  // reads as belonging beside — a frame is part of how a board is laid out.
+  { name: "scope_area", orderBy: ["id"], since: 8 },
   { name: "partition", orderBy: ["id"] },
   { name: "layer", orderBy: ["id"] },
   { name: "warp", orderBy: ["id"] },
@@ -198,7 +210,17 @@ function parseDump(input: unknown): DbJsonDump {
   }
 
   for (const table of TABLES) {
-    const rows = (dump.tables as Partial<TableRows>)[table.name];
+    const tables = dump.tables as Partial<TableRows>;
+    // A table added after this dump was written is read as empty rather than as missing. See
+    // the note on {@link OLDEST_SUPPORTED_IMPORT_VERSION}: the dump is not incomplete, it
+    // predates the table, and the rows it would hold are ones that did not exist. Written
+    // back onto the dump so the insert loop below finds the key like any other.
+    const since = "since" in table ? table.since : undefined;
+    if (since !== undefined && dump.version < since && tables[table.name] === undefined) {
+      tables[table.name] = [];
+    }
+
+    const rows = tables[table.name];
     if (!Array.isArray(rows)) throw new Error(`Import file is missing table ${table.name}`);
 
     rows.forEach((row, index) => {
@@ -320,6 +342,12 @@ function validateDumpRefs(tables: TableRows): void {
       throw new Error(`scope_rel: references unknown scope_id ${row.scope_id}`);
     if (!cardIds.has(row.card_id as string))
       throw new Error(`scope_rel: references unknown card_id ${row.card_id}`);
+  }
+  for (const row of tables.scope_area) {
+    if (!scopeIds.has(row.scope_id as string))
+      throw new Error(`scope_area ${row.id}: references unknown scope_id ${row.scope_id}`);
+    if (!namespaceIds.has(row.namespace_id as string))
+      throw new Error(`scope_area ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
 }
 

@@ -27,6 +27,9 @@
     onDeleteScope,
     onAddToScope,
     onRemoveFromScope,
+    framedScopeIds,
+    onAddScopeArea,
+    onRemoveScopeArea,
     onCreateTaskspace,
     onOpenFile,
     readonly = false,
@@ -49,6 +52,11 @@
     onDeleteScope: (scopeId: string) => void;
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
+    /** The scopes that already have a frame on this board. */
+    framedScopeIds: Set<string>;
+    /** Frames the selection when there is one, or the middle of the view when there is not. */
+    onAddScopeArea: (scopeId: string) => void;
+    onRemoveScopeArea: (scopeId: string) => void;
     onCreateTaskspace: () => void;
     /**
      * Opens one file of one taskspace in the editor. Absent in a static export that has no
@@ -118,6 +126,47 @@
 
   function scopeDelete(focused: boolean) {
     return cx("scope-delete", scopeDeleteBase, focused ? scopeDeleteFocusedClass : scopeDeleteClass);
+  }
+
+  // Sits where the delete button sits, one slot to its left, and appears on the same hover.
+  // A frame is the second thing you do to a scope, not the first, so it does not take up a
+  // row of its own.
+  const scopeFrameBase = css({
+    position: "absolute",
+    right: "26px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    width: "18px",
+    height: "18px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    borderRadius: "2px",
+    fontSize: "12px",
+    lineHeight: "1",
+    transition: "opacity 0.12s, color 0.12s",
+  });
+  const scopeFrameClass = css({ color: "neutral.subtle", "&:hover": { color: "neutral.primary" } });
+  const scopeFrameFocusedClass = css({
+    color: "neutral.faded",
+    "&:hover": { color: "ink.light" },
+  });
+
+  /**
+   * A scope that already has a frame keeps its button visible rather than revealing it on
+   * hover: the button is then the only thing in the panel saying the frame is there at all,
+   * and a control you have to go looking for is a poor way to be told.
+   */
+  function scopeFrame(focused: boolean, framed: boolean) {
+    return cx(
+      framed ? "" : "scope-delete",
+      scopeFrameBase,
+      !framed && css({ opacity: "0" }),
+      focused ? scopeFrameFocusedClass : scopeFrameClass,
+    );
   }
 
   /**
@@ -230,7 +279,7 @@
       )}>
         <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .scope-delete": { opacity: "1" } })}>
           <button
-            class={cx(sideBtn(active), css({ paddingRight: "28px" }))}
+            class={cx(sideBtn(active), css({ paddingRight: readonly ? "28px" : "48px" }))}
             aria-pressed={active}
             onclick={() => (activeScope = active ? null : scope.id)}
           >
@@ -246,6 +295,25 @@
             </span>
           </button>
           {#if !readonly}
+          {@const framed = framedScopeIds.has(scope.id)}
+          <!-- The label leaves the scope's own name out: the row button beside this one
+               carries it, and repeating it here would give the panel two buttons answering to
+               the same name. The title is where the fuller explanation goes. -->
+          <button
+            class={scopeFrame(active, framed)}
+            aria-label={framed ? "Remove frame" : "Add frame"}
+            title={framed
+              ? "Remove this scope's frame from the board"
+              : selectedCards.size > 0
+                ? "Frame the selected cards on the board"
+                : "Add a frame for this scope to the board"}
+            aria-pressed={framed}
+            onclick={(e) => {
+              e.stopPropagation();
+              if (framed) onRemoveScopeArea(scope.id);
+              else onAddScopeArea(scope.id);
+            }}
+          >{framed ? "▣" : "▢"}</button>
           <button
             class={scopeDelete(active)}
             title="Delete scope"

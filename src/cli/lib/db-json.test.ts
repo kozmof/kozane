@@ -94,6 +94,10 @@ async function seedDb(dbUrl: string): Promise<void> {
           sql: "INSERT INTO scope_rel (scope_id, card_id) VALUES (?, ?)",
           args: ["scope-1", "card-1"],
         },
+        {
+          sql: "INSERT INTO scope_area (id, scope_id, namespace_id, pos_x, pos_y, width, height) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          args: ["scope-area-1", "scope-1", "namespace-1", 100, 200, 640, 480],
+        },
       ],
       "write",
     );
@@ -125,6 +129,7 @@ describe("db JSON export/import", () => {
     expect(counts).toEqual({
       namespace: 1,
       scope: 1,
+      scope_area: 1,
       partition: 1,
       layer: 1,
       warp: 1,
@@ -183,6 +188,45 @@ describe("db JSON export/import", () => {
     const legacy = { ...(await exportDbJson(dbUrl)), version: 6 };
 
     await expect(importDbJson(dbUrl, legacy)).rejects.toThrow(/kozane db migrate/);
+  });
+
+  it("reads a version 7 dump, which predates scope_area, as having no frames", async () => {
+    const sourceUrl = await migratedDbUrl("v7-source.db");
+    const targetUrl = await migratedDbUrl("v7-target.db");
+    await seedDb(sourceUrl);
+
+    // A version 7 dump is one taken before there was a `scope_area` table to export, so it
+    // carries no such key at all. That is not a dump missing something — it is a dump from
+    // before the thing existed, and the right reading of it is that nothing was framed.
+    const dump = await exportDbJson(sourceUrl);
+    const legacy = {
+      ...dump,
+      version: 7,
+      tables: { ...dump.tables, scope_area: undefined },
+    };
+    delete (legacy.tables as Record<string, unknown>).scope_area;
+
+    const counts = await importDbJson(targetUrl, legacy as never);
+
+    expect(counts.scope_area).toBe(0);
+    // And the rest of the dump still lands: the accommodation is one absent table, not a
+    // lenient reading of the file.
+    expect(counts.card).toBe(2);
+    expect(counts.scope_rel).toBe(1);
+  });
+
+  it("still demands scope_area from a dump old enough to have it", async () => {
+    const sourceUrl = await migratedDbUrl("v8-missing-table.db");
+    const targetUrl = await migratedDbUrl("v8-missing-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const broken = { ...dump, tables: { ...dump.tables } };
+    delete (broken.tables as Record<string, unknown>).scope_area;
+
+    await expect(importDbJson(targetUrl, broken as never)).rejects.toThrow(
+      "missing table scope_area",
+    );
   });
 
   it("rejects an export version this build cannot read", async () => {

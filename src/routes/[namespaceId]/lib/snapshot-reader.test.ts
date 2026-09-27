@@ -25,6 +25,9 @@ function fullSnapshot(): NamespaceDataSnapshot {
     warps: [{ id: "w1", namespaceId: "p1", posX: 100, posY: 200 }],
     scopes: [{ id: "s1", name: "Draft" }],
     scopeRels: [{ scopeId: "s1", cardId: "c1" }],
+    scopeAreas: [
+      { id: "a1", scopeId: "s1", namespaceId: "p1", posX: 40, posY: 60, width: 640, height: 480 },
+    ],
     glueRels: [{ glueId: "g1", cardId: "c1" }],
     taskspaces: [
       { id: "t1", name: "draft", scopeId: "s1", path: "draft", pathKind: "workspace_relative" },
@@ -69,6 +72,7 @@ describe("readNamespaceSnapshot", () => {
       warps: [],
       scopes: [],
       scopeRels: [],
+      scopeAreas: [],
       glueRels: [],
       taskspaces: [],
     };
@@ -91,6 +95,7 @@ describe("readNamespaceSnapshot", () => {
     "warps",
     "scopes",
     "scopeRels",
+    "scopeAreas",
     "glueRels",
     "taskspaces",
   ])("refuses a snapshot missing %s", (key) => {

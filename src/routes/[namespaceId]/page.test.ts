@@ -59,6 +59,7 @@ const data = {
   ],
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
+  scopeAreas: [],
   glueRels: [],
   taskspaces: [],
   otherNamespaces: [],

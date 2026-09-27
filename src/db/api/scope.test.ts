@@ -15,6 +15,7 @@ import { addNamespace } from "./namespace.js";
 import { addPartition } from "./partition.js";
 import { addCard } from "./card.js";
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
+import { getScopeAreasInNamespace, setScopeArea } from "./scope-area.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer } from "./layer.js";
 import { addTaskspace, deleteTaskspace, getTaskspace } from "./taskspace.js";
@@ -154,6 +155,46 @@ describe("deleteScopeFromNamespace", () => {
     expect(await getScopeRelsByCards({ db: d, cardIds: [card2] })).toHaveLength(1);
   });
 
+  it("takes this namespace's frame away with it", async () => {
+    const { d, namespaceId, scopeId } = await setup();
+    await setScopeArea({
+      db: d,
+      namespaceId,
+      scopeId,
+      posX: 0,
+      posY: 0,
+      width: 640,
+      height: 480,
+    });
+
+    expect(await deleteScopeFromNamespace({ db: d, namespaceId, scopeId })).toBe(true);
+
+    // A frame left behind would put the scope back on this board at the next poll, through
+    // the area branch of `getScopesInNamespace`.
+    expect(await getScopeAreasInNamespace({ db: d, namespaceId })).toEqual([]);
+    expect(await getScope({ db: d, scopeId })).toBeUndefined();
+  });
+
+  it("preserves a card-less scope that is still framed on another board", async () => {
+    const d = await createTestDB();
+    const p1 = await addNamespace({ db: d, name: "P1" });
+    await addLayer({ db: d, namespaceId: p1, name: "Base", isDefault: true });
+    const p2 = await addNamespace({ db: d, name: "P2" });
+    await addLayer({ db: d, namespaceId: p2, name: "Base", isDefault: true });
+    const scopeId = await addScope({ db: d, name: "Shared" });
+    const rect = { posX: 0, posY: 0, width: 640, height: 480 };
+    await setScopeArea({ db: d, namespaceId: p1, scopeId, ...rect });
+    await setScopeArea({ db: d, namespaceId: p2, scopeId, ...rect });
+
+    await deleteScopeFromNamespace({ db: d, namespaceId: p1, scopeId });
+
+    // Same argument as the taskspace case below: a frame on another board is someone's work
+    // in progress, and the cascade would take it with the scope.
+    expect(await getScope({ db: d, scopeId })).toBeDefined();
+    expect(await getScopeAreasInNamespace({ db: d, namespaceId: p1 })).toEqual([]);
+    expect(await getScopeAreasInNamespace({ db: d, namespaceId: p2 })).toHaveLength(1);
+  });
+
   it("preserves a card-less scope that a taskspace is still attached to", async () => {
     const { d, namespaceId, scopeId } = await setup();
     const taskspaceId = await addTaskspace({ db: d, scopeId, name: "ws" });
@@ -273,6 +314,26 @@ describe("getScopesInNamespace", () => {
 
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p1 }))).toEqual(["Unassigned"]);
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p2 }))).toEqual(["Unassigned"]);
+  });
+
+  it("returns a card-less scope to the namespace it is framed on", async () => {
+    const { d, p1, p2 } = await twoNamespaces();
+    const scopeId = await addScope({ db: d, name: "Framed" });
+    await setScopeArea({
+      db: d,
+      namespaceId: p1,
+      scopeId,
+      posX: 0,
+      posY: 0,
+      width: 640,
+      height: 480,
+    });
+
+    // A frame with nothing in it yet is the ordinary way this feature starts: drawn first,
+    // filled by dragging. The board that drew it must keep the scope through the next poll.
+    expect(names(await getScopesInNamespace({ db: d, namespaceId: p1 }))).toEqual(["Framed"]);
+    // And framing it on p1 places it, so it stops being the unattached scope everyone sees.
+    expect(names(await getScopesInNamespace({ db: d, namespaceId: p2 }))).toEqual([]);
   });
 
   it("is not confused by a null scope_id on an unrelated taskspace", async () => {

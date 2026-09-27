@@ -12,7 +12,7 @@ The name "Kozane" comes from こざね法 (kozane method), developed by Japanese
 - **Partition:** A sub-container assigned to each card. Every namespace has a default partition named "General."
 - **Card:** A unit of text.
 - **Layer:** A way to arrange cards in layers.
-- **Scope:** A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
+- **Scope:** A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it.
 - **Warp:** A saved point to jump to. Warps are not related to cards.
 
 ## Status

@@ -6,6 +6,7 @@ import type {
   NamespaceDataSnapshot,
   Scope,
   ScopeRel,
+  ScopeArea,
   TaskspaceSummary,
   Warp,
 } from "$lib/types.js";
@@ -142,6 +143,28 @@ function readScopeRel(row: unknown): ScopeRel | undefined {
   return { scopeId, cardId };
 }
 
+function readScopeArea(row: unknown): ScopeArea | undefined {
+  const id = readString(row, "id");
+  const scopeId = readString(row, "scopeId");
+  const namespaceId = readString(row, "namespaceId");
+  const posX = readFiniteNumber(row, "posX");
+  const posY = readFiniteNumber(row, "posY");
+  const width = readFiniteNumber(row, "width");
+  const height = readFiniteNumber(row, "height");
+  if (
+    id === undefined ||
+    scopeId === undefined ||
+    namespaceId === undefined ||
+    posX === undefined ||
+    posY === undefined ||
+    width === undefined ||
+    height === undefined
+  ) {
+    return undefined;
+  }
+  return { id, scopeId, namespaceId, posX, posY, width, height };
+}
+
 function readGlueRel(row: unknown): GlueRel | undefined {
   const glueId = readString(row, "glueId");
   const cardId = readString(row, "cardId");
@@ -190,6 +213,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
   const warps = readRows(source, "warps", readWarp);
   const scopes = readRows(source, "scopes", readScope);
   const scopeRels = readRows(source, "scopeRels", readScopeRel);
+  const scopeAreas = readRows(source, "scopeAreas", readScopeArea);
   const glueRels = readRows(source, "glueRels", readGlueRel);
   const taskspaces = readRows(source, "taskspaces", readTaskspace);
 
@@ -200,6 +224,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
     !warps ||
     !scopes ||
     !scopeRels ||
+    !scopeAreas ||
     !glueRels ||
     !taskspaces
   ) {
@@ -214,6 +239,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
     warps,
     scopes,
     scopeRels,
+    scopeAreas,
     glueRels,
     taskspaces,
   };

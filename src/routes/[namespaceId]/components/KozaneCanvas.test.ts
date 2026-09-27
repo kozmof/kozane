@@ -7,7 +7,13 @@ import { INACTIVE_LAYER_OPACITY } from "../lib/namespace-page.js";
 import type { CardPositionPatch } from "../lib/namespace-page.js";
 import { PALETTE } from "$lib/palette";
 import type { NewCardPlacement } from "$lib/ui-config";
-import type { PartitionWithColor, CardWithGlue, Layer, Warp } from "$lib/types";
+import type {
+  PartitionWithColor,
+  CardWithGlue,
+  Layer,
+  ScopeArea as ScopeAreaRow,
+  Warp,
+} from "$lib/types";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 
 /**
@@ -74,6 +80,18 @@ function makeProps(overrides: Overrides = {}) {
     partitionColorById: new Map([["b1", color("b1")]]),
     selection: new SelectionState(),
     scopeCardIds: null,
+    scopeAreas: [],
+    scopeNameById: new Map<string, string>(),
+    activeScopeId: null,
+    onPersistScopeArea: vi.fn(
+      async (
+        _scopeId: string,
+        _rect: { posX: number; posY: number; width: number; height: number },
+      ) => true,
+    ),
+    onScopeMembershipChange: vi.fn(
+      async (_scopeId: string, _change: { entered: string[]; exited: string[] }) => {},
+    ),
     warps: [],
     focusedWarpId: null,
     warpsVisible: true,
@@ -630,5 +648,327 @@ describe("KozaneCanvas resizing", () => {
 
     expect(component.read()[0].width).toBeNull();
     expect(props.onError).toHaveBeenCalledWith("Failed to save card width");
+  });
+});
+
+/**
+ * Scope areas: the frame, and what crossing its edge does to the scope's membership.
+ *
+ * Containment is measured against rendered card boxes, which jsdom does not produce — every
+ * element there has a zero-sized rect. So the cards in these tests are given the boxes they
+ * would have on a real board, with {@link layOut}. That is a fake, and it is a narrow one:
+ * the geometry it feeds is `cardIdsOverlapping` and `membershipTransition`, both tested as
+ * pure functions in `namespace-page.test.ts` against real numbers. What is being tested here
+ * is the wiring — that the frame reads the board before a drag and after it, and files the
+ * difference — which has no home outside this component.
+ */
+const scopeArea = (overrides: Partial<ScopeAreaRow> = {}): ScopeAreaRow => ({
+  id: "a1",
+  scopeId: "s1",
+  namespaceId: "p1",
+  posX: 100,
+  posY: 200,
+  width: 640,
+  height: 480,
+  ...overrides,
+});
+
+/**
+ * The box the browser would give an element, read off the styles the template writes.
+ *
+ * Unlike {@link layOut}, which pins a box, this one moves when the element does — and only
+ * once Svelte has put the new `left`/`top` on screen. That is what makes it the fake worth
+ * having for the drop path: the release writes a card's position and then has to measure it,
+ * and measuring before the flush reads where the card was rather than where it is.
+ */
+function layOutFromStyle(el: HTMLElement, w: number, h: number) {
+  el.getBoundingClientRect = () => {
+    const x = Number.parseFloat(el.style.left) || 0;
+    const y = Number.parseFloat(el.style.top) || 0;
+    return {
+      left: x,
+      top: y,
+      right: x + w,
+      bottom: y + h,
+      width: w,
+      height: h,
+      x,
+      y,
+    } as DOMRect;
+  };
+}
+
+/** Gives an element the box it would have if the browser had laid it out. */
+function layOut(el: Element, box: { x: number; y: number; w: number; h: number }) {
+  el.getBoundingClientRect = () =>
+    ({
+      left: box.x,
+      top: box.y,
+      right: box.x + box.w,
+      bottom: box.y + box.h,
+      width: box.w,
+      height: box.h,
+      x: box.x,
+      y: box.y,
+    }) as DOMRect;
+}
+
+describe("KozaneCanvas scope areas", () => {
+  function areaTab(container: HTMLElement, scopeId: string): HTMLElement {
+    const found = container.querySelector<HTMLElement>(
+      `[data-scope-id="${scopeId}"] button[aria-label^="Scope area"]`,
+    );
+    if (!found) throw new Error(`no scope area tab for "${scopeId}"`);
+    return found;
+  }
+
+  function areaHandle(container: HTMLElement, scopeId: string): HTMLElement {
+    const found = container.querySelector<HTMLElement>(
+      `[data-scope-id="${scopeId}"] button[aria-label^="Resize scope area"]`,
+    );
+    if (!found) throw new Error(`no scope area handle for "${scopeId}"`);
+    return found;
+  }
+
+  function areaProps(overrides: Overrides = {}) {
+    return makeProps({
+      scopeAreas: [scopeArea()],
+      scopeNameById: new Map([["s1", "Now"]]),
+      ...overrides,
+    });
+  }
+
+  it("draws a frame for each scope area", () => {
+    const { container } = render(KozaneCanvas, areaProps());
+    expect(container.querySelector("[data-scope-area-id='a1']")).not.toBeNull();
+  });
+
+  it("moves the frame with the pointer and saves where it landed", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(148, 148);
+    up();
+    await settle();
+
+    // The delta is what snaps to the grid, not the frame's own corner: the frame carries
+    // its cards, so moving it by a multiple of the grid leaves everything aligned as it was.
+    expect(props.scopeAreas[0]).toMatchObject({ posX: 148, posY: 248 });
+    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", {
+      posX: 148,
+      posY: 248,
+      width: 640,
+      height: 480,
+    });
+  });
+
+  it("carries the cards inside it", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    // Inside the frame, which stands at (100, 200) 640×480.
+    layOut(cardEl(container, "c1"), { x: 150, y: 250, w: 240, h: 80 });
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(148, 148);
+    up();
+    await settle();
+
+    // Moved by the same delta as the frame, from (10, 20).
+    expect(props.cards[0]).toMatchObject({ posX: 58, posY: 68 });
+    expect(props.onPersistPositions).toHaveBeenCalledWith([{ cardId: "c1", posX: 58, posY: 68 }]);
+  });
+
+  it("leaves a card outside the frame where it is", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    layOut(cardEl(container, "c1"), { x: 0, y: 0, w: 240, h: 80 });
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(148, 148);
+    up();
+    await settle();
+
+    expect(props.cards[0]).toMatchObject({ posX: 10, posY: 20 });
+  });
+
+  it("files a card dragged into the frame into the scope", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 0, y: 0, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    // The card's drawn box follows it, which on a real board is what the browser does.
+    layOut(el, { x: 150, y: 250, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).toHaveBeenCalledWith("s1", {
+      entered: ["c1"],
+      exited: [],
+    });
+  });
+
+  it("files a card dragged out of the frame out of the scope", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 150, y: 250, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    layOut(el, { x: 0, y: 0, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).toHaveBeenCalledWith("s1", {
+      entered: [],
+      exited: ["c1"],
+    });
+  });
+
+  it("says nothing about a card that stayed outside the frame", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 0, y: 0, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    layOut(el, { x: 20, y: 20, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    // The reason membership is a transition rather than a sweep of the final state: a card
+    // that was never in the frame may still be in the scope, put there from the sidebar or
+    // the CLI, and nudging it must not file it out.
+    expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
+  });
+
+  it("does not file anything when the position save fails", async () => {
+    const props = areaProps({
+      onPersistPositions: vi.fn(async (_positions: CardPositionPatch[]) => false),
+    });
+    const { container } = render(KozaneCanvas, props);
+    const el = cardEl(container, "c1");
+    layOut(el, { x: 0, y: 0, w: 240, h: 80 });
+
+    down(el, 100, 100);
+    layOut(el, { x: 150, y: 250, w: 240, h: 80 });
+    move(200, 200);
+    up();
+    await settle();
+
+    // A card filed into a scope at a position the server refused would be a member of it
+    // while sitting somewhere else entirely.
+    expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
+  });
+
+  it("does not file its own members out of the scope when the frame is dragged away", async () => {
+    // The card starts inside the frame at (100, 200) 640×480 and is carried with it. Its box
+    // follows its styles, so it only reports the new position once Svelte has drawn it —
+    // which is the whole hazard: measured a moment early, the frame's new rectangle is tested
+    // against the card's old box, and the member it just carried across the board reads as
+    // having left the scope.
+    //
+    // Through the harness, because this is the one scope-area test whose assertion depends on
+    // the cards actually being redrawn: the canvas writes positions through the rows, and only
+    // a parent that owns them as state turns that into a style the box can be read from.
+    const { cards: initialCards, ...props } = areaProps({
+      cards: [card("c1", "l1", { posX: 150, posY: 250 })],
+    });
+    const { visibleCards: _visible, zoom: _zoom, ...rest } = props;
+    const { container } = render(CanvasBindingHarness, { initialCards, ...rest });
+    layOutFromStyle(cardEl(container, "c1"), 240, 80);
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(1000, 900);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
+  });
+
+  it("resizes the frame from its far corner and saves the new size", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+
+    down(areaHandle(container, "s1"), 0, 0);
+    move(48, 24);
+    up();
+    await settle();
+
+    expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", {
+      // The origin stays put: a frame that moved while being resized would take its cards'
+      // relationship to it with it.
+      posX: 100,
+      posY: 200,
+      width: 696,
+      height: 504,
+    });
+  });
+
+  it("lets a card out when the frame is shrunk past it", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    // Near the frame's far corner: inside at 640×480, outside once it is much smaller.
+    layOut(cardEl(container, "c1"), { x: 600, y: 600, w: 240, h: 80 });
+
+    down(areaHandle(container, "s1"), 0, 0);
+    move(-480, -360);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).toHaveBeenCalledWith("s1", {
+      entered: [],
+      exited: ["c1"],
+    });
+  });
+
+  it("takes a card in when the frame is grown over it", async () => {
+    const props = areaProps();
+    const { container } = render(KozaneCanvas, props);
+    // Outside the frame's far corner at 640×480, inside once it is grown.
+    layOut(cardEl(container, "c1"), { x: 800, y: 700, w: 240, h: 80 });
+
+    down(areaHandle(container, "s1"), 0, 0);
+    move(480, 360);
+    up();
+    await settle();
+
+    expect(props.onScopeMembershipChange).toHaveBeenCalledWith("s1", {
+      entered: ["c1"],
+      exited: [],
+    });
+  });
+
+  it("puts the frame back when the save fails", async () => {
+    const props = areaProps({
+      onPersistScopeArea: vi.fn(async (_scopeId: string, _rect: unknown) => false),
+    });
+    const { container } = render(KozaneCanvas, props);
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(148, 148);
+    up();
+    await settle();
+
+    expect(props.scopeAreas[0]).toMatchObject({ posX: 100, posY: 200 });
+    expect(props.onError).toHaveBeenCalledWith("Failed to save scope area");
+  });
+
+  it("ignores a frame drag on a read-only board", async () => {
+    const props = areaProps({ readonly: true });
+    const { container } = render(KozaneCanvas, props);
+
+    down(areaTab(container, "s1"), 100, 100);
+    move(200, 200);
+    up();
+    await settle();
+
+    expect(props.scopeAreas[0]).toMatchObject({ posX: 100, posY: 200 });
+    expect(props.onPersistScopeArea).not.toHaveBeenCalled();
   });
 });

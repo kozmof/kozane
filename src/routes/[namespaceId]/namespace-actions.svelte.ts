@@ -668,6 +668,107 @@ export function createNamespaceActions(state: NamespaceState) {
     state.selection.selectedCards = new Set();
   }
 
+  /**
+   * Files the cards that crossed a frame's edge into the scope, or out of it.
+   *
+   * Optimistic, like every other mutation here, but rolled back only as far as it got: the
+   * two calls are independent — a card coming in and another going out have nothing to do
+   * with each other — so a failure in one leaves the other standing rather than undoing a
+   * write the server accepted. The local relations are put back for whichever half failed,
+   * and the next poll settles any disagreement.
+   *
+   * The selection is deliberately untouched: this runs at the end of a drag, and clearing it
+   * would take away what the user is holding.
+   */
+  async function handleScopeMembershipChange(
+    scopeId: string,
+    { entered, exited }: { entered: string[]; exited: string[] },
+  ) {
+    if (entered.length > 0) {
+      const added = entered.filter(
+        (cid) => !state.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid),
+      );
+      state.scopeRels = [...state.scopeRels, ...added.map((cardId) => ({ scopeId, cardId }))];
+      const res = await api.addCardsToScope(
+        state.mutationFetcher,
+        state.namespaceId,
+        scopeId,
+        entered,
+      );
+      if (!res.ok) {
+        const addedSet = new Set(added);
+        state.scopeRels = state.scopeRels.filter(
+          (r) => !(r.scopeId === scopeId && addedSet.has(r.cardId)),
+        );
+        state.setError(await api.failureMessage(res, "Failed to add cards to scope"));
+      }
+    }
+
+    if (exited.length > 0) {
+      const exitedSet = new Set(exited);
+      const removed = state.scopeRels.filter(
+        (r) => r.scopeId === scopeId && exitedSet.has(r.cardId),
+      );
+      state.scopeRels = state.scopeRels.filter(
+        (r) => !(r.scopeId === scopeId && exitedSet.has(r.cardId)),
+      );
+      const res = await api.removeCardsFromScope(
+        state.mutationFetcher,
+        state.namespaceId,
+        scopeId,
+        exited,
+      );
+      if (!res.ok) {
+        state.scopeRels = [...state.scopeRels, ...removed];
+        state.setError(await api.failureMessage(res, "Failed to remove cards from scope"));
+      }
+    }
+  }
+
+  /**
+   * Puts a frame on the board for `scopeId`, at `rect`.
+   *
+   * Whatever the frame lands on joins the scope, which is the point of placing one around a
+   * selection: the cards are already there, and the frame is how they are now held. The
+   * caller works out the rectangle — it is the one that knows where the view is and what is
+   * selected — and hands the members it covers along with it.
+   */
+  async function handleCreateScopeArea(
+    scopeId: string,
+    rect: { posX: number; posY: number; width: number; height: number },
+    covers: string[] = [],
+  ) {
+    const res = await api.setScopeArea(state.mutationFetcher, state.namespaceId, scopeId, rect);
+    if (!res.ok) {
+      state.setError(await api.failureMessage(res, "Failed to add scope area"));
+      return;
+    }
+    const stored = api.parseScopeArea(await res.json().catch(() => null));
+    if (!stored) {
+      state.setError("Failed to add scope area");
+      return;
+    }
+    state.scopeAreas = [...state.scopeAreas.filter((a) => a.scopeId !== scopeId), stored];
+    if (covers.length > 0) {
+      await handleScopeMembershipChange(scopeId, { entered: covers, exited: [] });
+    }
+  }
+
+  /**
+   * Takes the frame off the board. The scope keeps every card in it: a frame says where a
+   * scope is drawn, not what belongs to it, and removing one by accident must not be a way
+   * to lose a membership list.
+   */
+  async function handleDeleteScopeArea(scopeId: string) {
+    const prev = state.scopeAreas;
+    state.scopeAreas = state.scopeAreas.filter((a) => a.scopeId !== scopeId);
+    const res = await api.deleteScopeArea(state.mutationFetcher, state.namespaceId, scopeId);
+    if (!res.ok) {
+      state.scopeAreas = prev;
+      state.setError("Failed to remove scope area");
+    }
+  }
+
   return {
     handleCardPartitionChange,
     handleSelectionPartitionChange,
@@ -694,5 +795,8 @@ export function createNamespaceActions(state: NamespaceState) {
     handleCreateTaskspace,
     handleLinkScope,
     handleCreateScopeWithFile,
+    handleScopeMembershipChange,
+    handleCreateScopeArea,
+    handleDeleteScopeArea,
   };
 }

@@ -66,6 +66,7 @@ function snapshot(overrides: Partial<NamespaceDataSnapshot> = {}): NamespaceData
     warps: [],
     scopes: [],
     scopeRels: [],
+    scopeAreas: [],
     glueRels: [],
     taskspaces: [],
     ...overrides,

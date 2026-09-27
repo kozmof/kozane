@@ -287,6 +287,31 @@ cards.
 
 Removes cards from a scope, the ones belonging to this namespace. Body: `cardIds`.
 
+### `PUT /[namespaceId]/api/scopes/[scopeId]/area`
+
+Puts the scope's frame on this board, or moves and resizes the one already there. Body:
+`posX`, `posY`, `width`, `height`, all required. Answers the whole stored row.
+
+One request for both, because a scope has at most one frame per namespace and the board has
+no gesture that means "add a frame" apart from "the frame is here now". A scope may be framed
+on several boards at once; each board's frame is its own.
+
+The rectangle is clamped to the canvas and rounded before it is stored — whole, so the far
+edge lands on the board too — which is why the stored row comes back rather than an `{ ok }`.
+A frame smaller than 120 canvas pixels on a side is grown to it.
+
+Membership is not part of this request. The cards a frame holds are decided in the browser,
+which is the only place a card's rendered height is known, and filed through the two
+`/members` endpoints above.
+
+`400` when any of the four is missing. `404` for an unknown scope.
+
+### `DELETE /[namespaceId]/api/scopes/[scopeId]/area`
+
+Takes the scope's frame off this board. The scope and every card in it are left alone.
+
+`404` when this board has no frame for that scope.
+
 ---
 
 ## Warps
@@ -416,8 +441,8 @@ a way to force the write; it is a `400`.
 
 ### `GET /[namespaceId]/api/snapshot`
 
-Everything a board draws — cards, partitions, layers, warps, scopes, scope and glue
-relations, taskspaces — as one object. The page load and this endpoint run the same read, so
+Everything a board draws — cards, partitions, layers, warps, scopes, scope areas, scope and
+glue relations, taskspaces — as one object. The page load and this endpoint run the same read, so
 the board a poll replaces cannot be assembled differently from the board it replaces.
 
 Polled once a second per open tab. Send back the `ETag` as `If-None-Match` and an unchanged
