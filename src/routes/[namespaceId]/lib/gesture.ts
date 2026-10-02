@@ -9,11 +9,11 @@ import { DRAG_THRESHOLD } from "$lib/constants";
  * scope frame, resizing one, sweeping a marquee, and drawing a frame are seven gestures over
  * one shape, and this is the shape.
  *
- * It is not a state machine and does not try to be. Each gesture's state object in
- * `KozaneCanvas.svelte` carries its own substance beside these three fields — which card, the
- * rectangle it started at, who was in the frame before it moved — and none of that generalises.
- * What does generalise is the question "has this moved yet", which was answered in six places
- * by the same expression written out longhand against the same unnamed `4`:
+ * It is not a state machine and does not try to be. Each gesture carries its own substance
+ * beside these three fields — which card, the rectangle it started at, who was in the frame
+ * before it moved — and none of that generalises. What does generalise is the question "has
+ * this moved yet", which was answered in six places by the same expression written out
+ * longhand against the same unnamed `4`:
  *
  * ```ts
  * if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) state.moved = true;
@@ -22,6 +22,11 @@ import { DRAG_THRESHOLD } from "$lib/constants";
  * Six copies meant six chances for one of them to be `>=`, or to compare the wrong axis, or to
  * be left behind when the figure changed — and a seventh copy of the number itself sat in
  * `routes/map/+page.svelte` as a local `DRAG_THRESHOLD`, where nothing tied it to these at all.
+ *
+ * Which of the gestures is open *is* a thing with one answer, and that answer lives in
+ * `board-gesture.ts` as a tagged union over these two shapes. The distinction is worth
+ * keeping straight: that module names the slot, this one names what a press is. Eight
+ * nullable `let`s in the component used to do both jobs badly at once.
  *
  * ## Client pixels, not world pixels
  *
