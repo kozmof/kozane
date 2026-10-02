@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
+  chmodSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -8,6 +9,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -516,5 +518,211 @@ describe("createTaskspaceDirectory", () => {
       expect.objectContaining({ reason: "not-found" }),
     );
     expect(readdirSync(base)).toEqual(["src"]);
+  });
+});
+
+/**
+ * The paths a real filesystem takes that a tidy one does not: a permission the process does
+ * not have, a symlink that points at itself, an entry that is neither a file nor a
+ * directory, and a directory that can be listed but not inspected.
+ *
+ * Every case here is about `mapFsError` and the catch blocks around it — the part of this
+ * module that decides whether an awkward filesystem reads to the route as 403, 404 or 400.
+ * The boundary tests above are about what the module refuses on purpose; these are about
+ * what it does when the refusal comes from the kernel instead.
+ *
+ * `skipIf` on the permission cases for the reason `taskspace-tags.test.ts` gives on its own:
+ * nothing is unreadable to root, so the denial they rest on does not happen there.
+ */
+describe("taskspace files on an awkward filesystem", () => {
+  const asRoot = process.getuid?.() === 0;
+  let root: string;
+  let base: string;
+
+  beforeEach(() => {
+    root = join(tmpdir(), `kozane-files-fs-${randomUUID()}`);
+    base = join(root, "taskspace");
+    mkdirSync(base, { recursive: true });
+  });
+
+  afterEach(() => {
+    // Permissions are put back before the tree is removed: a directory left at 0o000 cannot
+    // be recursed into, and the cleanup would leave it behind in the temp directory.
+    for (const name of ["ro", "nox", "locked-dir"]) {
+      try {
+        chmodSync(join(base, name), 0o755);
+      } catch {
+        // Not every case creates every one of them.
+      }
+    }
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  function reasonOf(run: () => unknown): string {
+    try {
+      run();
+    } catch (e) {
+      if (e instanceof TaskspaceFilesError) return e.reason;
+      throw e;
+    }
+    throw new Error("expected a TaskspaceFilesError");
+  }
+
+  describe("a taskspace that is not there", () => {
+    it("reports a missing taskspace directory as not-found when listing", () => {
+      expect(reasonOf(() => listTaskspaceDirectory({ baseDir: join(root, "gone") }))).toBe(
+        "not-found",
+      );
+    });
+
+    it("reports a missing taskspace directory as not-found when reading a file", () => {
+      expect(
+        reasonOf(() => readTaskspaceFile({ baseDir: join(root, "gone"), subPath: "a.txt" })),
+      ).toBe("not-found");
+    });
+
+    it("reports a missing taskspace directory as not-found when creating a file", () => {
+      expect(
+        reasonOf(() => createTaskspaceFile({ baseDir: join(root, "gone"), subPath: "a.txt" })),
+      ).toBe("not-found");
+    });
+
+    it("reports a missing parent directory as not-found rather than creating it", () => {
+      // Non-recursive on purpose: one request must not be able to conjure a tree.
+      expect(reasonOf(() => createTaskspaceFile({ baseDir: base, subPath: "no/such/a.txt" }))).toBe(
+        "not-found",
+      );
+    });
+  });
+
+  describe("a symlink that points at itself", () => {
+    it("reports a looping taskspace root as an invalid path", () => {
+      const loop = join(root, "loop");
+      symlinkSync(loop, loop);
+      expect(reasonOf(() => listTaskspaceDirectory({ baseDir: loop }))).toBe("invalid-path");
+    });
+
+    it("reports a looping directory inside the taskspace as an invalid path", () => {
+      symlinkSync(join(base, "loop"), join(base, "loop"));
+      expect(reasonOf(() => listTaskspaceDirectory({ baseDir: base, subPath: "loop" }))).toBe(
+        "invalid-path",
+      );
+    });
+
+    it("reports a looping path as an invalid path when reading a file through it", () => {
+      symlinkSync(join(base, "loop"), join(base, "loop"));
+      expect(reasonOf(() => readTaskspaceFile({ baseDir: base, subPath: "loop/a.txt" }))).toBe(
+        "invalid-path",
+      );
+    });
+  });
+
+  describe("an entry that is neither a file nor a directory", () => {
+    it("lists a unix socket as `other`, with no size", async () => {
+      // The one `entryKind` branch nothing else reaches. A socket is what a running program
+      // leaves in a working directory, so a taskspace can genuinely contain one.
+      const server = createServer();
+      await new Promise<void>((resolve) => server.listen(join(base, "app.sock"), resolve));
+      try {
+        const listing = listTaskspaceDirectory({ baseDir: base });
+        expect(listing.entries).toEqual([
+          { name: "app.sock", kind: "other", size: null, modifiedAt: expect.any(String) },
+        ]);
+      } finally {
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      }
+    });
+
+    it("refuses to read one as a file", () => {
+      expect(reasonOf(() => readTaskspaceFile({ baseDir: base, subPath: "nothing-here" }))).toBe(
+        "not-found",
+      );
+    });
+  });
+
+  describe("a permission the process does not have", () => {
+    it.skipIf(asRoot)("reports an unlistable directory as forbidden", () => {
+      mkdirSync(join(base, "locked-dir"));
+      chmodSync(join(base, "locked-dir"), 0o000);
+      expect(reasonOf(() => listTaskspaceDirectory({ baseDir: base, subPath: "locked-dir" }))).toBe(
+        "forbidden",
+      );
+    });
+
+    it.skipIf(asRoot)("reports an unreadable file as forbidden", () => {
+      const file = join(base, "locked.txt");
+      writeFileSync(file, "secret");
+      chmodSync(file, 0o000);
+      try {
+        expect(reasonOf(() => readTaskspaceFile({ baseDir: base, subPath: "locked.txt" }))).toBe(
+          "forbidden",
+        );
+      } finally {
+        chmodSync(file, 0o644);
+      }
+    });
+
+    it.skipIf(asRoot)("reports a file it cannot write as forbidden", () => {
+      const file = join(base, "readonly.txt");
+      writeFileSync(file, "before");
+      const { signature } = readTaskspaceFile({ baseDir: base, subPath: "readonly.txt" });
+      chmodSync(base, 0o555);
+      try {
+        // The directory is what is locked, not the file: `writeFileAtomic` renames a
+        // temporary file into place, so it needs to write the directory entry.
+        expect(
+          reasonOf(() =>
+            writeTaskspaceFile({
+              baseDir: base,
+              subPath: "readonly.txt",
+              content: "after",
+              signature,
+            }),
+          ),
+        ).toBe("forbidden");
+      } finally {
+        chmodSync(base, 0o755);
+      }
+      // The refusal left the file as it was, which is the property that matters.
+      expect(readFileSync(file, "utf8")).toBe("before");
+    });
+
+    it.skipIf(asRoot)("reports a file it cannot create as forbidden", () => {
+      mkdirSync(join(base, "ro"));
+      chmodSync(join(base, "ro"), 0o555);
+      expect(reasonOf(() => createTaskspaceFile({ baseDir: base, subPath: "ro/new.txt" }))).toBe(
+        "forbidden",
+      );
+    });
+
+    it.skipIf(asRoot)("reports a directory it cannot create as forbidden", () => {
+      mkdirSync(join(base, "ro"));
+      chmodSync(join(base, "ro"), 0o555);
+      expect(
+        reasonOf(() => createTaskspaceDirectory({ baseDir: base, subPath: "ro/new-folder" })),
+      ).toBe("forbidden");
+    });
+  });
+
+  describe("an entry that cannot be inspected after it has been listed", () => {
+    it.skipIf(asRoot)("leaves it out of the listing rather than failing the whole read", () => {
+      // Read permission without execute: `readdir` answers with the names, and `lstat` on
+      // each of them is refused. That is the same shape as an entry deleted between the two
+      // calls, which is the race this branch is really for — and the only version of it a
+      // test can arrange deterministically.
+      const dir = join(base, "nox");
+      mkdirSync(dir);
+      writeFileSync(join(dir, "a.txt"), "x");
+      writeFileSync(join(dir, "b.txt"), "y");
+      chmodSync(dir, 0o444);
+      try {
+        const listing = listTaskspaceDirectory({ baseDir: base, subPath: "nox" });
+        expect(listing.entries).toEqual([]);
+        expect(listing.truncated).toBe(false);
+        expect(listing.path).toBe("nox");
+      } finally {
+        chmodSync(dir, 0o755);
+      }
+    });
   });
 });
