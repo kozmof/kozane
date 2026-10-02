@@ -1,7 +1,7 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { partitionTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
 import type { NeedsDB, NeedsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
-import { assertFound, columnCount, type BatchRefusal } from "./utils.js";
+import { assertFound, columnCount, type BatchResult } from "./utils.js";
 import { cardsBelongToNamespace } from "./card.js";
 import { withTx, type DB } from "../tx.js";
 import { chunked } from "../../lib/constants.js";
@@ -75,7 +75,7 @@ type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: 
  * request whose cards were perfectly fine and whose *scope* was the thing that did not
  * exist.
  */
-export type ScopeMemberResult = { ok: true } | BatchRefusal<"foreign-cards" | "foreign-scope">;
+export type ScopeMemberResult = BatchResult<"foreign-cards" | "foreign-scope">;
 
 /** Bulk-adds cards to a scope, after verifying the scope and every card belong here. */
 export async function addScopeMembers({

@@ -4,7 +4,7 @@ import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsBelongToNamespace } from "./card.js";
 import { chunked } from "../../lib/constants.js";
-import { columnCount, type BatchRefusal } from "./utils.js";
+import { columnCount, type BatchResult } from "./utils.js";
 
 /**
  * The glue rows of a named handful of cards. For a caller that already holds the ids and
@@ -168,7 +168,7 @@ type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
  * reporting the first. Same argument as {@link CardBatchResult}, and the same vocabulary,
  * so one route helper words them all.
  */
-export type GlueResult = { ok: true; glueId: string } | BatchRefusal<"foreign-cards">;
+export type GlueResult = BatchResult<"foreign-cards", { glueId: string }>;
 
 /** Glues cards together after verifying all belong to namespaceId. */
 export async function glueNamespaceCards({
@@ -186,7 +186,7 @@ export async function glueNamespaceCards({
 type UnglueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /** The cards left ungrouped, or the refusal. See {@link GlueResult}. */
-export type UnglueResult = { ok: true; clearedCardIds: string[] } | BatchRefusal<"foreign-cards">;
+export type UnglueResult = BatchResult<"foreign-cards", { clearedCardIds: string[] }>;
 
 /** Unglues cards after verifying all belong to namespaceId. */
 export async function unglueNamespaceCards({

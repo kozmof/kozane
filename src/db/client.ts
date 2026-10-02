@@ -6,7 +6,7 @@ import { isMemoryDbUrl } from "../lib/db-url.js";
 import { applyConnectionPragmas } from "./pragmas.js";
 import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
-import type { DB } from "./tx.js";
+import { brandDb, type DB } from "./tx.js";
 
 export type { DB, Tx, AnyDB } from "./tx.js";
 export { withTx } from "./tx.js";
@@ -32,7 +32,7 @@ export async function openDb(url: string): Promise<OpenedDb> {
     await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
   }
 
-  return { db: db as unknown as DB, close: () => client.close() };
+  return { db: brandDb(db), close: () => client.close() };
 }
 
 export async function createDb(url: string): Promise<DB> {

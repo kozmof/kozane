@@ -26,19 +26,35 @@ export type NeedsDB = { db: AnyDB };
  * differently for no reason.
  */
 export type NeedsTx = { db: Tx };
+/**
+ * One entity each, and the only place each id is spelled.
+ *
+ * The compounds below are intersections of these rather than fresh object literals, which
+ * is a correction and not a tidy-up: `NeedsNamespacePartition` used to be written
+ * `NeedsNamespace & { partitionId: string }`, so `{ partitionId: string }` appeared twice
+ * and the two spellings were held together by nobody. TypeScript is structural — the two
+ * were the *same type* either way, which means a function declaring one has always accepted
+ * the other, and the name never drew a distinction the compiler could check. Composing them
+ * says that outright. A genuine distinction would need a brand, the way `DB` and `Tx` are
+ * branded in `db/tx.ts`, and nothing here wants one: an argument bag is not a capability.
+ */
 export type NeedsNamespace = NeedsDB & { namespaceId: string };
 export type NeedsPartition = NeedsDB & { partitionId: string };
+export type NeedsLayer = NeedsDB & { layerId: string };
+export type NeedsWarp = NeedsDB & { warpId: string };
+export type NeedsScope = NeedsDB & { scopeId: string };
+export type NeedsTaskspace = NeedsDB & { taskspaceId: string };
+export type NeedsCards = NeedsDB & { cardIds: string[] };
+
 /**
  * A namespace and a batch of its cards — the shape every operation acting on a selection
  * takes, and the reason they can share one ownership check and one rejection vocabulary.
  * See {@link BatchRejection} in `utils.ts`.
  */
-export type NeedsNamespaceCards = NeedsNamespace & { cardIds: string[] };
-export type NeedsNamespacePartition = NeedsNamespace & { partitionId: string };
-export type NeedsNamespaceLayer = NeedsNamespace & { layerId: string };
-export type NeedsNamespaceWarp = NeedsNamespace & { warpId: string };
-export type NeedsScope = NeedsDB & { scopeId: string };
-export type NeedsTaskspace = NeedsDB & { taskspaceId: string };
+export type NeedsNamespaceCards = NeedsNamespace & NeedsCards;
+export type NeedsNamespacePartition = NeedsNamespace & NeedsPartition;
+export type NeedsNamespaceLayer = NeedsNamespace & NeedsLayer;
+export type NeedsNamespaceWarp = NeedsNamespace & NeedsWarp;
 
 export type Namespace = InferSelectModel<typeof namespaceTable>;
 export type Partition = InferSelectModel<typeof partitionTable>;

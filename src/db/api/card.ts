@@ -15,7 +15,7 @@ import {
   assertFound,
   columnCount,
   readByIds,
-  type BatchRefusal,
+  type BatchResult,
   type CardBatchResult,
 } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
@@ -636,9 +636,10 @@ export type CardStacking = { cardId: string; zIndex: number };
  * and so could only name one of them — the route worked around that by looking the layer up
  * itself first, outside the transaction that then looked it up again.
  */
-export type ReassignLayerResult =
-  | { ok: true; stacking: CardStacking[] }
-  | BatchRefusal<"foreign-cards" | "foreign-layer">;
+export type ReassignLayerResult = BatchResult<
+  "foreign-cards" | "foreign-layer",
+  { stacking: CardStacking[] }
+>;
 
 // Same shape as buildPositionCaseWhen, including the ELSE, and for the same reason.
 function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
@@ -727,9 +728,7 @@ type ReassignCardsStackOrder = {
 };
 
 /** Refused the one way a glue group's cards can be: some do not belong to this namespace. */
-export type ReassignStackOrderResult =
-  | { ok: true; stacking: CardStacking[] }
-  | BatchRefusal<"foreign-cards">;
+export type ReassignStackOrderResult = BatchResult<"foreign-cards", { stacking: CardStacking[] }>;
 
 /**
  * Moves cards to the front or back of their own layer's stack, together.
@@ -820,9 +819,7 @@ type ReassignCardsToPartition = {
 };
 
 /** Refused the two ways {@link ReassignLayerResult} is, for the same reason. */
-export type ReassignPartitionResult =
-  | { ok: true }
-  | BatchRefusal<"foreign-cards" | "foreign-partition">;
+export type ReassignPartitionResult = BatchResult<"foreign-cards" | "foreign-partition">;
 
 export async function reassignCardsToPartition({
   db,

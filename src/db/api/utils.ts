@@ -62,8 +62,32 @@ export type BatchRejection =
  */
 export type BatchRefusal<R extends BatchRejection> = { ok: false; reason: R };
 
+/**
+ * A whole batch result: the reasons this operation can refuse for, and what it carries when
+ * it does not.
+ *
+ * {@link BatchRefusal} generalised the refused half and left the other one to be written out
+ * at each of the seven declaration sites, on the grounds that `ok: true` carries something
+ * different in each — nothing, a `glueId`, a `stacking`, a list of cleared cards — and that
+ * covering it would cost a type parameter per member. It costs one, with a default, because
+ * every one of those is a single object type: `Ok` is intersected onto `{ ok: true }`
+ * rather than enumerated.
+ *
+ * What that buys is the `{ ok: true } | …` union shape being written once. Seven copies of
+ * it is seven chances to write `{ ok: boolean }`, or to leave the success arm off a result
+ * that gained a payload, and a union with a non-literal discriminant stops narrowing without
+ * saying so — the failure would surface at the call sites as `reason` not existing, not here.
+ *
+ * `Ok extends object` and not `unknown`: a primitive intersected with `{ ok: true }` gives
+ * `never` for the success arm, which would quietly turn a mistyped payload into an
+ * operation that can only fail.
+ */
+export type BatchResult<R extends BatchRejection, Ok extends object = Record<never, never>> =
+  | ({ ok: true } & Ok)
+  | BatchRefusal<R>;
+
 /** The refusal every batch operation whose only precondition is card ownership can give. */
-export type CardBatchResult = { ok: true } | BatchRefusal<"foreign-cards">;
+export type CardBatchResult = BatchResult<"foreign-cards">;
 
 /**
  * Runs a read over an id list in statement-sized batches and concatenates the rows.

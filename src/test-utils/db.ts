@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { sql } from "drizzle-orm";
 import * as schema from "../db/schema.js";
-import type { AnyDB, DB } from "../db/tx.js";
+import { brandDb, type AnyDB, type DB } from "../db/tx.js";
 import { existsSync, unlinkSync } from "node:fs";
 import { tmpdir } from "os";
 import { join, resolve } from "path";
@@ -18,7 +18,7 @@ import { onTestFinished } from "vitest";
 export async function createTestDB(dbPath?: string): Promise<DB> {
   dbPath ??= join(tmpdir(), `kozane-test-${randomUUID()}.db`);
   const client = createClient({ url: `file:${dbPath}` });
-  const db = drizzle(client, { schema }) as unknown as DB;
+  const db = brandDb(drizzle(client, { schema }));
   await migrate(db, { migrationsFolder: resolve("drizzle") });
   onTestFinished(() => {
     if (existsSync(dbPath)) unlinkSync(dbPath);
