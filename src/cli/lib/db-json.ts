@@ -139,7 +139,15 @@ function emptyTables(): TableRows {
   return Object.fromEntries(TABLES.map((table) => [table.name, []])) as unknown as TableRows;
 }
 
-function rowToJson(row: Record<string, unknown>): JsonObject {
+/**
+ * One row, narrowed to what JSON can carry.
+ *
+ * `table` is named in both refusals below because this is `kozane db export`, and the
+ * column name alone does not locate the problem: `content`, `name` and `id` each belong to
+ * several tables, and a dump that cannot be written is something the holder of the workspace
+ * has to go and look at.
+ */
+function rowToJson(row: Record<string, unknown>, table: TableName): JsonObject {
   const next: JsonObject = {};
   for (const [key, value] of Object.entries(row)) {
     if (
@@ -152,14 +160,24 @@ function rowToJson(row: Record<string, unknown>): JsonObject {
       continue;
     }
 
+    // A backstop rather than a live path, and worth saying so: the client is opened with
+    // libsql's default `intMode`, which reads integer columns as JavaScript numbers and
+    // refuses one outside the safe range during the `SELECT` itself — so a bigint does not
+    // reach here, and an oversized integer is reported by the wrapper in `exportDbJson`
+    // instead. This stays for the configuration where it would, and converts rather than
+    // refuses, because an integer that fits is an ordinary value whatever its type.
     if (typeof value === "bigint") {
       const asNumber = Number(value);
-      if (!Number.isSafeInteger(asNumber)) throw new Error(`Value for ${key} exceeds JSON range`);
+      if (!Number.isSafeInteger(asNumber))
+        throw new Error(`Value for ${table}.${key} exceeds JSON range`);
       next[key] = asNumber;
       continue;
     }
 
-    throw new Error(`Unsupported database value for ${key}`);
+    // Reached by a BLOB, which libsql hands back as an `ArrayBuffer`. No column in the
+    // schema is one, so getting here means the database holds a value the schema does not
+    // describe — a hand-edited file, or one written by something other than Kozane.
+    throw new Error(`Unsupported database value for ${table}.${key}`);
   }
   return next;
 }
@@ -250,8 +268,24 @@ export async function exportDbJson(
     await client.execute("PRAGMA busy_timeout = 5000");
     const tables = emptyTables();
     for (const table of TABLES) {
-      const result = await client.execute(selectSql(table));
-      tables[table.name] = result.rows.map((row) => rowToJson(row));
+      let rows;
+      try {
+        rows = (await client.execute(selectSql(table))).rows;
+      } catch (e) {
+        // The read itself can fail on a value the client will not hand over at all: an
+        // integer outside the safe range comes back as a bare RangeError naming neither the
+        // table nor the column it was in. `kozane db export` is where someone finds out
+        // their workspace holds one, and "Received integer which cannot be safely
+        // represented as a JavaScript number" on its own gives them nowhere to look.
+        // `cause` as well as the message: the wording below is what the user reads, and the
+        // original is what a stack trace needs — `isUniqueConstraintError` and its
+        // neighbours in `db/api/utils` walk the chain for exactly this reason.
+        throw new Error(
+          `Failed to read table ${table.name} for export: ${e instanceof Error ? e.message : String(e)}`,
+          { cause: e },
+        );
+      }
+      tables[table.name] = rows.map((row) => rowToJson(row, table.name));
     }
 
     return {

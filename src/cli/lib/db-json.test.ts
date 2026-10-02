@@ -7,7 +7,7 @@ import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
-import { TABLES, exportDbJson, hasDbJsonRows, importDbJson } from "./db-json";
+import { TABLES, exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "./db-json";
 
 const tempRoots: string[] = [];
 
@@ -408,6 +408,47 @@ describe("import reference validation", () => {
     }, "more than one namespace is marked as the default");
   });
 
+  it("rejects a taskspace in an unknown namespace", async () => {
+    await expectRejectedImport((tables) => {
+      tables.taskspace[0].namespace_id = "namespace-missing";
+    }, "taskspace taskspace-1: references unknown namespace_id namespace-missing");
+  });
+
+  it("rejects a glue_rel naming an unknown glue group", async () => {
+    await expectRejectedImport((tables) => {
+      tables.glue_rel[0].glue_id = "glue-missing";
+    }, "glue_rel: references unknown glue_id glue-missing");
+  });
+
+  it("rejects a scope_rel naming an unknown card", async () => {
+    await expectRejectedImport((tables) => {
+      tables.scope_rel[0].card_id = "card-missing";
+    }, "scope_rel: references unknown card_id card-missing");
+  });
+
+  it("rejects a scope_area on an unknown scope", async () => {
+    await expectRejectedImport((tables) => {
+      tables.scope_area[0].scope_id = "scope-missing";
+    }, "scope_area scope-area-1: references unknown scope_id scope-missing");
+  });
+
+  it("rejects a scope_area in an unknown namespace", async () => {
+    await expectRejectedImport((tables) => {
+      tables.scope_area[0].namespace_id = "namespace-missing";
+    }, "scope_area scope-area-1: references unknown namespace_id namespace-missing");
+  });
+
+  // A taskspace assigned to no namespace at all is an ordinary record, not a dangling
+  // reference: `taskspace scan --apply --reattach` makes one from a marker that names no
+  // namespace, and it shows on every board. Same for a card on no taskspace.
+  it("accepts the nullable references that are allowed to be null", async () => {
+    const dump = await seededDump();
+    dump.tables.taskspace[0].namespace_id = null;
+    dump.tables.taskspace[0].scope_id = null;
+    const targetUrl = await migratedDbUrl(`refs-target-${sequence++}.db`);
+    await expect(importDbJson(targetUrl, dump)).resolves.toMatchObject({ taskspace: 1 });
+  });
+
   // `card.layer_id` is NOT NULL, so a null here would otherwise reach SQLite as a
   // constraint failure rather than as the missing reference it is.
   it("reports a null layer_id as an unknown reference rather than a constraint failure", async () => {
@@ -451,5 +492,226 @@ describe("import batching", () => {
     // Round-tripped whole: same rows, same values, in the same order.
     const imported = await exportDbJson(targetUrl);
     expect(imported.tables.card).toEqual(dump.tables.card);
+  });
+});
+
+describe("export refuses what JSON cannot carry", () => {
+  it("names the table and column of a value it cannot represent", async () => {
+    const dbUrl = await migratedDbUrl("export-blob.db");
+    await seedDb(dbUrl);
+    const client = createClient({ url: dbUrl });
+    try {
+      // A BLOB in a TEXT column. SQLite's TEXT affinity does not convert one, so it is
+      // stored as a blob and libsql hands it back as an ArrayBuffer — which is how a
+      // hand-edited or foreign database reaches the exporter.
+      await client.execute({
+        sql: "UPDATE card SET content = ? WHERE id = ?",
+        args: [new Uint8Array([0xde, 0xad, 0xbe, 0xef]), "card-1"],
+      });
+    } finally {
+      client.close();
+    }
+
+    await expect(exportDbJson(dbUrl)).rejects.toThrow(
+      "Unsupported database value for card.content",
+    );
+  });
+
+  it("names the table when the client refuses to hand a value over at all", async () => {
+    const dbUrl = await migratedDbUrl("export-bigint.db");
+    await seedDb(dbUrl);
+    const client = createClient({ url: dbUrl });
+    try {
+      // Beyond 2^53. The client reads integer columns as JavaScript numbers, so this fails
+      // during the SELECT rather than in `rowToJson`, with a message that names neither
+      // the table nor the column.
+      await client.execute({
+        sql: "UPDATE card SET z_index = ? WHERE id = ?",
+        args: [9007199254740993n, "card-1"],
+      });
+    } finally {
+      client.close();
+    }
+
+    await expect(exportDbJson(dbUrl)).rejects.toThrow("Failed to read table card for export");
+  });
+});
+
+describe("import rejects a malformed dump", () => {
+  let sequence = 0;
+  const target = () => migratedDbUrl(`malformed-${sequence++}.db`);
+
+  async function wellFormed() {
+    const sourceUrl = await migratedDbUrl(`malformed-source-${sequence++}.db`);
+    await seedDb(sourceUrl);
+    return exportDbJson(sourceUrl);
+  }
+
+  it("rejects a dump that is not an object at all", async () => {
+    await expect(importDbJson(await target(), "not a dump")).rejects.toThrow(
+      "Import file must contain a JSON object",
+    );
+  });
+
+  it("rejects null, which is an object by typeof and nothing by shape", async () => {
+    await expect(importDbJson(await target(), null)).rejects.toThrow(
+      "Import file must contain a JSON object",
+    );
+  });
+
+  it("rejects a dump with no exportedAt", async () => {
+    const dump = await wellFormed();
+    await expect(importDbJson(await target(), { ...dump, exportedAt: undefined })).rejects.toThrow(
+      "Import file is missing exportedAt",
+    );
+  });
+
+  it("rejects a dump with no migrations block", async () => {
+    const dump = await wellFormed();
+    await expect(importDbJson(await target(), { ...dump, migrations: null })).rejects.toThrow(
+      "Import file is missing migrations",
+    );
+  });
+
+  it("rejects a migrations block missing a key", async () => {
+    const dump = await wellFormed();
+    await expect(
+      importDbJson(await target(), { ...dump, migrations: { applied: "0001" } }),
+    ).rejects.toThrow("Import file has invalid migrations");
+  });
+
+  it("rejects a migrations block whose values are the wrong type", async () => {
+    const dump = await wellFormed();
+    await expect(
+      importDbJson(await target(), { ...dump, migrations: { applied: 1, latest: null } }),
+    ).rejects.toThrow("Import file has invalid migrations");
+  });
+
+  it("rejects a dump with no tables block", async () => {
+    const dump = await wellFormed();
+    await expect(importDbJson(await target(), { ...dump, tables: null })).rejects.toThrow(
+      "Import file is missing tables",
+    );
+  });
+
+  it("rejects a table that is not an array", async () => {
+    const dump = await wellFormed();
+    const tables = { ...dump.tables, card: {} };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Import file is missing table card",
+    );
+  });
+
+  it("rejects a row that is not an object", async () => {
+    const dump = await wellFormed();
+    const tables = { ...dump.tables, card: ["not a row"] };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Invalid row 0 in table card",
+    );
+  });
+
+  it("rejects a row that is an array, which is an object by typeof", async () => {
+    const dump = await wellFormed();
+    const tables = { ...dump.tables, card: [[]] };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Invalid row 0 in table card",
+    );
+  });
+
+  it("names the row and column of a missing column", async () => {
+    const dump = await wellFormed();
+    const { z_index: _dropped, ...withoutZIndex } = dump.tables.card[0];
+    const tables = { ...dump.tables, card: [withoutZIndex] };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Row 0 in table card is missing column z_index",
+    );
+  });
+
+  it("names the row and column of a value JSON cannot carry", async () => {
+    const dump = await wellFormed();
+    const tables = { ...dump.tables, card: [{ ...dump.tables.card[0], content: { a: 1 } }] };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Invalid value for card.content at row 0",
+    );
+  });
+
+  it("reports the second row by its own index", async () => {
+    const dump = await wellFormed();
+    const tables = { ...dump.tables, card: [dump.tables.card[0], "not a row"] };
+    await expect(importDbJson(await target(), { ...dump, tables })).rejects.toThrow(
+      "Invalid row 1 in table card",
+    );
+  });
+});
+
+describe("import rolls back a dump SQLite refuses", () => {
+  it("leaves the target workspace exactly as it was", async () => {
+    // Passes `validateDumpRefs` — every reference resolves — and fails on insert, because
+    // `scope_name_nonempty` is a CHECK constraint and nothing before the transaction looks
+    // at the contents of a name. That is the case the ROLLBACK exists for: the delete loop
+    // has already emptied every table by the time the insert fails.
+    const sourceUrl = await migratedDbUrl("rollback-source.db");
+    await seedDb(sourceUrl);
+    const dump = await exportDbJson(sourceUrl);
+    dump.tables.scope[0].name = "";
+
+    const targetUrl = await migratedDbUrl("rollback-target.db");
+    await seedDb(targetUrl);
+
+    await expect(importDbJson(targetUrl, dump)).rejects.toThrow();
+
+    // Everything still there, which is the whole point: a failed import must not be a
+    // successful delete.
+    const after = await exportDbJson(targetUrl);
+    expect(after.tables.card).toHaveLength(2);
+    expect(after.tables.namespace).toHaveLength(1);
+    expect(after.tables.scope).toHaveLength(1);
+    expect(after.tables.scope[0].name).toBe("Planning");
+    expect(after.tables.glue_rel).toHaveLength(2);
+    expect(after.tables.scope_area).toHaveLength(1);
+  });
+
+  it("leaves the database usable for the import that follows", async () => {
+    // The rollback has to release the transaction, not merely undo it: a connection left
+    // inside a failed BEGIN would make the next import fail for a reason of its own.
+    const sourceUrl = await migratedDbUrl("rollback-retry-source.db");
+    await seedDb(sourceUrl);
+    const good = await exportDbJson(sourceUrl);
+    const bad = {
+      ...good,
+      tables: { ...good.tables, scope: [{ ...good.tables.scope[0], name: "" }] },
+    };
+
+    const targetUrl = await migratedDbUrl("rollback-retry-target.db");
+    await seedDb(targetUrl);
+
+    await expect(importDbJson(targetUrl, bad)).rejects.toThrow();
+    await expect(importDbJson(targetUrl, good)).resolves.toMatchObject({ card: 2 });
+  });
+});
+
+describe("stringifyDbJson", () => {
+  const dump = {
+    kind: "kozane.db.json" as const,
+    version: 1,
+    exportedAt: "2026-01-01T00:00:00.000Z",
+    migrations: { applied: null, latest: null },
+    tables: {},
+  };
+
+  it("indents by default and ends with a newline", () => {
+    const text = stringifyDbJson(dump as never);
+    expect(text.endsWith("\n")).toBe(true);
+    expect(text).toContain('\n  "kind"');
+  });
+
+  it("writes one line when asked not to indent, still newline-terminated", () => {
+    const text = stringifyDbJson(dump as never, false);
+    expect(text.endsWith("\n")).toBe(true);
+    expect(text.trimEnd().includes("\n")).toBe(false);
+  });
+
+  it("round-trips through JSON.parse", () => {
+    expect(JSON.parse(stringifyDbJson(dump as never))).toEqual(dump);
   });
 });
