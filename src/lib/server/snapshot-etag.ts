@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { SNAPSHOT_ETAG_NAMESPACES_MAX } from "../constants.js";
 import { databaseSignature } from "./file-signature.js";
-import { evict } from "./lru.js";
+import { evict, touch } from "./lru.js";
 
 /**
  * Answering "has this board changed?" without assembling the board.
@@ -65,13 +65,26 @@ const remembered = new Map<string, RememberedEtag>();
 /**
  * The tag this namespace's snapshot still has, or null when that cannot be established
  * without reading the database.
+ *
+ * A hit counts as a use, which is what the {@link touch} is for. Recency used to move only
+ * in {@link rememberSnapshotEtag}, and that inverted the eviction order this map is built
+ * around: an idle board answers every poll from here, recording nothing, while a namespace
+ * being written to refreshes its position on each full read. So the entry most worth keeping
+ * — the board left open all afternoon, whose whole value is that it never has to be read —
+ * was the one aging towards eviction, and the one busy enough to be re-read anyway was safe.
+ *
+ * A miss touches nothing, for the same reason {@link touch} does not create: an entry absent
+ * or stale is about to be replaced by the full read's `rememberSnapshotEtag`, which puts it
+ * at the end itself.
  */
 export function unchangedSnapshotEtag(dbUrl: string | null, namespaceId: string): string | null {
   if (!dbUrl) return null;
   const signature = databaseSignature(dbUrl);
   if (!signature) return null;
   const entry = remembered.get(namespaceId);
-  return entry && entry.signature === signature ? entry.etag : null;
+  if (!entry || entry.signature !== signature) return null;
+  touch(remembered, namespaceId);
+  return entry.etag;
 }
 
 /** Records the tag a full read produced, against the database it was read from. */

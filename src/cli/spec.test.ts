@@ -86,6 +86,51 @@ function pathOf(signature: string): string {
     .join(" ");
 }
 
+/**
+ * That {@link runnableCommands} still tells a leaf from a group.
+ *
+ * It reads `_actionHandler`, which is Commander's own field and is not in its public types,
+ * because nothing public distinguishes a group from a leaf that happens to have subcommands.
+ * That probe is load-bearing for every check below, and it fails in the one direction none of
+ * them would report: renamed or removed upstream, the field reads `undefined` for every
+ * command, `runnableCommands` returns an empty list, and the two checks that walk *from* the
+ * code — "documents every command" and the argument spelling — pass over nothing at all. The
+ * suite would go green on a tree it had stopped looking at.
+ *
+ * So the probe is checked against commands whose kind is known by construction, in both
+ * directions, with a floor on the count underneath. A Commander upgrade that moves the field
+ * fails here, naming the cause, instead of quietly emptying the checks that gate the build.
+ */
+describe("the leaf/group probe the checks below rest on", () => {
+  const commands = runnableCommands(buildProgram());
+  const paths = new Set(commands.map(({ path }) => path));
+
+  it("counts a leaf as runnable", () => {
+    expect(paths.has("init")).toBe(true);
+    expect(paths.has("card add")).toBe(true);
+  });
+
+  it("does not count a group that only holds children", () => {
+    // `net` and `api key` carry no action of their own; running either prints help.
+    expect(paths.has("net")).toBe(false);
+    expect(paths.has("api key")).toBe(false);
+    expect(paths.has("net ssg")).toBe(false);
+  });
+
+  it("counts a command that is both a leaf and a group", () => {
+    // `doctor` runs a check of its own *and* hosts `doctor config`, which is why the probe
+    // tests for an action handler rather than for having no children.
+    expect(paths.has("doctor")).toBe(true);
+    expect(paths.has("doctor config")).toBe(true);
+  });
+
+  it("finds the whole tree rather than a fraction of it", () => {
+    // A floor, not a count: a number to keep in step with every new command is the thing
+    // `vitest.config.ts` warns against. This only has to fail if the probe stops working.
+    expect(commands.length).toBeGreaterThan(40);
+  });
+});
+
 describe("spec/cli.md against the command tree", () => {
   const commands = runnableCommands(buildProgram());
   const signatures = specifiedSignatures();

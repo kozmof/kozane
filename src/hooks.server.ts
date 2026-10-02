@@ -78,18 +78,31 @@ let exitHookInstalled = false;
 let runtimeStateConflict: string | null = null;
 let conflictCheckedAt = 0;
 /**
- * How long a conflict is trusted before the reservation is tried again. The conflict used
- * to be latched for the lifetime of the process, which made "the other server has since
- * stopped" indistinguishable from "it is still running": every request went on failing
- * until this one was restarted too. Long enough that a browser reloading against a
- * genuinely occupied workspace does not go back to racing for the lock file.
+ * How long a refusal about the *workspace* is trusted before it is established again.
+ *
+ * Both of the two gates that can clear without this process restarting: another server
+ * holding the workspace ({@link registerRuntimeState}) and a database behind this version
+ * ({@link checkMigrations}). Each keeps its own timestamp — they are answered independently
+ * and neither should reset the other's clock — and shares this interval, because the thing
+ * being traded off is the same in both: how soon the server notices someone has fixed it,
+ * against how often an unfixed workspace pays for asking.
+ *
+ * Both were once latched for the lifetime of the process, which made "the other server has
+ * since stopped", or "`kozane db migrate` has since been run", indistinguishable from the
+ * condition still standing: every request went on failing until this one was restarted too.
+ * Long enough that a browser reloading against a genuinely occupied workspace does not go
+ * back to racing for the lock file, or re-opening the database once a request to read its
+ * migration state.
+ *
+ * Named for the workspace rather than for the conflict it first covered, which is what it
+ * was called while the runtime-state gate was its only reader.
  */
-const CONFLICT_RECHECK_MS = 5_000;
+const WORKSPACE_RECHECK_MS = 5_000;
 
 /** The reason this process may not serve `root`, or null when it may. */
 function registerRuntimeState(root: string | null): string | null {
   if (!root || registeredRoot === root) return null;
-  if (runtimeStateConflict && Date.now() - conflictCheckedAt < CONFLICT_RECHECK_MS)
+  if (runtimeStateConflict && Date.now() - conflictCheckedAt < WORKSPACE_RECHECK_MS)
     return runtimeStateConflict;
 
   const active = claimServerState(root, process.pid, {
@@ -125,7 +138,7 @@ function registerRuntimeState(root: string | null): string | null {
  * migrate it out from under a running server is `kozane db migrate`, which refuses to run
  * while one holds the workspace.
  *
- * A *stale* answer is re-checked on the interval {@link CONFLICT_RECHECK_MS} sets, for the
+ * A *stale* answer is re-checked on the interval {@link WORKSPACE_RECHECK_MS} sets, for the
  * same reason the runtime-state conflict is: `kozane db migrate` in another terminal is the
  * ordinary way out of this state, and a latched answer would go on refusing every request
  * until the server was restarted too.
@@ -149,7 +162,7 @@ let migrationsVerified = false;
  */
 async function checkMigrations(): Promise<string | null> {
   if (migrationsVerified) return null;
-  if (migrationBlock && Date.now() - migrationBlock.checkedAt < CONFLICT_RECHECK_MS)
+  if (migrationBlock && Date.now() - migrationBlock.checkedAt < WORKSPACE_RECHECK_MS)
     return migrationBlock.message;
 
   let url: string;

@@ -83,8 +83,41 @@ export class EditorDocument {
   #store: ReedStore;
   #unsubscribe: (() => void) | null = null;
 
-  /** The current Reed state. Replaced wholesale on every edit. */
-  state = $state.raw<DocumentState>(undefined as unknown as DocumentState);
+  /**
+   * The Reed state, or `undefined` for the one moment it has none: a class field is
+   * initialised before the constructor body runs, and the store the first snapshot comes
+   * from cannot exist until `content` is in hand.
+   *
+   * Private, with {@link state} as the way in, because that moment is not one any caller can
+   * observe — the constructor creates the store and takes a snapshot in its next two
+   * statements, before it has returned anything to hold. This field is where that gap is
+   * admitted and the getter is where it is closed, which is the whole reason the pair is
+   * written out.
+   *
+   * It used to be one public field declared `DocumentState` and initialised
+   * `undefined as unknown as DocumentState`, so the type said the gap did not exist. The
+   * cast cost nothing at runtime and everything in what it taught a reader: this module's
+   * own header notes that casting Reed's values this way "became a way to not notice a
+   * signature changing underneath", and that is just as true of casting away an `undefined`
+   * — a snapshot call that started returning one would have type-checked.
+   *
+   * `raw` because a Reed state is immutable and compared by reference; see the class note.
+   */
+  #current = $state.raw<DocumentState | undefined>(undefined);
+
+  /**
+   * The current Reed state. Replaced wholesale on every edit.
+   *
+   * The throw is unreachable from outside: there is no way to hold an `EditorDocument` whose
+   * constructor has not finished. It is here rather than a `!` so that a future initialiser
+   * reordered above the snapshot says what went wrong instead of handing Reed an `undefined`
+   * and failing somewhere inside it.
+   */
+  get state(): DocumentState {
+    const current = this.#current;
+    if (current === undefined) throw new Error("EditorDocument read before its first snapshot");
+    return current;
+  }
 
   /**
    * The revision the file was last read or saved at. What `dirty` is measured against, so
@@ -94,9 +127,9 @@ export class EditorDocument {
 
   constructor(content: string) {
     this.#store = store.createDocumentStore({ content, undoGroupTimeout: UNDO_GROUP_MS });
-    this.state = this.#store.getSnapshot();
+    this.#current = this.#store.getSnapshot();
     this.#unsubscribe = this.#store.subscribe(() => {
-      this.state = this.#store.getSnapshot();
+      this.#current = this.#store.getSnapshot();
     });
   }
 

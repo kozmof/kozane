@@ -111,6 +111,29 @@ describe("unchangedSnapshotEtag", () => {
     for (const id of ids.slice(1)) expect(unchangedSnapshotEtag(dbUrl, id)).toBe(`"${id}"`);
   });
 
+  it("counts answering from the cache as a use", () => {
+    const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+
+    // The board left open on `p0`: every poll it makes is answered from here, so nothing
+    // ever re-remembers it. Without recency moving on a hit, this read leaves `p0` at the
+    // head of the queue and the insert below evicts the one namespace actively being polled.
+    expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
+    rememberSnapshotEtag(dbUrl, "fresh", '"fresh"');
+
+    expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
+    expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
+  });
+
+  it("does not create an entry for a namespace it has nothing for", () => {
+    const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+
+    // A miss must not take a slot, or probing unknown ids would evict the real entries.
+    expect(unchangedSnapshotEtag(dbUrl, "absent")).toBeNull();
+    for (const id of ids) expect(unchangedSnapshotEtag(dbUrl, id)).toBe(`"${id}"`);
+  });
+
   it("moves a re-remembered namespace back to the end of the queue", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
     for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);

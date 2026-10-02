@@ -95,17 +95,26 @@ export function startSnapshotPoll({
     }
   };
 
-  const interval = window.setInterval(refresh, SNAPSHOT_POLL_MS);
+  // `refresh` is async and nothing awaits it, so every one of the three places that starts
+  // it goes through the same `void` wrapper rather than handing the promise to a caller that
+  // drops it silently. The tick and the focus listener used to pass `refresh` itself: it
+  // behaves identically today, because `refresh` cannot reject — the body after its guards
+  // is one `try` with a `finally` — but that is a property of the function rather than of
+  // these call sites, and it is the kind that stops holding when someone adds a line above
+  // the `try`. One spelling, so a reader is not left looking for the difference between the
+  // three.
+  const tick = () => void refresh();
+  const interval = window.setInterval(tick, SNAPSHOT_POLL_MS);
   // A tab that comes back into view catches up at once rather than waiting out the tick it
   // spent hidden.
   const onVisibilityChange = () => {
     if (!isHidden()) void refresh();
   };
   document.addEventListener("visibilitychange", onVisibilityChange);
-  window.addEventListener("focus", refresh);
+  window.addEventListener("focus", tick);
   return () => {
     window.clearInterval(interval);
     document.removeEventListener("visibilitychange", onVisibilityChange);
-    window.removeEventListener("focus", refresh);
+    window.removeEventListener("focus", tick);
   };
 }
