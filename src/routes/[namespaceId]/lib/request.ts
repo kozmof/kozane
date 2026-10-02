@@ -81,6 +81,58 @@ export function optionalNullableNumber(body: JsonRecord, key: string): number | 
   return optionalNumber(body, key);
 }
 
+/**
+ * A number field that must be there, as the counterpart to {@link optionalNumber}.
+ *
+ * The one this module was missing. Every optional field had a reader and every required
+ * string had one, so a required *number* was the gap that got filled in place — the
+ * position batch below spelled `typeof row.posX !== "number" || !Number.isFinite(row.posX)`
+ * twice, once per axis, with the message written out beside each.
+ */
+export function requireFiniteNumber(body: JsonRecord, key: string): number {
+  const value = body[key];
+  if (typeof value !== "number" || !Number.isFinite(value))
+    throw error(400, `${key} must be a number`);
+  return value;
+}
+
+/**
+ * Each element of an array field, read through the same guards as a top-level body.
+ *
+ * This module guarded request bodies and the string arrays in them, and nothing else: an
+ * array of *objects* — `positions` on `PATCH /cards` is the only one — was checked inside
+ * the route, longhand, with its own `Array.isArray`, its own per-item `typeof` ladder and
+ * its own four messages. That is the gap, rather than the duplication: a second endpoint
+ * taking a batch of objects had no reader to reach for and would have grown another ladder,
+ * and `requireWithinBatchLimit` is easy to leave out of a hand-written one, which is the
+ * check standing between a request and a statement SQLite refuses.
+ *
+ * `readItem` is handed a `JsonRecord` and reads it with the same `require*` functions a
+ * route reads a body with, so an element gets the vocabulary and the messages everything
+ * else gets. The order here is load-bearing and matches {@link requireStringArray}: shape,
+ * then length, then the batch limit, then the per-item work — the limit is what an
+ * oversized body must be refused by *before* anything iterates it.
+ *
+ * `message` exists because "this field is required" and "this field is not an array" are
+ * the same answer to a caller who sent neither, and `positions` worded it the first way
+ * before this reader existed. Keeping that wording is the point of the parameter.
+ */
+export function requireObjectArray<T>(
+  body: JsonRecord,
+  key: string,
+  readItem: (item: JsonRecord) => T,
+  { minLength = 1, message = `${key} must be an array` } = {},
+): T[] {
+  const value = body[key];
+  if (!Array.isArray(value) || value.length < minLength) throw error(400, message);
+  requireWithinBatchLimit(value.length, key);
+  return value.map((item) => {
+    if (typeof item !== "object" || item === null || Array.isArray(item))
+      throw error(400, `${key} must contain objects`);
+    return readItem(item as JsonRecord);
+  });
+}
+
 export function requireStringArray(body: JsonRecord, key: string, minLength = 1): string[] {
   const value = body[key];
   if (!Array.isArray(value)) throw error(400, `${key} must be an array`);

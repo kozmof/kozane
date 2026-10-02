@@ -3,6 +3,8 @@ import {
   optionalNumber,
   optionalString,
   readJsonObject,
+  requireFiniteNumber,
+  requireObjectArray,
   requireString,
   requireStringArray,
   requireTrimmedString,
@@ -200,5 +202,168 @@ describe("requireUniqueStrings", () => {
       400,
       "cardIds must be unique",
     );
+  });
+});
+
+describe("requireFiniteNumber", () => {
+  it("returns a number that is there", () => {
+    expect(requireFiniteNumber({ posX: 0 }, "posX")).toBe(0);
+    expect(requireFiniteNumber({ posX: -24.5 }, "posX")).toBe(-24.5);
+  });
+
+  it("refuses a missing field", () => {
+    expectHttpError(() => requireFiniteNumber({}, "posX"), 400, "posX must be a number");
+  });
+
+  it("refuses a numeric string", () => {
+    expectHttpError(
+      () => requireFiniteNumber({ posX: "24" }, "posX"),
+      400,
+      "posX must be a number",
+    );
+  });
+
+  it("refuses null, which is how an infinity arrives through JSON", () => {
+    expectHttpError(
+      () => requireFiniteNumber({ posX: null }, "posX"),
+      400,
+      "posX must be a number",
+    );
+  });
+
+  it("refuses NaN and the infinities, which would put a card nowhere on the canvas", () => {
+    for (const value of [Number.NaN, Infinity, -Infinity]) {
+      expectHttpError(
+        () => requireFiniteNumber({ posX: value }, "posX"),
+        400,
+        "posX must be a number",
+      );
+    }
+  });
+});
+
+describe("requireObjectArray", () => {
+  /** The shape `PATCH /cards` reads, which is what this guard exists for. */
+  const readPosition = (row: Record<string, unknown>) => ({
+    cardId: requireString(row, "cardId"),
+    posX: requireFiniteNumber(row, "posX"),
+  });
+
+  const body = (positions: unknown) => ({ positions });
+
+  it("reads every element through the per-item reader", () => {
+    const rows = requireObjectArray(
+      body([
+        { cardId: "a", posX: 1 },
+        { cardId: "b", posX: 2 },
+      ]),
+      "positions",
+      readPosition,
+    );
+    expect(rows).toEqual([
+      { cardId: "a", posX: 1 },
+      { cardId: "b", posX: 2 },
+    ]);
+  });
+
+  it("refuses a field that is not an array", () => {
+    expectHttpError(
+      () => requireObjectArray(body({}), "positions", readPosition),
+      400,
+      "positions must be an array",
+    );
+  });
+
+  it("refuses an empty array, since one item is the default minimum", () => {
+    expectHttpError(
+      () => requireObjectArray(body([]), "positions", readPosition),
+      400,
+      "positions must be an array",
+    );
+  });
+
+  it("uses the caller's wording when it is given one", () => {
+    // `PATCH /cards` said "positions is required" before this guard existed, and a caller
+    // who sent neither an array nor anything else gets the same answer as before.
+    expectHttpError(
+      () =>
+        requireObjectArray(body(undefined), "positions", readPosition, {
+          message: "positions is required",
+        }),
+      400,
+      "positions is required",
+    );
+  });
+
+  it("honours a minimum above one", () => {
+    expectHttpError(
+      () =>
+        requireObjectArray(body([{ cardId: "a", posX: 1 }]), "positions", readPosition, {
+          minLength: 2,
+        }),
+      400,
+      "positions must be an array",
+    );
+  });
+
+  it("accepts an empty array when the minimum says it may", () => {
+    expect(requireObjectArray(body([]), "positions", readPosition, { minLength: 0 })).toEqual([]);
+  });
+
+  it("refuses an element that is not an object", () => {
+    expectHttpError(
+      () => requireObjectArray(body(["a"]), "positions", readPosition),
+      400,
+      "positions must contain objects",
+    );
+  });
+
+  it("refuses an element that is null", () => {
+    expectHttpError(
+      () => requireObjectArray(body([null]), "positions", readPosition),
+      400,
+      "positions must contain objects",
+    );
+  });
+
+  it("refuses an element that is an array, which is an object by typeof", () => {
+    expectHttpError(
+      () => requireObjectArray(body([[]]), "positions", readPosition),
+      400,
+      "positions must contain objects",
+    );
+  });
+
+  it("lets the per-item reader's own refusal through", () => {
+    expectHttpError(
+      () => requireObjectArray(body([{ posX: 1 }]), "positions", readPosition),
+      400,
+      "cardId is required",
+    );
+  });
+
+  it("refuses an oversized batch before reading a single item of it", () => {
+    // The order that matters: the cap stands between a request and a statement SQLite will
+    // not accept, so it is answered while the body is still just a list.
+    let reads = 0;
+    const counted = (row: Record<string, unknown>) => {
+      reads += 1;
+      return readPosition(row);
+    };
+    const oversized = Array.from({ length: BATCH_MAX + 1 }, (_, i) => ({
+      cardId: String(i),
+      posX: 0,
+    }));
+    expectHttpError(
+      () => requireObjectArray(body(oversized), "positions", counted),
+      400,
+      `positions must have at most ${BATCH_MAX} items`,
+    );
+    expect(reads).toBe(0);
+  });
+
+  it("accepts a batch exactly at the cap", () => {
+    const atCap = Array.from({ length: BATCH_MAX }, (_, i) => ({ cardId: String(i), posX: 0 }));
+    expect(requireObjectArray(body(atCap), "positions", readPosition)).toHaveLength(BATCH_MAX);
   });
 });

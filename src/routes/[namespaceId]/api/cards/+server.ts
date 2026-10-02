@@ -15,35 +15,30 @@ import {
   optionalNumber,
   optionalString,
   readJsonObject,
+  requireFiniteNumber,
+  requireObjectArray,
   requireString,
   requireStringArray,
   requireTrimmedString,
   requireUniqueStrings,
-  requireWithinBatchLimit,
 } from "../../lib/request.js";
 import { rejectBatch } from "../../lib/rejection.js";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
-  const value = body.positions;
-  if (!Array.isArray(value) || value.length === 0) throw error(400, "positions is required");
   // The widest statement any endpoint builds: each position contributes to both CASE
-  // expressions and to the WHERE, so the cap matters more here than anywhere else.
-  requireWithinBatchLimit(value.length, "positions");
-
-  const positions = value.map((item) => {
-    if (typeof item !== "object" || item === null || Array.isArray(item))
-      throw error(400, "positions must contain objects");
-
-    const row = item as Record<string, unknown>;
-    if (typeof row.cardId !== "string" || row.cardId.length === 0)
-      throw error(400, "cardId is required");
-    if (typeof row.posX !== "number" || !Number.isFinite(row.posX))
-      throw error(400, "posX must be a number");
-    if (typeof row.posY !== "number" || !Number.isFinite(row.posY))
-      throw error(400, "posY must be a number");
-
-    return { cardId: row.cardId, ...clampToCanvas(row.posX, row.posY) };
-  });
+  // expressions and to the WHERE, so the batch cap `requireObjectArray` applies matters
+  // more here than anywhere else.
+  const positions = requireObjectArray(
+    body,
+    "positions",
+    (row) => ({
+      cardId: requireString(row, "cardId"),
+      // Clamped on the way in, which is why the response echoes the stored row rather than
+      // the request: see the note on POST below.
+      ...clampToCanvas(requireFiniteNumber(row, "posX"), requireFiniteNumber(row, "posY")),
+    }),
+    { message: "positions is required" },
+  );
 
   requireUniqueStrings(
     positions.map((p) => p.cardId),
