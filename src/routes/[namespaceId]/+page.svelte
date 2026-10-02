@@ -35,7 +35,13 @@
     type WarpListEntry,
   } from "$lib/warp-list";
   import type { CardWithGlue } from "$lib/types";
-  import type { BoardRect } from "$lib/constants";
+  import { ARROW_KEYS, type BoardRect } from "$lib/constants";
+  import {
+    hasCommandModifier,
+    isTypingTarget,
+    runKeyBindings,
+    type KeyBinding,
+  } from "./lib/board-keymap.js";
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
@@ -102,6 +108,12 @@
   // because the canvas opens it before any request exists: the poll has to stand down for
   // the drag itself, not only for the PATCH at the end of it.
   const positionActivity = new InFlight();
+  /**
+   * Whether the composer’s action bar has the keyboard. Every board-level shortcut below
+   * the composer in `keyBindings` asks this, which is what the bare `return` it replaces
+   * used to do for all of them at once.
+   */
+  const noSelection = () => s.selection.selectedCards.size === 0;
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: {
@@ -595,8 +607,133 @@
       : s.warps;
   }
 
+  /**
+   * What each key does on the board, and under what conditions. See `lib/board-keymap.ts`
+   * for why this is a table and what the dispatcher guarantees about it.
+   *
+   * `$derived` because every binding closes over `data.uiConfig`, which a namespace
+   * navigation replaces — the table has to be the one for the config now in force. The
+   * order is the order the old `if` chain ran in, and two places in it are load-bearing:
+   *
+   * - **The pending-frame Escape comes first**, so a rectangle waiting for a scope is what
+   *   Escape means while one is up, whatever else may be bound to it.
+   * - **The composer owns the keyboard while cards are selected**, which is what keeps the
+   *   warp keys from colliding with its action bar. That was a bare `return` sitting in the
+   *   middle of the chain, catching everything below it; it is now `noSelection` on each of
+   *   those bindings, which says the same thing where the binding is rather than where the
+   *   reader has to remember having passed it.
+   */
+  const keyBindings = $derived<KeyBinding[]>([
+    {
+      // The prompt handles Escape itself while its input holds focus — the typing guard
+      // below stops anything typed there reaching the board — and this is the same key with
+      // focus anywhere else.
+      name: "dismiss pending scope frame",
+      keys: ["Escape"],
+      when: () => pendingScopeAreaRect !== null,
+      preventDefault: true,
+      run: () => {
+        pendingScopeAreaRect = null;
+      },
+    },
+    {
+      name: "focus the card composer",
+      keys: [data.uiConfig.focusCardInputShortcut],
+      when: () => !readonly,
+      preventDefault: true,
+      run: () => {
+        s.selection.composerCard = null;
+        s.selection.selectedCards = new Set();
+        s.selection.primarySelectedId = null;
+        tick().then(() => composerComponent.focusInput());
+      },
+    },
+    {
+      name: "toggle card footers",
+      keys: [data.uiConfig.toggleFootersShortcut],
+      when: noSelection,
+      run: () => {
+        showFooters = !showFooters;
+      },
+    },
+    {
+      name: "toggle side panels",
+      keys: [data.uiConfig.togglePanelsShortcut],
+      when: noSelection,
+      run: () => {
+        sidebarsVisible = !sidebarsVisible;
+      },
+    },
+    {
+      name: "toggle warp markers",
+      keys: [data.uiConfig.toggleWarpsShortcut],
+      when: noSelection,
+      run: () => {
+        warpsVisible = !warpsVisible;
+      },
+    },
+    {
+      // Any of the four arrows opens the same list: the direction is how the hand already
+      // reaches for warping, not a choice of which warps to show.
+      name: "open the warp palette",
+      keys: ARROW_KEYS,
+      shift: true,
+      when: noSelection,
+      preventDefault: true,
+      run: () => {
+        warpPaletteOpen = true;
+        void refreshWarpDirectory();
+      },
+    },
+    {
+      name: "warp in a direction",
+      keys: ARROW_KEYS,
+      shift: false,
+      when: noSelection,
+      // The one binding that cancels the key conditionally rather than declaring
+      // `preventDefault`: arrowing past the last warp in a direction finds nothing, and the
+      // key has to be left to the browser when it does.
+      run: (e) => {
+        // Measured from where the view is now, so warping works the same whether you
+        // arrived by arrow key or by dragging the canvas.
+        const { posX, posY } = canvasComponent.getViewCenter();
+        const target = warpInDirection(
+          reachableWarps(),
+          { x: posX, y: posY },
+          ARROW_DIRECTIONS[e.key],
+          s.focusedWarpId,
+        );
+        if (!target) return;
+        e.preventDefault();
+        canvasComponent.centerOn(target.posX, target.posY);
+        focusWarp(target.id);
+      },
+    },
+    {
+      name: "set a warp here",
+      keys: [data.uiConfig.setWarpShortcut],
+      when: () => noSelection() && !readonly,
+      run: () => {
+        // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
+        warpsVisible = true;
+        void actions.handleSetWarp(canvasComponent.getWarpPosition());
+      },
+    },
+    {
+      name: "remove the focused warp",
+      keys: [data.uiConfig.removeWarpShortcut],
+      when: () => noSelection() && !readonly && s.focusedWarpId !== null,
+      run: () => {
+        if (s.focusedWarpId) void actions.handleRemoveWarp(s.focusedWarpId);
+      },
+    },
+  ]);
+
   function handleKeydown(e: KeyboardEvent) {
-    // The palette owns the keyboard while it is open, including the key that closes it.
+    // The gates, in order, and none of them is about what a key means — see the note in
+    // `lib/board-keymap.ts` on why they stay here rather than becoming bindings.
+    //
+    // The palettes own the keyboard while they are open, including the key that closes them.
     if (warpPaletteOpen) return;
     if (filePaletteOpen) return;
     // So does the editor. Its own handler stops propagation, but a click on the panel
@@ -608,85 +745,10 @@
     // set-warp key drops a warp per repeat — each one a POST and a marker stacked on the
     // last, with only the topmost reachable to remove.
     if (e.repeat) return;
-    const target = e.target as HTMLElement;
-    if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) return;
-    // Shortcuts are single keys, and `event.key` carries no modifier but Shift: without
-    // this, Ctrl/Cmd+A — select-all — reads as the set-warp key and drops a warp, and the
-    // browser's own Ctrl/Cmd shortcuts each collide with whatever letter matches them.
-    // Shift is the exception: it is part of the palette's own chord, and a shortcut may be
-    // configured as a capital letter (`toggleWarpsShortcut` is Shift+A by default).
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
-    // A rectangle waiting for a scope is what Escape means while one is up. The prompt
-    // handles the key itself while its input holds focus — the guard above stops anything
-    // typed there reaching the board — and this is the same key with focus anywhere else.
-    if (pendingScopeAreaRect && e.key === "Escape") {
-      e.preventDefault();
-      pendingScopeAreaRect = null;
-      return;
-    }
-    if (!readonly && e.key === data.uiConfig.focusCardInputShortcut) {
-      e.preventDefault();
-      s.selection.composerCard = null;
-      s.selection.selectedCards = new Set();
-      s.selection.primarySelectedId = null;
-      tick().then(() => composerComponent.focusInput());
-      return;
-    }
-    // Below this line the composer's action bar owns the keyboard whenever cards are
-    // selected, which is what keeps the warp keys from colliding with it.
-    if (s.selection.selectedCards.size > 0) return;
-    // One key, one action: each branch returns, so a config that binds two shortcuts to
-    // the same key does one thing rather than both. `kozane doctor config` warns about
-    // such a binding, but the config is still loaded and the page still has to behave.
-    if (e.key === data.uiConfig.toggleFootersShortcut) {
-      showFooters = !showFooters;
-      return;
-    }
-    if (e.key === data.uiConfig.togglePanelsShortcut) {
-      sidebarsVisible = !sidebarsVisible;
-      return;
-    }
-    if (e.key === data.uiConfig.toggleWarpsShortcut) {
-      warpsVisible = !warpsVisible;
-      return;
-    }
+    if (isTypingTarget(e.target)) return;
+    if (hasCommandModifier(e)) return;
 
-    const direction = ARROW_DIRECTIONS[e.key];
-    if (direction && e.shiftKey) {
-      // Any of the four arrows opens the same list: the direction is how the hand already
-      // reaches for warping, not a choice of which warps to show.
-      e.preventDefault();
-      warpPaletteOpen = true;
-      void refreshWarpDirectory();
-      return;
-    }
-    if (direction) {
-      // Measured from where the view is now, so warping works the same whether you
-      // arrived by arrow key or by dragging the canvas.
-      const { posX, posY } = canvasComponent.getViewCenter();
-      const target = warpInDirection(
-        reachableWarps(),
-        { x: posX, y: posY },
-        direction,
-        s.focusedWarpId,
-      );
-      if (target) {
-        e.preventDefault();
-        canvasComponent.centerOn(target.posX, target.posY);
-        focusWarp(target.id);
-      }
-      return;
-    }
-    if (readonly) return;
-    if (e.key === data.uiConfig.setWarpShortcut) {
-      // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
-      warpsVisible = true;
-      void actions.handleSetWarp(canvasComponent.getWarpPosition());
-      return;
-    }
-    if (e.key === data.uiConfig.removeWarpShortcut && s.focusedWarpId) {
-      void actions.handleRemoveWarp(s.focusedWarpId);
-    }
+    runKeyBindings(e, keyBindings);
   }
 </script>
 
