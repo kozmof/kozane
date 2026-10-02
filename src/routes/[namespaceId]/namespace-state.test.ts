@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   NamespaceState,
+  idSet,
+  prunedRef,
+  prunedRefs,
+  prunedRow,
   resolveActiveLayerId,
   readStoredLayerId,
   storeActiveLayerId,
@@ -288,5 +292,72 @@ describe("NamespaceState.refreshFromData", () => {
 
     expect(state.selection.selectedCards).toEqual(new Set(["c1", "c2"]));
     expect(state.selection.primarySelectedId).toBe("c1");
+  });
+});
+
+describe("the snapshot prune helpers", () => {
+  describe("idSet", () => {
+    it("collects the ids a snapshot carries", () => {
+      expect(idSet([{ id: "a" }, { id: "b" }])).toEqual(new Set(["a", "b"]));
+    });
+
+    it("is empty for an empty snapshot", () => {
+      expect(idSet([])).toEqual(new Set());
+    });
+  });
+
+  describe("prunedRef", () => {
+    it("keeps a reference the snapshot still carries", () => {
+      expect(prunedRef("a", new Set(["a", "b"]))).toBe("a");
+    });
+
+    it("drops one it does not", () => {
+      expect(prunedRef("a", new Set(["b"]))).toBeNull();
+    });
+
+    it("leaves nothing held as nothing held", () => {
+      expect(prunedRef(null, new Set(["a"]))).toBeNull();
+    });
+
+    it("drops everything when the snapshot is empty", () => {
+      expect(prunedRef("a", new Set())).toBeNull();
+    });
+  });
+
+  describe("prunedRefs", () => {
+    it("narrows a selection to what the snapshot still carries", () => {
+      expect(prunedRefs(new Set(["a", "b", "c"]), new Set(["a", "c"]))).toEqual(
+        new Set(["a", "c"]),
+      );
+    });
+
+    it("answers a new set rather than editing the one it was given", () => {
+      const held = new Set(["a", "b"]);
+      const pruned = prunedRefs(held, new Set(["a"]));
+      expect(held).toEqual(new Set(["a", "b"]));
+      expect(pruned).not.toBe(held);
+    });
+
+    it("empties a selection whose cards have all gone", () => {
+      expect(prunedRefs(new Set(["a"]), new Set(["b"]))).toEqual(new Set());
+    });
+  });
+
+  describe("prunedRow", () => {
+    it("replaces a held row with the copy the snapshot carries", () => {
+      // The composer case: a card edited elsewhere has to come back with the new text, not
+      // the text the composer was opened on.
+      const held = { id: "a", content: "before" };
+      const arrived = { id: "a", content: "after" };
+      expect(prunedRow(held, [arrived])).toBe(arrived);
+    });
+
+    it("drops a row the snapshot no longer carries", () => {
+      expect(prunedRow({ id: "a" }, [{ id: "b" }])).toBeNull();
+    });
+
+    it("leaves nothing held as nothing held", () => {
+      expect(prunedRow(null, [{ id: "a" }])).toBeNull();
+    });
   });
 });
