@@ -520,6 +520,20 @@
     editor.open(editorContext, { taskspaceId, taskspaceName, path });
   }
 
+  /**
+   * Opens a file clicked on the icons under a scope frame.
+   *
+   * The frame hands over a taskspace id and a path within it, which is all the canvas has
+   * any reason to carry. The editor titles its tab with the taskspace's name, so that is
+   * looked up here, from the same rows the canvas drew the icon from. Nothing to close
+   * first, unlike the palette: the icons are part of the board.
+   */
+  function handleFrameOpenFile(taskspaceId: string, path: string) {
+    const taskspace = s.taskspaces.find(({ id }) => id === taskspaceId);
+    if (!taskspace) return;
+    editor.open(editorContext, { taskspaceId, taskspaceName: taskspace.name, path });
+  }
+
   /** Creates the scope, taskspace and file, then opens the file that came of it. */
   async function handlePaletteCreate(names: {
     scope: string;
@@ -705,6 +719,10 @@
       bind:scopeAreas={s.scopeAreas}
       {scopeNameById}
       activeScopeId={s.sidebar.activeScope}
+      taskspaces={s.taskspaces}
+      taskspaceTree={s.taskspaceTree}
+      treeContext={editorContext}
+      onOpenFile={!readonly || staticFiles ? handleFrameOpenFile : undefined}
       bind:pendingScopeAreaRect
       onPersistScopeArea={handlePersistScopeArea}
       onRemoveScopeArea={actions.handleDeleteScopeArea}

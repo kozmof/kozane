@@ -88,6 +88,67 @@ describe("TaskspaceTreeState", () => {
     expect(tree.node("other", "").entries?.map(({ name }) => name)).toEqual(["app.ts"]);
   });
 
+  describe("ensure", () => {
+    it("reads a directory without opening it in the panel", async () => {
+      const fetcher = fetcherFor(listing(["src", "app.ts"]));
+      const tree = new TaskspaceTreeState();
+
+      await tree.ensure(context(fetcher as never), TS, "");
+
+      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["src", "app.ts"]);
+      // The whole reason this exists rather than calling `toggle`: a frame on the canvas
+      // asking for a listing must not unfold rows in the right panel.
+      expect(tree.isExpanded(TS, "")).toBe(false);
+    });
+
+    it("costs nothing on a directory already read", async () => {
+      const fetcher = fetcherFor(listing(["app.ts"]));
+      const tree = new TaskspaceTreeState();
+
+      await tree.ensure(context(fetcher as never), TS, "");
+      await tree.ensure(context(fetcher as never), TS, "");
+      await tree.ensure(context(fetcher as never), TS, "");
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+
+    it("re-reads one it has when forced", async () => {
+      const fetcher = fetcherFor(listing(["app.ts"]));
+      const tree = new TaskspaceTreeState();
+
+      await tree.ensure(context(fetcher as never), TS, "");
+      fetcher.mockImplementation(async () => jsonResponse(listing(["app.ts", "new.ts"])));
+      await tree.ensure(context(fetcher as never), TS, "", true);
+
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["app.ts", "new.ts"]);
+    });
+
+    it("leaves a directory the panel opened alone, and shares what it read with the panel", async () => {
+      const fetcher = fetcherFor(listing(["app.ts"]));
+      const tree = new TaskspaceTreeState();
+
+      await tree.toggle(context(fetcher as never), TS, "");
+      await tree.ensure(context(fetcher as never), TS, "");
+
+      // One cache, two readers: the panel's listing is what the frame draws from.
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(tree.isExpanded(TS, "")).toBe(true);
+    });
+
+    it("does not fire a second request while the first is in flight", async () => {
+      const fetcher = vi.fn(async () => jsonResponse(listing(["app.ts"])));
+      const tree = new TaskspaceTreeState();
+
+      await Promise.all([
+        tree.ensure(context(fetcher as never), TS, ""),
+        tree.ensure(context(fetcher as never), TS, ""),
+      ]);
+
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it("surfaces the server's message when a listing fails", async () => {
     const fetcher = fetcherFor({ message: "Taskspace directory not found" }, 404);
     const tree = new TaskspaceTreeState();

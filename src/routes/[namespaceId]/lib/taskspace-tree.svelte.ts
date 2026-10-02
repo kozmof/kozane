@@ -98,6 +98,28 @@ export class TaskspaceTreeState {
     await this.load(ctx, taskspaceId, path);
   }
 
+  /**
+   * Reads one directory because something other than the panel needs what is in it, without
+   * opening it in the panel.
+   *
+   * {@link toggle} is the panel's way in, and it does two things: it reads the directory and
+   * it records that the directory is open. The icons a scope frame draws need only the first.
+   * Going through `toggle` would have a frame on the canvas silently unfold rows in the right
+   * panel — two surfaces reading one cache is the point of this class, two surfaces sharing
+   * one surface's open-and-closed state is not.
+   *
+   * Idempotent and cheap to call again: `load` returns at once for a directory already read
+   * and for one already in flight. `force` re-reads one that was read.
+   */
+  async ensure(
+    ctx: TaskspaceTreeContext,
+    taskspaceId: string,
+    path: string,
+    force = false,
+  ): Promise<void> {
+    await this.load(ctx, taskspaceId, path, force);
+  }
+
   /** Re-reads every directory of `taskspaceId` that is currently open. */
   async refresh(ctx: TaskspaceTreeContext, taskspaceId: string): Promise<void> {
     const open = [...this.expanded].filter((key) => taskspaceOf(key) === taskspaceId);

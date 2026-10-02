@@ -1,12 +1,12 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_SSG_DEPTH_MAX } from "$lib/constants";
-  import type { TaskspaceTruncation } from "$lib/types";
   import type {
     TaskspaceCreateKind,
     TaskspaceTreeContext,
     TaskspaceTreeState,
   } from "../lib/taskspace-tree.svelte.js";
+  import { truncationNote } from "../lib/taskspace-truncation.js";
+  import FileGlyph from "./FileGlyph.svelte";
   import TaskspaceCreateButtons from "./TaskspaceCreateButtons.svelte";
   import TaskspaceCreateRow from "./TaskspaceCreateRow.svelte";
   import TaskspaceTree from "./TaskspaceTree.svelte";
@@ -70,21 +70,6 @@
     return path ? `${path}/${name}` : name;
   }
 
-  // Each limit in its own words: told only that a directory was "truncated", a reader has
-  // no way to tell a folder with more files in it from one this export never walked into.
-  function truncationNote(reason: TaskspaceTruncation): string {
-    switch (reason) {
-      case "entries":
-        return `First ${TASKSPACE_DIR_ENTRIES_MAX} entries only`;
-      case "depth":
-        return `Nested deeper than ${TASKSPACE_SSG_DEPTH_MAX} levels — not included in this export`;
-      case "nodes":
-        return "Past this export's size limit — not included";
-      case "unreadable":
-        return "Could not be read";
-    }
-  }
-
   const rowBase = css({
     display: "flex",
     alignItems: "center",
@@ -130,13 +115,12 @@
   });
 </script>
 
+<!-- The glyph draws in `currentColor`, and these rows are `ink.secondary`, so the sheet is
+     wrapped in the dim it has always been drawn in rather than taking the row's colour. -->
 {#snippet fileIcon(isLink: boolean)}
-  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-    <path d="M2.5 1h3l2 2v6h-5z" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.1" stroke-linejoin="round" />
-    {#if isLink}
-      <path d="M3.8 6.2h2.4" stroke="var(--colors-neutral-icon-dim)" stroke-width="1.1" stroke-linecap="round" />
-    {/if}
-  </svg>
+  <span class={css({ display: "flex", flexShrink: "0", color: "neutral.iconDim" })}>
+    <FileGlyph kind={isLink ? "symlink" : "file"} />
+  </span>
 {/snippet}
 
 <!-- Above the listing rather than in the place the new entry will sort into: where that

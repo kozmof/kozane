@@ -352,6 +352,38 @@ one, and clicking, dragging or sweeping a selection over the middle of one
 works exactly as it does on bare canvas. Each board has its own frames for a
 shared scope — the rectangles are this namespace's, the scope is not.
 
+#### Files on a frame
+
+If a framed scope has a [taskspace](#taskspaces), the frame draws what is in
+it: icons with names, below the frame's bottom edge and lined up with its right
+one. They are the board's answer to "what is this scope working on", so nothing
+has to be unfolded first — the taskspace's top directory is read as soon as the
+frame is on screen.
+
+Below the frame rather than inside it, so the icons take no room a card could
+have had: everything within a frame goes on behaving like bare canvas. They
+travel with the frame when you drag it.
+
+- Open a file — click it. It opens in the editor, the same as clicking it in the
+  right panel.
+- Look in a folder — click it. The icons become that folder's contents, and a
+  `‹ back` cell returns you to the folder above. This is per frame: a scope
+  framed in two places can have one frame showing `src` and the other showing
+  the top directory.
+- Folders come first, then files, each by name. A symbolic link is drawn as
+  itself and does not open, for the reason the panel's tree gives.
+
+Two rows of icons at most. Past that the last cell reads `+12 more` and says so
+rather than running down the board — reading a whole directory is the right
+panel's job. A frame too narrow for a useful row lays its icons out wider than
+itself instead of cutting them; nothing is clipped, because none of this is
+inside the frame.
+
+The icons and the right panel read the same listings, so a folder opened in one
+costs the other nothing, and the panel's `⟳` refreshes both. Like the panel,
+they do not refresh on their own: live sync watches the database, not the disk.
+A scope with more than one taskspace gets a labelled group of icons apiece.
+
 ## Taskspaces
 
 A taskspace is a filesystem directory tied to a scope, used to write scope
@@ -383,6 +415,10 @@ something a read confined to the taskspace can do.
 The tree does not refresh on its own — live sync watches the database, not the
 disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
 than 500 entries is cut off, and the panel says so at the end of the listing.
+
+The panel is one of three ways to the same files. A scope's frame on the canvas
+draws its taskspace as icons — see [Files on a frame](#files-on-a-frame) — and
+a selection opens the file palette, below.
 
 ### Opening a file from a selection
 

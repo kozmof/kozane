@@ -4,6 +4,7 @@
   import { token } from "styled-system/tokens";
   import KozaneCard from "./KozaneCard.svelte";
   import ScopeArea from "./ScopeArea.svelte";
+  import ScopeAreaFiles from "./ScopeAreaFiles.svelte";
   import SelectionRect from "./SelectionRect.svelte";
   import WarpMarker from "./WarpMarker.svelte";
   import type {
@@ -12,9 +13,21 @@
     GlueRel,
     Layer,
     ScopeArea as ScopeAreaRow,
+    TaskspaceSummary,
     Warp,
   } from "$lib/types";
   import type { SelectionState } from "../namespace-state.svelte.js";
+  import type {
+    TaskspaceTreeContext,
+    TaskspaceTreeState,
+  } from "../lib/taskspace-tree.svelte.js";
+  import {
+    cwdFor,
+    cwdKey,
+    fileGroupsForArea,
+    pruneCwd,
+    taskspacesForScope,
+  } from "../lib/scope-area-files.js";
   import { PALETTE } from "$lib/palette";
   import {
     GRID,
@@ -71,6 +84,10 @@
     scopeAreas = $bindable(),
     scopeNameById,
     activeScopeId,
+    taskspaces,
+    taskspaceTree,
+    treeContext,
+    onOpenFile,
     pendingScopeAreaRect = $bindable(),
     onPersistScopeArea,
     onRemoveScopeArea,
@@ -124,6 +141,23 @@
     scopeNameById: Map<string, string>;
     /** The scope the board is filtered to, whose frame is drawn at full strength. */
     activeScopeId: string | null;
+    /**
+     * Every taskspace this board draws, whichever scope it belongs to. Narrowed per frame by
+     * `taskspacesForScope`, the same filter the scope panel applies to its own rows.
+     */
+    taskspaces: TaskspaceSummary[];
+    /**
+     * The directory cache the scope panel and the file palette already read from, shared
+     * rather than copied: the panel's `⟳` refreshes what a frame draws too, and a folder
+     * opened in either place costs the other nothing.
+     */
+    taskspaceTree: TaskspaceTreeState;
+    treeContext: TaskspaceTreeContext;
+    /**
+     * Opens one file of one taskspace in the editor. Absent on a board with no endpoint to
+     * read a file with, where a frame's icons are drawn and inert.
+     */
+    onOpenFile?: (taskspaceId: string, path: string) => void;
     /**
      * A rectangle drawn with Alt and not yet given a scope, or null.
      *
@@ -654,6 +688,100 @@
   /** Who is in each scope on this board right now, by scope id. */
   function membersByScope(): Map<string, Set<string>> {
     return new Map([...areasByScope()].map(([scopeId, areas]) => [scopeId, cardIdsInScope(areas)]));
+  }
+
+  /**
+   * Which directory each frame is showing of each of its taskspaces, keyed by frame and
+   * taskspace. Absent means the taskspace root.
+   *
+   * Per frame rather than per scope: a scope framed in two places gets its icons under both,
+   * and drilling into a folder on one leaves the other where it was. The same answer the
+   * frame's own `×` gives to "which one did you mean".
+   *
+   * Local to the canvas and deliberately not persisted. It is a way of looking at a frame
+   * rather than anything about the board, and a folder left open across a reload would be a
+   * frame whose icons do not match the taskspace it names.
+   */
+  let areaCwd = $state<Record<string, string>>({});
+
+  /** This board's taskspaces that belong to a framed scope, each with the frames it draws under. */
+  const framedTaskspaces = $derived(
+    scopeAreas.map((area) => ({
+      area,
+      taskspaces: taskspacesForScope(taskspaces, area.scopeId, treeContext.staticFiles),
+    })),
+  );
+
+  const fileGroupsByArea = $derived(
+    new Map(
+      framedTaskspaces.map(({ area, taskspaces: owned }) => [
+        area.id,
+        fileGroupsForArea({
+          areaId: area.id,
+          taskspaces: owned,
+          cwdByKey: areaCwd,
+          nodeOf: (taskspaceId, path) => taskspaceTree.node(taskspaceId, path),
+        }),
+      ]),
+    ),
+  );
+
+  /**
+   * What the frames between them need read off disk: one directory per frame per taskspace,
+   * each named once however many frames are showing it.
+   *
+   * Deduplicated because the cache is keyed by taskspace and path and not by frame, so two
+   * frames of one scope showing the same folder are one request. The key the `Set` holds is
+   * joined on a NUL, which is the one byte a path cannot contain — a directory called
+   * `"a\nb"` is unusual but legal, and any printable separator would make it collide.
+   *
+   * This recomputes when a frame appears, a taskspace is attached or a folder is drilled
+   * into, and — this is what matters for the effect below — *not* while a frame is being
+   * dragged: nothing here reads a rectangle, only `area.id` and `area.scopeId`, so the
+   * position written on every pointer move goes unnoticed.
+   */
+  const directoriesToRead = $derived.by(() => {
+    const seen = new Set<string>();
+    const wanted: { taskspaceId: string; path: string }[] = [];
+    for (const { area, taskspaces: owned } of framedTaskspaces) {
+      for (const taskspace of owned) {
+        const path = cwdFor(areaCwd, area.id, taskspace.id);
+        if (seen.has(`${taskspace.id}\0${path}`)) continue;
+        seen.add(`${taskspace.id}\0${path}`);
+        wanted.push({ taskspaceId: taskspace.id, path });
+      }
+    }
+    return wanted;
+  });
+
+  /**
+   * Reads what the frames are showing, as soon as they are showing it.
+   *
+   * Eager, unlike the panel, where opening a folder is the request. A frame's icons are not
+   * something you asked for a moment ago — they are how the frame says what the scope is
+   * working on, so they have to be there when the board opens. The cost is one small listing
+   * per framed taskspace; `ensure` is a no-op for a directory already read or in flight, so
+   * re-running this costs nothing but the walk over the list. The live-sync poll replaces the
+   * frame list wholesale, which is one such walk and no requests.
+   */
+  $effect(() => {
+    for (const { taskspaceId, path } of directoriesToRead) {
+      taskspaceTree.ensure(treeContext, taskspaceId, path);
+    }
+  });
+
+  /** Forgets where a frame was looking once the frame, or the taskspace, is gone. */
+  $effect(() => {
+    const next = pruneCwd(
+      areaCwd,
+      scopeAreas.map((a) => a.id),
+      taskspaces.map((t) => t.id),
+    );
+    if (Object.keys(next).length !== Object.keys(areaCwd).length) areaCwd = next;
+  });
+
+  function navigateAreaFiles(areaId: string, taskspaceId: string, path: string): void {
+    areaCwd = { ...areaCwd, [cwdKey(areaId, taskspaceId)]: path };
   }
 
   const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
@@ -1444,6 +1572,19 @@
           onResizeMouseDown={(e) => handleScopeAreaResizeMouseDown(e, area.id)}
           onRemove={() => onRemoveScopeArea(area.scopeId, area.id)}
         />
+        <!-- A sibling of the frame rather than a child of it: the strip is drawn outside the
+             rectangle, and `ScopeArea` stays what it is — a frame and its two handles, with
+             nothing in it that knows about taskspaces. It follows a drag regardless, because
+             the gestures write `posX`/`posY` through the row both of these read. -->
+        {@const groups = fileGroupsByArea.get(area.id) ?? []}
+        {#if groups.length > 0}
+          <ScopeAreaFiles
+            {area}
+            {groups}
+            {onOpenFile}
+            onNavigate={(taskspaceId, path) => navigateAreaFiles(area.id, taskspaceId, path)}
+          />
+        {/if}
       {/each}
       {#each layerGroups as group (group.id)}
         <!-- pointer-events pass through the wrapper so cards on layers underneath stay
