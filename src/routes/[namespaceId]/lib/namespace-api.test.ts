@@ -17,6 +17,8 @@ import {
   moveCardsToNamespace,
   createTaskspace,
   parseWarp,
+  parseCard,
+  parseCards,
   createScopeArea,
   moveScopeArea,
   deleteScopeArea,
@@ -384,5 +386,89 @@ describe("parseScopeArea", () => {
     expect(parseScopeArea({ ...whole, posX: "40" })).toBeNull();
     expect(parseScopeArea({ ...whole, height: NaN })).toBeNull();
     expect(parseScopeArea({ ...whole, width: Infinity })).toBeNull();
+  });
+});
+
+describe("parseCard", () => {
+  const row = {
+    id: "c-1",
+    partitionId: "b-1",
+    layerId: "l-1",
+    content: "hello",
+    posX: 10,
+    posY: 20,
+    zIndex: 3,
+    taskspaceId: null,
+    glueId: null,
+    width: null,
+  };
+
+  it("accepts the row a card POST answers with", () => {
+    expect(parseCard(row)).toEqual(row);
+  });
+
+  it("keeps only the fields a card has", () => {
+    expect(parseCard({ ...row, createdAt: "2026-01-01", nope: true })).toEqual(row);
+  });
+
+  it("accepts an empty card, which is an ordinary one", () => {
+    expect(parseCard({ ...row, content: "" })).toEqual({ ...row, content: "" });
+  });
+
+  it("accepts the nullable fields when they carry a value", () => {
+    const filled = { ...row, taskspaceId: "w-1", glueId: "g-1", width: 420 };
+    expect(parseCard(filled)).toEqual(filled);
+  });
+
+  it("rejects a body that is not a card", () => {
+    expect(parseCard(null)).toBeNull();
+    expect(parseCard("c-1")).toBeNull();
+    expect(parseCard({ ok: true })).toBeNull();
+  });
+
+  // The failure the annotation it replaced could not catch: a body that is *almost* a card.
+  // Each of these used to reach `state.cards` and be drawn from.
+  it("rejects a card missing or mistyping a field the board draws with", () => {
+    expect(parseCard({ ...row, posX: undefined })).toBeNull();
+    expect(parseCard({ ...row, posX: "10" })).toBeNull();
+    expect(parseCard({ ...row, posY: NaN })).toBeNull();
+    expect(parseCard({ ...row, zIndex: null })).toBeNull();
+    expect(parseCard({ ...row, id: "" })).toBeNull();
+    expect(parseCard({ ...row, layerId: 1 })).toBeNull();
+    expect(parseCard({ ...row, content: 5 })).toBeNull();
+    expect(parseCard({ ...row, width: "420" })).toBeNull();
+    expect(parseCard({ ...row, glueId: 7 })).toBeNull();
+  });
+});
+
+describe("parseCards", () => {
+  const piece = (id: string) => ({
+    id,
+    partitionId: "b-1",
+    layerId: "l-1",
+    content: id,
+    posX: 0,
+    posY: 0,
+    zIndex: 0,
+    taskspaceId: null,
+    glueId: null,
+    width: null,
+  });
+
+  it("accepts the list a squash answers with", () => {
+    const cards = [piece("c-1"), piece("c-2")];
+    expect(parseCards({ cards })).toEqual(cards);
+  });
+
+  it("refuses the whole list when one element is not a card", () => {
+    expect(parseCards({ cards: [piece("c-1"), { ...piece("c-2"), posX: "0" }] })).toBeNull();
+    expect(parseCards({ cards: [piece("c-1"), null] })).toBeNull();
+  });
+
+  it("refuses a body with no list, or an empty one", () => {
+    expect(parseCards(null)).toBeNull();
+    expect(parseCards({})).toBeNull();
+    expect(parseCards({ cards: {} })).toBeNull();
+    expect(parseCards({ cards: [] })).toBeNull();
   });
 });

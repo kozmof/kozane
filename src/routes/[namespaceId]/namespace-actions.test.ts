@@ -22,6 +22,7 @@ vi.mock("./lib/namespace-api", () => ({
   createWarp: vi.fn(),
   deleteWarp: vi.fn(),
   parseWarp: vi.fn(),
+  parseCards: vi.fn(),
   createScope: vi.fn(),
   deleteScope: vi.fn(),
   addCardsToScope: vi.fn(),

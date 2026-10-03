@@ -13,9 +13,25 @@
  * inside it. The alternative — a card function reaching into glue, a partition function reaching
  * into card — is the import cycle this module exists instead of.
  *
- * A function belongs here when leaving it out would let a partial write be observed. A
- * function that merely calls two others in sequence does not: it belongs beside whichever
- * table it is about.
+ * ## What actually decides whether a function belongs here
+ *
+ * Needing to land whole is the *precondition*, not the rule. This header used to stop at
+ * "a function belongs here when leaving it out would let a partial write be observed", and
+ * that sends a reader to the wrong file: `createNamespace` and `deleteNamespace` in
+ * `namespace.ts` both open `withTx` and both span three of the sibling modules — deleting a
+ * namespace reads its glue groups before the cascade takes them, then dissolves the ones it
+ * emptied — so by that sentence they are two functions in the wrong place.
+ *
+ * They are not. The rule is the import graph: a cross-module write belongs here when
+ * putting it beside one of its tables would make the modules import each other. Nothing
+ * imports `namespace.ts` — it is the top of the DAG, above `glue`, `layer` and `partition`
+ * rather than beside them — so it can reach down into all three and no cycle is possible.
+ * `card.ts` and `glue.ts` are siblings and cannot, which is the whole reason this file is
+ * here.
+ *
+ * So: a cross-module write goes beside its table if that table's module sits above the
+ * others it touches, and here if it does not. A function that merely calls two others in
+ * sequence, with no partial write to observe, goes beside whichever table it is about.
  */
 
 import { withTx, type DB, type AnyDB } from "../tx.js";

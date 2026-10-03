@@ -4,6 +4,7 @@ import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/c
 import { normalizeTag } from "$lib/tag";
 import { loadTreemapSnapshot, type TreemapPartition } from "$lib/server/treemap-snapshot";
 import { validActivityDay } from "./lib/activity.js";
+import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 /**
  * The whole workspace at once: every namespace as a rectangle, its partitions inside it sized by
@@ -20,7 +21,7 @@ import { validActivityDay } from "./lib/activity.js";
 // Static export: one map of the workspace, prerendered. A static route with no `entries` to
 // generate, for the reason `/tags` has none — which namespace is being looked at is a query
 // parameter, and a prerender has no query to read.
-export const prerender = process.env.KOZANE_SSG === "1";
+export const prerender = isSsgBuild();
 
 /**
  * Whether a prerender may draw scopes at all.
@@ -35,7 +36,7 @@ export const prerender = process.env.KOZANE_SSG === "1";
  * and then declined to render them would still have baked them into the JSON the export
  * ships beside the HTML.
  */
-const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
+const includeScopedFiles = ssgIncludesScopedFiles();
 const includeScopes = !prerender || includeScopedFiles;
 
 function cacheLocation(): { root: string; dbUrl: string } | undefined {

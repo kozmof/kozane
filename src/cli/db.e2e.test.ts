@@ -1,4 +1,11 @@
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
@@ -132,5 +139,60 @@ describe("database CLI flow", () => {
     expect(output).toContain(`Restored: ${backup}`);
     expect(output).toMatch(/Current database backed up: .*\.kozane\/backups\//);
     expect(cli(root, "namespace", "list")).toContain("Restored namespace");
+  }, 30_000);
+});
+
+/**
+ * `kozane db import` takes rows the endpoints and the card commands would have refused, and
+ * says so instead of refusing.
+ *
+ * The decision is in `dumpLimitWarnings`: these limits are workspace *settings*, so a dump
+ * exported from a workspace with a wider canvas or a larger `ui.contentMax` has to remain
+ * restorable into one with the defaults. Refusing would mean a backup that cannot be restored
+ * because of a policy difference, on the command whose whole purpose is getting data back.
+ */
+describe("kozane db import — limits", () => {
+  it("imports rows past this workspace's limits and warns about them", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "card", "add", "Ordinary card");
+    const dump = join(root, "limits.json");
+    cli(root, "db", "export", dump);
+
+    // Edited in the dump rather than written through a command, which is the only way such a
+    // row arrives: every write path clamps or refuses first.
+    const parsed = JSON.parse(readFileSync(dump, "utf-8")) as {
+      tables: { card: Record<string, unknown>[]; scope: Record<string, unknown>[] };
+    };
+    parsed.tables.card[0].content = "x".repeat(200_001);
+    parsed.tables.card[0].pos_x = 999_999;
+    parsed.tables.scope.push({ id: "wide-scope", name: "n".repeat(300) });
+    writeFileSync(dump, JSON.stringify(parsed), "utf-8");
+
+    const result = runCli(root, "db", "import", dump, "--force");
+    // Imported, not refused: the rows are there and the command succeeded.
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`Database imported: ${dump}`);
+    expect(result.stdout).toContain("card: 1");
+
+    expect(result.stderr).toContain("Warning: card: 1 card longer than this workspace's");
+    expect(result.stderr).toContain("Warning: card: 1 card positioned outside this workspace's");
+    expect(result.stderr).toContain("Warning: 1 name longer than the 255-character limit");
+
+    // And findable afterwards, which is the other half of not refusing.
+    const doctor = runCli(root, "doctor");
+    expect(doctor.stdout).toContain("✗  Rows within workspace limits");
+  }, 30_000);
+
+  it("says nothing about a dump that is within every limit", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "card", "add", "Ordinary card");
+    const dump = join(root, "within-limits.json");
+    cli(root, "db", "export", dump);
+
+    const result = runCli(root, "db", "import", dump, "--force");
+    expect(result.status).toBe(0);
+    expect(result.stderr).not.toContain("Warning:");
   }, 30_000);
 });

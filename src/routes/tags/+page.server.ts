@@ -10,11 +10,12 @@ import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "$lib/tag"
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
 import { applyPalette } from "$lib/palette";
 import type { TagHit } from "$lib/types";
+import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 // Static export: one tag index for the whole workspace. A static route, so unlike the board
 // there are no `entries` to generate — and unlike the board it is not per-namespace, because
 // which namespace is being looked at is a query parameter now, and a prerender has no query.
-export const prerender = process.env.KOZANE_SSG === "1";
+export const prerender = isSsgBuild();
 // `--include-scoped-files`. A file hit names a path inside the workspace and quotes a line
 // of that file, so an export carries file tags only when it was built to carry files at
 // all — the same opt-in that governs the taskspace panel. Card tags are board content and
@@ -29,7 +30,7 @@ export const prerender = process.env.KOZANE_SSG === "1";
 // It is no longer a second condition here, which is the point: `loadTagIndex` returns the
 // taskspaces it walked, and an export that scans no file walks none. See
 // `TagIndex.taskspaces`.
-const includeScopedFiles = process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES === "1";
+const includeScopedFiles = ssgIncludesScopedFiles();
 
 /**
  * Where the gather is kept between requests, or nothing when it cannot be.

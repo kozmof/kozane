@@ -12,7 +12,15 @@ import {
   runMigrations,
   type MigrationStatus,
 } from "../lib/db.js";
-import { exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "../lib/db-json.js";
+import {
+  dumpLimitWarnings,
+  exportDbJson,
+  hasDbJsonRows,
+  importDbJson,
+  stringifyDbJson,
+} from "../lib/db-json.js";
+import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
+import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 
 // Every command here targets the on-disk workspace database via `dbUrl`, never the
@@ -162,6 +170,16 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
     for (const [table, count] of Object.entries(counts)) {
       console.log(`${table}: ${count}`);
     }
+    // After the counts, and after the import has committed: these are rows the import
+    // accepted on purpose — see `dumpLimitWarnings` for why a policy difference between the
+    // exporting and importing workspace must not fail a restore — so they are reported as
+    // something to know about the database that now exists, not as a reason it failed.
+    // `kozane doctor` reports the same conditions later.
+    const warnings = dumpLimitWarnings(parsed, {
+      contentMax: contentMaxForRoot(workspaceRoot),
+      ...canvasBoundsForRoot(workspaceRoot),
+    });
+    for (const warning of warnings) console.warn(`Warning: ${warning}`);
   } catch (e) {
     console.error("Import failed.");
     console.error(e instanceof Error ? e.message : String(e));

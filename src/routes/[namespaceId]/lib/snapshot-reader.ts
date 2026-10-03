@@ -54,7 +54,24 @@ function readRows<T>(
   return parsed;
 }
 
-function readCard(row: unknown): CardWithGlue | undefined {
+/**
+ * One card, read off whatever carried it rather than trusted from it.
+ *
+ * Exported because the poll is not the only response that carries a card. `POST /api/cards`
+ * answers with the stored row and `POST /api/cards/squash` with a list of them, and both
+ * were read straight off `response.json()` — one through a `const created: CardWithGlue |
+ * null` annotation, which accepts `any` without narrowing anything, and one behind an
+ * `Array.isArray` that leaves the elements `any`. A body missing `posX` therefore put a
+ * card at `undefined` on the canvas, which is the failure `readNamespaceSnapshot` already
+ * exists to prevent on the one response that polls for it.
+ *
+ * So the rule the rest of this module states — a card is read, never trusted — applies to
+ * every response that hands one over, and there is one function that does it. The
+ * `parseCard`/`parseCards` pair in `namespace-api.ts` wraps this in the `T | null`
+ * convention the other mutation parsers there use; see {@link readNamespaceSnapshot} for
+ * the all-or-nothing rule a list of these is held to.
+ */
+export function readCard(row: unknown): CardWithGlue | undefined {
   const id = readString(row, "id");
   const partitionId = readString(row, "partitionId");
   const layerId = readString(row, "layerId");

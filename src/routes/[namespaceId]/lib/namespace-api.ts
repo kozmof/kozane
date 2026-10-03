@@ -1,9 +1,16 @@
 import { base } from "$app/paths";
 import type { CardPositionPatch } from "./namespace-page.js";
-import type { ScopeArea, Warp } from "$lib/types.js";
+import type { CardWithGlue, ScopeArea, Warp } from "$lib/types.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
 import type { BoardRect } from "$lib/constants";
-import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
+import {
+  readArray,
+  readBoolean,
+  readFiniteNumber,
+  readNullableString,
+  readString,
+} from "./response.js";
+import { readCard } from "./snapshot-reader.js";
 
 /**
  * The URL of one namespace-scoped endpoint.
@@ -104,6 +111,50 @@ export function squashCard(
   cardId: string,
 ): Promise<Response> {
   return jsonRequest(fetcher, apiUrl(namespaceId, "/cards/squash"), "POST", { cardId });
+}
+
+/**
+ * The row a card POST answers with, or null when the body is not one.
+ *
+ * The same contract as {@link parseWarp}, and it exists for the same reason: the response
+ * is the stored row — the server clamps `posX`/`posY` to the canvas — so it is drawn rather
+ * than discarded, and an unexpected body would put a card at `undefined`. The board used to
+ * read it as `const created: CardWithGlue | null = await res.json()`, which narrows nothing:
+ * `json()` resolves to `any`, so the annotation was a claim about the body rather than a
+ * check on it, and `!created` caught only an outright `null`.
+ *
+ * The field-by-field work is {@link readCard}'s, which is what the snapshot poll already
+ * holds every card to. Only the `undefined`/`null` convention differs, and it is converted
+ * here so these read like the other parsers in this module.
+ */
+export function parseCard(value: unknown): CardWithGlue | null {
+  return readCard(value) ?? null;
+}
+
+/**
+ * The cards a squash answers with, or null when the body is not a list of them.
+ *
+ * All or nothing, the way `readNamespaceSnapshot` treats its lists: the pieces of one card
+ * are one result, and half of them is not a smaller version of it — the board replaces the
+ * original with the whole set and selects them, so a list with one unreadable element has
+ * no partial application that means anything. An empty list is refused too: a squash that
+ * split nothing is the server's "does not split into more than one card", which the caller
+ * already reports from the response status.
+ *
+ * This replaces an `Array.isArray(cards)` check that left every element `any` — enough to
+ * type-check `[...state.cards, ...cards]`, and enough to put a row with no `posX` on the
+ * canvas.
+ */
+export function parseCards(value: unknown): CardWithGlue[] | null {
+  const rows = readArray(value, "cards");
+  if (!rows || rows.length === 0) return null;
+  const cards: CardWithGlue[] = [];
+  for (const row of rows) {
+    const card = readCard(row);
+    if (!card) return null;
+    cards.push(card);
+  }
+  return cards;
 }
 
 export function deleteCards(

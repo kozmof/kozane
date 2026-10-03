@@ -46,11 +46,39 @@ export function fileSignature(path: string): string | null {
  *
  * Null for an in-memory database, which has no file to sign and no life beyond the process.
  */
+/**
+ * The filesystem path behind a `file:` URL, with the query stripped and any percent-escapes
+ * undone.
+ *
+ * The decode is the part that was missing. A URL is percent-encoded by definition, so a
+ * workspace under a directory with a space or a `#` in its name arrives here as
+ * `file:/home/me/my%20notes/.kozane/kozane.db` — and `statSync` on that literal string finds
+ * nothing, since no such file exists. `throwIfNoEntry: false` turns that into `null`, which
+ * {@link databaseSignature} passes on, which switches the snapshot ETag gate and the tag
+ * cache off: correct, and silently slower forever, on exactly the workspaces whose owners
+ * are least likely to connect the two.
+ *
+ * Failing safe is why it was not urgent and not why it is fine. Undoing the escapes costs
+ * one call and gives the caches back.
+ *
+ * `decodeURIComponent` throws on a lone `%` — a path that is not valid percent-encoding at
+ * all — so a malformed URL falls back to the raw string rather than taking down a request.
+ * That lands exactly where this started: no signature, no gate, no error.
+ */
+function decodeDbPath(dbUrl: string): string {
+  const raw = dbUrl.startsWith("file:") ? dbUrl.slice("file:".length).split("?")[0] : dbUrl;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export function databaseSignature(dbUrl: string): string | null {
   if (isMemoryDbUrl(dbUrl)) return null;
   // libsql takes `file:/path`, optionally with query parameters; anything else is not a
   // local file this can stat.
-  const path = dbUrl.startsWith("file:") ? dbUrl.slice("file:".length).split("?")[0] : dbUrl;
+  const path = decodeDbPath(dbUrl);
   const main = fileSignature(path);
   if (!main) return null;
   return `${main}|${fileSignature(`${path}-wal`) ?? ""}`;

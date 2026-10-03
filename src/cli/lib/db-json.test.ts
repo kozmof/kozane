@@ -7,7 +7,14 @@ import { SQLiteTable, getTableConfig } from "drizzle-orm/sqlite-core";
 import { afterEach, describe, expect, it } from "vitest";
 import * as schema from "../../db/schema";
 import { runMigrations } from "./db";
-import { TABLES, exportDbJson, hasDbJsonRows, importDbJson, stringifyDbJson } from "./db-json";
+import {
+  TABLES,
+  dumpLimitWarnings,
+  exportDbJson,
+  hasDbJsonRows,
+  importDbJson,
+  stringifyDbJson,
+} from "./db-json";
 
 const tempRoots: string[] = [];
 
@@ -713,5 +720,107 @@ describe("stringifyDbJson", () => {
 
   it("round-trips through JSON.parse", () => {
     expect(JSON.parse(stringifyDbJson(dump as never))).toEqual(dump);
+  });
+});
+
+describe("dumpLimitWarnings", () => {
+  const limits = { contentMax: 100, canvasWidth: 1000, canvasHeight: 800 };
+
+  const card = (id: string, over: Partial<Record<string, unknown>> = {}) => ({
+    id,
+    partition_id: "b-1",
+    layer_id: "l-1",
+    content: "short",
+    pos_x: 10,
+    pos_y: 20,
+    ...over,
+  });
+
+  const dumpOf = (tables: Record<string, unknown[]>) => ({
+    tables: { namespace: [], partition: [], layer: [], scope: [], taskspace: [], ...tables },
+  });
+
+  it("says nothing about a dump within every limit", () => {
+    expect(dumpLimitWarnings(dumpOf({ card: [card("c-1")] }), limits)).toEqual([]);
+  });
+
+  it("names the cards whose text is past this workspace's contentMax", () => {
+    const dump = dumpOf({
+      card: [card("c-1"), card("c-2", { content: "x".repeat(101) })],
+    });
+    const [warning, ...rest] = dumpLimitWarnings(dump, limits);
+    expect(rest).toEqual([]);
+    expect(warning).toContain("1 card longer");
+    expect(warning).toContain("ui.contentMax of 100");
+    expect(warning).toContain("c-2");
+    expect(warning).not.toContain("c-1");
+  });
+
+  it("names the cards sitting off this workspace's canvas, in either direction", () => {
+    const dump = dumpOf({
+      card: [
+        card("inside"),
+        card("too-far-right", { pos_x: 1001 }),
+        card("too-far-down", { pos_y: 801 }),
+        card("negative", { pos_x: -1 }),
+      ],
+    });
+    const [warning] = dumpLimitWarnings(dump, limits);
+    expect(warning).toContain("3 cards positioned outside");
+    expect(warning).toContain("1000×800");
+    expect(warning).toContain("too-far-right");
+    expect(warning).not.toContain("inside");
+  });
+
+  // The edge is on the board: `clampToBounds` clamps to `0..canvasWidth` inclusive, so a card
+  // at exactly the far edge is one the write paths would have accepted.
+  it("counts the far edge as on the board", () => {
+    const dump = dumpOf({ card: [card("edge", { pos_x: 1000, pos_y: 800 })] });
+    expect(dumpLimitWarnings(dump, limits)).toEqual([]);
+  });
+
+  it("names over-long names by table, since every named thing shares one limit", () => {
+    const long = "n".repeat(256);
+    const dump = dumpOf({
+      card: [],
+      namespace: [{ id: "ns-1", name: long }],
+      layer: [{ id: "l-1", name: "Base" }],
+      scope: [{ id: "s-1", name: long }],
+    });
+    const [warning] = dumpLimitWarnings(dump, limits);
+    expect(warning).toContain("2 names longer than the 255-character limit");
+    expect(warning).toContain("namespace ns-1");
+    expect(warning).toContain("scope s-1");
+    expect(warning).not.toContain("l-1");
+  });
+
+  it("stops naming rows after a few, and still counts them all", () => {
+    const dump = dumpOf({
+      card: Array.from({ length: 9 }, (_, i) => card(`c-${i}`, { content: "x".repeat(101) })),
+    });
+    const [warning] = dumpLimitWarnings(dump, limits);
+    expect(warning).toContain("9 cards longer");
+    expect(warning).toContain("and 4 more");
+    expect(warning).not.toContain("c-8");
+  });
+
+  it("reports every condition a dump trips, one line each", () => {
+    const dump = dumpOf({
+      card: [card("c-1", { content: "x".repeat(101) }), card("c-2", { pos_x: 9999 })],
+      scope: [{ id: "s-1", name: "n".repeat(256) }],
+    });
+    expect(dumpLimitWarnings(dump, limits)).toHaveLength(3);
+  });
+
+  // Lenient on purpose: this runs after the import has committed, so a report must not be
+  // able to turn a restore that worked into one that appears to have failed. `parseDump` is
+  // the strict reader and has already run by then.
+  it("reads a shape it was not given as nothing to warn about", () => {
+    expect(dumpLimitWarnings(null, limits)).toEqual([]);
+    expect(dumpLimitWarnings("not a dump", limits)).toEqual([]);
+    expect(dumpLimitWarnings({}, limits)).toEqual([]);
+    expect(dumpLimitWarnings({ tables: null }, limits)).toEqual([]);
+    expect(dumpLimitWarnings({ tables: { card: "nope" } }, limits)).toEqual([]);
+    expect(dumpLimitWarnings({ tables: { card: [null, 7, "x"] } }, limits)).toEqual([]);
   });
 });

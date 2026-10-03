@@ -2,7 +2,8 @@ import { createClient, type InValue } from "@libsql/client";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../db/schema.js";
-import { chunked } from "../../lib/constants.js";
+import { chunked, NAME_MAX } from "../../lib/constants.js";
+import { plural } from "./plural.js";
 
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 8;
@@ -383,6 +384,127 @@ function validateDumpRefs(tables: TableRows): void {
     if (!namespaceIds.has(row.namespace_id as string))
       throw new Error(`scope_area ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
+}
+
+/**
+ * The limits a dump's rows are measured against — the workspace's, not the built-in
+ * defaults, because `ui.contentMax` and the canvas size are settings and the workspace being
+ * imported *into* is the one whose rules apply from here on.
+ */
+export type DumpLimits = { contentMax: number; canvasWidth: number; canvasHeight: number };
+
+/**
+ * How many offending rows a warning names before it stops listing them. The same figure
+ * `kozane doctor` uses for the same reason: a dump where every card is over the limit should
+ * produce a line, not a page.
+ */
+const LIMIT_WARNING_NAMED_MAX = 5;
+
+/** The first few ids, and a count of the rest. */
+function nameSome(ids: string[]): string {
+  const named = ids.slice(0, LIMIT_WARNING_NAMED_MAX);
+  const rest = ids.length - named.length;
+  return rest > 0 ? `${named.join(", ")}, and ${rest} more` : named.join(", ");
+}
+
+function overLimit(
+  rows: JsonObject[],
+  offending: (row: JsonObject) => boolean,
+): { total: number; ids: string[] } {
+  const hit = rows.filter(offending);
+  return { total: hit.length, ids: hit.map((row) => String(row.id)) };
+}
+
+/**
+ * One table's rows off a dump, leniently — anything that is not an array of objects reads as
+ * no rows.
+ *
+ * Lenient because of *when* this runs: {@link dumpLimitWarnings} is called after
+ * {@link importDbJson} has already succeeded, so the shape is known good and these guards
+ * can only fire on a dump that was somehow accepted anyway. What they buy is that a report
+ * about a restore cannot become the reason the restore appears to have failed. `parseDump`
+ * is the strict reader, and it has already run.
+ */
+function rowsOf(input: unknown, table: TableName): JsonObject[] {
+  if (typeof input !== "object" || input === null) return [];
+  const tables = (input as { tables?: unknown }).tables;
+  if (typeof tables !== "object" || tables === null) return [];
+  const rows = (tables as Record<string, unknown>)[table];
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(
+    (row): row is JsonObject => typeof row === "object" && row !== null && !Array.isArray(row),
+  );
+}
+
+/**
+ * What a dump carries that this workspace's own write paths would have refused.
+ *
+ * Reported rather than refused, which is the whole decision here and is not the one
+ * {@link validateDumpRefs} makes. A broken foreign key is a dump that cannot become a
+ * database — SQLite would reject it a moment later, less legibly — so it stops the import.
+ * These are different: a card longer than `ui.contentMax`, a name past {@link NAME_MAX}, a
+ * position off the end of the canvas. Every one of them is a row SQLite will take and the
+ * board will draw, and every one of them is measured against a *setting* that the workspace
+ * which produced the dump may simply have had set differently. Exporting from a workspace
+ * with a wider canvas and importing into one with the default is an ordinary thing to do.
+ *
+ * So refusing would mean a backup that cannot be restored because of a policy difference,
+ * on the one command whose whole purpose is getting a user's data back. Instead the import
+ * succeeds and says what it took, which is also what makes the rows findable: `kozane
+ * doctor` reports the same three conditions against the database afterwards.
+ *
+ * Returns one line per condition, or nothing when the dump is within every limit. Called on
+ * the dump a successful import has just written, so it reports the database that now exists.
+ */
+export function dumpLimitWarnings(input: unknown, limits: DumpLimits): string[] {
+  const warnings: string[] = [];
+  const { contentMax, canvasWidth, canvasHeight } = limits;
+  const cards = rowsOf(input, "card");
+
+  const long = overLimit(
+    cards,
+    (row) => typeof row.content === "string" && row.content.length > contentMax,
+  );
+  if (long.total > 0)
+    warnings.push(
+      `card: ${plural(long.total, "card")} longer than this workspace's ` +
+        `ui.contentMax of ${contentMax} characters (${nameSome(long.ids)}). ` +
+        `Editing one through the board or 'kozane card edit' will refuse it until it is shortened.`,
+    );
+
+  // Off the board rather than merely past the defaults: a position is stored unclamped here,
+  // and the viewport cannot reach one outside the canvas, so the card is drawn nowhere.
+  const offBoard = overLimit(
+    cards,
+    (row) =>
+      Number(row.pos_x) < 0 ||
+      Number(row.pos_y) < 0 ||
+      Number(row.pos_x) > canvasWidth ||
+      Number(row.pos_y) > canvasHeight,
+  );
+  if (offBoard.total > 0)
+    warnings.push(
+      `card: ${plural(offBoard.total, "card")} positioned outside this ` +
+        `workspace's ${canvasWidth}×${canvasHeight} canvas ` +
+        `(${nameSome(offBoard.ids)}). Use 'kozane card move' to bring one back, ` +
+        `or raise ui.canvasWidth / ui.canvasHeight.`,
+    );
+
+  // Every named thing shares one limit, so they share one line; the table is named with each
+  // id because a `name` collision across tables would otherwise be indistinguishable.
+  const namedTables: TableName[] = ["namespace", "partition", "layer", "scope", "taskspace"];
+  const longNames = namedTables.flatMap((table) =>
+    rowsOf(input, table)
+      .filter((row) => typeof row.name === "string" && row.name.length > NAME_MAX)
+      .map((row) => `${table} ${String(row.id)}`),
+  );
+  if (longNames.length > 0)
+    warnings.push(
+      `${plural(longNames.length, "name")} longer than the ${NAME_MAX}-character ` +
+        `limit (${nameSome(longNames)}). Renaming one will refuse it until it is shortened.`,
+    );
+
+  return warnings;
 }
 
 export async function importDbJson(

@@ -8,6 +8,7 @@
   import { page } from "$app/state";
   import {
     createCard,
+    parseCard,
     updateCard,
     patchCardPositions,
     fetchWarpDirectory,
@@ -34,7 +35,6 @@
     withoutWarp,
     type WarpListEntry,
   } from "$lib/warp-list";
-  import type { CardWithGlue } from "$lib/types";
   import { ARROW_KEYS, type BoardRect } from "$lib/constants";
   import {
     hasCommandModifier,
@@ -370,7 +370,10 @@
         ...(layerId && { layerId }),
       });
       if (!res.ok) { s.setError(await failureMessage(res, "Failed to create card")); return; }
-      const created: CardWithGlue | null = await res.json().catch(() => null);
+      // Read rather than trusted, the way the warp and scope-area responses below are: an
+      // annotation on `res.json()` would narrow nothing, and a body missing `posX` would put
+      // this card at `undefined` on the canvas. See `parseCard`.
+      const created = parseCard(await res.json().catch(() => null));
       // An answer that is not a row, where the fallback is all there is to say.
       if (!created) { s.setError("Failed to create card"); return; }
       // The stored row, not a local reconstruction: the server clamps posX/posY to the

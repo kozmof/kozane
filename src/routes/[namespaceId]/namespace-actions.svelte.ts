@@ -204,9 +204,8 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError(await api.failureMessage(res, "Failed to squash card"));
       return;
     }
-    const parsed = await res.json().catch(() => null);
-    const cards = (parsed as { cards?: unknown } | null)?.cards;
-    if (!Array.isArray(cards) || cards.length === 0) {
+    const cards = api.parseCards(await res.json().catch(() => null));
+    if (!cards) {
       state.setError("Failed to squash card");
       return;
     }

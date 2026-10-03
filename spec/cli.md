@@ -227,6 +227,8 @@ Checks (in order):
 | `kozane.db` readable/writable | file exists and has `rw` permissions               |
 | DB migrations current         | migration status is `current`                      |
 | Card timestamps valid         | every card's timestamps name a moment              |
+| Database integrity            | SQLite reports no file or reference problems       |
+| Rows within workspace limits  | no row sits past a limit a write path enforces     |
 | Port available                | configured port not already in use                 |
 
 Exit code `0` if all checks pass, `1` otherwise.
@@ -240,6 +242,8 @@ Output:
   ✓  kozane.db readable/writable
   ✓  DB migrations current
   ✓  Card timestamps valid
+  ✓  Database integrity
+  ✓  Rows within workspace limits
   ✓  Port 17173 available
 ```
 
@@ -260,6 +264,40 @@ The check names the cards it found, by short ID — up to five, then `and N more
 
 ```
   ✗  Card timestamps valid — 2 cards stamped outside what this app writes, likely inserted by hand: 6fd3a2b, 41c0e9d; kozane card list --sort reports them as 1970 or invalid
+```
+
+`Database integrity` runs only when the migrations are current, and runs both
+`PRAGMA integrity_check` and `PRAGMA foreign_key_check`. They answer different questions:
+the first is about the file — page structure, index entries that do not match their table —
+and the second about the rows, which can find something the first calls sound. `PRAGMA
+foreign_keys` is a per-connection setting, so a row written over a connection that left it
+off is a dangling reference in a structurally perfect file; `sqlite3` on the command line
+starts in that state, and every connection Kozane opens sets the pragma. A failure points at
+`kozane db restore`, or at `kozane db export` first where anything is still readable.
+
+```
+  ✗  Database integrity — 3 rows referencing a row that does not exist, in card, scope_rel; written by a client that had PRAGMA foreign_keys off. Export what is readable with kozane db export, then kozane db restore
+```
+
+`Rows within workspace limits` reports rows past the limits every write path holds a new row
+to: card text longer than `ui.contentMax`, a card positioned outside the
+`ui.canvasWidth` × `ui.canvasHeight` board, and a name longer than 255 characters in any of
+`namespace`, `partition`, `layer`, `scope` or `taskspace`. Nothing in the schema enforces
+these — they are settings, and a `CHECK` constraint could not follow one being changed — so
+there are two ways such a row arrives: hand-written SQL, and
+[`kozane db import`](#kozane-db-import), which takes them on purpose and warns rather than
+refusing, because a dump exported from a workspace with different settings has to stay
+Cards are named by short ID, the way `Card timestamps valid` names them; an over-long name is
+located by its table and full ID instead, since a short ID would have to be unambiguous
+across five tables rather than within one. Up to five of each, then `and N more`.
+
+Measured with SQLite's `length()`, which counts characters, where the write paths measure
+UTF-16 code units — so a card made of astral characters such as emoji may be past the limit
+the endpoints enforce without being named here. The direction is the safe one: nothing is
+reported that a write path would accept.
+
+```
+  ✗  Rows within workspace limits — 1 card over ui.contentMax: 6fd3a2b; 1 name over 255 characters: scope 0199c3f1-7a2e-7b41-9c08-3d5e2f6a4b10; editing one will refuse it
 ```
 
 ---
@@ -1121,7 +1159,9 @@ Behavior:
 1. Requires migrations to be current.
 2. Refuses if the DB is not empty and `--force` is not given.
 3. Creates a backup before importing.
-4. Imports and prints per-table row counts.
+4. Checks every foreign key in the dump and refuses, naming the row, before writing anything.
+5. Imports and prints per-table row counts.
+6. Warns on stderr about rows that are past this workspace's limits, without refusing them.
 
 Output:
 
@@ -1132,6 +1172,20 @@ namespace: 1
 partition: 2
 card: 42
 ```
+
+A broken reference stops the import; a row past a limit does not. The difference is that a
+dangling foreign key is a dump that cannot become a database, while `ui.contentMax` and the
+canvas size are _settings_ — a dump exported from a workspace that set them differently has
+to remain restorable into one that did not, and refusing would mean a backup that cannot be
+restored because of a policy difference. So those rows are imported and reported:
+
+```
+Warning: card: 2 cards longer than this workspace's ui.contentMax of 200000 characters (c-1, c-2). Editing one through the board or 'kozane card edit' will refuse it until it is shortened.
+Warning: card: 1 card positioned outside this workspace's 5600×4000 canvas (c-3). Use 'kozane card move' to bring one back, or raise ui.canvasWidth / ui.canvasHeight.
+```
+
+[`kozane doctor`](#kozane-doctor) reports the same three conditions against the database
+afterwards, so the rows stay findable past the import that brought them in.
 
 ---
 

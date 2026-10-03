@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
 import { getDBURL, getWorkspaceRoot } from "./db/internal/config";
 import { isMemoryDbUrl } from "./lib/db-url";
+import { isSsgBuild } from "./lib/server/ssg";
 import { getMigrationStatus } from "./db/internal/migrations";
 import { readApiKeyResult } from "./lib/server/api-key";
 import { claimServerState, removeServerState } from "./lib/server/runtime-state";
@@ -237,7 +238,7 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   // against the local workspace DB. Skip the API-key/TLS gating entirely — the
   // export is inherently public and read-only, and enforcing auth here would make
   // prerendering fail with 401s on any workspace that has an API key configured.
-  if (process.env.KOZANE_SSG === "1") {
+  if (isSsgBuild()) {
     event.locals.db = await getDb();
     return resolve(event);
   }

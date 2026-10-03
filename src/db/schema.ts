@@ -117,6 +117,19 @@ export const scopeTable = sqliteTable(
   },
   (t) => [
     check("scope_name_nonempty", sql`length(${t.name}) > 0`),
+    // Workspace-wide, not per namespace — the one place the absence of `namespace_id` above
+    // has a consequence a user meets rather than a reader. A scope is identified by its name
+    // across the whole workspace, which is what lets `kozane scope add docs` in one namespace
+    // and the same command in another mean the same scope, and is what `kozane scope list`
+    // reports a single row per. The cost is the other side of it: two namespaces cannot each
+    // keep a scope called `docs` that means different things, and the second `scope add` is
+    // refused as a duplicate rather than creating one.
+    //
+    // Deliberate, and the alternative is worse in the direction this project cares about: a
+    // unique index on `(namespace_id, name)` is what a scope would need to be per namespace,
+    // and there is no `namespace_id` to put in it — adding one would make a shared scope
+    // impossible, which is the whole reason the column is absent. Named in the README beside
+    // the structures it describes, because it decides what a user may call things.
     uniqueIndex("scope_name_unique").on(t.name),
   ],
 );
