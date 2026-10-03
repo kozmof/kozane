@@ -180,14 +180,20 @@
     // Cleared here rather than after the click, because a drag released outside the map
     // produces no click at all — and a flag left standing would swallow the next real one.
     travelled = false;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: PointerEvent) {
     if (!origin) return;
     const dx = event.clientX - origin.x;
     const dy = event.clientY - origin.y;
-    if (Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) travelled = true;
+    // Captured only once the gesture is a drag, not on the way down. A captured pointer's
+    // `click` is dispatched to the capturing element rather than to what is under it, so
+    // capturing on `pointerdown` left every partition link showing a pointer and opening
+    // nothing.
+    if (!travelled && Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) {
+      travelled = true;
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
     // From where the drag began and how far the pointer has gone altogether, not from the
     // last frame. See `pannedBy`.
     movedView = pannedBy(origin.view, size, dx, dy);

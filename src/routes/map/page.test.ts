@@ -577,6 +577,23 @@ describe("panning and zooming", () => {
     expect(click.defaultPrevented).toBe(false);
   });
 
+  /**
+   * A browser sends a captured pointer's `click` to the capturing element instead of the link
+   * under it — something jsdom does not model — so capturing on the way down made every
+   * partition unclickable. Capture has to wait until the gesture is a drag.
+   */
+  it("captures the pointer only once the gesture is a drag", () => {
+    const { container } = draw();
+    const el = surface(container);
+    const capture = vi.spyOn(el, "setPointerCapture");
+    fireEvent.pointerDown(el, { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 401, clientY: 300 });
+    expect(capture).not.toHaveBeenCalled();
+    fireEvent.pointerMove(el, { pointerId: 1, clientX: 450, clientY: 300 });
+    expect(capture).toHaveBeenCalledWith(1);
+    fireEvent.pointerUp(el, { pointerId: 1, clientX: 450, clientY: 300 });
+  });
+
   it("enlarges the rectangles when zoomed in, and says so", async () => {
     const { container } = draw();
     const before = geometry(container);
