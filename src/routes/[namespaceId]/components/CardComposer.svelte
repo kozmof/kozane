@@ -144,10 +144,13 @@
         ? `selection:${selectedCards.map(({ id }) => id).join(",")}`
         : "create";
     if (context === loadedComposerContext) return;
+    // Not on the first run, which is the page opening: a textarea focused on arrival took the
+    // board's single-key shortcuts and every stray keystroke as card text.
+    const opening = loadedComposerContext === null;
     loadedComposerContext = context;
     content = editingCard?.content ?? "";
     partitionId = context === "create" ? createPartitionId : composerPartitionId();
-    const shouldFocus = !suppressNextAutoFocus;
+    const shouldFocus = !opening && !suppressNextAutoFocus;
     suppressNextAutoFocus = false;
     tick().then(() => {
       if (shouldFocus) textareaEl?.focus();

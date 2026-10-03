@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
+import { tick } from "svelte";
 import CardComposer from "./CardComposer.svelte";
 import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 
@@ -45,6 +46,22 @@ describe("CardComposer — create mode", () => {
     await rerender(makeProps({ partitions: partitions.map((partition) => ({ ...partition })) }));
 
     expect(textarea).toHaveValue("aa");
+  });
+
+  it("leaves the textarea unfocused when the page opens", async () => {
+    render(CardComposer, { props: makeProps() });
+    await tick();
+    expect(screen.getByRole("textbox")).not.toHaveFocus();
+  });
+
+  it("focuses the textarea when a selection is cleared back to writing", async () => {
+    const card = { id: "c1", content: "A", partitionId: "b1" };
+    const { rerender } = render(CardComposer, {
+      props: makeProps({ selectedCards: [card], primaryCard: card }),
+    });
+    await rerender(makeProps());
+    await tick();
+    expect(screen.getByRole("textbox")).toHaveFocus();
   });
 
   it("does not show 'Esc to cancel' hint in create mode", () => {

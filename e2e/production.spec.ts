@@ -72,8 +72,9 @@ test("authenticates, hydrates, creates, and persists a card", async ({ page }) =
   await expect(page).toHaveURL(`${baseUrl}/`);
   await page.getByRole("link", { name: "Browser namespace" }).click();
 
+  // Not focused on arrival, so the board's single-key shortcuts work straight away.
   const composer = page.getByLabel("Write a card");
-  await expect(composer).toBeFocused();
+  await expect(composer).not.toBeFocused();
   await composer.fill("Created in a real browser");
   await page.getByRole("button", { name: "Create card" }).click();
   await expect(page.getByRole("button", { name: "Card: Created in a real browser" })).toBeVisible();
@@ -128,5 +129,5 @@ test("creates a namespace from the list page and opens it", async ({ page }) => 
 
   // The default partition and layer came with it, so the canvas is usable.
   await created.click();
-  await expect(page.getByLabel("Write a card")).toBeFocused();
+  await expect(page.getByLabel("Write a card")).toBeVisible();
 });
