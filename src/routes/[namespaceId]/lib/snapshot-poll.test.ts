@@ -199,4 +199,30 @@ describe("startSnapshotPoll", () => {
     expect(harness.applied).toEqual([]);
     harness.stop();
   });
+
+  it("drops an answer about a namespace the page has since left", async () => {
+    let current = "p1";
+    let answer: (response: Response) => void = () => {};
+    const fetcher = vi.fn().mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    const applied: NamespaceDataSnapshot[] = [];
+    const stop = startSnapshotPoll({
+      fetcher: fetcher as unknown as typeof fetch,
+      namespaceId: () => current,
+      activities: [new InFlight()],
+      apply: (snapshot) => applied.push(snapshot),
+      isHidden: () => false,
+    });
+    await tick();
+    expect(fetcher).toHaveBeenCalledWith("/p1/api/snapshot", expect.anything());
+    current = "p2";
+    answer(snapshotResponse());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(applied).toEqual([]);
+    stop();
+  });
 });

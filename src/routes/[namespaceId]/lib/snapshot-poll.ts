@@ -78,6 +78,10 @@ export function startSnapshotPoll({
       // recorded, so the next poll asks for the whole thing again.
       const snapshot = readNamespaceSnapshot(await response.json());
       if (!snapshot) return;
+      // The page is reused across namespaces, so a navigation while this request was in
+      // flight leaves an answer about the board that was just left. Dropped, not applied:
+      // the next poll asks about the one now showing.
+      if (namespaceId() !== currentNamespaceId) return;
       if (!activities.every((activity, index) => activity.unchangedSince(versions[index]))) return;
       apply(snapshot);
       // Recorded only once the data is actually on the board. A snapshot dropped by the
