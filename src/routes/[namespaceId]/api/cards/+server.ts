@@ -63,33 +63,34 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const contentIssue = contentLimitIssue(content, contentMax());
   if (contentIssue) throw error(400, contentIssue);
 
-  const partition = await getPartition({ db, namespaceId, partitionId });
-  if (!partition) throw error(400, "Partition not found in namespace");
-  if (scopeId && !(await getScope({ db, scopeId }))) throw error(400, "Scope not found");
+  // The lookups run inside the transaction that writes, so a partition, layer, or scope
+  // removed by another writer in between is a 400 here rather than a foreign-key 500.
+  const { id, stored } = await withTx(db, async (tx) => {
+    const partition = await getPartition({ db: tx, namespaceId, partitionId });
+    if (!partition) throw error(400, "Partition not found in namespace");
+    if (scopeId && !(await getScope({ db: tx, scopeId }))) throw error(400, "Scope not found");
 
-  // An unknown layer is rejected rather than silently redirected to the default one:
-  // a card that quietly lands on another layer is invisible to the client that asked.
-  const layer = requestedLayerId
-    ? await getLayer({ db, namespaceId, layerId: requestedLayerId })
-    : await getDefaultLayer({ db, namespaceId });
-  if (!layer)
-    throw error(
-      400,
-      requestedLayerId ? "Layer not found in namespace" : "Namespace has no default layer",
-    );
+    // An unknown layer is rejected rather than silently redirected to the default one:
+    // a card that quietly lands on another layer is invisible to the client that asked.
+    const layer = requestedLayerId
+      ? await getLayer({ db: tx, namespaceId, layerId: requestedLayerId })
+      : await getDefaultLayer({ db: tx, namespaceId });
+    if (!layer)
+      throw error(
+        400,
+        requestedLayerId ? "Layer not found in namespace" : "Namespace has no default layer",
+      );
 
-  const stored = {
-    partitionId,
-    layerId: layer.id,
-    content,
-    ...clampToCanvas(posX, posY),
-    zIndex,
-  };
-
-  const id = await withTx(db, async (tx) => {
+    const stored = {
+      partitionId,
+      layerId: layer.id,
+      content,
+      ...clampToCanvas(posX, posY),
+      zIndex,
+    };
     const cardId = await addCard({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-    return cardId;
+    return { id: cardId, stored };
   });
 
   // The whole stored row, not just the id: posX/posY were clamped above, so a client
