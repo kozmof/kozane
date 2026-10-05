@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { getDBURL } from "./internal/config.js";
 import { isMemoryDbUrl } from "../lib/db-url.js";
-import { applyConnectionPragmas } from "./pragmas.js";
+import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "./pragmas.js";
 import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
 import { brandDb, type DB } from "./tx.js";
@@ -24,7 +24,11 @@ export { withTx } from "./tx.js";
 export type OpenedDb = { db: DB; close: () => void };
 
 export async function openDb(url: string): Promise<OpenedDb> {
-  const client = createClient({ url });
+  // `timeout` as well as the pragma: libsql's `transaction()` hands its connection to the
+  // transaction and opens a fresh one for whatever comes next, and only an option given here
+  // reaches that one. Without it every statement after the first transaction ran with a
+  // busy timeout of 0, failing at once on a lock a `kozane card add` held.
+  const client = createClient({ url, timeout: BUSY_TIMEOUT_MS });
   await applyConnectionPragmas(client, url);
   const db = drizzle(client, { schema });
 

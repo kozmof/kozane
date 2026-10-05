@@ -140,7 +140,8 @@ export async function requireCurrentMigrations(dbUrl: string, purpose: string): 
 }
 
 export async function runMigrations(dbUrl: string): Promise<void> {
-  const client = createClient({ url: dbUrl });
+  // `timeout` for the connection a transaction leaves behind — see `openDb`.
+  const client = createClient({ url: dbUrl, timeout: BUSY_TIMEOUT_MS });
   const db = drizzle(client, { schema });
 
   try {

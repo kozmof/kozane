@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "./pragmas.js";
+import { openDb, withTx } from "./client.js";
 
 const tempRoots: string[] = [];
 
@@ -66,6 +68,23 @@ describe("applyConnectionPragmas", () => {
       expect((await client.execute("PRAGMA foreign_keys")).rows[0]?.foreign_keys).toBe(1);
     } finally {
       client.close();
+    }
+  });
+
+  it("keeps the busy timeout on the connection a transaction leaves behind", async () => {
+    // libsql hands its connection to a transaction and opens a fresh one afterwards, so a
+    // pragma set once at open is gone by the next statement unless the client carries it.
+    const { db, close } = await openDb(tempDbUrl());
+    try {
+      await withTx(db, async () => {});
+      const after = await db.all<{ timeout: number }>(sql`PRAGMA busy_timeout`);
+      expect(after[0]?.timeout).toBe(BUSY_TIMEOUT_MS);
+      await withTx(db, async (tx) => {
+        const inner = await tx.all<{ timeout: number }>(sql`PRAGMA busy_timeout`);
+        expect(inner[0]?.timeout).toBe(BUSY_TIMEOUT_MS);
+      });
+    } finally {
+      close();
     }
   });
 });
