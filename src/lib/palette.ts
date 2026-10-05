@@ -32,6 +32,10 @@ export const PALETTE = [
  * or the map and the tag index would colour a partition differently from the board it belongs
  * to. Colours repeat once a namespace passes {@link PALETTE}`.length` (8), deliberately: a
  * ninth partition sharing the first one's colour is better than a ninth colour nobody chose.
+ *
+ * Id order is creation order, so a new partition takes the next colour and the existing ones
+ * keep theirs. Deleting one does shift the partitions created after it down a colour: a
+ * position is all there is to go on, and nothing stores the colour itself.
  */
 export function applyPalette<T extends { id: string }>(partitions: T[]) {
   return partitions.map((partition, i) => ({ ...partition, ...PALETTE[i % PALETTE.length] }));

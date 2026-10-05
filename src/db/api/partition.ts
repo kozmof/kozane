@@ -1,10 +1,23 @@
 import { partitionTable, cardTable } from "../schema.js";
-import { and, count, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import type { NeedsDB, NeedsNamespace, NeedsNamespacePartition, Partition } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
+/**
+ * A namespace's partitions in the order they were created — uuidv7 ids sort that way.
+ *
+ * The order is what colours a partition (see `applyPalette`), so it is stated rather than left
+ * to the plan: without it SQLite answers through `partition_name_per_namespace` and returns the
+ * rows by name, and creating "Alpha" moved every partition after it on to the next colour.
+ * Creation order only ever grows at the end, so adding a partition leaves every existing
+ * partition's colour where it was.
+ */
 export async function getAllPartitions({ db, namespaceId }: NeedsNamespace): Promise<Partition[]> {
-  return db.select().from(partitionTable).where(eq(partitionTable.namespaceId, namespaceId));
+  return db
+    .select()
+    .from(partitionTable)
+    .where(eq(partitionTable.namespaceId, namespaceId))
+    .orderBy(asc(partitionTable.id));
 }
 
 /** A partition, and how many cards sit in it. See {@link getPartitionCardCounts}. */

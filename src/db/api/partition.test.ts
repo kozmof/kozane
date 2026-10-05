@@ -104,6 +104,18 @@ describe("getAllPartitions", () => {
     await addPartition({ db, namespaceId: p1, name: "P1 Partition" });
     expect(await getAllPartitions({ db, namespaceId: p2 })).toEqual([]);
   });
+
+  // The order colours a partition (`applyPalette`), so a new one must not move the others.
+  // Names that sort differently from creation are the case the name index used to decide.
+  it("returns partitions in the order they were created, whatever their names", async () => {
+    const { db, namespaceId } = await setup();
+    const created = [];
+    for (const name of ["General", "Zeta", "Beta"]) {
+      created.push(await addPartition({ db, namespaceId, name }));
+    }
+    created.push(await addPartition({ db, namespaceId, name: "Alpha" }));
+    expect((await getAllPartitions({ db, namespaceId })).map((p) => p.id)).toEqual(created);
+  });
 });
 
 describe("deletePartition", () => {
