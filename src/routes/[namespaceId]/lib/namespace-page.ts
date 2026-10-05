@@ -184,6 +184,27 @@ export function cardPositionPatches<T extends { id: string; posX: number; posY: 
   });
 }
 
+/**
+ * Puts back the cards a refused save had sent, each to where it was before the drag.
+ *
+ * Only a card still at the position that was sent: a poll or another drag may have moved it
+ * on since the request went out, and that newer position is not this refusal's to undo.
+ * Returns a new array, leaving untouched rows as they were.
+ */
+export function revertedPositions<T extends { id: string; posX: number; posY: number }>(
+  cards: T[],
+  sent: readonly CardPositionUpdate[],
+  previous: ReadonlyMap<string, CardPosition>,
+): T[] {
+  const sentById = new Map(sent.map((pos) => [pos.cardId, pos]));
+  return cards.map((card) => {
+    const was = sentById.get(card.id);
+    const prev = previous.get(card.id);
+    if (!was || !prev || card.posX !== was.posX || card.posY !== was.posY) return card;
+    return { ...card, posX: prev.x, posY: prev.y };
+  });
+}
+
 // Folded rather than spread into Math.max/Math.min: `Math.max(...cards)` throws once
 // the workspace grows past the engine's argument limit. Both are seeded at 0, the
 // column default, so an empty canvas yields the same layer a first card would get.

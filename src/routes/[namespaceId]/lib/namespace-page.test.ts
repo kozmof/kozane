@@ -17,6 +17,7 @@ import {
   moveWithin,
   nearestWarpInDirection,
   orderLayers,
+  revertedPositions,
   scrollForViewCenter,
   viewCenterWorld,
   warpInDirection,
@@ -328,6 +329,45 @@ describe("cardPositionPatches", () => {
       { cardId: "card-2", posX: 72, posY: 96 },
       { cardId: "card-1", posX: 24, posY: 48 },
     ]);
+  });
+});
+
+describe("revertedPositions", () => {
+  const board = [
+    { id: "a", posX: 100, posY: 100 },
+    { id: "b", posX: 200, posY: 200 },
+    { id: "c", posX: 300, posY: 300 },
+  ];
+  const previous = new Map([
+    ["a", { x: 1, y: 1 }],
+    ["b", { x: 2, y: 2 }],
+  ]);
+
+  it("puts back every sent card still at the position that was sent", () => {
+    const sent = [
+      { cardId: "a", posX: 100, posY: 100 },
+      { cardId: "b", posX: 200, posY: 200 },
+    ];
+    expect(revertedPositions(board, sent, previous)).toEqual([
+      { id: "a", posX: 1, posY: 1 },
+      { id: "b", posX: 2, posY: 2 },
+      board[2],
+    ]);
+  });
+
+  it("leaves a card that has moved on since the save went out", () => {
+    const sent = [
+      { cardId: "a", posX: 100, posY: 100 },
+      { cardId: "b", posX: 999, posY: 999 },
+    ];
+    const reverted = revertedPositions(board, sent, previous);
+    expect(reverted[0]).toEqual({ id: "a", posX: 1, posY: 1 });
+    expect(reverted[1]).toBe(board[1]);
+  });
+
+  it("leaves a sent card it has no previous position for", () => {
+    const sent = [{ cardId: "c", posX: 300, posY: 300 }];
+    expect(revertedPositions(board, sent, previous)[2]).toBe(board[2]);
   });
 });
 

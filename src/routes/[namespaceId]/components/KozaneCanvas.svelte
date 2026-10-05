@@ -21,43 +21,42 @@
     TaskspaceTreeContext,
     TaskspaceTreeState,
   } from "../lib/taskspace-tree.svelte.js";
+  import { ScopeAreaBrowser } from "../lib/scope-area-browser.svelte.js";
+  import { CanvasViewport } from "../lib/canvas-viewport.js";
   import {
-    cwdFor,
-    cwdKey,
-    fileGroupsForArea,
-    pruneCwd,
-    taskspacesForScope,
-  } from "../lib/scope-area-files.js";
+    areaBoardRect,
+    areasByScope,
+    areaWorldRect,
+    cardIdsInScope as cardIdsInScopeOf,
+    heldScopeAreaRect,
+    membersByScope as membersByScopeOf,
+    sameBoardRect,
+    scopeAreaChanges as scopeAreaChangesOf,
+    type ScopeChange,
+  } from "../lib/scope-areas.js";
   import { PALETTE } from "$lib/palette";
   import {
     GRID,
     buildGlueGroupMap,
-    centeredScrollOffset,
     clampZoom,
     edgeScrollVelocity,
-    clientToWorld as toWorldPoint,
     dragGroupIds,
     glueGroupIds,
     glueIdByCardId,
     cardPositionPatches,
     INACTIVE_LAYER_OPACITY,
-    isViewCenteredOn,
     layerStack,
     previousPositions,
     resizedCardWidth,
     rectsIntersect,
+    revertedPositions,
     cardIdsOverlapping,
-    membershipTransition,
     movedRect,
     resizedRect,
-    scrollForViewCenter,
     selectionRectFromPoints,
-    viewCenterWorld,
-    worldRectToScreenRect,
   } from "../lib/namespace-page.js";
   import type {
     CardPositionPatch,
-    MembershipTransition,
     Point,
     PositionedCardSize,
     WorldRect,
@@ -78,12 +77,8 @@
     type WarpDragGesture,
   } from "../lib/board-gesture.js";
   import { CARD_WIDTH_RANGE, type NewCardPlacement } from "$lib/ui-config";
-  import {
-    clamp,
-    SCOPE_AREA_MIN_SIZE,
-    SCOPE_AREA_DRAW_MIN,
-    type BoardRect,
-  } from "$lib/constants";
+  import { SCOPE_AREA_MIN_SIZE, SCOPE_AREA_DRAW_MIN, type BoardRect } from "$lib/constants";
+  import type { BoardPoint } from "../lib/canvas-viewport.js";
 
   let {
     cards = $bindable(),
@@ -246,6 +241,12 @@
   const cardToGlue = $derived(glueIdByCardId(glueRels));
 
   let canvasEl: HTMLDivElement = $state()!;
+  const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
+  const viewport = new CanvasViewport(
+    () => canvasEl,
+    () => zoom,
+    () => canvasRectBounds,
+  );
   /** Where new cards go, and the run of them the last one belongs to. */
   const placement = new CardPlacement();
 
@@ -383,8 +384,7 @@
    * board inheriting the last one's scroll offset opens on nothing in particular.
    */
   export function recenter(): void {
-    canvasEl.scrollLeft = centeredScrollOffset(canvasEl.scrollWidth, canvasEl.clientWidth);
-    canvasEl.scrollTop = centeredScrollOffset(canvasEl.scrollHeight, canvasEl.clientHeight);
+    viewport.recenter();
   }
 
   /**
@@ -430,19 +430,8 @@
   }
 
   /** Where the viewport is looking, in world coordinates — where warping measures from. */
-  export function getViewCenter(): { posX: number; posY: number } {
-    return {
-      posX: clamp(
-        Math.round(viewCenterWorld(canvasEl.scrollLeft, canvasEl.clientWidth, zoom)),
-        0,
-        canvasWidth,
-      ),
-      posY: clamp(
-        Math.round(viewCenterWorld(canvasEl.scrollTop, canvasEl.clientHeight, zoom)),
-        0,
-        canvasHeight,
-      ),
-    };
+  export function getViewCenter(): BoardPoint {
+    return viewport.center();
   }
 
   /**
@@ -450,20 +439,9 @@
    * looking when they reach for the key. A pointer that has not moved yet, or that sits
    * over a side panel rather than the board, falls back to the centre of the view.
    */
-  export function getWarpPosition(): { posX: number; posY: number } {
-    if (!lastPointer) return getViewCenter();
-    const rect = canvasEl.getBoundingClientRect();
-    const outside =
-      lastPointer.x < rect.left ||
-      lastPointer.x > rect.right ||
-      lastPointer.y < rect.top ||
-      lastPointer.y > rect.bottom;
-    if (outside) return getViewCenter();
-    const { x, y } = clientToWorld(lastPointer.x, lastPointer.y);
-    return {
-      posX: clamp(Math.round(x), 0, canvasWidth),
-      posY: clamp(Math.round(y), 0, canvasHeight),
-    };
+  export function getWarpPosition(): BoardPoint {
+    if (!lastPointer || !viewport.contains(lastPointer)) return viewport.center();
+    return viewport.onCanvas(viewport.toWorld(lastPointer.x, lastPointer.y));
   }
 
   /**
@@ -473,48 +451,12 @@
    * already true.
    */
   export function isCenteredOn(posX: number, posY: number): boolean {
-    return (
-      isViewCenteredOn(
-        canvasEl.scrollLeft,
-        posX,
-        canvasEl.clientWidth,
-        zoom,
-        canvasEl.scrollWidth - canvasEl.clientWidth,
-      ) &&
-      isViewCenteredOn(
-        canvasEl.scrollTop,
-        posY,
-        canvasEl.clientHeight,
-        zoom,
-        canvasEl.scrollHeight - canvasEl.clientHeight,
-      )
-    );
+    return viewport.isCenteredOn(posX, posY);
   }
 
   /** Moves the viewport so `posX`/`posY` sits in the middle of it. Zoom is left alone. */
   export function centerOn(posX: number, posY: number): void {
-    canvasEl.scrollLeft = scrollForViewCenter(
-      posX,
-      canvasEl.clientWidth,
-      zoom,
-      canvasEl.scrollWidth - canvasEl.clientWidth,
-    );
-    canvasEl.scrollTop = scrollForViewCenter(
-      posY,
-      canvasEl.clientHeight,
-      zoom,
-      canvasEl.scrollHeight - canvasEl.clientHeight,
-    );
-  }
-
-  function clientToWorld(clientX: number, clientY: number) {
-    return toWorldPoint(
-      clientX,
-      clientY,
-      canvasEl.getBoundingClientRect(),
-      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
-      zoom,
-    );
+    viewport.centerOn(posX, posY);
   }
 
   /**
@@ -525,12 +467,7 @@
    * before anything is awaited, so by the time this ran the rectangle it was about was gone.
    */
   function applyRectangleSelection(rect: WorldRect) {
-    const screenRect = worldRectToScreenRect(
-      rect,
-      canvasEl.getBoundingClientRect(),
-      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
-      zoom,
-    );
+    const screenRect = viewport.toScreen(rect);
     const next = new Set<string>();
     let primaryId: string | null = null;
     canvasEl.querySelectorAll<HTMLElement>("[data-card-id]").forEach((el) => {
@@ -553,14 +490,14 @@
     e.stopPropagation();
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
-    const rect = canvasEl.getBoundingClientRect();
     const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId);
     const groupPrevPositions = previousPositions(cards, groupIds);
+    const pressed = viewport.toWorld(e.clientX, e.clientY);
     gesture = {
       kind: "card-drag",
       cardId,
-      offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - card.posX,
-      offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - card.posY,
+      offsetX: pressed.x - card.posX,
+      offsetY: pressed.y - card.posY,
       ...gestureOrigin(e),
       prevX: card.posX,
       prevY: card.posY,
@@ -588,159 +525,47 @@
   }
 
   /** Which cards overlap `rect`, given in world coordinates. */
-  function cardIdsInRect(rect: { x: number; y: number; w: number; h: number }): Set<string> {
-    const screenRect = worldRectToScreenRect(
-      rect,
-      canvasEl.getBoundingClientRect(),
-      { x: canvasEl.scrollLeft, y: canvasEl.scrollTop },
-      zoom,
-    );
-    return cardIdsOverlapping(cardElements(), screenRect);
+  function cardIdsInRect(rect: WorldRect): Set<string> {
+    return cardIdsOverlapping(cardElements(), viewport.toScreen(rect));
   }
 
-  function areaWorldRect(area: ScopeAreaRow) {
-    return { x: area.posX, y: area.posY, w: area.width, h: area.height };
-  }
-
-  /** Which cards overlap a frame right now. */
-  function cardIdsInArea(area: ScopeAreaRow): Set<string> {
-    return cardIdsInRect(areaWorldRect(area));
-  }
-
-  /** The scopes drawn on this board, each with the frames it has here. */
-  function areasByScope(): Map<string, ScopeAreaRow[]> {
-    const byScope = new Map<string, ScopeAreaRow[]>();
-    for (const area of scopeAreas) {
-      const existing = byScope.get(area.scopeId);
-      if (existing) existing.push(area);
-      else byScope.set(area.scopeId, [area]);
-    }
-    return byScope;
-  }
+  // The scope-membership questions, asked of this board's frames against its drawn cards.
+  // The logic is `scope-areas.ts`; these only supply the two things it cannot know.
+  const cardIdsInScope = (areas: ScopeAreaRow[]) => cardIdsInScopeOf(areas, cardIdsInRect);
+  const membersByScope = () => membersByScopeOf(scopeAreas, cardIdsInRect);
+  const scopeAreaChanges = (membersBefore: Map<string, Set<string>>) =>
+    scopeAreaChangesOf(scopeAreas, membersBefore, cardIdsInRect);
+  const scopeMembersOf = (area: ScopeAreaRow) =>
+    cardIdsInScope(areasByScope(scopeAreas).get(area.scopeId) ?? [area]);
 
   /**
-   * Which cards are inside a scope *anywhere on this board* — the union over its frames.
-   *
-   * The union is what makes several frames per scope behave like one membership. Asked per
-   * frame instead, a card dragged out of one and into another of the same scope would read
-   * as having left and joined in the same breath, and — worse — a card that merely stopped
-   * overlapping one frame while still sitting inside another would be filed out of the scope
-   * it is plainly still in. Membership is a fact about the scope, so it is measured against
-   * everything the scope covers.
+   * The file icons under each frame, read from the directory cache the scope panel and the
+   * file palette already share — the panel's `⟳` refreshes what a frame draws too.
    */
-  function cardIdsInScope(areas: ScopeAreaRow[]): Set<string> {
-    const hit = new Set<string>();
-    for (const area of areas) for (const id of cardIdsInArea(area)) hit.add(id);
-    return hit;
-  }
-
-  /** Who is in each scope on this board right now, by scope id. */
-  function membersByScope(): Map<string, Set<string>> {
-    return new Map([...areasByScope()].map(([scopeId, areas]) => [scopeId, cardIdsInScope(areas)]));
-  }
-
-  /**
-   * Which directory each frame is showing of each of its taskspaces, keyed by frame and
-   * taskspace. Absent means the taskspace root.
-   *
-   * Per frame rather than per scope: a scope framed in two places gets its icons under both,
-   * and drilling into a folder on one leaves the other where it was. The same answer the
-   * frame's own `×` gives to "which one did you mean".
-   *
-   * Local to the canvas and deliberately not persisted. It is a way of looking at a frame
-   * rather than anything about the board, and a folder left open across a reload would be a
-   * frame whose icons do not match the taskspace it names.
-   */
-  let areaCwd = $state<Record<string, string>>({});
-
-  /** This board's taskspaces that belong to a framed scope, each with the frames it draws under. */
-  const framedTaskspaces = $derived(
-    scopeAreas.map((area) => ({
-      area,
-      taskspaces: taskspacesForScope(taskspaces, area.scopeId, treeContext.staticFiles),
-    })),
-  );
-
-  const fileGroupsByArea = $derived(
-    new Map(
-      framedTaskspaces.map(({ area, taskspaces: owned }) => [
-        area.id,
-        fileGroupsForArea({
-          areaId: area.id,
-          taskspaces: owned,
-          cwdByKey: areaCwd,
-          nodeOf: (taskspaceId, path) => taskspaceTree.node(taskspaceId, path),
-        }),
-      ]),
-    ),
-  );
-
-  /**
-   * What the frames between them need read off disk: one directory per frame per taskspace,
-   * each named once however many frames are showing it.
-   *
-   * Deduplicated because the cache is keyed by taskspace and path and not by frame, so two
-   * frames of one scope showing the same folder are one request. The key the `Set` holds is
-   * joined on a NUL, which is the one byte a path cannot contain — a directory called
-   * `"a\nb"` is unusual but legal, and any printable separator would make it collide.
-   *
-   * This recomputes when a frame appears, a taskspace is attached or a folder is drilled
-   * into, and — this is what matters for the effect below — *not* while a frame is being
-   * dragged: nothing here reads a rectangle, only `area.id` and `area.scopeId`, so the
-   * position written on every pointer move goes unnoticed.
-   */
-  const directoriesToRead = $derived.by(() => {
-    const seen = new Set<string>();
-    const wanted: { taskspaceId: string; path: string }[] = [];
-    for (const { area, taskspaces: owned } of framedTaskspaces) {
-      for (const taskspace of owned) {
-        const path = cwdFor(areaCwd, area.id, taskspace.id);
-        if (seen.has(`${taskspace.id}\0${path}`)) continue;
-        seen.add(`${taskspace.id}\0${path}`);
-        wanted.push({ taskspaceId: taskspace.id, path });
-      }
-    }
-    return wanted;
+  const areaFiles = new ScopeAreaBrowser({
+    areas: () => scopeAreas,
+    taskspaces: () => taskspaces,
+    tree: () => taskspaceTree,
+    context: () => treeContext,
   });
 
   /**
    * Reads what the frames are showing, as soon as they are showing it.
    *
-   * Eager, unlike the panel, where opening a folder is the request. A frame's icons are not
-   * something you asked for a moment ago — they are how the frame says what the scope is
-   * working on, so they have to be there when the board opens. The cost is one small listing
-   * per framed taskspace; `ensure` is a no-op for a directory already read or in flight, so
-   * re-running this costs nothing but the walk over the list. The live-sync poll replaces the
-   * frame list wholesale, which is one such walk and no requests.
+   * Eager, unlike the panel, where opening a folder is the request: a frame's icons are how
+   * it says what the scope is working on, so they have to be there when the board opens.
+   * `ensure` is a no-op for a directory already read or in flight, so re-running this costs
+   * only the walk over the list.
    */
-  $effect(() => {
-    for (const { taskspaceId, path } of directoriesToRead) {
-      taskspaceTree.ensure(treeContext, taskspaceId, path);
-    }
-  });
-
-  /** Forgets where a frame was looking once the frame, or the taskspace, is gone. */
-  $effect(() => {
-    const next = pruneCwd(
-      areaCwd,
-      scopeAreas.map((a) => a.id),
-      taskspaces.map((t) => t.id),
-    );
-    if (Object.keys(next).length !== Object.keys(areaCwd).length) areaCwd = next;
-  });
-
-  function navigateAreaFiles(areaId: string, taskspaceId: string, path: string): void {
-    areaCwd = { ...areaCwd, [cwdKey(areaId, taskspaceId)]: path };
-  }
-
-  const canvasRectBounds = $derived({ canvasWidth, canvasHeight });
+  $effect(() => areaFiles.readShown());
+  $effect(() => areaFiles.prune());
 
   /**
    * Saves a frame's rectangle, putting it back if the save is refused.
    *
    * Only puts it back if the frame still holds the rectangle that failed: a poll or another
    * drag may have moved on since the request went out. Same guard, and the same reason, as
-   * the warp drop above.
+   * the warp drop.
    */
   async function persistArea(
     area: ScopeAreaRow,
@@ -750,68 +575,15 @@
     const ok = await onPersistScopeArea(area.scopeId, area.id, sent);
     if (ok) return true;
     const current = scopeAreas.find((a) => a.id === area.id);
-    if (
-      current &&
-      current.posX === sent.posX &&
-      current.posY === sent.posY &&
-      current.width === sent.width &&
-      current.height === sent.height
-    ) {
-      Object.assign(current, prev);
-    }
+    if (current && sameBoardRect(current, sent)) Object.assign(current, prev);
     onError("Failed to save scope area");
     return false;
   }
 
-  /**
-   * What crossed each frame's edge, given who was inside each of them before.
-   *
-   * Read at the end of a drag rather than tracked during it: a card belongs where it was let
-   * go, and asking mid-drag would file it into every frame it was carried across on the way.
-   * Frames with nothing to report are dropped, so the common drag — one that goes nowhere
-   * near a frame — produces no entries and no requests.
-   */
-  function scopeAreaChanges(
-    membersBefore: Map<string, Set<string>>,
-  ): { scopeId: string; change: MembershipTransition }[] {
-    const changes: { scopeId: string; change: MembershipTransition }[] = [];
-    // Over the scopes rather than over the frames, so a scope framed in three places is
-    // asked about once, against everything it covers. See `cardIdsInScope`.
-    for (const [scopeId, areas] of areasByScope()) {
-      const before = membersBefore.get(scopeId);
-      if (!before) continue;
-      const change = membershipTransition(before, cardIdsInScope(areas));
-      if (change.entered.length === 0 && change.exited.length === 0) continue;
-      changes.push({ scopeId, change });
-    }
-    return changes;
-  }
-
-  async function applyScopeAreaChanges(
-    changes: { scopeId: string; change: MembershipTransition }[],
-  ) {
+  async function applyScopeAreaChanges(changes: ScopeChange[]) {
     for (const { scopeId, change } of changes) {
       await onScopeMembershipChange(scopeId, change);
     }
-  }
-
-  /**
-   * The rectangle a drawn frame would be stored as, held on the board.
-   *
-   * Sized first, then placed — the order `clampRectToBounds` uses on the server, so what is
-   * drawn here is what comes back from it. A draw smaller than the minimum is grown to it
-   * rather than refused: the pointer said where, and how small a frame may usefully be is a
-   * separate question from whether one was asked for.
-   */
-  function heldScopeAreaRect(rect: { x: number; y: number; w: number; h: number }) {
-    const w = clamp(rect.w, SCOPE_AREA_MIN_SIZE, canvasWidth);
-    const h = clamp(rect.h, SCOPE_AREA_MIN_SIZE, canvasHeight);
-    return {
-      x: Math.round(clamp(rect.x, 0, Math.max(0, canvasWidth - w))),
-      y: Math.round(clamp(rect.y, 0, Math.max(0, canvasHeight - h))),
-      w: Math.round(w),
-      h: Math.round(h),
-    };
   }
 
   /**
@@ -836,17 +608,17 @@
     if (!area) return;
     // The cards this frame carries are the ones inside *it*; who counts as a member of the
     // scope is a wider question, and `membersBefore` asks it across all of the scope's frames.
-    const cardIds = [...cardIdsInArea(area)];
+    const cardIds = [...cardIdsInRect(areaWorldRect(area))];
     gesture = {
       kind: "area-drag",
       areaId,
       scopeId: area.scopeId,
       ...gestureOrigin(e),
-      prevRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
+      prevRect: areaBoardRect(area),
       cardIds,
       cardIdSet: new Set(cardIds),
       cardPrevPositions: previousPositions(cards, cardIds),
-      membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
+      membersBefore: scopeMembersOf(area),
     };
     onPositionActivityStart();
   }
@@ -860,8 +632,8 @@
       areaId,
       scopeId: area.scopeId,
       ...gestureOrigin(e),
-      startRect: { posX: area.posX, posY: area.posY, width: area.width, height: area.height },
-      membersBefore: cardIdsInScope(areasByScope().get(area.scopeId) ?? [area]),
+      startRect: areaBoardRect(area),
+      membersBefore: scopeMembersOf(area),
       pointer: null,
     };
     onPositionActivityStart();
@@ -976,9 +748,9 @@
     snapToGrid = false,
   ) {
     const { cardId, offsetX, offsetY, groupIdSet } = g;
-    const rect = canvasEl.getBoundingClientRect();
-    const rawX = (clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
-    const rawY = (clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
+    const pointer = viewport.toWorld(clientX, clientY);
+    const rawX = pointer.x - offsetX;
+    const rawY = pointer.y - offsetY;
     const x = Math.max(0, snapToGrid ? Math.round(rawX / GRID) * GRID : rawX);
     const y = Math.max(0, snapToGrid ? Math.round(rawY / GRID) * GRID : rawY);
     const dx = x - g.lastX;
@@ -1014,12 +786,12 @@
     if (readonly || e.button !== 0 || gesture) return;
     const warp = warps.find((w) => w.id === warpId);
     if (!warp) return;
-    const rect = canvasEl.getBoundingClientRect();
+    const pressed = viewport.toWorld(e.clientX, e.clientY);
     gesture = {
       kind: "warp-drag",
       warpId,
-      offsetX: (e.clientX - rect.left + canvasEl.scrollLeft) / zoom - warp.posX,
-      offsetY: (e.clientY - rect.top + canvasEl.scrollTop) / zoom - warp.posY,
+      offsetX: pressed.x - warp.posX,
+      offsetY: pressed.y - warp.posY,
       ...gestureOrigin(e),
       prevX: warp.posX,
       prevY: warp.posY,
@@ -1031,21 +803,18 @@
 
   function updateDraggedWarp(g: WarpDragGesture, clientX: number, clientY: number) {
     const { warpId, offsetX, offsetY } = g;
-    const rect = canvasEl.getBoundingClientRect();
     // Rounded and held on the board here, which is what the server will store anyway, so
     // the marker does not shift under the pointer when the save answers. No grid snap: a
     // warp marks a point someone chose to come back to, not a slot in a layout, and the
     // key that sets one drops it under the pointer unrounded to any grid.
-    const rawX = (clientX - rect.left + canvasEl.scrollLeft) / zoom - offsetX;
-    const rawY = (clientY - rect.top + canvasEl.scrollTop) / zoom - offsetY;
-    const x = clamp(Math.round(rawX), 0, canvasWidth);
-    const y = clamp(Math.round(rawY), 0, canvasHeight);
+    const pointer = viewport.toWorld(clientX, clientY);
+    const { posX, posY } = viewport.onCanvas({ x: pointer.x - offsetX, y: pointer.y - offsetY });
     // Written through the row rather than into a replacement array, for the reason
     // `updateDraggedCard` gives: this runs on every pointer move.
     for (const w of warps) {
       if (w.id !== warpId) continue;
-      w.posX = x;
-      w.posY = y;
+      w.posX = posX;
+      w.posY = posY;
       break;
     }
   }
@@ -1105,7 +874,7 @@
       // A second draw replaces a rectangle still waiting for a scope: the prompt asks about
       // one rectangle, and the newer one is the one the pointer just meant.
       pendingScopeAreaRect = null;
-      const start = clientToWorld(e.clientX, e.clientY);
+      const start = viewport.toWorld(e.clientX, e.clientY);
       gesture = { kind: "area-draw", ...gestureOrigin(e), startWorldX: start.x, startWorldY: start.y };
       scopeAreaDraft = { x: start.x, y: start.y, w: 0, h: 0 };
       return;
@@ -1113,7 +882,7 @@
     if (!readonly && e.shiftKey) {
       e.preventDefault();
       selection.composerCard = null;
-      const start = clientToWorld(e.clientX, e.clientY);
+      const start = viewport.toWorld(e.clientX, e.clientY);
       gesture = { kind: "marquee", ...gestureOrigin(e), startWorldX: start.x, startWorldY: start.y };
       selectionRect = { x: start.x, y: start.y, w: 0, h: 0 };
       return;
@@ -1154,7 +923,7 @@
         markMoved(g, clientX, clientY);
         selectionRect = selectionRectFromPoints(
           { x: g.startWorldX, y: g.startWorldY },
-          clientToWorld(clientX, clientY),
+          viewport.toWorld(clientX, clientY),
         );
         return;
       case "area-draw":
@@ -1163,7 +932,7 @@
         markMoved(g, clientX, clientY, SCOPE_AREA_DRAW_MIN);
         scopeAreaDraft = selectionRectFromPoints(
           { x: g.startWorldX, y: g.startWorldY },
-          clientToWorld(clientX, clientY),
+          viewport.toWorld(clientX, clientY),
         );
         return;
       case "card-drag":
@@ -1245,7 +1014,7 @@
         case "area-draw": {
           // A draw that went nowhere was an Alt-click, not a rectangle. Dropped without
           // asking anything: a prompt nobody meant to open is worse than no frame.
-          if (g.moved && drafts.drawn) pendingScopeAreaRect = heldScopeAreaRect(drafts.drawn);
+          if (g.moved && drafts.drawn) pendingScopeAreaRect = heldScopeAreaRect(drafts.drawn, canvasRectBounds);
           return;
         }
         case "marquee": {
@@ -1259,7 +1028,6 @@
           updateDraggedCard(g, g.pointer.x, g.pointer.y, true);
           const allIds = [g.cardId, ...g.groupIds];
           const positions = cardPositionPatches(cards, allIds);
-          const sentByCardId = new Map(positions.map((pos) => [pos.cardId, pos]));
           // Measured against the drawn board, which is why the flush comes first: the release
           // snaps the card to the grid by writing `posX`, and reading a box before Svelte has
           // put that on screen measures where the card was a moment ago. A snap is only a few
@@ -1277,16 +1045,11 @@
             await applyScopeAreaChanges(areaChanges);
             return;
           }
-          cards = cards.map((c) => {
-            const sent = sentByCardId.get(c.id);
-            if (!sent) return c;
-            if (c.id === g.cardId && c.posX === sent.posX && c.posY === sent.posY)
-              return { ...c, posX: g.prevX, posY: g.prevY };
-            const prev = g.groupPrevPositions.get(c.id);
-            if (prev && c.posX === sent.posX && c.posY === sent.posY)
-              return { ...c, posX: prev.x, posY: prev.y };
-            return c;
-          });
+          cards = revertedPositions(
+            cards,
+            positions,
+            new Map(g.groupPrevPositions).set(g.cardId, { x: g.prevX, y: g.prevY }),
+          );
           onError("Failed to save card position");
           return;
         }
@@ -1309,12 +1072,7 @@
           if (g.moved && lastPointer) updateDraggedArea(g, lastPointer.x, lastPointer.y, true);
           const dropped = g.moved ? scopeAreas.find((a) => a.id === g.areaId) : undefined;
           if (!dropped) return;
-          const sent = {
-            posX: dropped.posX,
-            posY: dropped.posY,
-            width: dropped.width,
-            height: dropped.height,
-          };
+          const sent = areaBoardRect(dropped);
           const positions = cardPositionPatches(cards, g.cardIds);
           // The flush matters most here. The frame and everything it carries have moved by
           // the same delta, and none of it is on screen yet — so measuring now would test the
@@ -1346,12 +1104,7 @@
           if (g.moved && g.pointer) updateResizedArea(g, g.pointer.x, g.pointer.y, true);
           const resized = g.moved ? scopeAreas.find((a) => a.id === g.areaId) : undefined;
           if (!resized) return;
-          const sent = {
-            posX: resized.posX,
-            posY: resized.posY,
-            width: resized.width,
-            height: resized.height,
-          };
+          const sent = areaBoardRect(resized);
           // Nothing moved, but the frame’s own edge did, and the release snapped it: the
           // cards it just stopped covering are decided by where that edge came to rest.
           await tick();
@@ -1480,13 +1233,13 @@
              rectangle, and `ScopeArea` stays what it is — a frame and its two handles, with
              nothing in it that knows about taskspaces. It follows a drag regardless, because
              the gestures write `posX`/`posY` through the row both of these read. -->
-        {@const groups = fileGroupsByArea.get(area.id) ?? []}
+        {@const groups = areaFiles.fileGroupsByArea.get(area.id) ?? []}
         {#if groups.length > 0}
           <ScopeAreaFiles
             {area}
             {groups}
             {onOpenFile}
-            onNavigate={(taskspaceId, path) => navigateAreaFiles(area.id, taskspaceId, path)}
+            onNavigate={(taskspaceId, path) => areaFiles.navigate(area.id, taskspaceId, path)}
           />
         {/if}
       {/each}
