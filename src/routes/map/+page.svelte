@@ -4,8 +4,13 @@
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { buildTagTree, normalizeTag, CARDS_TRUNCATED_LABEL, type TagNode } from "$lib/tag";
+  import { buildTagTree, normalizeTag } from "$lib/tag";
   import NavIcon from "$lib/components/NavIcon.svelte";
+  import TagPanel from "./components/TagPanel.svelte";
+  import MapZoomControl from "./components/MapZoomControl.svelte";
+  import ActivityStrip from "./components/ActivityStrip.svelte";
+  import MapDescription from "./components/MapDescription.svelte";
+  import { mapHref } from "./lib/map-href.js";
   import { DRAG_THRESHOLD, MAP_DEFAULT_VIEWPORT } from "$lib/constants";
   import {
     buildMapLayout,
@@ -21,21 +26,11 @@
     viewedArea,
     zoomedBy,
     zoomedTo,
-    zoomPercent,
     isDefaultView,
     type MapView,
   } from "./lib/view.js";
   import { tagPartitionIndex, tagPartitionTargets } from "./lib/graph.js";
-  import {
-    childrenShown,
-    tagLineOrigin,
-    visibleTagRows,
-    MAP_HEADER_HEIGHT,
-    TAG_PANEL_LEFT,
-    TAG_PANEL_TOP,
-    TAG_PANEL_WIDTH,
-    TAG_ROW_HEIGHT,
-  } from "./lib/tag-rows.js";
+  import { tagLineOrigin, visibleTagRows, MAP_HEADER_HEIGHT } from "./lib/tag-rows.js";
   import {
     activityCells,
     activityRangeLabel,
@@ -269,46 +264,11 @@
    *  actually reaching somewhere — a tag written on no card dims nothing. */
   const dimming = $derived(links.length > 0);
 
-  const tagHref = (tag: string | null) => {
-    const params = new URLSearchParams();
-    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
-    if (tag) params.set("tag", tag);
-    if (selectedDay) params.set("day", selectedDay);
-    const query = params.toString();
-    return query ? `${base}/map?${query}` : `${base}/map`;
-  };
-  const namespaceHref = (namespaceId: string | null) => {
-    const params = new URLSearchParams();
-    if (namespaceId) params.set("namespaceId", namespaceId);
-    if (selectedTag) params.set("tag", selectedTag);
-    if (selectedDay) params.set("day", selectedDay);
-    const query = params.toString();
-    return query ? `${base}/map?${query}` : `${base}/map`;
-  };
-  const dayHref = (day: string | null) => {
-    const params = new URLSearchParams();
-    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
-    if (selectedTag) params.set("tag", selectedTag);
-    if (day) params.set("day", day);
-    const query = params.toString();
-    return query ? `${base}/map?${query}` : `${base}/map`;
-  };
-
-  const ACTIVITY_COLORS = [
-    "oklch(94% 0.008 250)",
-    "oklch(88% 0.07 250)",
-    "oklch(76% 0.13 250)",
-    "oklch(64% 0.17 250)",
-    "oklch(50% 0.16 250)",
-  ] as const;
-  const activityLabel = (day: string, cards: number) =>
-    `${day}: ${cards} card ${cards === 1 ? "change" : "changes"}`;
-
-  /** Cards, and only cards: this page gathers no file tags, so `total.files` is always zero
-   *  and a two-part label would be one part that never appears. */
-  const countLabel = (node: TagNode) => `${node.total.cards}`;
-  const countDescription = (node: TagNode) =>
-    `${node.total.cards} card${node.total.cards === 1 ? "" : "s"}`;
+  // The page's links to itself: one narrowing changed, the other two carried over.
+  const current = $derived({ namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
+  const tagHref = (tag: string | null) => mapHref(base, { ...current, tag });
+  const namespaceHref = (namespaceId: string | null) => mapHref(base, { ...current, namespaceId });
+  const dayHref = (day: string | null) => mapHref(base, { ...current, day });
 
   /** Whether a partition is drawn at full strength: everything is, until a tag is reaching
    *  somewhere and this partition is not one of the places. */
@@ -331,38 +291,6 @@
   const roomForLabel = (rect: { width: number; height: number }) =>
     rect.width >= LABEL_MIN_WIDTH && rect.height >= LABEL_MIN_HEIGHT;
 
-  /**
-   * Every measurement this page shares with `lib/tag-rows.ts` is written as an inline
-   * `style`, and none of them through `css()`.
-   *
-   * Panda extracts its atomic classes by reading the source, so a length interpolated from a
-   * constant is a length it cannot evaluate where it stands. It emits the class name at
-   * runtime all the same and no rule to go with it, which is silent in the worst way:
-   * nothing fails to build, nothing fails to render, and the row is simply whatever height
-   * its text came out at. That is the measurement every tag line is drawn from, so it is the
-   * one thing here that must not be able to quietly not apply.
-   */
-  const rowStyle = `height: ${TAG_ROW_HEIGHT}px`;
-
-  /**
-   * Pinned to `TAG_ROW_HEIGHT` rather than left to come out of the font, because
-   * `tagRowCenter` multiplies by it to decide where a tag's lines leave from. A row an odd
-   * pixel taller than the constant would put every line below it out by a growing amount.
-   * The height itself is in `rowStyle` — see the note there.
-   */
-  const rowClass = css({
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "0 8px",
-    borderRadius: "2px",
-    color: "ink.black",
-    textDecoration: "none",
-    fontSize: "13px",
-    _hover: { backgroundColor: "neutral.bg" },
-  });
-  const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
-  const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
   /**
    * The links out of the map, which are icons and carry no text of their own.
    *
@@ -398,30 +326,6 @@
 <svelte:head>
   <title>{selectedNamespace ? `Map · ${selectedNamespace.name}` : "Map"}</title>
 </svelte:head>
-
-{#snippet branch(nodes: TagNode[], depth: number)}
-  <ul class={css({ listStyle: "none", margin: "0", padding: "0" })}>
-    {#each nodes as node (node.tag)}
-      <li>
-        <a
-          href={tagHref(selectedTag === node.tag ? null : node.tag)}
-          aria-current={selectedTag === node.tag ? "page" : undefined}
-          style="{rowStyle}; padding-left: {8 + depth * 14}px"
-          class="{rowClass} {selectedTag === node.tag ? activeRowClass : ''}"
-        >
-          <span class={css({ fontFamily: "mono" })}>{node.name}</span>
-          <!-- Bare in the column, spelled out for a reader who cannot see the column. The
-               same split the tag index makes. -->
-          <span class={countClass} aria-hidden="true">{countLabel(node)}</span>
-          <span class={css({ srOnly: true })}>{countDescription(node)}</span>
-        </a>
-        {#if childrenShown(node, depth, selectedTag)}
-          {@render branch(node.children, depth + 1)}
-        {/if}
-      </li>
-    {/each}
-  </ul>
-{/snippet}
 
 <!--
   The window, and nothing but the map in it. The canvas fills it edge to edge and everything
@@ -521,49 +425,14 @@
   </header>
 
   {#if data.drawn.length !== 0}
-    <!--
-      The tag panel, floating at the corner `tagLineOrigin` draws from — so the numbers that
-      place it and the numbers a line starts at are one set of numbers.
-
-      A scroller, which it did not used to be. Beside the map it could be any height and the
-      page scrolled to reach the bottom of it; over a window-height canvas there is no page
-      scroll left to do that, and a tree taller than the window would simply have tags that
-      could not be reached. What it costs is `panelScroll`: the one measured quantity on a
-      page that is otherwise pure arithmetic, and zero until someone actually scrolls.
-
-      No vertical padding and no border, deliberately. `tagRowCenter` counts rows from this
-      element's top edge, so anything between that edge and the first row is an offset every
-      line below would be out by.
-    -->
     {#if tree.length !== 0}
-      <nav
-        aria-label="Tags"
-        onscroll={(event) => (panelScroll = event.currentTarget.scrollTop)}
-        style="left: {TAG_PANEL_LEFT}px; top: {TAG_PANEL_TOP}px; width: {TAG_PANEL_WIDTH}px; max-height: calc(100% - {TAG_PANEL_TOP + 16}px)"
-        class={css({
-          position: "absolute",
-          zIndex: "1",
-          boxSizing: "border-box",
-          overflowY: "auto",
-          overscrollBehavior: "contain",
-          padding: "0 4px",
-          scrollbarWidth: "thin",
-        })}
-      >
-        {@render branch(tree, 0)}
-        {#if data.cardsTruncated}
-          <p
-            class={css({
-              fontSize: "11px",
-              color: "neutral.subtle",
-              padding: "8px",
-              maxWidth: "34ch",
-            })}
-          >
-            {CARDS_TRUNCATED_LABEL}
-          </p>
-        {/if}
-      </nav>
+      <TagPanel
+        {tree}
+        {selectedTag}
+        cardsTruncated={data.cardsTruncated}
+        {tagHref}
+        onScroll={(scrollTop) => (panelScroll = scrollTop)}
+      />
     {/if}
 
       <!--
@@ -717,172 +586,17 @@
           {/each}
         </svg>
 
-        <!-- The board's control, in the board's corner and to the board's limits, so the two
-             pages are zoomed the same way. The reading doubles as the way back: there is no
-             scrollbar here to say how far the map has been moved, so the one thing that
-             always says where you are is also the thing that puts you back. -->
-        <div
-          class={css({
-            position: "absolute",
-            bottom: "12px",
-            right: "12px",
-            display: "flex",
-            alignItems: "center",
-            gap: "1px",
-            backgroundColor: "ink.light",
-            borderRadius: "2px",
-            border: "1px solid token(colors.neutral.dim)",
-            boxShadow: "0 1px 6px rgba(0,0,0,0.018)",
-            overflow: "hidden",
-          })}
-        >
-          {#each [["Zoom out", -data.zoomStep], ["Zoom in", data.zoomStep]] as [label, delta] (label)}
-            <button
-              type="button"
-              aria-label={label as string}
-              onclick={() => (movedView = zoomedBy(view, size, delta as number))}
-              class={css({
-                width: "30px",
-                height: "26px",
-                border: "none",
-                background: "transparent",
-                cursor: "pointer",
-                color: "ink.secondary",
-                padding: "0",
-                fontFamily: "mono",
-                fontSize: "13px",
-                lineHeight: "1",
-              })}
-            >{label === "Zoom in" ? "+" : "−"}</button>
-          {/each}
-          <button
-            type="button"
-            disabled={atDefault}
-            title={atDefault ? "At the size the map opens at" : "Back to the size the map opens at"}
-            onclick={() => (movedView = null)}
-            class={css({
-              padding: "0 8px",
-              height: "26px",
-              minWidth: "48px",
-              fontSize: "11px",
-              fontFamily: "mono",
-              color: "neutral.secondary",
-              background: "transparent",
-              border: "none",
-              borderLeft: "1px solid token(colors.neutral.dim)",
-              cursor: "pointer",
-              _disabled: { cursor: "default" },
-            })}
-          >{zoomPercent(view.zoom)}%</button>
-        </div>
+        <MapZoomControl
+          zoom={view.zoom}
+          zoomStep={data.zoomStep}
+          {atDefault}
+          onZoomBy={(delta) => (movedView = zoomedBy(view, size, delta))}
+          onReset={() => (movedView = null)}
+        />
       </div>
 
-      <section
-        aria-label="Card change activity"
-        class={css({
-          position: "absolute",
-          zIndex: "3",
-          left: "50%",
-          bottom: "12px",
-          transform: "translateX(-50%)",
-          maxWidth: "calc(100% - 150px)",
-          boxSizing: "border-box",
-          padding: "8px 10px",
-          backgroundColor: "ink.light",
-          border: "1px solid token(colors.neutral.dim)",
-          borderRadius: "3px",
-          boxShadow: "0 1px 6px rgba(0,0,0,0.025)",
-          fontFamily: "mono",
-        })}
-      >
-        <div
-          class={css({
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: "12px",
-            marginBottom: "6px",
-            color: "neutral.subtle",
-            fontSize: "10px",
-          })}
-        >
-          <span>{selectedDay ?? activityRange}</span>
-          {#if selectedDay}
-            <a
-              href={dayHref(null)}
-              class={css({
-                color: "neutral.secondary",
-                textDecoration: "none",
-                _hover: { color: "ink.black" },
-              })}
-            >Clear</a>
-          {/if}
-        </div>
-        <div
-          class={css({
-            display: "grid",
-            gridAutoFlow: "column",
-            gridTemplateRows: "repeat(7, 9px)",
-            gridAutoColumns: "9px",
-            gap: "3px",
-            overflowX: "auto",
-            scrollbarWidth: "thin",
-          })}
-        >
-          {#each heatmap as cell (cell.week + "-" + cell.weekday)}
-            {#if cell.day}
-              <a
-                href={dayHref(selectedDay === cell.day ? null : cell.day)}
-                title={activityLabel(cell.day, cell.cards)}
-                aria-label={activityLabel(cell.day, cell.cards)}
-                aria-current={selectedDay === cell.day ? "date" : undefined}
-                style="width: 9px; height: 9px; background-color: {ACTIVITY_COLORS[cell.level]}"
-                class={css({
-                  display: "block",
-                  boxSizing: "border-box",
-                  borderRadius: "1px",
-                  border: "1px solid rgba(0,0,0,0.055)",
-                  _hover: { outline: "1px solid token(colors.ink.black)" },
-                })}
-              ></a>
-            {:else}
-              <span aria-hidden="true" style="width: 9px; height: 9px"></span>
-            {/if}
-          {/each}
-        </div>
-      </section>
+      <ActivityStrip cells={heatmap} {selectedDay} rangeLabel={activityRange} {dayHref} />
 
-    <!--
-      The same map in words, for a reader who cannot see it. An `<svg>` with one label says
-      what the picture is about and nothing about what is in it, and every number on this page
-      is in the picture.
-    -->
-    <div class={css({ srOnly: true })}>
-      <h2>What the map shows</h2>
-      <ul>
-        {#each layout.namespaces as namespace (namespace.id)}
-          <li>
-            {namespace.name}: {namespace.cards} card{namespace.cards === 1 ? "" : "s"}
-            <ul>
-              {#each layout.partitions.filter((b) => b.partition.namespaceId === namespace.id) as placed (placed.partition.id)}
-                <li>
-                  {placed.partition.name}: {placed.partition.cards} card{placed.partition.cards === 1
-                    ? ""
-                    : "s"}
-                </li>
-              {/each}
-            </ul>
-          </li>
-        {/each}
-      </ul>
-      {#if layout.scopes.length > 0}
-        <h2>Scopes across the map</h2>
-        <ul>
-          {#each layout.scopes as scope (scope.id)}
-            <li>{scope.name}: reaches {scope.spokes.length} of them</li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
+    <MapDescription {layout} />
   {/if}
 </main>
