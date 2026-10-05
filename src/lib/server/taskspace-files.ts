@@ -123,6 +123,8 @@ export function listTaskspaceDirectory({
     throw mapFsError(e, "Taskspace directory not found");
   }
 
+  if (subPath.includes("\0"))
+    throw new TaskspaceFilesError("invalid-path", "Path must not contain a NUL byte");
   const segments = subPath.split("/");
   const requested = resolve(realBase, segments.join(sep));
   if (!isWithin(realBase, requested))

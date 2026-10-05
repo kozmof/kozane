@@ -105,6 +105,12 @@ describe("listTaskspaceDirectory", () => {
     );
   });
 
+  it("refuses a path with a NUL byte as an invalid path", () => {
+    expect(() => listTaskspaceDirectory({ baseDir: base, subPath: "src\0" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+  });
+
   it("labels a symlink as itself rather than as its target", () => {
     mkdirSync(join(base, "real"));
     symlinkSync(outside, join(base, "link"), "dir");
