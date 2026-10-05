@@ -7,41 +7,23 @@
   import { goto, replaceState } from "$app/navigation";
   import { page } from "$app/state";
   import {
-    createCard,
-    parseCard,
-    updateCard,
-    patchCardPositions,
     fetchWarpDirectory,
     parseWarpEntries,
-    parseWarp,
-    moveWarp,
-    moveScopeArea,
-    parseScopeArea,
     deleteWarp,
     failureMessage,
   } from "./lib/namespace-api.js";
   import { applyPalette } from "$lib/palette";
-  import {
-    ARROW_DIRECTIONS,
-    clampZoom,
-    maxZIndex,
-    minZIndex,
-    warpInDirection,
-  } from "./lib/namespace-page.js";
-  import type { CardPositionPatch } from "./lib/namespace-page.js";
+  import { ARROW_DIRECTIONS, clampZoom, warpInDirection } from "./lib/namespace-page.js";
   import {
     cardMetrics,
     warpEntriesForNamespace,
     withoutWarp,
     type WarpListEntry,
   } from "$lib/warp-list";
-  import { ARROW_KEYS, type BoardRect } from "$lib/constants";
-  import {
-    hasCommandModifier,
-    isTypingTarget,
-    runKeyBindings,
-    type KeyBinding,
-  } from "./lib/board-keymap.js";
+  import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
+  import { boardKeyBindings } from "./lib/board-bindings.js";
+  import { createBoardPersistence } from "./lib/board-persistence.js";
+  import type { BoardPoint } from "./lib/canvas-viewport.js";
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
@@ -117,9 +99,9 @@
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
   let canvasComponent: {
-    getNewCardPosition: (seq: number) => { posX: number; posY: number };
-    getViewCenter: () => { posX: number; posY: number };
-    getWarpPosition: () => { posX: number; posY: number };
+    getNewCardPosition: (seq: number) => BoardPoint;
+    getViewCenter: () => BoardPoint;
+    getWarpPosition: () => BoardPoint;
     isCenteredOn: (posX: number, posY: number) => boolean;
     centerOn: (posX: number, posY: number) => void;
     recenter: () => void;
@@ -288,10 +270,7 @@
 
     const acted: string[] = [];
     if (taskspace && path) {
-      editor.open(
-        { fetcher: s.fetcher, namespaceId: s.namespaceId, staticFiles },
-        { taskspaceId: taskspace.id, taskspaceName: taskspace.name, path },
-      );
+      editor.open(editorContext, { taskspaceId: taskspace.id, taskspaceName: taskspace.name, path });
       acted.push("taskspace", "path");
     }
     if (card) {
@@ -344,91 +323,15 @@
   // ── Domain action handlers ────────────────────────────────────
   const actions = createNamespaceActions(s);
 
-  // ── Composer submit (needs canvas ref for new card position) ──
-  async function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
-    if (id) {
-      const res = await updateCard(s.mutationFetcher, data.namespace.id, id, { content, partitionId });
-      // The server's own message, not a fixed one: a refusal this composer cannot foresee —
-      // text past `ui.contentMax` above all — is the reason the writer needs, and a bare
-      // "failed" leaves them retyping the same card to find out.
-      if (!res.ok) { s.setError(await failureMessage(res, "Failed to save card")); return; }
-      s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, partitionId } : c));
-      s.selection.composerCard = null;
-    } else {
-      const { posX, posY } = canvasComponent.getNewCardPosition(newCardSeq++);
-      const scopeId = s.sidebar.activeScope;
-      const layerId = s.activeLayerId;
-      // Only cards on the same layer compete for stacking, so the new card starts above them.
-      const zIndex = maxZIndex(s.cards.filter((c) => c.layerId === layerId)) + 1;
-      const res = await createCard(s.mutationFetcher, data.namespace.id, {
-        partitionId,
-        content,
-        posX,
-        posY,
-        zIndex,
-        ...(scopeId && { scopeId }),
-        ...(layerId && { layerId }),
-      });
-      if (!res.ok) { s.setError(await failureMessage(res, "Failed to create card")); return; }
-      // Read rather than trusted, the way the warp and scope-area responses below are: an
-      // annotation on `res.json()` would narrow nothing, and a body missing `posX` would put
-      // this card at `undefined` on the canvas. See `parseCard`.
-      const created = parseCard(await res.json().catch(() => null));
-      // An answer that is not a row, where the fallback is all there is to say.
-      if (!created) { s.setError("Failed to create card"); return; }
-      // The stored row, not a local reconstruction: the server clamps posX/posY to the
-      // canvas, so a card composed at the edge would otherwise jump on the next poll.
-      s.cards = [...s.cards, created];
-      if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
-    }
-  }
+  // ── Saves the canvas and composer hand back ──────────────────
+  // The canvas has already made each edit — moved the card, resized the frame — and these
+  // only save it, answering whether it took so the canvas can put the old value back.
+  const persistence = createBoardPersistence(s);
 
-  async function handlePersistPositions(positions: CardPositionPatch[]): Promise<boolean> {
-    const res = await patchCardPositions(s.mutationFetcher, data.namespace.id, positions);
-    return res.ok;
-  }
-
-  /**
-   * The canvas has already moved the marker, the way a card drag moves a card: this only
-   * saves it, and answers whether the save took so the canvas can put the old position
-   * back if it did not.
-   *
-   * The stored row is written back on the way through for the reason `handleSetWarp` keeps
-   * it — the server clamps to the canvas, so a warp dropped at the very edge would
-   * otherwise sit a pixel off what was kept until the next poll corrected it.
-   */
-  async function handlePersistWarpPosition(
-    warpId: string,
-    position: { posX: number; posY: number },
-  ): Promise<boolean> {
-    const res = await moveWarp(s.mutationFetcher, data.namespace.id, warpId, position);
-    if (!res.ok) return false;
-    const stored = parseWarp(await res.json().catch(() => null));
-    if (stored) s.warps = s.warps.map((w) => (w.id === warpId ? stored : w));
-    return true;
-  }
-
-  /**
-   * The canvas has already moved or resized the frame: this only saves it, and answers
-   * whether the save took so the canvas can put the old rectangle back if it did not.
-   *
-   * The stored row is written back for the reason `handlePersistWarpPosition` keeps it — the
-   * server clamps to the canvas, so a frame dragged to the very edge would otherwise sit a
-   * few pixels off what was kept until the next poll corrected it, and every card it holds
-   * would be filed against the wrong rectangle in the meantime.
-   */
-  async function handlePersistScopeArea(
-    scopeId: string,
-    areaId: string,
-    rect: BoardRect,
-  ): Promise<boolean> {
-    const res = await moveScopeArea(s.mutationFetcher, data.namespace.id, scopeId, areaId, rect);
-    if (!res.ok) return false;
-    const stored = parseScopeArea(await res.json().catch(() => null));
-    // By id, not by scope: a scope may have several frames here, and the one that moved is
-    // the one that was dragged.
-    if (stored) s.scopeAreas = s.scopeAreas.map((a) => (a.id === areaId ? stored : a));
-    return true;
+  function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
+    return persistence.submitComposer(id, content, partitionId, () =>
+      canvasComponent.getNewCardPosition(newCardSeq++),
+    );
   }
 
   /**
@@ -480,16 +383,6 @@
   /** Shows the card's resize handle, or takes it away when it is the one already showing. */
   function handleResizeToggle(cardId: string) {
     s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
-  }
-
-  /**
-   * The canvas has already written the new width onto the card, the way a drag writes a
-   * new position: this only saves it, and answers whether the save took, so the canvas can
-   * put the old width back if it did not.
-   */
-  async function handlePersistWidth(cardId: string, width: number): Promise<boolean> {
-    const res = await updateCard(s.mutationFetcher, data.namespace.id, cardId, { width });
-    return res.ok;
   }
 
   /** Fills the palette in with warps another tab or the CLI has set since the page loaded. */
@@ -610,127 +503,60 @@
       : s.warps;
   }
 
+  /** Centres on the nearest warp toward an arrow key, answering whether there was one. */
+  function warpToward(key: string): boolean {
+    // Measured from where the view is now, so warping works the same whether you arrived
+    // by arrow key or by dragging the canvas.
+    const { posX, posY } = canvasComponent.getViewCenter();
+    const target = warpInDirection(
+      reachableWarps(),
+      { x: posX, y: posY },
+      ARROW_DIRECTIONS[key],
+      s.focusedWarpId,
+    );
+    if (!target) return false;
+    canvasComponent.centerOn(target.posX, target.posY);
+    focusWarp(target.id);
+    return true;
+  }
+
   /**
-   * What each key does on the board, and under what conditions. See `lib/board-keymap.ts`
-   * for why this is a table and what the dispatcher guarantees about it.
+   * What each key does on the board; the table and its order are `lib/board-bindings.ts`.
    *
-   * `$derived` because every binding closes over `data.uiConfig`, which a namespace
-   * navigation replaces — the table has to be the one for the config now in force. The
-   * order is the order the old `if` chain ran in, and two places in it are load-bearing:
-   *
-   * - **The pending-frame Escape comes first**, so a rectangle waiting for a scope is what
-   *   Escape means while one is up, whatever else may be bound to it.
-   * - **The composer owns the keyboard while cards are selected**, which is what keeps the
-   *   warp keys from colliding with its action bar. That was a bare `return` sitting in the
-   *   middle of the chain, catching everything below it; it is now `noSelection` on each of
-   *   those bindings, which says the same thing where the binding is rather than where the
-   *   reader has to remember having passed it.
+   * `$derived` because the shortcuts come from `data.uiConfig`, which a namespace navigation
+   * replaces — the table has to be the one for the config now in force.
    */
-  const keyBindings = $derived<KeyBinding[]>([
-    {
-      // The prompt handles Escape itself while its input holds focus — the typing guard
-      // below stops anything typed there reaching the board — and this is the same key with
-      // focus anywhere else.
-      name: "dismiss pending scope frame",
-      keys: ["Escape"],
-      when: () => pendingScopeAreaRect !== null,
-      preventDefault: true,
-      run: () => {
-        pendingScopeAreaRect = null;
-      },
-    },
-    {
-      name: "focus the card composer",
-      keys: [data.uiConfig.focusCardInputShortcut],
-      when: () => !readonly,
-      preventDefault: true,
-      run: () => {
+  const keyBindings = $derived(
+    boardKeyBindings(data.uiConfig, {
+      readonly,
+      hasPendingFrame: () => pendingScopeAreaRect !== null,
+      noSelection,
+      hasFocusedWarp: () => s.focusedWarpId !== null,
+      dismissPendingFrame: () => (pendingScopeAreaRect = null),
+      focusComposer: () => {
         s.selection.composerCard = null;
         s.selection.selectedCards = new Set();
         s.selection.primarySelectedId = null;
         tick().then(() => composerComponent.focusInput());
       },
-    },
-    {
-      name: "toggle card footers",
-      keys: [data.uiConfig.toggleFootersShortcut],
-      when: noSelection,
-      run: () => {
-        showFooters = !showFooters;
-      },
-    },
-    {
-      name: "toggle side panels",
-      keys: [data.uiConfig.togglePanelsShortcut],
-      when: noSelection,
-      run: () => {
-        sidebarsVisible = !sidebarsVisible;
-      },
-    },
-    {
-      name: "toggle warp markers",
-      keys: [data.uiConfig.toggleWarpsShortcut],
-      when: noSelection,
-      run: () => {
-        warpsVisible = !warpsVisible;
-      },
-    },
-    {
-      // Any of the four arrows opens the same list: the direction is how the hand already
-      // reaches for warping, not a choice of which warps to show.
-      name: "open the warp palette",
-      keys: ARROW_KEYS,
-      shift: true,
-      when: noSelection,
-      preventDefault: true,
-      run: () => {
+      toggleFooters: () => (showFooters = !showFooters),
+      togglePanels: () => (sidebarsVisible = !sidebarsVisible),
+      toggleWarps: () => (warpsVisible = !warpsVisible),
+      openWarpPalette: () => {
         warpPaletteOpen = true;
         void refreshWarpDirectory();
       },
-    },
-    {
-      name: "warp in a direction",
-      keys: ARROW_KEYS,
-      shift: false,
-      when: noSelection,
-      // The one binding that cancels the key conditionally rather than declaring
-      // `preventDefault`: arrowing past the last warp in a direction finds nothing, and the
-      // key has to be left to the browser when it does.
-      run: (e) => {
-        // Measured from where the view is now, so warping works the same whether you
-        // arrived by arrow key or by dragging the canvas.
-        const { posX, posY } = canvasComponent.getViewCenter();
-        const target = warpInDirection(
-          reachableWarps(),
-          { x: posX, y: posY },
-          ARROW_DIRECTIONS[e.key],
-          s.focusedWarpId,
-        );
-        if (!target) return;
-        e.preventDefault();
-        canvasComponent.centerOn(target.posX, target.posY);
-        focusWarp(target.id);
-      },
-    },
-    {
-      name: "set a warp here",
-      keys: [data.uiConfig.setWarpShortcut],
-      when: () => noSelection() && !readonly,
-      run: () => {
+      warpToward,
+      setWarpHere: () => {
         // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
         warpsVisible = true;
         void actions.handleSetWarp(canvasComponent.getWarpPosition());
       },
-    },
-    {
-      name: "remove the focused warp",
-      keys: [data.uiConfig.removeWarpShortcut],
-      when: () => noSelection() && !readonly && s.focusedWarpId !== null,
-      run: () => {
+      removeFocusedWarp: () => {
         if (s.focusedWarpId) void actions.handleRemoveWarp(s.focusedWarpId);
       },
-    },
-  ]);
+    }),
+  );
 
   function handleKeydown(e: KeyboardEvent) {
     // The gates, in order, and none of them is about what a key means — see the note in
@@ -789,7 +615,7 @@
       treeContext={editorContext}
       onOpenFile={!readonly || staticFiles ? handleFrameOpenFile : undefined}
       bind:pendingScopeAreaRect
-      onPersistScopeArea={handlePersistScopeArea}
+      onPersistScopeArea={persistence.persistScopeArea}
       onRemoveScopeArea={actions.handleDeleteScopeArea}
       onScopeMembershipChange={actions.handleScopeMembershipChange}
       bind:warps={s.warps}
@@ -798,7 +624,7 @@
       warpMarkerSize={data.uiConfig.warpMarkerSize}
       initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
       onFocusWarp={focusWarp}
-      onPersistWarpPosition={handlePersistWarpPosition}
+      onPersistWarpPosition={persistence.persistWarpPosition}
       {showFooters}
       bind:zoom
       zoomStep={data.uiConfig.zoomStep}
@@ -808,8 +634,8 @@
       newCardPlacement={data.uiConfig.newCardPlacement}
       fontSize={data.uiConfig.defaultFontSize}
       fontFamily={data.uiConfig.defaultFontFamily}
-      onPersistPositions={handlePersistPositions}
-      onPersistWidth={handlePersistWidth}
+      onPersistPositions={persistence.persistPositions}
+      onPersistWidth={persistence.persistWidth}
       onPositionActivityStart={() => positionActivity.begin()}
       onPositionActivityEnd={() => positionActivity.end()}
       onError={(msg) => (s.lastError = msg)}
@@ -920,7 +746,7 @@
     scopeRels={s.scopeRels}
     taskspaces={s.taskspaces}
     taskspaceTree={s.taskspaceTree}
-    treeContext={{ fetcher: s.fetcher, namespaceId: s.namespaceId, staticFiles }}
+    treeContext={editorContext}
     selectedCards={s.selection.selectedCards}
     bind:activeScope={s.sidebar.activeScope}
     bind:newScopeName={s.sidebar.newScopeName}
@@ -933,17 +759,14 @@
     onCreateTaskspace={actions.handleCreateTaskspace}
     onOpenFile={!readonly || staticFiles
       ? (taskspaceId, taskspaceName, path) =>
-          editor.open(
-            { fetcher: s.fetcher, namespaceId: s.namespaceId, staticFiles },
-            { taskspaceId, taskspaceName, path },
-          )
+          editor.open(editorContext, { taskspaceId, taskspaceName, path })
       : undefined}
     {readonly}
   />
 
   <FileEditor
     session={editor}
-    ctx={{ fetcher: s.fetcher, namespaceId: s.namespaceId, staticFiles }}
+    ctx={editorContext}
     vimMode={data.uiConfig.editorVimMode}
     {readonly}
     bind:width={editorWidth}
