@@ -131,4 +131,39 @@ describe("authenticateRequest", () => {
     );
     expect(outcome.kind === "respond" && outcome.response.status).toBe(401);
   });
+
+  it("lets a valid cookie through a stale key in the query, and drops the stale key", () => {
+    const outcome = authenticateRequest(
+      event({ url: "http://localhost/board?api_key=stale&zoom=2", cookie: KEY.apiKey }),
+      KEY,
+    );
+    expect(outcome.kind).toBe("respond");
+    if (outcome.kind !== "respond") return;
+    expect(outcome.response.status).toBe(303);
+    expect(outcome.response.headers.get("location")).toBe("/board?zoom=2");
+    expect(outcome.response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("serves a non-GET with a stale query key and a valid bearer token", () => {
+    const outcome = authenticateRequest(
+      event({
+        url: "http://localhost/board?api_key=stale",
+        method: "POST",
+        headers: { authorization: `Bearer ${KEY.apiKey}` },
+      }),
+      KEY,
+    );
+    expect(outcome).toEqual({ kind: "pass" });
+  });
+
+  it("does not count a stale query key against a signed-in client", () => {
+    for (let i = 0; i < AUTH_FAILURE_LIMIT + 1; i++) {
+      authenticateRequest(
+        event({ url: "http://localhost/board?api_key=stale", cookie: KEY.apiKey }),
+        KEY,
+      );
+    }
+    const outcome = authenticateRequest(event({ headers: { authorization: "Bearer wrong" } }), KEY);
+    expect(outcome.kind === "respond" && outcome.response.status).toBe(401);
+  });
 });

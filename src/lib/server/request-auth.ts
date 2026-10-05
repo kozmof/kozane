@@ -40,9 +40,18 @@ const PASS: AuthOutcome = { kind: "pass" };
  */
 export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFile): AuthOutcome {
   const queryKey = event.url.searchParams.get("api_key") ?? undefined;
-  const suppliedKey = queryKey ?? requestApiKey(event.request, event.cookies.get(API_KEY_COOKIE));
+  const queryKeyValid = queryKey !== undefined && apiKeysEqual(queryKey, configuredKey.apiKey);
+  // A query key that is wrong does not shadow a valid cookie or header: a bookmarked URL
+  // carrying a key since refreshed would otherwise lock out a browser that is signed in,
+  // and count against its rate limit on every load.
+  const authenticated =
+    queryKeyValid ||
+    apiKeysEqual(
+      requestApiKey(event.request, event.cookies.get(API_KEY_COOKIE)),
+      configuredKey.apiKey,
+    );
 
-  if (!apiKeysEqual(suppliedKey, configuredKey.apiKey)) {
+  if (!authenticated) {
     const retryAfter = recordAuthFailure(event.getClientAddress());
     if (retryAfter) {
       return {
@@ -84,21 +93,22 @@ export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFi
   // that ever puts a key in a URL — `kozane open` opening a browser at the board — and that
   // is a GET. Any other method with a key in the query authenticates and is served, and
   // simply gets no cookie out of it.
-  if (queryKey && event.request.method === "GET") {
-    const cookie = event.cookies.serialize(
-      API_KEY_COOKIE,
-      configuredKey.apiKey,
-      apiKeyCookieOptions(event.url.protocol === "https:"),
-    );
+  //
+  // A stale key in the query, on a request the cookie or header authenticated, is dropped
+  // from the URL the same way but sets no cookie: there is nothing to exchange it for.
+  if (queryKey !== undefined && event.request.method === "GET") {
+    const headers: Record<string, string> = {};
+    if (queryKeyValid) {
+      headers["set-cookie"] = event.cookies.serialize(
+        API_KEY_COOKIE,
+        configuredKey.apiKey,
+        apiKeyCookieOptions(event.url.protocol === "https:"),
+      );
+    }
     const cleanUrl = new URL(event.url);
     cleanUrl.searchParams.delete("api_key");
-    return {
-      kind: "respond",
-      response: new Response(null, {
-        status: 303,
-        headers: { location: cleanUrl.pathname + cleanUrl.search, "set-cookie": cookie },
-      }),
-    };
+    headers.location = cleanUrl.pathname + cleanUrl.search;
+    return { kind: "respond", response: new Response(null, { status: 303, headers }) };
   }
 
   return PASS;
