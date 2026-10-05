@@ -217,9 +217,10 @@ export interface NamespaceDataSnapshot {
   scopes: Scope[];
   scopeRels: ScopeRel[];
   /**
-   * Where those scopes are framed on this board. At most one per scope, and most scopes have
-   * none: an area is drawn only for a scope someone has given a place to. Narrowed the same
-   * way `scopes` is — another namespace's frames are not this board's business.
+   * Where those scopes are framed on this board. Any number per scope, each identified by its
+   * own `id` rather than its `scopeId`, and most scopes have none: an area is drawn only for a
+   * scope someone has given a place to. Narrowed the same way `scopes` is — another
+   * namespace's frames are not this board's business.
    */
   scopeAreas: ScopeArea[];
   glueRels: GlueRel[];

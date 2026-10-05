@@ -166,7 +166,7 @@ export const scopeAreaTable = sqliteTable(
   },
   (t) => [
     // Deliberately not unique. A scope may be framed in several places on one board — a
-    // cluster by the inbox and another by the archive are the same scope in two placeses —
+    // cluster by the inbox and another by the archive are the same scope in two places —
     // so a frame is identified by its own id and nothing here constrains how many share a
     // scope. Leading with `scope_id` so it answers `getScopesInNamespace`'s two questions:
     // "is this scope framed on this board" and, on the prefix alone, "is it framed anywhere".
