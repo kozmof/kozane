@@ -19,6 +19,13 @@ describe("safeNext", () => {
     expect(safeNext("namespace")).toBe("/");
   });
 
+  it("rejects control characters the URL parser strips before resolving", () => {
+    expect(safeNext("/\t/evil.test")).toBe("/");
+    expect(safeNext("/\n/evil.test")).toBe("/");
+    expect(safeNext("/\r/evil.test")).toBe("/");
+    expect(safeNext("/a\\b")).toBe("/");
+  });
+
   it("never loops back to the login page", () => {
     expect(safeNext("/login")).toBe("/");
     expect(safeNext("/login?next=%2F")).toBe("/");
