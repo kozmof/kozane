@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getWorkspaceUiConfig } from "../../db/internal/config.js";
 import { readApiKey } from "./api-key.js";
 import { AUTH_FAILURE_LIMIT, recordAuthFailure } from "./security.js";
-import { rememberSnapshotEtag, unchangedSnapshotEtag } from "./snapshot-etag.js";
+import {
+  rememberSnapshotEtag,
+  snapshotReadSignature,
+  unchangedSnapshotEtag,
+} from "./snapshot-etag.js";
 import { _resetProcessStateForTest } from "./process-state.js";
 
 let root: string;
@@ -39,7 +43,7 @@ describe("_resetProcessStateForTest", () => {
     readApiKey(root);
     for (let i = 0; i <= AUTH_FAILURE_LIMIT; i += 1) recordAuthFailure("1.2.3.4");
     const dbUrl = `file:${join(root, ".kozane", "config.json")}`;
-    rememberSnapshotEtag(dbUrl, "p1", '"tag"');
+    rememberSnapshotEtag(dbUrl, "p1", '"tag"', snapshotReadSignature(dbUrl));
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBe('"tag"');
     expect(recordAuthFailure("1.2.3.4")).not.toBeNull();
 

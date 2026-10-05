@@ -5,6 +5,7 @@ import {
   matchesEtag,
   rememberSnapshotEtag,
   snapshotEtag,
+  snapshotReadSignature,
   unchangedSnapshotEtag,
 } from "$lib/server/snapshot-etag";
 import { loadNamespaceSnapshot } from "../../lib/namespace-snapshot.js";
@@ -32,6 +33,7 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
   // The same read the page load makes, so the board the poll replaces cannot be assembled
   // differently from the board it replaces. `path` is sent as stored — unlike the static
   // export, which nulls it; see the note on `includeTaskspacePaths`.
+  const readFrom = snapshotReadSignature(dbUrl);
   const loaded = await loadNamespaceSnapshot({
     db: locals.db,
     namespaceId,
@@ -47,11 +49,10 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
   // that changed no data would cost one needless refresh, never a wrong one.
   const body = JSON.stringify(loaded.snapshot);
   const etag = snapshotEtag(body);
-  // Recorded against the database signature as it stands *now*, after the read. A write
-  // that landed while the queries ran therefore leaves a signature this tag is not
-  // remembered under, so the next poll reads again rather than trusting a snapshot that
-  // may already have been overtaken.
-  rememberSnapshotEtag(dbUrl, namespaceId, etag);
+  // Remembered only if the signature taken before the read still stands after it. A write
+  // that landed while the queries ran leaves this tag unremembered, so the next poll reads
+  // again rather than being answered 304 with a snapshot that write had overtaken.
+  rememberSnapshotEtag(dbUrl, namespaceId, etag, readFrom);
 
   if (matchesEtag(ifNoneMatch, etag)) {
     return new Response(null, { status: 304, headers: { etag, "cache-control": "no-store" } });

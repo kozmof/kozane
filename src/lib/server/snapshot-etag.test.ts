@@ -7,6 +7,7 @@ import {
   _resetSnapshotEtagsForTest,
   matchesEtag,
   rememberSnapshotEtag,
+  snapshotReadSignature,
   snapshotEtag,
   unchangedSnapshotEtag,
 } from "./snapshot-etag.js";
@@ -63,12 +64,12 @@ describe("unchangedSnapshotEtag", () => {
   });
 
   it("answers the remembered tag while the database file has not moved", () => {
-    rememberSnapshotEtag(dbUrl, "p1", '"tag"');
+    rememberSnapshotEtag(dbUrl, "p1", '"tag"', snapshotReadSignature(dbUrl));
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBe('"tag"');
   });
 
   it("stops answering once the database has been written to", () => {
-    rememberSnapshotEtag(dbUrl, "p1", '"tag"');
+    rememberSnapshotEtag(dbUrl, "p1", '"tag"', snapshotReadSignature(dbUrl));
     // A different length as well as different bytes: `fileSignature` documents that two
     // same-length rewrites inside one filesystem timestamp tick are indistinguishable to
     // it, and this test is about a commit being noticed, not about closing that gap.
@@ -76,10 +77,20 @@ describe("unchangedSnapshotEtag", () => {
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
   });
 
+  it("remembers nothing when the database moved while the read ran", () => {
+    // The read started before the commit and may not have seen it, so its tag must not be
+    // filed under the signature the commit produced — that would answer 304 with the board
+    // as it was before the write, for as long as nothing else moved the file.
+    const readFrom = snapshotReadSignature(dbUrl);
+    touchDatabase("one plus a commit mid-read");
+    rememberSnapshotEtag(dbUrl, "p1", '"pre-commit"', readFrom);
+    expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
+  });
+
   it("keeps one namespace's tag out of another's answer", () => {
-    rememberSnapshotEtag(dbUrl, "p1", '"tag-1"');
+    rememberSnapshotEtag(dbUrl, "p1", '"tag-1"', snapshotReadSignature(dbUrl));
     expect(unchangedSnapshotEtag(dbUrl, "p2")).toBeNull();
-    rememberSnapshotEtag(dbUrl, "p2", '"tag-2"');
+    rememberSnapshotEtag(dbUrl, "p2", '"tag-2"', snapshotReadSignature(dbUrl));
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBe('"tag-1"');
     expect(unchangedSnapshotEtag(dbUrl, "p2")).toBe('"tag-2"');
   });
@@ -87,25 +98,25 @@ describe("unchangedSnapshotEtag", () => {
   it("declines for a database with no file behind it", () => {
     // The in-memory case, and the reason the gate is off in most of the test suite: there
     // is nothing to stat, so there is no way to know the database has not moved.
-    rememberSnapshotEtag(":memory:", "p1", '"tag"');
+    rememberSnapshotEtag(":memory:", "p1", '"tag"', snapshotReadSignature(":memory:"));
     expect(unchangedSnapshotEtag(":memory:", "p1")).toBeNull();
     expect(unchangedSnapshotEtag("file::memory:?cache=shared", "p1")).toBeNull();
   });
 
   it("declines when no database has been opened at all", () => {
-    rememberSnapshotEtag(null, "p1", '"tag"');
+    rememberSnapshotEtag(null, "p1", '"tag"', snapshotReadSignature(null));
     expect(unchangedSnapshotEtag(null, "p1")).toBeNull();
   });
 
   it("declines for a file that is not there", () => {
     const gone = `file:${join(root, "absent.db")}`;
-    rememberSnapshotEtag(gone, "p1", '"tag"');
+    rememberSnapshotEtag(gone, "p1", '"tag"', snapshotReadSignature(gone));
     expect(unchangedSnapshotEtag(gone, "p1")).toBeNull();
   });
 
   it("keeps the most recently used namespaces and drops the idlest", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX + 1 }, (_, i) => `p${i}`);
-    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`, snapshotReadSignature(dbUrl));
 
     expect(unchangedSnapshotEtag(dbUrl, ids[0])).toBeNull();
     for (const id of ids.slice(1)) expect(unchangedSnapshotEtag(dbUrl, id)).toBe(`"${id}"`);
@@ -113,13 +124,13 @@ describe("unchangedSnapshotEtag", () => {
 
   it("counts answering from the cache as a use", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
-    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`, snapshotReadSignature(dbUrl));
 
     // The board left open on `p0`: every poll it makes is answered from here, so nothing
     // ever re-remembers it. Without recency moving on a hit, this read leaves `p0` at the
     // head of the queue and the insert below evicts the one namespace actively being polled.
     expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
-    rememberSnapshotEtag(dbUrl, "fresh", '"fresh"');
+    rememberSnapshotEtag(dbUrl, "fresh", '"fresh"', snapshotReadSignature(dbUrl));
 
     expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
@@ -127,7 +138,7 @@ describe("unchangedSnapshotEtag", () => {
 
   it("does not create an entry for a namespace it has nothing for", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
-    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`, snapshotReadSignature(dbUrl));
 
     // A miss must not take a slot, or probing unknown ids would evict the real entries.
     expect(unchangedSnapshotEtag(dbUrl, "absent")).toBeNull();
@@ -136,12 +147,12 @@ describe("unchangedSnapshotEtag", () => {
 
   it("moves a re-remembered namespace back to the end of the queue", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
-    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`);
+    for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`, snapshotReadSignature(dbUrl));
 
     // Re-remembering `p0` must move it, or the eviction below would order the map by
     // first-seen and discard the namespace being polled rather than the idle one.
-    rememberSnapshotEtag(dbUrl, "p0", '"p0"');
-    rememberSnapshotEtag(dbUrl, "fresh", '"fresh"');
+    rememberSnapshotEtag(dbUrl, "p0", '"p0"', snapshotReadSignature(dbUrl));
+    rememberSnapshotEtag(dbUrl, "fresh", '"fresh"', snapshotReadSignature(dbUrl));
 
     expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();

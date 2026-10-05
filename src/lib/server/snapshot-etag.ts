@@ -87,15 +87,36 @@ export function unchangedSnapshotEtag(dbUrl: string | null, namespaceId: string)
   return entry.etag;
 }
 
-/** Records the tag a full read produced, against the database it was read from. */
+/**
+ * The database's signature as a full read is about to start, for {@link rememberSnapshotEtag}
+ * to compare against once it has finished. Null wherever {@link unchangedSnapshotEtag} would
+ * have no gate to offer.
+ */
+export function snapshotReadSignature(dbUrl: string | null): string | null {
+  return dbUrl ? databaseSignature(dbUrl) : null;
+}
+
+/**
+ * Records the tag a full read produced, against the database it was read from — which is
+ * only known when the signature did not move while the read ran. `readFrom` is
+ * {@link snapshotReadSignature} taken before the first query.
+ *
+ * Reading the signature only afterwards, as this did, paired a commit that landed mid-read
+ * with a tag computed before it: the next poll found the signature unchanged and answered
+ * 304 with the older board, and went on doing so until some unrelated write moved the file.
+ * The snapshot's reads are not one transaction, so such a read can also be torn across
+ * tables. Either way a moved signature means the tag describes no single state of the
+ * database, and nothing is remembered — the next poll reads again.
+ */
 export function rememberSnapshotEtag(
   dbUrl: string | null,
   namespaceId: string,
   etag: string,
+  readFrom: string | null,
 ): void {
-  if (!dbUrl) return;
+  if (!dbUrl || !readFrom) return;
   const signature = databaseSignature(dbUrl);
-  if (!signature) return;
+  if (signature !== readFrom) return;
   // Deleted first so a revisit moves to the end, which is what makes the eviction below
   // least-recently-used rather than first-seen. Same shape as `touchOrCreate` in `lru.ts`,
   // which cannot be used here because the value depends on a signature read at write time.
