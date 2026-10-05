@@ -63,6 +63,16 @@ describe("listTaskspaceDirectory", () => {
     expect(names()).toEqual(["notes.md"]);
   });
 
+  it("refuses to list inside a dot-directory it hides", () => {
+    mkdirSync(join(base, ".git", "refs"), { recursive: true });
+    mkdirSync(join(base, "src"));
+
+    for (const subPath of [".git", ".git/refs", "src/../.git"])
+      expect(() => listTaskspaceDirectory({ baseDir: base, subPath })).toThrow(
+        expect.objectContaining({ reason: "invalid-path" }),
+      );
+  });
+
   it("reports the listed path relative to the taskspace root", () => {
     mkdirSync(join(base, "src", "lib"), { recursive: true });
     writeFileSync(join(base, "src", "lib", "util.ts"), "export {}");

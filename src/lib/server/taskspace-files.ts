@@ -123,9 +123,15 @@ export function listTaskspaceDirectory({
     throw mapFsError(e, "Taskspace directory not found");
   }
 
-  const requested = resolve(realBase, subPath.split("/").join(sep));
+  const segments = subPath.split("/");
+  const requested = resolve(realBase, segments.join(sep));
   if (!isWithin(realBase, requested))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+  // The listing hides dot-entries, so it must not list *inside* one either: naming `.git`
+  // outright would otherwise show what no listing offered, and what `readTaskspaceFile`
+  // already refuses to open. `.` and `..` were settled by the containment check above.
+  if (segments.some((segment) => segment.startsWith(".") && segment !== "." && segment !== ".."))
+    throw new TaskspaceFilesError("invalid-path", "Dot-entries cannot be opened");
 
   let real: string;
   try {
