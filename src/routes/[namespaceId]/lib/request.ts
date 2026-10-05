@@ -12,7 +12,20 @@ export function requireWithinBatchLimit(length: number, key: string): void {
   if (length > BATCH_MAX) throw error(400, `${key} must have at most ${BATCH_MAX} items`);
 }
 
+/**
+ * The body as a JSON object, refused unless it was sent as `application/json`.
+ *
+ * The content type is a CSRF guard rather than a formality. SvelteKit's origin check covers
+ * only the types an HTML form can send; a cross-site `fetch` in `no-cors` mode can still
+ * post a body with *no* content type, which slips past that check, and `request.json()` would
+ * parse it all the same. On a workspace with no API key nothing else stands in the way.
+ * Requiring `application/json` makes any cross-site sender a non-simple request, which the
+ * browser will not send without a CORS preflight this server never grants.
+ */
 export async function readJsonObject(request: Request): Promise<JsonRecord> {
+  const contentType = request.headers.get("content-type") ?? "";
+  if (contentType.split(";", 1)[0].trim().toLowerCase() !== "application/json")
+    throw error(415, "Request body must be sent as application/json");
   let body: unknown;
   try {
     body = await request.json();

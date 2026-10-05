@@ -40,7 +40,9 @@ key file authenticates nobody and answers every request. See
 
 ### Request bodies
 
-Every endpoint that takes a body takes exactly one JSON object. A body that is not valid
+Every endpoint that takes a body takes exactly one JSON object, sent with
+`Content-Type: application/json`; any other content type, or none, is
+`415 Request body must be sent as application/json`. A body that is not valid
 JSON is `400 Request body must be valid JSON`; one that parses to an array or a scalar is
 `400 Request body must be a JSON object`.
 

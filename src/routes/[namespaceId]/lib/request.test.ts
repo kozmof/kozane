@@ -22,18 +22,50 @@ async function expectHttpRejection(promise: Promise<unknown>, status: number, me
 }
 
 describe("readJsonObject", () => {
+  const json = { "content-type": "application/json" };
+
   it("returns parsed JSON objects", async () => {
     const request = new Request("http://localhost", {
       method: "POST",
+      headers: json,
       body: JSON.stringify({ title: "Card" }),
     });
 
     await expect(readJsonObject(request)).resolves.toEqual({ title: "Card" });
   });
 
+  it("accepts parameters and any casing on the content type", async () => {
+    const request = new Request("http://localhost", {
+      method: "POST",
+      headers: { "content-type": "Application/JSON; charset=utf-8" },
+      body: "{}",
+    });
+
+    await expect(readJsonObject(request)).resolves.toEqual({});
+  });
+
+  it("refuses a body not sent as application/json, CORS-simple ones above all", async () => {
+    // No content type is what a cross-site `no-cors` fetch of a Blob sends, and it passes
+    // SvelteKit's origin check; text/plain is the form-safe type a page can also send.
+    const unsent = new Request("http://localhost", {
+      method: "POST",
+      body: new Blob(['{"title":"Card"}']),
+    });
+    expect(unsent.headers.get("content-type")).toBeNull();
+    const plain = new Request("http://localhost", { method: "POST", body: '{"title":"Card"}' });
+
+    for (const request of [unsent, plain])
+      await expectHttpRejection(
+        readJsonObject(request),
+        415,
+        "Request body must be sent as application/json",
+      );
+  });
+
   it("rejects invalid JSON", async () => {
     const request = new Request("http://localhost", {
       method: "POST",
+      headers: json,
       body: "{nope",
     });
 
@@ -42,7 +74,7 @@ describe("readJsonObject", () => {
 
   it("rejects non-object JSON bodies", async () => {
     for (const body of ["null", "[]", '"text"']) {
-      const request = new Request("http://localhost", { method: "POST", body });
+      const request = new Request("http://localhost", { method: "POST", headers: json, body });
       await expectHttpRejection(readJsonObject(request), 400, "Request body must be a JSON object");
     }
   });
