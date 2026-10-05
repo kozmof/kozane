@@ -18,7 +18,7 @@ import {
   type BatchResult,
   type CardBatchResult,
 } from "./utils.js";
-import { withTx, type DB } from "../tx.js";
+import { withTx, type DB, type Tx } from "../tx.js";
 
 // ── Simple operations (no ownership check) ────────────────────────────────────
 
@@ -647,6 +647,35 @@ function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
   return sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} ELSE ${cardTable.zIndex} END`;
 }
 
+/** The layer and stacking of each named card, read in batches like every id-list read. */
+function readStackRows(
+  tx: Tx,
+  cardIds: string[],
+): Promise<{ id: string; layerId: string; zIndex: number }[]> {
+  return readByIds([...new Set(cardIds)], (batch) =>
+    tx
+      .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
+      .from(cardTable)
+      .where(inArray(cardTable.id, batch)),
+  );
+}
+
+/**
+ * The highest and lowest zIndex on a layer, each clamped to 0 so an empty layer starts where
+ * a first card would. Asked of SQLite rather than folded over every card's row in JS.
+ */
+async function layerStackBounds(tx: Tx, layerId: string): Promise<{ top: number; bottom: number }> {
+  const row = await tx
+    .select({
+      top: sql<number | null>`max(${cardTable.zIndex})`,
+      bottom: sql<number | null>`min(${cardTable.zIndex})`,
+    })
+    .from(cardTable)
+    .where(eq(cardTable.layerId, layerId))
+    .get();
+  return { top: Math.max(row?.top ?? 0, 0), bottom: Math.min(row?.bottom ?? 0, 0) };
+}
+
 /**
  * Moves cards onto another layer of their own namespace. Refuses when a card is not in the
  * namespace or the layer is not either — a card must never end up on a layer its namespace
@@ -682,20 +711,11 @@ export async function reassignCardsToLayer({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    const requested = await tx
-      .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
-      .from(cardTable)
-      .where(inArray(cardTable.id, [...new Set(cardIds)]));
+    const requested = await readStackRows(tx, cardIds);
     const arriving = requested.filter((card) => card.layerId !== layerId);
     if (arriving.length === 0) return { ok: true, stacking: [] };
 
-    const resident = await tx
-      .select({ zIndex: cardTable.zIndex })
-      .from(cardTable)
-      .where(eq(cardTable.layerId, layerId));
-    // Folded rather than spread into Math.max, which throws on a large enough layer, and
-    // seeded at 0 so an empty layer starts where a first card would.
-    const top = resident.reduce((highest, { zIndex }) => (zIndex > highest ? zIndex : highest), 0);
+    const { top } = await layerStackBounds(tx, layerId);
 
     // Their order relative to each other is what the user arranged, so it is kept; the id
     // breaks ties the same way the rest of the app does.
@@ -752,10 +772,7 @@ export async function reassignCardsStackOrder({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    const requested = await tx
-      .select({ id: cardTable.id, layerId: cardTable.layerId, zIndex: cardTable.zIndex })
-      .from(cardTable)
-      .where(inArray(cardTable.id, [...new Set(cardIds)]));
+    const requested = await readStackRows(tx, cardIds);
 
     const byLayer = new Map<string, typeof requested>();
     for (const card of requested) {
@@ -766,20 +783,7 @@ export async function reassignCardsStackOrder({
 
     const stacking: CardStacking[] = [];
     for (const [layerId, group] of byLayer) {
-      const resident = await tx
-        .select({ zIndex: cardTable.zIndex })
-        .from(cardTable)
-        .where(eq(cardTable.layerId, layerId));
-      // Folded rather than spread into Math.max/min, which throws on a large enough layer,
-      // and seeded at 0 so an empty layer starts where a first card would.
-      const top = resident.reduce(
-        (highest, { zIndex }) => (zIndex > highest ? zIndex : highest),
-        0,
-      );
-      const bottom = resident.reduce(
-        (lowest, { zIndex }) => (zIndex < lowest ? zIndex : lowest),
-        0,
-      );
+      const { top, bottom } = await layerStackBounds(tx, layerId);
 
       const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));
       if (direction === "front") {
@@ -841,7 +845,8 @@ export async function reassignCardsToPartition({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, cardIds));
+    for (const batch of chunked([...new Set(cardIds)], { size: BATCH_MAX }))
+      await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, batch));
 
     return { ok: true };
   });
