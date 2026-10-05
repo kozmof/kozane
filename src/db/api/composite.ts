@@ -34,7 +34,7 @@
  * sequence, with no partial write to observe, goes beside whichever table it is about.
  */
 
-import { withTx, type DB, type AnyDB } from "../tx.js";
+import { withTx, type DB } from "../tx.js";
 import {
   addCard,
   newCardStamps,
@@ -64,23 +64,12 @@ import {
 } from "./utils.js";
 import { and, eq, inArray } from "drizzle-orm";
 import { partitionTable, cardTable, scopeRelTable } from "../schema.js";
-import type { Card } from "./types.js";
+import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 
-type CreateCardFromTaskspace = {
-  db: DB;
-  taskspaceId: string;
-  partitionId: string;
-  content: string;
-};
-
-type CreateCardInTaskspaceContext = {
-  db: AnyDB;
-  taskspaceId: string;
-  partitionId: string;
-  content: string;
-};
+type CreateCardInTaskspaceContext = NeedsTaskspace & NeedsPartition & { content: string };
+type CreateCardFromTaskspace = CreateCardInTaskspaceContext & { db: DB };
 
 /**
  * Core logic for creating a card within a taskspace context.
@@ -96,6 +85,17 @@ export async function createCardInTaskspaceContext({
 }: CreateCardInTaskspaceContext): Promise<string> {
   const taskspace = await getTaskspace({ db, taskspaceId });
   if (!taskspace) throw new NotFoundError(`Taskspace taskspaceId=${taskspaceId}`);
+  // A taskspace placed in a namespace originates cards only there: otherwise its scope would
+  // gather a card from a board the taskspace has no part in. An unplaced taskspace (null
+  // namespace) is shown on every board, so any partition will do.
+  if (
+    taskspace.namespaceId &&
+    !(await getPartition({ db, namespaceId: taskspace.namespaceId, partitionId }))
+  ) {
+    throw new NotFoundError(
+      `Partition partitionId=${partitionId} in namespace namespaceId=${taskspace.namespaceId}`,
+    );
+  }
   const cardId = await addCard({ db, partitionId, content, taskspaceId });
   if (taskspace.scopeId) {
     await addScopeRel({ db, scopeId: taskspace.scopeId, cardId });

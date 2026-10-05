@@ -171,6 +171,36 @@ describe("createCardInTaskspaceContext", () => {
       createCardInTaskspaceContext({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
+
+  it("throws NotFoundError for a partition outside the taskspace's namespace", async () => {
+    const { db, namespaceId, scopeId } = await setup();
+    const wcId = await addTaskspace({ db, namespaceId, scopeId });
+    const otherNs = await addNamespace({ db, name: "Q" });
+    await addLayer({ db, namespaceId: otherNs, name: "Base", isDefault: true });
+    const foreignPartition = await addPartition({ db, namespaceId: otherNs, name: "F" });
+
+    await expect(
+      createCardInTaskspaceContext({
+        db,
+        taskspaceId: wcId,
+        partitionId: foreignPartition,
+        content: "Hi",
+      }),
+    ).rejects.toThrow(NotFoundError);
+    expect(await getAllCards({ db, partitionId: foreignPartition })).toHaveLength(0);
+  });
+
+  it("accepts any partition for a taskspace with no namespace", async () => {
+    const { db, partitionId } = await setup();
+    const wcId = await addTaskspace({ db });
+    const cardId = await createCardInTaskspaceContext({
+      db,
+      taskspaceId: wcId,
+      partitionId,
+      content: "Hi",
+    });
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
+  });
 });
 
 // createCardFromTaskspace wraps the inner logic in a transaction.
