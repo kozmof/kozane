@@ -57,7 +57,7 @@ let _dbClose: (() => void) | null = null;
  * The URL {@link getDb} opened, or null before it has opened one.
  *
  * Recorded rather than re-derived, because the two are not the same question. `getDBURL()`
- * reads the environment *now*; this is what the connection every request is served from was
+ * reads the environment now; this is what the connection every request is served from was
  * actually built against. They agree today — `kozane open` passes `DATABASE_URL` explicitly,
  * including the temporary file a `--memory` server runs on — but the snapshot ETag gate in
  * `lib/server/snapshot-etag.ts` decides whether to answer 304 without reading the database,

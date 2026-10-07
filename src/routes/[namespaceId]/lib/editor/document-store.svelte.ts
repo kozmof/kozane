@@ -43,41 +43,16 @@ export function sameCaret(a: Caret, b: Caret): boolean {
 }
 
 /**
- * One open file, as the editor holds it.
+ * Bridge one Reed document store to Svelte runes. Refresh a `$state.raw` snapshot from the
+ * store subscription so immutable Reed state keeps its reference identity.
  *
- * Wraps a Reed document store, which is shaped for React's `useSyncExternalStore`
- * (`subscribe` plus `getSnapshot`) rather than for runes. The bridge is one `$state.raw`
- * box refreshed from the subscription: **raw** because a Reed state is immutable and
- * compared by reference, so wrapping it in a deep proxy would cost a traversal of the whole
- * document on every edit to observe changes that never happen in place.
+ * The editor uses line and column coordinates. Columns count UTF-16 code units, while Reed
+ * positions are UTF-8 byte offsets. Convert between them here and use Reed's types directly.
  *
- * Coordinates on this class are `(line, column)` in characters, which is what the render
- * layer and the key handling both work in. Reed positions are byte offsets; the conversion
- * happens here and nowhere else, so no caller has to remember which of the two it holds.
- *
- * Reed's own types are used as they come. Nothing here needs unwrapping: Reed 3 strips the
- * cost algebra at its `api/*` boundary, so `rendering` answers a plain `string | null` and
- * a plain `VisibleLinesResult` where Reed 2 answered those inside a `Costed<L, T>`. What
- * remains branded is `ByteOffset`, which is `number & Brand` and so already assignable to
- * `number`. This module once cast every one of these through `as unknown as`, which was
- * load-bearing against Reed 1 and became a way to not notice a signature changing
- * underneath.
- *
- * Every caret this class hands out or accepts sits on a UTF-8 code-point boundary, which
- * Reed requires of the offsets an edit names and enforces by throwing `RangeError`. A
- * column counts UTF-16 code units, so the two disagree exactly on characters outside the
- * BMP — an emoji is one character, two columns wide — and a caret stepped one column at a
- * time lands between the halves of one. {@link clamp}, {@link columnBefore} and
- * {@link columnAfter} are what keep such a column from reaching a dispatch.
- *
- * Which half it is pulled to is this class's own choice, and since Reed 3.1 that is all the
- * snapping decides. `rendering.lineColumnToPosition` used to hand back the offset such a
- * column encoded to, inside the code point and rejected by the next dispatch; it now
- * resolves a column inside a character to a boundary itself, snapping *forward* to the end
- * of that character. This class snaps backward, to the start — the half a click on the
- * character was aimed at, and the side {@link clamp} and the render layer already agree on.
- * So the snap stays, and a column that escapes it is now a caret on the far side of an
- * emoji rather than an editor taken down by a keystroke.
+ * Keep carets on code-point boundaries. `clamp` , `columnBefore` , and `columnAfter` prevent a
+ * column from splitting a surrogate pair. This editor snaps such columns backward to the
+ * character's start, matching click placement. Reed's own conversion snaps forward, so the
+ * explicit backward snap is still needed.
  */
 export class EditorDocument {
   #store: ReedStore;
@@ -328,7 +303,7 @@ export class EditorDocument {
   /**
    * The text between two carets. O(n) in the document, so not for drawing.
    *
-   * A caret is turned into an index by asking Reed where its *line* starts and adding the
+   * A caret is turned into an index by asking Reed where its line starts and adding the
    * column to that. The line start is the part that cannot be counted here: the previous
    * version summed the lines above and added one apiece for the separator between them,
    * which is a claim about the file's line endings that nothing in this class is in a

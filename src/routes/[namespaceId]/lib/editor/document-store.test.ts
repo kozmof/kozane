@@ -419,7 +419,7 @@ describe("EditorDocument", () => {
 
     it("edits at a caret inside a character at that character's start", () => {
       const d = doc(line);
-      // Reed resolves column 2 to the *end* of the emoji, so an insert that reached it
+      // Reed resolves column 2 to the end of the emoji, so an insert that reached it
       // unsnapped would land after the emoji and not throw doing it. The text is what says
       // which of the two sides was taken; before Reed 3.1 the same column produced an
       // offset inside the code point and a RangeError out of the keystroke handler.

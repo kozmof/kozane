@@ -70,7 +70,7 @@ export async function getAllCards({ db, partitionId }: NeedsPartition): Promise<
 /**
  * The ids of every card in a namespace, and nothing else about them.
  *
- * For the callers that want a namespace's cards only in order to number them —
+ * For the callers that want a namespace's cards only to number them —
  * {@link shortIdMap} draws its short ids against the whole namespace, so the id printed for a
  * card is the one `kozane card show` takes whichever command printed it. That is the entire
  * requirement, and reading the rows to meet it read every card's `content` as well.
@@ -106,9 +106,9 @@ export async function getCardsByPartitions({
  * errors. `readCard` in `snapshot-reader.ts` is the third member of that set, and breaks the
  * same way — so a column reaches the board only when all three have been changed to admit it.
  *
- * The board is what makes this worth spelling out rather than selecting the row and letting
+ * The board makes this worth spelling out rather than selecting the row and letting
  * the extra columns ride along. Precisely: drizzle's `select()` enumerates the columns the
- * *schema* declares, so a column that exists only in the database never arrives here anyway
+ * schema declares, so a column that exists only in the database never arrives here anyway
  * — but one added to `cardTable` did, by the act of adding it. `CardData` is a hand-written
  * `Pick`, so it would not gain the column and nothing on the path would object, and the
  * board is a published surface: served to every browser on page load, and baked into
@@ -134,7 +134,7 @@ const CARD_DATA_SELECTION = {
  * The read behind both halves of the snapshot — the page load and the once-a-second poll —
  * which is the pair `loadNamespaceSnapshot` exists to keep identical. It used to select the
  * whole row: the poll's reader rebuilt each card from the fields it knows, so the two paths
- * already agreed on what the *client* kept, and disagreed on what crossed the wire.
+ * already agreed on what the client kept, and disagreed on what crossed the wire.
  */
 export async function getCardDataByPartitions({
   db,

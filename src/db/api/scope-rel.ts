@@ -72,7 +72,7 @@ type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: 
  * Refused two ways, and a caller that could only be told "no" reported the wrong one. Both
  * of these used to answer `false` for a missing scope and for foreign cards alike, and the
  * DELETE route worded that as "Some cards do not belong to this namespace" — said of a
- * request whose cards were perfectly fine and whose *scope* was the thing that did not
+ * request whose cards were perfectly fine and whose scope was the thing that did not
  * exist.
  */
 export type ScopeMemberResult = BatchResult<"foreign-cards" | "foreign-scope">;

@@ -141,7 +141,7 @@ export interface TaskspaceFileTree {
  * would put a second, staler copy of those columns behind every occurrence of every tag.
  *
  * A file is the other case rather than the same duplication: nothing anywhere holds a row
- * for one, so the taskspace, the path within it, and the line *are* its identity.
+ * for one, so the taskspace, the path within it, and the line are its identity.
  *
  * That is also why only one of the two carries a `line`, though `scanTagLines` computes it
  * for both. A file hit is a place to go and look, and the line is half of where; a card hit
@@ -165,33 +165,16 @@ export interface TagHit {
 }
 
 /**
- * Why a tag scan is not the whole taskspace. {@link WalkTruncation} — the limits any walk of
- * a directory tree stops at — plus the three the tag walk has and the export walk does not:
- * `"budget"`, a file left unread because the scan's byte ceiling was already spent, and the
- * two below. The export has nodes to hang a per-file reason on where this has only the one
- * answer for the whole taskspace, which is why the extra members sit here rather than in the
- * shared half.
+ * Reasons a tag scan may cover only part of a taskspace. Extend `WalkTruncation` with
+ * tag-specific limits and failures.
  *
- * Each is a distinct thing to be told. A file that ran past the budget and one that could
- * not be read at all both produce no tags, and neither is "there are no tags in this file".
+ * `budget` means the scan exhausted its byte allowance. `too-large` means a file exceeded the
+ * per-file limit before it was opened. `unreadable` means reading failed. `hits` means scanning
+ * found more tags than `TAG_SCAN_HITS_MAX` allows, so even the reported counts are lower
+ * bounds.
  *
- * `"hits"` is the one that is not about a file at all. The others say a file was not read;
- * this says reading went fine and produced more tags than one taskspace's scan will carry —
- * see `TAG_SCAN_HITS_MAX`. It is the only reason that makes the *counts* a floor rather than
- * the list, since the tree is built from the hits that were kept.
- *
- * `"too-large"` is the third of those, and was folded into `"unreadable"` until it turned
- * out to be the one a user meets: a file over the per-file cap is refused before it is
- * opened, which is not a failure of any kind, and telling someone their files "could not be
- * read" because one log sits beside their notes describes a broken taskspace rather than a
- * working one. The same distinction `TaskspaceFileNode` already draws between `"too-large"`
- * and `"unreadable"` for the export walk.
- *
- * Here rather than beside the walk that produces it, which is where it was. Both things that
- * print one are far from that walk — `kozane tag list` and the tag index page — and the
- * page cannot reach a module built on `node:fs` at all. A shared vocabulary needs a home
- * both ends can import, and `truncationReasons` in `lib/tag.ts` is the wording that goes
- * with it.
+ * Keep this type shared between the filesystem scanner, CLI, and browser. `truncationReasons`
+ * in `lib/tag.ts` supplies the display text.
  */
 export type TagScanTruncation = WalkTruncation | "budget" | "hits" | "too-large";
 

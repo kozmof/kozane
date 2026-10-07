@@ -65,7 +65,7 @@ const data = {
   otherNamespaces: [],
   uiConfig: {
     // Spread first so a setting added to UiConfig arrives here at its default instead of
-    // failing this file to type-check. Everything below is deliberately *not* a default:
+    // failing this file to type-check. Everything below is deliberately not a default:
     // the page has to read each one rather than hardcode what it happens to be.
     ...DEFAULT_UI_CONFIG,
     defaultFontSize: 11.5,
@@ -201,7 +201,7 @@ describe("Namespace page", () => {
   });
 
   /**
-   * One poll, start to finish. `waitFor` sees a mock the moment it is *called*, which for
+   * One poll, start to finish. `waitFor` sees a mock the moment it is called, which for
    * the snapshot body is well before the page has applied it and released its in-flight
    * guard — so the next poll would be dropped rather than sent.
    */
@@ -1767,7 +1767,7 @@ describe("Warps", () => {
       await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1400));
       expect(canvasOf(container).scrollTop).toBe(700);
       // Selected as well as centred: the middle of a dense board is not a mark, so the pan
-      // alone would not say *which* card the tag matched.
+      // alone would not say which card the tag matched.
       expect(screen.getByRole("button", { name: "Card: Gamma" })).toHaveAttribute(
         "aria-pressed",
         "true",

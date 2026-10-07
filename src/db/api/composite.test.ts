@@ -571,7 +571,7 @@ describe("squashNamespaceCard", () => {
   });
 
   /**
-   * What the pieces do *not* inherit is the source card's history: each is a new card,
+   * What the pieces do not inherit is the source card's history: each is a new card,
    * created when the squash ran. They do share one moment with each other, so `kozane card
    * list --sort created` cannot separate pieces of one squash by a second's drift.
    */

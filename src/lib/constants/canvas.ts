@@ -11,42 +11,15 @@ export const CANVAS_W = 5600;
 export const CANVAS_H = 4000;
 
 /**
- * A whole rectangle in canvas coordinates: where it sits and how big it is.
+ * A complete rectangle in board coordinates, with `posX` , `posY` , `width` , and `height` .
+ * Scope-area storage, request validation, bounds checks, and drag state share this type.
+ * Callers must supply all four values, not a position or size delta.
  *
- * The shape a scope area is, everywhere one is passed about — stored in `scope_area`, read off
- * a request by `readAreaRect`, clamped to the board by `clampRectToBounds`, carried by
- * `createScopeArea` and `moveScopeArea`, and held in the canvas's drag and resize state.
+ * Keep the type in this dependency-free module so database and browser code can import it.
+ * `lib/types.ts` already depends on the database API.
  *
- * Named once because it had been named four times and spelled out nine more. There was
- * `CanvasRect` in `lib/server/canvas.ts`, `Rect` in `db/api/scope-area.ts`, `AreaRect` in
- * `routes/[namespaceId]/lib/scope-area-request.ts`, and the bare
- * `{ posX: number; posY: number; width: number; height: number }` written inline in the two API
- * wrappers, the two action-layer signatures, the page's prop type, and four places in
- * `KozaneCanvas.svelte`. Every one of them meant this, and structural typing meant they all
- * interoperated silently — so nothing was broken by it, and nothing would have caught a fifth
- * spelling that quietly dropped `height` either.
- *
- * Here rather than in `lib/types.ts`, for the reason {@link WARP_HINT_MAX_CHARS} and
- * `PATH_KINDS` are here: both the data layer and the browser need it, and `lib/types.ts`
- * imports from `db/api/types.js`, so putting it there would have `db/api/scope-area.ts`
- * importing back through it. A leaf module is the place both can reach without the tree gaining
- * an edge that points the wrong way.
- *
- * Always whole, never a delta. Both endpoints that take one take all four numbers, which is
- * what `readAreaRect` refuses a partial body for; a caller holding a rectangle never has to ask
- * whether it is an offset from something else.
- *
- * Distinct from `PositionedCardSize` in `routes/[namespaceId]/lib/namespace-page.ts`, which is
- * the same four numbers about a different thing — a card's drawn box rather than a frame on the
- * board. Left separate deliberately: structural identity is not the same as meaning the same
- * thing, and a function that lays cards out should not accept a scope frame because the fields
- * happen to line up.
- *
- * `Board` and not `Canvas` in the name, which matters more than it looks: `CanvasRect` is a
- * type `lib.dom.d.ts` already declares — the 2D context's `clearRect`/`fillRect`/`strokeRect`
- * mixin — so that spelling resolves to the DOM's in any module that uses it without importing
- * it, and the compiler says nothing until the two are compared. "Board" is also what the rest
- * of the project calls this surface.
+ * Keep `PositionedCardSize` separate because it describes a card's drawn box. The `BoardRect`
+ * name also avoids the DOM's unrelated `CanvasRect` type.
  */
 export type BoardRect = { posX: number; posY: number; width: number; height: number };
 

@@ -1,46 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Kozane's HTTP server entry, in place of adapter-node's `build/index.js`.
+ * Kozane's HTTP server entry. It binds to `DEFAULT_SERVER_HOST` unless `HOST` is set.
  *
- * The reason this file exists is one line in the file it replaces:
+ * This entry calls `listen` directly so the default address does not depend on SvelteKit's
+ * module loading order. It imports the application middleware from `build/handler.js` and
+ * supplies timeouts, a 404 fallback, and graceful shutdown.
  *
- *     const host = env('HOST', '0.0.0.0');
+ * The file stays in JavaScript because `build/handler.js` is generated without TypeScript
+ * declarations.
  *
- * A workspace is a person's notes on their own machine, so binding every interface is the
- * wrong default for this application whatever it is for the adapter. `src/hooks.server.ts`
- * used to override it by assigning `process.env.HOST` at module scope and winning a race:
- * `build/index.js` statically imports the handler chunk, that chunk ends in a top-level
- * `await server.init(...)`, and `init()` reaches hooks through a dynamic import — so hooks
- * evaluated before the entry's own body read HOST. It worked. It also depended on two
- * SvelteKit internals staying true, and the failure mode if either changed was a server
- * quietly listening on every interface, with no error to notice.
+ * An explicit `BODY_SIZE_LIMIT` takes precedence. Otherwise, the limit is derived from
+ * `ui.contentMax` before the handler loads.
  *
- * So Kozane calls `listen` itself. The address comes from {@link DEFAULT_SERVER_HOST}, a
- * constant in this repository, and adapter-node's default is never consulted because the
- * module that holds it is never run. There is no ordering left to get wrong.
- *
- * `build/handler.js` is adapter-node's supported embedding entry and is what makes this
- * cheap: the whole SvelteKit application arrives as one middleware, and what is written out
- * below is only the part `index.js` wraps around it — timeouts, the listen call, and a
- * graceful shutdown.
- *
- * Plain JavaScript rather than TypeScript compiled into `dist/`, because it imports
- * `build/handler.js`, which is a build artifact with no declarations and which does not
- * exist when `tsc` runs.
- *
- * ## What is deliberately not ported
- *
- * `BODY_SIZE_LIMIT` is ported in the sense that matters: it is still the adapter reading it,
- * and still overridable, but a workspace that has not set one gets a ceiling sized from
- * `ui.contentMax` instead of the adapter's 512K. See the block below.
- *
- * `index.js` also supports systemd socket activation (`LISTEN_PID`/`LISTEN_FDS`) and
- * `SOCKET_PATH`. Kozane starts its own server on a host and port — `kozane open` spawns
- * this file with HOST and PORT set — and nothing in the CLI, the docs, or the security
- * matrix offers either. Leaving them out is better than carrying an untested reimplementation
- * of them: a half-ported socket activation that mis-parses `LISTEN_FDS` would bind something
- * unexpected, which is the class of bug this file exists to close.
+ * `kozane open` starts this entry with `HOST` and `PORT` . Systemd socket activation and
+ * `SOCKET_PATH` are not supported here.
  */
 
 import http from "node:http";
@@ -49,18 +23,11 @@ import { canonicalLoopbackOrigin } from "../dist/lib/server/security.js";
 import { bodySizeLimitFor, contentMax } from "../dist/lib/server/content-limit.js";
 
 /**
- * The body ceiling has to be in the environment before the handler module is evaluated:
- * adapter-node reads `BODY_SIZE_LIMIT` once, at its own module scope, and its 512K default
- * is smaller than one card of this workspace's `ui.contentMax`. Left at the default, a long
- * card is refused by the transport before any endpoint sees it — see {@link bodySizeLimitFor}.
+ * Set `BODY_SIZE_LIMIT` before importing the handler, which reads it at module scope.
+ * `bodySizeLimitFor` allows room for a card up to the workspace's `ui.contentMax` .
  *
- * Hence the dynamic import below. This is the ordering hazard the note above describes for
- * HOST, met the other way round: not a race won by loading order, but a write that plainly
- * happens first, with the import that reads it moved after it where that is visible.
- *
- * An explicit setting wins, the way it does for every other variable here. A workspace whose
- * config cannot be read falls back to the adapter's own default rather than failing to start:
- * the request that would need the room is the one that reports the problem.
+ * Keep an explicit environment setting. If the workspace configuration cannot be read, leave
+ * the adapter's default in place and let the request hooks report the configuration error.
  */
 if (process.env.BODY_SIZE_LIMIT === undefined) {
   try {
@@ -73,9 +40,8 @@ if (process.env.BODY_SIZE_LIMIT === undefined) {
 const { handler } = await import("../build/handler.js");
 
 /**
- * A non-negative integer from the environment, or `fallback`. Mirrors adapter-node's
- * `timeout_env`, including refusing a value that is not one rather than coercing it: a
- * mistyped `KEEP_ALIVE_TIMEOUT` should say so, not silently become `NaN` milliseconds.
+ * Read a non-negative integer from the environment, or return `fallback` . Reject invalid text
+ * so a mistyped timeout cannot silently become `NaN` .
  */
 function seconds(name, fallback) {
   const raw = process.env[name];
@@ -86,9 +52,8 @@ function seconds(name, fallback) {
   return Number.parseInt(raw, 10);
 }
 
-// Resolved here and written back, so that everything downstream reading `process.env.HOST`
-// — `remoteBindingRequiresApiKey` and `remoteBindingRequiresTls` in `lib/server/security.ts`
-// — sees the address actually bound rather than an absence it has to guess at.
+// Write the resolved host back to the environment so the API-key and TLS checks in
+// `lib/server/security.ts` use the address this server binds to.
 const host = process.env.HOST ?? DEFAULT_SERVER_HOST;
 const port = Number(process.env.PORT ?? DEFAULT_SERVER_PORT);
 process.env.HOST = host;
@@ -99,15 +64,13 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
 }
 
 const server = http.createServer((req, res) => {
-  // Before the handler, because SvelteKit's CSRF check runs inside it and ahead of
-  // `hooks.server.ts`, so there is nowhere further in that a form POST can be rescued. What
-  // is rescued, and what is left refused, is `canonicalLoopbackOrigin`'s to decide.
+  // Canonicalize loopback origins before the handler runs SvelteKit's CSRF check.
+  // `hooks.server.ts` runs too late to do this. `canonicalLoopbackOrigin` decides which origins
+  // qualify.
   const origin = canonicalLoopbackOrigin(req.headers.origin, process.env.ORIGIN, req.headers.host);
   if (origin) req.headers.origin = origin;
 
-  // The `next` adapter-node's middleware calls when no route matched. Under `index.js` polka
-  // supplies one; here it is this, and it has to exist — without it an unmatched request
-  // leaves the socket open until it times out.
+  // End unmatched requests with a 404 so their sockets do not wait for a timeout.
   handler(req, res, () => {
     res.statusCode = 404;
     res.setHeader("content-type", "text/plain");
@@ -125,14 +88,9 @@ const shutdownTimeout = seconds("SHUTDOWN_TIMEOUT", 30);
 let shutdownTimer;
 
 /**
- * Stop accepting work, let what is in flight finish, then exit.
- *
- * Ported from `index.js` rather than reduced to `server.close()`, and the two lines that
- * look redundant are the ones that matter. `close()` alone waits out every keep-alive
- * connection even when it is carrying no request, so a browser with the board open would
- * hold the process for its full timeout — `closeIdleConnections` before it is what makes
- * `kozane open`'s Ctrl-C feel immediate. The timer is the other end: a request that never
- * finishes must not hold the workspace's reservation for ever.
+ * Stop accepting requests, close idle connections, and let active requests finish. Force
+ * shutdown after the timeout so a stuck request cannot hold the workspace reservation
+ * indefinitely.
  */
 function shutdown(reason) {
   if (shutdownTimer) return;
@@ -141,8 +99,7 @@ function shutdown(reason) {
     if (error) return; // already closed
     clearTimeout(shutdownTimer);
     process.emit("sveltekit:shutdown", reason);
-    // `process.once("exit", …)` in hooks.server releases the workspace reservation, and
-    // exiting here is what runs it.
+    // Exiting runs the hook that releases the workspace reservation.
     process.exit(0);
   });
   shutdownTimer = setTimeout(() => {
@@ -151,9 +108,7 @@ function shutdown(reason) {
   }, shutdownTimeout * 1000);
 }
 
-// Once shutting down, retire each connection the moment it falls idle so it cannot pick up
-// another request on the way out. `index.js` also counts requests here, to drive the idle
-// timeout that belongs to socket activation; with that not ported, the count had no reader.
+// During shutdown, close each connection when it becomes idle.
 server.on("request", (req) => {
   req.on("close", () => {
     if (shutdownTimer) server.closeIdleConnections();
@@ -167,8 +122,7 @@ server.listen({ host, port }, () => {
   const address = server.address();
   const shown = typeof address === "object" && address ? address.address : host;
   const bracketed = shown.includes(":") ? `[${shown}]` : shown;
-  // Read back off the socket rather than echoing what was asked for, so the line is evidence
-  // of where the server actually is. `scripts/smoke-production.mjs` asserts against it.
+  // Report the bound socket address for `scripts/smoke-production.mjs` to verify.
   console.log(
     `Listening on http://${bracketed}:${typeof address === "object" && address ? address.port : port}`,
   );

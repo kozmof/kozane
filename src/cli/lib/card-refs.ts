@@ -15,7 +15,7 @@ import { resolveLayerRef } from "./layer-ref.js";
  * fifty lines of plumbing they all reach for. Two things follow from moving it, and the
  * second is the reason:
  *
- * - A command module holds commands. What is left there is what each subcommand *does*,
+ * - A command module holds commands. What is left there is what each subcommand does,
  *   rather than that plus the shared machinery it does it with.
  * - It becomes measurable. `src/cli/commands/**` is excluded from coverage because every
  *   one of those is exercised by spawning `kozane` as a subprocess, which v8 cannot
@@ -42,12 +42,12 @@ export function movedCoordinate(value: number | string, current: number): number
  * Resolve card references together and retain the namespace needed by the guarded glue APIs.
  *
  * Workspace-wide, and it has to be: an abbreviated id is unambiguous or it is not, and the
- * set it is unambiguous *in* is every card there is — `kozane card namespace` moves cards
+ * set it is unambiguous in is every card there is — `kozane card namespace` moves cards
  * between namespaces, so narrowing this to one would make a prefix resolve here that
  * `shortId` had refused to print. What each id is printed back as depends on the same set.
  *
- * What it does not read is every card's *text*. This selected `content` — and `width`,
- * `pos_x`, `pos_y` — for every card in the workspace in order to answer a question about
+ * What it does not read is every card's text. This selected `content` — and `width`,
+ * `pos_x`, `pos_y` — for every card in the workspace to answer a question about
  * ids, so `kozane card delete 3f9a2c1` read every word anyone had written. The two columns
  * resolution needs are here; {@link loadCards} fetches the rest for the handful of cards a
  * command actually acts on.

@@ -33,37 +33,16 @@ export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
 }
 
 /**
- * The scopes one namespace's board has reason to draw.
+ * Return scopes visible on a namespace's board. A scope is visible when it has a card or
+ * taskspace in that namespace, or when no card or taskspace anywhere refers to it.
  *
- * A scope carries no `namespace_id` (see the note on `scopeTable`) — it is placed by what
- * refers to it, so this is three conditions rather than a column read:
+ * Unused scopes appear on every board so a newly created scope remains visible before anything
+ * is assigned to it. `deleteScopeFromNamespace` uses the same condition to allow removal.
  *
- * - a card of this namespace is filed into it, which is the ordinary case;
- * - a taskspace of this namespace is attached to it, which is how a scope with no cards yet
- *   is still this namespace's;
- * - or nothing anywhere refers to it at all, which is a scope somebody has just named and
- *   not yet put anything in. The browser creates one that way — `scope add` in the sidebar
- *   takes a name and nothing else — so leaving these out would have a new scope disappear
- *   from the sidebar on the next poll, a second after it was typed.
- *
- * The last one is the same condition `deleteScopeFromNamespace` treats as disposable, and
- * deliberately so: an unattached scope belongs to nobody, so every namespace can see it and
- * any namespace may clear it away. It stops being shared the moment one of them uses it.
- *
- * One statement rather than the four small reads and a JS filter it could also be. Against
- * a local SQLite file a round trip costs more than any of these subqueries does — the four
- * were measured at roughly twice this — so the shape that reads as more work is the cheaper
- * one. It also keeps the answer a single consistent read rather than four that a CLI write
- * could land between.
- *
- * Spelled with EXISTS rather than IN for two separate reasons, both worth keeping:
- * `taskspace.scope_id` is nullable, and `NOT IN` over a subquery that yields a NULL matches
- * no rows at all — and rewriting the card test as an uncorrelated `IN` driven from this
- * namespace's partitions, which reads like the cheaper shape, measured about half again slower.
- * `EXPLAIN QUERY PLAN` says why: SQLite answers it by building an AUTOMATIC COVERING INDEX
- * over `card` and `scope_rel` on every call, where the correlated form walks
- * `sqlite_autoindex_scope_rel_1` and the primary keys it already has. Both taskspace
- * subqueries lean on `taskspace_scope`, without which they scan the table once per scope.
+ * Use one statement for a consistent read with fewer database round trips. Correlated `EXISTS`
+ * queries use the existing scope relation, taskspace, and primary-key indexes. `NOT IN` would
+ * mishandle nullable `taskspace.scope_id` values. The uncorrelated card query also required
+ * SQLite to build a temporary covering index in measured query plans.
  */
 export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace): Promise<Scope[]> {
   const cardOfThisNamespace = db
@@ -186,7 +165,7 @@ export type ScopePartitionUsage = { scopeId: string; partitionId: string; cards:
  * a scope holding cards from two partitions of one namespace is two lines there, and collapsing
  * them to the namespace would draw one line to a rectangle that is not what the cards are in.
  *
- * Cards only. A taskspace attaches a scope to a *namespace* and to no partition at all, so it
+ * Cards only. A taskspace attaches a scope to a namespace and to no partition at all, so it
  * cannot produce a row here — which is why the map recovers those from
  * {@link getScopeNamespaceUsage} and draws them against the namespace rectangle instead. The two
  * queries are the two ways a scope is placed, and this is the half that has a partition.

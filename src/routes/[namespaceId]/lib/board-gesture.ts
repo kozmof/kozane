@@ -3,49 +3,16 @@ import type { Gesture, HorizontalGesture } from "./gesture.js";
 import type { Point } from "./namespace-page.js";
 
 /**
- * The one gesture the board can have open, as a type that admits one.
+ * Represent the board's active gesture in one mutually exclusive slot. Each union member
+ * carries the data its gesture needs. An exhaustive switch dispatches movement, and one cleanup
+ * path releases resources when a gesture ends or is abandoned.
  *
- * `KozaneCanvas.svelte` held these as eight independent nullable `let`s — `dragState`,
- * `resizeState`, `warpDragState`, `areaDragState`, `areaResizeState`, `panState`,
- * `rectangleSelectionState`, `scopeAreaDrawState` — and they are mutually exclusive. Nothing
- * said so. Eight nullable slots describe 256 states, of which nine are legal, and the
- * illegal ones were kept out by hand in three different ways:
+ * `Gesture` in `gesture.ts` defines the shared press origin and movement threshold. This type
+ * adds each gesture's specific state.
  *
- * - **Each press checked a different subset.** A card press refused while `dragState ||
- *   resizeState`; a frame press while `dragState || resizeState || areaDragState`; a frame
- *   *resize* press while `areaResizeState` alone. No two of those lists agreed, and none of
- *   them was wrong about anything in particular — there was simply no statement of the rule
- *   for them to be checked against.
- * - **`onMove` ran all eight movers on every pointer move** and leaned on each returning at
- *   once unless its own slot was open. The comment above it said what that cost: "the order
- *   is kept rather than reasoned about afresh."
- * - **The canvas press cleared two slots defensively** (`dragState = null; panState = null`)
- *   to cover a release the window never saw. Two of eight, and clearing a card drag that way
- *   skipped `onPositionActivityEnd` — so the one case the defence existed for left the
- *   snapshot poll stood down for the life of the page.
- *
- * A tagged union collapses that to one slot: `switch (gesture.kind)` is exhaustive by
- * compilation, a press is refused by one uniform `if (gesture)`, and abandoning a stale
- * gesture is one function that releases what the press reserved.
- *
- * ## What this is not
- *
- * {@link Gesture} in `gesture.ts` says a press has an origin and may have travelled, and its
- * note is explicit that the *substance* beside those three fields does not generalise —
- * which card, which rectangle, who was in the frame before it moved. That still holds, and
- * this does not try to generalise any of it. Each member below carries its own substance.
- * What is shared is the slot, not the contents.
- *
- * ## Reactivity
- *
- * The component holds this in `$state.raw`, which is load-bearing. The fields written on
- * every pointer move — `moved`, and the `pointer` trackers below — must not be reactive
- * writes: there are sixty of them a second during a drag, and a proxied object would rerun
- * every derivation reading the gesture on each one. `$state.raw` tracks the *assignment*, so
- * picking a gesture up and putting it down drives the rendering while moving it does not.
- * That is the same split the eight separate `let`s had — plain fields for the substance,
- * `$state` for the few ids the board draws from — reached by stating it once instead of
- * maintaining a parallel set of variables.
+ * The component uses `$state.raw` so starting or ending a gesture updates rendering without
+ * making every pointer movement reactive. Fields such as `moved` and pointer trackers change in
+ * place.
  */
 export type BoardGesture =
   | CardDragGesture
@@ -141,7 +108,7 @@ export type AreaDragGesture = Gesture & {
   cardIdSet: Set<string>;
   cardPrevPositions: Map<string, Point>;
   /**
-   * Who was in the *scope* before the drag, across every frame it has on this board — the
+   * Who was in the scope before the drag, across every frame it has on this board — the
    * `before` half of `membershipTransition`. Wider than `cardIds`, which is only what this
    * frame carries: a card sitting in another frame of the same scope is a member throughout,
    * however this one moves. See `cardIdsInScope`.
@@ -201,7 +168,7 @@ export type PanGesture = {
  * The board calls `onPositionActivityStart` from five of the eight presses — the five that
  * move or resize something a poll would otherwise overwrite mid-drag — and nothing wrote
  * down which five. Each release handler simply remembered to call `onPositionActivityEnd`,
- * and the one path that *abandoned* a gesture rather than releasing it did not, because
+ * and the one path that abandoned a gesture rather than releasing it did not, because
  * there was nothing to ask.
  *
  * Asked of the kind rather than carried as a flag on each member, so a new gesture answers

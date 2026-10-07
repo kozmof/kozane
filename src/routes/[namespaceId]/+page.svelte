@@ -70,7 +70,7 @@
   let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
   let warpPaletteOpen = $state(false);
-  // The file palette, opened from a selection. Unlike the warp palette it is up *while*
+  // The file palette, opened from a selection. Unlike the warp palette it is up while
   // cards are selected, which is why the composer is told to stand down below.
   let filePaletteOpen = $state(false);
   // The taskspace file the editor has open, if any. One at a time: the panel is a place to
@@ -274,7 +274,7 @@
       acted.push("taskspace", "path");
     }
     if (card) {
-      // Selected as well as centred, which is what says *which* card the tag matched: the
+      // Selected as well as centred, which is what says which card the tag matched: the
       // pan puts it in the middle of a board that may be dense, and the middle of the screen
       // is not a mark. The same thing `focusWarp` does for `?warp=`, in this page's other
       // vocabulary. Not in a read-only export, where nothing clears a selection again.

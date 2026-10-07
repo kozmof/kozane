@@ -38,7 +38,7 @@ describe("activityCells", () => {
 
   /**
    * The case the old anchor lost. The grid used to be laid forward from the Sunday on or
-   * before *today minus a year*, and 53 weeks from there ends on the Saturday before this
+   * before today minus a year, and 53 weeks from there ends on the Saturday before this
    * one whenever today is a Sunday — so today had no cell, and a day's card changes could
    * be neither seen nor clicked. Every weekday is asserted rather than the Sunday alone,
    * because the two anchors agree on the other six and a single case would have passed

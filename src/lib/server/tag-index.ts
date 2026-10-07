@@ -137,7 +137,7 @@ type LoadTagIndex = {
    * The live page passes `true`. A static export passes `false` unless built with
    * `--include-scoped-files`, for the reason the note on `includeScopes` in
    * `namespace-snapshot.ts` gives at more length: a file hit carries a path inside the
-   * workspace *and* a line of that file's content, and page data baked into a publishable
+   * workspace and a line of that file's content, and page data baked into a publishable
    * export is readable via view-source however the UI draws it. So it has to be decided
    * here, not in the component.
    */
@@ -243,7 +243,7 @@ export async function loadTagIndex({
     // sat inside. Yielding here does not make any one walk interruptible — that needs the
     // boundary functions themselves to be async, which is a change to the module the live
     // file endpoints hold their path containment in — but it does put the board's poll and
-    // every other request back in front of the *next* taskspace rather than behind all of
+    // every other request back in front of the next taskspace rather than behind all of
     // them. A gather of one taskspace is unchanged, and pays nothing for this.
     if (scannedAny) await yieldToEventLoop();
     scannedAny = true;

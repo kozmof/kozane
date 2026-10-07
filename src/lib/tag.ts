@@ -8,79 +8,25 @@ import type { TagHit, TagScanTruncation, TagSource } from "./types.js";
 import { scanUrls, type UrlSpan } from "./urls.js";
 
 /**
- * The tag grammar, in one place, for every caller: a card's text, a taskspace file's text,
- * the CLI, and the browser. A leaf module — nothing here reaches the database or the
- * filesystem, which is what lets `src/cli` (built by `tsc`), the server, and the board all
- * read tags by the same rules rather than by three that agree for now. The presentation
- * helpers at the foot of the file are here for the same reason: the terminal and the page
- * draw the same rows, so they group and label them with the same code.
+ * Use one tag grammar for card text, taskspace files, the CLI, and the browser. This module has
+ * no database or filesystem dependencies. It also supplies the shared grouping and display
+ * helpers.
  *
- * A tag is `:foo`, and subcategorizes as `:foo:bar:baz`:
+ * A tag starts with `:` at the start of text, after whitespace, or after an opening `(` , `[` ,
+ * or `{` . Each segment contains Unicode letters, numbers, underscores, or hyphens. Colons
+ * separate levels, so `:foo:bar:baz` has the body `foo:bar:baz` .
  *
- * ```
- * sigil     :   preceded by start-of-line, whitespace, or an opening ( [ {
- * body      segment ( ":" segment )*
- * segment   [\p{L}\p{N}_-]+
- * ```
+ * Ordinary punctuation such as `12:30` and `key: value` does not open a tag. URL spans are
+ * excluded before scanning, using `lib/urls.ts` , so a tag cannot start inside or continue into
+ * a URL. The index and renderer use this same boundary rule.
  *
- * The sigil and the level separator are the same character, and that is not a conflict: the
- * pattern consumes the sigil once, before the body is matched at all, so `:foo:bar:baz` is
- * read as sigil `:` followed by the body `foo:bar:baz`, which `splitTag` then breaks into
- * `["foo", "bar", "baz"]` the same as any other tag.
+ * A trailing colon does not cancel a tag. `:foo:` contains the tag `foo` followed by
+ * punctuation.
  *
- * A colon is ordinary punctuation too, so two rules keep writing from becoming tagging:
- *
- * - **A word boundary opens it.** The lookbehind requires the sigil to sit at the start of a
- *   line, after whitespace, or after an opening `( [ {`. That is what a colon almost always
- *   fails, on its own, in running text: `12:30`, `key: value`, and `it's 3:45` all have their
- *   colon preceded by a letter or digit, not whitespace, so none of them opens a tag.
- * - **A URL is an address, not text.** A colon inside `http://…` opens nothing, so
- *   `http://example.com/(:foo)` is one link rather than a link and a tag. This rule is not in
- *   the pattern — it cannot be, since the pattern is asked about one candidate at a time and a
- *   URL is a span around it. A URL's characters are therefore *cut out* before the pattern is
- *   asked anything: `scanTagMatches` below reads the gaps between the spans `lib/urls.ts`
- *   finds, each as its own text, so an address is not merely stepped over but is not there to
- *   be read.
- *
- *   Cut rather than stepped over, and the difference is the whole of the rule. Testing where
- *   a match *started* let a candidate that began outside a URL and ran into one through, so
- *   `see http://example.com` gathered a stray tag out of the scheme separator, and
- *   `:todo:https://example.com` gathered `todo:https` — neither of which the card drew,
- *   because the renderer had always cut. The junk tag existed only in the index, and `:todo`,
- *   the one the writer meant, only on the card. Cutting is what the renderer was already
- *   doing; doing it here too is what makes the two one decision rather than two that nearly
- *   agree.
- *
- *   It is a rule of the grammar rather than of the renderer, deliberately:
- *   `lib/text-segments.ts` already had to know where URLs were in order to draw them as
- *   anchors, and when only it knew, a card was gathered under a tag the card itself did not
- *   draw. See `lib/urls.ts`.
- *
- * There is no rule that cancels a tag once opened — nothing plays the role `'quoted'` played
- * for the apostrophe sigil, because a colon does not pair up the way a quote mark does.
- * `:foo:` is just the tag `foo` followed by a colon, the same as `:foo,` or `:foo.` — the
- * trailing lookahead only asks that the body has genuinely run out of word characters, not
- * that anything closes it.
- *
- * ## What that costs, which is a decision and not an oversight
- *
- * A word boundary is the only thing standing between prose and code here, and code uses a
- * leading colon for its own reasons: it is Ruby, Elixir, and Clojure's symbol and keyword
- * syntax (`{ id: :active }`, `[:a, :b]`), and it opens colon emoticons (`:D`, `:P`). Each of
- * those sits at a word boundary — after whitespace or a bracket — so each reads as a tag.
- *
- * That is real noise and it is left in rather than legislated away here, for the same reason
- * the quoted-string noise the apostrophe sigil let through was: excluding it means either
- * knowing which files are Ruby/Elixir/Clojure/Lisp, or narrowing the word-boundary rule in a
- * way that would just as readily swallow a tag someone meant to write, and one grammar for
- * every source is the property this module exists to hold.
- *
- * It is bounded on the other side instead, where the cost actually arises: the file scan does
- * not walk `node_modules`, `build`, `dist`, or the rest of `TAG_SCAN_SKIP_DIRS` in
- * `lib/constants.ts`, where compiled and vendored code lives and where nearly all of this
- * kind of noise was measured for the apostrophe sigil, and the same bound applies here.
- * A symbol literal or emoticon in hand-written source still becomes a tag; it sits in the
- * tree unread, next to the tags that were meant.
+ * The grammar applies uniformly to every source. Symbol literals such as `:active` and
+ * emoticons such as `:D` can therefore become tags. The file scanner skips generated and
+ * dependency directories listed in `TAG_SCAN_SKIP_DIRS` , but does not apply language-specific
+ * exclusions to handwritten source.
  */
 
 // Bounded rather than `+` on purpose, and it does two jobs. It enforces
@@ -93,7 +39,7 @@ import { scanUrls, type UrlSpan } from "./urls.js";
 const SEGMENT = String.raw`[\p{L}\p{N}_-]{1,${TAG_SEGMENT_CHARS_MAX}}`;
 
 /**
- * The two lookaheads are what make an over-long or over-deep candidate *no tag at all*
+ * The two lookaheads are what make an over-long or over-deep candidate no tag at all
  * rather than a truncated one:
  *
  * - `(?![\p{L}\p{N}_-])` — the body must have run out of word characters on its own. A
@@ -101,7 +47,7 @@ const SEGMENT = String.raw`[\p{L}\p{N}_-]{1,${TAG_SEGMENT_CHARS_MAX}}`;
  *   off to is still followed by a letter.
  * - `(?!:[\p{L}\p{N}_-])` — no further level may be waiting. A ninth level fails here and
  *   keeps failing as the engine backs off level by level, so the whole candidate is
- *   rejected. A `:` *not* followed by a word character is allowed through, which is what
+ *   rejected. A `:` not followed by a word character is allowed through, which is what
  *   lets `:foo:` be the tag `foo` with a colon after it.
  */
 const TAG_RE = new RegExp(
@@ -111,32 +57,15 @@ const TAG_RE = new RegExp(
 );
 
 /**
- * A tag as it is compared and indexed: lowercased, so `:Foo` and `:foo` are one tag, and
- * NFC-normalized, so a composed and a decomposed spelling of the same accented or Japanese
- * text do not become two tags in the index over a difference nothing renders — `é` written
- * as one code point and as `e` plus a combining acute, or a kana and its dakuten.
+ * Normalize tag keys by lowercasing, then applying NFC. This merges canonically equivalent
+ * spellings while keeping the original text in each hit's line.
  *
- * NFC and not NFKC, which is the compatibility form, and the difference is visible in
- * exactly the script this limit was set for. NFC folds nothing about *width*: `:Ｆｏｏ` and
- * `:Foo` are two tags here, and so are `:ｱｲｳ` and `:アイウ`, though a Japanese IME will
- * produce either half of each pair depending on how it was left. NFKC would fold both, and
- * is not used because it does not stop there — it also flattens `①` to `1`, `㍿` to five
- * kana, and every ligature and superscript to its parts, so tags that are genuinely
- * different characters would be merged along with the ones that are genuinely the same.
+ * NFC preserves width distinctions, so `:Ｆｏｏ` and `:Foo` remain separate tags, as do `:ｱｲｳ` and
+ * `:アイウ` . NFKC would merge these but would also merge other compatibility characters. A future
+ * width-only normalization should address that case separately.
  *
- * That is a real cost, not a dismissed one: someone who types a tag fullwidth once and
- * halfwidth the next time gets two rows in the index and no hint that they are the same
- * tag. It is accepted here because the alternative is a normalization that merges tags on a
- * rule no one can predict from looking at them. If the width case turns out to be the one
- * people meet, the answer is a width fold of its own rather than NFKC.
- *
- * Lowercased *then* normalized, in that order and not the reverse. Case folding is not
- * guaranteed to preserve normal form — a handful of characters lower onto sequences that are
- * no longer NFC — so composing last is what actually makes the result an NFC string, which is
- * the whole property an index key is wanted for. Both sides of every comparison come through
- * here, so the two orders agree wherever they agree; this one is right where they do not.
- *
- * What was actually typed is not lost — every hit carries the line it sits on.
+ * Normalize after lowercasing so the resulting key is in NFC even when lowercasing changes its
+ * character sequence.
  */
 export function normalizeTag(tag: string): string {
   return tag.toLowerCase().normalize("NFC");
@@ -214,7 +143,7 @@ export function scanTagPositions(text: string, urls?: UrlSpan[]): TagPosition[] 
  *
  * A URL is cut out rather than stepped over. The text is split at the spans `urls` names and
  * each gap is matched as its own text, so the pattern is never shown an address at all — and
- * a candidate running *into* one stops at its edge. `:todo:https://x.com` is the tag `todo`,
+ * a candidate running into one stops at its edge. `:todo:https://x.com` is the tag `todo`,
  * matched in the gap `:todo:`; `see :http://x.com` is no tag, because its gap is `see :` and
  * nothing follows the sigil. See the URL rule in the module note.
  *
@@ -398,7 +327,7 @@ export interface CappedHits<T extends { source: TagSource }> {
  *
  * One pass, keeping and counting together, rather than two `filter`s and two `slice`s. The
  * point of a ceiling is that the answer is small however large the question is, and building
- * two full arrays of everything that matched in order to throw away all but the first two
+ * two full arrays of everything that matched to throw away all but the first two
  * hundred of each spent the whole of what the cap was there to avoid.
  *
  * `keep` is that argument carried one step further back, to where it was still being spent.

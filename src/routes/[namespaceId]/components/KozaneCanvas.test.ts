@@ -170,7 +170,7 @@ describe("KozaneCanvas layer grouping", () => {
   });
 
   // A card whose layer this namespace no longer has must not vanish from the board: it is
-  // drawn on the topmost layer rather than dropped on the floor. Topmost in *stacking*
+  // drawn on the topmost layer rather than dropped on the floor. Topmost in stacking
   // order, which `layerStack` puts the active layer at — not the highest `position`.
   it("draws a card whose layer is missing on the topmost layer of the stack", () => {
     const cards = [card("orphan", "deleted-layer")];
@@ -230,7 +230,7 @@ describe("KozaneCanvas layer grouping", () => {
         cards,
         visibleCards: cards,
         layers: [layer("l1", 0), layer("l2", 1)],
-        // Active is the *lower* layer by position, so a stack that merely followed
+        // Active is the lower layer by position, so a stack that merely followed
         // `position` would put l2 on top and fail this.
         activeLayerId: "l1",
       }),
@@ -703,7 +703,7 @@ const scopeArea = (overrides: Partial<ScopeAreaRow> = {}): ScopeAreaRow => ({
  * The box the browser would give an element, read off the styles the template writes.
  *
  * Unlike {@link layOut}, which pins a box, this one moves when the element does — and only
- * once Svelte has put the new `left`/`top` on screen. That is what makes it the fake worth
+ * once Svelte has put the new `left`/`top` on screen. That makes it the fake worth
  * having for the drop path: the release writes a card's position and then has to measure it,
  * and measuring before the flush reads where the card was rather than where it is.
  */
@@ -1100,7 +1100,7 @@ describe("KozaneCanvas scope area drawing", () => {
     down(surface(container), 100, 100, { altKey: true });
     move(500, 460);
     // Svelte batches the DOM write; a browser flushes it before the next frame, and here it
-    // takes a tick. The assertion is still about the state *before* the release.
+    // takes a tick. The assertion is still about the state before the release.
     await settle();
 
     // Before the release, which is the whole point: a rectangle you cannot see while pulling

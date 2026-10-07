@@ -129,7 +129,7 @@
      *
      * Written by the draw gesture and read by the page, which puts the prompt up beside it.
      * It stays drawn for as long as the prompt is open — the question being asked is "which
-     * scope does *this* belong to", and the rectangle is the half of that the canvas holds.
+     * scope does this belong to", and the rectangle is the half of that the canvas holds.
      * The page clears it on answer or cancel.
      */
     pendingScopeAreaRect: { x: number; y: number; w: number; h: number } | null;

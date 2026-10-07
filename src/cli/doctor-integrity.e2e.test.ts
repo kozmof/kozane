@@ -7,7 +7,7 @@ import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 /**
- * The two checks `kozane doctor` gained that read the database as a *file* rather than
+ * The two checks `kozane doctor` gained that read the database as a file rather than
  * through the schema: what SQLite says about it, and which rows sit past the limits every
  * write path holds new rows to.
  *
@@ -103,7 +103,7 @@ describe("kozane doctor — integrity and limits", () => {
     const { layerId } = await defaults(root);
 
     await withRawDb(root, async (client) => {
-      // Off deliberately, which is what makes this row possible at all. libsql's own client
+      // Off deliberately, which makes this row possible at all. libsql's own client
       // happens to default it on — so the honest reproduction is a connection that turns it
       // off, which is the state `sqlite3` on the command line starts in.
       await client.execute("PRAGMA foreign_keys = OFF");
@@ -123,7 +123,7 @@ describe("kozane doctor — integrity and limits", () => {
   /**
    * How these rows actually arrive: `kozane db import` takes them on purpose, because the
    * limits are settings and a backup from a workspace with different ones must still restore.
-   * The import warns; this check is what makes them findable afterwards.
+   * The import warns; this check makes them findable afterwards.
    */
   it("reports a card past ui.contentMax, one off the canvas, and an over-long name", async () => {
     const root = initWorkspace();

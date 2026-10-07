@@ -27,7 +27,7 @@ export type CardTagHits = {
    *
    * The value is optional, and saying so is the point. Every card carrying a hit has an
    * entry — the loop below writes one before it writes the hit — but `Record<string, string>`
-   * promises that a lookup *cannot* miss, and both readers of this already know it can: one
+   * promises that a lookup cannot miss, and both readers of this already know it can: one
    * arrives through a cache file that may have been written by another build, and the page's
    * copy is narrowed to the cards actually being shown. Each had a hand-written
    * `string | undefined` annotation to work around the type; the type now says it.
@@ -42,7 +42,7 @@ export type CardTagHits = {
    * tree beside the panel, the totals under it — then reads as exact when it is a floor.
    *
    * A plain boolean rather than a member of `TagScanTruncation`, which enumerates the limits
-   * a *taskspace walk* stops at and is reported per taskspace. There is one card query per
+   * a taskspace walk stops at and is reported per taskspace. There is one card query per
    * gather and one ceiling for it to stop at, so a taskspace-shaped record would have no
    * taskspace to name and no second reason to distinguish.
    */
@@ -55,7 +55,7 @@ export type CardTagHits = {
  *
  * A type rather than a runtime guard, so the failure is a build that does not compile rather
  * than a query that quietly stops narrowing. `TAG_SIGIL` is presented in `lib/constants.ts`
- * as *the* character the grammar opens with; a sigil of `_` would turn the prefilter into
+ * as the character the grammar opens with; a sigil of `_` would turn the prefilter into
  * "every card holding at least one character" and every test would still pass, because a
  * prefilter that is too generous is invisible from the outside — it costs a scan, not an
  * answer. Anything else needs an `ESCAPE` clause here before the constant changes.
@@ -91,7 +91,7 @@ type GetCardTagHits = NeedsDB & {
  * row and narrowed below to the rows that could possibly match, and it answers a page a user
  * has navigated to rather than the once-a-second board poll.
  *
- * Read a page at a time, so what the gather *holds* is bounded as well as what it keeps. See
+ * Read a page at a time, so what the gather holds is bounded as well as what it keeps. See
  * {@link TAG_CARD_ROWS_PAGE}: a single statement for the whole workspace brought back the
  * text of every tagged card at once, which is the one read on this path that answered to no
  * ceiling at all.
@@ -114,7 +114,7 @@ export async function getCardTagHits({
   const cardNamespaces: Record<string, string> = {};
   const cardData: CardTagHits["cardData"] = {};
   let truncated = false;
-  // Where the last page ended. Ordered by the same column it pages on, which is what makes
+  // Where the last page ended. Ordered by the same column it pages on, which makes
   // "after this one" mean the next row rather than an arbitrary one — and what makes a hit
   // list built over several statements the same list one statement would have built.
   let after: string | undefined;

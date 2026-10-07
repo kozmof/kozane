@@ -23,9 +23,8 @@ import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 
-// Every command here targets the on-disk workspace database via `dbUrl`, never the
-// session database from `commandDbUrl`: migrations, backups, and restores belong to
-// the persistent file even while a `kozane open --memory` server is running.
+// Use `dbUrl` for the persistent workspace database. Migrations, backups, and restores must
+// target that file even while a `kozane open --memory` session is running.
 
 type DbExportOptions = {
   pretty?: boolean;
@@ -170,11 +169,9 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
     for (const [table, count] of Object.entries(counts)) {
       console.log(`${table}: ${count}`);
     }
-    // After the counts, and after the import has committed: these are rows the import
-    // accepted on purpose — see `dumpLimitWarnings` for why a policy difference between the
-    // exporting and importing workspace must not fail a restore — so they are reported as
-    // something to know about the database that now exists, not as a reason it failed.
-    // `kozane doctor` reports the same conditions later.
+    // Report limit warnings after the import commits. `dumpLimitWarnings` explains why imports
+    // retain rows that exceed local policy. `kozane doctor` can report the same conditions
+    // later.
     const warnings = dumpLimitWarnings(parsed, {
       contentMax: contentMaxForRoot(workspaceRoot),
       ...canvasBoundsForRoot(workspaceRoot),

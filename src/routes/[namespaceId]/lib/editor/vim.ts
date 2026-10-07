@@ -19,7 +19,7 @@ export function createVimState(): VimState {
 }
 
 /**
- * Normal mode sits the caret *on* a character rather than between two, so the last column
+ * Normal mode sits the caret on a character rather than between two, so the last column
  * of a line is its last character and not the position after it. An empty line has the one
  * position, which is why the floor is zero rather than a negative.
  *
@@ -60,7 +60,7 @@ function wordForward(doc: EditorDocument, from: Caret): Caret {
       line++;
       text = doc.lineText(line);
       column = 0;
-      // A blank line is a word for `w`, which is what makes it a way through a paragraph
+      // A blank line is a word for `w`, which makes it a way through a paragraph
       // break rather than something that skips over one.
       if (text.length === 0) return { line, column: 0 };
       continue;

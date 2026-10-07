@@ -5,7 +5,7 @@
  * the request was made. Applying that over an edit the user has since started would undo
  * it on screen, so a poll stands down while anything is in flight.
  *
- * The count alone is not enough. A whole begin/end pair can land *while* a request is
+ * The count alone is not enough. A whole begin/end pair can land while a request is
  * outstanding — a card dropped and saved inside one second is exactly that — and by the
  * time the response arrives the count is back to zero, so the guard that stood down before
  * the request would wave the same stale snapshot through after it. {@link version} is what

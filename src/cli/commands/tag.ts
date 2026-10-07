@@ -234,7 +234,7 @@ async function printCardHits(
  * The file rows, under the taskspace each was found in.
  *
  * Grouped by taskspace first, because a path is relative to one and says nothing on its own:
- * a namespace draws its own taskspaces *and* every unplaced one, so `README.md:2` printed bare
+ * a namespace draws its own taskspaces and every unplaced one, so `README.md:2` printed bare
  * was two indistinguishable rows for two different files as soon as a workspace had a second
  * taskspace. The tag index page heads its file rows the same way, through the same
  * `groupHitsByTaskspace` — only the drawing below differs, which is the whole of what the

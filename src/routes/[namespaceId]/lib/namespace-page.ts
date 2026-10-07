@@ -324,7 +324,7 @@ export function movedRect(rect: WorldRect, dx: number, dy: number, bounds: RectB
 
 /**
  * A scope area resized by its bottom-right handle. The origin stays put and only the far
- * corner follows the pointer, which is what makes the gesture readable — a frame that moved
+ * corner follows the pointer, which makes the gesture readable — a frame that moved
  * while being resized would take its cards' relationship to it with it.
  *
  * Mirrors `resizedCardWidth`: the delta is divided by the zoom, the grid snap is applied on

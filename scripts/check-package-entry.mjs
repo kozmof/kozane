@@ -4,25 +4,14 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 /**
- * What the published tarball must and must not carry, for the server to start at all and to
- * start on the right interface.
+ * Check that the published package contains a usable server with the intended default binding.
  *
- * Two invariants, and the second is why this is a script rather than another `grep -c` in
- * `package.json`:
+ * 1. Exclude adapter-node's `build/index.js` , which defaults to binding all interfaces. Kozane
+ * uses `bin/server.js` and `DEFAULT_SERVER_HOST` instead.
+ * 2. Include `build/handler.js` , `build/env.js` , and `build/shims.js` , which the server
+ * needs to start.
  *
- * 1. **`build/index.js` is excluded.** It is adapter-node's own entry, and it binds
- *    `env('HOST', '0.0.0.0')` — every interface, by default, for a workspace that is one
- *    person's notes. `bin/server.js` replaces it and binds `DEFAULT_SERVER_HOST` instead.
- *    Shipping both leaves the footgun one `node build/index.js` away, so `files` excludes it
- *    with a negation pattern, and a negation pattern is exactly the kind of thing that stops
- *    working quietly when someone reorders the array or adds an entry above it.
- *
- * 2. **The pieces `bin/server.js` needs are present.** Asserting only the absence would pass
- *    just as happily if `build/` were empty, or if `handler.js` were dropped along with it —
- *    a tarball that installs and then cannot serve a request. `handler.js` is what
- *    `bin/server.js` imports; `env.js` and `shims.js` are what *it* imports in turn.
- *
- * Run from `pnpm pack:check`, against the tarball `pack:tmp` leaves in the temp directory.
+ * `pnpm pack:check` runs this against the tarball produced by `pack:tmp` .
  */
 
 const packageRoot = resolve(import.meta.dirname, "..");

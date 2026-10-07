@@ -92,7 +92,7 @@ describe("loadNamespaceSnapshot", () => {
    * names, not as the row it came from.
    *
    * This is the guard against going back to selecting the row. Drizzle's `select()`
-   * enumerates the columns the *schema* declares — it does not emit `SELECT *` — so a column
+   * enumerates the columns the schema declares — it does not emit `SELECT *` — so a column
    * that exists only in the database was never going to arrive here. The one that would is a
    * column added to `cardTable`, and that reached the wire by the act of adding it: nothing
    * in the snapshot path named the card fields, so nothing objected. Verified both ways

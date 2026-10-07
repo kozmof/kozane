@@ -61,7 +61,7 @@ describe("server runtime state", () => {
     expect(activeServerProcess(root)?.pid).toBe(process.pid);
   });
 
-  // What a CLI command reads to find a running memory server's database. That it *is* read
+  // What a CLI command reads to find a running memory server's database. That it is read
   // that way is `commandDbUrl`'s own test, in `cli/lib/config.test.ts` — asserting it from
   // here meant a module below both front ends reaching up into one of them.
   it("exposes the active memory database", () => {

@@ -2,7 +2,7 @@
  * How much the disposable caches in `.kozane/` will hold before they are rebuilt rather than read.
  *
  * Every one of these bounds a file that owns nothing: `docs/cache.md` is the statement of
- * that, and it is what makes an oversized or unreadable cache a rebuild rather than an error.
+ * that, and it makes an oversized or unreadable cache a rebuild rather than an error.
  * The snapshot ETag map is here too — it is not on disk, but it is the same kind of thing: a
  * remembered answer with a ceiling on how many are kept.
  */
@@ -38,7 +38,7 @@ export const TAG_CACHE_DIRS_MAX = 64;
  *
  * That one bounds how many directories are held and says nothing about how many files any
  * one of them holds, and the two are not the same guarantee. `pruneStale` is the precise
- * cleanup and needs a directory to have been listed *to the end* before it may call an
+ * cleanup and needs a directory to have been listed to the end before it may call an
  * entry stale — so a taskspace large enough that every scan of it stops at a ceiling is
  * exactly the one nothing prunes, and its entries accumulated across scans for the life of
  * the process. A million-file checkout walked twenty thousand nodes at a time reaches all
@@ -50,7 +50,7 @@ export const TAG_CACHE_DIRS_MAX = 64;
  * current scan has just parsed. A lower ceiling would evict the front of the very walk
  * filling it, and every scan would re-read the files the one before it had already read.
  *
- * Least-recently-used within the directory, and a cache *hit* touches its entry — which it
+ * Least-recently-used within the directory, and a cache hit touches its entry — which it
  * has to, since a hit writes nothing and would otherwise sink to the front and be evicted
  * ahead of a file that changed. After a scan the order is that scan's walk order, so what
  * is kept is what was most recently seen, and what is dropped is what the taskspace no
@@ -59,43 +59,15 @@ export const TAG_CACHE_DIRS_MAX = 64;
 export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
 
 /**
- * How large the gathered tag index on disk may be before it is ignored and rebuilt.
+ * Maximum size of the saved tag index. Ignore an oversized cache and rebuild the index.
  *
- * The one ceiling the cache did not have. {@link TAG_CACHE_SCOPES_MAX} and
- * {@link TAG_CACHE_DIRS_MAX} bound how many entries it keeps and neither bounds how large
- * one is: a scope holds every tagged card in the workspace with a line of each, and a
- * directory holds every parsed file with the tags of each, so the file's size follows the
- * workspace's rather than anything set here.
+ * Entry-count limits do not bound the size of each scope or directory record. This byte limit
+ * bounds the synchronous file read and JSON parsing that page loads and CLI commands wait for.
  *
- * It has to be bounded because of where it is read. `readTagCache` is `readFileSync` and
- * `JSON.parse` on the path a page load and a `kozane tag` run wait on — the same synchronous
- * blocking {@link TAG_SCAN_WORKSPACE_BYTES_MAX} exists to bound for the walk, which was
- * bounded while the read of what the walk produced was not. A cache large enough to cost
- * more to read than the gather it saves is worse than no cache.
- *
- * Ignored and rebuilt rather than trimmed, because trimming means deciding which scope or
- * which directory to drop while holding the parsed file this is trying to avoid parsing.
- * Rebuilding writes a smaller file only if the workspace has shrunk, so a workspace that is
- * genuinely this size pays a cold read every time — which is the honest outcome, and the
- * signal that {@code ?files=0} or a narrower namespace is the answer rather than a bigger
- * ceiling.
- *
- * Set above what a realistic workspace reaches and no further, which is a smaller number than
- * it looks: {@link TAG_CACHE_SCOPES_MAX} scopes at the megabyte a scope is reckoned at is
- * sixteen, and this is that with room to spare. It was four times higher, on the reasoning
- * that a ceiling should be generous — but generosity is the wrong direction for this one.
- * Every byte under it is a byte that may be read synchronously while a page load waits, so
- * the ceiling *is* the worst case it permits, and setting it far above the workspaces that
- * exist only widens the window in which the cache costs more than the gather it replaces.
- * A workspace that genuinely exceeds this is told the truth by paying a cold read, and that
- * is a better answer than a hundred-millisecond stall on every navigation.
- *
- * Checked when the file is written as well as when it is read, and the write side is what
- * makes "pays a cold read every time" true rather than "pays a cold read *and* a wasted
- * write every time". Read alone, the ceiling refuses a file that the very next gather
- * serializes and lays down again — megabytes through `JSON.stringify` and out to disk, once
- * per page load, to produce a file this build has already decided it will never read. A
- * cache too large to be read is not a cache, so it is not written either.
+ * Apply the limit on writes too, so a gather cannot repeatedly serialize and save a cache that
+ * the next read will reject. A workspace whose index remains over the limit requires a fresh
+ * gather each time. Narrowing the namespace or disabling file scanning with `?files=0` can
+ * reduce that work.
  */
 export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 

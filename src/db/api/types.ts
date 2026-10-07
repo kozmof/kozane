@@ -33,7 +33,7 @@ export type NeedsTx = { db: Tx };
  * is a correction and not a tidy-up: `NeedsNamespacePartition` used to be written
  * `NeedsNamespace & { partitionId: string }`, so `{ partitionId: string }` appeared twice
  * and the two spellings were held together by nobody. TypeScript is structural — the two
- * were the *same type* either way, which means a function declaring one has always accepted
+ * were the same type either way, which means a function declaring one has always accepted
  * the other, and the name never drew a distinction the compiler could check. Composing them
  * says that outright. A genuine distinction would need a brand, the way `DB` and `Tx` are
  * branded in `db/tx.ts`, and nothing here wants one: an argument bag is not a capability.

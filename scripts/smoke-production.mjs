@@ -66,24 +66,14 @@ function externalAddress() {
 }
 
 /**
- * The built server, started with no HOST at all, must bind loopback and nothing else.
- *
- * `src/hooks.server.ts` sets `process.env.HOST ??= "127.0.0.1"` so that running the build
- * directly cannot put a workspace on every interface — adapter-node's own default is
- * `0.0.0.0`. Whether that assignment lands in time is not something the source can show:
- * it depends on SvelteKit reaching hooks from a top-level-awaited `server.init()`, which is
- * a framework internal and could stop being true in a minor release. The failure would be
- * silent, and would be an exposed server.
- *
- * So it is checked the only way it can be — by starting the thing and looking at the socket.
- * Every other case in this file passes HOST explicitly, which is exactly what this one must
- * not do.
+ * Verify that the built server defaults to loopback when `HOST` is absent. Start
+ * `bin/server.js` and inspect the listening socket to check the actual binding. The other cases
+ * pass `HOST` explicitly.
  */
 async function checkLoopbackDefault(port) {
   const child = spawn(process.execPath, [join(packageRoot, "bin", "server.js")], {
     cwd: packageRoot,
-    // HOST is deliberately absent. Copied field by field rather than spread-and-delete so a
-    // HOST in the ambient environment cannot make this pass by accident.
+    // Copy environment fields explicitly so an inherited `HOST` cannot affect this test.
     env: {
       PATH: process.env.PATH,
       HOME: process.env.HOME,
@@ -106,8 +96,7 @@ async function checkLoopbackDefault(port) {
       setTimeout(() => fail(new Error(`server did not start\n${output}`)), 20_000);
     });
 
-    // The log line is `httpServer.address()`, so it reports the address actually bound
-    // rather than the one that was asked for.
+    // The log reports the socket's bound address.
     if (!listening.includes("127.0.0.1")) {
       throw new Error(`server with no HOST did not bind loopback: ${listening.trim()}`);
     }
@@ -148,8 +137,8 @@ try {
       KOZANE_WORKSPACE_ROOT: workspace,
       HOST: "127.0.0.1",
       PORT: port,
-      // What `kozane open` sets for a loopback binding, and what the form checks below are
-      // about: without it the Node adapter assumes https and refuses every form POST.
+      // Match the loopback `ORIGIN` set by `kozane open` so SvelteKit accepts form POSTs over
+      // HTTP.
       ORIGIN: baseUrl,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -178,11 +167,9 @@ try {
     throw new Error(`unauthenticated health request returned ${unauthorized.status}`);
   }
 
-  // The workspace page's create-namespace form, which is the whole of the application's
-  // HTML-form surface and so the whole of what SvelteKit's CSRF check governs. `bin/server.js`
-  // canonicalizes a loopback origin before the handler sees it, and only unit tests reach
-  // that function — a server started with the wrong `ORIGIN` plumbing fails nowhere else.
-  // node:http preserves Host, unlike Node fetch, so this can model a forwarded request.
+  // Exercise the create-namespace form through the built server to check loopback origin
+  // normalization before SvelteKit's CSRF check. Use `node:http` to control the Host header and
+  // model a forwarded request.
   const createNamespace = (origin, host) =>
     new Promise((resolveRequest, rejectRequest) => {
       const req = request(
@@ -211,8 +198,7 @@ try {
       req.end(new URLSearchParams({ name: `Smoke ${origin}` }).toString());
     });
 
-  // The address bar says `localhost`; `ORIGIN` says `127.0.0.1`. Same server, and this is
-  // the spelling the browser sends.
+  // Use `localhost` in the request origin while `ORIGIN` uses `127.0.0.1` .
   const otherSpelling = await createNamespace(`http://localhost:${port}`);
   if (!otherSpelling.ok) {
     throw new Error(
@@ -231,7 +217,7 @@ try {
     throw new Error(`cross-site forwarded form returned ${mismatched.status}`);
   }
 
-  // And the reason it is a rewrite rather than the check turned off.
+  // Verify that mismatched origins are still rejected.
   for (const origin of [`http://localhost:${Number(port) + 1}`, "http://attacker.example"]) {
     const foreign = await createNamespace(origin);
     if (foreign.status !== 403) {
@@ -241,7 +227,7 @@ try {
 
   cli("db", "export");
 
-  // Last, and against a stopped server: it needs the port to itself.
+  // Run this after stopping the server because it needs the same port.
   if (server && !server.killed) server.kill("SIGTERM");
   await new Promise((done) => server.on("exit", done));
   await checkLoopbackDefault(Number(port) + 1);

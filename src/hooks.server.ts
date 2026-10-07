@@ -79,7 +79,7 @@ let exitHookInstalled = false;
 let runtimeStateConflict: string | null = null;
 let conflictCheckedAt = 0;
 /**
- * How long a refusal about the *workspace* is trusted before it is established again.
+ * How long a refusal about the workspace is trusted before it is established again.
  *
  * Both of the two gates that can clear without this process restarting: another server
  * holding the workspace ({@link registerRuntimeState}) and a database behind this version
@@ -139,7 +139,7 @@ function registerRuntimeState(root: string | null): string | null {
  * migrate it out from under a running server is `kozane db migrate`, which refuses to run
  * while one holds the workspace.
  *
- * A *stale* answer is re-checked on the interval {@link WORKSPACE_RECHECK_MS} sets, for the
+ * A stale answer is re-checked on the interval {@link WORKSPACE_RECHECK_MS} sets, for the
  * same reason the runtime-state conflict is: `kozane db migrate` in another terminal is the
  * ordinary way out of this state, and a latched answer would go on refusing every request
  * until the server was restarted too.
@@ -210,21 +210,21 @@ async function checkMigrations(): Promise<string | null> {
  * The gates every request passes, in the order they run. The order is load-bearing, so it
  * is written down rather than left to be inferred from the sequence below:
  *
- * 1. **SSG bypass.** A prerender pass is not a request from anyone and skips the rest.
- * 2. **Runtime state.** Another server holding this workspace is a condition of the
+ * 1. SSG bypass. A prerender pass is not a request from anyone and skips the rest.
+ * 2. Runtime state. Another server holding this workspace is a condition of the
  *    workspace, not of the request, so it answers before anything about the request is read.
- * 3. **Key file readable.** Likewise the workspace's, and answered rather than thrown: see
+ * 3. Key file readable. Likewise the workspace's, and answered rather than thrown: see
  *    `readApiKeyResult`.
- * 4. **Remote binding has a key**, and 5. **remote binding is over TLS.** Both refuse a
- *    misconfigured *server*, so they run before any question of who is asking — a
+ * 4. Remote binding has a key, and 5. remote binding is over TLS. Both refuse a
+ *    misconfigured server, so they run before any question of who is asking — a
  *    workspace bound to the world without a key must not answer a login page either.
- * 6. **Host, for a keyless workspace only.** The one mode with no key to check, so the
+ * 6. Host, for a keyless workspace only. The one mode with no key to check, so the
  *    name the request arrived under is all there is to go on; see `isAllowedRequestHost`.
  *    Skipped entirely once a key exists, where gate 8 is the real answer.
- * 7. **Login page exemption.** After 3–6 so those still apply to it, and before the key
+ * 7. Login page exemption. After 3–6 so those still apply to it, and before the key
  *    check so that redirecting an unauthenticated browser to it cannot loop.
- * 8. **The key check** (`authenticateRequest`).
- * 9. **The schema**, and 10. **the database**, both only for a request that got this far.
+ * 8. The key check (`authenticateRequest`).
+ * 9. The schema, and 10. the database, both only for a request that got this far.
  *    The schema is a condition of the workspace like gates 2–5, and would sit with them but
  *    for what it costs: answering it opens the database file, so asking it before the key
  *    check would do that work for every unauthenticated prober, and would tell one the

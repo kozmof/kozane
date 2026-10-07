@@ -389,7 +389,7 @@ describe("EditorSurface", () => {
   });
 
   it("leaves the view where a scroll put it rather than springing back to the caret", async () => {
-    // The panel follows the caret when the *caret* moves. Following it when the *view* moves
+    // The panel follows the caret when the caret moves. Following it when the view moves
     // is the same code with the scroll position as a dependency, and it pinned a long file
     // to the caret's line: the wheel moved nothing and the scrollbar sprang back on release.
     mount(Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n");

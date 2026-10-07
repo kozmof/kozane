@@ -4,34 +4,15 @@ import { databaseSignature } from "./file-signature.js";
 import { evict, touch } from "./lru.js";
 
 /**
- * Answering "has this board changed?" without assembling the board.
+ * Skip snapshot assembly when the database signature and the client's ETag still match the
+ * cached values. The ETag remains a hash of the response bytes.
  *
- * The snapshot endpoint is polled once a second for as long as a tab is open, and almost
- * every poll finds nothing new. The ETag it already sent made those cheap *for the client*
- * — a 304 in place of the whole payload — and left them exactly as expensive for the
- * server, because the tag is a hash of the payload and computing it meant running all nine
- * queries and serializing the result first. Two tabs on an idle workspace is that work
- * twice a second, forever.
+ * With `includeScopedFiles: false` , the live snapshot reads only the database.
+ * `databaseSignature` tracks the main file and WAL file so changes from CLI commands and other
+ * processes can invalidate the cached result.
  *
- * The tag itself is unchanged, and deliberately: it stays a hash of the bytes, so what a
- * client holds still means "these exact bytes". What is added is a gate in front of the
- * work — the database file's identity, as `databaseSignature` reads it. If the file has
- * not moved since the tag now being offered was computed, that tag is still the right
- * answer, and the queries are skipped outright.
- *
- * Why the file's identity is enough. With `includeScopedFiles: false` — which is what the
- * live endpoint passes — `loadNamespaceSnapshot` is a pure function of the database: nine
- * reads and no filesystem access at all. A byte-identical database therefore cannot produce
- * a different snapshot. `databaseSignature` is `ino:mtimeNs:size` over the main file and
- * its `-wal`, so any commit moves it, whoever made it — this server, another tab, a
- * `kozane card add` in another terminal, a `db import`. That is the same property the tag
- * cache already rests on, and the reason there is no revision counter here to bump: writers
- * that never pass through this process are the ordinary case.
- *
- * The gate fails safe in every direction it can fail. No signature (an in-memory database,
- * a file that cannot be stat'd) means no gate and the full read, which is what happened
- * before. A signature that has moved means the full read. A remembered tag the client is
- * not offering means the full read. It can only ever skip work, never invent an answer.
+ * A missing or changed signature, or a client ETag that does not match, falls back to
+ * assembling the full snapshot.
  */
 
 /** The tag for a snapshot's exact bytes. Not a security boundary — it says "these bytes
@@ -117,7 +98,7 @@ export function rememberSnapshotEtag(
   if (!dbUrl || !readFrom) return;
   const signature = databaseSignature(dbUrl);
   if (signature !== readFrom) return;
-  // Deleted first so a revisit moves to the end, which is what makes the eviction below
+  // Deleted first so a revisit moves to the end, which makes the eviction below
   // least-recently-used rather than first-seen. Same shape as `touchOrCreate` in `lru.ts`,
   // which cannot be used here because the value depends on a signature read at write time.
   remembered.delete(namespaceId);

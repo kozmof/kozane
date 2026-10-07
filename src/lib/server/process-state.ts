@@ -23,7 +23,7 @@ import { _resetSnapshotEtagsForTest } from "./snapshot-etag.js";
  *
  * So this is the list, in one place. A module that grows process-lifetime state adds its
  * resetter here and every test that already calls this is covered by it. The individual
- * `_resetXForTest` functions stay exported for the tests that are *about* one cache and
+ * `_resetXForTest` functions stay exported for the tests that are about one cache and
  * want to move only it.
  *
  * Not production API. Nothing in a running server should want this — the state it clears is

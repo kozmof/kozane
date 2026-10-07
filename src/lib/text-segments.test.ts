@@ -114,7 +114,7 @@ describe("segmentText", () => {
  * to go looking for. Both now read through the one scanner in `lib/tag.ts`.
  *
  * Sharing `lib/urls.ts` was not by itself enough, and the cases below say so: the segmenter
- * *cut* at the spans while the grammar only asked whether a match had begun inside one, so a
+ * cut at the spans while the grammar only asked whether a match had begun inside one, so a
  * tag running into an address parted them again. This suite had the right idea and the wrong
  * corpus — every case here put whitespace between the tag and the URL, which is the one shape
  * that could not fail. The adjacency cases are the ones that did.

@@ -36,7 +36,7 @@ export const TAG_LEVELS_MAX = 8;
 export const TAG_EXCERPT_CHARS_MAX = 200;
 
 /**
- * How many hits of *each kind* one tag's panel draws, in the browser and in a static export
+ * How many hits of each kind one tag's panel draws, in the browser and in a static export
  * alike: at most this many cards, and at most this many file lines.
  *
  * Every other walk on the tag path is bounded and this one has to be too, for the reason the
@@ -77,7 +77,7 @@ export const TAG_SCAN_TOTAL_BYTES_MAX = 8 * 1024 * 1024;
 export const TAG_SCAN_NODES_MAX = 20_000;
 
 /**
- * How many bytes of file content one *gather* will read, across every taskspace in it.
+ * How many bytes of file content one gather will read, across every taskspace in it.
  *
  * {@link TAG_SCAN_TOTAL_BYTES_MAX} bounds one taskspace and this bounds the loop over them,
  * which was unbounded: a workspace with twelve taskspaces could spend twelve times the
@@ -104,7 +104,7 @@ export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
  * How many hits one taskspace's scan will gather before it stops.
  *
  * The third budget, and the one the other two do not imply. Bytes and entries bound what is
- * *read*; neither bounds what reading produces, and the ratio between them is not fixed —
+ * read; neither bounds what reading produces, and the ratio between them is not fixed —
  * a line of prose yields no hit, while a line reading `'a` yields one per three bytes. So
  * {@link TAG_SCAN_TOTAL_BYTES_MAX} of such lines is some millions of hits out of a budget
  * that was doing exactly what it was set to do.
@@ -117,7 +117,7 @@ export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
  * thousand or so. A budget that is spent honestly took the page down.
  *
  * Reported as a truncation like any other ceiling, rather than silently cutting the list.
- * The tag *tree* is built from these hits, so a scan that stopped here has undercounted
+ * The tag tree is built from these hits, so a scan that stopped here has undercounted
  * every tag in that taskspace, and the reader has to be told that the numbers beside them
  * are a floor.
  *
@@ -150,12 +150,12 @@ export const TAG_CARD_HITS_MAX = 100_000;
 /**
  * How many card rows one statement of the card gather brings back.
  *
- * {@link TAG_CARD_HITS_MAX} bounds what the gather *keeps*; this bounds what it holds in
+ * {@link TAG_CARD_HITS_MAX} bounds what the gather keeps; this bounds what it holds in
  * order to decide. The two are not the same ceiling and the gap between them was the whole
  * of what was left unbounded: the query asked for every card in the workspace holding a
  * colon, materialized `content` for all of them, and only then counted hits in a loop
  * — so a workspace past the hit ceiling read its way to that ceiling through every card
- * anyway. The file side has always charged for a file's bytes *before* reading it; this is
+ * anyway. The file side has always charged for a file's bytes before reading it; this is
  * the same discipline on the other source.
  *
  * Read as pages keyed on the card id rather than as one statement with a row limit, because
@@ -199,7 +199,7 @@ export const TAG_SCAN_TRUNCATED_PATHS_MAX = 5;
  * out of compiled JavaScript.
  *
  * Not reported as a truncation, for the same reason a dot-entry is not: a taskspace read to
- * the end of everything this scans *was* read in full, and warning about it on every page
+ * the end of everything this scans was read in full, and warning about it on every page
  * would make the warning meaningless. What this excludes is documented instead — in
  * `docs/browser-ui-handbook.md`, `docs/security-matrix.md`, and `spec/cli.md`.
  *

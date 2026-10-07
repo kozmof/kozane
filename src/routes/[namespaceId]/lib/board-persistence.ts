@@ -19,7 +19,7 @@ import {
  * The saves the board's canvas and composer hand to the page, against the namespace state.
  *
  * Split from `namespace-actions.svelte.ts` along the line the canvas draws: every save here
- * follows an edit the board has *already made* — a card dragged, a frame resized, a warp
+ * follows an edit the board has already made — a card dragged, a frame resized, a warp
  * dropped — and only answers whether it took, so the canvas can put the old value back if it
  * did not. The actions module is the other kind: it makes the edit and the request together.
  *

@@ -52,7 +52,7 @@
 
   /**
    * Whether a hit belongs to the selected namespace. The same rule the board draws by: a card
-   * belongs to the namespace its partition does, and a taskspace to its own namespace *or* to none
+   * belongs to the namespace its partition does, and a taskspace to its own namespace or to none
    * at all — an unplaced taskspace appears on every board, so it belongs to every namespace's
    * index too.
    */
@@ -72,7 +72,7 @@
    * rather than a branch that only one of the two ever takes.
    *
    * Handed to `capHitsByKind` rather than run as a `filter` before it, so an export holding
-   * the whole workspace's hits does not copy everything one tag matched in order to draw two
+   * the whole workspace's hits does not copy everything one tag matched to draw two
    * hundred rows of each kind. Per kind, which matters here for the same reason it matters on
    * the server: the hits arrive cards first, so one ceiling across both would let a much-used
    * tag's cards push its files off the page entirely.
@@ -100,7 +100,7 @@
    * numbers read as a disagreement. Per kind because the caps are: "the first 200 of 900"
    * over a list that also holds files would be a second disagreement in place of the first.
    *
-   * Counted in *hits*, and said so — the word is what makes the number true rather than a
+   * Counted in hits, and said so — the word makes the number true rather than a
    * third disagreement. The cap is applied before `groupHitRows`, so a card carrying `:perf`
    * and `:perf:cache` is two of what is counted here, one row below, and one card in the
    * tree beside it; calling that "cards" made the notice contradict both. `kozane tag show`

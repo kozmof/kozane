@@ -375,7 +375,7 @@ describe("map page", () => {
 
     /**
      * The line leaves the panel level with its own row, and it does so in the markup rather
-     * than once something has measured the page — which is what makes it right in the served
+     * than once something has measured the page — which makes it right in the served
      * HTML and in a static export opened without JavaScript.
      *
      * `docs` is the first row of this tree, so its line leaves at half a row down.

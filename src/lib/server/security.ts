@@ -117,7 +117,7 @@ export function canonicalLoopbackOrigin(
  * will.
  *
  * {@link recordAuthFailure} counts per client address, and the address comes from
- * `getClientAddress()` — which, for a server behind a reverse proxy, is the *proxy's*
+ * `getClientAddress()` — which, for a server behind a reverse proxy, is the proxy's
  * address unless the Node adapter is told which header carries the real one. Every remote
  * client then shares one counter: ten bad keys from anyone locks out everybody, and a
  * distributed attempt is never counted per attacker at all.

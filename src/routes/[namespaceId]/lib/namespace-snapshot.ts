@@ -55,7 +55,7 @@ type LoadNamespaceSnapshot = {
  *
  * They were the same seven queries written out twice, in the same order, differing only in
  * what each wrapped around the result. `satisfies NamespaceDataSnapshot` on both kept the
- * *shape* from drifting, but nothing kept the queries from it — a table added to the board
+ * shape from drifting, but nothing kept the queries from it — a table added to the board
  * was two edits, and a board that loaded with data the poll then took away again is the
  * failure that would follow from making only one of them.
  *
@@ -126,7 +126,7 @@ export async function loadNamespaceSnapshot({
   // `buildTaskspaceFileTreeOnce`, not `buildTaskspaceFileTree`: a prerender calls this once
   // per namespace, and an unplaced taskspace is drawn by every namespace's board, so the same
   // directory is asked about once per namespace page. Its files still go into each of those
-  // pages — that is what makes them browsable there — but the disk is walked for the first
+  // pages — that makes them browsable there — but the disk is walked for the first
   // one only. See the note on that function.
   let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
   // `includeScopes` too, not just relying on `taskspaces` already being `[]` when it is

@@ -6,11 +6,7 @@ import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { CONTENT_MAX } from "../lib/constants.js";
 
-/**
- * The CLI writes cards to the same table the HTTP routes do, through the same `addCard`.
- * These hold it to the rules the routes enforce — the card text limit and the workspace's
- * own board — because a rule applied on one path only is not a rule the database has.
- */
+/** Verify that CLI card writes enforce the same text limit and workspace bounds as HTTP writes. */
 
 const cliEntry = resolve("src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -75,13 +71,10 @@ afterEach(() => {
 });
 
 /**
- * A limit `card add` can actually be handed, since it takes its text as a command-line
- * argument: Linux refuses any single argument of 128 KB or more (`MAX_ARG_STRLEN`), which is
- * well below the built-in {@link CONTENT_MAX}. So the boundary is exercised here against a
- * workspace that set its own limit, and the default itself is pinned in `constants.test.ts`.
- * Far enough under the ceiling to hold in any encoding — a Japanese character is three bytes.
- *
- * `card squash` is not subject to this and does test the default, because it reads stdin.
+ * Use a configured limit small enough to pass card text as a command-line argument. The
+ * built-in `CONTENT_MAX` exceeds the platform's single-argument limit. `constants.test.ts`
+ * checks the default, and the stdin-based `card squash` test exercises it without that
+ * restriction.
  */
 const ARGV_SAFE_MAX = 20_000;
 
@@ -103,9 +96,7 @@ describe("card add", () => {
     expect(cli(root, "card", "list")).toContain("No cards found.");
   });
 
-  // Both directions around one length, which is what shows the setting is read rather than
-  // a constant being consulted: the same text is refused under one limit and taken under a
-  // higher one.
+  // The same text must fail under the lower configured limit and succeed under the higher one.
   it("accepts text a lower ui.contentMax would refuse once it is raised", () => {
     const root = tempWorkspace();
     cli(root, "init");
@@ -199,7 +190,7 @@ describe("card squash", () => {
     const positions = listedPositions(root);
     expect(positions).toHaveLength(5);
     expect(positions.every(({ posX, posY }) => posX <= 400 && posY <= 400)).toBe(true);
-    // The rows that fit keep their spacing; only the ones past the edge are pulled in.
+    // Keep the spacing of rows that fit. Clamp only rows beyond the edge.
     expect(positions.map(({ posY }) => posY).sort((a, b) => a - b)).toEqual([
       0, 160, 320, 400, 400,
     ]);

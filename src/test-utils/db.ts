@@ -11,9 +11,8 @@ import { randomUUID } from "crypto";
 import { onTestFinished } from "vitest";
 
 /**
- * `dbPath` is for the tests that have to *identify* the database rather than merely use it —
- * the tag cache validates itself against the database file's signature, so its tests need one
- * at a path they chose. Everything else takes the temporary default and never looks.
+ * Allow an explicit database path for tests that inspect file signatures. Other tests use a
+ * temporary path.
  */
 export async function createTestDB(dbPath?: string): Promise<DB> {
   dbPath ??= join(tmpdir(), `kozane-test-${randomUUID()}.db`);
@@ -27,25 +26,15 @@ export async function createTestDB(dbPath?: string): Promise<DB> {
 }
 
 /**
- * How many bound parameters SQLite will take in one statement.
- *
- * Confirmed against the driver rather than taken from the documentation: 32,766 is accepted
- * and 32,767 is refused. The reads that select by namespace exist because the ones that
- * select by id list cannot clear this on a board of any size, so a test crossing it is the
- * only one that actually distinguishes them.
+ * SQLite's bound-parameter limit, checked against the driver. Tests that exceed it distinguish
+ * namespace queries from queries that bind a list of card IDs.
  */
 export const SQLITE_VARIABLE_MAX = 32_766;
 
 /**
- * Inserts `count` cards onto one partition and layer in a single statement.
- *
- * `addCards` would be the honest way to build a fixture, and is — up to a few hundred rows.
- * Crossing {@link SQLITE_VARIABLE_MAX} takes tens of thousands, which through the data API
- * is a couple of hundred round trips and through `addCard` tens of thousands. Nothing that
- * reads these rows parses an id or looks at the content, so a recursive CTE producing rows
- * that merely exist and belong to the partition is the whole of what is needed.
- *
- * Returns the ids in insertion order.
+ * Insert `count` cards into one partition and layer with a recursive CTE. This creates large
+ * fixtures without the round trips required by individual data API writes. Return IDs in
+ * insertion order.
  */
 export async function seedCards(
   db: AnyDB,
@@ -71,12 +60,8 @@ type SeedCards = {
 };
 
 /**
- * Whether a rejection is SQLite refusing a statement's parameter count.
- *
- * Drizzle re-throws driver errors wrapped in a `Failed query: …` of its own, so the reason
- * is only ever in the cause chain — the same place `isUniqueConstraintError` looks for
- * one. Matching the reason rather than "it threw" is what keeps such a test from going on
- * passing once the query starts failing for some unrelated reason.
+ * Recognize SQLite's parameter-count error through Drizzle's cause chain so unrelated query
+ * failures cannot satisfy the assertion.
  */
 export function isTooManyVariables(e: unknown): boolean {
   if (!(e instanceof Error)) return false;

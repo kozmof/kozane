@@ -7,7 +7,7 @@ import { placeHubs, rectAnchor, scopeRail, curve, HUB_RADIUS } from "./graph.js"
  *
  * One function, called twice per render: on the server against `MAP_DEFAULT_VIEWPORT`, and
  * in the browser against the box it measured. Keeping it here rather than in the component
- * is what makes the geometry testable without a DOM — and what keeps the server's HTML and
+ * makes the geometry testable without a DOM — and what keeps the server's HTML and
  * the browser's re-render the same map at two sizes rather than two maps.
  */
 
@@ -30,7 +30,7 @@ export const LABEL_MIN_WIDTH = 54;
 export const LABEL_MIN_HEIGHT = 20;
 
 /**
- * How tall the strip of card-less *namespaces* along the bottom of the map is.
+ * How tall the strip of card-less namespaces along the bottom of the map is.
  *
  * Taller than the 18px `squarify` defaults to, and it has to be. That default is sized for a
  * partition, which is drawn in the strip as a dashed outline and nothing more; a namespace is a
@@ -119,7 +119,7 @@ const EMPTY_LAYOUT: MapLayout = {
  * The order is forced and worth saying, because it is the one thing that could have been
  * circular: the rail's height depends on how many scopes there are and on nothing else, so it
  * can be reserved before the packing is laid out; the packing then fills what is left; and
- * only then do the hubs have anchors to sit under. Reserving the rail *after* packing would
+ * only then do the hubs have anchors to sit under. Reserving the rail after packing would
  * mean packing twice.
  *
  * A namespace's area is the sum of its partitions' cards, so a namespace with cards in it is drawn

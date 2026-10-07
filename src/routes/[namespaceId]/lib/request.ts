@@ -17,7 +17,7 @@ export function requireWithinBatchLimit(length: number, key: string): void {
  *
  * The content type is a CSRF guard rather than a formality. SvelteKit's origin check covers
  * only the types an HTML form can send; a cross-site `fetch` in `no-cors` mode can still
- * post a body with *no* content type, which slips past that check, and `request.json()` would
+ * post a body with no content type, which slips past that check, and `request.json()` would
  * parse it all the same. On a workspace with no API key nothing else stands in the way.
  * Requiring `application/json` makes any cross-site sender a non-simple request, which the
  * browser will not send without a CORS preflight this server never grants.
@@ -98,7 +98,7 @@ export function optionalNullableNumber(body: JsonRecord, key: string): number | 
  * A number field that must be there, as the counterpart to {@link optionalNumber}.
  *
  * The one this module was missing. Every optional field had a reader and every required
- * string had one, so a required *number* was the gap that got filled in place — the
+ * string had one, so a required number was the gap that got filled in place — the
  * position batch below spelled `typeof row.posX !== "number" || !Number.isFinite(row.posX)`
  * twice, once per axis, with the message written out beside each.
  */
@@ -113,7 +113,7 @@ export function requireFiniteNumber(body: JsonRecord, key: string): number {
  * Each element of an array field, read through the same guards as a top-level body.
  *
  * This module guarded request bodies and the string arrays in them, and nothing else: an
- * array of *objects* — `positions` on `PATCH /cards` is the only one — was checked inside
+ * array of objects — `positions` on `PATCH /cards` is the only one — was checked inside
  * the route, longhand, with its own `Array.isArray`, its own per-item `typeof` ladder and
  * its own four messages. That is the gap, rather than the duplication: a second endpoint
  * taking a batch of objects had no reader to reach for and would have grown another ladder,
@@ -124,7 +124,7 @@ export function requireFiniteNumber(body: JsonRecord, key: string): number {
  * route reads a body with, so an element gets the vocabulary and the messages everything
  * else gets. The order here is load-bearing and matches {@link requireStringArray}: shape,
  * then length, then the batch limit, then the per-item work — the limit is what an
- * oversized body must be refused by *before* anything iterates it.
+ * oversized body must be refused by before anything iterates it.
  *
  * `message` exists because "this field is required" and "this field is not an array" are
  * the same answer to a caller who sent neither, and `positions` worded it the first way

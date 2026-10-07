@@ -59,7 +59,7 @@
    * and moving the pointer over the tree changes nothing but the row's own highlight.
    *
    * That leaves one piece of state instead of two, and it lives in the URL rather than in
-   * this component — which is what makes a drawn map a link somebody can send, and why
+   * this component — which makes a drawn map a link somebody can send, and why
    * there is no setter here: every way of changing which tag is drawn is a navigation.
    *
    * What the URL asks for. `data.*` on the live page, where the server read the query; from
@@ -100,7 +100,7 @@
    *
    * Measured in the browser, and {@link MAP_DEFAULT_VIEWPORT} before anything has measured
    * anything — on the server, and in a static export rendered on a machine with no browser.
-   * That is what makes the served HTML a map rather than an empty frame waiting for
+   * That makes the served HTML a map rather than an empty frame waiting for
    * hydration; the browser then repacks at the real size through the same function, so what
    * changes on mount is the size and not the arrangement.
    */
@@ -159,7 +159,7 @@
   // Only the number is shared. The comparison below is this page's own: a Manhattan sum
   // (`|dx| + |dy|`) rather than the per-axis test `travelled` in `lib/gesture.ts` makes, so a
   // gesture that creeps diagonally arms slightly sooner here. That is deliberate and left
-  // alone — the map swallows a *click* on a partition link, where the board writes a position
+  // alone — the map swallows a click on a partition link, where the board writes a position
   // patch, and being a shade eager to call a wobble a pan is the forgiving direction when the
   // cost of being wrong is opening a board the user did not ask for.
   let dragging = $state(false);
@@ -248,7 +248,7 @@
    *
    * Worked out from the tree rather than measured off the page — see `lib/tag-rows.ts`. The
    * panel is drawn over the canvas at a known corner, so a row's offset down it is a y on the
-   * map without either being measured. That is what makes a line right in the served HTML,
+   * map without either being measured. That makes a line right in the served HTML,
    * before any JavaScript has run, and right in a static export opened without any.
    *
    * `panelScroll` is the exception, and it is zero until someone scrolls a tree too tall for
@@ -278,7 +278,7 @@
    * Enough room to read a label in. Below this the rectangle is drawn and left unlabelled
    * rather than carrying text wider than itself.
    *
-   * Asked of the rectangle as drawn, which is what makes zooming worth doing: the label is
+   * Asked of the rectangle as drawn, which makes zooming worth doing: the label is
    * the same size at every zoom, so a partition too small to carry one grows into it rather
    * than growing its text along with itself.
    *

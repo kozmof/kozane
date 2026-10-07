@@ -40,11 +40,11 @@ export const NAME_MAX = 255;
  * finding out. This sits far enough under that for a list of ids, and far enough above any
  * real selection that reaching it means something other than a user dragging cards.
  *
- * It is not what keeps the *writes* under that limit, and did not use to say so. The
+ * It is not what keeps the writes under that limit, and did not use to say so. The
  * position and stacking updates bind several parameters per id, so a request at this size
  * builds a statement several times as wide; they draw their own batch size from
  * {@link STATEMENT_PARAMS_MAX} instead, which is computed from how wide each row of the
- * statement actually is. This bounds what a request may *ask for*, and that is all.
+ * statement actually is. This bounds what a request may ask for, and that is all.
  */
 export const BATCH_MAX = 2_000;
 /**

@@ -74,7 +74,7 @@ async function seedDb(dbUrl: string): Promise<void> {
           ],
         },
         // Both timestamps are written rather than left to the column default that migration
-        // 0011 needed in order to add them NOT NULL: a row that takes that default lands at
+        // 0011 needed to add them NOT NULL: a row that takes that default lands at
         // the epoch, and a seed that exports as 1970 is not the seed these round trips mean
         // to be testing.
         {

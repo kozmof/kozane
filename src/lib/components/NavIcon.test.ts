@@ -24,7 +24,7 @@ describe("NavIcon", () => {
   /**
    * The meaning is the point, not just the arrangement. Rows of rectangles say "a list",
    * which is what the namespace page is — so the tag index draws the connections too, and a
-   * drawn connection is what makes a shape a tree rather than an indented list.
+   * drawn connection makes a shape a tree rather than an indented list.
    */
   describe("the tag index, as a tree", () => {
     const rects = () =>

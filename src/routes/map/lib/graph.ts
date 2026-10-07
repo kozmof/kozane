@@ -29,7 +29,7 @@ const RAIL_MAX_FRACTION = 0.4;
 /**
  * A packing fills its rectangle completely, so there is no gap in it for a scope's node to
  * sit in. The map reserves a band below the packing instead and draws every hub there, which
- * is also what makes the spokes read as a graph *over* the treemap rather than as marks
+ * is also what makes the spokes read as a graph over the treemap rather than as marks
  * inside one of its cells.
  *
  * How many rows that band needs: as many as it takes to give each hub {@link HUB_MIN_GAP} of
@@ -139,7 +139,7 @@ export function placeHubs(hubs: HubInput[], rail: Rect): HubPlacement[] {
  *
  * A spoke drawn to a rectangle's centre disappears under the rectangle, which on a packing —
  * where the rectangles are the whole picture — means the line is only visible outside the
- * thing it points at. Stopping it on the border is what makes it point.
+ * thing it points at. Stopping it on the border makes it point.
  */
 export function rectAnchor(rect: Rect, toward: Point): Point {
   const cx = rect.x + rect.width / 2;
@@ -232,7 +232,7 @@ export function tagPartitionIndex(
  * per tag in what crosses the wire, where pre-rolling would store every tag's cards again
  * under each of its ancestors.
  *
- * **A weight, and not a count of cards.** One card carrying both `:perf:cache` and
+ * A weight, and not a count of cards. One card carrying both `:perf:cache` and
  * `:perf:disk` is two entries under `:perf`, and summing them counts it twice — which is
  * why `buildTagTree` tallies sets of sources rather than adding numbers. Distinguishing
  * them here would mean shipping the card ids the aggregate exists to avoid shipping, and the

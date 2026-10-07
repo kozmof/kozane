@@ -27,7 +27,7 @@ export type WorkspaceCommandContext = {
    * The database this command opened, as {@link commandDbUrl} resolved it — which is the
    * temporary database of a running `kozane open --memory` when there is one, and the
    * workspace's own otherwise. Handed over rather than left to be resolved a second time,
-   * so a caller that needs to identify the database it is reading identifies *that* one.
+   * so a caller that needs to identify the database it is reading identifies that one.
    */
   dbUrl: string;
 };

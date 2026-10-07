@@ -28,7 +28,7 @@ let _workspaceRoot: string | null | undefined = undefined;
  * itself. Two roots in a single process shared the one slot, so each read evicted the
  * other's and the cache stopped being a cache — and the correctness of the arrangement
  * rested entirely on `fileSignature` including the inode, which is a lot to ask of a
- * field documented as a heuristic about *versions of one file*.
+ * field documented as a heuristic about versions of one file.
  *
  * `signature: null` records that there was no readable file, which is worth remembering
  * too. Unbounded in principle; in practice a process sees one workspace, or the handful a

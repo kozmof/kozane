@@ -36,7 +36,7 @@
     onOpenFilePalette?: () => void;
     /**
      * Hands the keyboard to something in front of this bar — the file palette, which is the
-     * one overlay that is open *while* cards are selected.
+     * one overlay that is open while cards are selected.
      *
      * The palette stops the keys typed into it from reaching here, but only those: a press
      * with focus anywhere else would still arrive, and `Delete` arriving would delete the

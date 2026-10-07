@@ -35,7 +35,7 @@ const PASS: AuthOutcome = { kind: "pass" };
  *    another device is asked for the key rather than shown a bare 401.
  * 3. Everything else — API and `fetch` clients — gets the machine-readable 401.
  *
- * The caller is responsible for the gates that run *before* this one, and for
+ * The caller is responsible for the gates that run before this one, and for
  * `applySecurityHeaders` on whatever comes back.
  */
 export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFile): AuthOutcome {

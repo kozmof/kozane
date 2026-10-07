@@ -1,45 +1,12 @@
 import { DRAG_THRESHOLD } from "$lib/constants";
 
 /**
- * Where a pointer gesture began, and whether it has travelled far enough to be a drag.
+ * Track where a pointer gesture began and whether it crossed the drag threshold. Each gesture
+ * keeps its own card, rectangle, or selection data alongside these shared fields.
+ * `board-gesture.ts` represents which gesture is active.
  *
- * Every gesture the board has is some version of this: a press records where it started, the
- * moves that follow decide whether it counts as travel, and the release does one thing if it
- * did and another if it did not. Dragging a card, resizing one, dragging a warp, dragging a
- * scope frame, resizing one, sweeping a marquee, and drawing a frame are seven gestures over
- * one shape, and this is the shape.
- *
- * It is not a state machine and does not try to be. Each gesture carries its own substance
- * beside these three fields — which card, the rectangle it started at, who was in the frame
- * before it moved — and none of that generalises. What does generalise is the question "has
- * this moved yet", which was answered in six places by the same expression written out
- * longhand against the same unnamed `4`:
- *
- * ```ts
- * if (Math.abs(e.clientX - startX) > 4 || Math.abs(e.clientY - startY) > 4) state.moved = true;
- * ```
- *
- * Six copies meant six chances for one of them to be `>=`, or to compare the wrong axis, or to
- * be left behind when the figure changed — and a seventh copy of the number itself sat in
- * `routes/map/+page.svelte` as a local `DRAG_THRESHOLD`, where nothing tied it to these at all.
- *
- * Which of the gestures is open *is* a thing with one answer, and that answer lives in
- * `board-gesture.ts` as a tagged union over these two shapes. The distinction is worth
- * keeping straight: that module names the slot, this one names what a press is. Eight
- * nullable `let`s in the component used to do both jobs badly at once.
- *
- * ## Client pixels, not world pixels
- *
- * `startClientX`/`startClientY` are `clientX`/`clientY` as the browser reported them, before
- * the canvas's zoom and scroll transform. That is deliberate and it is why the name says
- * `Client`: the threshold is about whether the *hand* moved, and a slip of four pixels is the
- * same slip whether the board is drawn at half scale or double. Comparing world coordinates
- * would make a board zoomed out demand a longer drag to register one, which is backwards.
- *
- * The fields used to be spelled two ways — `startX`/`startY` on the card, warp and frame
- * drags, `startClientX`/`startClientY` on the resizes and the rectangles — for values that
- * were identical in kind and in origin. One name, so that conforming to {@link Gesture} is
- * what the compiler checks rather than what a reader notices.
+ * Measure movement with browser `clientX` and `clientY` coordinates before applying canvas zoom
+ * or scroll. This keeps the physical drag threshold the same at every zoom level.
  */
 export type Gesture = {
   startClientX: number;

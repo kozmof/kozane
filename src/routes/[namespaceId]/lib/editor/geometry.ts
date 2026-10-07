@@ -48,7 +48,7 @@ export function caretPoint(
  * wrap buy. `x` is put to the measurer, because the column it lands in cannot be computed
  * from a character width: a document holding CJK has cells of two widths in one line, and
  * one holding a ligature or a combining mark has cells that are not a whole number of
- * either. Guessing here is what makes a click land one character off in Japanese text.
+ * either. Guessing here makes a click land one character off in Japanese text.
  */
 export function pointToCaret(
   x: number,
@@ -137,7 +137,7 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
   /**
    * Pixels from the start of the line's text to the left edge of `column`.
    *
-   * The *width* of the range rather than its edge measured against the element: a line is
+   * The width of the range rather than its edge measured against the element: a line is
    * drawn with horizontal padding, so the element's left edge is not where its text
    * begins, and measuring from it made every column one padding too far right. A width
    * has no origin to get wrong, and is zero at column 0 by construction rather than by an

@@ -15,7 +15,7 @@
  * impossible.
  *
  * Sharing the module was not by itself enough to make it impossible, which is worth writing
- * down because it looked as though it were. Both ends read these spans, but one *cut* at them
+ * down because it looked as though it were. Both ends read these spans, but one cut at them
  * and the other only asked whether a match had started inside one — so a tag running into an
  * address (`:todo:https://x.com`) still parted the two. Both now cut, and the segmenter is
  * handed the spans the grammar cut by rather than finding its own.

@@ -3,9 +3,8 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// @libsql/client exports its browser entry under the "browser" condition, which
-// doesn't support in-memory SQLite. Force the Node/SQLite entry so :memory: DBs
-// work correctly in tests even though we set conditions: ["browser"] for Svelte.
+// Use libsql's Node entry for in-memory SQLite tests. The browser condition is needed for
+// Svelte but would select libsql's browser client.
 const libsqlNodeEntry = fileURLToPath(
   new URL("./node_modules/@libsql/client/lib-esm/node.js", import.meta.url),
 );
@@ -20,12 +19,11 @@ export default defineConfig({
     conditions: ["browser"],
     alias: {
       $lib: path.resolve("./src/lib"),
-      // Mirrors `kit.alias` in svelte.config.js. Both are for `src/routes` only; see the
-      // note there on why the tsc-built directories keep relative specifiers.
+      // Mirror the route aliases from `svelte.config.js` .
       $db: path.resolve("./src/db"),
       "styled-system": path.resolve("./styled-system"),
       "@libsql/client": libsqlNodeEntry,
-      // SvelteKit virtual modules — only real in a Vite/SvelteKit build.
+      // Stub the virtual modules supplied by SvelteKit builds.
       "$app/paths": path.resolve("./src/test-utils/app-paths.ts"),
       "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
       "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
@@ -37,81 +35,45 @@ export default defineConfig({
     setupFiles: ["src/test-utils/setup.ts"],
     environment: "jsdom",
     maxWorkers: 4,
-    // Bounds one test, and nothing above it. Vitest has no run-level timeout, and the
-    // `teardownTimeout` watchdog is armed inside `exit()` and unref'd, so it cannot end a run
-    // that never reaches shutdown. Nothing here will stop a wedged run, so never pipe
-    // `vitest run` into a consumer that exits early (`| head`, `| grep -m`): the consumer
-    // leaves, the runner keeps going with nobody waiting on it, and one left that way sat at
-    // 93% CPU for eleven minutes. Redirect to a file and filter the file instead.
+    // Limit each test's runtime. This does not bound the whole run. Redirect output to a file
+    // before filtering it so a consumer that exits early cannot leave the runner running
+    // unattended.
     testTimeout: 10_000,
     coverage: {
       provider: "v8",
       include: ["src/**/*.{ts,svelte}"],
-      // What the thresholds below describe, and — just as important — what they do not.
+      // Coverage thresholds apply only to files outside the exclusions below.
       //
-      // Two areas are outside this measurement for reasons that are about the tooling
-      // rather than about how well they are tested, so the percentage is not a statement
-      // about the whole tree and should not be read as one:
-      //
-      // - **Svelte components.** v8 reports `0/0` for a `.svelte` file even while its own
-      //   test suite renders it and passes — the compiled output carries no mapping this
-      //   provider can attribute back to the component. Including them would not lower the
-      //   number honestly, it would add zero statements and zero covered statements and
-      //   make the figure mean less. They are covered by the component suites beside them
-      //   (`KozaneCard.test.ts`, `CardComposer.test.ts`, and every other `*.test.ts` sitting
-      //   next to a `.svelte` file) and by `e2e/`.
-      // - **CLI commands.** Genuinely 0% *in this process*, because every one of them is
-      //   exercised by spawning `kozane` as a subprocess — `src/cli/*.e2e.test.ts` — which
-      //   v8 cannot instrument from here. Counting them would report code with a suite per
-      //   command group behind it as untested.
-      //
-      // Neither bullet names a count any more. Both used to — "six more" components and
-      // "nine" e2e suites — and both had drifted to well under half the real number by the
-      // time anyone read them again. A figure in a comment beside a glob that keeps its own
-      // tally is a figure nothing checks; the globs are what these sentences are about.
-      //
-      // Everything else is measured, which is what the thresholds hold.
+      // - Svelte components have component and browser tests, but this V8 setup does not
+      // attribute their compiled coverage to the source files.
+      // - CLI commands run in subprocess tests. This process's coverage does not measure their
+      // execution.
       exclude: [
         // Test infrastructure
         "src/test-utils/**",
         "src/app.d.ts",
-        // Exercised by subprocess e2e suites this process cannot measure; see the note above.
+        // CLI subprocess coverage is not collected by this process.
         "src/cli/index.ts",
         "src/cli/commands/**",
-        // The command tree itself, for the same reason and with the same evidence. It was
-        // the one member of this group left measured, and it reported the shape that gives
-        // that away: 54% of statements and 1.85% of *functions*. `spec.test.ts` calls
-        // `buildProgram()` and walks the tree, so building it is covered from here — what
-        // cannot be is any action handler, every one of which runs only in a spawned
-        // `kozane`. Branch coverage of 0% is the same fact from the other side.
+        // `spec.test.ts` checks the command tree. Action handlers run in CLI subprocess tests.
         "src/cli/program.ts",
         // Filesystem discovery/configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
         "src/cli/lib/workspace.ts",
         "src/cli/lib/taskspace-scan.ts",
-        // Command scaffolding: finds the workspace, opens its database, and exits the
-        // process on failure. Exercised by every subprocess test in src/cli/*.e2e.test.ts,
-        // none of which can be measured from this process.
+        // Workspace setup and failure exits are exercised by CLI subprocess tests.
         "src/cli/lib/workspace-command.ts",
-        // DB plumbing — no logic to assert
+        // Database setup and schema declarations.
         "src/db/internal/**",
         "src/db/client.ts",
         "src/db/schema.ts",
-        // SvelteKit wiring — no logic to assert
+        // SvelteKit module wiring.
         "src/lib/index.ts",
-        // Page and layout load functions require integration/e2e testing.
-        //
-        // Both are named, because the first was once the only one: `*page.server.ts` is this
-        // intent spelled one word too narrowly, and it left `src/routes/+layout.server.ts` —
-        // a single `trailingSlash` export, read only while SvelteKit renders — measured at 0%
-        // with nothing a unit test could do about it. Spelled as two patterns rather than one
-        // clever glob: `+page` and `+layout` share no suffix to match on, and a pattern that
-        // appeared to cover both while covering one is how this was wrong in the first place.
+        // Exclude both page and layout server modules, which require integration coverage.
         "src/routes/**/*page.server.ts",
         "src/routes/**/*layout.server.ts",
-        // Not measurable by v8 rather than not tested; see the note above. Every component,
-        // wherever it lives — the ones shared across pages sit in `src/lib/components` and
-        // v8 can no more attribute their compiled output than it can a route's.
+        // Exclude route and shared Svelte components because this V8 setup does not measure
+        // their source coverage.
         "src/**/*.svelte",
       ],
       reporter: ["text", "html", "lcov"],

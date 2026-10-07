@@ -1,5 +1,3 @@
-// Test stub for SvelteKit's virtual `$app/paths` module, which only exists in a
-// real Vite/SvelteKit build. Components use `base` to prefix internal links; in
-// unit tests the base is always the site root.
+// Stub SvelteKit's `$app/paths` module with the site root as the base for internal links.
 export const base = "";
 export const assets = "";

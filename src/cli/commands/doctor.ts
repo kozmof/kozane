@@ -99,7 +99,7 @@ function nameSome({ total, named }: { total: number; named: string[] }): string 
 /**
  * What SQLite itself says about the file, which nothing here was asking.
  *
- * Every other check reads the database *through* the schema — the migration state, the card
+ * Every other check reads the database through the schema — the migration state, the card
  * timestamps — and so can only report what a well-formed file says. A corrupted page or an
  * orphaned row is invisible to all of them: the queries that would meet it are the ones a
  * workspace runs in the course of being used, so the first report is a failed request or a
@@ -170,9 +170,9 @@ const noneOverLimit: OverLimit = { total: 0, named: [] };
  * Three ways in, and only two of them are guarded. The HTTP endpoints check `ui.contentMax`
  * and {@link NAME_MAX} and clamp to the canvas; the CLI's card commands do the same through
  * `contentMaxForRoot` and `clampToBounds`. `kozane db import` is the third, and it
- * deliberately does not refuse — a dump is a backup, and these limits are *settings*, so a
+ * deliberately does not refuse — a dump is a backup, and these limits are settings, so a
  * workspace exported with a wider canvas must still be restorable into one with the default
- * (see `dumpLimitWarnings`). It warns instead, and this is what makes the rows findable
+ * (see `dumpLimitWarnings`). It warns instead, and this makes the rows findable
  * afterwards rather than only at the moment of the import.
  *
  * Nothing in the schema enforces any of the three, which is the other half of why this is
@@ -180,7 +180,7 @@ const noneOverLimit: OverLimit = { total: 0, named: [] };
  * table rebuild, and `ui.contentMax` is a number the user is invited to change.
  *
  * Not a failure of the database, and reported as a check so that it is said out loud. A card
- * past the limit is readable and movable; what it is not is *editable* — the composer and
+ * past the limit is readable and movable; what it is not is editable — the composer and
  * `kozane card edit` both refuse it until it is shortened — and that is a thing to be told
  * once rather than discovered while trying to work.
  *

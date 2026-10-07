@@ -86,7 +86,7 @@ export function prunedRefs(refs: ReadonlySet<string>, present: ReadonlySet<strin
 }
 
 /**
- * A held *row*, replaced by the snapshot’s copy of it, or dropped when it is gone.
+ * A held row, replaced by the snapshot’s copy of it, or dropped when it is gone.
  *
  * The composer holds a card rather than an id, so pruning it and refreshing it are the same
  * lookup: a card still present must be swapped for the arriving version — the text may have

@@ -105,8 +105,8 @@ describe("writeConfig", () => {
 
 /**
  * The resolver that decides which database an interactive command reads. Tested here rather
- * than beside `runtime-state`, where it was: the state file is what a *server* writes, and
- * which database a *command* picks from it is this module's decision.
+ * than beside `runtime-state`, where it was: the state file is what a server writes, and
+ * which database a command picks from it is this module's decision.
  */
 describe("commandDbUrl", () => {
   beforeEach(() => {

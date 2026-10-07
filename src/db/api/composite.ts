@@ -1,37 +1,16 @@
 /**
- * The writes that span more than one of the sibling modules and have to land whole.
+ * Coordinate atomic writes across database modules without introducing circular imports. Each
+ * operation opens a transaction and passes its `AnyDB` handle to the modules it calls.
  *
- * That is the entire rule for what belongs here, and it is worth writing down because the
- * name says how the module is built rather than what it is for — every function in it is
- * composed of others, which describes half of `db/api` and is not why these ones sit
- * together. What they share is an invariant no single-table module can hold: deleting a card
- * must dissolve a glue group the deletion would leave with one member; squashing one must
- * insert the pieces, carry the scope memberships over, and remove the original or none of
- * it; deleting a partition must move its cards before the cascade takes them.
+ * These operations preserve relationships while changing several tables. Card deletion
+ * dissolves glue groups left with one member. Squashing inserts the pieces, copies scope
+ * memberships, and removes the original together. Partition deletion moves cards before the
+ * cascade runs.
  *
- * So each of these opens the transaction, and the modules it calls into take `AnyDB` and run
- * inside it. The alternative — a card function reaching into glue, a partition function reaching
- * into card — is the import cycle this module exists instead of.
- *
- * ## What actually decides whether a function belongs here
- *
- * Needing to land whole is the *precondition*, not the rule. This header used to stop at
- * "a function belongs here when leaving it out would let a partial write be observed", and
- * that sends a reader to the wrong file: `createNamespace` and `deleteNamespace` in
- * `namespace.ts` both open `withTx` and both span three of the sibling modules — deleting a
- * namespace reads its glue groups before the cascade takes them, then dissolves the ones it
- * emptied — so by that sentence they are two functions in the wrong place.
- *
- * They are not. The rule is the import graph: a cross-module write belongs here when
- * putting it beside one of its tables would make the modules import each other. Nothing
- * imports `namespace.ts` — it is the top of the DAG, above `glue`, `layer` and `partition`
- * rather than beside them — so it can reach down into all three and no cycle is possible.
- * `card.ts` and `glue.ts` are siblings and cannot, which is the whole reason this file is
- * here.
- *
- * So: a cross-module write goes beside its table if that table's module sits above the
- * others it touches, and here if it does not. A function that merely calls two others in
- * sequence, with no partial write to observe, goes beside whichever table it is about.
+ * Keep a cross-module operation beside its table when its dependencies remain one-way. For
+ * example, `namespace.ts` can call glue, layer, and partition helpers because those modules do
+ * not import it. Put an operation here when placing it in a table module would create a
+ * circular dependency.
  */
 
 import { withTx, type DB } from "../tx.js";

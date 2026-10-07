@@ -68,7 +68,7 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
   // parse of the file, and a shared value that can be written through is a trap.
   const result: ApiKeyFile = Object.freeze({ apiKey: value.apiKey, createdAt: value.createdAt });
   // Only a file that parsed is remembered: a malformed one is re-read and re-thrown each
-  // time, which is what makes a fixed file take effect without a restart.
+  // time, which makes a fixed file take effect without a restart.
   apiKeyCache.set(path, { signature, value: result });
   return result;
 }

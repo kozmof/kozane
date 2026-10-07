@@ -36,7 +36,7 @@ type WriteFileAtomicOptions = {
  * shell script saved through the taskspace editor comes back stripped of the bit that made
  * it executable, and nothing reports it.
  *
- * `lstat`, and regular files only: a symlink or a device node is *replaced* by this write
+ * `lstat`, and regular files only: a symlink or a device node is replaced by this write
  * rather than rewritten, so its bits describe something that will not be there afterwards.
  */
 function existingMode(target: string): number | undefined {
@@ -54,7 +54,7 @@ function existingMode(target: string): number | undefined {
  * Writes a file by filling a temporary and renaming it over the target, so nothing ever
  * reads a half-written one after a crash or a full disk.
  *
- * The rename is also what makes the write *visible*: it gives the target a new inode, and
+ * The rename is also what makes the write visible: it gives the target a new inode, and
  * {@link fileSignature} — which decides whether a cached parse is still good — leans on
  * that. A plain in-place write keeps the inode, leaving only mtime and size to tell the
  * versions apart, and two writes of the same length inside one filesystem timestamp tick

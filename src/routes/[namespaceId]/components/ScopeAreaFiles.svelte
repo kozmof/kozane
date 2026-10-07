@@ -38,7 +38,7 @@
    * has to keep behaving like bare canvas — a card dropped in the bottom-right corner, a
    * marquee swept across it — and a band of icons inside would be a band of board the frame
    * had quietly taken away. Outside it also needs no clipping and no scroll region of its
-   * own, which is what makes a fixed two rows enough.
+   * own, which makes a fixed two rows enough.
    *
    * The width is {@link stripWidth}, which can exceed the frame's: a frame may be as narrow
    * as 120px, and the strip is not bound by a box it sits outside of. Clamped at the left so

@@ -48,9 +48,9 @@ export function areasByScope(areas: readonly ScopeArea[]): Map<string, ScopeArea
 }
 
 /**
- * Which cards are inside a scope *anywhere on the board* — the union over its frames.
+ * Which cards are inside a scope anywhere on the board — the union over its frames.
  *
- * The union is what makes several frames per scope behave like one membership. Asked per
+ * The union makes several frames per scope behave like one membership. Asked per
  * frame instead, a card dragged out of one and into another of the same scope would read
  * as having left and joined in the same breath, and a card that merely stopped overlapping
  * one frame while still sitting inside another would be filed out of the scope it is plainly

@@ -20,7 +20,7 @@
  * any of this is compiled and cannot import from here.
  *
  * Read on each call rather than captured at module load. The values are fixed for the life
- * of a build, but `prerender` and `trailingSlash` are module-scope *exports* evaluated as
+ * of a build, but `prerender` and `trailingSlash` are module-scope exports evaluated as
  * their modules load, and a cached constant here would be bound at whatever point this
  * module happened to be pulled in first — which is a thing SvelteKit decides, not this
  * project. A `process.env` read is not worth caching to find out.

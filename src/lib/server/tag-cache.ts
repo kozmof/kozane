@@ -282,7 +282,7 @@ export function openTagCache({
   /**
    * The namespace this gather is narrowed to, or omitted for one across the whole workspace.
    *
-   * Taken once, here, rather than handed to each call below — which is what makes the scope
+   * Taken once, here, rather than handed to each call below — which makes the scope
    * key and the eviction rule that depends on it one decision instead of two that have to
    * agree. `save` used to be given a scope string and, separately, the set of directories it
    * was allowed to presume complete; the caller built the second with
@@ -358,7 +358,7 @@ export function openTagCache({
 
       writeTagCache(root, {
         version: TAG_CACHE_VERSION,
-        // The signature read *before* the gather, deliberately, and never a fresher one. A
+        // The signature read before the gather, deliberately, and never a fresher one. A
         // write that lands mid-gather leaves hits that are neither the old state nor quite
         // the new one; stamping what the database looks like now would declare them current
         // and serve them until the next write. Stamping what it looked like when they were
@@ -377,7 +377,7 @@ export function openTagCache({
  * Whether the file on disk already says exactly this.
  *
  * Deliberately shallow, and it can be: `changed` has already ruled out the two ways the
- * *contents* move — a re-queried card set and a re-read or pruned file. What is left for this
+ * contents move — a re-queried card set and a re-read or pruned file. What is left for this
  * to catch is the bookkeeping around them. Identity is the right test for the values, because
  * every one of them came out of `existing` moments ago and was put back unchanged; a key
  * comparison catches an eviction or a first visit that rearranged the maps without altering

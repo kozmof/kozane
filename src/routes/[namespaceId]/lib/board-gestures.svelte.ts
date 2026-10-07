@@ -56,7 +56,7 @@ import {
  *
  * Every member is read when it is needed rather than captured, because nearly all of them are
  * props of `KozaneCanvas` and change under it: the component passes an object of getters, so
- * a gesture always sees the cards, the zoom and the callbacks the board has *now*. `cards` and
+ * a gesture always sees the cards, the zoom and the callbacks the board has now. `cards` and
  * `pendingScopeAreaRect` have setters as well, because both are bound back to the page and a
  * rollback or a finished frame-draw is written to the binding itself.
  */
@@ -107,7 +107,7 @@ type Drafts = { swept: WorldRect | null; drawn: WorldRect | null };
  *
  * The board's half of {@link BoardGesture}, which is the data: this is what opens one, moves
  * it, and settles it. Lifted out of `KozaneCanvas.svelte`, which kept it beside the props and
- * markup it is wired to; it is the bulk of what the board *does*, and none of it is markup.
+ * markup it is wired to; it is the bulk of what the board does, and none of it is markup.
  *
  * The component still owns the listeners. It forwards window `mousemove` and `mouseup` to
  * {@link move} and {@link release}, calls {@link autoScroll} once a frame, and passes each
@@ -127,7 +127,7 @@ export class BoardGestures {
    * The rectangle being swept right now.
    *
    * The one part of a gesture that stays outside the slot, because it is the one part the
-   * board *draws while the gesture is open*: it is rewritten on every pointer move and has
+   * board draws while the gesture is open: it is rewritten on every pointer move and has
    * to be reactive, which is exactly what `$state.raw` denies the slot on purpose. Two
    * drafts rather than one, so a marquee and a frame draw cannot be confused for each other
    * by a renderer that only has a rectangle to go on.
@@ -160,7 +160,7 @@ export class BoardGestures {
   /**
    * Lifts the open gesture out of the slot, leaving the board with none.
    *
-   * Taking it rather than reading it is what every exit path wants, and taking it *first* is
+   * Taking it rather than reading it is what every exit path wants, and taking it first is
    * what makes a release safe to await in: the handler then works from the gesture it was
    * handed, not from a slot a later press may have refilled while a save was in flight.
    *
@@ -180,11 +180,11 @@ export class BoardGestures {
    *
    * For the one path that puts a gesture down without finishing it: a press on the bare
    * canvas while one is still open, which means the window never saw the release.
-   * {@link holdsPositionActivity} is what makes that safe — the slot knows what it reserved,
+   * {@link holdsPositionActivity} makes that safe — the slot knows what it reserved,
    * so putting it down cannot forget to give it back and leave the snapshot poll stood down
    * for the life of the page.
    *
-   * {@link release} does not come through here, because it has to hold the activity *open*
+   * {@link release} does not come through here, because it has to hold the activity open
    * across the save it is about to make; it releases it in a `finally` of its own.
    */
   #end(): void {
@@ -259,7 +259,7 @@ export class BoardGestures {
     if (!this.#mayOpen(e)) return;
     const area = this.#host.scopeAreas.find((a) => a.id === areaId);
     if (!area) return;
-    // The cards this frame carries are the ones inside *it*; who counts as a member of the
+    // The cards this frame carries are the ones inside it; who counts as a member of the
     // scope is a wider question, and `membersBefore` asks it across all of the scope's frames.
     const cardIds = [...this.#host.cardIdsInRect(areaWorldRect(area))];
     this.#openHolding({
@@ -616,7 +616,7 @@ export class BoardGestures {
   /**
    * Puts the open gesture down and does whatever its release means.
    *
-   * The slot is read and cleared *before* anything is awaited. Each arm then works from `g`,
+   * The slot is read and cleared before anything is awaited. Each arm then works from `g`,
    * the gesture it narrowed, and not from state a later press may have replaced while a save
    * was in flight.
    */

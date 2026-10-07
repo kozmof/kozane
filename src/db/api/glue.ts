@@ -12,7 +12,7 @@ import { columnCount, type BatchResult } from "./utils.js";
  *
  * Not for the board: see {@link getGlueRelsByNamespace}.
  *
- * Deliberately *not* batched through `readByIds`, unlike the id-list reads in `card.ts`.
+ * Deliberately not batched through `readByIds`, unlike the id-list reads in `card.ts`.
  * Batching it would make handing it a whole board work — slowly, at a round trip per two
  * thousand cards, once a second for as long as a tab is open. The hard failure is the point:
  * every caller here is a bounded selection, and the one that was not is why
@@ -31,7 +31,7 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
  * per card, and the board asks for it on every page load and every snapshot poll. SQLite
  * refuses a statement past its variable limit — and builds the whole thing in memory before
  * finding out — so a namespace large enough stops loading rather than loading slowly. It is
- * the one read that took an id list nothing bounded: `BATCH_MAX` caps what a *request* may
+ * the one read that took an id list nothing bounded: `BATCH_MAX` caps what a request may
  * name, and this list came out of the database.
  *
  * The join binds one parameter whatever the board holds, and walks indexes the schema
@@ -68,7 +68,7 @@ async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<
   if (affectedGlueIds.length === 0) return [];
 
   // Survivors are counted and then subtracted, rather than selecting orphans with
-  // `HAVING count() <= 1`: a group whose members were *all* removed produces no
+  // `HAVING count() <= 1`: a group whose members were all removed produces no
   // GROUP BY row at all, so a HAVING filter can never see it and its `glue` row
   // would leak. Anything not proven to still hold ≥2 members is an orphan.
   const memberCounts = await db

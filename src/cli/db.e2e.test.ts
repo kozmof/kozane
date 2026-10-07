@@ -146,7 +146,7 @@ describe("database CLI flow", () => {
  * `kozane db import` takes rows the endpoints and the card commands would have refused, and
  * says so instead of refusing.
  *
- * The decision is in `dumpLimitWarnings`: these limits are workspace *settings*, so a dump
+ * The decision is in `dumpLimitWarnings`: these limits are workspace settings, so a dump
  * exported from a workspace with a wider canvas or a larger `ui.contentMax` has to remain
  * restorable into one with the defaults. Refusing would mean a backup that cannot be restored
  * because of a policy difference, on the command whose whole purpose is getting data back.

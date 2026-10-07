@@ -13,7 +13,7 @@
    * object to write to, so those assignments land nowhere and the paths that matter most read
    * as though they never ran.
    *
-   * It is also the only way a *drag* is observable in the drawn output rather than only in
+   * It is also the only way a drag is observable in the drawn output rather than only in
    * the row it mutated. The gestures write positions through the rows — a frame's `posX`, a
    * card's `posY` — and a plain prop object is not state, so nothing re-renders: the frame,
    * its cards, and the icon strip under it all stay where they were drawn. A parent that owns

@@ -426,7 +426,7 @@ describe("parseCard", () => {
     expect(parseCard({ ok: true })).toBeNull();
   });
 
-  // The failure the annotation it replaced could not catch: a body that is *almost* a card.
+  // The failure the annotation it replaced could not catch: a body that is almost a card.
   // Each of these used to reach `state.cards` and be drawn from.
   it("rejects a card missing or mistyping a field the board draws with", () => {
     expect(parseCard({ ...row, posX: undefined })).toBeNull();

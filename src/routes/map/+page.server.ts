@@ -14,7 +14,7 @@ import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
  * A read, and only a read. There are no actions here and no snapshot poll — the board is
  * where a workspace is changed, and this page is where its shape is looked at.
  *
- * **Cards only, and no filesystem.** The persisted treemap snapshot gathers card tags without
+ * Cards only, and no filesystem. The persisted treemap snapshot gathers card tags without
  * taskspace files, together with the other semantic data every map view derives from.
  */
 

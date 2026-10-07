@@ -250,7 +250,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The ceiling the other budgets do not imply. Bytes and entries bound what is *read*, and
+     * The ceiling the other budgets do not imply. Bytes and entries bound what is read, and
      * the number of tags that reading produces is not a fixed fraction of either: a file of
      * `:a` lines yields a hit every three bytes, so a byte budget spent exactly as intended
      * can still produce millions of them.
@@ -389,7 +389,7 @@ describe("scanTaskspaceTags", () => {
      * one flag for the whole scan, so a truncation anywhere meant nothing anywhere was
      * pruned — and a taskspace large enough to hit a ceiling is exactly the one whose stale
      * entries most need dropping. It is per directory now: a file gone from a directory that
-     * *was* listed to the end is gone, whatever happened elsewhere in the tree.
+     * was listed to the end is gone, whatever happened elsewhere in the tree.
      */
     it("forgets a file gone from a directory it listed, though the walk stopped elsewhere", () => {
       mkdirSync(join(dir, "sub"));

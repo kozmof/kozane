@@ -23,11 +23,11 @@ export function columnCount(table: Table): number {
  *
  * - Pre-check the destination outside the transaction so a specific message could be
  *   written — `cards/partition` and `cards/layer` each ran a `getPartition`/`getLayer` that the
- *   transaction then ran again, and ran it *outside* the transaction, so the answer it gave
+ *   transaction then ran again, and ran it outside the transaction, so the answer it gave
  *   was already stale by the time the write took it.
  * - Or write one message for every way it could fail. `DELETE .../scopes/:id/members`
  *   answered "Some cards do not belong to this namespace" when what was missing was the
- *   *scope*, which is not a card and not the namespace's.
+ *   scope, which is not a card and not the namespace's.
  *
  * A reason carried out of the transaction that decided it removes both. Each function
  * narrows this to the subset it can actually produce, so a route handling

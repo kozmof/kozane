@@ -30,7 +30,7 @@ describe("scanUrls", () => {
     ]);
   });
 
-  // The trim is what makes "see http://x.com." link the address and leave the period as
+  // The trim makes "see http://x.com." link the address and leave the period as
   // prose — and it moves where the span ends, which is the boundary a tag written after it
   // is read against.
   it("leaves trailing sentence punctuation out of the url", () => {

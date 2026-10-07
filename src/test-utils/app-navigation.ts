@@ -1,7 +1,5 @@
-// Test stub for SvelteKit's virtual `$app/navigation` module, which only exists in a
-// real Vite/SvelteKit build. Tests that care about navigation spy on these with
-// `vi.spyOn(navigation, "goto")`; the defaults do nothing, the way a router that is not
-// running would.
+// Stub SvelteKit's `$app/navigation` module. Defaults do nothing. Tests can observe calls with
+// `vi.spyOn(navigation, "goto")` .
 export function goto(_url: string | URL): Promise<void> {
   return Promise.resolve();
 }
@@ -9,7 +7,7 @@ export function goto(_url: string | URL): Promise<void> {
 export function replaceState(_url: string | URL, _state: Record<string, unknown>): void {}
 
 /**
- * Registers a navigation guard. Does nothing here: with no router running there is no
- * navigation to guard, and a test that wants the callback mocks this module to capture it.
+ * Provide a no-op navigation guard registration. Tests that need the callback can mock this
+ * module to capture it.
  */
 export function beforeNavigate(_callback: (navigation: unknown) => void): void {}

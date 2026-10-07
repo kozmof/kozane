@@ -2,7 +2,7 @@
  * The colours a partition is drawn in, and the rule that assigns them.
  *
  * Here rather than beside the board that draws them, though the board is the only thing that
- * *draws* a partition: three server-side readers have to answer with the same colours the board
+ * draws a partition: three server-side readers have to answer with the same colours the board
  * would give, and one of them cannot reach a route module at all.
  *
  * `lib/server/treemap-snapshot.ts` was importing this from

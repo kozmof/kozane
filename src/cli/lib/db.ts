@@ -163,7 +163,7 @@ export async function runMigrations(dbUrl: string): Promise<void> {
  * plain copy had no way to show. A database in WAL — which is what a workspace runs in, see
  * `db/pragmas.ts` — keeps its most recent commits in the `-wal` beside it until a
  * checkpoint, so copying the main file alone can produce a database missing everything
- * committed since. What arrived here was not a corrupt file but an *older* one, and an older
+ * committed since. What arrived here was not a corrupt file but an older one, and an older
  * Kozane database is a plausible database: `validateRestoreCandidate` below read it as one
  * that had never been migrated, and refused a backup that was perfectly good.
  *
@@ -252,7 +252,7 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
     renameSync(stagedPath, targetPath);
     // After the rename rather than before: until the new file is in place there is still a
     // database here that its log belongs to, and a crash between the two would otherwise
-    // leave the *old* database stripped of commits it had.
+    // leave the old database stripped of commits it had.
     for (const sidecar of sidecarPaths(targetPath)) rmSync(sidecar, { force: true });
     const directoryFd = openSync(dirname(targetPath), "r");
     try {

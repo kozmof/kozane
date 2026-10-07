@@ -118,7 +118,7 @@ export type TaskspaceTagScan = {
    * `"unreadable"`, carried one step further out: this is not a limit the scan met, it is a
    * taskspace that is not there to meet one.
    *
-   * A directory the walk cannot list *below* the root stays a truncation. That taskspace was
+   * A directory the walk cannot list below the root stays a truncation. That taskspace was
    * read as far as it goes, and one unreadable directory inside it is a fact about a file.
    */
   missing: boolean;
@@ -156,7 +156,7 @@ export type TaskspaceTagScan = {
  * and no reads, and only a file that actually changed is read and parsed again.
  *
  * Weaker than `fileSignature` in two ways, both from taking what the listing already has
- * rather than paying for a `stat` of its own. There is no inode, so a file *replaced* by
+ * rather than paying for a `stat` of its own. There is no inode, so a file replaced by
  * rename — which is how editors and Kozane's own writers save — is caught by its mtime rather
  * than outright. And `modifiedAt` is an ISO string, so the resolution is a millisecond where
  * `fileSignature` reports nanoseconds. Two writes of the same length inside one millisecond
@@ -186,7 +186,7 @@ const fileCache = new Map<string, Map<string, CachedFile>>();
 
 /**
  * One directory's entries, created on first sight, and moved to the end of the map either
- * way — which is what makes insertion order least-recently-used.
+ * way — which makes insertion order least-recently-used.
  *
  * Eviction happens here rather than on a timer because here is where the map grows. It was
  * missing entirely: pruning is per directory — {@link pruneStale} drops files that are gone
@@ -317,7 +317,7 @@ function fileTagHits(
 
   // Refused here rather than by the read below, because the read is not what it would cost.
   // `readTaskspaceFile` turns a file past the per-file cap away without opening it, so
-  // charging for one and *then* being refused spends budget on bytes nobody ever looked at —
+  // charging for one and then being refused spends budget on bytes nobody ever looked at —
   // and a single large asset beside the notes was enough to spend the whole of it and leave
   // the text files after it reported as `"budget"`.
   //
@@ -375,7 +375,7 @@ type Scan = {
    * Per directory rather than one flag for the whole walk, and that is the whole of what
    * makes pruning work on a large taskspace. A directory is here when its listing succeeded,
    * was not itself cut short, and its every entry was visited; nothing about what happened
-   * *below* it bears on that, since a child that stopped at a budget still leaves this
+   * below it bears on that, since a child that stopped at a budget still leaves this
    * directory's own entries fully enumerated. So "not seen, and its directory was completed"
    * means gone, which is the only thing {@link pruneStale} needs to be true.
    */
@@ -449,7 +449,7 @@ function walk(scan: Scan, subPath: string, depth: number): void {
       scan.truncated.add("nodes");
       return;
     }
-    // Full, so there is nothing left for the rest of the tree to be read *into*. Returning
+    // Full, so there is nothing left for the rest of the tree to be read into. Returning
     // unwinds the same way the nodes budget does — each enclosing loop meets this on its
     // next entry — and stops the walk from spending bytes and syscalls producing hits that
     // would only be dropped.
@@ -523,7 +523,7 @@ function parentDir(subPath: string): string {
  * entirely and the map grew with each renamed file for the life of the process — the
  * unbounded growth this function exists to prevent, reintroduced by its own guard.
  *
- * {@link Scan.completed} is what makes the narrower question answerable, and the two
+ * {@link Scan.completed} makes the narrower question answerable, and the two
  * conditions together are exact: a file whose directory was enumerated in full and which was
  * not among what that enumeration named is not there any more.
  *

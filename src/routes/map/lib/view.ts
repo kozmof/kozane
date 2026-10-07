@@ -5,7 +5,7 @@ import type { Point, Rect } from "./treemap.js";
  * Panning and zooming the map, as arithmetic.
  *
  * The map is a packing rather than a scene, so the view is not applied to it afterwards the
- * way a `<g transform>` would: it decides the rectangle the packing is laid out *into*. At
+ * way a `<g transform>` would: it decides the rectangle the packing is laid out into. At
  * 100% with no pan that rectangle is the box on the page, which is what the map has always
  * been drawn into; zoomed to 200% it is a rectangle twice that size, positioned by the pan.
  *
@@ -37,7 +37,7 @@ export type Size = { width: number; height: number };
  * Not where the map opens — see {@link defaultView} — and not what the control in the corner
  * calls 100% either, which is {@link zoomPercent}'s business. It stays the unit everything
  * here is written in, because it is the one view the box itself defines: `viewedArea`
- * multiplies by `zoom`, and 1 has to mean *the box* for that to be arithmetic rather than a
+ * multiplies by `zoom`, and 1 has to mean the box for that to be arithmetic rather than a
  * convention.
  */
 export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
@@ -134,7 +134,7 @@ export function clampView(view: MapView, size: Size): MapView {
  * The view zoomed to `zoom`, with `at` — a point in the box, in its own pixels — left where
  * it was.
  *
- * That is what makes a wheel zoom feel attached to the pointer: the partition under the cursor
+ * That makes a wheel zoom feel attached to the pointer: the partition under the cursor
  * is the one that stays put, rather than the top-left corner, so zooming in on something is
  * done by pointing at it.
  */
@@ -162,7 +162,7 @@ export function zoomedBy(view: MapView, size: Size, delta: number): MapView {
 /**
  * The view moved by a screen-pixel offset.
  *
- * A drag passes the view it *began* at and how far the pointer has travelled altogether,
+ * A drag passes the view it began at and how far the pointer has travelled altogether,
  * rather than the last view and the last few pixels. Both give the same answer until the
  * clamp bites, and then they differ in a way that is felt: applied step by step, a drag that
  * ran past the edge would have to travel back through everything the clamp had thrown away
@@ -176,9 +176,9 @@ export function pannedBy(view: MapView, size: Size, dx: number, dy: number): Map
 /**
  * Whether the map is where it opens.
  *
- * Compared by value, and against the *clamped* default: a map panned back by hand counts as
+ * Compared by value, and against the clamped default: a map panned back by hand counts as
  * home, and a box too small to hold the default does not leave the way back permanently
- * offered — the clamp is what makes those two the same test rather than two.
+ * offered — the clamp makes those two the same test rather than two.
  */
 export function isDefaultView(view: MapView, size: Size): boolean {
   const home = clampView(defaultView(size), size);

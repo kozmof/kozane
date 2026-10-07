@@ -47,7 +47,7 @@ export type PlacementRequest = {
  * Three fields of component state — `placementSeq`, `lastPlacementScroll`,
  * `lastListPosition` — and the rules relating them, which were readable only by reading
  * `getNewCardPosition` in `KozaneCanvas.svelte` from end to end. The rules are worth stating
- * on their own because they are about *runs*, not about any one card:
+ * on their own because they are about runs, not about any one card:
  *
  * - A run continues while the board has not been scrolled. Adding three cards in a row puts
  *   them beside or below each other rather than three in the same place.

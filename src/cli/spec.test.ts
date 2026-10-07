@@ -49,7 +49,7 @@ type CommandEntry = {
  *
  * A group such as `net` or `api key` is not runnable and is not listed: it carries no action
  * and exists only to hold its children. `doctor` is the one that is both — it runs a check
- * of its own *and* hosts `doctor config` — so the test is on having an action handler rather
+ * of its own and hosts `doctor config` — so the test is on having an action handler rather
  * than on having no children.
  */
 function runnableCommands(command: Command, prefix: string[] = []): CommandEntry[] {
@@ -93,7 +93,7 @@ function pathOf(signature: string): string {
  * because nothing public distinguishes a group from a leaf that happens to have subcommands.
  * That probe is load-bearing for every check below, and it fails in the one direction none of
  * them would report: renamed or removed upstream, the field reads `undefined` for every
- * command, `runnableCommands` returns an empty list, and the two checks that walk *from* the
+ * command, `runnableCommands` returns an empty list, and the two checks that walk from the
  * code — "documents every command" and the argument spelling — pass over nothing at all. The
  * suite would go green on a tree it had stopped looking at.
  *
@@ -118,7 +118,7 @@ describe("the leaf/group probe the checks below rest on", () => {
   });
 
   it("counts a command that is both a leaf and a group", () => {
-    // `doctor` runs a check of its own *and* hosts `doctor config`, which is why the probe
+    // `doctor` runs a check of its own and hosts `doctor config`, which is why the probe
     // tests for an action handler rather than for having no children.
     expect(paths.has("doctor")).toBe(true);
     expect(paths.has("doctor config")).toBe(true);

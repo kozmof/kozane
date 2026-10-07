@@ -45,7 +45,7 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
 
   // Serialized once and reused for both the tag and the body. The rows arrive in whatever
   // order SQLite hands them over, which is stable for a table nothing has written to — and
-  // a table something *has* written to earns a new tag on the merits anyway. A reshuffle
+  // a table something has written to earns a new tag on the merits anyway. A reshuffle
   // that changed no data would cost one needless refresh, never a wrong one.
   const body = JSON.stringify(loaded.snapshot);
   const etag = snapshotEtag(body);

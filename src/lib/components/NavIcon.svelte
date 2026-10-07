@@ -46,7 +46,7 @@
       { x: 10, y: 10, w: 4, h: 4 },
     ],
     // The tag index: a tag, and the tags written underneath it. The trunk drops from the
-    // root and stops at the last branch it has to reach, which is what makes the shape a
+    // root and stops at the last branch it has to reach, which makes the shape a
     // tree rather than three bars that happen to be indented — the connection is drawn.
     tags: [
       { x: 2, y: 2, w: 5, h: 3 },

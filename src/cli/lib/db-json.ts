@@ -11,7 +11,7 @@ const EXPORT_VERSION = 8;
  * Version 7 is the first written after `project` and `bundle` became `namespace` and
  * `partition`, and it is still the oldest that can be read.
  *
- * Version 8 added `scope_area`, and did *not* move this floor. A table that did not exist
+ * Version 8 added `scope_area`, and did not move this floor. A table that did not exist
  * when a dump was written is not a table the dump half-answers — it is one it has nothing to
  * say about, and the right reading of a version 7 dump is that no scope had been framed yet.
  * {@link TABLE_ORDER} records the version each such table arrived in, and `parseDump` reads a
@@ -39,7 +39,7 @@ const OLDEST_SUPPORTED_IMPORT_VERSION = 7;
  * point at one already written. The reverse of this order is what a restore deletes in.
  *
  * The order and the sort are decisions the schema does not hold, so they are written here.
- * The *columns* are not: they are read off the Drizzle table below, because a column added
+ * The columns are not: they are read off the Drizzle table below, because a column added
  * to the schema and not to this list is silently dropped by `kozane db export` — which is
  * how `namespace.is_default` was lost after migration 0003 — and a list restated by hand
  * could only ever be checked against the schema after the fact. Drizzle reports them in
@@ -389,7 +389,7 @@ function validateDumpRefs(tables: TableRows): void {
 /**
  * The limits a dump's rows are measured against — the workspace's, not the built-in
  * defaults, because `ui.contentMax` and the canvas size are settings and the workspace being
- * imported *into* is the one whose rules apply from here on.
+ * imported into is the one whose rules apply from here on.
  */
 export type DumpLimits = { contentMax: number; canvasWidth: number; canvasHeight: number };
 
@@ -419,7 +419,7 @@ function overLimit(
  * One table's rows off a dump, leniently — anything that is not an array of objects reads as
  * no rows.
  *
- * Lenient because of *when* this runs: {@link dumpLimitWarnings} is called after
+ * Lenient because of when this runs: {@link dumpLimitWarnings} is called after
  * {@link importDbJson} has already succeeded, so the shape is known good and these guards
  * can only fire on a dump that was somehow accepted anyway. What they buy is that a report
  * about a restore cannot become the reason the restore appears to have failed. `parseDump`
@@ -444,7 +444,7 @@ function rowsOf(input: unknown, table: TableName): JsonObject[] {
  * database — SQLite would reject it a moment later, less legibly — so it stops the import.
  * These are different: a card longer than `ui.contentMax`, a name past {@link NAME_MAX}, a
  * position off the end of the canvas. Every one of them is a row SQLite will take and the
- * board will draw, and every one of them is measured against a *setting* that the workspace
+ * board will draw, and every one of them is measured against a setting that the workspace
  * which produced the dump may simply have had set differently. Exporting from a workspace
  * with a wider canvas and importing into one with the default is an ordinary thing to do.
  *

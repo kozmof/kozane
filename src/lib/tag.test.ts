@@ -152,7 +152,7 @@ describe("scanTagLines", () => {
      * A URL ends whatever was being written into it, because its characters are cut out
      * before the pattern sees them rather than merely skipped once it has matched.
      *
-     * Skipping tested where a match *began*, which let a candidate that opened in prose and
+     * Skipping tested where a match began, which let a candidate that opened in prose and
      * ran into an address through whole: the tag reached past the `://` and took part of the
      * host with it. Both cases below were real, and both produced a tag the card did not draw
      * — the renderer having always cut.

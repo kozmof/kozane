@@ -30,7 +30,7 @@ export function activityCells(rows: ActivityCount[], today = utcDay(new Date()))
   // Anchored on the week today sits in — the Saturday that closes it — and laid backwards,
   // so today always has a cell in the last week. Anchoring on the year-ago week instead
   // (the Sunday on or before `rangeStart`, then 53 weeks forward) put the final cell a day
-  // *before* today whenever today was a Sunday, and on about a third of Mondays: the window
+  // before today whenever today was a Sunday, and on about a third of Mondays: the window
   // ended on the previous Saturday, so the day's own card changes were neither drawn nor
   // clickable. The two anchors agree on every other day, which is why it read as correct.
   const end = new Date(todayDate);
@@ -65,7 +65,7 @@ export function validActivityDay(value: string): boolean {
  * Narrowing the map to one day of the activity grid.
  *
  * Two filters and they have to agree: clicking a day re-sizes the partition rectangles by what
- * changed that day, *and* narrows the tag tree to the cards that changed that day. Written
+ * changed that day, and narrows the tag tree to the cards that changed that day. Written
  * inline on the page they were two `$derived` blocks that happened to test the same thing
  * two different ways — one against the `activity` rows, one against `tagCards` — with
  * nothing saying they were one decision. A day that filtered the packing but not the tags,

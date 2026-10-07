@@ -1,6 +1,5 @@
-// Test stub for SvelteKit's virtual `$app/environment` module, which only exists in a
-// real Vite/SvelteKit build. Component tests run in jsdom, which is the browser as far as
-// the code under test is concerned.
+// Stub SvelteKit's `$app/environment` module for component tests in jsdom. Treat the test
+// environment as a browser.
 export const browser = true;
 export const dev = false;
 export const building = false;

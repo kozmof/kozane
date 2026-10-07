@@ -270,7 +270,7 @@ export const cardTable = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
     /**
-     * When the card's *text* last changed, and nothing else about it. A card dragged across
+     * When the card's text last changed, and nothing else about it. A card dragged across
      * the board, resized, restacked, or moved to another partition or layer keeps the timestamp
      * it had — which is why `updateNamespaceCardPositions` and the `reassign*` writers do not
      * touch this column, and only `updateCard`'s content branch does.

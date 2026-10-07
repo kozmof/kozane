@@ -78,8 +78,7 @@ type CardMoveOptions = { x?: number | string; y?: number | string };
 
 export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    // Held against this workspace's `ui.contentMax`, which is why the check waits for the
-    // workspace rather than running on the way in.
+    // Validate against the workspace's `ui.contentMax` after loading its configuration.
     const contentIssue = contentLimitIssue(content, contentMaxForRoot(root));
     if (contentIssue) throw new Error(contentIssue);
 
@@ -87,9 +86,7 @@ export async function cardAdd(content: string, options: CardAddOptions = {}): Pr
     const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
     const layerId = await resolveLayerId(db, namespaceId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
-    // `--x`/`--y` are held to the board the same way the create endpoint holds a dragged
-    // card, and against the same workspace bounds: a position outside them is one the
-    // viewport can never scroll to, so a card stored there is a card nobody can find.
+    // Clamp `--x` and `--y` to the workspace's board bounds so the viewport can reach the card.
     const placement = clampToBounds(options.x ?? 0, options.y ?? 0, canvasBoundsForRoot(root));
     const id = await withTx(db, async (tx) => {
       const cardId = await addCard({
@@ -152,10 +149,8 @@ export async function cardSquash(
     const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
     if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
 
-    // Each segment becomes a card of its own, so each is held to the limit a card is held
-    // to — this workspace's `ui.contentMax`. Reported by position, the only thing that
-    // tells one segment of a piped file from another, and checked before anything is
-    // written so a refusal leaves the board alone.
+    // Check every segment against the workspace's `ui.contentMax` before writing any cards.
+    // Report failures by segment position so they can be found in the input.
     const limit = contentMaxForRoot(root);
     for (const [index, segment] of contents.entries()) {
       const issue = contentLimitIssue(segment, limit);
@@ -171,11 +166,8 @@ export async function cardSquash(
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(eq(partitionTable.namespaceId, namespaceId));
-    // The workspace's own board, not the built-in default: `ui.canvasWidth` decides how
-    // many columns the layout wraps at, and laying out against 5600 on a board configured
-    // narrower puts the right-hand columns past its edge. Clamped afterwards for the rows,
-    // which run downwards without a wrap to stop them — the same pair of steps
-    // `squashNamespaceCard` takes for the board's own squash.
+    // Lay out columns using the workspace's `ui.canvasWidth` , then clamp overflowing rows to
+    // the board. `squashNamespaceCard` uses the same steps.
     const bounds = canvasBoundsForRoot(root);
     const positions = squashCardPositions(occupied, contents.length, {
       canvasWidth: bounds.canvasWidth,
@@ -371,9 +363,8 @@ export async function cardGlue(
     if (options.add) {
       const rels = await getGlueRelsByNamespace({ db, namespaceId });
       const glueIdByCardId = new Map(rels.map((rel) => [rel.cardId, rel.glueId]));
-      // Built from the workspace index rather than from `rels`, though the two hold the same
-      // pairs: the members of a group come out in the order the cards did, which is the order
-      // the anchor below and the printed list are chosen in.
+      // Build groups from the workspace index to preserve card order when choosing anchors and
+      // printing members.
       const membersByGlueId = new Map<string, string[]>();
       for (const card of index) {
         const glueId = glueIdByCardId.get(card.id);
@@ -395,8 +386,8 @@ export async function cardGlue(
     if (options.alignList) {
       const ui = getUiConfigForRoot(root);
       const bounds = canvasBoundsForRoot(root);
-      // Read here rather than up front: this is the one branch that needs a card's text and
-      // width, and it needs them for the *expanded* set, which `--add` has just decided.
+      // Read text and width only for this branch, after `--add` has determined the expanded
+      // card set.
       const detailed = await loadCards(db, cardIds);
       const byId = new Map(detailed.map((card) => [card.id, card]));
       const anchor = findById(detailed, cardIds[0], "Card");
@@ -440,17 +431,12 @@ export async function cardUnglue(requestedIds: string[]): Promise<void> {
 }
 
 /**
- * The three lines `--times` puts above the text, printed through the same {@link sortColumn}
- * `card list --sort` prints its column with, so one card reads the same whichever command
- * showed it — the unreadable timestamps of a hand-edited row included.
+ * Print the `--times` header with the same `sortColumn` formatter as `card list --sort` ,
+ * including its handling of invalid timestamps. Include the derived `gap` alongside the stored
+ * timestamps.
  *
- * `gap` is derived from the two above it rather than stored, and is listed all the same:
- * it is what `--sort gap` orders by, and a card is easier to find in that listing when the
- * command that shows one card names the same three things.
- *
- * The label column is measured from the keys rather than written down beside them, so a
- * fourth order stays one entry in `CARD_SORT_KEYS` and does not also have to be a number
- * corrected here.
+ * Measure label width from `CARD_SORT_KEYS` so adding a sort key needs no separate width
+ * change.
  */
 const KEY_LABEL_WIDTH = Math.max(...CARD_SORT_KEYS.map((key) => key.length));
 
@@ -463,9 +449,8 @@ function printCardTimes(card: CardStamps): void {
 
 export async function cardShow(requestedId: string, options: CardShowOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    // Ids alone: resolving a short id needs every id in the workspace, but printing one
-    // card needs one card's text. Selected together, `kozane card show` read the whole
-    // content column — every card of every namespace — to put a single card on stdout.
+    // Resolve short IDs using only the workspace's ID column. Fetch text separately for the
+    // requested card.
     const cards = await db.select({ id: cardTable.id }).from(cardTable);
     const cardId = resolveShortId(
       requestedId,
@@ -484,9 +469,8 @@ export async function cardShow(requestedId: string, options: CardShowOptions = {
     // Not `findById`: the row is fetched by a second query rather than found in the list
     // the id was resolved against, which is the case its docstring warns a `!` would break.
     if (!card) throw new Error(`Card not found: ${requestedId}`);
-    // Behind a flag, and above the text rather than below it. Without the flag this command
-    // prints a card's text and nothing else, which is what makes `kozane card show x > f.txt`
-    // write the card — a history printed by default would end up in the file too.
+    // Print history only when requested so redirecting the default output writes just the card
+    // text.
     if (options.times) printCardTimes(card);
     console.log(card.content);
   });
@@ -494,9 +478,8 @@ export async function cardShow(requestedId: string, options: CardShowOptions = {
 
 export async function cardNearest(requestedId: string): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    // Positions first, without the text. Resolving a short id needs every card in the
-    // workspace, but only the origin's own namespace is ever printed — carrying `content`
-    // through this pass read every other namespace's cards to throw them away again.
+    // Read positions and IDs first to resolve the origin. Fetch text only for the namespace
+    // being printed.
     const placed = await db
       .select({
         id: cardTable.id,
@@ -525,9 +508,8 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(eq(partitionTable.namespaceId, origin.namespaceId));
-    // Equal distances are broken by `compareIds`, which is what `sortCards` breaks equal
-    // timestamps with and `orderLayers` equal positions: the reason it is not
-    // `localeCompare` is written once, in `lib/order.ts`.
+    // Break equal distances with `compareIds` , as the card and layer sorters do. See
+    // `lib/order.ts` for the ordering rule.
     const sorted: NearestCard[] = cards
       .map((card) => ({
         ...card,
@@ -539,24 +521,18 @@ export async function cardNearest(requestedId: string): Promise<void> {
 }
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
-  // Ahead of `runWorkspaceCommand`, because these two say nothing about the workspace:
-  // `kozane card list --reverse` run outside one is a malformed command wherever it was
-  // typed, and should say so rather than report the missing workspace it never got to.
+  // Validate workspace-independent options before `runWorkspaceCommand` . A malformed command
+  // should report its option error even outside a workspace.
   //
-  // Thrown, not exited on: commander does not await this action, so nothing here catches a
-  // rejection by itself — the `.catch(fail)` on the action in `index.ts` is what turns
-  // these into the one-line `Error: ...` and the exit code every other refusal from this
-  // file prints. That keeps the exit in the CLI's outermost layer and leaves this function
-  // callable — and its refusals assertable — without ending the process.
+  // Throw so callers can test validation without exiting. The action's `.catch(fail)` in
+  // `program.ts` reports the error and sets the exit code.
   const { sort, reverse } = options;
   if (options.taskspace && (options.namespace || options.partition))
     throw new Error("--taskspace cannot be combined with --namespace or --partition.");
-  // Without a key there is no order to reverse: the unsorted listing comes back in
-  // whatever order SQLite hands the rows over, which is not an order anything promises.
+  // Without a sort key, SQLite's row order is unspecified and cannot be meaningfully reversed.
   if (reverse && !sort) throw new Error("--reverse requires --sort.");
 
-  // Both applied on every path below, so listing from a taskspace directory sorts the same
-  // way — and prints the same column — as listing a namespace does.
+  // Apply the same sort and time-column formatter to namespace and taskspace listings.
   const ordered = <T extends ListedCard>(cards: T[]): T[] =>
     sort ? sortCards(cards, sort, reverse) : cards;
   const timeColumn = sort ? (card: CardTimes) => sortColumn(card, sort) : undefined;

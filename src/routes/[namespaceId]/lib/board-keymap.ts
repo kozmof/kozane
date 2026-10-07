@@ -21,7 +21,7 @@
  *
  * ## What a binding may not do
  *
- * Decide the *order* the gates run in. The page's own guards — a palette or the editor
+ * Decide the order the gates run in. The page's own guards — a palette or the editor
  * owning the keyboard, a held key repeating, focus sitting in a text field — are about who
  * the keystroke belongs to rather than what it means, and they stay where they are, above
  * this. A binding only says: these keys, under this condition, do this.
@@ -65,7 +65,7 @@ export type KeyBinding = {
    */
   shift?: boolean;
   /**
-   * When this binding is live. A binding whose condition does not hold is *passed over*
+   * When this binding is live. A binding whose condition does not hold is passed over
    * rather than ending the dispatch — which is the behaviour of the `if (!readonly && …)`
    * and `if (pendingRect && …)` branches this replaces, and it matters: a workspace where
    * the focus-composer key is also the toggle-footers key still toggles footers in a
@@ -144,8 +144,8 @@ export function hasCommandModifier(event: {
 /**
  * The bindings claiming each key, in the order {@link runKeyBindings} would reach them.
  *
- * For the tests, and for anything that wants to ask of a *table* the question
- * `validateUiOverrides` asks of a *config*: does more than one action answer to this key,
+ * For the tests, and for anything that wants to ask of a table the question
+ * `validateUiOverrides` asks of a config: does more than one action answer to this key,
  * and which one wins. Keyed by the key and the Shift requirement together, since
  * Shift+ArrowUp and ArrowUp are not competing for the same keystroke.
  *

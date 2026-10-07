@@ -5,12 +5,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 /**
- * The taskspace file editor, in a browser with real layout.
- *
- * This is where the parts the jsdom tests cannot reach are checked: the caret and selection
- * are painted from measured pixels, and a click has to land on the character under it.
- * `EditorSurface.test.ts` covers which keys produce which edits; nothing there can say
- * whether the cursor is drawn in the right place, because jsdom reports every rect as zero.
+ * Test the taskspace editor with real browser layout. Caret placement, selections, and pointer
+ * coordinates depend on font measurements that jsdom cannot provide. `EditorSurface.test.ts`
+ * covers editing behavior separately.
  */
 
 const packageRoot = resolve(import.meta.dirname, "..");
@@ -64,12 +61,9 @@ async function openTheFile(page: Page): Promise<void> {
 }
 
 /**
- * The client x of a column's left edge on the line reading `lineText`, measured in the page
- * with the same `Range` the editor uses.
- *
- * Asking the browser rather than assuming a character width is the point: these tests exist
- * to check the editor against real font metrics, and a test that computed its own expected
- * pixels from a nominal cell size would only be checking its own arithmetic.
+ * Measure a column's left edge on the line containing `lineText` with the browser's `Range`
+ * API. Real font metrics let these tests check the editor's positioning without assuming a
+ * fixed character width.
  */
 async function columnX(page: Page, lineText: string, column: number): Promise<number> {
   return page.evaluate(
@@ -114,8 +108,7 @@ test.beforeAll(async () => {
   mkdirSync(join(taskspaceDir, "src"), { recursive: true });
   writeFileSync(join(taskspaceDir, "notes.md"), "alpha\nbravo\ncharlie\n");
   writeFileSync(join(taskspaceDir, "src", "app.ts"), "export {}\n");
-  // A line of double-width cells beside single-width ones. The measured geometry exists for
-  // exactly this, and a font's real metrics are the only thing that can confirm it.
+  // Place double-width and single-width cells on the same line to test measured geometry.
   writeFileSync(join(taskspaceDir, "cjk.md"), "あいうabc\nplain\n");
   writeFileSync(join(taskspaceDir, "selectme.md"), "abcdefghij\nsecond\n");
   writeFileSync(join(taskspaceDir, "grouped.md"), "start \n");
@@ -124,8 +117,7 @@ test.beforeAll(async () => {
     Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n",
   );
 
-  // The marker carries the full UUIDs; the CLI prints short ids, and the routes want the
-  // full ones.
+  // The marker and routes use full UUIDs. The CLI prints short IDs.
   namespaceId = JSON.parse(readFileSync(join(taskspaceDir, ".taskspace.json"), "utf8"))
     .namespaceId as string;
 
@@ -168,7 +160,7 @@ test("types into a file and saves it to disk", async ({ page }) => {
 
   expect(readFileSync(join(taskspaceDir, "notes.md"), "utf8")).toBe("ZZalpha\nbravo\ncharlie\n");
 
-  // And it is still there after a reload, read back from disk rather than from the tab.
+  // Reload to verify that the edit was saved to disk.
   await page.reload();
   await openTheFile(page);
   await expect(page.getByText("ZZalpha")).toBeVisible();
@@ -180,9 +172,7 @@ test("places the caret where the text is clicked", async ({ page }) => {
   const charlie = page.getByText("charlie");
   const box = await charlie.boundingBox();
   if (!box) throw new Error("no box for the line");
-  // The line is drawn with horizontal padding, so its box starts a padding before its
-  // text. Counting that padding as part of the text is what put a click about two
-  // characters to the right of where it was aimed.
+  // The line box includes horizontal padding. Subtract it when mapping clicks to text columns.
   const padLeft = await charlie.evaluate((el) =>
     Number.parseFloat(getComputedStyle(el).paddingLeft),
   );
@@ -192,15 +182,12 @@ test("places the caret where the text is clicked", async ({ page }) => {
   await page.mouse.click(box.x + padLeft + 1, middleY);
   await expect(page.getByText("Ln 3, Col 1")).toBeVisible();
 
-  // Clicking well past the end of the text stops at the end of the line rather than
-  // running on into the empty space after it. "charlie" is seven characters, so the
-  // caret belongs at column 8. Halfway across the panel rather than at its edge: a line
-  // runs the full width of the surface, and its far edge is where the scrollbar sits.
+  // A click beyond the text stops at column 8, after the seven characters in "charlie". Click
+  // halfway across the panel to avoid its scrollbar.
   await page.mouse.click(box.x + box.width / 2, middleY);
   await expect(page.getByText("Ln 3, Col 8")).toBeVisible();
 
-  // And the top of a line belongs to that line: the vertical padding was being counted
-  // too, which put the bottom of each line on the line below.
+  // The top of a line must map to that line after accounting for vertical padding.
   await page.mouse.click(box.x + padLeft + 1, box.y + 1);
   await expect(page.getByText("Ln 3, Col 1")).toBeVisible();
 });
@@ -217,7 +204,7 @@ test("takes focus back when the text is clicked after focus went elsewhere", asy
   await expect(page.getByTestId("editor-cursor")).toBeVisible();
   await expect(page.getByTestId("editor-sink")).toBeFocused();
 
-  // And it is really focused, not just painted: typing lands in the file.
+  // Typing verifies that the editor has keyboard focus.
   await page.keyboard.type("X");
   await expect(page.getByTitle("Unsaved changes")).toBeVisible();
 });
@@ -227,12 +214,11 @@ test("fits the text to the panel rather than overflowing it sideways", async ({ 
 
   const surface = page.getByTestId("editor-surface");
   const overflow = await surface.evaluate((el) => el.scrollWidth - el.clientWidth);
-  // A short file has nothing to scroll to. The sizer used to add its own padding on top of
-  // a 100% width, which put a horizontal scrollbar under every file and pushed each line a
-  // padding past the visible edge.
+  // A short file should fit without a horizontal scrollbar. The sizer must include padding
+  // within its width.
   expect(overflow).toBe(0);
 
-  // And a line ends where the panel does, so a click anywhere along it reaches the editor.
+  // A click anywhere along the line reaches the editor.
   const lineBox = await page.getByText("charlie").boundingBox();
   const surfaceBox = await surface.boundingBox();
   if (!lineBox || !surfaceBox) throw new Error("no box");
@@ -243,9 +229,8 @@ test("puts the caret back at the edit an undo takes back", async ({ page }) => {
   await openTheFile(page);
   await page.getByTestId("editor-sink").focus();
 
-  // Edit the third line, then walk the caret up to the first. The two characters are typed
-  // in one go, so they are one undo entry rather than two — consecutive edits in one place
-  // are grouped, and a single Ctrl+Z below takes back both.
+  // Type two characters in one edit, then move the caret to the first line. One undo should
+  // remove both characters.
   await page.getByText("charlie").click();
   await page.keyboard.press("End");
   await page.keyboard.type("!!");
@@ -268,9 +253,8 @@ test("puts the caret back at the edit an undo takes back", async ({ page }) => {
 test("lands a click on the right character in a line of double-width cells", async ({ page }) => {
   await openFile(page, "cjk.md");
 
-  // "あいうabc" — three double-width cells then three single-width ones. The unit tests
-  // model this with a stubbed measurer; only a real font can say whether the model is
-  // right, which is what makes this worth running in a browser.
+  // Use three double-width cells followed by three single-width cells. Browser font metrics
+  // verify the geometry modeled by the unit tests.
   const line = "あいうabc";
   const y = (await page.getByText(line).boundingBox())!.y + 10;
 
@@ -279,10 +263,8 @@ test("lands a click on the right character in a line of double-width cells", asy
     await expect(page.getByText(`Ln 1, Col ${column + 1}`)).toBeVisible();
   }
 
-  // The cells really are unequal, so the loop above is not passing on a line that a
-  // fixed character width would have got right anyway. Only "wider", not "twice as wide":
-  // how much wider depends on which fonts the machine running this has, and the claim
-  // worth making here does not.
+  // Verify that the measured cells have different widths. The exact ratio depends on the
+  // available fonts.
   const wide = (await columnX(page, line, 1)) - (await columnX(page, line, 0));
   const narrow = (await columnX(page, line, 4)) - (await columnX(page, line, 3));
   expect(wide).toBeGreaterThan(narrow);
@@ -293,14 +275,13 @@ test("selects what was dragged over and replaces it", async ({ page }) => {
   const line = "abcdefghij";
   const y = (await page.getByText(line).boundingBox())!.y + 10;
 
-  // Drag from the start of "c" to the start of "g": four characters.
+  // Drag from the start of "c" to the start of "g" to select four characters.
   await page.mouse.move(await columnX(page, line, 2), y);
   await page.mouse.down();
   await page.mouse.move(await columnX(page, line, 6), y, { steps: 8 });
   await page.mouse.up();
 
-  // The selection is painted as its own rectangles rather than by the browser, so there is
-  // something to see as well as something to act on.
+  // Verify the selection rectangles as well as the selected text.
   await expect(page.getByTestId("editor-selection")).toHaveCount(1);
 
   await page.keyboard.press("Backspace");
@@ -317,8 +298,7 @@ test("groups a run of typing into one undo, and breaks the group after a pause",
   await page.keyboard.type("hello");
   await expect(page.getByText("start hello")).toBeVisible();
 
-  // One press takes the whole run back. The unit tests drive a fake clock; this is the
-  // only place the real one is exercised.
+  // One undo removes the whole typing run. This checks grouping with the real clock.
   await page.keyboard.press("Control+z");
   await expect(page.getByText("start")).toBeVisible();
   await expect(page.getByText("start hello")).toBeHidden();
@@ -339,8 +319,7 @@ test("draws only the lines in view and scrolls the rest of a long file", async (
   const surface = page.getByTestId("editor-surface");
   await expect(page.getByText("line 0", { exact: true })).toBeVisible();
 
-  // The DOM holds a viewport, not the document: 400 lines are in the file and nothing like
-  // 400 line elements are drawn.
+  // The DOM should contain only the visible portion of the 400-line document.
   const drawn = await surface.evaluate((el) => el.querySelectorAll("[data-line]").length);
   expect(drawn).toBeGreaterThan(0);
   expect(drawn).toBeLessThan(120);
@@ -368,9 +347,7 @@ test("returns the caret to where a backspace was pressed from when it is undone"
   await expect(page.getByText("abcdfghij")).toBeVisible();
   await expect(page.getByText("Ln 1, Col 5")).toBeVisible();
 
-  // Back to column 6, where the key was pressed from — not column 5, where the deletion
-  // began. The difference is a character, and it is the difference between carrying on
-  // typing and having to look for where you were.
+  // Undo restores the caret to column 6, where Backspace was pressed.
   await page.keyboard.press("Control+z");
   await expect(page.getByText("abcdefghij")).toBeVisible();
   await expect(page.getByText("Ln 1, Col 6")).toBeVisible();
@@ -401,7 +378,7 @@ test("resizes by dragging the left edge, and keeps the width across a close", as
   await expect(panel).toBeVisible();
   expect((await panel.boundingBox())!.width).toBeCloseTo(widened, 0);
 
-  // A reload starts from the default again: the width is per tab and never stored.
+  // Reload resets the panel width because it is not persisted.
   await page.reload();
   await openTheFile(page);
   expect((await panel.boundingBox())!.width).toBeCloseTo(before, 0);
@@ -432,8 +409,7 @@ test("commits an IME composition as one word rather than one character at a time
   const sink = page.getByTestId("editor-sink");
   await sink.focus();
 
-  // Drive a composition the way an IME does: a preedit that is revised, then a commit.
-  // Playwright's CDP session is what makes a real composition reachable at all.
+  // Use Playwright's CDP session to simulate IME preedit updates followed by a commit.
   const client = await page.context().newCDPSession(page);
   await client.send("Input.imeSetComposition", {
     text: "にほn",
@@ -459,7 +435,7 @@ test("closes on Escape and on a click outside the panel", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 
-  // The board is what "outside" means here: the canvas the panel sits over.
+  // Use the board as the click target outside the editor panel.
   await page.getByRole("button", { name: "notes.md", exact: true }).click();
   await expect(panel).toBeVisible();
   await page.mouse.click(80, 300);
@@ -490,7 +466,7 @@ test("asks before either route throws unsaved changes away", async ({ page }) =>
 
   await page.getByRole("button", { name: "Discard and close" }).click();
   await expect(panel).toBeHidden();
-  // Discarded rather than written: the file on disk is untouched.
+  // Discarding leaves the file on disk unchanged.
   expect(readFileSync(join(taskspaceDir, "grouped.md"), "utf8")).toBe("start \n");
 });
 
@@ -501,8 +477,8 @@ test("leaves a file untouched when it is closed without saving", async ({ page }
   await page.getByTestId("editor-sink").focus();
   await page.keyboard.type("dirty");
 
-  // The header Close is the third route out of the panel, and it asks over unsaved changes
-  // like the other two do — the test above covers Escape and a click on the board.
+  // The header Close button also prompts for unsaved changes. The preceding test covers Escape
+  // and a click on the board.
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page.getByText("This file has unsaved changes.")).toBeVisible();
   await page.getByRole("button", { name: "Discard and close" }).click();

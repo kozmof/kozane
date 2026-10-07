@@ -10,7 +10,7 @@ import type { BatchRejection } from "$db/api/utils";
  *
  * - It was said where it was not true. `DELETE /[namespaceId]/api/scopes/[scopeId]/members`
  *   answered it for a request naming a scope that does not exist, whose cards were fine.
- * - Where it *was* true, keeping it true cost a query. `cards/partition` and `cards/layer`
+ * - Where it was true, keeping it true cost a query. `cards/partition` and `cards/layer`
  *   each looked their destination up before calling, so that a missing partition or layer
  *   could be named separately — a read the transaction then did again, and did properly,
  *   since the pre-check's answer was already stale by the time the write used it.
@@ -21,7 +21,7 @@ import type { BatchRejection } from "$db/api/utils";
  *
  * All 400: every one of these is a request naming something the namespace does not have, and
  * that is the same answer whether the row is elsewhere or nowhere. The single-card routes
- * keep their own 404 — there the named thing *is* the resource, so its absence is the
+ * keep their own 404 — there the named thing is the resource, so its absence is the
  * status. See the note on {@link BatchRejection}.
  */
 const BATCH_REJECTION_MESSAGE: Record<BatchRejection, string> = {

@@ -7,12 +7,8 @@ import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 /**
- * `kozane card list --sort` end to end, over a real workspace built by `kozane init`.
- *
- * The histories are written rather than waited for. The columns are stored to the second,
- * so cards added one after another may or may not straddle a second boundary — an order
- * that depends on how fast the machine is is not an order worth asserting. Written, the
- * fixture states the history and the assertions state the order it produces.
+ * Test `kozane card list --sort` against a workspace created by `kozane init` . Set timestamps
+ * directly so ordering does not depend on whether consecutive writes cross a second boundary.
  */
 
 const cliEntry = resolve("src/cli/index.ts");
@@ -20,9 +16,8 @@ const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("ts
 const tempRoots: string[] = [];
 
 /**
- * The `when` of migration 0011, read out of the journal rather than copied from it, so
- * regenerating a migration cannot leave this test rolling a workspace back to the wrong
- * point and still passing for the wrong reason.
+ * Read migration 0011's `when` value from the journal so regeneration cannot leave this fixture
+ * using a stale timestamp.
  */
 const CARD_TIMESTAMPS_MIGRATION_WHEN = migrationWhen("0011_card_timestamps");
 
@@ -86,12 +81,11 @@ async function withDb(
 }
 
 /**
- * Three cards on which no two of the orders agree: `oldest` was added first but rewritten
- * most recently, `untouched` was added last and never edited, and `reconsidered` sits
- * between them by both timestamps while holding much the longest interval.
+ * Give the three cards distinct sort orders. `oldest` was created first and edited last.
+ * `untouched` was created last and never edited. `reconsidered` has intermediate timestamps and
+ * the longest interval.
  *
- * Each card's id is its text, so a failure names the card it is about, and the ids order
- * the same way `sortCards` breaks a tie on them.
+ * Use each card's text as its ID to make failures readable and ID tie-breaking predictable.
  */
 const THREE_CARDS = [
   { content: "oldest", created: "2026-01-01T00:00:00Z", updated: "2026-04-01T00:00:00Z" },
@@ -113,15 +107,9 @@ const BY_UPDATED = [
 const BY_GAP = ["0s  untouched", "28d  reconsidered", "90d  oldest"];
 
 /**
- * Writes `THREE_CARDS` into an initialised workspace, optionally tied to a taskspace.
- *
- * Inserted directly rather than through `kozane card add`. Each CLI call here is a `node
- * --import tsx` spawn of several seconds, and the histories these cards need would have to
- * be written over the top of whatever `card add` stamped anyway — so the spawns would buy
- * nothing but the flakiness of a test that starts eight processes. What the command under
- * test reads is the table, and this puts the table in a known state. `taskspace_id` is
- * written the same way for the same reason: the CLI has no command that sets it, since a
- * card is tied to a taskspace by the board rather than from a terminal.
+ * Insert `THREE_CARDS` directly into an initialized workspace, optionally linked to a
+ * taskspace. Direct inserts set the required histories without spawning a CLI process per card.
+ * They also set `taskspace_id` , which has no CLI setter.
  */
 async function seedThreeCards(root: string, taskspaceId: string | null = null): Promise<void> {
   await withDb(root, async (client) => {
@@ -161,9 +149,8 @@ async function addEveryCardToScope(root: string, scopeId: string): Promise<void>
 }
 
 /**
- * The id of the one row in `table`, read from the database rather than from what the
- * command printed: the CLI prints short ids, which resolve as arguments but are not what
- * a foreign key wants.
+ * Read the row's full ID from the database. CLI output uses short IDs, which cannot serve as
+ * foreign keys.
  */
 async function onlyId(root: string, table: "scope" | "taskspace"): Promise<string> {
   let id = "";
@@ -244,13 +231,9 @@ describe("kozane card list --sort", () => {
   }, 120_000);
 
   /**
-   * The whole of stderr, not a substring of it.
-   *
-   * These two refusals are raised before `runWorkspaceCommand`, which is the one place the
-   * CLI turns a throw into a one-line message and an exit code. A throw from outside it
-   * reaches the user as an unhandled rejection: the message is still in there, so an
-   * assertion that merely looked for the message would pass on a stack trace naming a line
-   * of `card.ts`. Matching the whole stream is what tells the two apart.
+   * Match the full stderr output to distinguish a handled error from an unhandled rejection
+   * containing the same message. These validation errors occur before `runWorkspaceCommand` can
+   * catch them.
    */
   function refusal(root: string, ...args: string[]): string {
     const result = runCli(root, ...args);
@@ -410,7 +393,7 @@ describe("kozane card list --sort", () => {
     // the reader go looking for it would be leaving the last step undone. The id is short,
     // as everything else the CLI prints is.
     expect(result.stdout).toContain("inserted by hand: epoch;");
-    // And the listing it warns about does read 1970, which is what makes it worth reporting.
+    // And the listing it warns about does read 1970, which makes it worth reporting.
     expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
   }, 90_000);
 

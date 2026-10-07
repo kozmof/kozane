@@ -59,7 +59,7 @@ export function resolveMigrationsFolder(): string {
  * Here rather than in `cli/lib/db.ts`, where it began, because it has two audiences now and
  * they sit on opposite sides of the tree. The CLI reports it and offers a way out — that
  * half is still there, in `migrationStatusMessage` and `requireCurrentMigrations`, and it
- * ends in `process.exit`, which a server cannot do. The server needs the same *answer* to
+ * ends in `process.exit`, which a server cannot do. The server needs the same answer to
  * refuse a request against a schema it cannot serve, and reaching into `src/cli` for it
  * would point the dependency the wrong way round.
  *

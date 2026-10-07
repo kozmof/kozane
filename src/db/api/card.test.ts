@@ -461,7 +461,7 @@ describe("updateNamespaceCardPositions", () => {
    *
    * The two CASEs and the WHERE bind five parameters per card, so a request at `BATCH_MAX`
    * builds a statement of ten thousand — under SQLite's own ceiling today, and under it only
-   * because nobody has added a third column to the CASE. The batching is what makes that a
+   * because nobody has added a third column to the CASE. The batching makes that a
    * property of the code rather than of a comment: enough positions to need several
    * statements still land as one atomic write.
    */
@@ -766,7 +766,7 @@ describe("reassignCardsToLayer", () => {
  *
  * Backdated rather than slept on: the columns are stored to the second, so a card added
  * and edited inside the same second has the same timestamp either way. Setting a known
- * past value is what makes "did this move" answerable at all.
+ * past value makes "did this move" answerable at all.
  */
 describe("card timestamps", () => {
   const LONG_AGO = new Date("2020-01-01T00:00:00Z");

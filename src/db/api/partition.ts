@@ -32,7 +32,7 @@ export type PartitionCardCount = {
 /**
  * Every partition in the workspace, with how many cards it holds.
  *
- * What the map page draws a rectangle from: a partition's area *is* its card count there, so the
+ * What the map page draws a rectangle from: a partition's area is its card count there, so the
  * number is the geometry rather than a label beside it.
  *
  * A `LEFT JOIN`, and that is the whole of what distinguishes this from the obvious query. An

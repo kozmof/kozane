@@ -12,7 +12,7 @@ import { compareIds } from "../../lib/order.js";
  * same choice `cardNearest` makes for distance.
  *
  * The cost of that choice is that `--sort` holds a namespace's whole card list in the CLI
- * process and sorts it there. It is the list `card list` was already holding in order to
+ * process and sorts it there. It is the list `card list` was already holding to
  * print it, so sorting adds no read; what it rules out is ever streaming the listing.
  */
 
@@ -53,7 +53,7 @@ export function isCardSortKey(value: unknown): value is CardSortKey {
  * The two ends are two different rules, and both belong to the same column:
  *
  * - The low end is one second past the epoch, and is about the `DEFAULT 0` migration 0011
- *   had to give both columns in order to add them NOT NULL to a table with rows in it.
+ *   had to give both columns to add them NOT NULL to a table with rows in it.
  *   SQLite cannot drop a column default afterwards, so an `INSERT INTO card` naming neither
  *   column succeeds and lands the row at the epoch rather than failing. Such a row reads
  *   perfectly well — as 1970 — which is why it is `doctor`'s business rather than
@@ -91,7 +91,7 @@ export function namesAMoment(at: Date): boolean {
  * A word rather than a blank, so a column that could not be filled is not read as a column
  * that was empty. And a word rather than the `RangeError: Invalid time value` that
  * `toISOString` throws on such a date, which used to leave the command printing one line of
- * error in place of the whole listing — hiding every sound card in the namespace in order to
+ * error in place of the whole listing — hiding every sound card in the namespace to
  * report a problem with one of them.
  */
 const UNREADABLE = "invalid";

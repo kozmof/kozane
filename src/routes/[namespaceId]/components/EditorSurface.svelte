@@ -425,7 +425,7 @@
 
     // The focus this moves is the whole point. A mousedown's default action puts focus on
     // the nearest focusable ancestor of what was clicked, and the surface is plain divs —
-    // so the default is to focus nothing, which lands *after* this handler and blurs the
+    // so the default is to focus nothing, which lands after this handler and blurs the
     // sink `focus()` just focused. Without this, clicking the text of an unfocused editor
     // leaves it unfocused, and the caret never comes back.
     event.preventDefault();

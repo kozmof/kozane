@@ -45,9 +45,9 @@ export type BoardCommands = {
  *
  * The order is load-bearing in two places:
  *
- * - **The pending-frame Escape comes first**, so a rectangle waiting for a scope is what
+ * - The pending-frame Escape comes first, so a rectangle waiting for a scope is what
  *   Escape means while one is up, whatever else may be bound to it.
- * - **The composer owns the keyboard while cards are selected**, which is what keeps the
+ * - The composer owns the keyboard while cards are selected, which is what keeps the
  *   warp keys from colliding with its action bar. Each of those bindings says so with
  *   `noSelection`, where the binding is rather than where a reader has to remember it.
  */

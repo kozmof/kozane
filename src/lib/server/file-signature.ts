@@ -9,11 +9,11 @@ import { isMemoryDbUrl } from "../db-url.js";
  *
  * What it actually guarantees, in the order the fields earn their place:
  *
- * - **A file replaced by rename always looks different**, because the new file has its own
+ * - A file replaced by rename always looks different, because the new file has its own
  *   inode. Every file Kozane writes goes through `writeFileAtomic`, so every write Kozane
  *   makes is caught outright, whatever the clock did. Editors that save by rename — most
  *   of them — get the same treatment.
- * - **A file rewritten in place** keeps its inode, leaving mtime and size to separate the
+ * - A file rewritten in place keeps its inode, leaving mtime and size to separate the
  *   versions. That covers a person editing the config and covers any change of length, but
  *   it is not absolute: two same-length writes within one filesystem timestamp tick are
  *   genuinely indistinguishable here. `mtimeNs` reports nanoseconds but is not ticked at
@@ -33,7 +33,7 @@ export function fileSignature(path: string): string | null {
  * Identity of the database behind `dbUrl`, or null where there is nothing to identify it by.
  *
  * `fileSignature` rather than a stored timestamp compared with `>`: it is `ino:mtimeNs:size`,
- * and requiring it to be *equal* catches the write that lands inside the same filesystem
+ * and requiring it to be equal catches the write that lands inside the same filesystem
  * timestamp tick as the gather, which a "has anything happened since?" comparison waves
  * through. Any commit moves it — this server's own, another tab's, a `kozane card add` in
  * another terminal, a `db import`.

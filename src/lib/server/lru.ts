@@ -51,7 +51,7 @@ export function touchOrCreate<K, V>(map: Map<K, V>, key: K, make: () => V): V {
  *
  * `max <= 0` clears the map, which is what "keep none of them" means. Spelled out because
  * `slice(0, -max)` does not mean it: `-0` is `0`, so the negative-offset form quietly becomes
- * `slice(0, 0)` and keeps *everything* — a ceiling of zero that evicts nothing is the one
+ * `slice(0, 0)` and keeps everything — a ceiling of zero that evicts nothing is the one
  * value where this function would do the opposite of what it was asked.
  */
 export function evict<K, V>(map: Map<K, V>, max: number): void {

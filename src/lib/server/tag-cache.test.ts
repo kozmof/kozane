@@ -43,7 +43,7 @@ afterEach(() => {
 });
 
 /**
- * The shape `TAG_CACHE_VERSION` is the version *of*, written out by hand.
+ * The shape `TAG_CACHE_VERSION` is the version of, written out by hand.
  *
  * `satisfies` rather than a type annotation, and that is the whole point of it being here: a
  * field added to `TagCache` is missing from this literal and a field removed from it is
@@ -87,7 +87,7 @@ describe("readTagCache / writeTagCache", () => {
 
   /**
    * The read is `readFileSync` and `JSON.parse` on the path a page load waits on, so a cache
-   * that has grown past the ceiling is refused *before* it is opened — reading it in order to
+   * that has grown past the ceiling is refused before it is opened — reading it to
    * decide would be the whole of the cost this avoids.
    *
    * Laid down directly rather than through `writeTagCache`, which refuses to produce one. A

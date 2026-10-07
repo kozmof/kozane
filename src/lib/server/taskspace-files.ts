@@ -129,7 +129,7 @@ export function listTaskspaceDirectory({
   const requested = resolve(realBase, segments.join(sep));
   if (!isWithin(realBase, requested))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
-  // The listing hides dot-entries, so it must not list *inside* one either: naming `.git`
+  // The listing hides dot-entries, so it must not list inside one either: naming `.git`
   // outright would otherwise show what no listing offered, and what `readTaskspaceFile`
   // already refuses to open. `.` and `..` were settled by the containment check above.
   if (segments.some((segment) => segment.startsWith(".") && segment !== "." && segment !== ".."))
@@ -344,7 +344,7 @@ export type WriteTaskspaceFile = TaskspaceFileTarget & {
  * path into a file that restates any of it.
  *
  * The write goes through {@link writeFileAtomic}, so a failure leaves the original intact
- * rather than truncated, and the rename it ends with is what makes the returned signature
+ * rather than truncated, and the rename it ends with makes the returned signature
  * reliably different from the one that came in.
  */
 export function writeTaskspaceFile({

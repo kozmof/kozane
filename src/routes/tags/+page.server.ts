@@ -20,7 +20,7 @@ export const prerender = isSsgBuild();
 // of that file, so an export carries file tags only when it was built to carry files at
 // all — the same opt-in that governs the taskspace panel. Card tags are board content and
 // go out with the rest of it.
-// The same flag governs whether the export may *name* a taskspace at all, for the reason
+// The same flag governs whether the export may name a taskspace at all, for the reason
 // `loadNamespaceSnapshot` gates its taskspaces behind `includeScopes`: a taskspace's name is
 // the name of a directory on someone's machine, and an export is published. This page was
 // reading `getAllTaskspaces` unconditionally and shipping every one of them, which
@@ -78,7 +78,7 @@ function selectHits(
   // The tag test goes in rather than being a `filter` before the cap, so the only arrays
   // built here are the two capped ones. A workspace at the gather's own ceiling holds a
   // hundred thousand hits, and selecting into a new array first meant a copy of however many
-  // of them one tag matched in order to keep two hundred of each kind.
+  // of them one tag matched to keep two hundred of each kind.
   const { cards, files, cardTotal, fileTotal } = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) =>
     matches(hit.tag),
   );

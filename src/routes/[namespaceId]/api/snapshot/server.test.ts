@@ -152,7 +152,7 @@ describe("GET /[namespaceId]/api/snapshot", () => {
 describe("GET /[namespaceId]/api/snapshot — the unchanged-database gate", () => {
   /**
    * A workspace on disk, so the gate has a file to sign. `createTestDB` takes a path for
-   * exactly this reason, and pointing `openedDbUrl` at the same one is what makes the
+   * exactly this reason, and pointing `openedDbUrl` at the same one makes the
    * signature the endpoint reads the signature of the database it is being handed.
    */
   async function setupOnDisk() {

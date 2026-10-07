@@ -53,7 +53,7 @@ describe("writeFileAtomic", () => {
   });
 
   // Compared against a plain write rather than against fixed bits, which would only be
-  // asserting this machine's umask. The point is that a *new* file is left to the umask,
+  // asserting this machine's umask. The point is that a new file is left to the umask,
   // exactly as a plain write would leave it.
   it("leaves permissions to the umask for a file that did not exist", () => {
     const reference = join(dir, "reference.json");
