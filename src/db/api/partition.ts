@@ -4,13 +4,9 @@ import type { NeedsDB, NeedsNamespace, NeedsNamespacePartition, Partition } from
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 /**
- * A namespace's partitions in the order they were created — uuidv7 ids sort that way.
- *
- * The order is what colours a partition (see `applyPalette`), so it is stated rather than left
- * to the plan: without it SQLite answers through `partition_name_per_namespace` and returns the
- * rows by name, and creating "Alpha" moved every partition after it on to the next colour.
- * Creation order only ever grows at the end, so adding a partition leaves every existing
- * partition's colour where it was.
+ * List partitions by ID, which follows creation order for UUIDv7 IDs. Palette assignment
+ * depends on this order, so adding a partition does not shift existing colors as name
+ * ordering would.
  */
 export async function getAllPartitions({ db, namespaceId }: NeedsNamespace): Promise<Partition[]> {
   return db
@@ -30,23 +26,11 @@ export type PartitionCardCount = {
 };
 
 /**
- * Every partition in the workspace, with how many cards it holds.
+ * Count cards in every partition for the workspace map.
  *
- * What the map page draws a rectangle from: a partition's area is its card count there, so the
- * number is the geometry rather than a label beside it.
- *
- * A `LEFT JOIN`, and that is the whole of what distinguishes this from the obvious query. An
- * inner join answers with the partitions that have a card in them, which on a page whose subject
- * is what a workspace holds is exactly the wrong set: an empty partition would not be drawn
- * small, it would not be drawn at all. `count(card.id)` rather than `count(*)` for the same
- * reason — over a left join the latter counts the one all-null row an empty partition produces
- * and reports it as holding a card.
- *
- * One statement over the workspace rather than one per namespace, the same argument
- * `getScopeNamespaceUsage` makes: the map packs every namespace at once, so the per-namespace shape
- * is a round trip per rectangle, and the grouping SQLite does here is the grouping the caller
- * would otherwise do in JS over every card id in the database. It rides `card_partition`, the
- * index the board's poll already needs.
+ * Use a left join to include empty partitions, and count `card.id` so an empty partition has
+ * zero cards. Group in one workspace-wide query instead of querying each namespace
+ * separately.
  */
 export async function getPartitionCardCounts({ db }: NeedsDB): Promise<PartitionCardCount[]> {
   return db

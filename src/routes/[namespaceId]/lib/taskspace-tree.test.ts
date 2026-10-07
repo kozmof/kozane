@@ -17,7 +17,7 @@ function listing(names: string[], truncated = false) {
   };
 }
 
-/** A fresh Response per call: a body can only be read once. */
+/** Create a fresh Response per call because its body can be read only once. */
 function fetcherFor(body: unknown, status = 200) {
   return vi.fn(async () => jsonResponse(body, status));
 }
@@ -96,8 +96,7 @@ describe("TaskspaceTreeState", () => {
       await tree.ensure(context(fetcher as never), TS, "");
 
       expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["src", "app.ts"]);
-      // The whole reason this exists rather than calling `toggle`: a frame on the canvas
-      // asking for a listing must not unfold rows in the right panel.
+      // Loading a frame's directory must not expand rows in the sidebar.
       expect(tree.isExpanded(TS, "")).toBe(false);
     });
 
@@ -131,7 +130,7 @@ describe("TaskspaceTreeState", () => {
       await tree.toggle(context(fetcher as never), TS, "");
       await tree.ensure(context(fetcher as never), TS, "");
 
-      // One cache, two readers: the panel's listing is what the frame draws from.
+      // The panel and frame read the same cached listing.
       expect(fetcher).toHaveBeenCalledTimes(1);
       expect(tree.isExpanded(TS, "")).toBe(true);
     });
@@ -207,8 +206,8 @@ describe("TaskspaceTreeState", () => {
       };
     }
 
-    // The behavior an export built without `--include-scoped-files` relies on: a taskspace
-    // with no embedded tree must fall back to a live request, never invent an empty answer.
+    // Request live data when a taskspace has no embedded tree. Do not infer an empty
+    // directory.
     it("still fetches when the context carries no static tree at all", async () => {
       const { fetcher, ctx } = staticContext({});
       const tree = new TaskspaceTreeState();
@@ -272,9 +271,7 @@ describe("TaskspaceTreeState", () => {
       expect(tree.node(TS, "src").entries?.map(({ name }) => name)).toEqual(["app.ts"]);
     });
 
-    // A taskspace without a resolvable path at build time (or a scopes-only export) has no
-    // entry in the map at all — that must fall back the same as an empty map does, not
-    // throw or silently show nothing.
+    // Handle a missing embedded tree entry through the normal fallback path.
     it("falls back to fetching for a taskspace absent from the static map", async () => {
       const { fetcher, ctx } = staticContext({
         "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: null } },
@@ -333,8 +330,7 @@ describe("TaskspaceTreeState creation", () => {
   it("re-reads the directory it created in, so the new row appears", async () => {
     const fetcher = createThenList({ path: "notes.md", content: "" }, ["notes.md"]);
     const tree = new TaskspaceTreeState();
-    // Already read once: without the forced re-read the cached listing would be kept and
-    // the file just made would not be on screen until something else refreshed it.
+    // Force a refresh after creation so the cached listing includes the new file.
     tree.nodes[nodeKey(TS, "")] = {
       entries: [],
       truncated: null,

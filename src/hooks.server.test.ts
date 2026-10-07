@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ root: null as string | null }));
-// `:memory:` so the schema gate passes on its own exemption rather than by the accident of
-// an unmocked export being undefined. What that gate does is its own suite:
-// `hooks.server.migrations.test.ts`.
+// An in-memory database bypasses the schema gate. Test file-backed databases separately.
 vi.mock("./db/internal/config", () => ({
   getWorkspaceRoot: () => state.root,
   getDBURL: () => ":memory:",
@@ -95,7 +93,7 @@ describe("production request hook", () => {
 
     expect(response.status).toBe(503);
     expect(await response.text()).toContain("api.json");
-    // The request never reached the app: an unreadable key means nothing can be authorised.
+    // Reject an invalid key before reaching the app.
     expect(resolver).not.toHaveBeenCalled();
   });
 
@@ -106,8 +104,7 @@ describe("production request hook", () => {
     state.root = root;
     expect((await handle({ event: event() as never, resolve: vi.fn() as never })).status).toBe(503);
 
-    // No restart: `readApiKey` never caches a file that failed to parse, so the repair
-    // takes effect on the very next request.
+    // Do not cache malformed keys. A repaired file must work on the next request.
     writeFileSync(path, JSON.stringify({ apiKey: "fixed", createdAt: new Date().toISOString() }));
 
     const response = await handle({
@@ -221,10 +218,9 @@ describe("production request hook", () => {
 });
 
 /**
- * The gate for the one mode with no credential to check. A keyless workspace on loopback
- * authenticates nobody, so a name pointed at this address by DNS rebinding would otherwise
- * read the whole board over ordinary `GET`s — which SvelteKit's CSRF origin check does not
- * cover.
+ * Verify Host validation for keyless loopback workspaces. DNS rebinding must not let an
+ * arbitrary hostname read the board through GET requests, which the CSRF origin check does
+ * not cover.
  */
 describe("keyless workspace host gate", () => {
   beforeEach(() => {
@@ -264,9 +260,8 @@ describe("keyless workspace host gate", () => {
     expect(response.status).toBe(200);
   });
 
-  // With a key configured the key is the defence, and the cookie belongs to the loopback
-  // origin so a rebound page never receives it. Named hosts must keep working there —
-  // that is the documented reverse-proxy deployment.
+  // Allow named hosts when a key is configured so reverse proxies work. Authentication
+  // protects this mode, and the loopback cookie is not sent to a different origin.
   it("does not apply to a workspace that has an API key", async () => {
     state.root = workspace("secret");
     const response = await handle({
@@ -281,12 +276,8 @@ describe("keyless workspace host gate", () => {
 });
 
 /**
- * The reservation is released by a `process.once("exit", …)` hook, and a hook per
- * reservation is a hook Node keeps for the life of the process. Production resolves its
- * workspace root once and caches it, so it never reserves twice and never noticed; this
- * suite hands the gate a fresh workspace on every test and did notice — eleven tests in,
- * Node wrote a `MaxListenersExceededWarning` about a leaked emitter to stderr, in the middle
- * of a run that otherwise passed clean.
+ * Verify that repeated workspace reservations share one process exit listener. Tests reserve
+ * multiple workspaces even though production caches one root.
  */
 describe("workspace reservation release hook", () => {
   beforeEach(() => {
@@ -316,9 +307,8 @@ describe("workspace reservation release hook", () => {
 
     expect(process.listenerCount("exit")).toBe(before + 1);
 
-    // And that one hook is enough, because only the current reservation is still held: a
-    // workspace this process has moved off is released as it moves, not left reserved by a
-    // server that stopped serving it.
+    // Register one exit hook for the current reservation. Previous reservations have already
+    // been released.
     for (const root of roots.slice(0, -1)) {
       expect(existsSync(join(root, ".kozane", SERVER_STATE_FILE))).toBe(false);
     }

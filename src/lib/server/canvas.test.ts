@@ -61,8 +61,7 @@ describe("canvasBoundsForRoot", () => {
     expect(canvasBoundsForRoot(root)).toEqual({ canvasWidth: 900, canvasHeight: 700 });
   });
 
-  // The reason this function exists: a CLI holding the root must land cards on the same
-  // board the server clamps to, not on the built-in default.
+  // The CLI must use the same configured canvas bounds as the server.
   it("agrees with the environment-resolved bounds for the same workspace", () => {
     writeConfig({ name: "w", ui: { canvasWidth: 1234, canvasHeight: 999 } });
     expect(canvasBoundsForRoot(root)).toEqual(canvasBounds());

@@ -112,10 +112,8 @@ describe("authenticateRequest", () => {
     expect(cookie).toContain("HttpOnly");
   });
 
-  // The exchange answers 303, and a 303 turns the retry into a GET — so a POST that
-  // authenticated this way was answered with a redirect that dropped its body, and the write
-  // it carried never happened. Only `kozane open` ever puts a key in a URL, and that is a
-  // GET; anything else is authenticated and served, cookie or no cookie.
+  // Do not redirect authenticated POST requests during query-key handling because a 303 would
+  // discard their body. Only GET requests exchange the key for a cookie.
   it("serves a non-GET carrying the key in the query rather than redirecting it", () => {
     const outcome = authenticateRequest(
       event({ url: `http://localhost/board?api_key=${KEY.apiKey}`, method: "POST" }),

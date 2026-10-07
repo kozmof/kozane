@@ -24,16 +24,8 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
 };
 
 /**
- * Creates one directory, and answers with it in the shape `GET` uses — empty, necessarily.
- * The panel draws the new folder from that answer rather than asking again for a listing
- * it was just handed.
- *
- * On this route rather than beside the file creation on `file/` because what it makes is a
- * name and nothing else, which is exactly what this route deals in: `file/` is the only
- * endpoint that carries the contents of anything, and it stays that way.
- *
- * Non-recursive and never replacing: a parent that is not there is a `404`, and a name
- * already taken — by a file, a directory, or a symlink — is a `409`.
+ * Create one directory and return its empty listing. Require an existing parent and return
+ * 409 when any entry already occupies the requested name.
  */
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);

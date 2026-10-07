@@ -49,7 +49,7 @@ function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
   };
 }
 
-/** A response whose `ok` the action branches on; nothing here reads a body. */
+/** Response fixture used only for its `ok` status. */
 const failed = { ok: false } as Response;
 const succeeded = { ok: true, json: async () => ({}) } as unknown as Response;
 
@@ -81,9 +81,7 @@ describe("optimistic rollback", () => {
     expect(state.cards.find((c) => c.id === "card-2")?.partitionId).toBe("b1");
   });
 
-  // The regression this file exists for: the rollback used to put back the whole `cards`
-  // array as it stood before the request, which also undid anything applied while it was
-  // in flight.
+  // Rollback must preserve changes made while the failed request was in flight.
   it("leaves a change applied by another action in flight alone", async () => {
     const state = stateWith([card("card-1"), card("card-2")]);
     const actions = createNamespaceActions(state);
@@ -177,8 +175,7 @@ describe("handleLinkScope", () => {
       { scopeId: "s1", cardId: "card-1" },
       { scopeId: "s1", cardId: "card-2" },
     ]);
-    // The whole reason this is not `handleAddToScope`: the palette is about the selection,
-    // and linking from it must not empty the panel doing the linking.
+    // Linking from the palette must preserve the selection it is acting on.
     expect(state.selection.selectedCards).toEqual(new Set(["card-1", "card-2"]));
   });
 

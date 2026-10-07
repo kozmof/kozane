@@ -26,8 +26,8 @@ describe("health endpoint", () => {
     });
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    // Answered rather than thrown: a probe reads `status` out of the body, which a
-    // rendered error page would not carry.
+    // Return a response body containing `status` so probes can read it without parsing an
+    // error page.
     const response = await GET({ locals: { db: { run } } } as never);
 
     expect(response.status).toBe(503);

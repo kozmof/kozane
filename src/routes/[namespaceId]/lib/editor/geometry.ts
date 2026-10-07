@@ -1,9 +1,8 @@
 import type { Caret } from "./document-store.svelte.js";
 
 /**
- * How a rendered line is measured. The editor supplies one backed by DOM `Range` rects;
- * tests supply one backed by arithmetic, because jsdom has no layout and every rect it
- * reports is zero.
+ * Rendered line measurement interface. Production uses DOM Range rectangles, while tests
+ * provide fixed geometry.
  */
 export type LineMeasurer = {
   /** Pixels from the start of the line to the left edge of `column`. */
@@ -42,13 +41,8 @@ export function caretPoint(
 }
 
 /**
- * The point in the document under a pixel, for a click.
- *
- * `y` decides the line by division alone, which is what a fixed line height and no soft
- * wrap buy. `x` is put to the measurer, because the column it lands in cannot be computed
- * from a character width: a document holding CJK has cells of two widths in one line, and
- * one holding a ligature or a combining mark has cells that are not a whole number of
- * either. Guessing here makes a click land one character off in Japanese text.
+ * Resolve a click to a document position. Fixed line height determines the line. Measure
+ * horizontal position to handle CJK, ligatures, and combining marks accurately.
  */
 export function pointToCaret(
   x: number,
@@ -70,13 +64,8 @@ export type SelectionRect = {
 };
 
 /**
- * A selection as the rectangles that paint it: the tail of the first line, one block for
- * everything between, and the head of the last.
- *
- * Geometry rather than the DOM `Selection` API, which is the trade the render layer is
- * built on. Nothing here asks the browser where the selection is, so nothing here can be
- * moved by the browser deciding differently — and a second range, when there is one, is
- * just another three rectangles.
+ * Compute selection rectangles for the first-line tail, full middle lines, and last-line
+ * head. Keep drawing independent of browser Selection state.
  */
 export function selectionRects(
   start: Caret,
@@ -103,9 +92,8 @@ export function selectionRects(
     return rects;
   }
 
-  // The first line runs to its end, and a line selected through its newline is drawn to
-  // the edge of the panel rather than stopping at its last character — otherwise a block
-  // of selected lines has a ragged right side that does not say the newlines are in it.
+  // Extend a selection through a newline to the panel edge so the highlight shows that the
+  // newline is included.
   push(start.line, start.column, null);
   for (let line = start.line + 1; line < end.line; line++) push(line, 0, null);
   if (end.column > 0) push(end.line, 0, end.column);
@@ -115,15 +103,9 @@ export function selectionRects(
 }
 
 /**
- * A measurer backed by the DOM.
- *
- * `columnToX` measures a `Range` over the line's text up to the column, rather than
- * multiplying a character width, so a proportional font, a CJK cell, and a ligature are all
- * measured as what they are. `xToColumn` binary-searches the same measurement, which costs
- * about `log2(lineLength)` rects — a dozen for a line of four thousand characters.
- *
- * Only ever asked about one line at a time: the one clicked, or the one the caret is on. A
- * hundred-thousand-line document costs no more here than a one-line one.
+ * Measure text with DOM Ranges so proportional fonts, CJK characters, and ligatures use
+ * actual layout. Binary-search those measurements to map x coordinates to columns. Each query
+ * measures one line.
  */
 export function domMeasurer(lineElement: (line: number) => HTMLElement | null): LineMeasurer {
   const textNodeOf = (line: number): { node: Text; length: number } | null => {
@@ -135,22 +117,16 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
   };
 
   /**
-   * Pixels from the start of the line's text to the left edge of `column`.
-   *
-   * The width of the range rather than its edge measured against the element: a line is
-   * drawn with horizontal padding, so the element's left edge is not where its text
-   * begins, and measuring from it made every column one padding too far right. A width
-   * has no origin to get wrong, and is zero at column 0 by construction rather than by an
-   * early return that quietly disagreed with every other column.
+   * Measure pixels from the text start to `column` using range width. This excludes element
+   * padding and naturally returns zero at column 0.
    */
   const widthTo = (node: Text, column: number): number => {
     if (column <= 0) return 0;
     const range = document.createRange();
     range.setStart(node, 0);
     range.setEnd(node, Math.min(column, node.length));
-    // Optional-called: jsdom implements Range without the rect methods, and a component
-    // test that renders the surface must not die on a measurement it was never going to
-    // get a real answer to. Everywhere with layout this is an ordinary call.
+    // Allow missing Range rectangle methods in jsdom, where real layout measurements are
+    // unavailable.
     return range.getBoundingClientRect?.()?.width ?? 0;
   };
 
@@ -166,9 +142,8 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
       if (!found) return 0;
       if (x <= 0) return 0;
 
-      // Binary search for the last column whose left edge is at or before x, then take
-      // whichever of that column and the next one the point is nearer to — so clicking the
-      // right half of a character puts the caret after it, as every editor does.
+      // Find the last column edge at or before x, then choose the nearer of that edge and the
+      // next.
       let low = 0;
       let high = found.length;
       while (low < high) {

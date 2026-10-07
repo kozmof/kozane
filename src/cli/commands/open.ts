@@ -33,12 +33,8 @@ type OpenOptions = {
 };
 
 /**
- * Opens the workspace in the user's browser, and says so when it cannot.
- *
- * `execFile` without a callback swallows the spawn error — a missing `xdg-open` produces
- * no throw and no output — so a headless box got a URL printed a second earlier, then
- * silence, with nothing connecting the two. The fallback names the URL again rather than
- * only reporting the failure, because typing it in is the whole of the recovery.
+ * Open the workspace in a browser. If the opener fails, report the error and URL so the user
+ * can open it manually.
  */
 export function openBrowser(url: string): void {
   const onFailure = (error: Error | null) => {
@@ -83,9 +79,8 @@ export async function open(options: OpenOptions): Promise<void> {
     return;
   }
   const shouldOpen = options.open ?? true;
-  // Read as a result rather than thrown: a malformed `api.json` otherwise leaves the
-  // command as an unhandled rejection and a stack trace, where every other way `open`
-  // refuses — a port in use, a workspace already served — prints a line and exits 1.
+  // Handle malformed `api.json` through the CLI error path so it produces a message and exit
+  // status 1 instead of an unhandled rejection.
   const apiKeyResult = readApiKeyResult(root);
   if (!apiKeyResult.ok) {
     console.error(apiKeyResult.message);
@@ -150,21 +145,17 @@ export async function open(options: OpenOptions): Promise<void> {
   // nothing here that could be behind.
   if (!options.memory) await requireCurrentMigrations(dbURL, "the UI can start");
 
-  // `bin/server.js`, not adapter-node's `build/index.js`: Kozane calls `listen` itself so
-  // the bind address is a constant in this repository rather than the adapter's `0.0.0.0`
-  // default. See the note at the top of that file.
+  // Start `bin/server.js`, which explicitly controls the bind address. See its entrypoint
+  // comment.
   const serverEntry = join(packageRoot, "bin", "server.js");
   const normalizedHost = normalizeHost(host);
   const urlHost = normalizedHost.includes(":") ? `[${normalizedHost}]` : normalizedHost;
   const url = `http://${urlHost}:${port}`;
   const browserUrl = apiKey ? url + "/?api_key=" + encodeURIComponent(apiKey.apiKey) : url;
 
-  // The workspace is reserved before the server is started rather than after it. The
-  // reservation is the authority on who serves this workspace, and consulting it second
-  // meant two `kozane open` runs could both pass the check above, both spawn a server, and
-  // one of them be killed once already listening — a window a whole process launch wide.
-  // `activeServerProcess` above stays: it fails early, before a temporary database has been
-  // built, and this is the one that actually decides.
+  // Reserve the workspace before spawning the server so concurrent `open` commands cannot
+  // both start serving it. The earlier `activeServerProcess` check avoids unnecessary
+  // temporary-database setup, but this reservation decides ownership.
   const conflictingServer = claimServerState(root, process.pid, {
     memory: options.memory === true,
     databaseUrl: options.memory ? dbURL : undefined,
@@ -209,10 +200,8 @@ export async function open(options: OpenOptions): Promise<void> {
     stdio: "inherit",
   });
 
-  // Re-pointed at the server itself now that it has a pid. The reservation was taken above
-  // in this process's name, which held the workspace across the spawn; from here the
-  // process that has to be found alive is the one actually serving it, and it is the one
-  // `removeServerState` below is matched against.
+  // Transfer the reservation from this process to the server PID. Subsequent liveness checks
+  // and `removeServerState` use the server's PID.
   if (child.pid) {
     writeServerState(root, child.pid, {
       memory: options.memory === true,
@@ -234,8 +223,7 @@ export async function open(options: OpenOptions): Promise<void> {
   }
 
   child.on("error", (err) => {
-    // The reservation is held from before the spawn now, so a server that never started has
-    // to give it back — under whichever pid it ended up recorded against.
+    // Release the reservation if startup fails, using whichever PID currently owns it.
     removeServerState(root, child.pid ?? process.pid);
     cleanupMemory();
     console.error("Failed to start server:", err.message);

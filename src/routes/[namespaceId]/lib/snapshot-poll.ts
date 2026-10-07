@@ -8,15 +8,11 @@ export const SNAPSHOT_POLL_MS = 1_000;
 
 export type SnapshotPollOptions = {
   fetcher: typeof fetch;
-  /**
-   * Read fresh on every tick rather than captured: one page component serves whichever
-   * board is open, and a namespace navigation reuses it.
-   */
+  /** Read current values on every tick because namespace navigation reuses the page component. */
   namespaceId: () => string;
   /**
-   * Everything whose being in flight means a snapshot must wait — the user's own drags and
-   * the mutations the action layer has outstanding. A poll stands down while any of them
-   * is open, and an answer is dropped if any of them moved while it was on its way.
+   * Activity trackers for drags and mutations. Wait while any is active and discard responses
+   * spanning a tracker change.
    */
   activities: readonly InFlight[];
   /** Applied only once every guard above still holds. */
@@ -26,14 +22,8 @@ export type SnapshotPollOptions = {
 };
 
 /**
- * Keeps a long-lived board in step with writes made by the CLI or another tab.
- *
- * Lifted out of `+page.svelte` because none of it is about rendering: it is a conditional
- * request, two guards against clobbering the user, and an ETag cache — all of which can be
- * driven directly by a test, where inside `onMount` they could only be reached by mounting
- * the whole page and waiting on timers.
- *
- * Returns the stop function, which the caller hands straight back from `onMount`.
+ * Poll for external workspace writes using ETags and activity guards. Return a stop function
+ * for the component's lifecycle cleanup.
  */
 export function startSnapshotPoll({
   fetcher,
@@ -44,52 +34,39 @@ export function startSnapshotPoll({
 }: SnapshotPollOptions): () => void {
   let refreshing = false;
   /**
-   * The tag of the snapshot currently applied, and the namespace it describes. Sent back so
-   * the server can answer "nothing new" instead of the whole board: most polls find no
-   * change, and re-applying an identical snapshot rebuilds every reactive list on the page
-   * once a second for nothing.
-   *
-   * Kept with its namespace because the same poll serves whichever board is open, and a tag
-   * from the previous one would describe data this one never had.
+   * Store the applied snapshot's tag with its namespace for conditional requests. This avoids
+   * replacing unchanged reactive lists and prevents reusing a tag from a different board.
    */
   let applied: { namespaceId: string; etag: string } | null = null;
 
   const refresh = async () => {
     if (refreshing || isHidden() || activities.some((activity) => !activity.idle)) return;
     refreshing = true;
-    // Noted before the request so the answer can be checked against them afterwards; see
-    // the note on `InFlight.version` for the case the counts alone would miss.
+    // Capture activity versions before the request to detect edits that start and finish
+    // while it is in flight.
     const versions = activities.map((activity) => activity.version);
     const currentNamespaceId = namespaceId();
     const known = applied?.namespaceId === currentNamespaceId ? applied.etag : null;
     try {
       const response = await fetcher(`${base}/${currentNamespaceId}/api/snapshot`, {
-        // Revalidation is done by hand with the tag below, so the browser's own cache is
-        // kept out of it — served from there, a 304 would arrive as a full 200 again.
+        // Disable the browser cache because this poll handles ETag revalidation explicitly.
         cache: "no-store",
         ...(known && { headers: { "if-none-match": known } }),
       });
       // 304: the board already matches the database, and there is nothing to apply.
       if (response.status === 304) return;
       if (!response.ok) return;
-      // Read rather than trusted: `response.json()` resolves to `any`, and a body that is
-      // not a snapshot would otherwise be applied as one. An unreadable body is dropped
-      // exactly as a failed request is — the board keeps what it has, and no tag is
-      // recorded, so the next poll asks for the whole thing again.
+      // Validate the response before applying it. Preserve the current board and leave the
+      // ETag unset when parsing fails so the next poll requests a full snapshot.
       const snapshot = readNamespaceSnapshot(await response.json());
       if (!snapshot) return;
-      // The page is reused across namespaces, so a navigation while this request was in
-      // flight leaves an answer about the board that was just left. Dropped, not applied:
-      // the next poll asks about the one now showing.
+      // Discard responses for a namespace left during the request. The next poll targets the
+      // current board.
       if (namespaceId() !== currentNamespaceId) return;
       if (!activities.every((activity, index) => activity.unchangedSince(versions[index]))) return;
       apply(snapshot);
-      // Recorded only once the data is actually on the board. A snapshot dropped by the
-      // guard above was never applied, so claiming to hold it would leave the page waiting
-      // on a change the server has already sent.
-      //
-      // No tag means no conditional request to make: the poll simply goes on asking for
-      // the whole board, which is what it did before there was one to send.
+      // Record a tag only after applying its snapshot. Without a tag, keep requesting full
+      // snapshots.
       const etag = response.headers?.get("etag") ?? null;
       applied = etag ? { namespaceId: currentNamespaceId, etag } : null;
     } catch {
@@ -99,14 +76,7 @@ export function startSnapshotPoll({
     }
   };
 
-  // `refresh` is async and nothing awaits it, so every one of the three places that starts
-  // it goes through the same `void` wrapper rather than handing the promise to a caller that
-  // drops it silently. The tick and the focus listener used to pass `refresh` itself: it
-  // behaves identically today, because `refresh` cannot reject — the body after its guards
-  // is one `try` with a `finally` — but that is a property of the function rather than of
-  // these call sites, and it is the kind that stops holding when someone adds a line above
-  // the `try`. One spelling, so a reader is not left looking for the difference between the
-  // three.
+  // Use the same void-returning wrapper for each fire-and-forget refresh trigger.
   const tick = () => void refresh();
   const interval = window.setInterval(tick, SNAPSHOT_POLL_MS);
   // A tab that comes back into view catches up at once rather than waiting out the tick it

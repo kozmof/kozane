@@ -4,16 +4,8 @@ import type { ScopeRel } from "$lib/types";
 export type ScopeLink = "all" | "some" | "none";
 
 /**
- * Whether every selected card is in `scopeId`, only some of them, or none.
- *
- * The sidebar has computed the all-or-nothing half of this inline since scopes gained a
- * membership button, and the file palette needs the same answer with the middle case drawn
- * rather than rounded down — a row reading "Link" over a selection half of which is already
- * there says nothing about what the click will do. One predicate for both, so the panel and
- * the palette cannot come to disagree about what "linked" means.
- *
- * An empty selection is `"none"`: there is nothing to be in the scope, and the callers use
- * this only where something is selected.
+ * Report whether all, some, or none of the selected cards belong to the scope. An empty
+ * selection returns none.
  */
 export function scopeLinkState(
   scopeRels: ScopeRel[],
@@ -27,12 +19,8 @@ export function scopeLinkState(
 }
 
 /**
- * How many of the selected cards are in `scopeId`.
- *
- * Counted from the relations rather than from a per-scope set built up front: a board holds
- * one row per card per scope, and the palette asks this once per scope against a selection
- * of a handful, which is cheaper than indexing every relation to answer for the few scopes
- * actually on screen.
+ * Count selected cards in `scopeId` from their relations. Avoid building an index of every
+ * membership to answer for a small selection.
  */
 export function countLinked(
   scopeRels: ScopeRel[],

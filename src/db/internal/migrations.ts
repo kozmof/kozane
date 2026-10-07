@@ -9,28 +9,10 @@ function isMigrationsFolder(candidate: string): boolean {
 }
 
 /**
- * Absolute path to the bundled `drizzle/` migrations folder.
+ * Find the bundled migrations directory by walking ancestors of this module. This supports
+ * source, CLI, and server bundle layouts without assuming a fixed depth or working directory.
  *
- * Resolved from this module rather than from `process.cwd()` so migrations are found
- * whichever directory a command runs in.
- *
- * Found by walking up rather than by counting directories, and that is a fix rather than a
- * flourish. It used to be `resolve(here, "../../..")` — correct for `src/db/internal` and
- * `dist/db/internal`, which both sit three below the package root, and wrong the moment
- * anything else imports this module. Vite is the anything else: it bundles the server hooks
- * into `build/server/chunks/entries/`, so the same arithmetic landed on `<root>/build/drizzle`
- * and the schema gate in `hooks.server.ts` answered every request with a 503 about a journal
- * that was never there. Nothing caught it, because the source layouts the tests run under are
- * exactly the two the arithmetic was written for.
- *
- * So the depth is not assumed. Each ancestor is asked whether it holds a `drizzle/` with a
- * journal in it, which is the question the caller actually has, and the first that does wins.
- * That is a handful of `existsSync` calls on a path a few levels deep, once per process in
- * practice.
- *
- * `KOZANE_MIGRATIONS_DIR` overrides it outright, for a layout that defeats the walk — a
- * bundler that inlines this file somewhere unrelated to the package, say. Nothing sets it;
- * it exists so that being wrong here is recoverable without a release.
+ * `KOZANE_MIGRATIONS_DIR` overrides discovery for other layouts.
  */
 export function resolveMigrationsFolder(): string {
   const override = process.env.KOZANE_MIGRATIONS_DIR;
@@ -46,28 +28,14 @@ export function resolveMigrationsFolder(): string {
     dir = parent;
   }
 
-  // Nothing found. Answered with the historical guess rather than by throwing, so the caller
-  // reports a missing journal the way it always did — `getMigrationStatus` turns it into an
-  // `"unknown"` status, and `kozane doctor` into a check — instead of this throwing from
-  // inside an import.
+  // Return the fallback path when discovery fails so callers report an unknown migration
+  // state instead of throwing during import.
   return join(resolve(here, "../../.."), "drizzle");
 }
 
 /**
- * Reading a database's migration state, as opposed to acting on it.
- *
- * Here rather than in `cli/lib/db.ts`, where it began, because it has two audiences now and
- * they sit on opposite sides of the tree. The CLI reports it and offers a way out — that
- * half is still there, in `migrationStatusMessage` and `requireCurrentMigrations`, and it
- * ends in `process.exit`, which a server cannot do. The server needs the same answer to
- * refuse a request against a schema it cannot serve, and reaching into `src/cli` for it
- * would point the dependency the wrong way round.
- *
- * So what moved is the part with no policy in it: read the journal, ask the database what it
- * has applied, and say which of the five states that is. What to do about each is left to
- * the caller, which is what lets the CLI exit and the server answer 503.
- *
- * `cli/lib/db.ts` re-exports these, so the commands that already named them still can.
+ * Read migration state for both CLI and server callers. Leave recovery policy to them so the
+ * CLI can exit while the server returns a response. `cli/lib/db.ts` re-exports these readers.
  */
 
 type MigrationJournal = {
@@ -102,9 +70,7 @@ export type MigrationStatus =
       applied: MigrationJournalEntry | null;
       pendingCount: number;
     }
-  // Migrations were applied out of order or a row was lost: the database records
-  // a migration newer than one it never applied. `kozane db migrate` cannot repair
-  // this, because drizzle only applies migrations newer than the newest recorded one.
+  // Migration cannot fill a history gap once a newer migration is recorded.
   | {
       state: "gapped";
       dbPath: string | null;
@@ -211,9 +177,7 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
       args: ["__drizzle_migrations"],
     });
     const hasMigrationTable = table.rows.length > 0;
-    // Every applied timestamp is read, not just the newest one: a database that is
-    // missing an interior migration still has a newest row, and reporting on that
-    // alone would call an incomplete schema "current".
+    // Read every timestamp to detect gaps within migration history.
     const appliedRows = hasMigrationTable
       ? await client.execute("SELECT created_at FROM __drizzle_migrations ORDER BY created_at ASC")
       : null;

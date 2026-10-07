@@ -67,7 +67,7 @@ describe("layer CLI flow", () => {
     const layerId = outputField(card, "layer");
 
     const list = cli(root, "layer", "list");
-    // "<id>  <position>  <cards>  <name>": the new layer holds the one card.
+    // The new layer's printed card count is one.
     expect(list).toMatch(new RegExp(`^${layerId}\\s+1\\s+1\\s+Draft$`, "m"));
     expect(list).toMatch(/^\S+\s+0\s+0\s+Base \(default\)$/m);
   }, 30_000);

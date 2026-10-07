@@ -15,10 +15,8 @@ describe("applyPalette", () => {
   });
 
   /**
-   * The property the map, the tag index and the board all depend on: a partition's colour is
-   * its index in the list, and nothing else. Three readers apply this to `getAllPartitions`
-   * output independently, so a colour that varied with anything but position would show the
-   * same partition in two colours on two pages.
+   * Partition colour depends only on list position so the map, tag index, and board assign it
+   * consistently.
    */
   it("colors by position alone, and leaves the partition's own fields untouched", () => {
     const partitions = [

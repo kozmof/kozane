@@ -8,12 +8,8 @@ import { getWorkspaceUiConfig } from "../../db/internal/config.js";
 type LoadWarpDirectory = { db: AnyDB; namespaceId: string };
 
 /**
- * The warp palette's rows for every namespace except the one being viewed. The viewed
- * namespace is left out because the page derives its own rows from live state, so a warp
- * just dropped shows up without waiting for a round trip.
- *
- * Cards are fetched only for the namespaces that actually have warps: with no warps
- * elsewhere this costs two small queries and no card scan at all.
+ * Warp-palette rows for other namespaces. The current namespace derives its rows from live
+ * state so new warps appear immediately. Fetch cards only for namespaces with warps.
  */
 export async function loadWarpDirectory({
   db,

@@ -7,19 +7,12 @@ import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 /**
- * The two checks `kozane doctor` gained that read the database as a file rather than
- * through the schema: what SQLite says about it, and which rows sit past the limits every
- * write path holds new rows to.
+ * Test `kozane doctor` through the CLI, including SQLite integrity checks and reports of rows
+ * beyond workspace limits.
  *
- * Driven through a spawned `kozane`, like every other command suite — the checks are
- * assembled and printed by `doctor()`, and the thing worth asserting is the line a person
- * reads. The rows they report are written here with a raw libsql client, because that is
- * exactly how they come about: a connection that left `PRAGMA foreign_keys` off, or one that
- * never saw `ui.contentMax`.
- *
- * Three cases rather than one per assertion, each with one `kozane init` behind it: init runs
- * the migrations, so a case is the expensive unit here, and the suite shares a workspace
- * wherever the conditions do not interfere.
+ * Create invalid rows through a raw client to reproduce writes that bypass application
+ * validation. Share initialized workspaces where the cases do not interfere, since each
+ * initialization runs migrations.
  */
 
 const cliEntry = resolve("src/cli/index.ts");
@@ -94,18 +87,16 @@ describe("kozane doctor — integrity and limits", () => {
   });
 
   /**
-   * The condition `integrity_check` cannot see. `PRAGMA foreign_keys` is per connection, so a
-   * row written over one that left it off is a dangling reference in a structurally perfect
-   * file — and every schema-level check in `doctor` goes on passing.
+   * Verify that the foreign-key check finds a dangling reference in a structurally valid
+   * database.
    */
   it("reports a row referencing a parent that does not exist", async () => {
     const root = initWorkspace();
     const { layerId } = await defaults(root);
 
     await withRawDb(root, async (client) => {
-      // Off deliberately, which makes this row possible at all. libsql's own client
-      // happens to default it on — so the honest reproduction is a connection that turns it
-      // off, which is the state `sqlite3` on the command line starts in.
+      // Disable foreign-key enforcement explicitly so this connection can insert a dangling
+      // reference.
       await client.execute("PRAGMA foreign_keys = OFF");
       await client.execute({
         sql: INSERT_CARD,
@@ -121,9 +112,8 @@ describe("kozane doctor — integrity and limits", () => {
   });
 
   /**
-   * How these rows actually arrive: `kozane db import` takes them on purpose, because the
-   * limits are settings and a backup from a workspace with different ones must still restore.
-   * The import warns; this check makes them findable afterwards.
+   * Verify that diagnostics find rows beyond current limits. Imports accept these rows to
+   * allow restores across workspaces with different settings and warn about them separately.
    */
   it("reports a card past ui.contentMax, one off the canvas, and an over-long name", async () => {
     const root = initWorkspace();

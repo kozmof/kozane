@@ -53,12 +53,9 @@ function stringRule(path: string, key: string, fallback: string): FieldRule {
 }
 
 /**
- * The single description of what a `.kozane/config.json` may contain. `readConfig` walks
- * it to build a config and reject a bad one; `kozane doctor config` walks it to report
- * every problem at once. Keeping one table means the two can never disagree.
+ * Shared schema for reading configuration and reporting configuration problems.
  *
- * Order matters: it is the order problems are reported in, and the first error is the one
- * `readConfig` throws.
+ * Declaration order determines diagnostic order and the first error thrown by `readConfig`.
  */
 const FIELD_GROUPS: FieldGroup[] = [
   {
@@ -67,8 +64,7 @@ const FIELD_GROUPS: FieldGroup[] = [
     rules: [stringRule("name", "name", "")],
   },
   {
-    // `server` and its fields are optional: omitting one falls back to the built-in
-    // default, so a workspace can stay on whatever port Kozane ships with.
+    // Omitted server fields use built-in defaults.
     section: "server",
     required: false,
     rules: [
@@ -196,9 +192,8 @@ function unknownKeyIssues(parent: string, raw: Record<string, unknown>): ConfigI
 }
 
 /**
- * Validates a parsed `.kozane/config.json`, collecting every problem rather than stopping
- * at the first. `value` is usable only when no issue has severity `error`: invalid and
- * missing required fields are filled with placeholders so the shape stays whole.
+ * Validate parsed configuration and collect all problems. Use `value` only when no error is
+ * present because invalid required fields receive shape-preserving placeholders.
  */
 export function validateWorkspaceConfig(parsed: unknown): ValidationResult<WorkspaceConfig> {
   const issues: ConfigIssue[] = [];
@@ -227,8 +222,8 @@ export function validateWorkspaceConfig(parsed: unknown): ValidationResult<Works
     for (const rule of group.rules) {
       const value = raw?.[rule.key];
       if (value === undefined) {
-        // A missing field of an optional section is not a problem; one of a required
-        // section is, and so is a section that failed above (`raw` is undefined there).
+        // Missing optional fields are valid. Missing required fields and sections rejected
+        // above still need errors.
         if (group.required && raw !== undefined) {
           issues.push(error(rule.path, `${rule.path} is missing`));
         }

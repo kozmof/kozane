@@ -20,7 +20,7 @@ function workspace(): string {
 }
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
 
-/** Whether this platform lets a process read its own start time; see `isSameProcess`. */
+/** Whether this platform exposes the current process's start time. See `isSameProcess`. */
 function startTimeReadable(): boolean {
   try {
     readFileSync(`/proc/${process.pid}/stat`, "utf8");
@@ -61,9 +61,8 @@ describe("server runtime state", () => {
     expect(activeServerProcess(root)?.pid).toBe(process.pid);
   });
 
-  // What a CLI command reads to find a running memory server's database. That it is read
-  // that way is `commandDbUrl`'s own test, in `cli/lib/config.test.ts` — asserting it from
-  // here meant a module below both front ends reaching up into one of them.
+  // Verify stored state for a memory server. `commandDbUrl` tests separately verify how CLI
+  // commands read it.
   it("exposes the active memory database", () => {
     const root = workspace();
     const memoryUrl = "file:/tmp/kozane-memory-test/kozane.db";
@@ -102,15 +101,13 @@ describe("server runtime state", () => {
     writeServerState(root);
     const reserved = activeServerProcess(root);
     expect(reserved?.pid).toBe(process.pid);
-    // Present wherever the start time is readable, absent where it is not; either way the
-    // reservation belongs to this process and has to survive being read back.
+    // Preserve the reservation whether or not this platform provides a start-time token.
     if (reserved?.startToken !== undefined) expect(reserved.startToken).toEqual(expect.any(String));
   });
 
   it("treats a recycled pid as stale rather than as the server that reserved it", () => {
     const root = workspace();
-    // This process is alive and holds the pid, but it is not the process that wrote this
-    // reservation — which is what a pid handed out again after a hard kill looks like.
+    // Model PID reuse by giving the current PID a different recorded start time.
     writeFileSync(
       serverStatePath(root),
       JSON.stringify({
@@ -120,9 +117,8 @@ describe("server runtime state", () => {
       }),
     );
 
-    // Only decidable where the start time can be read. Where it cannot, the pid check
-    // stands alone and the reservation is correctly left in place — `isSameProcess` below
-    // is where that rule is pinned down.
+    // Require a readable start time to identify PID reuse. Otherwise preserve the reservation
+    // based on the PID check.
     if (!startTimeReadable()) {
       expect(activeServerProcess(root)?.pid).toBe(process.pid);
       return;

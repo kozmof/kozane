@@ -19,7 +19,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const direction = requireStackDirection(body);
   const result = await reassignCardsStackOrder({ db, namespaceId, cardIds, direction });
   if (!result.ok) rejectBatch(result.reason);
-  // Every moved card is told what it ended up with, the same way a layer move is: a glue
-  // group can straddle more than one layer, so the client cannot compute this on its own.
+  // Return each moved card's final stacking value because a glue group may span multiple
+  // layers.
   return json({ ok: true, stacking: result.stacking });
 };

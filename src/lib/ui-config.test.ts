@@ -33,8 +33,8 @@ describe("parseUiOverrides", () => {
     expect(parseUiOverrides({ nope: 1 }, { strict: true })).toEqual({});
   });
 
-  // Each case is rejected in strict mode and dropped in lenient mode — the two modes
-  // must never disagree about which values are valid, only about the reaction.
+  // Strict and lenient parsing must agree on validity. They differ only in whether invalid
+  // values cause failure or are dropped.
   const invalid: [string, Record<string, unknown>, string][] = [
     ["a non-numeric number field", { defaultFontSize: "big" }, "ui.defaultFontSize must be a"],
     ["an out-of-range number", { defaultFontSize: 9_000 }, "ui.defaultFontSize must be between"],
@@ -122,7 +122,8 @@ describe("shortcut bindings", () => {
   });
 
   it("sees a collision with a shortcut left at its default", () => {
-    // `f` is toggleFootersShortcut out of the box: the config only has to name one side.
+    // The default `toggleFootersShortcut` is `f`, so the config needs to name only the
+    // conflicting shortcut.
     const issues = issuesFor({ setWarpShortcut: DEFAULT_UI_CONFIG.toggleFootersShortcut });
 
     expect(issues).toHaveLength(1);

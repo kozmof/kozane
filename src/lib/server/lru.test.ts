@@ -1,15 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { evict, evictRecord, setLast, touch, touchOrCreate } from "./lru.js";
 
-/**
- * The policy the two tag stores share, on its own.
- *
- * It was reached only through them — a scan of a taskspace, or a gather written to disk — so
- * the one thing this module exists to state, that insertion order is recency and eviction
- * reads it from the front, was asserted nowhere directly. Both containers are exercised
- * because both are the policy: a `Map` for what this process holds, a plain object for what
- * is written to JSON.
- */
+/** Test least-recently-used ordering for both in-memory Maps and JSON-backed objects. */
 
 const keysOf = <V>(map: Map<string, V>) => [...map.keys()];
 
@@ -82,9 +74,8 @@ describe("evict", () => {
   });
 
   /**
-   * The one value where the natural spelling means the opposite of what it says: `-0` is `0`,
-   * so `slice(0, -max)` on a ceiling of zero is `slice(0, 0)` and keeps every entry. A
-   * ceiling of none has to keep none.
+   * A zero ceiling must retain no entries. With `max` set to zero, `slice(0, -max)` returns
+   * an empty deletion list and would retain everything.
    */
   it("keeps nothing for a ceiling of zero", () => {
     const map = new Map([

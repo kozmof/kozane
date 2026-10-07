@@ -1,15 +1,6 @@
 import { compareIds } from "$lib/order";
 
-/**
- * The packing the map page is drawn from: a squarified treemap, and the two decisions the
- * published algorithm leaves open.
- *
- * Pure arithmetic, deliberately — no DOM, no stores, no `$state`. The layout is computed
- * twice for every render of the page: once on the server, which has no browser to measure,
- * and again in the browser once it has measured its own container. Both call this, so the
- * served HTML and the hydrated page differ in the size they were packed at and in nothing
- * else. See `MAP_DEFAULT_VIEWPORT`.
- */
+/** Pure squarified treemap calculations shared by server and browser rendering. */
 
 export type Rect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
@@ -21,10 +12,8 @@ export type TreemapCell<T extends TreemapItem = TreemapItem> = {
   item: T;
   rect: Rect;
   /**
-   * Whether this cell was laid into the empty strip rather than given proportional area.
-   * True exactly when `item.value` is zero — see {@link squarify}. Carried on the cell so a
-   * caller draws the two differently without re-deriving which is which from the value it
-   * has already been given.
+   * Whether a zero-value item was placed in the empty strip rather than given proportional
+   * area.
    */
   empty: boolean;
 };
@@ -32,8 +21,7 @@ export type TreemapCell<T extends TreemapItem = TreemapItem> = {
 /** Insets, in pixels, as a caller of {@link inset} names them. */
 export type Insets = { top?: number; right?: number; bottom?: number; left?: number };
 
-/** `rect` pulled in on each side, never past nothing: a rectangle smaller than its own
- *  insets collapses to zero rather than turning inside out. */
+/** Inset `rect` on each side, clamping dimensions to zero when the insets exceed its size. */
 export function inset(rect: Rect, by: Insets): Rect {
   const { top = 0, right = 0, bottom = 0, left = 0 } = by;
   return {
@@ -50,17 +38,8 @@ export const rectCenter = ({ x, y, width, height }: Rect): Point => ({
 });
 
 /**
- * How tall the strip along the bottom of a rectangle is when something has to go in it, and
- * how much of the rectangle it may take. A strip is for the items that have no area to be
- * given; it must be tall enough to be seen and small enough that a workspace of mostly empty
- * partitions does not turn the map into a row of them.
- *
- * The height is what a caller may override, because "tall enough to be seen" is a question
- * about what is going in the strip rather than about the packing. A partition laid there is a
- * dashed outline, and 18px is room for one; a namespace laid there is a rectangle that still
- * has to carry its own name, and needs more — see `NAMESPACE_EMPTY_STRIP_HEIGHT` in
- * `map-layout.ts`. The fraction is deliberately not overridable: it is the promise that the strip
- * stays a footnote, and it holds against whatever height a caller asks for.
+ * Default empty-strip height and maximum height fraction. Allow callers to override height
+ * for their content while preserving the fraction cap.
  */
 const EMPTY_STRIP_HEIGHT = 18;
 const EMPTY_STRIP_MAX_FRACTION = 0.25;
@@ -73,14 +52,8 @@ export type SquarifyOptions = {
 };
 
 /**
- * Descending by value, with {@link compareIds} as the tiebreak.
- *
- * The tiebreak is the point. Squarifying is order-dependent, so two partitions holding the same
- * number of cards decide which of them the algorithm reaches first — and if that came out of
- * SQLite's row order, the same workspace could pack differently between the server's render
- * and the browser's, and the map would visibly rearrange itself on hydration. `compareIds` is
- * the tiebreak `orderLayers` and `sortCards` already use, so this is the app's one answer to
- * "equal, now what" rather than a second one.
+ * Sort by descending value and then {@link compareIds} so equal-sized items produce
+ * deterministic packing.
  */
 function ordered<T extends TreemapItem>(items: T[]): T[] {
   return [...items].sort((a, b) => b.value - a.value || compareIds(a.id, b.id));
@@ -104,11 +77,8 @@ function worstRatio(areas: number[], side: number): number {
 }
 
 /**
- * Lay one finished row along the shorter side of `remaining`, and answer with what is left.
- *
- * The row runs down the left edge when the rectangle is wider than tall, and along the top
- * edge when it is taller than wide — which is what keeps the cells square-ish, since the
- * algorithm only ever commits a row when adding to it would make its worst cell worse.
+ * Lay a completed row along the remaining rectangle's shorter side and return the unused
+ * area.
  */
 function placeRow<T extends TreemapItem>(
   row: { item: T; area: number }[],
@@ -117,8 +87,7 @@ function placeRow<T extends TreemapItem>(
 ): Rect {
   const total = row.reduce((sum, { area }) => sum + area, 0);
   const horizontal = remaining.width >= remaining.height;
-  // Guarded against a zero side, which arises when a caller hands in a rectangle with no
-  // width or height at all; the cells are then all zero-sized and nothing divides by it.
+  // Handle zero-sized rectangles without dividing by a zero side.
   const side = horizontal ? remaining.height : remaining.width;
   const thickness = side > 0 ? total / side : 0;
 
@@ -145,27 +114,12 @@ function placeRow<T extends TreemapItem>(
 }
 
 /**
- * The squarified treemap of Bruls, Huizing and van Wijk: items are laid into the shorter side
- * of what is left, a row growing for as long as adding to it improves the worst aspect ratio
- * in it, and committed the moment it would not.
+ * Build a squarified treemap using the algorithm of Bruls, Huizing, and van Wijk. Extend each
+ * row while its worst aspect ratio improves, then place it along the shorter remaining side.
  *
- * Area is proportional to value, which is the one thing a treemap promises and the reason for
- * the two rules below.
- *
- * Order is fixed — see {@link ordered}.
- *
- * Zero has no area. A partition holding no cards cannot be given a rectangle in proportion
- * to nothing, and the two obvious ways out are both wrong on a page whose subject is what a
- * workspace holds: dropping it makes an empty partition invisible rather than empty, and
- * packing `value + 1` distorts every other rectangle to give it something to show. So the
- * zero-valued items are laid into a strip along the bottom instead, split evenly, and marked
- * `empty` so the page can draw them as the outlines they are. The strip is capped at a
- * quarter of the height: a workspace of a hundred empty partitions and two full ones is still a
- * map of the two full ones.
- *
- * A rectangle with nothing positive in it is all strip, which is the same rule read from
- * the other end — a namespace whose every partition is empty is drawn as those partitions, not as a
- * blank.
+ * Assign area in proportion to positive values. Keep zero-value items in a separate evenly
+ * divided strip, capped at one quarter of the height when positive items exist. Use the full
+ * rectangle for the strip when every value is zero.
  */
 export function squarify<T extends TreemapItem>(
   items: T[],
@@ -204,8 +158,7 @@ export function squarify<T extends TreemapItem>(
     const scaled = item.value * scale;
     const side = Math.min(remaining.width, remaining.height);
     const areas = row.map(({ area: a }) => a);
-    // The first item of a row always goes in: a row of one has a worst ratio to beat, and
-    // committing an empty row would loop forever.
+    // Always accept the first item so each row is non-empty and layout makes progress.
     if (row.length === 0 || worstRatio([...areas, scaled], side) <= worstRatio(areas, side)) {
       row.push({ item, area: scaled });
     } else {

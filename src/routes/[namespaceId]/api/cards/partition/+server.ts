@@ -10,9 +10,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const partitionId = requireString(body, "partitionId");
   const cardIds = requireStringArray(body, "cardIds");
-  // No `getPartition` first: the transaction checks the partition before it checks the cards, so
-  // the answer is the same one this used to pre-compute — and it is decided where the write
-  // happens rather than a query earlier.
+  // Validate the partition inside the write transaction so the reported result cannot become
+  // stale between a precheck and the update.
   const result = await reassignCardsToPartition({ db, namespaceId, cardIds, partitionId });
   if (!result.ok) rejectBatch(result.reason);
   return json({ ok: true });

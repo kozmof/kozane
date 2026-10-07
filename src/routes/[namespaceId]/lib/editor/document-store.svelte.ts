@@ -18,17 +18,8 @@ export type VisibleLine = {
 };
 
 /**
- * How long consecutive edits keep joining one undo entry.
- *
- * Off in Reed by default, which makes every keystroke its own entry and turns undoing a
- * mistyped word into holding the key down. With a window, a run of typing comes back in
- * one press and the caret returns to where the run started.
- *
- * Reed only joins edits that continue each other, so this does not group more than it
- * should: a pause longer than the window starts a new entry, and so does an edit somewhere
- * else in the document or an edit of a different kind — typing, then deleting, is always
- * two. 300ms is short enough that the boundaries land where a typist pauses to think,
- * which is where an undo boundary is wanted anyway.
+ * Time window for grouping consecutive compatible edits into one undo entry. A longer pause,
+ * a different edit kind, or a different location starts a new entry.
  */
 const UNDO_GROUP_MS = 300;
 
@@ -49,7 +40,7 @@ export function sameCaret(a: Caret, b: Caret): boolean {
  * The editor uses line and column coordinates. Columns count UTF-16 code units, while Reed
  * positions are UTF-8 byte offsets. Convert between them here and use Reed's types directly.
  *
- * Keep carets on code-point boundaries. `clamp` , `columnBefore` , and `columnAfter` prevent a
+ * Keep carets on code-point boundaries. `clamp`, `columnBefore`, and `columnAfter` prevent a
  * column from splitting a surrogate pair. This editor snaps such columns backward to the
  * character's start, matching click placement. Reed's own conversion snaps forward, so the
  * explicit backward snap is still needed.
@@ -59,34 +50,15 @@ export class EditorDocument {
   #unsubscribe: (() => void) | null = null;
 
   /**
-   * The Reed state, or `undefined` for the one moment it has none: a class field is
-   * initialised before the constructor body runs, and the store the first snapshot comes
-   * from cannot exist until `content` is in hand.
-   *
-   * Private, with {@link state} as the way in, because that moment is not one any caller can
-   * observe — the constructor creates the store and takes a snapshot in its next two
-   * statements, before it has returned anything to hold. This field is where that gap is
-   * admitted and the getter is where it is closed, which is the whole reason the pair is
-   * written out.
-   *
-   * It used to be one public field declared `DocumentState` and initialised
-   * `undefined as unknown as DocumentState`, so the type said the gap did not exist. The
-   * cast cost nothing at runtime and everything in what it taught a reader: this module's
-   * own header notes that casting Reed's values this way "became a way to not notice a
-   * signature changing underneath", and that is just as true of casting away an `undefined`
-   * — a snapshot call that started returning one would have type-checked.
-   *
-   * `raw` because a Reed state is immutable and compared by reference; see the class note.
+   * Immutable Reed snapshot, temporarily undefined during construction. Initialize it before
+   * returning the instance and expose it through the checked `state` getter. Keep it raw to
+   * preserve reference identity.
    */
   #current = $state.raw<DocumentState | undefined>(undefined);
 
   /**
-   * The current Reed state. Replaced wholesale on every edit.
-   *
-   * The throw is unreachable from outside: there is no way to hold an `EditorDocument` whose
-   * constructor has not finished. It is here rather than a `!` so that a future initialiser
-   * reordered above the snapshot says what went wrong instead of handing Reed an `undefined`
-   * and failing somewhere inside it.
+   * Current Reed state, replaced on every edit. Throw if initialization order leaves it
+   * unavailable so failures identify the missing snapshot directly.
    */
   get state(): DocumentState {
     const current = this.#current;
@@ -141,9 +113,8 @@ export class EditorDocument {
   }
 
   /**
-   * The lines a viewport needs, and nothing else. This is what keeps a large file cheap:
-   * the DOM only ever holds the window, so cost follows the height of the panel rather
-   * than the length of the document.
+   * Return only viewport lines so rendered DOM size follows panel height rather than document
+   * length.
    */
   visibleLines(startLine: number, visibleLineCount: number, overscan = 4): VisibleLine[] {
     const result = rendering.getVisibleLines(this.state, {
@@ -161,20 +132,15 @@ export class EditorDocument {
     return rendering.getLineContent(this.state, line) ?? "";
   }
 
-  /** The whole document. O(n) — for saving, not for drawing. */
+  /** Read the whole document in O(n) time for saving, outside the rendering path. */
   text(): string {
     return scan.getValue(this.state.pieceTable);
   }
 
   /**
-   * Holds a caret inside the document, inside the line it names, and on a character
-   * boundary.
-   *
-   * The last of those is what a caret arriving from somewhere that counts columns needs:
-   * a click resolved by measuring pixels, or a vertical move that carries a column onto a
-   * line where it falls in the middle of an emoji. Such a column is pulled back to the
-   * start of the character it landed inside, so the caret names a position that both the
-   * renderer can slice a line at and Reed will accept an edit at.
+   * Clamp the caret to the document, its line, and a character boundary. Move positions
+   * inside a surrogate pair back to the character's start so rendering and Reed edits use
+   * valid boundaries.
    */
   clamp({ line, column }: Caret): Caret {
     const lastLine = Math.max(0, this.lineCount - 1);
@@ -183,10 +149,8 @@ export class EditorDocument {
   }
 
   /**
-   * The column one character before `column`, for a leftward step or a backspace.
-   *
-   * One character, not one column: stepping by a column would put the caret between the
-   * halves of a surrogate pair, and a backspace would take half an emoji.
+   * Return the column one character before `column` for leftward movement or backspace.
+   * Preserve surrogate pairs.
    */
   columnBefore(line: number, column: number): number {
     const text = this.lineText(line);
@@ -197,7 +161,7 @@ export class EditorDocument {
       : at - 1;
   }
 
-  /** The counterpart to {@link columnBefore}: one character forward. */
+  /** Move one character forward, paired with {@link columnBefore}. */
   columnAfter(line: number, column: number): number {
     const text = this.lineText(line);
     const at = snapColumn(text, column);
@@ -208,44 +172,30 @@ export class EditorDocument {
   }
 
   #byteOffset({ line, column }: Caret): number {
-    // Snapped again here, where every caret this class turns into an offset passes, rather
-    // than trusted from the caller. Reed 3.1 accepts the unsnapped column — it resolves one
-    // naming half a character to that character's end — but that is the far side from where
-    // this class puts a caret, so an insert at the column naming the second half of an emoji
-    // would land after the emoji rather than before it. Snapping at the one place a caret
-    // becomes an offset keeps the last word on the invariant here rather than at each of
-    // the callers.
+    // Snap every caret before resolving its offset so a position inside a surrogate pair
+    // resolves to the character's start consistently.
     const offset = rendering.lineColumnToPosition(
       this.state,
       line,
       snapColumn(this.lineText(line), column),
     );
-    // A caret past the end of the document resolves to nothing; the end of the document is
-    // the nearest position that exists, and is where a caret in that state belongs.
+    // Clamp unresolved carets beyond the document to its end.
     return offset ?? this.state.pieceTable.totalLength;
   }
 
   #caretAt(byteOffset: number): Caret {
-    // Through the branded constructor rather than `as never`: `position.byteOffset` is
-    // what every other call here builds an offset with, and it is the one that would
-    // object if Reed ever asked for something other than a byte offset.
+    // Use the branded byte-offset constructor so Reed's offset type remains checked.
     const at = rendering.positionToLineColumn(this.state, position.byteOffset(byteOffset));
     return at ?? { line: 0, column: 0 };
   }
 
   /**
-   * Where the caret was when an edit was made, recorded on the action itself.
-   *
-   * This is what undo has to put the caret back to. Reed keeps the selection an action
-   * carried in its history entry and restores it on the way back, so an edit dispatched
-   * without one leaves nothing to return to and undo strands the caret wherever it
-   * happens to be — which, for an edit made far up a long file, is nowhere near the text
-   * that just changed.
+   * Record the pre-edit selection on the action so undo restores the caret near the text it
+   * changes.
    */
   #selectionAt(byteOffset: number): [SelectionRange] {
     const at = position.byteOffset(byteOffset);
-    // A tuple rather than an array: Reed 3 takes a non-empty selection, having found that
-    // an empty one names no caret to come back to and so is never what a caller meant.
+    // Use a tuple to satisfy Reed's non-empty selection requirement.
     return [{ anchor: at, head: at }];
   }
 
@@ -259,14 +209,9 @@ export class EditorDocument {
   }
 
   /**
-   * Deletes `start`–`end`, and answers where the caret ends up.
-   *
-   * `caretBefore` is where the caret was when the key was pressed, which is not something
-   * the range says: a backspace deletes what is behind a caret sitting at `end`, and a
-   * forward delete takes what is in front of one sitting at `start`. It is what undo puts
-   * the caret back to, so passing the wrong end of the range returns it a character away
-   * from where the edit was made. Defaults to `start`, which is right for a deletion the
-   * caret was already sitting at the front of.
+   * Delete `start` through `end` and return the resulting caret position. Record
+   * `caretBefore` for undo. It defaults to `start`, but backspace must pass the caret at
+   * `end`.
    */
   delete(start: Caret, end: Caret, caretBefore: Caret = start): Caret {
     const from = this.#byteOffset(start);
@@ -301,20 +246,8 @@ export class EditorDocument {
   }
 
   /**
-   * The text between two carets. O(n) in the document, so not for drawing.
-   *
-   * A caret is turned into an index by asking Reed where its line starts and adding the
-   * column to that. The line start is the part that cannot be counted here: the previous
-   * version summed the lines above and added one apiece for the separator between them,
-   * which is a claim about the file's line endings that nothing in this class is in a
-   * position to make. On CRLF it ran a character short for every line the span crossed, so
-   * a copy out of the editor came back shifted, and further with every line.
-   *
-   * The column is added in the string's own units rather than resolved through Reed as
-   * well, and deliberately: the slice is then a slice of the same string the columns were
-   * measured against. It is snapped first, so a column naming half a character cuts at the
-   * character instead — the alternative being a copied span that ends in half a surrogate
-   * pair and pastes as `U+FFFD`.
+   * Read text between two carets in O(n) document time. Use Reed's line offsets to account
+   * for actual line endings, then add snapped UTF-16 columns before slicing.
    */
   textBetween(start: Caret, end: Caret): string {
     const whole = this.text();
@@ -335,18 +268,14 @@ export class EditorDocument {
     return head == null ? null : this.#caretAt(head);
   }
 
-  /**
-   * Steps back one edit and answers where the caret belongs: the position recorded with
-   * the edit being undone. Null when there was nothing to undo, so a caller can leave the
-   * caret where it is rather than move it somewhere nothing chose.
-   */
+  /** Undo one edit and return its recorded caret position, or null when nothing can be undone. */
   undo(): Caret | null {
     if (!this.canUndo) return null;
     this.#store.dispatch(store.DocumentActions.undo());
     return this.selectionCaret();
   }
 
-  /** The counterpart to {@link undo}: forward one edit, and where that leaves the caret. */
+  /** Redo one edit and return its caret position, paired with {@link undo}. */
   redo(): Caret | null {
     if (!this.canRedo) return null;
     this.#store.dispatch(store.DocumentActions.redo());
@@ -367,10 +296,8 @@ function isLowSurrogate(code: number): boolean {
 }
 
 /**
- * A column held inside `text` and moved off the inside of a character.
- *
- * Pulled back rather than forward, so the position names the start of the character it
- * landed in — the same character a click on that half of the pair was aimed at.
+ * Clamp the column to the text and move it backward to the start of a character if it splits
+ * a surrogate pair.
  */
 function snapColumn(text: string, column: number): number {
   const at = Math.min(Math.max(0, column), text.length);

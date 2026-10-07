@@ -24,9 +24,8 @@ import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 /**
- * Every scope in the workspace, whichever namespace it is being used from. The
- * workspace-wide view — the CLI's `kozane scope list` — rather than the board's; the
- * browser asks {@link getScopesInNamespace}.
+ * List all workspace scopes for the CLI. Use {@link getScopesInNamespace} for a board's
+ * scoped view.
  */
 export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
   return db.select().from(scopeTable);
@@ -86,10 +85,7 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
     .from(taskspaceTable)
     .where(eq(taskspaceTable.scopeId, scopeTable.id));
 
-  // Counted alongside cards and taskspaces, so a scope framed on another board is placed
-  // rather than unattached: an area is a claim on a namespace the same way a scope_rel row
-  // is, and leaving it out would draw someone else's framed scope on every board that has
-  // never touched it.
+  // A scope framed on any board is placed.
   const anyArea = db
     .select({ present: sql`1` })
     .from(scopeAreaTable)
@@ -111,18 +107,11 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
 export type ScopeNamespaceUsage = { scopeId: string; namespaceId: string };
 
 /**
- * Which namespaces each scope reaches, by either route that places one: a card of that
- * namespace filed into it, or a taskspace of that namespace attached to it.
+ * Find namespaces that use each scope through card membership or an attached taskspace.
  *
- * The board narrowed to one namespace with {@link getScopesInNamespace}, so this is what
- * answers "where else is this scope used" — `kozane scope list`. A scope missing from the
- * result is used by no namespace yet; a taskspace with no `namespace_id` places nothing, since
- * an unassigned taskspace names no namespace to report.
- *
- * Walks every scope_rel row in the workspace, which is why it is a CLI query and not one
- * the once-a-second poll makes. What crosses back is already the size of the answer
- * rather than the size of the walk: a scope reached by twenty cards of one namespace is one
- * row, and it is SQLite that collapses the other nineteen.
+ * Omit unused scopes and taskspaces without a namespace. Deduplicate in SQL so each scope and
+ * namespace pair appears once. This workspace-wide scan runs for the CLI, outside the board
+ * polling path.
  */
 export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeNamespaceUsage[]> {
   const fromCards = db
@@ -131,9 +120,8 @@ export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeName
     .innerJoin(cardTable, eq(cardTable.id, scopeRelTable.cardId))
     .innerJoin(partitionTable, eq(partitionTable.id, cardTable.partitionId));
 
-  // Both columns are nullable on `taskspace`; a row missing either places nothing, so it
-  // is dropped by the WHERE rather than filtered back out here. The casts are what the
-  // WHERE has already established and the column types cannot carry across it.
+  // Exclude taskspaces missing either scope or namespace. The casts reflect the WHERE
+  // clause's non-null guarantees.
   const fromTaskspaces = db
     .select({
       scopeId: sql<string>`${taskspaceTable.scopeId}`.as("scope_id"),
@@ -142,14 +130,8 @@ export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeName
     .from(taskspaceTable)
     .where(and(isNotNull(taskspaceTable.scopeId), isNotNull(taskspaceTable.namespaceId)));
 
-  // `UNION`, not `UNION ALL`: it deduplicates across both halves at once, which is the whole
-  // of what the caller wants. Each half used to be a `SELECT DISTINCT` run as its own query,
-  // and the overlap between them — a namespace reaching one scope by both a card and a
-  // taskspace — was then collapsed here with a `Map` keyed by the two ids joined into a
-  // string. One statement is the shape the rest of this module argues for (see
-  // `getScopesInNamespace`): against a local file a round trip costs more than the set
-  // operation, and it makes the answer one consistent read rather than two a CLI write
-  // could land between.
+  // Use UNION to deduplicate scope and namespace pairs across card and taskspace links in one
+  // consistent read.
   return union(fromCards, fromTaskspaces);
 }
 
@@ -158,26 +140,11 @@ export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeName
 export type ScopePartitionUsage = { scopeId: string; partitionId: string; cards: number };
 
 /**
- * Which partitions each scope reaches, and by how many cards.
+ * Count each scope's cards by partition for the workspace map's links.
  *
- * {@link getScopeNamespaceUsage} one level finer, and for the map page, which draws a scope as
- * a node with a line to every partition it reaches. A namespace is the wrong grain for that line:
- * a scope holding cards from two partitions of one namespace is two lines there, and collapsing
- * them to the namespace would draw one line to a rectangle that is not what the cards are in.
- *
- * Cards only. A taskspace attaches a scope to a namespace and to no partition at all, so it
- * cannot produce a row here — which is why the map recovers those from
- * {@link getScopeNamespaceUsage} and draws them against the namespace rectangle instead. The two
- * queries are the two ways a scope is placed, and this is the half that has a partition.
- *
- * What crosses back is the size of the answer rather than the size of the walk, the same
- * property {@link getScopeNamespaceUsage} has: twenty cards of one partition filed into one scope
- * is one row, and it is SQLite that collapses the other nineteen. The count is kept rather
- * than discarded because it is what says how much of a scope sits where — a spoke carrying
- * one card and a spoke carrying two hundred are not the same line to draw.
- *
- * Walks every `scope_rel` row in the workspace, so this is a query a page load makes and not
- * one the once-a-second board poll does.
+ * Taskspace links have no partition and are supplied separately by {@link
+ * getScopeNamespaceUsage}. Group counts in SQL to return one row per scope and partition
+ * pair. This scans workspace memberships on page load, outside board polling.
  */
 export async function getScopePartitionUsage({ db }: NeedsDB): Promise<ScopePartitionUsage[]> {
   return db
@@ -224,17 +191,7 @@ export async function deleteScope({ db, scopeId }: DeleteScope): Promise<void> {
   assertFound(deleted, `Scope scopeId=${scopeId}`);
 }
 
-/**
- * Removes this namespace's cards from a scope. If nothing anywhere still refers to the
- * scope, deletes it entirely. Returns false when the scope does not exist.
- *
- * "Nothing anywhere" counts taskspaces as well as cards. A scope is cross-namespace
- * (see the note on `scopeTable`), so this runs on a row another namespace may be using,
- * and a scope that has been attached to a taskspace but not yet filed any cards into
- * is a scope someone is in the middle of setting up. Left to the card count alone this
- * would delete it out from under them and — through `taskspace.scope_id`'s
- * `onDelete: "set null"` — quietly detach their taskspace on the way out.
- */
+/** Delete scopes only when no cards, taskspaces, or frames reference them. */
 export async function deleteScopeFromNamespace({
   db,
   namespaceId,
@@ -268,9 +225,8 @@ export async function deleteScopeFromNamespace({
         and(eq(scopeRelTable.scopeId, scopeId), inArray(scopeRelTable.cardId, namespaceCardSubq)),
       );
 
-    // This namespace's frame goes with this namespace's memberships: the scope is being
-    // removed from this board, and a frame left behind would put it straight back on the
-    // next poll through `getScopesInNamespace`'s area branch. Other boards keep theirs.
+    // Remove this board's frames with its memberships so polling does not return the scope
+    // again.
     await tx
       .delete(scopeAreaTable)
       .where(and(eq(scopeAreaTable.scopeId, scopeId), eq(scopeAreaTable.namespaceId, namespaceId)));
@@ -289,9 +245,7 @@ export async function deleteScopeFromNamespace({
           .where(eq(taskspaceTable.scopeId, scopeId))
           .get();
 
-    // A frame on another board counts as a use, for the reason the taskspace check above
-    // gives: it is someone else's setup in progress, and deleting the scope would take their
-    // frame with it through the cascade.
+    // Frames on other boards keep the scope alive.
     const stillHasAreas =
       stillHasCards || stillHasTaskspaces
         ? undefined

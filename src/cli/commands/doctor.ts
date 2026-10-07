@@ -35,25 +35,19 @@ import { diagnoseConfig } from "../lib/config-diagnostics.js";
 
 type Check = { label: string; ok: boolean; detail?: string };
 
-/**
- * How many of the offending cards the check names before it stops counting them out. A
- * workspace whose whole `card` table was inserted by hand has nothing to gain from a
- * thousand ids on one line, and the ones it does print are enough to find the rest with.
- */
+/** Maximum number of invalid cards to name alongside the total count. */
 const NAMED_BAD_STAMPS = 5;
 
-/** How many cards are stamped wrongly, and the short ids of the first few of them. */
+/** Total number of cards with invalid timestamps and a sample of their short IDs. */
 type BadStamps = { total: number; named: string[] };
 
 /**
- * The cards carrying either timestamp outside {@link CARD_STAMP_EARLIEST}..{@link
- * CARD_STAMP_LATEST} — the range the listing reads them by, imported rather than restated
- * so this check and what `card list --sort` prints cannot come to disagree.
+ * Find cards with timestamps outside {@link CARD_STAMP_EARLIEST} and {@link
+ * CARD_STAMP_LATEST}. Share these bounds with the card listing so diagnostics use the same
+ * range.
  *
- * Names rows as well as counting them: the count alone said a card was wrong and left
- * finding it to the reader. Counted and named by two statements rather than one, so a
- * workspace whose whole table was written by hand is still only {@link NAMED_BAD_STAMPS}
- * rows to carry back — and still an exact count.
+ * Count all matching cards, then fetch at most {@link NAMED_BAD_STAMPS} IDs to keep the
+ * report bounded.
  */
 async function badlyStampedCards(url: string): Promise<BadStamps> {
   const { db, close } = await openDb(url);
@@ -73,9 +67,8 @@ async function badlyStampedCards(url: string): Promise<BadStamps> {
       .from(cardTable)
       .where(outsideRange)
       .limit(NAMED_BAD_STAMPS);
-    // Every id in the workspace, and only once there is something to name with them:
-    // `shortIdMap` needs the whole set to know how short a prefix stays unambiguous, and a
-    // sound workspace should not pay for a second pass over `card` to be told it is sound.
+    // Read all IDs only when diagnostics need to name cards. `shortIdMap` requires the
+    // complete set for unambiguous prefixes.
     const all = await db.select({ id: cardTable.id }).from(cardTable);
     const shortIds = shortIdMap(all.map(({ id }) => id));
     return { total, named: worst.map(({ id }) => shortIds.get(id) ?? id) };
@@ -85,11 +78,9 @@ async function badlyStampedCards(url: string): Promise<BadStamps> {
 }
 
 /**
- * `6fd3a2b, 41c0e9d and 3 more`, or as much of that as there is.
+ * Format a sample of IDs and the remaining count, such as `6fd3a2b, 41c0e9d and 3 more`.
  *
- * Takes the shape rather than one of the named types, because {@link BadStamps} and
- * {@link OverLimit} are the same shape for the same reason — an exact count with a few rows
- * named out of it — and this formats either.
+ * Accept the shared shape of {@link BadStamps} and {@link OverLimit}.
  */
 function nameSome({ total, named }: { total: number; named: string[] }): string {
   const rest = total - named.length;
@@ -97,37 +88,23 @@ function nameSome({ total, named }: { total: number; named: string[] }): string 
 }
 
 /**
- * What SQLite itself says about the file, which nothing here was asking.
+ * Check database structure and foreign-key references through a temporary read-only
+ * connection.
  *
- * Every other check reads the database through the schema — the migration state, the card
- * timestamps — and so can only report what a well-formed file says. A corrupted page or an
- * orphaned row is invisible to all of them: the queries that would meet it are the ones a
- * workspace runs in the course of being used, so the first report is a failed request or a
- * board missing cards, at which point the question is whether the file or Kozane is at fault.
- * `doctor` is where that question belongs.
+ * `integrity_check` reports damaged pages and inconsistent indexes. `foreign_key_check`
+ * reports dangling references, including rows written by a connection with foreign-key
+ * enforcement disabled. A structurally valid database can still contain those rows.
  *
- * Both pragmas, because they answer different things. `integrity_check` is about the file —
- * page structure, index entries that do not match their table — and is the one that matters
- * after a disk filled up or a backup was copied out from under a running server.
- * `foreign_key_check` is about the rows, and can find something `integrity_check` calls
- * sound: `PRAGMA foreign_keys` is a per-connection setting, so a row written over a
- * connection that left it off is a dangling reference in a structurally perfect file.
- * `sqlite3` on the command line is the plain way in, since that is the state it starts in —
- * libsql's own client defaults it on, and `db/pragmas.ts` sets it regardless, which is what
- * keeps every connection Kozane opens off that path. This is what notices when something
- * else took it.
- *
- * A read-only connection opened for the length of the check. `integrity_check` walks the
- * whole file, so it is not something to leave on a hot path; it is cheap enough once, on a
- * command someone ran to ask.
+ * Run these checks only on request. The integrity check scans the database and does not
+ * belong in a request handler.
  */
 async function databaseIntegrity(url: string): Promise<{ ok: boolean; detail?: string }> {
   const client = createClient({ url });
   try {
     await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
 
-    // Answers with one row reading "ok" when sound, and otherwise a row per problem — so the
-    // test is the content, not the row count.
+    // A valid database returns one row containing "ok". Check its value because a damaged
+    // database can also return a single row.
     const integrity = await client.execute("PRAGMA integrity_check");
     const problems = integrity.rows
       .map((row) => String(Object.values(row)[0] ?? ""))
@@ -165,32 +142,18 @@ type OverLimit = { total: number; named: string[] };
 const noneOverLimit: OverLimit = { total: 0, named: [] };
 
 /**
- * The rows this workspace's own write paths would now refuse.
+ * Report stored rows that exceed the workspace's current text, name, or canvas limits.
  *
- * Three ways in, and only two of them are guarded. The HTTP endpoints check `ui.contentMax`
- * and {@link NAME_MAX} and clamp to the canvas; the CLI's card commands do the same through
- * `contentMaxForRoot` and `clampToBounds`. `kozane db import` is the third, and it
- * deliberately does not refuse — a dump is a backup, and these limits are settings, so a
- * workspace exported with a wider canvas must still be restorable into one with the default
- * (see `dumpLimitWarnings`). It warns instead, and this makes the rows findable
- * afterwards rather than only at the moment of the import.
+ * HTTP and CLI writes enforce these limits. Imports warn instead of rejecting rows so backups
+ * from workspaces with different settings remain restorable. The schema does not enforce
+ * these configurable limits.
  *
- * Nothing in the schema enforces any of the three, which is the other half of why this is
- * worth a check: a `CHECK` constraint on `content` could not be changed afterwards without a
- * table rebuild, and `ui.contentMax` is a number the user is invited to change.
+ * Cards over the text limit remain readable and movable, but their text must be shortened
+ * before an edit can be saved.
  *
- * Not a failure of the database, and reported as a check so that it is said out loud. A card
- * past the limit is readable and movable; what it is not is editable — the composer and
- * `kozane card edit` both refuse it until it is shortened — and that is a thing to be told
- * once rather than discovered while trying to work.
- *
- * Measured with SQLite's `length()`, which counts characters, where the writers measure
- * `String.prototype.length`, which counts UTF-16 code units. They agree on everything in the
- * BMP and disagree by one per astral character — an emoji is two units and one character — so
- * this under-reports a card made of emoji that the endpoints would refuse. The direction is
- * the safe one: nothing is named here that the write paths accept. Closing it would mean
- * counting surrogate pairs in SQL, for a check whose whole job is to point at rows worth
- * looking at.
+ * SQLite's `length()` counts characters, while JavaScript writers count UTF-16 code units.
+ * This check can undercount text containing astral characters and miss cards that writers
+ * would reject.
  */
 async function rowsOverLimits(
   url: string,
@@ -207,14 +170,8 @@ async function rowsOverLimits(
     );
 
     /**
-     * Every card id in the workspace as a short id, read at most once however many of the
-     * two conditions below have something to name.
-     *
-     * The pass is what `badlyStampedCards` pays for the same reason — `shortIdMap` needs the
-     * whole set to know how short a prefix stays unambiguous — and the memoization is the
-     * difference between the two: there is one condition there and two here, so computing it
-     * per condition would scan `card` twice on a workspace that trips both, and a sound one
-     * must not scan it at all to be told it is sound.
+     * Build short IDs at most once, and only if a condition needs to name cards. `shortIdMap`
+     * needs every card ID to choose unambiguous prefixes.
      */
     let shortIds: Map<string, string> | null = null;
     const shortIdOf = async (id: string): Promise<string> => {
@@ -224,8 +181,8 @@ async function rowsOverLimits(
       return shortIds.get(id) ?? id;
     };
 
-    // `SQL | undefined` is what `or()` returns — it has nothing to combine when every one of
-    // its arguments is undefined, which these never are. The same widening `.where()` does.
+    // `or()` returns `SQL | undefined` because it also accepts an empty set of conditions.
+    // These arguments always provide conditions.
     const cardsMatching = async (where: SQL | undefined): Promise<OverLimit> => {
       const [counted] = await db.select({ total: count() }).from(cardTable).where(where);
       const total = counted?.total ?? 0;
@@ -244,10 +201,9 @@ async function rowsOverLimits(
     const long = await cardsMatching(longContent);
     const offBoard = await cardsMatching(offCanvas);
 
-    // Every named thing shares one limit, so they are counted together. Located by table and
-    // full id: the name is the thing that is too long to print, and a short id would have to
-    // be unambiguous within each of five tables rather than within one — a prefix scheme
-    // these rows are too rare to be worth. A full id is what `kozane scope delete` takes.
+    // Count all named entities against the shared limit. Identify each match by table and
+    // full ID, since its name is too long to print and short IDs would require separate maps
+    // for each table.
     const named: string[] = [];
     let total = 0;
     for (const [label, table] of [
@@ -293,8 +249,7 @@ export async function doctor(): Promise<void> {
   const cwd = process.cwd();
   const checks: Check[] = [];
 
-  // 1. Workspace detected. Found by path alone: an unreadable config is a check below,
-  // not a reason for the whole command to fail before it reports anything.
+  // 1. Locate the workspace by path. Report unreadable configuration in its separate check.
   const root = findWorkspaceRoot(cwd);
   checks.push(check("Kozane workspace found", !!root, root ?? "run kozane init"));
 
@@ -323,11 +278,8 @@ export async function doctor(): Promise<void> {
     check("config.json valid", configOk, configOk ? undefined : "run kozane doctor config"),
   );
 
-  // 4. api.json valid, when there is one at all. A workspace has no key until
-  // `kozane api key generate` is run, so an absent file is not a problem and is not
-  // reported as one. What this catches is the file that exists and cannot be read: every
-  // HTTP request consults it, so a hand-edited one takes the whole server to 503 until it
-  // is fixed, and `doctor` is where that should be visible without starting a server.
+  // 4. Validate `api.json` when present. Absence is valid for a keyless workspace, but an
+  // unreadable file prevents serving requests.
   const apiKeyFile = apiKeyPath(root);
   if (existsSync(apiKeyFile)) {
     const apiKeyResult = readApiKeyResult(root);
@@ -354,9 +306,8 @@ export async function doctor(): Promise<void> {
     check("kozane.db readable/writable", dbOk, dbOk ? undefined : "file missing or inaccessible"),
   );
 
-  // The workspace's own database, which is what both of the checks below read — not
-  // `commandDbUrl`, so that `doctor` run while `kozane open --memory` holds a temporary one
-  // still reports on the file the workspace keeps.
+  // Check the workspace's on-disk database even when `kozane open --memory` serves a
+  // temporary database.
   const workspaceDbUrl = dbUrl(resolve(root));
 
   // 6. DB migration status
@@ -382,11 +333,8 @@ export async function doctor(): Promise<void> {
     checks.push(check("DB migrations current", migrationOk, detail));
   }
 
-  // 7. Card timestamps that name a moment, rather than defaulted or hand-edited past what a
-  // date can hold. Only once the migrations are current, because before 0011 has run there
-  // are no columns to read — a workspace that needs migrating is already reported by the
-  // check above, and asking this of it would report the same problem a second time in a more
-  // confusing way.
+  // Check timestamps only after migrations are current. Older schemas may lack the columns,
+  // and the migration check already reports that problem.
   if (dbOk && migrationOk) {
     let stampOk = false;
     let detail: string | undefined;
@@ -404,10 +352,8 @@ export async function doctor(): Promise<void> {
     checks.push(check("Card timestamps valid", stampOk, detail));
   }
 
-  // 8. What SQLite says about the file and its references. After the migration check for the
-  // reason the timestamps are: a workspace that needs migrating has one thing to be told, and
-  // `foreign_key_check` against a schema half a version behind would name tables as a
-  // consequence of that rather than as a problem of their own.
+  // 8. Check SQLite integrity and references after migration validation so stale-schema
+  // problems are reported once.
   if (dbOk && migrationOk) {
     let integrityOk = false;
     let detail: string | undefined;
@@ -421,8 +367,8 @@ export async function doctor(): Promise<void> {
     checks.push(check("Database integrity", integrityOk, detail));
   }
 
-  // 9. Rows past the limits every write path holds new rows to. Reported rather than fixed:
-  // see `rowsOverLimits` for why `kozane db import` lets them in on purpose.
+  // 9. Report rows exceeding current write limits without modifying them. See
+  // `rowsOverLimits`.
   if (dbOk && migrationOk) {
     let withinLimits = false;
     let detail: string | undefined;
@@ -474,10 +420,7 @@ export type DoctorConfigOptions = {
   strict?: boolean;
 };
 
-/**
- * The `config.json valid` check of {@link doctor} in full: every problem with the config
- * at once, rather than the single pass/fail line.
- */
+/** Report every configuration problem found by {@link doctor}'s `config.json valid` check. */
 export function doctorConfig(opts: DoctorConfigOptions = {}): void {
   const root = findWorkspaceRoot(process.cwd());
   if (!root) {
@@ -508,7 +451,6 @@ export function doctorConfig(opts: DoctorConfigOptions = {}): void {
     console.log(`${plural(errors, "error")}, ${plural(warnings, "warning")}`);
   }
 
-  // Unknown keys are usually a typo worth showing, but not a reason to fail a scripted
-  // run — `--strict` is there for setups that want them treated as errors.
+  // Report unknown keys as warnings unless `--strict` requests a failing exit status.
   if (errors > 0 || (opts.strict && warnings > 0)) process.exit(1);
 }

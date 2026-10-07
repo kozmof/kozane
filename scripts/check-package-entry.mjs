@@ -6,12 +6,12 @@ import { tmpdir } from "node:os";
 /**
  * Check that the published package contains a usable server with the intended default binding.
  *
- * 1. Exclude adapter-node's `build/index.js` , which defaults to binding all interfaces. Kozane
+ * 1. Exclude adapter-node's `build/index.js`, which defaults to binding all interfaces. Kozane
  * uses `bin/server.js` and `DEFAULT_SERVER_HOST` instead.
- * 2. Include `build/handler.js` , `build/env.js` , and `build/shims.js` , which the server
+ * 2. Include `build/handler.js`, `build/env.js`, and `build/shims.js`, which the server
  * needs to start.
  *
- * `pnpm pack:check` runs this against the tarball produced by `pack:tmp` .
+ * `pnpm pack:check` runs this against the tarball produced by `pack:tmp`.
  */
 
 const packageRoot = resolve(import.meta.dirname, "..");

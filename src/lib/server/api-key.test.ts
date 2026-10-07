@@ -53,8 +53,8 @@ describe("API key", () => {
     writeApiKey(root, { apiKey: "first", createdAt: "2026-07-19T00:00:00.000Z" });
     expect(readApiKey(root)?.apiKey).toBe("first");
 
-    // Same length and same directory, written as fast as a refresh would: the cache has to
-    // notice on content identity, not on a timestamp that may not have ticked.
+    // Write same-length content quickly enough to test invalidation without relying on a
+    // timestamp change.
     writeApiKey(root, { apiKey: "sekond", createdAt: "2026-07-19T00:00:00.000Z" });
 
     expect(readApiKey(root)?.apiKey).toBe("sekond");

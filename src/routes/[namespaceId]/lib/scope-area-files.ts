@@ -2,40 +2,26 @@ import type { ScopeArea, TaskspaceEntry, TaskspaceSummary, TaskspaceTruncation }
 import type { TaskspaceNode, TaskspaceTreeContext } from "./taskspace-tree.svelte.js";
 
 /**
- * The icons a scope frame draws beneath it: which taskspace files belong under which frame,
- * in what order, and how many of them fit.
- *
- * All of it pure, and none of it reading `$state`. The canvas holds the one mutable thing
- * here — which directory each frame is currently showing — and everything else is derived
- * from that plus the taskspace rows and the tree cache. Kept out of `KozaneCanvas.svelte`
- * for the reason `gesture.ts` and `scope-area-request.ts` are: the arithmetic is worth
- * testing on its own, and that file is long enough already.
+ * Calculate scope-frame file groups, ordering, and layout from frame navigation, taskspaces,
+ * and cached directory data. Keep these functions independent of reactive state for direct
+ * tests.
  */
 
 /** How wide one icon cell is drawn, in canvas pixels. Sized to hold a two-line label. */
 export const CELL_WIDTH = 64;
 
-/** How tall one icon cell is drawn, in canvas pixels: the glyph plus two lines of label. */
+/** Icon-cell height in canvas pixels, including the glyph and two label lines. */
 export const CELL_HEIGHT = 46;
 
 /**
- * How many rows of icons one taskspace may draw before the rest become a `+N` chip.
- *
- * A limit at all because a taskspace is an ordinary working directory: the listing endpoint
- * will hand back up to `TASKSPACE_DIR_ENTRIES_MAX` entries, and a frame trailing 500
- * icons down the board would bury whatever is under it. Two rows is enough to see what a
- * scope is working on, which is what these icons are for — the panel is still where you go
- * to read a directory.
+ * Maximum icon rows per taskspace before remaining entries become a `+N` chip. Keep full
+ * directory browsing in the panel.
  */
 export const MAX_ROWS = 2;
 
 /**
- * The narrowest the strip is laid out at, in canvas pixels, however narrow its frame is.
- *
- * The strip sits outside the frame rather than inside it, so its width is a choice rather
- * than a constraint — nothing clips it and it covers no card the frame holds. A frame may be
- * as small as `SCOPE_AREA_MIN_SIZE` (120), which is under two cells; sizing the strip to that
- * would turn a small frame's files into a `+N` chip and nothing else.
+ * Minimum file-strip width in canvas pixels. The strip sits outside its frame and may be
+ * wider so narrow frames can still show files.
  */
 export const MIN_STRIP_WIDTH = 260;
 
@@ -53,7 +39,7 @@ export type FileCell =
   | { kind: "up"; label: string; path: string }
   | { kind: "entry"; entry: TaskspaceEntry; path: string };
 
-/** One taskspace's worth of strip: where it is pointed and what it found there. */
+/** One taskspace's strip with its current directory and entries. */
 export type FileGroup = {
   taskspaceId: string;
   /** The taskspace's own name, drawn as a label only when a scope has more than one. */
@@ -65,20 +51,15 @@ export type FileGroup = {
   loading: boolean;
   error: string | null;
   /**
-   * Whether the directory has been read at all. An empty directory and one not yet asked
-   * about both have no cells, and the strip has different things to say about them — so the
-   * distinction `TaskspaceNode` draws with a null `entries` is carried rather than flattened.
+   * Whether the directory was loaded. Distinguish an empty result from a directory not yet
+   * requested.
    */
   read: boolean;
 };
 
 /**
- * Which of a scope's taskspaces have files to draw.
- *
- * The same filter `ScopeSidebar` applies to the rows it unfolds: a taskspace with no `path`
- * is one this board cannot list — a static export's rows carry none — and is browsable only
- * where the export baked a tree in for it. Written here so the canvas and the panel cannot
- * drift into disagreeing about which taskspaces have files behind them.
+ * Select taskspaces that can be browsed through a live path or an embedded export tree. Share
+ * this rule with the sidebar.
  */
 export function taskspacesForScope(
   taskspaces: TaskspaceSummary[],
@@ -93,16 +74,8 @@ export function taskspacesForScope(
 }
 
 /**
- * Directories first, then by name.
- *
- * The listing endpoint hands back whatever order the directory was read in, which the panel's
- * tree passes straight through — a vertical list of rows reads fine in any order, and one
- * being read a folder at a time never shows two directories far apart. A wrapped grid does
- * not have that luxury: the only ordering it can be scanned by is the one it is drawn in.
- *
- * `localeCompare` rather than `<`, so an accented name sorts where a reader expects it rather
- * than after `z`. Symlinks and anything else sort with the files: what they are is in the
- * glyph, and a third sort class would put two names that look alike at opposite ends.
+ * Sort directories first, then names using locale comparison. Treat symlinks and other entry
+ * kinds like files for ordering.
  */
 export function sortEntries(entries: TaskspaceEntry[]): TaskspaceEntry[] {
   return [...entries].sort((a, b) => {
@@ -133,7 +106,7 @@ export function parentPath(path: string): string {
   return cut === -1 ? "" : path.slice(0, cut);
 }
 
-/** The last segment of `path` — what a directory is called, without what it sits under. */
+/** Final path segment used as the directory name. */
 export function baseName(path: string): string {
   const cut = path.lastIndexOf("/");
   return cut === -1 ? path : path.slice(cut + 1);
@@ -151,13 +124,8 @@ type FileGroupsForArea = {
 };
 
 /**
- * What one frame draws: a group per taskspace of its scope, each holding the cells for the
- * directory that frame is currently pointed at.
- *
- * Per frame rather than per scope, and that is deliberate. A scope may be framed in several
- * places, each frame gets the icons, and drilling into a folder on one leaves the others
- * where they were — the same answer the frame's `×` gives to "which one did you mean": the
- * one you clicked.
+ * Build one file group per taskspace for this frame's current directories. Keep navigation
+ * independent between frames sharing a scope.
  */
 export function fileGroupsForArea({
   areaId,
@@ -208,11 +176,8 @@ export type CellWindow = {
 };
 
 /**
- * As many of a group's cells as fit, and the count of those that did not.
- *
- * The chip takes a cell's place when it is needed, so the strip never grows past
- * {@link MAX_ROWS} rows: a frame's files take a fixed band of board below it whether the
- * taskspace holds four names or four hundred.
+ * Return cells that fit and count those omitted. Reserve one cell for the overflow chip when
+ * needed so the strip stays within {@link MAX_ROWS} rows.
  */
 export function visibleCells(
   cells: FileCell[],
@@ -227,11 +192,8 @@ export function visibleCells(
 }
 
 /**
- * The `cwd` entries still worth remembering: those whose frame and taskspace are both still
- * there.
- *
- * A frame removed and drawn again is a new row with a new id, so its old entry would sit in
- * the map forever. Mirrors what `TaskspaceTreeState.prune` does for the cache itself.
+ * Retain `cwd` entries only while both their frame and taskspace exist. Recreated frames have
+ * new IDs. See `TaskspaceTreeState.prune` for cache cleanup.
  */
 export function pruneCwd(
   cwdByKey: Record<string, string>,

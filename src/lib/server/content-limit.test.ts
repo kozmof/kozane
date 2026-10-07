@@ -43,8 +43,8 @@ describe("contentMaxForRoot", () => {
     expect(contentMaxForRoot(root)).toBe(280);
   });
 
-  // Out of range falls back rather than taking the value: the lenient server-side parse
-  // drops a bad field, and `kozane doctor config` is what reports it.
+  // The server drops out-of-range fields and uses defaults. `kozane doctor config` reports
+  // them.
   it("falls back when the configured limit is below the allowed floor", () => {
     writeConfig({ name: "w", ui: { contentMax: 1 } });
     expect(contentMaxForRoot(root)).toBe(CONTENT_MAX);
@@ -66,9 +66,8 @@ describe("bodySizeLimitFor", () => {
   const ADAPTER_DEFAULT = 512 * 1024;
 
   it("leaves room for a card of the limit at its worst byte cost", () => {
-    // Three bytes a character is ordinary Japanese; six is a card of control characters,
-    // each escaped to `\u00XX`. Both have to fit, or the transport refuses what the
-    // endpoint would have stored.
+    // Allow both multibyte text and control characters escaped as `\u00XX` to reach the
+    // endpoint.
     for (const bytesPerUnit of [1, 3, 4, 6]) {
       expect(bodySizeLimitFor(CONTENT_MAX)).toBeGreaterThan(CONTENT_MAX * bytesPerUnit);
     }
@@ -90,11 +89,8 @@ describe("bodySizeLimitFor", () => {
 });
 
 describe("contentMax", () => {
-  // The two limits differ in digit count on purpose. `config.json` is rewritten in place
-  // rather than renamed over, so its cache signature is (inode, mtime, size) with the
-  // inode fixed — and two writes this close together land in one filesystem timestamp
-  // tick. A same-size rewrite here would read as the same file and the test would be
-  // asserting the clock, not the cache.
+  // Use different-length configurations so the signature detects the in-place rewrite even
+  // within one filesystem timestamp tick.
   it("picks up an edit to the config without a restart", () => {
     writeConfig({ name: "w", ui: { contentMax: 20_000 } });
     expect(contentMax()).toBe(20_000);

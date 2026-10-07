@@ -10,18 +10,8 @@
   let nameInput = $state<HTMLInputElement | null>(null);
 
   /**
-   * The links across the workspace, which are icons and so have no text to be read.
-   *
-   * `neutral.iconDim` at rest, one of the two weights the canvas draws its own icons at —
-   * these are furniture in the corner of a page whose subject is elsewhere, so they belong
-   * at an icon's weight rather than a label's. The lighter `neutral.icon` is the other, and
-   * it is for an icon sitting inside a control that is already drawn; standing alone in a
-   * header, with nothing around it, it reads as switched off.
-   *
-   * Darkening the whole way to `ink.black` on hover is the other half of that: light enough
-   * to ignore has to become unmistakable when pointed at, or an icon with no label beside it
-   * gives no sign it is a link at all. The padding is the same argument in pixels — a 16px
-   * target is a target you have to aim at, so the link is grown around the drawing.
+   * Use a dim resting color and dark hover color for header navigation icons. Add padding
+   * around the drawing to enlarge the click target.
    */
   const navLinkClass = css({
     display: "flex",
@@ -35,14 +25,7 @@
 </script>
 
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
-  <!-- The two views that are of the workspace rather than of one namespace, and so belong on
-       the one page above them all.
-
-       The tag index reaches across every namespace: a tag written on a card links to it, but
-       that is only a way in once there is a tag to click and only ever to that one tag. The
-       map is the other: every namespace's rectangle at once, which no board can show and which
-       is also what makes this link the only way to reach it — SvelteKit's prerender crawler
-       finds the route from here. -->
+  <!-- Link to workspace-wide map and tag views from the namespace index. These links also let the prerender crawler discover the routes. -->
   <div
     class={css({
       display: "flex",

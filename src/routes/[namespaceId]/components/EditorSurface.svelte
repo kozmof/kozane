@@ -29,14 +29,13 @@
     mode?: EditorMode;
     readonly?: boolean;
     /**
-     * First refusal on every key. Returning true means the key was dealt with and the
-     * default handling below is skipped — this is the whole of the seam vim mode plugs
-     * into, so the surface itself never has to know a mode exists.
+     * Offer each key to the host first. A true result skips default handling, allowing Vim
+     * mode without coupling the surface to it.
      */
     onKeydown?: (event: KeyboardEvent) => boolean;
   } = $props();
 
-  /** Fixed, and the render layer leans on it: a line's y is a multiplication, not a measurement. */
+  /** Fixed line height used to calculate each line's vertical position. */
   const LINE_HEIGHT = 20;
   const FONT_SIZE = 12.5;
   const PAD_X = 12;
@@ -50,12 +49,8 @@
   let focused = $state(false);
 
   /**
-   * The line elements currently in the DOM, by line number. Not reactive: the measurer
-   * reads it when an event asks a question, never during rendering.
-   *
-   * Filled by the `lineEl` action below rather than by `bind:this` into a member, which is
-   * what Svelte warns about on a plain object — and the action's teardown removes the entry,
-   * so a line scrolled out of the window leaves nothing behind for the measurer to find.
+   * Track rendered line elements for event-time measurement. The `lineEl` action adds entries
+   * and removes them when lines leave the DOM. This map does not drive rendering.
    */
   const lineEls: Record<number, HTMLDivElement | undefined> = {};
 
@@ -109,7 +104,7 @@
     return caretPoint(caret, LINE_HEIGHT, measure);
   });
 
-  /** Width of the block cursor in normal mode: the cell the caret is sitting on. */
+  /** Normal-mode block cursor width, matching the current cell. */
   const caretWidth = $derived.by(() => {
     void doc.state.revision;
     if (mode !== "normal") return 2;
@@ -163,15 +158,10 @@
   }
 
   function handleKeydown(event: KeyboardEvent): void {
-    // Propagation is deliberately not stopped here. Keys typed at the surface still have
-    // to reach whatever is hosting it: `Escape` closes the file and the save accelerator
-    // saves it, and both are the overlay's to act on. Keeping them off the board behind is
-    // that host's job, which it is in a position to do — this one is not, because it
-    // cannot tell the difference between a key meant for itself and one meant for its
-    // parent without claiming both.
-
-    // The browser and the IME own the keyboard for the length of a composition. What it
-    // settles on arrives at compositionend; nothing before then is ours to act on.
+    // Let keys reach the host so it can handle save and close actions and stop them from
+    // reaching the board.
+    //
+    // During composition, leave input to the browser and IME. Commit text at compositionend.
     if (composing) return;
 
     if (onKeydown?.(event)) {
@@ -183,7 +173,7 @@
     const accel = event.ctrlKey || event.metaKey;
     const lastLine = Math.max(0, doc.lineCount - 1);
 
-    // Left to the parent: saving and closing are the overlay's business, not the surface's.
+    // Let the parent handle saving and closing.
     if (accel && (event.key === "s" || event.key === "S")) return;
 
     if (accel) {
@@ -191,8 +181,7 @@
         case "z":
         case "Z": {
           event.preventDefault();
-          // Where the edit was, not where the caret happened to be sitting: an undo that
-          // leaves the caret behind sends you looking for what just changed.
+          // Move the caret to the undone edit so the changed text stays visible.
           const to = event.shiftKey ? doc.redo() : doc.undo();
           collapse();
           caret = doc.clamp(to ?? caret);
@@ -219,8 +208,8 @@
           moveTo({ line: lastLine, column: doc.lineText(lastLine).length }, extend);
           return;
       }
-      // Any other accelerator — copy, cut, paste — belongs to the browser, which turns it
-      // into the clipboard event handled below.
+      // Leave clipboard accelerators to the browser, which dispatches the handled clipboard
+      // events.
       return;
     }
 
@@ -286,8 +275,7 @@
       case "Backspace": {
         event.preventDefault();
         if (deleteSelection()) return;
-        // Backspace takes what is behind the caret, so the caret was at the end of the
-        // range rather than its start — which is where undo belongs.
+        // Restore the caret to the deleted range's end when undoing Backspace.
         if (caret.column > 0)
           caret = doc.delete(
             { line: caret.line, column: doc.columnBefore(caret.line, caret.column) },
@@ -325,9 +313,8 @@
     }
   }
 
-  // ── IME ───────────────────────────────────────────────────────
-  // The sink holds the composition; the preedit is drawn into the line so the candidate
-  // text is visible where it will land, and the document hears nothing until it settles.
+  // Keep composition text in the input sink and display the preedit inline. Update the
+  // document only when composition commits.
   function handleCompositionStart(): void {
     composing = true;
     preedit = "";
@@ -349,9 +336,8 @@
   }
 
   /**
-   * Typed text that arrived without a keydown we could read — a candidate committed by a
-   * mobile keyboard, or a dictation. Composition has its own path above; this is only for
-   * what the sink accumulates outside one.
+   * Handle text input that arrives without keydown, such as mobile keyboard commits or
+   * dictation. Composition uses its separate handler.
    */
   function handleInput(): void {
     if (composing || !sinkEl) return;
@@ -387,11 +373,8 @@
     const sizer = scrollEl?.firstElementChild as HTMLElement | undefined;
     if (!sizer) return null;
     const box = sizer.getBoundingClientRect();
-    // The paddings come off here because the measurer answers in text coordinates: x from
-    // the first character of a line, y from the first line. They are added back when the
-    // caret and the selection are drawn, which is the same pair of offsets in the other
-    // direction. Leaving them on put a click a padding to the right of where it was aimed
-    // and, in the bottom of a line, on the line below.
+    // Subtract padding to convert pointer positions to text coordinates. Add the same offsets
+    // back when drawing the caret and selection.
     return pointToCaret(
       event.clientX - box.left - PAD_X,
       event.clientY - box.top - PAD_Y,
@@ -405,9 +388,7 @@
   function onScrollbar(event: MouseEvent): boolean {
     if (!scrollEl) return false;
     const { clientWidth, clientHeight } = scrollEl;
-    // Nothing measurable — no layout, so no scrollbar to be on. Answering "yes" on a zero
-    // width would call every click a scrollbar drag and swallow the focus it was meant to
-    // take.
+    // Without measurable layout, do not classify the click as a scrollbar drag.
     if (clientWidth === 0 || clientHeight === 0) return false;
     const box = scrollEl.getBoundingClientRect();
     // `clientWidth`/`clientHeight` exclude the scrollbars, so a point past either is on one.
@@ -423,11 +404,8 @@
     const at = caretFromEvent(event);
     if (!at) return;
 
-    // The focus this moves is the whole point. A mousedown's default action puts focus on
-    // the nearest focusable ancestor of what was clicked, and the surface is plain divs —
-    // so the default is to focus nothing, which lands after this handler and blurs the
-    // sink `focus()` just focused. Without this, clicking the text of an unfocused editor
-    // leaves it unfocused, and the caret never comes back.
+    // Prevent mousedown's default focus change from blurring the input sink just focused by
+    // this handler.
     event.preventDefault();
     setCaret(at, event.shiftKey);
     focus();
@@ -446,14 +424,8 @@
     globalThis.addEventListener("mouseup", onUp);
   }
 
-  // ── Following the caret ───────────────────────────────────────
-  //
-  // The caret is the only thing this follows. Where the view currently sits is read off the
-  // element rather than from the `scrollTop` and `viewportHeight` state beside it, which
-  // would make scrolling a dependency: the effect ran again on every scroll, and with the
-  // caret above the new position its first branch put the view straight back on the caret.
-  // A long file could not be scrolled through at all — the scrollbar sprang back to the top
-  // on release, and the wheel moved nothing.
+  // Follow caret changes without depending on reactive scroll state. Read the element's
+  // current viewport directly so manual scrolling does not trigger a jump back to the caret.
   $effect(() => {
     const top = caret.line * LINE_HEIGHT;
     if (!scrollEl) return;
@@ -496,14 +468,7 @@
   bind:clientHeight={viewportHeight}
   data-testid="editor-surface"
 >
-  <!-- The sizer is what the scrollbar measures: the whole document's height, whether or
-       not the lines that make it up are currently in the DOM.
-
-       No padding of its own. Everything inside is absolutely positioned, and an absolute
-       child is placed against the padding box — so padding here moved nothing, while
-       still widening the box past the scroll container and putting a horizontal scrollbar
-       under every file. The gaps come from `PAD_X`/`PAD_Y`, which the lines carry as their
-       own padding and the caret and selection add when they are placed. -->
+  <!-- Size the scroll area for the whole document, including virtualized lines. Keep this element unpadded because its children are absolutely positioned. Apply text padding to lines and caret or selection coordinates instead. -->
   <div
     class={css({ position: "relative", width: "100%", boxSizing: "border-box" })}
     style:height={`${contentHeight + PAD_Y * 2}px`}

@@ -18,7 +18,7 @@ export type ConfigNote = {
 export type ConfigReport = {
   /** Path the config was read from, whether or not it could be read. */
   path: string;
-  /** Errors first, then warnings; declaration order within each. */
+  /** Errors first, then warnings. Preserve declaration order within each group. */
   issues: ConfigIssue[];
   /** Unset optional keys and the defaults standing in for them, by section. */
   notes: ConfigNote[];
@@ -40,7 +40,7 @@ function show(value: unknown): string {
   return JSON.stringify(value) ?? String(value);
 }
 
-/** Every section whose keys fall back to a default: the schema's own, plus `ui`. */
+/** Sections whose missing keys use defaults, including `ui`. */
 function defaultingSections(): SectionDefaults[] {
   return [
     ...optionalSectionDefaults(),
@@ -56,8 +56,8 @@ function defaultNotes(parsed: Record<string, unknown>): ConfigNote[] {
 
   for (const { section, defaults } of defaultingSections()) {
     const raw = parsed[section];
-    // A section that is present but malformed is already an error; reporting all of its
-    // keys as unset on top of that would only bury it.
+    // The malformed section already has an error. Do not also report each of its fields as
+    // unset.
     if (raw !== undefined && !isPlainObject(raw)) continue;
 
     const unset = defaults.filter(({ key }) => raw?.[key] === undefined);
@@ -72,9 +72,8 @@ function defaultNotes(parsed: Record<string, unknown>): ConfigNote[] {
 }
 
 /**
- * Reports everything wrong with a workspace config at once — unreadable file, missing
- * required keys, unknown keys, invalid values — instead of stopping at the first problem
- * the way `readConfig` has to. Backs `kozane doctor config`.
+ * Report all configuration problems for `kozane doctor config`, including unreadable files,
+ * missing or unknown keys, and invalid values.
  */
 export function diagnoseConfig(workspaceRoot: string): ConfigReport {
   const path = configPath(workspaceRoot);

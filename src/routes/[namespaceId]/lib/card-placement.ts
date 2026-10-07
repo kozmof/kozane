@@ -20,46 +20,25 @@ export type PlacementViewport = {
 };
 
 export type PlacementRequest = {
-  /**
-   * Which card of the batch this is, as the caller counts them. Zero starts a fresh run —
-   * `kozane card squash` in the browser adds several at once and wants them laid out
-   * together, and a single card added on its own is a run of one.
-   */
+  /** Card index within a placement batch. Zero starts a new run. */
   seq: number;
   viewport: PlacementViewport;
   zoom: number;
   cardWidth: number;
   placement: NewCardPlacement;
   /**
-   * The cards drawn at `at`, with the sizes they are actually drawn at — which only the DOM
-   * knows, because a card's height depends on how its text wrapped.
-   *
-   * A callback rather than a list, so the measuring stays in the component and the sequencing
-   * does not. It is asked for only on the vertical-list path, and only after the first card of
-   * a run: the grid path computes its offsets and needs no measurement at all.
+   * Measure rendered cards at `at` for vertical-list placement after the first card. Keep DOM
+   * measurements in the caller because wrapped text determines card height.
    */
   measureAt: (at: CardPosition) => PositionedCardSize[];
 };
 
 /**
- * Where the next new card goes, and the run of them it belongs to.
+ * Track consecutive card placements. Continue a run while the viewport stays still, and start
+ * a new run after scrolling or when `seq === 0`.
  *
- * Three fields of component state — `placementSeq`, `lastPlacementScroll`,
- * `lastListPosition` — and the rules relating them, which were readable only by reading
- * `getNewCardPosition` in `KozaneCanvas.svelte` from end to end. The rules are worth stating
- * on their own because they are about runs, not about any one card:
- *
- * - A run continues while the board has not been scrolled. Adding three cards in a row puts
- *   them beside or below each other rather than three in the same place.
- * - Scrolling ends a run. The board has been moved deliberately, so the next card starts
- *   again from the middle of wherever the view is now, rather than continuing a column the
- *   user has scrolled away from.
- * - `seq === 0` ends a run too, which is how the caller says "this is a new batch".
- *
- * The class keeps the run; the maths stays in `namespace-page.ts`, which is where
- * `verticalListPosition` already was. What moved out of the component is the state and the
- * three rules, which is the part a test could not reach before: the only way to assert that
- * scrolling restarts a run was to mount the board and scroll it.
+ * Use the pure placement calculations in `namespace-page.ts` for grid and vertical-list
+ * positions.
  */
 export class CardPlacement {
   #seq = 0;
@@ -94,8 +73,8 @@ export class CardPlacement {
       };
     }
 
-    // Below whatever is already in this column. The first card of a run has nothing to
-    // measure against and nothing to measure — `measureAt` is not called for it.
+    // Place later cards below existing cards in the column. The first card needs no
+    // measurement.
     const previous = this.#lastListPosition;
     const sizes = previous ? measureAt(previous) : [];
     const position = verticalListPosition(sizes, startX, previous?.y ?? startY, cardWidth, 0);
@@ -104,9 +83,8 @@ export class CardPlacement {
   }
 
   /**
-   * Whether the board has scrolled since the last placement, past the slack that makes a
-   * single pixel of drift not count. Always false before the first placement of all: there
-   * is no run yet for scrolling to have ended.
+   * Whether scrolling since the last placement exceeds the drift tolerance. False before the
+   * first placement because there is no placement run to end.
    */
   #viewportMoved(scroll: { left: number; top: number }): boolean {
     const last = this.#lastScroll;
@@ -118,11 +96,8 @@ export class CardPlacement {
   }
 
   /**
-   * Where a run starts: the middle of the view, snapped to the grid, with the card's own
-   * width taken off so that it is the card that is centred rather than its left edge.
-   *
-   * `startY` sits two grid steps above the centre line, which is what puts a single new card
-   * in the middle of the view rather than with its top edge there.
+   * Start a run at the grid-snapped view centre, offset by the card width to centre the card.
+   * Place `startY` two grid steps above the centre line.
    */
   #runOrigin(
     viewport: PlacementViewport,

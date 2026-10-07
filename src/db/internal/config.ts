@@ -21,18 +21,8 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
 // of the process (production never changes the workspace mid-run).
 let _workspaceRoot: string | null | undefined = undefined;
 /**
- * What was last read out of one config file, keyed by that file's path.
- *
- * Per path rather than one slot for whichever root was asked about last, because
- * `getUiConfigForRoot` takes a root from its caller and the CLI hands it one it found
- * itself. Two roots in a single process shared the one slot, so each read evicted the
- * other's and the cache stopped being a cache — and the correctness of the arrangement
- * rested entirely on `fileSignature` including the inode, which is a lot to ask of a
- * field documented as a heuristic about versions of one file.
- *
- * `signature: null` records that there was no readable file, which is worth remembering
- * too. Unbounded in principle; in practice a process sees one workspace, or the handful a
- * test suite creates.
+ * Parsed configuration keyed by file path. Keep roots separate so alternating reads do not
+ * evict each other. A null signature records an unreadable or missing file.
  */
 type ConfigCacheEntry = {
   signature: string | null;
@@ -52,7 +42,7 @@ function resolveWorkspaceRoot(): string | null {
   return _workspaceRoot;
 }
 
-// For tests only — resets the cache so a fresh KOZANE_WORKSPACE_ROOT is picked up.
+// Reset the cache in tests so a new `KOZANE_WORKSPACE_ROOT` is read.
 export function _resetWorkspaceRootForTest(): void {
   _workspaceRoot = undefined;
   configCache.clear();
@@ -64,11 +54,8 @@ function configPath(root: string): string {
 }
 
 /**
- * The parsed config, re-read whenever the file has changed underneath. Held rather than
- * re-parsed on every call because `getWorkspaceUiConfig` runs on each page load, and
- * re-checked rather than cached for the process lifetime because the config is a file the
- * user is invited to hand-edit — settings that appeared to do nothing until the server was
- * restarted would look like settings that do not work.
+ * Cache parsed configuration and check its file signature on access so edits take effect
+ * without restarting the server.
  */
 function parseConfigFile(path: string): Record<string, unknown> | null {
   try {
@@ -110,19 +97,15 @@ export function getWorkspaceRoot(): string | null {
   return resolveWorkspaceRoot();
 }
 
-// Lenient: a bad value in one UI setting falls back to its default rather than
-// failing the request. The CLI runs the same parser in strict mode (cli/lib/config.ts).
+// The server uses the same parser as the CLI but skips invalid fields.
 function extractUiOverrides(raw: unknown): Partial<UiConfig> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return {};
   return parseUiOverrides((raw as Record<string, unknown>).ui, { strict: false });
 }
 
 /**
- * The UI settings of a workspace whose root the caller already holds — the CLI, which
- * finds it with `requireWorkspace()` rather than from the environment
- * {@link getWorkspaceUiConfig} reads. Same file, same parse, same cache; only how the root
- * was arrived at differs, and asking the two to agree is what a CLI reading these settings
- * would otherwise rest on. `getTaskspaceDefaultDir` takes a root for the same reason.
+ * Read UI settings for an explicit workspace root, using the same parsing and cache as {@link
+ * getWorkspaceUiConfig}.
  */
 export function getUiConfigForRoot(root: string): UiConfig {
   const entry = configEntry(root);

@@ -10,7 +10,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const body = await readJsonObject(request);
   const layerId = requireString(body, "layerId");
   const cardIds = requireStringArray(body, "cardIds");
-  // No `getLayer` first; see the note in the sibling partition handler.
+  // Let the transaction validate the destination layer, as in the partition handler.
   const result = await reassignCardsToLayer({ db, namespaceId, cardIds, layerId });
   if (!result.ok) rejectBatch(result.reason);
   // Arriving cards are restacked above the target layer's own, so the client is told what

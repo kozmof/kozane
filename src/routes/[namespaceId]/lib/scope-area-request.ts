@@ -8,12 +8,8 @@ import type { BoardRect } from "$lib/constants";
 export type AreaRect = BoardRect;
 
 /**
- * The rectangle a scope-area request carries, or a 400 naming what was missing.
- *
- * Shared by the two endpoints that take one — creating a frame and moving it — because they
- * take exactly the same four numbers and would otherwise say so twice, in wording that could
- * drift. The rectangle is always whole: neither endpoint accepts a delta, so neither has a
- * partial form to allow.
+ * Read the complete rectangle shared by scope-area creation and update requests. Report
+ * missing or invalid coordinates as 400 errors. Neither endpoint accepts a delta.
  */
 export function readAreaRect(body: Record<string, unknown>): AreaRect {
   const posX = optionalNumber(body, "posX");

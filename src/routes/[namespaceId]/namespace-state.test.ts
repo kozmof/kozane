@@ -165,10 +165,8 @@ describe("NamespaceState.resetFromData", () => {
 });
 
 /**
- * The invariants that keep the board's own selections pointing at rows the snapshot still
- * has. Every one of them is about a write made somewhere else — the CLI, or another tab —
- * arriving on a board that had picked something out, so each is checked on its own rather
- * than through the page that happens to hold them all.
+ * Test that snapshot refreshes preserve valid selections and remove references to rows
+ * deleted by external writes.
  */
 describe("NamespaceState.refreshFromData", () => {
   function board(): NamespaceState {
@@ -260,9 +258,8 @@ describe("NamespaceState.refreshFromData", () => {
     expect(state.sidebar.activePartition).toBeNull();
   });
 
-  // A scope can leave `data.scopes` without being deleted: the list is narrowed to the ones
-  // this namespace draws, so an unattached scope another namespace has since claimed simply
-  // stops arriving. Either way it must not stay the active filter.
+  // Clear the active filter when its scope leaves the namespace snapshot, even if the scope
+  // still exists elsewhere.
   it("clears the active scope filter when its scope stops arriving", () => {
     const state = board();
     state.sidebar.activeScope = "s1";
@@ -281,8 +278,7 @@ describe("NamespaceState.refreshFromData", () => {
     expect(state.taskspaceTree.expanded).toEqual(new Set([nodeKey("t2", "")]));
   });
 
-  // Unlike `resetFromData`, this is the same board being brought up to date — a selection
-  // whose rows all survived is the user's, and a poll must not clear it.
+  // Preserve selections whose rows survive a same-board refresh.
   it("leaves a selection whose cards all survived alone", () => {
     const state = board();
     state.selection.selectedCards = new Set(["c1", "c2"]);
@@ -345,8 +341,7 @@ describe("the snapshot prune helpers", () => {
 
   describe("prunedRow", () => {
     it("replaces a held row with the copy the snapshot carries", () => {
-      // The composer case: a card edited elsewhere has to come back with the new text, not
-      // the text the composer was opened on.
+      // Refresh the composer's text after an external edit.
       const held = { id: "a", content: "before" };
       const arrived = { id: "a", content: "after" };
       expect(prunedRow(held, [arrived])).toBe(arrived);

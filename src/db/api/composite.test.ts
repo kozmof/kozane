@@ -107,8 +107,8 @@ describe("deleteNamespaceCards", () => {
   });
 });
 
-// Tests use createCardInTaskspaceContext directly to avoid the withTx in-memory
-// connection boundary — createCardFromTaskspace wraps this in a real transaction.
+// Call `createCardInTaskspaceContext` directly to avoid the in-memory connection boundary.
+// `createCardFromTaskspace` adds the transaction wrapper.
 describe("createCardInTaskspaceContext", () => {
   it("creates a card and returns its id", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
@@ -203,9 +203,8 @@ describe("createCardInTaskspaceContext", () => {
   });
 });
 
-// createCardFromTaskspace wraps the inner logic in a transaction.
-// We only verify it resolves (not what the transaction writes) because
-// libsql :memory: transactions use a fresh connection internally.
+// The transaction uses a separate connection from the in-memory fixture. Check that the
+// wrapper resolves.
 describe("createCardFromTaskspace", () => {
   it("returns a card id", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
@@ -570,11 +569,7 @@ describe("squashNamespaceCard", () => {
     expect(result.cards.map(({ zIndex }) => zIndex)).toEqual([4, 5]);
   });
 
-  /**
-   * What the pieces do not inherit is the source card's history: each is a new card,
-   * created when the squash ran. They do share one moment with each other, so `kozane card
-   * list --sort created` cannot separate pieces of one squash by a second's drift.
-   */
+  /** Give the pieces new shared timestamps rather than copying the source card's history. */
   it("stamps every piece as new, at one moment", async () => {
     const { db, namespaceId, cardId } = await squashSetup();
 

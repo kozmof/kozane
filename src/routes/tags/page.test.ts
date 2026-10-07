@@ -4,12 +4,7 @@ import TagsPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
 
-/**
- * The page draws rows it links away from, and every link is built from something a hit
- * carries. These assert the links, because a row that lists the right text under the wrong
- * href is a row that looks right and goes nowhere — which is exactly what happened when the
- * key a row was grouped under was mistaken for the card id it was built from.
- */
+/** Verify result links use source identities rather than display-row keys. */
 
 const cardHit = (cardId: string, tag: string, excerpt: string): TagHit => ({
   tag,
@@ -54,12 +49,7 @@ const draw = (hits: TagHit[], over: Record<string, unknown> = {}) =>
 const hrefOf = (text: string) => screen.getByText(text).closest("a")?.getAttribute("href") ?? null;
 
 describe("tag index page", () => {
-  /**
-   * The way out is an icon, and the icon is the same drawing whether it leads to the whole
-   * namespace list or to one namespace's board. Narrowed to a namespace it leads to that board, so
-   * the name is shown beside the picture — nothing in the drawing could say which of the two
-   * you are about to get.
-   */
+  /** Show the namespace name when the back link leads to its board. */
   describe("the way out", () => {
     const backLink = (container: HTMLElement, href: string) =>
       [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
@@ -113,8 +103,7 @@ describe("tag index page", () => {
     expect(hrefOf("notes/todo.md:3")).toBe("/p1?taskspace=t1&path=notes%2Ftodo.md");
   });
 
-  /** The paths are relative to a taskspace and say nothing on their own — two taskspaces
-   *  holding the same file draw two rows that read identically without this. */
+  /** Distinguish identical relative paths through their taskspace headings. */
   it("names the taskspace a group of file rows was found in", () => {
     const hits = [
       fileHit("t1", "notes/todo.md", 3, "perf"),
@@ -158,11 +147,8 @@ describe("tag index page", () => {
   });
 
   /**
-   * The notice counts hits, and has to say so. The cap is applied before the rows are
-   * grouped, so a card carrying two matching tags is two of what the notice counts, one row
-   * on the page, and one card in the tree beside it — three numbers that only agree once the
-   * notice names its unit. Calling them "cards" made it contradict the two things drawn
-   * either side of it. `kozane tag show` prints "card hits" for the same reason.
+   * Label capped totals as hits because several matching tags can produce one card row and
+   * one distinct tree count.
    */
   it("counts the notice in hits, which is what was capped, and names them as hits", () => {
     const hits = [
@@ -178,9 +164,8 @@ describe("tag index page", () => {
   });
 
   /**
-   * The name is joined from the taskspaces the gather walked, which is where a truncated one
-   * always is — and the reasons are put into words rather than printed as the scanner's own
-   * vocabulary.
+   * Report taskspace names with readable truncation reasons rather than internal scan-limit
+   * names.
    */
   it("says a taskspace it could not read in full, by name and in words", () => {
     draw([cardHit("c1", "perf", "one")], {
@@ -206,11 +191,7 @@ describe("tag index page", () => {
     expect(screen.getByText(/for example media\/talk\.mp4, logs\//)).toBeTruthy();
   });
 
-  /**
-   * The case above without the field, which is what a static export built before it existed
-   * carries. The notice loses its paths and keeps everything else — it must not take the page
-   * down, which is what reading `.length` off an absent array did. See `truncationPaths`.
-   */
+  /** Render truncation notices without path samples when older exports omit the field. */
   it("draws a truncation from an older export, which carries no paths", () => {
     draw([cardHit("c1", "perf", "one")], {
       truncated: [{ taskspaceId: "t1", reasons: ["budget"] }],
@@ -220,12 +201,7 @@ describe("tag index page", () => {
     expect(screen.queryByText(/for example/)).toBeNull();
   });
 
-  /**
-   * A record whose directory is gone, which is a different thing to have to say: the words a
-   * truncation is drawn with — "was not read in full", a reason about files — describe a
-   * taskspace that was read and not finished, and this one could not be opened. It was drawn
-   * as one, and told a reader that "some files could not be read (for example ./)".
-   */
+  /** Describe an unavailable taskspace separately from a partially scanned one. */
   it("names a taskspace whose directory is gone, apart from the truncations", () => {
     draw([cardHit("c1", "perf", "one")], { missing: ["t1"] });
 
@@ -244,12 +220,7 @@ describe("tag index page", () => {
     expect(screen.getByText(/to drop the records.$/)).toBeTruthy();
   });
 
-  /**
-   * The case above from an export built before the page said anything about such a taskspace,
-   * which carries no `missing` at all. Nothing is drawn and the page still renders — reading
-   * `.length` off an absent array is what would take it down. See `truncationPaths` for the
-   * same rule about the same boundary.
-   */
+  /** Treat a missing `missing` field in older export data as an empty list. */
   it("draws a page from an older export, which carries no missing taskspaces", () => {
     draw([cardHit("c1", "perf", "one")], { missing: undefined });
 
@@ -259,9 +230,8 @@ describe("tag index page", () => {
   });
 
   /**
-   * The card side has a ceiling of its own, and it is drawn beside the taskspace notices
-   * rather than instead of them: to a reader whose tag is missing, "not every card was read"
-   * and "not every file was read" are the same fact about the same gather.
+   * Display the card limit alongside taskspace notices so users can see all sources of
+   * incomplete results.
    */
   it("says when the cards themselves were not read in full", () => {
     draw([cardHit("c1", "perf", "one")], { cardsTruncated: true });
@@ -270,16 +240,8 @@ describe("tag index page", () => {
     expect(screen.getByText(/counts above are a floor/)).toBeTruthy();
   });
 
-  /**
-   * `Record<string, string>` says the lookup cannot miss when it can — a tag page left open
-   * while the card moved, or a narrowed record that did not name it. A row that draws
-   * `/undefined?card=…` looks right and goes nowhere.
-   */
-  /**
-   * The tree marks its selection with a background and a weight, which is nothing to a
-   * reader who cannot see it — and the namespace nav in the same header already says
-   * `aria-current`, so the page was answering the same question two ways.
-   */
+  /** Handle absent namespace lookups without building an undefined card URL. */
+  /** Expose tag selection accessibly as well as through visual styling. */
   it("marks the selected tag in the tree as the current one", () => {
     draw([cardHit("c1", "perf", "one"), cardHit("c2", "docs", "two")], { tag: "perf" });
 

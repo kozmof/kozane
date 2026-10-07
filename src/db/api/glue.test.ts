@@ -124,14 +124,8 @@ describe("unglueCards", () => {
 });
 
 describe("glueCards over the insert batch size", () => {
-  // `INSERT_CHUNK_MAX` is 200 rows, so a group larger than that is the case a single
-  // statement used to cover and `chunked` now splits. Every other bulk insert here was
-  // already chunked; this one was the outlier.
-  //
-  // The cards are seeded in one statement rather than added one at a time: `addCard` is two
-  // round trips per card — the insert and the default-layer lookup — and a fixture of this
-  // size built that way ran the test past its 10s timeout on CI while saying nothing about
-  // what is being tested, which is only that a group spanning batches ends up in one group.
+  // Create a glue group larger than `INSERT_CHUNK_MAX` to exercise multiple insert batches.
+  // Seed the cards in one statement to avoid per-card setup queries.
   const groupSize = INSERT_CHUNK_MAX * 2 + 50;
 
   it("glues a group spanning several insert batches into one glue group", async () => {
@@ -197,10 +191,8 @@ describe("getGlueRelsByNamespace", () => {
     expect(new Set(rels.map((rel) => rel.cardId))).toEqual(new Set(mine.cardIds));
   });
 
-  // Why this function exists at all. `getGlueRelsByCards` binds one parameter per card, and
-  // the board handed it every card in the namespace on every page load and every poll — so a
-  // namespace this size did not load slowly, it did not load. Selecting by namespace binds one
-  // parameter whatever the board holds, which takes the row count out of the question.
+  // Verify that a large namespace loads glue relations without binding one parameter per
+  // card.
   it("reads a namespace holding more cards than one statement could name", async () => {
     const db = await createTestDB();
     const { namespaceId, cardIds } = await namespaceWithCards(db, "big", SQLITE_VARIABLE_MAX + 1);

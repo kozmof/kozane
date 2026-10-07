@@ -20,47 +20,27 @@ type LoadNamespaceSnapshot = {
   db: AnyDB;
   namespaceId: string;
   /**
-   * Whether a taskspace's `path` — a directory on the machine the workspace lives on —
-   * goes out with the rest of it.
-   *
-   * The live server sends it: the endpoint is behind the workspace API key, and the
-   * taskspace panel exists to show the user their own directories. A static export nulls
-   * it, because page data is baked into output built to be published, and the board's
-   * content is the point of an export while the local paths behind it are not.
+   * Whether to include local taskspace paths. Live boards use them to show directories.
+   * Static exports null them to avoid publishing machine-specific paths.
    */
   includeTaskspacePaths: boolean;
   /**
-   * Whether scopes, scope relations, and taskspace summaries are fetched at all. The live
-   * board always passes `true` — it has always shown scopes, independent of any export
-   * flag. A static export passes `false` unless built with `--include-scoped-files`: scope
-   * and taskspace organization is local-workspace detail the same as a taskspace's `path`,
-   * and page data baked into a publishable export is readable via view-source regardless of
-   * what the UI renders, so leaving it out has to happen here rather than only client-side.
+   * Whether to fetch scopes, memberships, and taskspace summaries. Live boards include them.
+   * Static exports omit them unless scoped files were requested, filtering server-side so
+   * omitted details are absent from page data.
    */
   includeScopes: boolean;
   /**
-   * Whether each taskspace's file tree is walked and embedded, content inline, via
-   * {@link buildTaskspaceFileTreeOnce}. Only ever `true` for a static export built with
-   * `--include-scoped-files` — the live board reads files on demand through the real
-   * `/taskspaces/:id/file(s)` endpoints and must not pay for a full recursive disk walk on
-   * every page load or once-a-second snapshot poll. Implies `includeScopes`: a file tree
-   * keyed by taskspace id is meaningless without the taskspaces themselves.
+   * Whether to embed taskspace file trees for static export. Require scope data too. Live
+   * boards read files on demand and must not recursively scan directories during page loads
+   * or polls.
    */
   includeScopedFiles: boolean;
 };
 
 /**
- * Everything a board is drawn from, for the two callers that draw one: the page load and
- * the snapshot poll it is kept in step by.
- *
- * They were the same seven queries written out twice, in the same order, differing only in
- * what each wrapped around the result. `satisfies NamespaceDataSnapshot` on both kept the
- * shape from drifting, but nothing kept the queries from it — a table added to the board
- * was two edits, and a board that loaded with data the poll then took away again is the
- * failure that would follow from making only one of them.
- *
- * Returns null when there is no such namespace, leaving each caller to say so in its own
- * terms: a 404 page from one, a 404 response from the other.
+ * Load shared board data for page rendering and snapshot polling. Return null when the
+ * namespace does not exist, leaving response handling to the caller.
  */
 export async function loadNamespaceSnapshot({
   db,
@@ -80,59 +60,35 @@ export async function loadNamespaceSnapshot({
     getAllLayers({ db, namespaceId }),
     getAllWarps({ db, namespaceId }),
     includeScopes ? getScopesInNamespace({ db, namespaceId }) : Promise.resolve([]),
-    // Gated with the scopes rather than sent unconditionally: a frame is the shape of the
-    // organization `includeScopes` exists to keep out of a published export, and its
-    // rectangle says where a scope's cards are even where the scope itself is withheld.
+    // Gate frames with `includeScopes` because their geometry also exposes scope organization
+    // in published exports.
     includeScopes ? getScopeAreasInNamespace({ db, namespaceId }) : Promise.resolve([]),
     includeScopes ? getTaskspacesInNamespace({ db, namespaceId }) : Promise.resolve([]),
   ]);
 
-  // Still sequential, though the data dependency that made it so is gone: the two reads
-  // below select by namespace now rather than by the card ids this line produces, for the
-  // reason `getGlueRelsByNamespace` gives. What is left is an ordering preference. None of
-  // this is one consistent read of the database — a CLI write can land between any two of
-  // these queries — so the order only decides which way that skews, and a relation row for
-  // a card the board has not got is worse for the client than a card whose relation row is
-  // a tick behind: the second draws as unglued until the next poll, the first refers to
-  // nothing.
+  // Read cards before their relations. These sequential queries are not one database
+  // transaction, so concurrent writes can make the result span different states. Polling
+  // resolves temporary disagreement.
   const cards = await getCardDataByPartitions({ db, partitionIds: partitions.map(({ id }) => id) });
   const [glueRels, scopeRels] = await Promise.all([
     getGlueRelsByNamespace({ db, namespaceId }),
     includeScopes ? getScopeRelsByNamespace({ db, namespaceId }) : Promise.resolve([]),
   ]);
 
-  // Which taskspaces this snapshot may name at all. The panel lists a taskspace under its
-  // scope and nowhere else, so one with no `scopeId` — the default for `kozane taskspace
-  // create`, and for every row made without one — is unreachable in the UI, as is one whose
-  // scope this namespace does not carry; `getTaskspacesInNamespace` returns both, along with
-  // rows assigned to no namespace at all.
-  //
-  // On the live board that is a row nothing draws, and it keeps being sent: the board is
-  // behind the workspace API key showing the user their own workspace, the same reason it
-  // is sent real paths. In an export it is the name of a directory — and, below, that
-  // directory's contents — published for a taskspace the site itself never mentions, which
-  // is the hazard the note on `includeScopes` gives for filtering here rather than in the
-  // panel. An export therefore carries the taskspaces it draws and no others.
+  // For static export, include only taskspaces whose scopes appear in this snapshot. The
+  // exported panel cannot reach other taskspaces, so publishing their names and files would
+  // disclose unused data. Live snapshots retain the full visible taskspace set.
   const drawnScopes = new Set(scopes.map(({ id }) => id));
   const namedTaskspaces = includeScopedFiles
     ? taskspaces.filter(({ scopeId }) => scopeId !== null && drawnScopes.has(scopeId))
     : taskspaces;
 
-  // Built from the taskspace rows before their `path` is nulled below — a static export's
-  // own file walk needs the real directory the same way the live `/file` endpoint does, and
-  // this is the one place both a database row and the workspace root it resolves against
-  // are already in hand.
-  //
-  // `buildTaskspaceFileTreeOnce`, not `buildTaskspaceFileTree`: a prerender calls this once
-  // per namespace, and an unplaced taskspace is drawn by every namespace's board, so the same
-  // directory is asked about once per namespace page. Its files still go into each of those
-  // pages — that makes them browsable there — but the disk is walked for the first
-  // one only. See the note on that function.
+  // Build file trees before removing local paths from exported rows. Reuse
+  // `buildTaskspaceFileTreeOnce` so taskspaces shared across namespaces are walked only once
+  // per build.
   let taskspaceFiles: Record<string, TaskspaceFileTree> | undefined;
-  // `includeScopes` too, not just relying on `taskspaces` already being `[]` when it is
-  // false: a file tree keyed by taskspace id is meaningless without the taskspaces
-  // themselves, and this keeps that true of the code rather than of an incidental empty
-  // loop — an export must never carry file contents its caller did not also ask to name.
+  // Require scope data explicitly before embedding files so every tree has a corresponding
+  // taskspace summary.
   if (includeScopedFiles && includeScopes) {
     const root = getWorkspaceRoot();
     if (root) {
@@ -168,7 +124,7 @@ export async function loadNamespaceSnapshot({
     ...(taskspaceFiles ? { taskspaceFiles } : {}),
   } satisfies NamespaceDataSnapshot;
 
-  // The whole namespace row alongside the snapshot: the page draws its name, while the
-  // snapshot carries only the id the client checks it against.
+  // Return the full namespace row for the page title alongside the snapshot, which carries
+  // only its ID.
   return { namespace, snapshot };
 }

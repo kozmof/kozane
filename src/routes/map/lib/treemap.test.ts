@@ -49,8 +49,7 @@ describe("squarify", () => {
     }
   });
 
-  /** Squarifying is order-dependent, and the page packs twice — once on the server and once
-   *  in the browser. Equal values must not be left to decide it. */
+  /** Use a deterministic tie-break because squarified layout depends on item order. */
   it("packs equal values the same way whatever order they arrive in", () => {
     const items = [item("b", 5), item("a", 5), item("c", 5)];
     const forwards = squarify(items, AREA);
@@ -101,7 +100,7 @@ describe("squarify", () => {
         squarify([item("full", 10), item("zero", 0)], AREA, { emptyStripHeight: 26 }),
       );
       expect(cells.zero.rect.height).toBeCloseTo(26, 6);
-      // Taken off the packing rather than added to the area: the two still tile it.
+      // Reserve the strip within the available area so the strip and packing still tile it.
       expect(cells.full.rect.height + cells.zero.rect.height).toBeCloseTo(AREA.height, 6);
     });
 

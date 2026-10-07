@@ -109,12 +109,7 @@ describe("scanTaskspaceTags", () => {
     }
   });
 
-  /**
-   * `missing` and not a truncation, which is what this was — reason `"unreadable"`, path
-   * `"./"`. Both readers turn a truncation into "was not read in full", and a taskspace whose
-   * directory is gone was not read in part: it told a user that "some files could not be read
-   * (for example ./)" in a taskspace that no longer existed. See `TaskspaceTagScan.missing`.
-   */
+  /** Report an unavailable taskspace root as missing, separately from a partial scan. */
   it("reports a taskspace directory that is not there as missing rather than truncated", () => {
     rmSync(dir, { recursive: true, force: true });
 
@@ -128,12 +123,10 @@ describe("scanTaskspaceTags", () => {
   });
 
   /**
-   * The other half of that split, and the reason it is drawn at the root rather than at any
-   * unreadable directory. This taskspace was read — one directory inside it was not — which
-   * is a truncation and names the directory it is about.
+   * An unreadable child directory is a truncation because the taskspace root was successfully
+   * read.
    */
-  // Nothing is unreadable to root, so the denial this rests on does not happen there — the
-  // same guard `taskspace-snapshot.test.ts` puts on the equivalent case.
+  // Skip permission-denial tests when running as root.
   it.skipIf(process.getuid?.() === 0)(
     "reports a directory below the root that could not be listed as a truncation",
     () => {
@@ -171,8 +164,8 @@ describe("scanTaskspaceTags", () => {
     }
     write(join(dir, "notes.md"), ":mine");
 
-    // Skipped, not truncated: what is left is the whole tree as this scan defines it, so a
-    // taskspace with a node_modules in it must not warn on every page load.
+    // Skipped directories are outside the scan's scope and must not cause truncation
+    // warnings.
     expect(scan(dir)).toEqual({
       hits: [
         {
@@ -223,12 +216,7 @@ describe("scanTaskspaceTags", () => {
       expect(result.truncated).toEqual(["budget"]);
     });
 
-    /**
-     * A file over the per-file cap is refused by `readTaskspaceFile` without being opened, so
-     * charging the budget for it would spend bytes on something nobody ever read — and one
-     * large asset beside the notes was enough to spend all of it and leave the text files
-     * after it reported as `"budget"`.
-     */
+    /** Do not charge the byte budget for an oversized file rejected before reading. */
     it("does not spend the byte budget on a file it is going to refuse anyway", () => {
       // Over TASKSPACE_FILE_BYTES_MAX, and named so it is walked before the file below.
       writeFileSync(join(dir, "a-big.bin"), Buffer.alloc(2 * 1024 * 1024, 0x41));
@@ -236,9 +224,7 @@ describe("scanTaskspaceTags", () => {
 
       const result = scan(dir, { bytes: 2 * 1024 * 1024 });
       expect(tagsOf(result.hits)).toEqual(["mine"]);
-      // Named for what it is rather than swallowing the budget silently — and named
-      // separately from a file that could not be read, because declining to open a file
-      // this large is not a failure and must not be reported to the reader as one.
+      // Report oversized files separately from read failures.
       expect(result.truncated).toEqual(["too-large"]);
     });
 
@@ -250,16 +236,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The ceiling the other budgets do not imply. Bytes and entries bound what is read, and
-     * the number of tags that reading produces is not a fixed fraction of either: a file of
-     * `:a` lines yields a hit every three bytes, so a byte budget spent exactly as intended
-     * can still produce millions of them.
-     *
-     * That was not a slow page. The hits of every taskspace are gathered into one array, and
-     * they were spread into it as arguments — which passes one argument per hit and throws
-     * `RangeError: Maximum call stack size exceeded` somewhere past a hundred thousand. The
-     * append is fixed too; this is what keeps the array from being that size in the first
-     * place.
+     * Bound tag hits independently of bytes and entries because a small file can contain many
+     * tags.
      */
     it("stops at the hit ceiling and says so", () => {
       write(join(dir, "many.md"), Array.from({ length: 20 }, (_, i) => `:t${i}`).join("\n"));
@@ -285,7 +263,7 @@ describe("scanTaskspaceTags", () => {
 
       const result = scan(dir, { hits: 2, bytes: 1000 });
       expect(tagsOf(result.hits)).toEqual(["one", "two"]);
-      // `b.md` was never opened: the budget still holds what only `a.md` spent.
+      // Only `a.md` consumed the budget. `b.md` was never opened.
       expect(result.truncated).toEqual(["hits"]);
     });
 
@@ -306,17 +284,16 @@ describe("scanTaskspaceTags", () => {
       const second = scan(dir);
       expect(second.hits).toEqual(first.hits);
       expect(second.truncated).toEqual(first.truncated);
-      // The one thing that must differ: the first scan read the file and the second
-      // recognized it and did not, which is what tells the caller there is nothing to store.
+      // The second scan must report that it reused cached content so the caller knows no
+      // write is needed.
       expect([first.changed, second.changed]).toEqual([true, false]);
     });
 
     it("does not spend budget re-reading an unchanged file", () => {
       write(join(dir, "a.md"), ":one");
       write(join(dir, "b.md"), ":two");
-      // Enough for exactly one of the two, so what the second file costs is what this is
-      // measuring: the first scan spends it all on `a.md` and cannot afford `b.md`, and the
-      // second gets `a.md` free from the cache and can.
+      // Budget for one file. The first scan reads only `a.md`. The second gets it from cache
+      // and can read `b.md`.
       const bytes = ":one".length;
 
       const first = scan(dir, { bytes });
@@ -355,9 +332,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The entry for a deleted file has to go, not merely stop being reported: it is handed to
-     * `tag-cache.ts` and written to disk, so keeping it means a workspace's stored tags grow
-     * by every file that has ever been in it.
+     * Remove deleted files from the persisted cache so it does not grow with every file ever
+     * scanned.
      */
     it("forgets the stored entry for a file that is gone, not just its hits", () => {
       write(join(dir, "notes.md"), ":foo");
@@ -372,8 +348,7 @@ describe("scanTaskspaceTags", () => {
       expect(after.changed).toBe(true);
     });
 
-    /** A scan that stopped early did not reach directories that are still there, so "not
-     *  seen" cannot mean "no longer there" — pruning on it would discard good entries. */
+    /** Do not prune entries from directories an incomplete scan did not reach. */
     it("keeps stored entries when the walk did not finish", () => {
       write(join(dir, "a.md"), ":one");
       write(join(dir, "b.md"), ":two");
@@ -385,11 +360,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The other half of the rule above, and the half that was missing. The guard used to be
-     * one flag for the whole scan, so a truncation anywhere meant nothing anywhere was
-     * pruned — and a taskspace large enough to hit a ceiling is exactly the one whose stale
-     * entries most need dropping. It is per directory now: a file gone from a directory that
-     * was listed to the end is gone, whatever happened elsewhere in the tree.
+     * Prune stale files in fully listed directories even if another part of the scan was
+     * truncated.
      */
     it("forgets a file gone from a directory it listed, though the walk stopped elsewhere", () => {
       mkdirSync(join(dir, "sub"));
@@ -402,8 +374,7 @@ describe("scanTaskspaceTags", () => {
       ]);
 
       rmSync(join(dir, "notes.md"));
-      // `sub` sits deeper than this scan goes, so the walk truncates — while the root
-      // directory is still enumerated to the end.
+      // Truncate below the depth limit while still completing the root listing.
       const after = scan(dir, { depth: 0 });
 
       expect(after.truncated).toEqual(["depth"]);
@@ -414,10 +385,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The subtler half of "listed to the end". This walk visits every entry it is handed and
-     * its loop runs to completion — but the listing itself was cut at
-     * {@link TASKSPACE_DIR_ENTRIES_MAX}, so the entries it was handed are not the directory.
-     * A file missing from a short listing may be perfectly well there, past the cut.
+     * A completed loop over a truncated listing is still incomplete. Preserve cached entries
+     * that might lie beyond the listing limit.
      */
     it("keeps entries for a directory whose listing was cut short", () => {
       const sub = join(dir, "sub");
@@ -436,8 +405,7 @@ describe("scanTaskspaceTags", () => {
       const after = scan(dir);
 
       expect(after.truncated).toContain("entries");
-      // Not seen this time, and nothing established it is gone: the listing it would have
-      // been named in stopped short of naming everything.
+      // Keep the entry because an incomplete listing cannot establish that its file is gone.
       expect(exportTaskspaceTagCache(dir)).toHaveProperty(["sub/f0000.md"]);
     });
 
@@ -456,12 +424,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The map is bounded by directory, as the file it mirrors is.
-     *
-     * It was not, and pruning does not cover this: `pruneStale` drops files that are gone
-     * from a directory it walked, and says nothing about a directory nobody walks again. So a
-     * taskspace deleted or re-pathed left every file it had ever parsed in memory for the
-     * life of the server, and a long-running `kozane open` grew with every one of them.
+     * Bound the cache by directory. Pruning cannot remove entries for deleted or moved
+     * taskspaces that are never walked again.
      */
     describe("its bound on directories", () => {
       /** One directory per scan, each holding one file, so the only thing varying is how many
@@ -478,8 +442,7 @@ describe("scanTaskspaceTags", () => {
         const first = scanFresh(dir, 0);
         expect(exportTaskspaceTagCache(first)).toBeDefined();
 
-        // One past the ceiling, counting the one above. `FILE_CACHE_DIRS_MAX` is not exported
-        // — it is the module's own business — so this reaches it by scanning past it.
+        // Scan one more directory than the cache limit to exercise eviction.
         for (let n = 1; n <= 64; n++) scanFresh(dir, n);
 
         expect(exportTaskspaceTagCache(first)).toBeUndefined();
@@ -491,9 +454,7 @@ describe("scanTaskspaceTags", () => {
 
         for (let n = 1; n <= 64; n++) {
           scanFresh(dir, n);
-          // Answered entirely from the cache, so nothing is written and nothing is parsed —
-          // which is exactly the scan that would not have marked it as used, and exactly the
-          // taskspace worth keeping.
+          // A cache-only scan must still refresh recency.
           scan(first);
         }
 
@@ -502,15 +463,8 @@ describe("scanTaskspaceTags", () => {
     });
 
     /**
-     * The ceiling the one above does not give. `TAG_CACHE_DIRS_MAX` bounds how many
-     * taskspaces are held and says nothing about how many files any one of them holds, and
-     * the precise cleanup — `pruneStale` — may only drop an entry from a directory the walk
-     * listed to the end. So the taskspace that cannot be finished in one scan is the one
-     * nothing prunes, and its entries accumulated a slice at a time for the life of the
-     * process.
-     *
-     * `limits.files` reaches the ceiling without writing twenty thousand files, the same way
-     * `limits.bytes` and `limits.nodes` reach theirs.
+     * Bound cached files within each taskspace, including taskspaces that cannot be fully
+     * scanned and pruned. Override `limits.files` to reach the limit with a small fixture.
      */
     describe("its bound on files within one taskspace", () => {
       it("keeps the most recently seen files and forgets the rest", () => {
@@ -526,10 +480,8 @@ describe("scanTaskspaceTags", () => {
       it("never drops a file the scan it is running has just parsed", () => {
         for (const name of ["a.md", "b.md", "c.md"]) write(join(dir, name), `:tag-${name}`);
 
-        // Every file still reports its tags, whatever the cache went on to keep: eviction is
-        // about what the next scan is spared, never about what this one answers with.
-        // `:tag-a.md` is the tag `tag-a`: a `.` is not a tag character, so it closes the tag
-        // and the extension is left as text.
+        // Eviction affects later scans, not the hits returned by this scan. `:tag-a.md`
+        // produces the tag `tag-a` because the period ends the tag.
         expect(tagsOf(scan(dir, { files: 1 }).hits)).toEqual(["tag-a", "tag-b", "tag-c"]);
       });
 

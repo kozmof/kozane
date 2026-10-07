@@ -5,18 +5,8 @@ import type { BoardRect } from "$lib/constants";
 import { readArray, readFiniteNumber, readString, readStringArray } from "./lib/response.js";
 
 /**
- * Undoing an optimistic edit, by field and by card rather than by restoring the array the
- * edit started from.
- *
- * The whole-array form was wrong whenever two edits overlapped. Each one captured
- * `state.cards` before its request and put that copy back on failure, so a rollback also
- * reverted every change applied in the meantime — a card moved to another partition would
- * silently jump back because an unrelated delete failed. The poll is held off while a
- * mutation is pending (`NamespaceState.mutationFetcher`), but nothing serializes the user's
- * own clicks, and the second edit is the one that loses.
- *
- * These are applied against whatever the board holds at the moment the failure lands, so
- * an edit that succeeded alongside is left where it is.
+ * Roll back only the affected cards and fields against current state. Restoring a captured
+ * array would also undo unrelated edits completed while the failed request was in flight.
  */
 function fieldSnapshot<K extends keyof CardWithGlue>(
   cards: CardWithGlue[],
@@ -40,10 +30,8 @@ function restoreField<K extends keyof CardWithGlue>(
 }
 
 /**
- * Puts removed rows back, skipping any the board has since regained. They land at the end
- * rather than where they were, which changes nothing on the canvas: cards are stacked by
- * `zIndex` within their layer, not by their place in this list — `handleSquashCard`
- * already appends for the same reason.
+ * Restore removed rows unless they already reappeared. Append them because canvas stacking
+ * follows layer and zIndex rather than array position.
  */
 function reinsert<T extends { id: string }>(current: T[], removed: T[]): T[] {
   const present = new Set(current.map(({ id }) => id));
@@ -56,9 +44,8 @@ function reinsertGlueRels(current: GlueRel[], removed: GlueRel[]): GlueRel[] {
 }
 
 /**
- * The `stacking` a layer move answers with, as a lookup. Read defensively: an older
- * server, or a static export replaying a canned response, simply reports nothing and the
- * cards keep the zIndex they had.
+ * Read the stacking lookup returned by a layer move. If absent or invalid, preserve existing
+ * card zIndex values.
  */
 function readStacking(parsed: unknown): Map<string, number> {
   const stacking = readArray(parsed, "stacking");
@@ -107,8 +94,8 @@ export function createNamespaceActions(state: NamespaceState) {
     }
   }
 
-  // Glue/unglue and scope membership apply their changes only after the server
-  // confirms them, so a failure needs no rollback — nothing was changed locally.
+  // Glue and scope membership actions update local state only after success, so failures need
+  // no rollback.
   async function handleGlueSelected(cardIds: string[]) {
     const res = await api.glueCards(state.mutationFetcher, state.namespaceId, cardIds);
     if (!res.ok) {
@@ -175,8 +162,7 @@ export function createNamespaceActions(state: NamespaceState) {
       state.cards = reinsert(state.cards, removedCards);
       state.glueRels = reinsertGlueRels(state.glueRels, removedGlueRels);
       state.selection.selectedCards = new Set([...state.selection.selectedCards, ...wasSelected]);
-      // Only when nothing has claimed it since: the user may have picked another card while
-      // the request was in flight, and that choice is newer than this undo.
+      // Restore selection only if the user has not selected another card during the request.
       if (wasPrimary && state.selection.primarySelectedId === null)
         state.selection.primarySelectedId = wasPrimary;
     };
@@ -192,15 +178,14 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Splits a card into one card per segment of its text. Applied only once the server
-   * confirms it, the way glue and scope membership are: the pieces come back with the
-   * positions and ids the server gave them, and nothing local was changed to roll back.
+   * Split a card by text segments. Apply the returned IDs and positions only after server
+   * confirmation, so failure requires no local rollback.
    */
   async function handleSquashCard(cardId: string) {
     const res = await api.squashCard(state.mutationFetcher, state.namespaceId, cardId);
     if (!res.ok) {
-      // The server's own wording says which card it refused and why — "does not split into
-      // more than one card" is the part that tells the user to pick a different card.
+      // Preserve the server's squash error so the user can identify why the selected card
+      // cannot be split.
       state.setError(await api.failureMessage(res, "Failed to squash card"));
       return;
     }
@@ -218,8 +203,8 @@ export function createNamespaceActions(state: NamespaceState) {
       ...state.scopeRels.filter((r) => r.cardId !== cardId),
       ...scopeIds.flatMap((scopeId) => cards.map((c) => ({ scopeId, cardId: c.id }))),
     ];
-    // The pieces are what there is to work on now: the card that was selected is gone, and
-    // leaving the selection empty would drop the action bar the squash was started from.
+    // Select the new pieces to keep the action bar available after replacing the original
+    // card.
     state.selection.selectedCards = new Set<string>(cards.map((c) => c.id));
     state.selection.primarySelectedId = cards[0].id;
     state.selection.composerCard = null;
@@ -327,8 +312,7 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError(await api.failureMessage(res, "Failed to set warp"));
       return;
     }
-    // The stored row, not the position sent: the server clamps it to the canvas, so a
-    // warp set at the very edge would otherwise move on the next poll.
+    // Use the stored warp position because the server clamps it to the canvas.
     const parsed = api.parseWarp(await res.json().catch(() => null));
     if (!parsed) {
       state.setError("Failed to set warp");
@@ -373,8 +357,7 @@ export function createNamespaceActions(state: NamespaceState) {
     const res = await api.reorderLayers(state.mutationFetcher, state.namespaceId, layerIds);
     if (!res.ok) {
       state.layers = prevLayers;
-      // A reorder fails when someone else changed the layers, and the server says so —
-      // "reload to see the current order" is the part the user needs.
+      // Show the server's reorder guidance when layers changed elsewhere.
       state.setError(await api.failureMessage(res, "Failed to reorder layers"));
     }
   }
@@ -405,16 +388,13 @@ export function createNamespaceActions(state: NamespaceState) {
         return zIndex === undefined ? c : { ...c, zIndex };
       });
     }
-    // Moving cards is how you follow them: the layer they landed on becomes the one in front.
+    // Select the destination layer so the moved cards remain in front.
     state.activeLayerId = layerId;
   }
 
   /**
-   * `cardIds` is one card for a plain selection, or a whole glue group when the selected
-   * card is glued — the composer sends whichever the selection actually is. A group is not
-   * guaranteed to share a layer (nothing enforces that), so the server restacks each layer
-   * it finds them on separately and reports where every card landed, the same `stacking`
-   * shape a layer move answers with.
+   * Restack the selected card or glue group within each card's current layer. Apply the
+   * server's returned stacking values because groups can span layers.
    */
   async function handleStackOrderChange(cardIds: string[], direction: "front" | "back") {
     const res = await api.batchChangeStackOrder(
@@ -524,16 +504,8 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Adds the selected cards to `scopeId` and leaves them selected.
-   *
-   * The difference from {@link handleAddToScope} is the whole reason this exists: that one
-   * clears the selection when it succeeds, which is right for the sidebar — the button is
-   * the end of what you were doing — and wrong for the file palette, where the selection is
-   * the subject of the panel and every row is about it. Linking from there and watching the
-   * panel empty itself would be the panel undoing its own premise.
-   *
-   * Answers whether the link took, so the palette can report it without a second source of
-   * truth about what happened.
+   * Add selected cards to a scope without clearing the selection used by the file palette.
+   * Return whether linking succeeded.
    */
   async function handleLinkScope(scopeId: string): Promise<boolean> {
     if (state.selection.selectedCards.size === 0) return false;
@@ -558,23 +530,12 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * The whole of the palette's second flow: a scope, a taskspace inside it, one empty file
-   * inside that, and the selected cards linked to the scope — in that order, over four
-   * endpoints that already exist.
+   * Create a scope, taskspace, and empty file, then link selected cards. Preserve server
+   * error messages for each step.
    *
-   * Ordered so that the step most likely to fail comes before anything is linked. Both
-   * early steps refuse for reasons worth reading — a scope name is unique across the whole
-   * workspace, and a taskspace claims a directory named after it — so every failure here
-   * carries the server's own wording rather than the fixed strings the older scope and
-   * taskspace handlers use, which would turn "a scope named X already exists" into "Failed
-   * to create scope" and leave the reader to guess.
-   *
-   * A taskspace that cannot be made takes its scope down with it. The scope was created a
-   * moment ago for this taskspace alone, and leaving an empty one behind would be litter
-   * from a flow that visibly did not finish. Past that point nothing is undone: a scope and
-   * a taskspace are useful on their own, and the tree's own controls finish the job.
-   *
-   * Answers what to open, or null when there is nothing to open.
+   * If taskspace creation fails, remove the newly created scope. After that step, retain
+   * created resources so the user can finish through existing controls. Return the file to
+   * open, or null.
    */
   async function handleCreateScopeWithFile(names: {
     scope: string;
@@ -605,9 +566,8 @@ export function createNamespaceActions(state: NamespaceState) {
     const taskspace = taskspaceRes.ok ? await taskspaceRes.json().catch(() => null) : null;
     if (!taskspace?.id) {
       const message = await api.failureMessage(taskspaceRes, "Failed to create taskspace");
-      // Undone rather than left behind: this scope was made for this taskspace, a moment
-      // ago, and has nothing else in it. A rollback that itself fails is not worth a second
-      // message — the scope is in the sidebar, where it can be deleted.
+      // Remove the scope created for this failed taskspace. If cleanup also fails, leave it
+      // available for deletion in the sidebar.
       await api.deleteScope(state.mutationFetcher, state.namespaceId, scopeId);
       state.scopes = state.scopes.filter((existing) => existing.id !== scopeId);
       state.setError(message);
@@ -637,8 +597,8 @@ export function createNamespaceActions(state: NamespaceState) {
       return null;
     }
 
-    // Last, so that nothing above has to unpick a membership to roll back. A link that
-    // fails is reported and left there: the file exists and is worth opening regardless.
+    // Link membership last to avoid undoing it if creation fails. Report link failures but
+    // still open the created file.
     await handleLinkScope(scopeId);
 
     return { taskspaceId, taskspaceName, path: file.path };
@@ -669,16 +629,9 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Files the cards that crossed a frame's edge into the scope, or out of it.
-   *
-   * Optimistic, like every other mutation here, but rolled back only as far as it got: the
-   * two calls are independent — a card coming in and another going out have nothing to do
-   * with each other — so a failure in one leaves the other standing rather than undoing a
-   * write the server accepted. The local relations are put back for whichever half failed,
-   * and the next poll settles any disagreement.
-   *
-   * The selection is deliberately untouched: this runs at the end of a drag, and clearing it
-   * would take away what the user is holding.
+   * Apply membership changes for cards crossing frame boundaries. Handle entry and exit
+   * requests independently, rolling back only the failed half. Preserve the current
+   * selection.
    */
   async function handleScopeMembershipChange(
     scopeId: string,
@@ -726,12 +679,8 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Puts a frame on the board for `scopeId`, at `rect`.
-   *
-   * Whatever the frame lands on joins the scope, which is the point of placing one around a
-   * selection: the cards are already there, and the frame is how they are now held. The
-   * caller works out the rectangle — it is the one that knows where the view is and what is
-   * selected — and hands the members it covers along with it.
+   * Create a scope frame at the supplied rectangle and add the supplied overlapping cards to
+   * the scope. The caller provides geometry and measured members.
    */
   async function handleCreateScopeArea(scopeId: string, rect: BoardRect, covers: string[] = []) {
     const res = await api.createScopeArea(state.mutationFetcher, state.namespaceId, scopeId, rect);
@@ -744,8 +693,7 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError("Failed to add scope area");
       return;
     }
-    // Appended, not replacing the scope's other frames: a scope may be framed in several
-    // places, and drawing another one says so rather than moving the one already there.
+    // Append the new frame without replacing other frames for this scope.
     state.scopeAreas = [...state.scopeAreas, stored];
     if (covers.length > 0) {
       await handleScopeMembershipChange(scopeId, { entered: covers, exited: [] });
@@ -753,12 +701,8 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Names a new scope and frames it in one go, for a rectangle drawn on a board with nothing
-   * yet to put in it — which is how a scope tends to start.
-   *
-   * The scope is created first and kept even if the frame fails: a named scope is a thing the
-   * user asked for and can frame again, while unwinding it would throw the name away over a
-   * failed rectangle.
+   * Create a named scope, then frame it. Keep the scope if frame creation fails so the user
+   * can retry placement.
    */
   async function handleCreateScopeWithArea(name: string, rect: BoardRect, covers: string[] = []) {
     const trimmed = name.trim();
@@ -777,15 +721,10 @@ export function createNamespaceActions(state: NamespaceState) {
     await handleCreateScopeArea(scopeId, rect, covers);
   }
 
-  /**
-   * Takes the frame off the board. The scope keeps every card in it: a frame says where a
-   * scope is drawn, not what belongs to it, and removing one by accident must not be a way
-   * to lose a membership list.
-   */
+  /** Remove the frame while preserving all scope memberships. */
   async function handleDeleteScopeArea(scopeId: string, areaId: string) {
     const prev = state.scopeAreas;
-    // By id: the frame removed is the one whose button was clicked, not every frame the
-    // scope happens to have here.
+    // Remove only the clicked frame's area ID.
     state.scopeAreas = state.scopeAreas.filter((a) => a.id !== areaId);
     const res = await api.deleteScopeArea(
       state.mutationFetcher,

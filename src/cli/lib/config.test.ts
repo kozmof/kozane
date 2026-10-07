@@ -77,11 +77,8 @@ describe("writeConfig", () => {
   });
 
   /**
-   * The readers cache a parsed config and re-validate it with {@link fileSignature}, so a
-   * rewrite that the signature cannot see is a rewrite that never takes effect. Two configs
-   * differing only in a digit are the same length and land in one filesystem timestamp
-   * tick; written in place they keep their inode too, which leaves nothing to tell them
-   * apart. Renaming over the target gives the second one an inode of its own.
+   * Replace the file by rename so the cache signature changes even when two configurations
+   * have the same length and filesystem timestamp. The new inode distinguishes them.
    */
   it("gives a same-length rewrite a signature of its own", () => {
     const path = join(root, KOZANE_DIR, CONFIG_FILE);
@@ -103,11 +100,7 @@ describe("writeConfig", () => {
   });
 });
 
-/**
- * The resolver that decides which database an interactive command reads. Tested here rather
- * than beside `runtime-state`, where it was: the state file is what a server writes, and
- * which database a command picks from it is this module's decision.
- */
+/** Test interactive command database selection here, where the runtime state is interpreted. */
 describe("commandDbUrl", () => {
   beforeEach(() => {
     mkdirSync(join(root, KOZANE_DIR), { recursive: true });
@@ -117,8 +110,8 @@ describe("commandDbUrl", () => {
     const memoryUrl = "file:/tmp/kozane-memory-test/kozane.db";
     writeServerState(root, process.pid, { memory: true, databaseUrl: memoryUrl });
 
-    // The bug this pins: with a memory server up, a command reading the workspace file
-    // instead wrote cards the open board could never show.
+    // Memory-server commands must use the session database so the board receives their
+    // writes.
     expect(commandDbUrl(root)).toBe(memoryUrl);
   });
 

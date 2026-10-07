@@ -36,9 +36,7 @@ afterEach(() => {
 
 describe("_resetProcessStateForTest", () => {
   it("clears every cache the process keeps between requests", () => {
-    // Warm all four of the caches that can be observed from here, then assert one call
-    // puts each of them back. The point is the set, not any one member: a test that had to
-    // name them individually is a test that could name three of the four.
+    // Warm every observable cache and verify that one call resets them all.
     getWorkspaceUiConfig();
     readApiKey(root);
     for (let i = 0; i <= AUTH_FAILURE_LIMIT; i += 1) recordAuthFailure("1.2.3.4");

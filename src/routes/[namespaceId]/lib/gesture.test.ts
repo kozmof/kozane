@@ -57,8 +57,7 @@ describe("travelled", () => {
   });
 
   it("takes a threshold of its own, which is how a frame draw asks for a longer one", () => {
-    // `scopeAreaDrawState` is held to SCOPE_AREA_DRAW_MIN rather than DRAG_THRESHOLD: an
-    // Alt-click that was meant as a click must not open a prompt.
+    // Use SCOPE_AREA_DRAW_MIN for frame drawing so an Alt-click does not open the prompt.
     const far = atOrigin();
     expect(travelled(far, DRAG_THRESHOLD + 1, 0, SCOPE_AREA_DRAW_MIN)).toBe(false);
     expect(travelled(far, SCOPE_AREA_DRAW_MIN + 1, 0, SCOPE_AREA_DRAW_MIN)).toBe(true);
@@ -102,8 +101,7 @@ describe("markMoved", () => {
 
 describe("markMovedHorizontally", () => {
   it("ignores vertical travel however far it goes", () => {
-    // The resize handle sits on the card's edge; only horizontal travel means anything, so a
-    // press that slides straight down must not count as a resize.
+    // Ignore vertical-only movement when resizing card width.
     const gesture = { startClientX: 0, moved: false };
     expect(markMovedHorizontally(gesture, 0)).toBe(false);
     expect(gesture.moved).toBe(false);
@@ -131,8 +129,7 @@ describe("markMovedHorizontally", () => {
 
 describe("the thresholds themselves", () => {
   it("keeps a frame draw harder to trigger than a drag", () => {
-    // The relationship the two constants are documented against: if this ever inverted, an
-    // Alt-click would open a prompt more easily than a press moves a card.
+    // Drawing a frame must require more movement than dragging a card.
     expect(SCOPE_AREA_DRAW_MIN).toBeGreaterThan(DRAG_THRESHOLD);
   });
 });

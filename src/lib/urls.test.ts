@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import { scanUrls } from "./urls";
 
 /**
- * `scanUrls` is the module both readings of a text agree through: `lib/tag.ts` cuts these
- * spans out of the grammar and `lib/text-segments.ts` draws them as anchors. It was covered
- * only through those two, which is coverage of the agreement rather than of the rule — the
- * span boundaries are what both of them depend on, and a trim that moved by one character
- * would show up as a tag appearing or vanishing several modules away.
+ * Test URL span boundaries directly because tag scanning and link rendering both depend on
+ * them.
  */
 describe("scanUrls", () => {
   const spansOf = (text: string) => scanUrls(text).map(({ url, index }) => [url, index]);
@@ -30,9 +27,7 @@ describe("scanUrls", () => {
     ]);
   });
 
-  // The trim makes "see http://x.com." link the address and leave the period as
-  // prose — and it moves where the span ends, which is the boundary a tag written after it
-  // is read against.
+  // Trim sentence punctuation from links while preserving it in surrounding prose.
   it("leaves trailing sentence punctuation out of the url", () => {
     expect(spansOf("see http://example.com.")).toEqual([["http://example.com", 4]]);
     expect(spansOf("(http://example.com)")).toEqual([["http://example.com", 1]]);
@@ -46,17 +41,12 @@ describe("scanUrls", () => {
     ]);
   });
 
-  // The trim can never empty a match — every one of them opens with a scheme, and `/` is not
-  // trailing punctuation — so a bare scheme is a span like any other rather than the
-  // zero-width one the guard in `scanUrls` stands against. Pinned because that is the
-  // property the guard rests on: if the pattern ever matched something the trim could consume
-  // whole, this is the test that would say so.
+  // Verify that punctuation trimming cannot consume a complete URL match. The remaining
+  // scheme prevents a zero-width span.
   it("keeps a bare scheme, which the trim cannot empty", () => {
-    // A scheme with nothing after it is not a match at all — the pattern wants at least one
-    // character past `://`.
+    // A scheme alone does not match because the pattern requires a character after `://`.
     expect(scanUrls("http://")).toEqual([]);
-    // With one, it matches; the trim then takes that character and leaves the scheme, which
-    // is the closest this gets to the empty span the guard stands against.
+    // A punctuation-only suffix can match, then trim back to the scheme.
     expect(spansOf("http://.")).toEqual([["http://", 0]]);
   });
 
@@ -65,8 +55,7 @@ describe("scanUrls", () => {
     expect(spansOf("<http://example.com/a>text")).toEqual([["http://example.com/a>text", 1]]);
   });
 
-  // The `://` guard is claimed to be exact rather than approximate: every match of the
-  // pattern contains it, so the fast path can never skip a url the slow path would find.
+  // Every URL pattern match must contain `://` so the fast path cannot skip a valid match.
   it("does not skip a url that the pattern would have matched", () => {
     for (const text of ["http://x", "https://x", "a\nhttp://x", "…http://x"]) {
       expect(scanUrls(text).length).toBe(1);

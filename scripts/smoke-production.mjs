@@ -198,7 +198,7 @@ try {
       req.end(new URLSearchParams({ name: `Smoke ${origin}` }).toString());
     });
 
-  // Use `localhost` in the request origin while `ORIGIN` uses `127.0.0.1` .
+  // Use `localhost` in the request origin while `ORIGIN` uses `127.0.0.1`.
   const otherSpelling = await createNamespace(`http://localhost:${port}`);
   if (!otherSpelling.ok) {
     throw new Error(

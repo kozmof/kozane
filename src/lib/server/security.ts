@@ -49,21 +49,11 @@ export function remoteBindingRequiresTls(
 }
 
 /**
- * Whether a request's `Host` names this workspace, for the one mode that has nothing else
- * to go on: a workspace with no API key, bound to loopback.
+ * Validate Host for a keyless loopback workspace to prevent DNS rebinding from reading it
+ * under an arbitrary hostname. CSRF origin checks do not protect ordinary GET requests.
  *
- * That mode authenticates nobody — `kozane init` leaves it there, and the security matrix
- * says so. What the matrix understates is the reach: a name under someone else's control
- * can be pointed at `127.0.0.1` (DNS rebinding), and the browser then treats this server as
- * that name's own origin. `ORIGIN` does not settle it, because SvelteKit's CSRF check
- * covers form-ish POSTs and says nothing about a `GET`, and the whole board is a `GET`.
- * The API-key cookie is not at risk either way — it belongs to the loopback origin and is
- * never sent to the attacker's name — which is exactly why this is scoped to the keyless
- * case rather than applied to every request.
- *
- * `KOZANE_ALLOWED_HOSTS` is the escape hatch, comma-separated, for a hosts-file alias or a
- * local proxy in front of a keyless workspace. Generating a key is the better answer, and
- * makes this gate moot.
+ * Allow explicit aliases through comma-separated `KOZANE_ALLOWED_HOSTS`. Key-protected
+ * workspaces use authentication instead of this gate.
  */
 export function isAllowedRequestHost(
   host: string,
@@ -92,12 +82,13 @@ function parseLoopbackOrigin(value: string): URL | null {
 }
 
 /**
- * Normalize a loopback form origin to the origin pinned by the Node adapter.
- * Local port forwarding may expose localhost:5174 while the server binds 127.0.0.1:5173.
- * For a different port, require Origin to match the request's Host exactly: browsers
- * cannot choose Host independently of the request URL. Do not trust forwarded headers.
- * Same-port loopback aliases remain supported. Missing and non-loopback origins are
- * left to SvelteKit's CSRF check.
+ * Normalize loopback form origins to the Node adapter's configured origin. Local port
+ * forwarding may expose localhost:5174 while the server binds 127.0.0.1:5173.
+ *
+ * For different ports, require Origin to match the request's Host exactly. Browsers cannot
+ * choose Host independently of the request URL. Do not trust forwarded headers. Allow
+ * same-port loopback aliases and leave missing or non-loopback origins to SvelteKit's CSRF
+ * check.
  */
 export function canonicalLoopbackOrigin(
   requestOrigin: string | undefined,
@@ -113,23 +104,10 @@ export function canonicalLoopbackOrigin(
 }
 
 /**
- * Why the authentication throttle will not do what it looks like it does, or null when it
- * will.
+ * Explain when remote clients may share one authentication throttle counter. Behind a proxy,
+ * configure `ADDRESS_HEADER` so `getClientAddress()` identifies each client.
  *
- * {@link recordAuthFailure} counts per client address, and the address comes from
- * `getClientAddress()` — which, for a server behind a reverse proxy, is the proxy's
- * address unless the Node adapter is told which header carries the real one. Every remote
- * client then shares one counter: ten bad keys from anyone locks out everybody, and a
- * distributed attempt is never counted per attacker at all.
- *
- * `docs/production.md` has said so since remote access existed. What it could not do is
- * notice — a workspace deployed without `ADDRESS_HEADER` looked exactly like one deployed
- * with it, from the outside and from the log. So the condition is checked where the server
- * can see it, and the answer is a line at startup rather than a refusal: the throttle is a
- * second line of defence behind the key, and a workspace whose proxy genuinely presents one
- * address is not misconfigured, only limited.
- *
- * Loopback bindings are exempt, having exactly one client and no proxy to be behind.
+ * Report this as a startup warning rather than refusing to serve. Exempt loopback bindings.
  */
 export function remoteThrottleWarning(
   host = process.env.HOST ?? "127.0.0.1",
@@ -155,9 +133,8 @@ export function recordAuthFailure(client: string, now = Date.now()): number | nu
   const window: FailureWindow =
     current && !rolledOver ? current : { count: 0, resetAt: now + AUTH_FAILURE_WINDOW_MS };
   window.count += 1;
-  // Re-insert rather than overwrite: `set` on an existing key keeps its original
-  // position, which would order the map by first-seen and make eviction discard the
-  // busiest clients instead of the idlest ones.
+  // Reinsert the key to update its position. Overwriting preserves insertion order and would
+  // evict busy clients before idle ones.
   authFailures.delete(client);
   authFailures.set(client, window);
 
@@ -174,10 +151,9 @@ export function _resetAuthFailuresForTest(): void {
   authFailures.clear();
 }
 
-// A top-level browser navigation, as opposed to an API call or a fetch/XHR
-// from page code. Browsers set `Sec-Fetch-Mode: navigate` on document loads;
-// for clients that omit it we fall back to a GET that accepts HTML. Only these
-// get redirected to the login page — everything else keeps a 401.
+// Identify browser navigation through `Sec-Fetch-Mode`, falling back to GET requests
+// accepting HTML. Redirect those requests to login and preserve 401 responses for API
+// clients.
 export function isBrowserNavigation(request: Request): boolean {
   if (request.headers.get("sec-fetch-mode") === "navigate") return true;
   if (request.method !== "GET") return false;
@@ -185,19 +161,9 @@ export function isBrowserNavigation(request: Request): boolean {
 }
 
 /**
- * The policy for a response Kozane built by hand rather than one SvelteKit rendered — the
- * two 503s, the 426, the 401, the 429, the login redirect.
- *
- * Pages already carry a policy and a stricter one: `kit.csp` in `svelte.config.js` is
- * applied while the page is rendered, with nonces for the scripts SvelteKit inlines. This
- * is only for the responses that never reach that code, which would otherwise name no
- * policy at all. They are plain text or empty, so `none` across the board costs them
- * nothing.
- *
- * Set rather than overwritten only when absent, so a rendered page keeps the policy that
- * was built for it. (The prerendered export carries its policy in a `<meta>` tag instead,
- * which this could not see — but that path returns before `applySecurityHeaders` is
- * reached, so the question does not arise.)
+ * Fallback content security policy for plain-text and empty responses built outside SvelteKit
+ * rendering. Apply it only when no CSP header is present so rendered pages keep their
+ * generated policy.
  */
 const FALLBACK_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
 

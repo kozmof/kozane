@@ -86,22 +86,9 @@ describe("loadNamespaceSnapshot", () => {
   });
 
   /**
-   * The board is a published surface: a page load serves this to whatever browser asked for
-   * it, and `kozane net ssg generate` bakes it into output whose exact contents
-   * `docs/security-matrix.md` enumerates. A card is therefore sent as the fields `CardData`
-   * names, not as the row it came from.
-   *
-   * This is the guard against going back to selecting the row. Drizzle's `select()`
-   * enumerates the columns the schema declares — it does not emit `SELECT *` — so a column
-   * that exists only in the database was never going to arrive here. The one that would is a
-   * column added to `cardTable`, and that reached the wire by the act of adding it: nothing
-   * in the snapshot path named the card fields, so nothing objected. Verified both ways
-   * before this test was written.
-   *
-   * Asserted as an exact key set rather than "has the fields the board needs", because the
-   * absence of anything else is the whole point. The forward guarantee is stronger and lives
-   * in `card.ts`: `CARD_DATA_SELECTION` is `satisfies Record<keyof CardData, AnyColumn>`, so
-   * the query, the type, and `readCard` cannot drift apart without a compile error.
+   * Assert the exact card field set in snapshots so adding a schema column cannot expose it
+   * accidentally. `CARD_DATA_SELECTION`, `CardData`, and `readCard` enforce the same boundary
+   * in types and queries.
    */
   it("sends exactly the declared card fields and nothing else", async () => {
     const db = await createTestDB();
@@ -146,14 +133,12 @@ describe("loadNamespaceSnapshot", () => {
     expect(exported?.snapshot.scopes).toEqual([]);
     expect(exported?.snapshot.scopeRels).toEqual([]);
     expect(exported?.snapshot.taskspaces).toEqual([]);
-    // Cards themselves are unaffected — leaving scopes out is about organization, not content.
+    // Omitting scope organization must not remove cards.
     expect(exported?.snapshot.cards).toHaveLength(1);
   });
 
-  // `includeScopedFiles` is the one flag that reaches out to the real filesystem, so it
-  // gets a real taskspace directory to point at rather than a bare database row — the
-  // question these tests answer is whether a file on disk ends up in the export, which a
-  // taskspace record with no directory behind it cannot exercise either way.
+  // Use real taskspace files to verify which content `includeScopedFiles` embeds in an
+  // export.
   describe("with a taskspace directory on disk", () => {
     let tmpRoot: string;
     let taskspaceDir: string;
@@ -180,11 +165,8 @@ describe("loadNamespaceSnapshot", () => {
     });
 
     /**
-     * The core guarantee behind `--include-scoped-files` being opt-in: a taskspace with a
-     * real, readable directory must not leak a byte of it into the export unless the
-     * caller asked for file contents specifically, even when scopes and taskspace names
-     * themselves are included. Scope visibility and file contents are two different
-     * questions, and only the second one touches the filesystem.
+     * Exclude file contents unless explicitly requested, even when scope and taskspace
+     * metadata are included. Only the file-content option should trigger filesystem reads.
      */
     it("never reads taskspace files from disk when includeScopedFiles is false", async () => {
       const db = await createTestDB();
@@ -235,12 +217,9 @@ describe("loadNamespaceSnapshot", () => {
     });
 
     /**
-     * The panel lists a taskspace under a scope and nowhere else, so a taskspace with no
-     * scope — what `kozane taskspace create` makes by default — is unreachable in the
-     * exported UI. Carrying it anyway would publish a local directory's name, and its whole
-     * contents, for a taskspace the site never so much as mentions, readable straight out of
-     * the page data by anyone who looks: the same reason scopes themselves are filtered
-     * server-side rather than hidden client-side.
+     * Exclude unscoped taskspaces from static file export because the exported UI cannot
+     * reach them. Do not publish directory names or contents that no displayed taskspace
+     * uses.
      */
     it("leaves a taskspace that belongs to no scope, and so is never drawn, out of the export entirely", async () => {
       const db = await createTestDB();
@@ -263,10 +242,8 @@ describe("loadNamespaceSnapshot", () => {
     });
 
     /**
-     * The board is not an export: it is behind the workspace API key, showing the user the
-     * workspace they are working in, which is why it is sent real paths in the first place.
-     * Filtering it to what the panel happens to draw today would be a different decision
-     * from the one above, and not this one's to make.
+     * Live boards receive real taskspace paths for the authenticated workspace.
+     * Published-export filtering is handled separately.
      */
     it("still names every taskspace to the live board, scope or no scope", async () => {
       const db = await createTestDB();
@@ -294,10 +271,8 @@ describe("loadNamespaceSnapshot", () => {
       expect(exported?.snapshot.taskspaceFiles).toEqual({});
     });
 
-    // The documented invariant on `includeScopedFiles` — "implies includeScopes" — held as
-    // code, not only as a comment: a caller that asks for file contents without also asking
-    // for the taskspaces themselves gets neither, rather than an orphaned `taskspaceFiles`
-    // map keyed by ids the rest of the snapshot never named.
+    // Requesting embedded files without scope data must return neither, avoiding file trees
+    // whose taskspace IDs are absent from the snapshot.
     it("builds no file tree at all when includeScopes is false, regardless of includeScopedFiles", async () => {
       const db = await createTestDB();
       const { namespaceId } = await namespace(db);
@@ -316,9 +291,8 @@ describe("loadNamespaceSnapshot", () => {
     });
   });
 
-  // The pair this function exists to keep identical: what the page load hands the board, and
-  // what the poll hands it a second later. A snapshot the reader cannot read is one the poll
-  // would drop on the floor, leaving the board on whatever it had.
+  // Page loads and polls must return the same valid snapshot shape so the client accepts
+  // both.
   it("produces a snapshot the poll's reader accepts unchanged", async () => {
     const db = await createTestDB();
     const { namespaceId, partitionId } = await namespace(db);

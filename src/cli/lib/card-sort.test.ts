@@ -19,19 +19,16 @@ function card(id: string, created: string, updated: string): CardTimes {
   return { id, createdAt: at(created), updatedAt: at(updated) };
 }
 
-// Written so that no two of the three orders agree: `a` is the oldest but the most recently
-// rewritten, `c` is the newest but was never touched again, and `b` sits between them on
-// both counts while holding the longest interval of the three.
+// Give each sort key a different order. `a` is oldest and last edited, `c` is newest and
+// untouched, and `b` has the longest gap.
 const a = card("a", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z"); // gap 1d
 const b = card("b", "2026-02-01T00:00:00Z", "2026-03-01T00:00:00Z"); // gap 28d
 const c = card("c", "2026-03-01T00:00:00Z", "2026-03-01T00:00:00Z"); // gap 0
 const ids = (cards: CardTimes[]): string[] => cards.map(({ id }) => id);
 
 /**
- * A card whose columns hold an integer too large for a `Date` — which is what drizzle hands
- * back for a row a hand-written `INSERT` put a nonsense number in, and what `kozane doctor`
- * reports. Built the way the driver builds it, seconds times a thousand, rather than as a
- * bare `new Date(NaN)`: the point is that this is reachable from the column.
+ * Build an invalid date as the driver does, by converting stored seconds to milliseconds.
+ * This reproduces an out-of-range timestamp stored through raw SQL.
  */
 const unreadable: CardTimes = {
   id: "u",
@@ -75,37 +72,30 @@ describe("sortCards", () => {
   });
 
   it("breaks ties the way SQLite orders ids, not the way a locale does", () => {
-    // `"a".localeCompare("B")` is negative in every locale ICU knows, while SQLite's binary
-    // `ORDER BY id` puts "B" first — an uppercase letter is the lower codepoint. The ids the
-    // app writes are UUIDv7, on which the two agree; the ids an import or a fixture can put
-    // in the column are not, and the listing must not change with `LANG`.
+    // Use mixed-case IDs to distinguish codepoint ordering from locale ordering. Imported IDs
+    // need not be UUIDs, and sorting must not depend on `LANG`.
     const upper = card("B", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
     const lower = card("a", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z");
     expect(ids(sortCards([lower, upper], "created"))).toEqual(["B", "a"]);
   });
 
   it("orders a backwards interval where it prints, not ahead of everything", () => {
-    // Only a hand-edited database or a doctored import holds `updated_at` before
-    // `created_at`. It prints `0s`, so it has to sort among the other `0s` cards rather
-    // than ahead of them on a negative nobody can see — the id is then what separates them.
+    // A negative timestamp gap prints as `0s`, so sort it with other zero gaps and use the ID
+    // to break ties.
     const backwards = card("d", "2026-03-01T00:00:00Z", "2026-01-01T00:00:00Z");
     expect(sortColumn(backwards, "gap")).toBe("0s");
     expect(ids(sortCards([a, backwards, c], "gap"))).toEqual(["c", "d", "a"]);
   });
 
   it("puts a timestamp that names no moment last, and first when reversed", () => {
-    // Last rather than wherever a NaN comparison happened to leave it: the card that cannot
-    // be placed is put where a reader will see it. `--reverse` carries it along like
-    // everything else, since the whole comparison is flipped.
+    // Place invalid timestamps last normally and first when the full comparison is reversed.
     expect(ids(sortCards([b, unreadable, a, c], "created"))).toEqual(["a", "b", "c", "u"]);
     expect(ids(sortCards([b, unreadable, a, c], "created", true))).toEqual(["u", "c", "b", "a"]);
     expect(ids(sortCards([b, unreadable, a, c], "gap"))).toEqual(["c", "a", "b", "u"]);
   });
 
   it("orders the same however the unreadable card arrives, so the comparator stays total", () => {
-    // NaN is neither less nor greater, so subtracting leaves two readable cards each
-    // comparing equal to the unreadable one while ordering against each other — an
-    // inconsistent comparator, whose result depends on the order the sort walked the array.
+    // Subtracting `NaN` cannot order invalid timestamps consistently against valid ones.
     const expected = ["a", "b", "c", "u"];
     expect(ids(sortCards([unreadable, a, b, c], "created"))).toEqual(expected);
     expect(ids(sortCards([a, unreadable, b, c], "created"))).toEqual(expected);
@@ -159,9 +149,7 @@ describe("sortColumn", () => {
   });
 
   it("names a timestamp it cannot read rather than throwing on it", () => {
-    // `toISOString` throws `RangeError: Invalid time value` on such a date, which reached
-    // the user as one line of error in place of the whole listing — every sound card in the
-    // namespace hidden to report a problem with one of them.
+    // An invalid date must not make `toISOString()` abort the whole listing.
     for (const key of CARD_SORT_KEYS) expect(sortColumn(unreadable, key)).toBe("invalid");
   });
 
@@ -171,12 +159,7 @@ describe("sortColumn", () => {
   });
 });
 
-/**
- * The range `kozane doctor` reports against is the range this module reads by, and the two
- * used to be written out separately — the same fact in two files, agreeing by inspection.
- * These tie the boundary the check draws to the boundary the listing can actually print, so
- * moving one without the other fails here rather than in a user's terminal.
- */
+/** Keep the diagnostic timestamp bounds aligned with the range the listing can print. */
 describe("what a card timestamp may hold", () => {
   const stamps = (at: Date): CardStamps => ({ createdAt: at, updatedAt: at });
 
@@ -192,9 +175,8 @@ describe("what a card timestamp may hold", () => {
   });
 
   it("draws its low end above the epoch a defaulted row lands on, not at readability", () => {
-    // The two ends are two rules. A row left at the epoch by an `INSERT` naming neither
-    // column reads perfectly well — as 1970 — so it is reported rather than printed
-    // `invalid`, and the low bound has to sit above it for the report to catch it.
+    // The epoch is printable but indicates a defaulted timestamp. Keep the diagnostic lower
+    // bound above it so `doctor` reports the row.
     expect(CARD_STAMP_EARLIEST.getTime()).toBeGreaterThan(0);
     expect(namesAMoment(new Date(0))).toBe(true);
     expect(sortColumn(stamps(new Date(0)), "created")).toBe("1970-01-01T00:00:00Z");

@@ -4,7 +4,7 @@
 
   let {
     entries,
-    /** The warp the board is already sitting on, if any: where the highlight starts. */
+    /** Currently focused warp, used as the initial highlight. */
     focusedWarpId = null,
     readonly = false,
     onJump,
@@ -13,7 +13,7 @@
   }: {
     entries: WarpListEntry[];
     focusedWarpId?: string | null;
-    /** Read-only export: no endpoint to remove a warp with, so no remove buttons. */
+    /** Hide removal controls in read-only exports because mutation endpoints are unavailable. */
     readonly?: boolean;
     onJump: (entry: WarpListEntry) => void;
     onDelete: (entry: WarpListEntry) => void;
@@ -23,11 +23,8 @@
   let highlightedId = $state<string | null>(null);
   let panelEl: HTMLDivElement = $state()!;
   /**
-   * The row buttons in the DOM, by warp id — read when the highlight moves, to scroll the
-   * row into view. Recorded through an action rather than `bind:this` into a property: the
-   * map is deliberately not `$state` (nothing renders from it), which is exactly what
-   * `bind:this` on a member warns about, and the action's teardown drops the ids of rows
-   * that have gone rather than leaving them behind to be pruned.
+   * Track row elements by warp ID for scrolling the highlighted row into view. Use action
+   * teardown to remove unmounted rows. This map does not drive rendering.
    */
   const rowEls: Record<string, HTMLButtonElement> = {};
 
@@ -40,22 +37,18 @@
     };
   }
 
-  // Rows come and go while the palette is open — removing a warp is done from here. The
-  // panel takes the keyboard back whenever focus has fallen outside it: clicking a remove
-  // button focuses that button, and removing the row unmounts it, which drops focus to
-  // <body> — where neither this panel's handler nor the page's, held off while the palette
-  // is open, would ever see another key. The same run on open is what puts the keyboard on
-  // the panel in the first place, rather than on the canvas behind it.
+  // Restore palette focus when removing a focused row would leave focus on the document body.
+  // Run the same check on opening.
   $effect(() => {
-    // `entries` is read for the dependency alone — nothing here is computed from it. The
-    // check has to run again every time a row comes or goes, not only when the panel opens.
+    // Read `entries` so focus is checked whenever rows change.
+    //
     // oxlint-disable-next-line no-unused-expressions
     entries.length;
     if (panelEl && !panelEl.contains(document.activeElement)) panelEl.focus();
   });
 
-  // The starting highlight, resolved against the list rather than trusted: a focused warp
-  // that has since been removed would otherwise leave nothing highlighted at all.
+  // Resolve the initial highlight against the current list in case the focused warp was
+  // removed.
   let highlighted = $derived(
     entries.find(({ id }) => id === highlightedId)?.id ??
       entries.find(({ id }) => id === focusedWarpId)?.id ??
@@ -65,7 +58,7 @@
   let groups = $derived(groupWarpEntries(entries));
 
   $effect(() => {
-    // Optional-called: jsdom has no layout, and scrolling a list is not worth a crash.
+    // Allow missing scroll support in environments such as jsdom.
     if (highlighted) rowEls[highlighted]?.scrollIntoView?.({ block: "nearest" });
   });
 
@@ -79,8 +72,8 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    // Nothing typed at the palette is meant for the board behind it — and without this the
-    // shift+arrow that closes the palette would reach the page and open it straight again.
+    // Stop palette keys from reaching the board, where the close shortcut could reopen the
+    // palette.
     e.stopPropagation();
     // Shift+arrow is the key that opened the palette, so it closes it again.
     if (e.shiftKey && e.key.startsWith("Arrow")) {
@@ -155,8 +148,7 @@
         <div role="listbox" aria-label={group.namespaceName}>
           {#each group.entries as entry (entry.id)}
             {@const isHighlighted = entry.id === highlighted}
-            <!-- The row is two buttons side by side rather than one inside the other:
-                 jumping and removing are separate targets, and a button cannot nest. -->
+            <!-- Use sibling buttons for jumping and removing. HTML buttons cannot be nested. -->
             <div
               role="presentation"
               class={css({ display: "flex", alignItems: "center", borderRadius: "2px" })}

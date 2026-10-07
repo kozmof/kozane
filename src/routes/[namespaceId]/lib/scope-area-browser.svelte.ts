@@ -9,7 +9,7 @@ import {
   type FileGroup,
 } from "./scope-area-files.js";
 
-/** What the browser reads from the board, as getters: every one of them is a prop. */
+/** Read current board props through getters. */
 export type ScopeAreaBrowserSource = {
   areas: () => ScopeArea[];
   taskspaces: () => TaskspaceSummary[];
@@ -18,19 +18,9 @@ export type ScopeAreaBrowserSource = {
 };
 
 /**
- * The file icons drawn under each scope frame, and which directory each frame is showing.
- *
- * Per frame rather than per scope: a scope framed in two places gets its icons under both,
- * and drilling into a folder on one leaves the other where it was. The same answer the
- * frame's own `×` gives to "which one did you mean".
- *
- * Local to the board and deliberately not persisted. Where a frame is looking is a way of
- * looking at it rather than anything about the board, and a folder left open across a reload
- * would be a frame whose icons do not match the taskspace it names.
- *
- * The layout arithmetic is `scope-area-files.ts`; this is the one piece of state it reads.
- * The board owns the two effects that act on it — reading what is shown and pruning what is
- * gone — so they run in the component's lifetime rather than a class's.
+ * Track the displayed taskspace directory separately for each scope frame. Do not persist
+ * navigation across board reloads. The component owns loading and pruning effects, while
+ * `scope-area-files.ts` provides layout calculations.
  */
 export class ScopeAreaBrowser {
   /** Which directory each frame is showing of each taskspace, by `cwdKey`. Absent is the root. */
@@ -70,15 +60,9 @@ export class ScopeAreaBrowser {
   );
 
   /**
-   * What the frames between them need read off disk: one directory per frame per taskspace,
-   * each named once however many frames are showing it.
-   *
-   * Deduplicated because the cache is keyed by taskspace and path and not by frame, so two
-   * frames of one scope showing the same folder are one request. The key is joined on a NUL,
-   * the one byte a path cannot contain — any printable separator could collide.
-   *
-   * Reads only `area.id` and `area.scopeId`, never a rectangle, so a frame being dragged —
-   * whose position is written on every pointer move — does not recompute this.
+   * Deduplicate directory requests by taskspace and path across frames. Separate key parts
+   * with NUL, which paths cannot contain. Read only frame identity and scope so dragging
+   * geometry does not retrigger loading.
    */
   readonly directoriesToRead: { taskspaceId: string; path: string }[] = $derived.by(() => {
     const seen = new Set<string>();

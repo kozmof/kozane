@@ -179,8 +179,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     process.exit(1);
   }
   await runWorkspaceCommand(async ({ db, root, config }) => {
-    // Resolved plainly now: the wrapper turns a throw from either of these into the same
-    // `Error: …` line the two hand-written catch blocks here used to print.
+    // Let the command wrapper report resolver errors consistently.
     const scopeId =
       typeof options.scope === "string"
         ? resolveShortId(
@@ -230,9 +229,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       };
       writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
     } catch (e) {
-      // Kept as its own catch rather than left to the wrapper: the record and the
-      // directory both have to be undone before anything is said, and the two-line message
-      // names the step that failed as well as the reason.
+      // Clean up both record and directory before reporting which creation step failed.
       await deleteTaskspace({ db, taskspaceId: id });
       if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
       console.error("Failed to initialize taskspace directory.");
@@ -255,12 +252,8 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
 export type TaskspaceListOptions = { namespace?: string };
 
 /**
- * Every taskspace in the workspace, with the namespace and scope each one sits under.
- *
- * Workspace-wide on purpose: a board draws only its own namespace's taskspaces and the
- * unassigned ones, so this is where a taskspace created from another namespace is visible at
- * all. `--namespace` narrows it to exactly what that namespace's board would show, unassigned
- * rows included.
+ * List taskspaces with their namespace and scope across the workspace. `--namespace` applies
+ * the board's visibility rule, including unplaced rows.
  */
 export async function taskspaceList(options: TaskspaceListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
@@ -284,8 +277,8 @@ export async function taskspaceList(options: TaskspaceListOptions = {}): Promise
     );
 
     for (const taskspace of taskspaces) {
-      // An em dash in either column is a real state, not missing data: a taskspace with no
-      // namespace shows on every board, and one with no scope gathers no cards.
+      // An em dash denotes no assignment. Unplaced taskspaces appear on every board, while
+      // unscoped taskspaces gather no cards.
       const namespace = taskspace.namespaceId
         ? (namespaceNameById.get(taskspace.namespaceId) ?? taskspace.namespaceId)
         : "—";

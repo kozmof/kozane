@@ -44,21 +44,11 @@ function outputId(output: string): string {
 }
 
 /**
- * Puts a freshly-initialised workspace back onto the 0004 schema, so that `db migrate` has
- * the whole chain from 0005 on to re-apply. Written out once because both tests below need
- * exactly this, and a rollback that drifts between them is a rollback neither one states.
+ * Restore the fixture to schema 0004 so migrations from 0005 onward can run again.
  *
- * The first half is migration 0014 in reverse, and the schema is wrong without it. The
- * journal rows deleted at the end say 0005 onward never ran, and 0005 is written against
- * `project` and `bundle` — so a database still carrying the renamed tables answers the
- * re-apply with `no such table: project`. The three indexes are restored for the same
- * reason from the other end: they are older than 0005, so nothing in the chain recreates
- * them, and 0014 drops them by their old names without an `IF EXISTS` to fall back on.
- *
- * Only what the chain actually reads is reversed. `layer` and `warp` are dropped a few
- * statements later and recreated by 0005 and 0006 under the old names, so their columns and
- * indexes need nothing here; `card` gets its old column back because 0005's UPDATE joins on
- * it and because the rebuilt table has to be the shape 0005 expects to find.
+ * Reverse migration 0014's names for tables and indexes that remain. Drop tables recreated by
+ * later migrations and restore the card shape expected by 0005. Older indexes must retain the
+ * names migration 0014 expects to remove.
  */
 const ROLLBACK_TO_0004 = [
   "ALTER TABLE `namespace` RENAME TO `project`",
@@ -94,10 +84,8 @@ const ROLLBACK_TO_0004 = [
   // applied. Left standing, the re-apply fails on `CREATE TABLE scope_area`. Its indexes go
   // with it, the same as `warp`'s do.
   "DROP TABLE IF EXISTS scope_area",
-  // Indexes added after 0004 belong to the rolled-back migrations too: the journal says they
-  // were never applied, so leaving one behind makes the re-apply fail on a name that already
-  // exists. Only the ones on tables this fixture leaves standing need naming — `card`'s go
-  // with the table it rebuilds, and `warp`'s with the table it drops.
+  // Drop later indexes on tables that remain in the rolled-back fixture. Indexes on rebuilt
+  // or dropped tables disappear with those tables.
   "DROP INDEX IF EXISTS taskspace_scope",
   "DROP INDEX IF EXISTS glue_rel_glue",
   "DROP INDEX IF EXISTS scope_rel_card",
@@ -155,10 +143,7 @@ describe("additional database CLI branches", () => {
         [
           { sql: "INSERT INTO scope (id, name) VALUES ('s1', 'demo')" },
           { sql: "INSERT INTO glue (id) VALUES ('g1')" },
-          // The timestamps are written rather than left to the column default: migration
-          // 0011 had to give them one to add them NOT NULL, and a row that takes it lands
-          // at the epoch. Nothing here reads them, but a fixture that leans on that default
-          // is a fixture that quietly disagrees with every card the app itself writes.
+          // Set timestamps explicitly to avoid the migration's epoch default in fixture rows.
           {
             sql: "INSERT INTO card (id, partition_id, layer_id, content, created_at, updated_at) SELECT 'c1', ?, id, 'one', unixepoch(), unixepoch() FROM layer LIMIT 1",
             args: [partitionId],
@@ -173,9 +158,8 @@ describe("additional database CLI branches", () => {
         "write",
       );
 
-      // Roll back to the pre-layer schema. Foreign keys have to be off for this: with them
-      // on, this fixture's own DROP TABLE would cascade the rows away and the test would
-      // pass without the migration ever being the reason.
+      // Disable foreign keys before rolling back the fixture so its own table drops do not
+      // cascade away the rows being tested.
       await client.execute("PRAGMA foreign_keys = OFF");
       for (const sql of ROLLBACK_TO_0004) {
         await client.execute(sql);

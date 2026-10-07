@@ -86,8 +86,7 @@ describe("ScopeControl", () => {
     expect(trigger().querySelector("svg rect")).toBeTruthy();
   });
 
-  // Escape closes the menu without leaving the scope: the board stays where it was put, and
-  // "No scope" remains the one way to actually let go of it.
+  // Escape closes the menu but preserves the active scope. Choose "No scope" to clear it.
   it("closes on Escape but keeps the board under its scope", async () => {
     mount({ activeScope: "scope-1" });
     await userEvent.click(screen.getByLabelText("Focused on scope My Scope"));

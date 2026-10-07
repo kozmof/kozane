@@ -16,13 +16,11 @@
     cardWidth: number;
     fontSize: number;
     fontFamily: string;
-    /** Armed by the resize shortcut: draws the handle that drags the right edge. */
+    /** Show the right-edge resize handle when the resize shortcut is active. */
     isResizing?: boolean;
     /**
-     * Where a tag written in the card text links to. The card knows a tag when it sees one
-     * but not which namespace's index to send it to, so the link is built by the caller that
-     * does. Omitted, tags are still marked but are not links — which is what a component
-     * test, and any caller without a router, gets.
+     * Optional tag-link builder supplied by the caller that knows the current namespace.
+     * Without it, mark tags without making them links.
      */
     tagHref?: (tag: string) => string;
     onCardMouseDown: (e: MouseEvent) => void;

@@ -25,10 +25,8 @@ export function resolveActiveLayerId(layers: Layer[], preferredId: string | null
 const ACTIVE_LAYER_STORAGE_PREFIX = "kozane:active-layer:";
 
 /**
- * Which layer this namespace was last worked on, kept per tab. A reload that dropped the
- * selection back to `Base` would undo the one thing the layer control is for. Storage is
- * absent while prerendering and can throw when a browser has it disabled, so every access
- * is treated as best-effort — a lost preference is not worth an error banner.
+ * Remember each namespace's active layer in per-tab storage. Ignore unavailable or failing
+ * storage so losing a preference does not block the board.
  */
 export function readStoredLayerId(namespaceId: string): string | null {
   try {
@@ -49,25 +47,9 @@ export function storeActiveLayerId(namespaceId: string, layerId: string | null):
 }
 
 /**
- * The four shapes a held reference is pruned in when a snapshot arrives, written once.
- *
- * `refreshFromData` below applies a snapshot over a board someone is working on, and every
- * reference the page holds into that data — the focused warp, the selection, the primary
- * card, the composer’s card, the active partition, the active scope — has to be checked
- * against what actually arrived. A card deleted by the CLI or another tab must not stay
- * selected, and a warp that is gone must not stay focused, or the remove shortcut aims at a
- * row that is no longer there.
- *
- * Each of those was spelled out longhand, and the reasons differ while the mechanics do
- * not: six copies of `if (ref && !rows.some(({ id }) => id === ref)) ref = null`, two of
- * them with the comparison inlined into a multi-line `if` and one written as a `filter`
- * over a `Set`. The cost is not the repetition, it is that adding a seventh thing the page
- * can hold a reference to means remembering to add a seventh step here, with nothing to say
- * so and nothing that fails if it is forgotten.
- *
- * So the mechanics move here and the reasons stay at the call sites, where they belong.
- * Exported because they are the part worth testing directly — a prune is a pure function of
- * a reference and a set, and reaching it through a mounted board was the only way before.
+ * Prune held IDs, selections, and rows against incoming snapshot data so deleted entities
+ * cannot remain active. Share the pure lookup mechanics while keeping each state's policy at
+ * its call site.
  */
 
 /** The ids a snapshot carries, as the set every prune below is asked against. */
@@ -86,12 +68,8 @@ export function prunedRefs(refs: ReadonlySet<string>, present: ReadonlySet<strin
 }
 
 /**
- * A held row, replaced by the snapshot’s copy of it, or dropped when it is gone.
- *
- * The composer holds a card rather than an id, so pruning it and refreshing it are the same
- * lookup: a card still present must be swapped for the arriving version — the text may have
- * changed under it — and one that is absent must be let go. Written as two branches over the
- * same `find`, which is what made it the one prune here that could disagree with itself.
+ * Replace a held row with its snapshot version, or drop it if absent. This also refreshes the
+ * composer's card text after external edits.
  */
 export function prunedRow<T extends { id: string }>(held: T | null, rows: readonly T[]): T | null {
   return held === null ? null : (rows.find(({ id }) => id === held.id) ?? null);
@@ -101,11 +79,7 @@ export class SelectionState {
   selectedCards = $state(new Set<string>());
   primarySelectedId = $state<string | null>(null);
   composerCard = $state<CardWithGlue | null>(null);
-  /**
-   * The card showing its resize handle, armed by the resize shortcut. Only ever one: the
-   * handle is somewhere to put the pointer, and two on the board at once would leave
-   * nothing saying which card the next drag is about to resize.
-   */
+  /** The single card whose resize handle is enabled by the resize shortcut. */
   resizingCardId = $state<string | null>(null);
 
   reset() {
@@ -136,9 +110,8 @@ export class NamespaceState {
   namespaceId = $state("");
   fetcher: typeof fetch = fetch;
   /**
-   * The mutations this board has outstanding. The snapshot poll stands down while any is
-   * open and drops an answer that arrived across one — see `snapshot-poll.ts`, which is
-   * handed this alongside the page's own drag activity.
+   * Track outstanding mutations so polling waits for them and discards responses spanning a
+   * mutation.
    */
   readonly mutations = new InFlight();
 
@@ -191,9 +164,8 @@ export class NamespaceState {
     this.cards = data.cards;
     this.partitions = data.partitions;
     this.layers = data.layers;
-    // A layer deleted by the CLI or another tab must not stay selected. Not a `prunedRef`:
-    // this is the one held reference with somewhere to fall back to rather than nowhere, and
-    // `resolveActiveLayerId` is what knows where.
+    // Resolve a fallback if the selected layer is deleted elsewhere. Unlike `prunedRef`,
+    // `resolveActiveLayerId` selects a replacement.
     this.activeLayerId = resolveActiveLayerId(data.layers, this.activeLayerId);
     this.warps = data.warps;
     this.scopes = data.scopes;
@@ -212,14 +184,12 @@ export class NamespaceState {
     const cardIds = idSet(data.cards);
     this.selection.selectedCards = prunedRefs(this.selection.selectedCards, cardIds);
     this.selection.primarySelectedId = prunedRef(this.selection.primarySelectedId, cardIds);
-    // A row rather than an id, so this both drops a card that is gone and picks up the text
-    // of one that has been edited elsewhere; see {@link prunedRow}.
+    // Refresh the held card row or clear it if deleted. See {@link prunedRow}.
     this.selection.composerCard = prunedRow(this.selection.composerCard, data.cards);
 
     this.sidebar.activePartition = prunedRef(this.sidebar.activePartition, idSet(data.partitions));
-    // A scope can leave this list without being deleted: `data.scopes` is narrowed to the
-    // ones this namespace draws, so an unattached scope another namespace has since claimed
-    // simply stops arriving. Either way it must not stay the active filter.
+    // Clear the active filter if its scope leaves this namespace's snapshot, whether deleted
+    // or claimed by another namespace.
     this.sidebar.activeScope = prunedRef(this.sidebar.activeScope, idSet(data.scopes));
   }
 }

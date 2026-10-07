@@ -3,8 +3,8 @@
   import type { ActivityCell } from "../lib/activity.js";
 
   /**
-   * The card-change heatmap at the foot of the map: a week to a column, a day to a cell, and
-   * each cell a link that narrows the map to the cards changed that day.
+   * Card-change heatmap with one week per column and one day per cell. Each cell filters the
+   * map to cards changed that day.
    */
   let {
     cells,

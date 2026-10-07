@@ -8,7 +8,7 @@ export type { CardPositionUpdate as CardPositionPatch } from "$db/api/card.js";
 export const GRID = 24;
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2;
-/** Opacity of a layer that is not the selected one: present, but well out of the way. */
+/** Opacity for layers other than the selected layer. */
 export const INACTIVE_LAYER_OPACITY = 0.3;
 
 export type Point = { x: number; y: number };
@@ -39,22 +39,17 @@ export function verticalListPosition(
 export type StackedLayer<T> = { layer: T; rank: number; active: boolean; floating: boolean };
 
 /**
- * Bottom to top, the one ordering of a namespace's layers: by position, with the id as the
- * tiebreak. Mirrors what `getAllLayers` asks SQLite for, and is what every other view of
- * the layers is derived from, so nothing has to re-decide what "in order" means.
+ * Order layers bottom to top by position, then ID, matching `getAllLayers`. Derive other
+ * layer views from this shared order.
  */
 export function orderLayers<T extends { id: string; position: number }>(layers: T[]): T[] {
-  // `compareIds` rather than localeCompare: the tiebreak has to land the same way as
-  // SQLite's binary `ORDER BY id`, whatever locale the browser happens to be in.
+  // Use `compareIds` to match SQLite's binary ID ordering regardless of browser locale.
   return [...layers].sort((a, b) => a.position - b.position || compareIds(a.id, b.id));
 }
 
 /**
- * Stacking order of a namespace's layers: non-active layers keep their own index order at
- * the bottom, the active layer sits above all of them, and `floatingLayerId` (the layer
- * of a card being dragged) is lifted to the very top so a drag stays visible even when it
- * starts on a dimmed layer. Both the active and the floating layer are drawn at full
- * strength — a card is dragged to be looked at.
+ * Stack ordinary layers in index order, then the active layer, then the dragged card's layer.
+ * Draw active and dragged layers at full opacity.
  */
 export function layerStack<T extends { id: string; position: number }>(
   layers: T[],
@@ -85,8 +80,8 @@ export function moveWithin(ids: string[], id: string, toIndex: number): string[]
 }
 
 /**
- * The reordering a drop produces: `ids` and the result are both in display order (top of
- * the stack first), which is the reverse of the bottom-to-top order the API takes.
+ * Reorder layers after a drop. Input and output use top-first display order, opposite to the
+ * API's bottom-first order.
  */
 export function reorderByDrop(ids: string[], draggedId: string, targetId: string): string[] {
   if (draggedId === targetId) return [...ids];
@@ -94,8 +89,8 @@ export function reorderByDrop(ids: string[], draggedId: string, targetId: string
 }
 
 /**
- * The reordering a keyboard nudge produces: `delta` is -1 for up the display list, 1 for
- * down. Returns null at the ends of the list, where there is nothing to commit.
+ * Move a layer up for `delta` -1 or down for 1 in display order. Return null when already at
+ * the requested end.
  */
 export function reorderByNudge(ids: string[], id: string, delta: -1 | 1): string[] | null {
   const target = ids.indexOf(id) + delta;
@@ -108,13 +103,8 @@ export function glueIdByCardId<T extends { cardId: string; glueId: string }>(glu
 }
 
 /**
- * Pairs each card with the glue group it belongs to, if any.
- *
- * Takes `CardData` rather than the whole `Card` row, because the spread below is what puts
- * these on the wire: handed a full row it would carry every column of `card` to the browser,
- * including any added later for reasons that have nothing to do with drawing a board. The
- * caller reads exactly `CardData` (see `getCardDataByPartitions`), and this asks for no more
- * than the caller has.
+ * Attach glue groups to `CardData`. Accept the projected type because spreading a full
+ * database row would expose unrelated columns in browser data. See `getCardDataByPartitions`.
  */
 export function cardsWithGlueIds(cards: CardData[], glueRels: GlueRel[]): CardWithGlue[] {
   const cardGlueMap = glueIdByCardId(glueRels);
@@ -185,11 +175,8 @@ export function cardPositionPatches<T extends { id: string; posX: number; posY: 
 }
 
 /**
- * Puts back the cards a refused save had sent, each to where it was before the drag.
- *
- * Only a card still at the position that was sent: a poll or another drag may have moved it
- * on since the request went out, and that newer position is not this refusal's to undo.
- * Returns a new array, leaving untouched rows as they were.
+ * Restore cards after a failed position save only if they still have the submitted positions.
+ * Preserve later changes. Return a new array while retaining untouched rows.
  */
 export function revertedPositions<T extends { id: string; posX: number; posY: number }>(
   cards: T[],
@@ -205,9 +192,8 @@ export function revertedPositions<T extends { id: string; posX: number; posY: nu
   });
 }
 
-// Folded rather than spread into Math.max/Math.min: `Math.max(...cards)` throws once
-// the workspace grows past the engine's argument limit. Both are seeded at 0, the
-// column default, so an empty canvas yields the same layer a first card would get.
+// Reduce values instead of spreading them into Math.max/Math.min, which can exceed the
+// engine's argument limit. Start at the column default of zero for an empty board.
 export function maxZIndex(cards: readonly { zIndex: number }[]): number {
   return cards.reduce((highest, card) => (card.zIndex > highest ? card.zIndex : highest), 0);
 }
@@ -257,17 +243,9 @@ export function rectsIntersect(a: RectLike, b: RectLike): boolean {
 }
 
 /**
- * Which of `cardEls` overlap `screenRect`, by their measured boxes.
- *
- * Measured rather than computed from `posX`/`posY`/`width`, because a card has no height to
- * compute with: `KozaneCard` sets only `left`, `top` and `width`, and what a card is tall
- * enough to cover is decided by its text. A scope area asks exactly the question the marquee
- * asks — which cards does this rectangle touch — so it is answered the same way, against the
- * same `[data-card-id]` elements.
- *
- * Screen space, not world space, for the same reason `applyRectangleSelection` works there:
- * `getBoundingClientRect` reports the zoom already applied, and converting the one rectangle
- * to match is cheaper and less error-prone than dividing every card's box back out of it.
+ * Find cards overlapping a screen-space rectangle using their rendered boxes. Text determines
+ * height, so stored positions and widths are insufficient. Keep measurements in screen
+ * coordinates to include zoom consistently.
  */
 export function cardIdsOverlapping(
   cardEls: Iterable<HTMLElement>,
@@ -286,19 +264,11 @@ export function cardIdsOverlapping(
 export type MembershipTransition = { entered: string[]; exited: string[] };
 
 /**
- * What a drag did to a scope area's membership: who came in, and who went out.
+ * Compare frame overlap before and after a drag to find entered and exited cards. Preserve
+ * manual scope membership for cards that crossed no boundary.
  *
- * A transition rather than a reconciliation, and that is the whole point of it. "Overlapping
- * means a member" read as a rule about the final state would make "not overlapping means not a
- * member" true too, and every card sitting outside the frame would be swept out of the scope
- * by the first drag that touched it — including one put there deliberately by `kozane scope
- * add-cards`, which has never had anything to do with where the card sits. Comparing before
- * with after asks only about cards that actually crossed the edge, so a membership nothing
- * crossed is a membership nothing here has an opinion about.
- *
- * `after` is not filtered against `members`: a card already in the scope that is dragged into
- * the frame is reported as `entered` and the write that follows is an upsert
- * (`onConflictDoNothing`), which is cheaper than the set difference that would avoid it.
+ * Report entering cards even if already members. The idempotent insert handles existing
+ * memberships.
  */
 export function membershipTransition(
   before: Set<string>,
@@ -323,13 +293,8 @@ export function movedRect(rect: WorldRect, dx: number, dy: number, bounds: RectB
 }
 
 /**
- * A scope area resized by its bottom-right handle. The origin stays put and only the far
- * corner follows the pointer, which makes the gesture readable — a frame that moved
- * while being resized would take its cards' relationship to it with it.
- *
- * Mirrors `resizedCardWidth`: the delta is divided by the zoom, the grid snap is applied on
- * release rather than during, and the result is clamped. The server clamps again on the way
- * in; this is what keeps the rectangle under the pointer honest while it is being dragged.
+ * Resize from the bottom-right corner while keeping the origin fixed. Convert screen movement
+ * by zoom, snap on release, and clamp the result. The server validates it again.
  */
 export function resizedRect({
   rect,
@@ -366,11 +331,8 @@ export type Triangle = [Point, Point, Point];
 export const SAFE_AREA_GRACE_MS = 400;
 
 /**
- * The corridor a pointer is allowed to travel through on its way from a trigger to the
- * popover it opened: the point where the pointer left the trigger, plus the two corners of
- * the popover edge facing it. A popover sitting below and to one side of its button is
- * reached diagonally, and that diagonal crosses ground belonging to neither — closing on
- * the way there is the bug this prevents.
+ * Build the pointer corridor from the trigger exit point to the facing popover edge. Keep the
+ * popover open during diagonal travel between them.
  */
 export function safeTriangle(exit: Point, rect: RectLike): Triangle {
   if (exit.y <= rect.top)
@@ -387,7 +349,7 @@ function sideOfLine(point: Point, a: Point, b: Point): number {
   return (point.x - b.x) * (a.y - b.y) - (a.x - b.x) * (point.y - b.y);
 }
 
-/** Inside, or on an edge: a pointer on the boundary is still on its way in. */
+/** Include points on the boundary. */
 export function insideTriangle(point: Point, [a, b, c]: Triangle): boolean {
   const sides = [sideOfLine(point, a, b), sideOfLine(point, b, c), sideOfLine(point, c, a)];
   return !(sides.some((side) => side < 0) && sides.some((side) => side > 0));
@@ -412,12 +374,9 @@ export function scrollForViewCenter(
 const SCROLL_EPSILON = 1;
 
 /**
- * Whether a viewport scrolled to `scroll` is showing `center` as centred as the board
- * allows, along one axis. Not the same question as "is the view centre this point": a
- * point within half a viewport of the canvas edge can never reach the middle, because
- * {@link scrollForViewCenter} clamps, and the view has still arrived at everything it can
- * of it. Compared to the nearest pixel, since a browser may round a scroll offset to whole
- * device pixels.
+ * Check whether `scroll` centres the target as closely as canvas bounds allow on one axis.
+ * Use {@link scrollForViewCenter} and pixel rounding because edge targets cannot reach the
+ * viewport centre and browsers may round scroll offsets.
  */
 export function isViewCenteredOn(
   scroll: number,
@@ -452,10 +411,9 @@ const WARP_EPSILON = 1;
 const CROSS_AXIS_PENALTY = 2;
 
 /**
- * The next warp in `direction` from `from`, wrapping round the board when there is none:
- * travelling right off the rightmost warp arrives at the leftmost, and down off the
- * bottom one at the top. `currentId` is the warp the view is already on, which the wrap
- * avoids landing back on. `null` only when the namespace has no warps at all.
+ * Find the next warp in `direction`, wrapping to the opposite side when needed. Avoid
+ * wrapping to `currentId` when another warp is available. Return null only for an empty
+ * namespace.
  */
 export function warpInDirection<T extends { id: string; posX: number; posY: number }>(
   warps: readonly T[],
@@ -470,13 +428,8 @@ export function warpInDirection<T extends { id: string; posX: number; posY: numb
 }
 
 /**
- * The warp travelling `direction` wraps round to: the leftmost when going right, the
- * topmost when going down, and so on. Ties keep creation order.
- *
- * The warp the view is already on is left out of the running: warps sharing the edge —
- * two at the same x, say — would otherwise wrap the focus straight back onto itself and
- * the key would look broken. It comes back in only when it is the last one standing,
- * where staying put is all a single-warp board can do.
+ * Choose the opposite-edge warp when navigation wraps, breaking ties by creation order.
+ * Exclude the focused warp unless it is the only candidate.
  */
 function farthestWarpBehind<T extends { id: string; posX: number; posY: number }>(
   warps: readonly T[],
@@ -497,9 +450,8 @@ function farthestWarpBehind<T extends { id: string; posX: number; posY: number }
 }
 
 /**
- * The closest warp that actually lies `direction` of `from`, weighted so an
- * almost-straight-ahead warp beats a distant diagonal. `null` when nothing lies that way —
- * {@link warpInDirection} is what turns that into a wrap.
+ * Find the closest warp in the requested direction, favoring straight-ahead travel. Return
+ * null when none exists so {@link warpInDirection} can wrap.
  */
 export function nearestWarpInDirection<T extends { id: string; posX: number; posY: number }>(
   warps: readonly T[],
@@ -517,8 +469,7 @@ export function nearestWarpInDirection<T extends { id: string; posX: number; pos
     if (along <= WARP_EPSILON) continue;
     const cross = Math.abs(horizontal ? warp.posY - from.y : warp.posX - from.x);
     const score = along + CROSS_AXIS_PENALTY * cross;
-    // Ties fall to the straighter one, and then to the older warp: `warps` arrives in
-    // creation order, so a tie always resolves the same way twice running.
+    // Break ties by the straighter direction, then creation order for consistent results.
     if (score < bestScore || (score === bestScore && cross < bestCross)) {
       best = warp;
       bestScore = score;
@@ -543,16 +494,8 @@ type ResizedCardWidth = {
 };
 
 /**
- * How wide a card being resized is drawn.
- *
- * Divided by `zoom` because the pointer moves in screen pixels and the card is measured in
- * canvas ones: without it the edge lags the pointer on a zoomed-out board and outruns it on
- * a zoomed-in one.
- *
- * Rounded last, after both the snap and the clamp. Rounding before the clamp could put the
- * result a pixel outside the range the clamp was there to hold, and snapping after it would
- * do the same — the grid multiple nearest a clamped value is not necessarily inside the
- * range either.
+ * Convert horizontal pointer movement by zoom, then snap, clamp, and round the card width.
+ * Keep this order so snapping cannot move the result beyond its bounds.
  */
 export function resizedCardWidth({
   startWidth,

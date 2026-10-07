@@ -4,11 +4,7 @@ import { commandDbUrl, type WorkspaceConfig } from "./config.js";
 import { requireCurrentMigrations } from "./db.js";
 import { requireWorkspace } from "./workspace.js";
 
-/**
- * Ends the command with a message rather than a stack trace. The one place the CLI turns
- * a thrown error into an exit code — it used to be copied verbatim into `card.ts`,
- * `layer.ts` and `scope.ts`, and written out inline again twice in `namespace.ts`.
- */
+/** Report a CLI error as a message and nonzero exit status. */
 export function fail(error: unknown): never {
   console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
@@ -17,50 +13,29 @@ export function fail(error: unknown): never {
 /** What a workspace command is handed once the workspace and its database are open. */
 export type WorkspaceCommandContext = {
   db: DB;
-  /**
-   * The workspace root, already absolute — `findWorkspaceRoot` resolves before returning,
-   * so the `resolve(root)` every one of these call sites used to do was a no-op.
-   */
+  /** Absolute workspace root returned by `findWorkspaceRoot`. */
   root: string;
   config: WorkspaceConfig;
   /**
-   * The database this command opened, as {@link commandDbUrl} resolved it — which is the
-   * temporary database of a running `kozane open --memory` when there is one, and the
-   * workspace's own otherwise. Handed over rather than left to be resolved a second time,
-   * so a caller that needs to identify the database it is reading identifies that one.
+   * Database URL resolved by {@link commandDbUrl}. This points to the running memory session
+   * when present, or the workspace database otherwise. Reuse it when identifying this
+   * connection.
    */
   dbUrl: string;
 };
 
 export type WorkspaceCommandOptions = {
-  /**
-   * Whether a database behind the current schema stops the command.
-   *
-   * On for everything that reads or writes rows, which is the point: a workspace left
-   * behind by an upgrade now refuses the same way from every command instead of three
-   * different ways (see {@link requireCurrentMigrations}).
-   *
-   * Off for `kozane status`, whose whole job is to report the workspace as it is. Refusing
-   * to describe a workspace because it needs attention is the one case where the guard
-   * would withhold exactly the information being asked for.
-   */
+  /** Require current migrations for workspace commands, except status. */
   requireMigrations?: boolean;
 };
 
 /**
- * The shape every workspace command shares: find the workspace, check the schema, open the
- * session database, and turn anything thrown into a one-line error and a non-zero exit.
+ * Find the workspace, require current migrations, open the session database, and report
+ * errors through the CLI error handler.
  *
- * The database is always {@link commandDbUrl}, which is the fix this exists to make
- * permanent. That resolver points at the temporary database of a running `kozane open
- * --memory` server, and `card`, `layer`, `scope`, `taskspace` and `status` used it while
- * `namespace` did not — so with a memory server up, `kozane card add` wrote to the session
- * while `kozane namespace list` read the disk, and `kozane namespace create` made a namespace
- * the open board could never show. `spec/cli.md` says namespace-dependent commands use the
- * session database; now they cannot do otherwise.
- *
- * Not for `db`, `doctor` or `net ssg`: those deliberately target the on-disk database even
- * while a memory server runs, and say so where they open it.
+ * Use {@link commandDbUrl} so workspace commands share the database served by `kozane open
+ * --memory`. Database maintenance, diagnostics, and static export deliberately open the
+ * on-disk database separately.
  */
 export async function runWorkspaceCommand<T>(
   run: (context: WorkspaceCommandContext) => Promise<T>,

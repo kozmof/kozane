@@ -24,8 +24,8 @@
     onCreate,
     onClose,
   }: {
-    // Already narrowed to this namespace by the snapshot, as in ScopeSidebar: every scope
-    // this board draws, which is not every scope in the workspace.
+    // The snapshot already limits scopes to those this namespace displays, as in
+    // ScopeSidebar.
     scopes: Scope[];
     scopeRels: ScopeRel[];
     taskspaces: TaskspaceSummary[];
@@ -42,14 +42,8 @@
 
   let panelEl: HTMLDivElement | undefined = $state();
   /**
-   * Scopes folded away, rather than scopes opened.
-   *
-   * Every scope starts showing its taskspaces, because seeing all of them at once is the
-   * point of this panel — the sidebar already offers one scope at a time, and reproducing
-   * that here would be the long path in a smaller window. Folding is for quieting a board
-   * with many scopes, so it is the exception and it is held here: which scopes a reader
-   * folded is about this panel, not about the taskspace tree, and it is not worth carrying
-   * between openings.
+   * Track collapsed scopes. Show all taskspaces initially and reset folding when the palette
+   * reopens.
    */
   let collapsed = $state(new Set<string>());
   let scopeName = $state("");
@@ -58,9 +52,7 @@
   let taskspaceInput: HTMLInputElement | undefined = $state();
   let fileInput: HTMLInputElement | undefined = $state();
 
-  // The panel takes the keyboard when it opens. `scopes` is read for the dependency alone,
-  // so that focus is retaken when a row that had it is unmounted by the poll — the same
-  // reason WarpPalette reads `entries` here.
+  // Focus the palette on opening and after scope updates remove a focused row.
   $effect(() => {
     // oxlint-disable-next-line no-unused-expressions
     scopes.length;
@@ -68,9 +60,7 @@
   });
 
   function handleKeydown(e: KeyboardEvent): void {
-    // Nothing typed at the palette is meant for the board behind it. Without this the
-    // composer's selection shortcuts are still live — the cards this panel is about are
-    // selected, which is exactly when `Delete` would reach them.
+    // Stop palette keystrokes from reaching board selection shortcuts.
     e.stopPropagation();
     if (e.key === "Escape") {
       e.preventDefault();
@@ -85,8 +75,8 @@
   }
 
   /**
-   * Opens the name field at the root of `taskspaceId`, expanding it first if it was closed:
-   * the field is drawn among the taskspace's own rows, so a closed one has nowhere to show it.
+   * Expand the taskspace before opening its root name field so the field is visible among its
+   * rows.
    */
   async function startCreate(taskspaceId: string, kind: TaskspaceCreateKind): Promise<void> {
     if (!tree.isExpanded(taskspaceId, "")) await tree.toggle(ctx, taskspaceId, "");
@@ -99,9 +89,8 @@
   }
 
   /**
-   * Enter moves on to the next field rather than submitting early: naming a scope and a
-   * taskspace is worth committing to before the file name is even asked for, so a stray
-   * Enter earlier in the row should not fire a create nothing is ready for yet.
+   * Move to the next field on Enter so creation waits until the scope, taskspace, and file
+   * name are ready.
    */
   function createKeydown(e: KeyboardEvent, next?: HTMLInputElement): void {
     if (e.key !== "Enter") return;
@@ -119,10 +108,8 @@
     );
   }
 
-  // Every taskspace's tree starts open: finding a file here is the point of this modal, and
-  // an extra click per taskspace before any of them can be seen would work against that. The
-  // sidebar opens one at a time instead, because it is meant to stay compact rather than show
-  // everything at once.
+  // Open every taskspace tree initially so files are immediately visible. The sidebar opens
+  // one at a time to stay compact.
   $effect(() => {
     for (const scope of scopes) {
       for (const taskspace of taskspacesOf(scope.id)) {
@@ -255,8 +242,7 @@
   });
 </script>
 
-<!-- A press on the backdrop and nowhere else closes the panel: `target === currentTarget`
-     is what separates the backdrop itself from anything inside it. -->
+<!-- Close only when the press targets the backdrop itself. -->
 <div
   class={backdropClass}
   role="presentation"

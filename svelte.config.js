@@ -2,7 +2,7 @@ import adapterNode from "@sveltejs/adapter-node";
 import adapterStatic from "@sveltejs/adapter-static";
 
 // `kozane net ssg generate` sets `KOZANE_SSG` to select the static adapter. Other builds use
-// the Node adapter. See `src/cli/commands/ssg.ts` .
+// the Node adapter. See `src/cli/commands/ssg.ts`.
 const ssg = process.env.KOZANE_SSG === "1";
 // GitHub Pages project sites need a base path such as "/kozane". A nonempty base starts with
 // "/" and has no trailing slash. An empty base serves from the root.
@@ -16,7 +16,7 @@ const config = {
   },
   kit: {
     adapter: ssg
-      ? // Keep static output separate from the Node build used by `kozane open` .
+      ? // Keep static output separate from the Node build used by `kozane open`.
         adapterStatic({ pages: "build-ssg", assets: "build-ssg", fallback: "404.html" })
       : adapterNode(),
     paths: { base },
@@ -34,8 +34,8 @@ const config = {
         "style-src": ["self", "unsafe-inline"],
       },
     },
-    // Use aliases in route code compiled by Vite. Keep relative imports in `src/cli` , `src/db`
-    // , and `src/lib` because the CLI's TypeScript build does not rewrite import paths.
+    // Use aliases in route code compiled by Vite. Use relative imports in CLI, database, and
+    // library modules because the CLI's TypeScript build does not rewrite import paths.
     alias: {
       "styled-system": "./styled-system",
       $db: "./src/db",

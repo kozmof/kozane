@@ -3,35 +3,17 @@ import { join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * `spec/http.md` against the endpoints it specifies.
- *
- * The CLI has had this since `spec/cli.md` was written: a check that runs both ways, so a
- * command renamed or removed fails rather than leaving the spec describing something that
- * is no longer there. The HTTP surface had nothing of the kind — twenty-two route files
- * reached by every browser on the workspace, and a route deleted, moved, or given another
- * method was caught only by whichever unit test happened to cover it.
- *
- * Spec → code catches a section describing an endpoint that is gone. Code → spec catches an
- * endpoint shipped without one, which is what the whole surface had been.
- *
- * The router is the filesystem, so the filesystem is what is walked. Read as text rather
- * than imported: a route module pulls in `./$types`, `$app/*` and a database, none of which
- * exist to answer the only question here — which methods this file exports.
+ * Compare HTTP specification entries with route exports in both directions. Detect
+ * undocumented endpoints and obsolete sections. Read source text instead of importing routes
+ * that require SvelteKit and database state.
  */
 
 const ROUTES_DIR = resolve("src/routes");
 const SPEC_PATH = resolve("spec/http.md");
 
 /**
- * Endpoints `spec/http.md` does not document.
- *
- * Empty, and the check below is what keeps it that way: an endpoint added without a section
- * fails rather than quietly joining a list of exemptions. Kept as a list rather than deleted
- * outright so that an endpoint shipped ahead of its documentation has somewhere honest to be
- * recorded, instead of the check being loosened. An entry here is a debt; an entry that has
- * since been documented is a failure, which is what the last test is for.
- *
- * Written as `METHOD /path`, the same key the check uses.
+ * Temporary documentation exemptions keyed as `METHOD /path`. Keep the list empty when all
+ * endpoints are documented and reject entries whose documentation now exists.
  */
 const UNSPECIFIED: readonly string[] = [];
 
@@ -39,12 +21,8 @@ const UNSPECIFIED: readonly string[] = [];
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"] as const;
 
 /**
- * The URL a `+server.ts` answers on, as the spec spells it.
- *
- * Route parameters keep their brackets — `/[namespaceId]/api/cards/[cardId]` — because that
- * is both how SvelteKit names them and how the URL reads as a template. Group directories
- * (`(name)`) do not appear in a URL and are dropped; there are none today, and this is what
- * keeps the check right when there are.
+ * Convert a server route filename to a specification URL. Preserve parameter brackets and
+ * omit route-group directories.
  */
 function routePath(dir: string): string {
   const segments = relative(ROUTES_DIR, dir)
@@ -87,8 +65,7 @@ describe("spec/http.md against the route tree", () => {
   const implemented = implementedEndpoints();
   const specified = specifiedEndpoints();
 
-  // A guard on the walk itself: a change to the layout that made it find nothing would
-  // otherwise pass every check below by having nothing to compare.
+  // Require the route walk to find entries so an empty result cannot pass every comparison.
   it("finds the route tree", () => {
     expect(implemented.length).toBeGreaterThan(20);
     expect(implemented).toContain("GET /health");
@@ -111,8 +88,7 @@ describe("spec/http.md against the route tree", () => {
   it("documents each endpoint once", () => {
     const duplicated = specified.filter((endpoint, index) => specified.indexOf(endpoint) !== index);
 
-    // Two sections for one endpoint means one of them is unread, and neither is under the
-    // check above — both match something real.
+    // Reject duplicate specification sections for the same endpoint.
     expect(duplicated).toEqual([]);
   });
 

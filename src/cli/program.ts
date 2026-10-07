@@ -51,8 +51,7 @@ import {
   DEFAULT_SERVER_PORT,
 } from "../lib/constants.js";
 
-// Commander argument parsers. Module scope rather than inside the builder: they close over
-// nothing in it, and a builder that can be called twice should not mint two copies of each.
+// Keep stateless argument parsers at module scope so repeated command-tree builds reuse them.
 
 function integer(value: string): number {
   const parsed = Number(value);
@@ -78,14 +77,8 @@ function cardSortKey(value: string): CardSortKey {
 }
 
 /**
- * The command tree, built rather than built-and-run.
- *
- * Split out of `index.ts`, which used to declare all of this and then call `parse()` at
- * module scope — so the only way to see what commands exist was to run one. `spec.test.ts`
- * walks what this returns and checks it against `spec/cli.md`, which is 1,500 lines of
- * specification that nothing previously held to the code.
- *
- * `index.ts` is now the entry and nothing else: it builds this and parses argv.
+ * Build the command tree without parsing arguments or running a command. `index.ts` parses
+ * arguments, and `spec.test.ts` compares this tree with `spec/cli.md`.
  */
 export function buildProgram(): Command {
   const program = new Command();
@@ -439,10 +432,8 @@ export function buildProgram(): Command {
       cardSortKey,
     )
     .option("--reverse", "Reverse the --sort order")
-    // `.catch(fail)`, because `cardList` refuses a malformed combination of these options
-    // before it opens a workspace — outside the `runWorkspaceCommand` that reports every
-    // other refusal. `program.parse()` does not await an action, so without this the rejection
-    // would reach the user as an unhandled rejection and a stack trace.
+    // Handle validation failures that occur before `runWorkspaceCommand`. `program.parse()`
+    // does not await the action, so an uncaught failure would become an unhandled rejection.
     .action((opts) => cardList(opts).catch(fail));
 
   cardListCommand.addHelpText(

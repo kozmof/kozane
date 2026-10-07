@@ -15,9 +15,8 @@ export type UiConfig = {
   defaultShowSidePanel: boolean;
   defaultShowWarps: boolean;
   /**
-   * Whether the taskspace file editor starts in vim normal mode and takes the vim key
-   * bindings. Off by default: the bindings would otherwise ambush anyone who opened a file
-   * expecting to type into it.
+   * Whether the file editor starts in Vim normal mode with Vim bindings. Disabled by default
+   * so typing inserts text immediately.
    */
   editorVimMode: boolean;
   /** Diameter of a warp marker, in canvas pixels. */
@@ -41,13 +40,7 @@ export type UiConfig = {
   removeWarpShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
-  /**
-   * How much text one card may hold, in characters. Not a drawing setting like the rest of
-   * this block, but a limit on what may be written — it sits here because it is a
-   * workspace-wide preference the user edits in the same file, and because both writers
-   * that enforce it, the card endpoints and `kozane card add`, already read this config to
-   * find the board they clamp positions to.
-   */
+  /** Workspace card text limit in UTF-16 code units, enforced by HTTP and CLI writers. */
   contentMax: number;
 };
 
@@ -106,11 +99,8 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   canvasWidth: [400, 20000],
   canvasHeight: [400, 20000],
   /**
-   * The floor keeps a sentence writable, which is the unit `card squash` cuts text into —
-   * a limit below that turns an ordinary paste into a command that cannot succeed. The
-   * ceiling is where the board's once-a-second poll stops being reasonable: it carries
-   * every card's whole text, not an excerpt, so the cost of raising this is paid on every
-   * poll of every open tab rather than once at write time.
+   * Bounds for the configurable card text limit. Higher limits increase snapshot payloads
+   * because polling includes complete card text.
    */
   contentMax: [100, 1_000_000],
 };
@@ -170,10 +160,8 @@ export type ValidationResult<T> = {
 };
 
 /**
- * Validates the `ui` block of a workspace config, collecting every problem instead of
- * stopping at the first. `value` holds the fields that passed; the rest fall back to
- * their defaults. {@link parseUiOverrides} reacts to the issues, `kozane doctor config`
- * reports them.
+ * Validate all UI settings and collect every issue. Keep valid fields and use defaults for
+ * invalid ones. Parsing and diagnostics decide how to report the issues.
  */
 export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiConfig>> {
   const issues: ConfigIssue[] = [];
@@ -246,16 +234,9 @@ export function validateUiOverrides(ui: unknown): ValidationResult<Partial<UiCon
 }
 
 /**
- * The two checks no single field can make: a shortcut bound to a key the UI reserves, and
- * two shortcuts bound to the same key.
- *
- * A reserved key is an error and the field is dropped, so its default stands. A collision
- * is a warning — the page fires whichever action it reaches first and the other becomes
- * unreachable, which is worth reporting rather than worth refusing to start on. Both are
- * judged against the config as it will actually be used,
- * defaults included, since an override lands on a default as easily as on another
- * override; only fields the config sets for itself are reported, because a field left at
- * its default is not the one the author can go and change.
+ * Check reserved shortcuts and collisions against effective settings, including defaults.
+ * Drop invalid reserved-key overrides and warn when two actions share a key. Report only
+ * explicitly configured fields.
  */
 function checkShortcuts(
   raw: Record<string, unknown>,
@@ -315,8 +296,7 @@ export type ParseUiOptions = {
  */
 export function parseUiOverrides(ui: unknown, { strict }: ParseUiOptions): Partial<UiConfig> {
   const { value, issues } = validateUiOverrides(ui);
-  // Errors only: a warning describes a config that works, just oddly, and stopping the
-  // CLI on one would make a shortcut collision harder to live with than the collision is.
+  // Reject errors only. Warnings describe usable configurations and must not block the CLI.
   const blocking = issues.find((issue) => issue.severity === "error");
   if (strict && blocking) throw new Error(`Invalid Kozane config: ${blocking.message}`);
   return value;

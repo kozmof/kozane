@@ -45,8 +45,7 @@ describe("readJsonObject", () => {
   });
 
   it("refuses a body not sent as application/json, CORS-simple ones above all", async () => {
-    // No content type is what a cross-site `no-cors` fetch of a Blob sends, and it passes
-    // SvelteKit's origin check; text/plain is the form-safe type a page can also send.
+    // Test absent and text/plain content types, which cross-origin simple requests can send.
     const unsent = new Request("http://localhost", {
       method: "POST",
       body: new Blob(['{"title":"Card"}']),
@@ -207,8 +206,7 @@ describe("requireWithinBatchLimit", () => {
 
 describe("requireStringArray batch limit", () => {
   it("rejects an oversized array before checking its contents", () => {
-    // Every element is invalid, so a message about element types would prove the
-    // per-item scan ran first — the work the limit exists to avoid.
+    // Reject the batch size before scanning invalid elements.
     const cardIds = Array.from({ length: BATCH_MAX + 1 }, () => 42);
     expectHttpError(
       () => requireStringArray({ cardIds }, "cardIds"),
@@ -375,8 +373,7 @@ describe("requireObjectArray", () => {
   });
 
   it("refuses an oversized batch before reading a single item of it", () => {
-    // The order that matters: the cap stands between a request and a statement SQLite will
-    // not accept, so it is answered while the body is still just a list.
+    // Enforce the batch cap before building a statement that exceeds SQLite's limits.
     let reads = 0;
     const counted = (row: Record<string, unknown>) => {
       reads += 1;

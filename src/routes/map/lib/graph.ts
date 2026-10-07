@@ -5,11 +5,8 @@ import { MAP_TAG_LINKS_MAX } from "$lib/constants";
 import type { Point, Rect } from "./treemap.js";
 
 /**
- * The lines drawn over the map's packing: a scope's spokes to the partitions it reaches, and the
- * selected tag's links to the partitions that carry it.
- *
- * Pure, for the reason `treemap.ts` is — the server and the browser both lay this out, and a
- * hub that landed somewhere different between the two would jump on hydration.
+ * Compute scope spokes and tag links over the treemap with shared pure geometry for server
+ * and browser rendering.
  */
 
 /** How large a scope's node is drawn, and the room one needs beside its label. */
@@ -20,22 +17,15 @@ const HUB_MIN_GAP = 120;
 const RAIL_ROW_HEIGHT = 46;
 const RAIL_PADDING = 14;
 /**
- * The most of the map a rail of scopes may take. A workspace with more scopes than the rail
- * can hold rows for keeps the rows it can and packs them tighter, rather than squeezing the
- * packing — which is the thing the page is actually about — down to a band.
+ * Maximum space reserved for scope rows. Tighten row spacing when needed without consuming
+ * the entire packing area.
  */
 const RAIL_MAX_FRACTION = 0.4;
 
 /**
- * A packing fills its rectangle completely, so there is no gap in it for a scope's node to
- * sit in. The map reserves a band below the packing instead and draws every hub there, which
- * is also what makes the spokes read as a graph over the treemap rather than as marks
- * inside one of its cells.
- *
- * How many rows that band needs: as many as it takes to give each hub {@link HUB_MIN_GAP} of
- * width, capped so the band never takes more than {@link RAIL_MAX_FRACTION} of the map. A
- * workspace past that cap draws its hubs closer together than the gap asks for — the
- * alternative is a rail taller than the map it annotates.
+ * Reserve a rail below the packing for scope hubs. Choose enough rows for the requested gap,
+ * capped by {@link RAIL_MAX_FRACTION}. Reduce spacing when all hubs cannot fit at the
+ * preferred gap.
  */
 export function scopeRailRows(count: number, area: Rect): number {
   if (count === 0) return 0;
@@ -59,35 +49,21 @@ export function scopeRail(count: number, area: Rect): Rect {
 
 export type HubInput = {
   id: string;
-  /** Where this scope's spokes are going — the anchors on the partitions it reaches. */
+  /** Anchors for this scope's links to target rectangles. */
   toward: Point[];
 };
 
 export type HubPlacement = { id: string; point: Point };
 
 /**
- * Where each scope's node sits in the rail.
- *
- * Under the middle of what it reaches, so a spoke is as short and as vertical as the rail
- * allows: a hub starts at the mean x of its own anchors. Two scopes over the same partitions
- * would then sit on top of each other, so the row is swept left to right pushing each hub to
- * at least {@link HUB_MIN_GAP} past the one before it, and then right to left to bring back
- * anything the first sweep pushed off the end.
- *
- * Hubs are dealt across the rows rather than chunked into them — sorted by x, then row
- * `index % rows`. Chunking would put every hub of the left-hand namespaces in the top row and
- * leave the bottom row under the right-hand ones, which is the crossing pattern the rows were
- * added to avoid; dealing gives every row the full width to spread over.
- *
- * Deterministic throughout: the sort breaks its ties with {@link compareIds}, and both sweeps
- * are single passes over a fixed order.
+ * Place hubs near the mean x of their targets. Distribute x-ordered hubs across rows, then
+ * sweep in both directions to enforce spacing and bounds. Break ordering ties with {@link
+ * compareIds} for deterministic layout.
  */
 export function placeHubs(hubs: HubInput[], rail: Rect): HubPlacement[] {
   if (hubs.length === 0 || rail.height <= 0) return [];
 
-  // Read back off the rail rather than recomputed from the map, because the rail is what
-  // was actually reserved: `scopeRail` may have clamped its rows against the area, and
-  // laying out more rows than the band holds would draw hubs below it.
+  // Use the rail's actual reserved row count, which may be clamped to the available area.
   const rows = Math.max(1, Math.round((rail.height - 2 * RAIL_PADDING) / RAIL_ROW_HEIGHT));
   const rowHeight = (rail.height - 2 * RAIL_PADDING) / rows;
   const center = rail.x + rail.width / 2;
@@ -108,18 +84,14 @@ export function placeHubs(hubs: HubInput[], rail: Rect): HubPlacement[] {
 
     const span = high - low;
     if (xs.length > 1 && (xs.length - 1) * HUB_MIN_GAP > span) {
-      // More hubs than this row has gaps for, which happens only once `scopeRail` has hit
-      // its own ceiling and stopped adding rows. Spread them evenly across the row rather
-      // than sweeping: a sweep would honour the gap for the first of them and push the rest
-      // off the end of the map. Tighter than the gap asks for is the concession the ceiling
-      // already decided to make.
+      // Distribute hubs evenly when the rail cannot add rows and the preferred gaps do not
+      // fit. Smaller gaps keep every hub inside the map.
       const step = span / (xs.length - 1);
       for (let i = 0; i < xs.length; i++) xs[i] = low + i * step;
     } else {
       for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + HUB_MIN_GAP);
-      // The forward sweep only ever pushes right, so a row crowded against the right-hand
-      // edge ends past it. Pin the last hub back on the edge and let the same gap propagate
-      // leftwards; the row fits, so this cannot push the first one off the other end.
+      // Sweep backward from the right edge to bring overflowing hubs inside while preserving
+      // the gap.
       const last = xs.length - 1;
       if (last >= 0 && xs[last] > high) {
         xs[last] = high;
@@ -135,11 +107,8 @@ export function placeHubs(hubs: HubInput[], rail: Rect): HubPlacement[] {
 }
 
 /**
- * Where a line from `toward` meets the border of `rect`.
- *
- * A spoke drawn to a rectangle's centre disappears under the rectangle, which on a packing —
- * where the rectangles are the whole picture — means the line is only visible outside the
- * thing it points at. Stopping it on the border makes it point.
+ * Find where the line toward `toward` meets the rectangle border so the visible spoke ends at
+ * its target.
  */
 export function rectAnchor(rect: Rect, toward: Point): Point {
   const cx = rect.x + rect.width / 2;
@@ -148,8 +117,7 @@ export function rectAnchor(rect: Rect, toward: Point): Point {
   const dy = toward.y - cy;
   if (dx === 0 && dy === 0) return { x: cx, y: cy };
 
-  // How far along the ray the first edge is met: the smaller of the two crossings, each
-  // ignored where the ray is parallel to that pair of edges.
+  // Use the nearer ray-edge crossing, ignoring edges parallel to the ray.
   const scaleX = dx === 0 ? Infinity : rect.width / 2 / Math.abs(dx);
   const scaleY = dy === 0 ? Infinity : rect.height / 2 / Math.abs(dy);
   const scale = Math.min(scaleX, scaleY);
@@ -157,14 +125,8 @@ export function rectAnchor(rect: Rect, toward: Point): Point {
 }
 
 /**
- * A quadratic bezier from one point to the other, bowed perpendicular to the line between
- * them.
- *
- * Curved rather than straight, and the reason is legibility rather than decoration: several
- * spokes from one hub to partitions in a row of one namespace are near-parallel straight lines
- * that overlap for most of their length, while a bow proportional to the distance separates
- * them. The bow is a fixed fraction, so the path is a function of its endpoints alone and
- * needs no state to stay put between renders.
+ * Draw a quadratic Bézier curve bowed perpendicular to its endpoints. A fixed proportional
+ * bow separates nearby spokes and keeps the path stable across renders without extra state.
  */
 export function curve(from: Point, to: Point, bow = 0.14): string {
   const mx = (from.x + to.x) / 2;
@@ -174,10 +136,7 @@ export function curve(from: Point, to: Point, bow = 0.14): string {
   return `M ${from.x} ${from.y} Q ${mx - dy * bow} ${my + dx * bow} ${to.x} ${to.y}`;
 }
 
-/**
- * Cards per partition, per tag exactly as written. The shape the map loader sends and the only
- * thing the tag graph is drawn from — see `MAP_TAG_LINKS_MAX`.
- */
+/** Per-tag card counts by partition, bounded by `MAP_TAG_LINKS_MAX`. */
 export type TagPartitionIndex = Record<string, Record<string, number> | undefined>;
 export type MapTagCard = { namespaceId: string; partitionId: string; updatedDay: string };
 
@@ -223,22 +182,11 @@ export function tagPartitionIndex(
 }
 
 /**
- * The partitions a tag reaches, each with the weight of the line to draw to it.
+ * Aggregate target weights for a tag and its descendants through {@link tagMatcher}.
  *
- * Rolled up over subcategories with {@link tagMatcher}, so `:perf` reaches everything
- * `:perf:cache` and `:perf:cache:invalidation` reach — the same rule the tag index, the CLI
- * and the card renderer use, reached for rather than restated. That is why the index is
- * keyed by the exact tag: rolling up here costs one pass over the keys and keeps one entry
- * per tag in what crosses the wire, where pre-rolling would store every tag's cards again
- * under each of its ancestors.
- *
- * A weight, and not a count of cards. One card carrying both `:perf:cache` and
- * `:perf:disk` is two entries under `:perf`, and summing them counts it twice — which is
- * why `buildTagTree` tallies sets of sources rather than adding numbers. Distinguishing
- * them here would mean shipping the card ids the aggregate exists to avoid shipping, and the
- * line does not need it: what it decides is which partitions are linked and how heavily. The
- * true count is in the tree beside it, where it is exact, and the page draws this as a line
- * rather than printing it as a number.
+ * Weights can count one card more than once when it carries several matching tags. Use them
+ * for link emphasis, not distinct-card labels. The tag tree computes distinct counts
+ * separately.
  */
 export function tagPartitionTargets(index: TagPartitionIndex, tag: string): Map<string, number> {
   const matches = tagMatcher(tag);

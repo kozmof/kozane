@@ -136,7 +136,7 @@ describe("WarpPalette", () => {
     await user.click(screen.getByRole("button", { name: "Remove warp 1 in Research" }));
 
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: "w3" }));
-    // Removing is not warping: the view stays where it is.
+    // Removing a warp must not change the view position.
     expect(onJump).not.toHaveBeenCalled();
   });
 
@@ -145,9 +145,8 @@ describe("WarpPalette", () => {
     const props = makeProps();
     const { rerender } = render(WarpPalette, { props });
 
-    // Clicking the button focuses it, and removing the warp unmounts it: without the panel
-    // taking focus back, the browser drops it on <body>, where neither this panel's key
-    // handler nor the page's — held off while the palette is open — would see another key.
+    // Restore panel focus after deleting its focused row so keyboard navigation remains
+    // available.
     await user.click(screen.getByRole("button", { name: "Remove warp 1 in Kozane" }));
     await rerender({ ...props, entries: entries.filter(({ id }) => id !== "w1") });
 

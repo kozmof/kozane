@@ -162,8 +162,7 @@ describe("EditorSession", () => {
     s.doc!.insert({ line: 0, column: 1 }, "b");
 
     const saving = s.save(ctx);
-    // Typed after the request went out: what was sent is already stale, so the file must
-    // still count as modified once the answer arrives.
+    // Edits made during the request must remain dirty after the save succeeds.
     s.doc!.insert({ line: 0, column: 2 }, "c");
     release!();
     await saving;
@@ -247,9 +246,8 @@ describe("EditorSession", () => {
       };
     }
 
-    // The default an export built without `--include-scoped-files` relies on: no entry for
-    // this taskspace means the live endpoint is asked, the same as if `staticFiles` were
-    // never set at all.
+    // Fall back to the live endpoint when the taskspace has no embedded tree, as in exports
+    // without `--include-scoped-files`.
     it("still fetches when the context carries no static tree for this taskspace", async () => {
       const { fetcher, ctx } = staticCtx({});
       const s = new EditorSession();

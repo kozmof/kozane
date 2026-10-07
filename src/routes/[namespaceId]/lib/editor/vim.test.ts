@@ -110,8 +110,7 @@ describe("vim motions", () => {
     expect(press("あいう\n", ["$"]).caret).toEqual({ line: 0, column: 2 });
   });
 
-  // An emoji is one character and two columns, and a caret between the two names half of
-  // it: nothing can be typed there, and the line cannot be sliced there to be drawn.
+  // Keep the caret outside surrogate pairs so emoji remain valid for editing and rendering.
   it("steps over an emoji in one press rather than landing inside it", () => {
     expect(press("a😀b\n", ["l"]).caret).toEqual({ line: 0, column: 1 });
     expect(press("a😀b\n", ["l", "l"]).caret).toEqual({ line: 0, column: 3 });
@@ -206,8 +205,7 @@ describe("vim edits", () => {
   });
 
   it("moves the caret to the edit u takes back", () => {
-    // Delete a character on the last line, walk up to the first, then undo: the caret
-    // belongs back at the restored text, not left where the motions ended.
+    // After deleting and moving elsewhere, undo must return the caret to the restored text.
     const { caret, text } = press("alpha\nbravo\ncharlie\n", [
       "j",
       "j",

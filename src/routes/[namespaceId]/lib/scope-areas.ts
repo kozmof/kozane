@@ -8,12 +8,8 @@ import {
 } from "./namespace-page.js";
 
 /**
- * How scope frames on a board decide which cards belong to their scope.
- *
- * Membership is measured, not computed: a card's height is whatever its text wrapped to, so
- * only the drawn board can say which cards a rectangle covers. Every function here takes that
- * measurement as `cardIdsInRect` and does the rest — the grouping by scope, the union over a
- * scope's frames, the before-and-after — which is what lets it be tested without a DOM.
+ * Calculate scope membership across frames using the caller's measured `cardIdsInRect`. Keep
+ * grouping and transition logic independent of DOM measurement.
  */
 
 /** Which cards the drawn board shows overlapping a world rectangle. */
@@ -48,13 +44,8 @@ export function areasByScope(areas: readonly ScopeArea[]): Map<string, ScopeArea
 }
 
 /**
- * Which cards are inside a scope anywhere on the board — the union over its frames.
- *
- * The union makes several frames per scope behave like one membership. Asked per
- * frame instead, a card dragged out of one and into another of the same scope would read
- * as having left and joined in the same breath, and a card that merely stopped overlapping
- * one frame while still sitting inside another would be filed out of the scope it is plainly
- * still in.
+ * Union card overlap across every frame of a scope. Moving between its frames must not remove
+ * membership while the card still overlaps another frame.
  */
 export function cardIdsInScope(
   areas: readonly ScopeArea[],
@@ -79,13 +70,8 @@ export function membersByScope(
 }
 
 /**
- * What crossed each scope's frames, given who was inside them before.
- *
- * Read at the end of a drag rather than tracked during it: a card belongs where it was let
- * go, and asking mid-drag would file it into every frame it was carried across on the way.
- * Only the scopes named in `membersBefore` are asked about, once each against everything they
- * cover, and scopes with nothing to report are dropped — so the common drag, one that goes
- * nowhere near a frame, produces no entries and no requests.
+ * Compare pre-drag membership with final overlap for each named scope. Evaluate on release,
+ * not during travel, and omit scopes with no changes.
  */
 export function scopeAreaChanges(
   areas: readonly ScopeArea[],
@@ -104,12 +90,8 @@ export function scopeAreaChanges(
 }
 
 /**
- * The rectangle a drawn frame would be stored as.
- *
- * Sized first, then placed — the order `clampRectToBounds` uses on the server, so what is
- * drawn here is what comes back from it. A draw smaller than the minimum is grown to it
- * rather than refused: the pointer said where, and how small a frame may usefully be is a
- * separate question from whether one was asked for.
+ * Clamp drawn frame size before position to match the server. Expand valid small draws to the
+ * minimum usable size.
  */
 export function heldScopeAreaRect(
   rect: WorldRect,

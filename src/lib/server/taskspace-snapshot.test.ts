@@ -94,9 +94,8 @@ describe("buildTaskspaceFileTree", () => {
   });
 
   it("stops embedding content once the total per-taskspace budget runs out, but keeps listing names", () => {
-    // Two files spend most of a lowered budget; the third is sized to blow past what is left
-    // of it while staying far under the per-file cap, so the budget is the only limit it
-    // meets — checked from the listing's reported size, before the file is ever opened.
+    // Exceed the remaining total budget with a file below the per-file limit to test the
+    // budget check independently.
     const chunk = "y".repeat(400);
     writeFileSync(join(dir, "a.txt"), chunk);
     writeFileSync(join(dir, "b.txt"), chunk);
@@ -111,9 +110,8 @@ describe("buildTaskspaceFileTree", () => {
   });
 
   it("blames the per-file cap, not the budget, for a file that is over both", () => {
-    // The reader is told why a file is not there, so the reason has to be the one that
-    // actually decided it: this file is withheld at any budget, and saying the export ran
-    // out of room would suggest a bigger budget could have carried it.
+    // Report the actual exclusion reason. Increasing the budget cannot make this file
+    // eligible for export.
     const oversized = "x".repeat(TASKSPACE_FILE_BYTES_MAX + 1);
     writeFileSync(join(dir, "big.log"), oversized);
 
@@ -145,13 +143,7 @@ describe("buildTaskspaceFileTree", () => {
     expect(node.children).toEqual([]);
   });
 
-  /**
-   * The walk has to be as forgiving of a directory it cannot read as it already is of a
-   * file: an export builds from rows written whenever the taskspace was created, against a
-   * disk that has moved on. A single unreadable directory that threw from here would take
-   * the whole prerender down with it — every namespace page, not just the subtree it could
-   * not read.
-   */
+  /** Verify that an unreadable directory is reported without failing the entire static export. */
   // Nothing is unreadable to root, so the denial this rests on does not happen there.
   it.skipIf(process.getuid?.() === 0)(
     "skips a directory it cannot read rather than failing the export",
@@ -176,8 +168,7 @@ describe("buildTaskspaceFileTree", () => {
         children: [],
         truncated: "unreadable",
       });
-      // The rest of the taskspace is still there: one unreadable directory costs that
-      // directory and nothing else.
+      // An unreadable directory must not prevent exporting the rest of the taskspace.
       expect(byName["src"]).toMatchObject({
         children: [{ kind: "file", name: "app.ts", content: "export {}\n", size: 10 }],
       });
@@ -196,11 +187,8 @@ describe("buildTaskspaceFileTree", () => {
   });
 
   /**
-   * The byte budget bounds what is read, not what is listed, and a name is free to produce
-   * but still shipped in the page data — so without this the export of a taskspace pointed
-   * at a checkout with a `node_modules` in it is unbounded in entries however small its
-   * files are. The limit is passed here rather than reached for real: what matters is that
-   * the walk stops on it and says which limit stopped it.
+   * Bound exported tree entries independently of content bytes. Verify that reaching the
+   * entry limit stops the walk and reports truncation.
    */
   it("stops the walk once the tree's entry budget is spent, marking the cut-off directory", () => {
     for (const name of ["a.txt", "b.txt", "c.txt", "d.txt"]) writeFileSync(join(dir, name), "x");
@@ -217,8 +205,7 @@ describe("buildTaskspaceFileTree", () => {
     writeFileSync(join(dir, "src", "two.ts"), "2");
     writeFileSync(join(dir, "zz.txt"), "z");
 
-    // Three entries to spend on a tree of four: `src`, then its two files, then nothing
-    // left for the sibling that sorts after it.
+    // Spend three entries on `src` and its two files, leaving no budget for the next sibling.
     const tree = buildTaskspaceFileTree(dir, { nodes: 3 });
 
     expect(names(tree.root.children)).toEqual(["src"]);
@@ -250,17 +237,13 @@ describe("buildTaskspaceFileTreeOnce", () => {
     const first = buildTaskspaceFileTreeOnce(dir);
     const second = buildTaskspaceFileTreeOnce(dir);
 
-    // The identity check is the point: an export asking about one unplaced taskspace from
-    // every namespace page must not pay for the walk more than once.
+    // Reuse the same snapshot when multiple namespace pages request an unplaced taskspace.
     expect(second).toBe(first);
   });
 
   /**
-   * The behaviour a prerender depends on and a live reader must not get. Nothing writes to
-   * the filesystem during a build, so answering from the first walk is answering correctly;
-   * the uncached entry point is what any caller reading a directory still being written to
-   * has to use, and this pins the difference between the two rather than leaving it to the
-   * comment that explains it.
+   * Verify build-time tree reuse separately from fresh reads, which must observe filesystem
+   * changes.
    */
   it("does not notice a write that lands after the first walk, unlike the uncached walk", () => {
     writeFileSync(join(dir, "README.md"), "hello\n");

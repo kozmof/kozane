@@ -2,17 +2,8 @@
   import type { TaskspaceEntryKind } from "$lib/types";
 
   /**
-   * The mark drawn beside, or above, the name of one thing in a taskspace.
-   *
-   * One component rather than a snippet apiece because three surfaces now draw these: the
-   * panel's tree, which had the file sheet as a local snippet, and the icon strip under a
-   * scope frame, which needs the same sheet at a larger size plus a folder and a way back
-   * out. A file that looks like a file in one place and not the other is the kind of drift
-   * that is easier to prevent than to notice.
-   *
-   * `currentColor` throughout, so the caller sets the colour on the row or cell and a
-   * hovered or dimmed state carries to the glyph without the glyph knowing about either.
-   * The panel's tree used a hard-coded `neutral.iconDim` and sets that colour on its rows.
+   * Shared file, folder, and parent-directory glyphs for taskspace views. Use `currentColor`
+   * so the caller controls normal, hovered, and dimmed states.
    */
   let {
     kind,
@@ -44,7 +35,7 @@
       stroke-linejoin="round"
     />
   {:else if kind === "up"}
-    <!-- The folder above, with the arrow leaving it: a step out rather than a step in. -->
+    <!-- Draw an arrow leaving the folder to indicate moving up one level. -->
     <path
       d="M1 3V2h3l1 1h4v5H1z"
       stroke="currentColor"

@@ -39,7 +39,7 @@ async function listing(value: unknown): Promise<TaskspaceListing> {
 
 type Fixture = { db: DB; namespaceId: string; taskspaceId: string; tmpRoot: string };
 
-/** The workspace both describes run against: a `demo` taskspace with a file and a folder. */
+/** Shared fixture containing a `demo` taskspace with one file and one folder. */
 async function makeWorkspace(): Promise<Fixture> {
   const db = await createTestDB();
   const namespaceId = await addNamespace({ db, name: "Test Namespace" });
@@ -144,8 +144,7 @@ describe("GET /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
       path: "demo",
     });
 
-    // The directory is real and readable — what refuses this is the namespace the endpoint
-    // is addressed to, not the filesystem boundary underneath it.
+    // Reject access through the wrong namespace even though the directory is readable.
     await expectHttpRejection(
       GET(event(db, namespaceId, otherTaskspaceId)),
       404,
@@ -154,8 +153,8 @@ describe("GET /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
   });
 
   it("lists a taskspace assigned to no namespace from any namespace's endpoint", async () => {
-    // Unplaced rather than somebody else's: `getTaskspacesInNamespace` draws these on every
-    // board, so the endpoints behind that panel have to answer about them too.
+    // Unplaced taskspaces appear on every board, so these endpoints must allow access to
+    // them.
     const unassignedId = await addTaskspace({ db, name: "demo", path: "demo" });
 
     const result = await listing(GET(event(db, namespaceId, unassignedId)));

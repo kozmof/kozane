@@ -1,7 +1,5 @@
 import { isSsgBuild } from "$lib/server/ssg";
 
-// Static export (kozane net ssg generate): use directory-style URLs (foo/index.html) so every
-// static host — GitHub Pages included — resolves namespace pages unambiguously,
-// without depending on extensionless ".html" mapping or a foo.html/foo-directory
-// split. The Node adapter keeps the default "never".
+// Use directory-style URLs for static exports so hosts resolve pages without extensionless
+// HTML rules. Node builds keep the default trailing-slash policy.
 export const trailingSlash = isSsgBuild() ? "always" : "never";

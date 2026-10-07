@@ -13,8 +13,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const posY = optionalNumber(body, "posY");
   if (posX === undefined || posY === undefined) throw error(400, "posX and posY are required");
 
-  // Clamped and rounded exactly as a new warp is: a dragged marker arrives here the same
-  // way a set one does, and the columns are integers either way.
+  // Round and clamp moved warps using the same rules as newly created warps.
   const clamped = clampToCanvas(posX, posY);
   const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
 

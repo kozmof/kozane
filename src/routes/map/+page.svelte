@@ -39,33 +39,16 @@
   } from "./lib/activity.js";
 
   /**
-   * The whole workspace in one picture: every namespace a rectangle, its partitions inside it
-   * sized by the cards they hold, the scopes that cross between them a graph under the
-   * packing, and the tags the tree they spell.
-   *
-   * Nothing here writes. The board is where a workspace is changed; this is where its shape
-   * is looked at, so every interaction on the page is a link or a gesture that moves it.
+   * Display workspace structure through namespace and partition areas, scope links, and tags.
+   * Interactions navigate or change the view without writing workspace data.
    */
 
   let { data }: PageProps = $props();
 
   /**
-   * The tag whose lines are drawn — and the only thing that decides it.
-   *
-   * Hovering used to preview a tag as well, and it read as the map flickering: a pointer
-   * crossing the panel on its way somewhere else lit up every row it passed over, and the
-   * drawing a reader was looking at kept being replaced by one they had not asked for. Now
-   * a click draws the lines and they stay drawn, clicking the same row again clears them,
-   * and moving the pointer over the tree changes nothing but the row's own highlight.
-   *
-   * That leaves one piece of state instead of two, and it lives in the URL rather than in
-   * this component — which makes a drawn map a link somebody can send, and why
-   * there is no setter here: every way of changing which tag is drawn is a navigation.
-   *
-   * What the URL asks for. `data.*` on the live page, where the server read the query; from
-   * the URL in a static export, which is prerendered and so had no query to read at build
-   * time. One value either way, so everything below reads the same on both. The same
-   * arrangement the tag index uses, for the same reason.
+   * Read the selected tag from URL-derived state. Clicking toggles its links, while hover
+   * changes only row highlighting. Live pages use server query data, and static exports read
+   * the browser URL.
    */
   const selectedTag = $derived.by(() => {
     if (data.tag) return data.tag;
@@ -82,7 +65,7 @@
     data.day ?? (browser ? page.url.searchParams.get("day") : null),
   );
 
-  // The two halves of one decision — see `partitionsForDay`, which says why they are not two.
+  // Keep day filtering of partition sizes and tag hits aligned. See `partitionsForDay`.
   const displayedPartitions = $derived(partitionsForDay(data.partitions, data.activity, selectedDay));
   const displayedTagHits = $derived(tagHitsForDay(data.tagHits, data.tagCards, selectedDay));
   const tree = $derived(buildTagTree(displayedTagHits));
@@ -96,13 +79,9 @@
   const activityRange = $derived(activityRangeLabel(heatmap));
 
   /**
-   * The box the map is drawn into.
-   *
-   * Measured in the browser, and {@link MAP_DEFAULT_VIEWPORT} before anything has measured
-   * anything — on the server, and in a static export rendered on a machine with no browser.
-   * That makes the served HTML a map rather than an empty frame waiting for
-   * hydration; the browser then repacks at the real size through the same function, so what
-   * changes on mount is the size and not the arrangement.
+   * Use measured viewport dimensions in the browser and {@link MAP_DEFAULT_VIEWPORT} during
+   * server rendering. Render a complete map before hydration, then recompute it at the real
+   * size.
    */
   let measuredWidth = $state(0);
   let measuredHeight = $state(0);
@@ -113,15 +92,9 @@
   );
 
   /**
-   * Where the map is being looked at from.
-   *
-   * Held raw and clamped on the way out, so the box being resized cannot leave a pan the
-   * clamp would no longer allow — and so nothing has to re-clamp what is already stored.
-   *
-   * `null` is the opening view rather than a copy of it, because `defaultView` centres the
-   * map in the box and the box is not known until the browser has measured it. Stored as a
-   * value, the pan the server centred `MAP_DEFAULT_VIEWPORT` at would survive into a window
-   * of another size and sit the map slightly off-centre for as long as nobody touched it.
+   * Store raw view state and derive a clamped view for current dimensions. Null uses the
+   * centered opening view so resizing before user interaction does not retain server-sized
+   * offsets.
    */
   let movedView = $state<MapView | null>(null);
   const rawView = $derived(movedView ?? defaultView(size));
@@ -129,9 +102,8 @@
   const atDefault = $derived(isDefaultView(view, size));
 
   /**
-   * The packing, laid into the rectangle the view describes rather than into the box on the
-   * page — see `lib/view.ts` for why the zoom is applied here rather than as a transform on
-   * the finished drawing.
+   * Lay out the map within the view rectangle so zoom changes areas while labels and gaps
+   * retain their pixel sizes.
    */
   const layout = $derived(
     buildMapLayout({
@@ -143,37 +115,23 @@
   );
 
   /**
-   * Dragging the map about.
-   *
-   * Every pointer that goes down on the map pans it, wherever it landed — the packing covers
-   * the whole box, so a drag that only worked on the gaps between rectangles would have
-   * almost nowhere to start. A partition is a link, though, so `travelled` remembers whether
-   * this gesture moved far enough to have been a drag, and the click that follows is
-   * swallowed if it did. Otherwise every attempt to pan from a rectangle would open its
-   * board.
+   * Allow panning from any map point, including linked partitions. Suppress the following
+   * click when movement crosses the drag threshold.
    */
-  // The shared figure, not a local copy of it — this was `const DRAG_THRESHOLD = 4`, the
-  // seventh spelling of the board's click-versus-drag threshold and the only one outside
-  // `KozaneCanvas.svelte`.
-  //
-  // Only the number is shared. The comparison below is this page's own: a Manhattan sum
-  // (`|dx| + |dy|`) rather than the per-axis test `travelled` in `lib/gesture.ts` makes, so a
-  // gesture that creeps diagonally arms slightly sooner here. That is deliberate and left
-  // alone — the map swallows a click on a partition link, where the board writes a position
-  // patch, and being a shade eager to call a wobble a pan is the forgiving direction when the
-  // cost of being wrong is opening a board the user did not ask for.
+  // Share the board's distance threshold but use Manhattan distance here. This makes diagonal
+  // movement suppress accidental link activation slightly sooner.
   let dragging = $state(false);
   let travelled = false;
   let origin: { x: number; y: number; view: MapView } | null = null;
 
   function onPointerDown(event: PointerEvent) {
-    // The primary button only: a right-click is the context menu, and a middle-click is the
-    // browser's own scroll gesture.
+    // Handle only the primary button. Preserve the context menu and browser middle-button
+    // scrolling.
     if (event.button !== 0) return;
     origin = { x: event.clientX, y: event.clientY, view };
     dragging = true;
-    // Cleared here rather than after the click, because a drag released outside the map
-    // produces no click at all — and a flag left standing would swallow the next real one.
+    // Reset click suppression on the next press because releasing outside the map may produce
+    // no click.
     travelled = false;
   }
 
@@ -211,13 +169,8 @@
   }
 
   /**
-   * Zooming toward the pointer, on `Ctrl`/`Cmd` and the wheel — the board's gesture, and
-   * the same `ui.zoomStep` behind it.
-   *
-   * Registered by hand rather than with `onwheel` because it has to call
-   * `preventDefault`: without `passive: false` the browser is entitled to ignore that and
-   * zoom the whole page underneath the map instead. A wheel without the modifier is left
-   * alone, so the page still scrolls.
+   * Zoom toward the pointer with Ctrl/Cmd and the wheel. Register a non-passive listener so
+   * preventing default can stop browser page zoom. Leave unmodified wheel input alone.
    */
   let mapEl = $state<HTMLElement | null>(null);
   $effect(() => {
@@ -235,73 +188,48 @@
     return () => el.removeEventListener("wheel", onWheel);
   });
 
-  /** Which partitions the active tag reaches, rolled up over its subcategories — see
-   *  `tagPartitionTargets`. Empty when nothing is selected or hovered, which is the ordinary
-   *  state of the page. */
+  /**
+   * Partitions reached by the selected tag and its descendants. Return no targets when no tag
+   * is selected.
+   */
   const targets = $derived(
     selectedTag ? tagPartitionTargets(mapTags.index, selectedTag) : new Map(),
   );
 
   /**
-   * The rows the panel is drawing, and the point on the canvas the active one's lines leave
-   * from.
-   *
-   * Worked out from the tree rather than measured off the page — see `lib/tag-rows.ts`. The
-   * panel is drawn over the canvas at a known corner, so a row's offset down it is a y on the
-   * map without either being measured. That makes a line right in the served HTML,
-   * before any JavaScript has run, and right in a static export opened without any.
-   *
-   * `panelScroll` is the exception, and it is zero until someone scrolls a tree too tall for
-   * the window — so it changes nothing about what is served, only about what a line does
-   * after the row it belongs to has moved.
+   * Compute tag-row positions from tree layout so links render correctly before hydration.
+   * Adjust by panel scroll after user interaction.
    */
   const rows = $derived(visibleTagRows(tree, selectedTag));
   let panelScroll = $state(0);
   const lineOrigin = $derived(tagLineOrigin(rows, selectedTag, panelScroll));
 
   const links = $derived(lineOrigin === null ? [] : tagLinks(layout, lineOrigin, targets));
-  /** Whether the packing should stand back so the tag's lines read. Only once a tag is
-   *  actually reaching somewhere — a tag written on no card dims nothing. */
+  /** Dim the packing only when the selected tag has graph targets. */
   const dimming = $derived(links.length > 0);
 
-  // The page's links to itself: one narrowing changed, the other two carried over.
+  // Change one map filter while preserving the other two.
   const current = $derived({ namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
   const tagHref = (tag: string | null) => mapHref(base, { ...current, tag });
   const namespaceHref = (namespaceId: string | null) => mapHref(base, { ...current, namespaceId });
   const dayHref = (day: string | null) => mapHref(base, { ...current, day });
 
-  /** Whether a partition is drawn at full strength: everything is, until a tag is reaching
-   *  somewhere and this partition is not one of the places. */
+  /**
+   * Keep partitions fully opaque unless an active tag reaches other partitions but not this
+   * one.
+   */
   const lit = (partitionId: string) => !dimming || targets.has(partitionId);
 
   /**
-   * Enough room to read a label in. Below this the rectangle is drawn and left unlabelled
-   * rather than carrying text wider than itself.
-   *
-   * Asked of the rectangle as drawn, which makes zooming worth doing: the label is
-   * the same size at every zoom, so a partition too small to carry one grows into it rather
-   * than growing its text along with itself.
-   *
-   * The two measures come from `map-layout.ts` rather than being written here, because the empty
-   * strip is sized to clear them — see `NAMESPACE_EMPTY_STRIP_HEIGHT`. Kept in this file, they
-   * were a threshold the geometry could not read, and the strip cleared them by luck until it
-   * stopped: an empty namespace used to reach the page too short to carry its own name, and so
-   * was drawn as an unlabelled box belonging to nothing.
+   * Show labels only when the drawn rectangle meets shared minimum dimensions. Keep text size
+   * fixed during zoom so small regions can grow large enough to label.
    */
   const roomForLabel = (rect: { width: number; height: number }) =>
     rect.width >= LABEL_MIN_WIDTH && rect.height >= LABEL_MIN_HEIGHT;
 
   /**
-   * The links out of the map, which are icons and carry no text of their own.
-   *
-   * `neutral.iconDim` at rest, an icon's weight rather than a label's — and the balance
-   * matters more here than on the namespace list, because this band is over the map itself:
-   * heavier and the icons read as part of the drawing underneath, lighter and they vanish
-   * into it.
-   *
-   * Grown well past the 16px the icon occupies, for the same reason: a link the size of its
-   * own artwork is a link you have to aim at, while the thing beneath it is waiting to be
-   * dragged.
+   * Use dim navigation icons with enlarged hit targets so they remain separate from the map
+   * and easy to activate.
    */
   const headerLinkClass = css({
     display: "flex",
@@ -327,19 +255,7 @@
   <title>{selectedNamespace ? `Map · ${selectedNamespace.name}` : "Map"}</title>
 </svelte:head>
 
-<!--
-  The window, and nothing but the map in it. The canvas fills it edge to edge and everything
-  else — the header, the tag panel, the zoom control — is drawn over it rather than beside
-  it, because a treemap laid into what is left over after the furniture has taken its share
-  is a treemap of a smaller workspace: every rectangle is scaled down by the same fraction,
-  and the small ones fall under the size a label needs first.
-
-  `height` rather than `min-height`, and the overflow hidden with it: this page does not
-  scroll. The map is moved by dragging it, which is the board's gesture and the one the rest
-  of this page is built around — a page that also scrolled would have two answers to "move
-  the map down", and the tag lines are drawn in window coordinates that a page scroll would
-  slide out from under.
--->
+<!-- Fill the fixed-height viewport with the map and overlay controls. Hide page overflow so panning is the single way to move the map and graph coordinates remain aligned. -->
 <main
   class={css({
     position: "relative",
@@ -348,10 +264,7 @@
     backgroundColor: "ink.lighter",
   })}
 >
-  <!-- Over the map, and letting a drag through where there is nothing to click: the band
-       runs the width of the window, and a strip that swallowed every gesture that began in
-       it would be a strip of dead map. `pointer-events` is handed back by the links
-       themselves. -->
+  <!-- Allow map dragging through gaps in the header band. Enable pointer events on the links themselves. -->
   <header
     style="height: {MAP_HEADER_HEIGHT}px"
     class={css({
@@ -371,10 +284,7 @@
       "& a": { pointerEvents: "auto" },
     })}
   >
-    <!-- Back to the namespace list, or to one namespace's board when the map has been narrowed
-         to it. The icon is the same drawing either way, so the name is what says which — and
-         it is worth the room, because the two destinations are not interchangeable and the
-         picture alone cannot tell them apart. The same link the tag index carries. -->
+    <!-- Link back to the namespace list or selected namespace board. Label the destination explicitly because the icon alone cannot distinguish them. -->
     <a
       href="{base}/{selectedNamespaceId ?? ''}"
       title={selectedNamespace ? undefined : "Namespaces"}
@@ -435,20 +345,7 @@
       />
     {/if}
 
-      <!--
-        The map, and the surface that is dragged to pan it. `touch-action: none` hands the
-        touch gestures over rather than letting the browser scroll the page under a drag,
-        and the pointer is captured so a drag that leaves the box keeps going.
-
-        `role="presentation"`, and no keyboard model of its own — the board's canvas is
-        exactly this and answers it exactly this way. The surface is a way of moving the
-        picture, not a thing to be read: what a screen reader should get is the words below,
-        which say what the map shows and are read the ordinary way. Zooming is still reachable
-        without a mouse, through the buttons in the corner; making the surface itself
-        focusable as well would put a stop on the tab order that announced nothing and, at
-        `role="application"`, would take a screen reader out of its own reading commands to
-        buy arrow keys for a picture it is not reading.
-      -->
+      <!-- Capture pointer input for map panning and disable native touch scrolling. Keep the surface presentational, expose the map through its text, and provide keyboard-accessible zoom buttons. -->
       <div
         bind:this={mapEl}
         bind:clientWidth={measuredWidth}
@@ -481,10 +378,7 @@
         >
           {#each layout.namespaces as namespace (namespace.id)}
             <g opacity={dimming ? 0.55 : 1}>
-              <!-- A namespace holding no cards anywhere is drawn as the outline an empty
-                   partition is, and for the same reason: it is in the map because leaving it
-                   out would say it does not exist, and it should not be mistaken for a
-                   namespace that merely packed small. -->
+              <!-- Outline empty namespaces so they remain visible and distinct from small non-empty namespaces. -->
               <rect
                 x={namespace.rect.x}
                 y={namespace.rect.y}
@@ -543,9 +437,7 @@
             </a>
           {/each}
 
-          <!-- The scope graph. Quiet by default: it is drawn over the packing, and a scope
-               reaching six partitions is six lines that would otherwise compete with the
-               rectangles they cross. Hovering a hub raises its own. -->
+          <!-- Keep scope edges subdued over the map rectangles. Highlight a hub's edges on hover. -->
           {#each layout.scopes as scope (scope.id)}
             <g class={css({ _hover: { opacity: "1 !important" } })} opacity={dimming ? 0.2 : 0.6}>
               {#each scope.spokes as spoke (spoke.id)}

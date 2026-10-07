@@ -56,10 +56,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (zIndex !== undefined && !Number.isInteger(zIndex))
     throw error(400, "zIndex must be an integer");
 
-  // Null is a value of its own here: it drops the card's own width and puts it back
-  // under `ui.defaultCardWidth`. Out-of-range widths are refused rather than clamped,
-  // unlike a position — a card dragged past the edge of the board still means to land
-  // somewhere, while a width of 4000 is a caller that has the units wrong.
+  // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
+  // widths rather than clamping them.
   const rawWidth = optionalNullableNumber(body, "width");
   const [widthMin, widthMax] = CARD_WIDTH_RANGE;
   if (typeof rawWidth === "number" && !Number.isInteger(rawWidth))
@@ -99,13 +97,8 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId, cardId } = params;
 
-  // One read rather than two. This used to call `requireCardInNamespace` first, purely to get
-  // the 404 that `deleteNamespaceCards` could not distinguish from any other refusal; the
-  // refusal now says which it is, and the only one this route can meet is the card's.
-  //
-  // 404 rather than the 400 the batch routes answer with, and that is the difference between
-  // the two shapes: here the card is the resource the URL names, so its absence is the
-  // status. A batch endpoint names no resource but the namespace, which exists.
+  // Use the deletion result to report a missing card without a separate precheck. Return 404
+  // because this URL identifies one card, unlike a batch request.
   const result = await deleteNamespaceCards({ db, namespaceId, cardIds: [cardId] });
   if (!result.ok) throw error(404, "Card not found");
 

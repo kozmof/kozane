@@ -6,19 +6,11 @@ import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import { TASKSPACE_FILES_STATUS, TaskspaceFilesError } from "$lib/server/taskspace-files";
 
 /**
- * The taskspace directory one request is confined to, resolved from the record and the
- * workspace root alone. The request chooses only where to look within it, and the
- * functions in `taskspace-files.ts` are what hold it to that.
+ * Resolve the request's trusted taskspace root from its database record and workspace root.
+ * Require a taskspace visible in the requested namespace.
  *
- * The row is fetched through `getTaskspaceInNamespace`, so a namespace's endpoint answers only
- * about the taskspaces that namespace's board draws. That is not what keeps a request inside
- * a directory — those functions hold that boundary however the row was found — but every
- * other namespace-scoped endpoint here refuses a row belonging to another namespace, and
- * being the one that does not is a difference nothing gains from.
- *
- * Shared by the `file` and `files` routes rather than written out in each. They resolved the
- * same base by the same rules before this existed, and the comment in one of them said so;
- * two endpoints onto one directory should not be able to drift apart on which directory it is.
+ * Share this resolver between file and directory routes. The filesystem helpers enforce
+ * containment within the resolved root.
  */
 export async function taskspaceBaseDir(
   locals: App.Locals,

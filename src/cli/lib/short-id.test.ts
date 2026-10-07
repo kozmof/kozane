@@ -50,8 +50,7 @@ describe("resolveShortId", () => {
     expect(resolveShortId(first.replaceAll("-", ""), [first, third], "Namespace")).toBe(first);
   });
 
-  // Resolution is independent of the displayed width, so IDs copied from older
-  // output — or typed with fewer characters — keep working.
+  // Resolve IDs independently of display width so older or shorter prefixes still work.
   it("accepts prefixes shorter than the displayed short ID", () => {
     const namespaceId = "019ed7a8-e997-720b-b31d-eb155d6dc15e";
     expect(resolveShortId("eb15", [namespaceId], "Namespace")).toBe(namespaceId);

@@ -209,8 +209,7 @@ describe("buildMapLayout", () => {
     });
   });
 
-  /** The server packs at a default size and the browser repacks at the one it measured. The
-   *  same workspace must give the same map, scaled — not a different arrangement. */
+  /** Keep map layout deterministic across server and browser viewport sizes. */
   it("is a function of its input alone", () => {
     expect(buildMapLayout(input())).toEqual(buildMapLayout(input()));
   });

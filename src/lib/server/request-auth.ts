@@ -9,41 +9,23 @@ import {
 import { clearAuthFailures, isBrowserNavigation, recordAuthFailure } from "./security.js";
 import { LOGIN_PATH } from "./login.js";
 
-/**
- * What the key check decided: either the request may go on to be served, or here is the
- * response to send instead. `pass` carries nothing — a request that authenticated is an
- * ordinary request from here on.
- */
+/** Authentication decision to continue processing or return a response immediately. */
 export type AuthOutcome = { kind: "pass" } | { kind: "respond"; response: Response };
 
 const PASS: AuthOutcome = { kind: "pass" };
 
 /**
- * Whether a request carries the workspace's API key, and what to answer when it does not.
+ * Authenticate a request after workspace configuration checks. Reject throttled clients with
+ * 429 before considering login redirects. Redirect browser navigation to login and return 401
+ * for other unauthenticated requests.
  *
- * Lifted out of `hooks.server.ts`, where it was the long tail of a gate chain that also
- * decides three unrelated things — whether another server holds the workspace, whether the
- * key file can be read at all, and whether the binding demands TLS. Those are conditions of
- * the workspace; this is a property of one request, and it is the only part of the chain
- * with branches worth reaching directly from a test rather than through a whole hook.
- *
- * The order inside is load-bearing and unchanged:
- *
- * 1. A rate-limited client gets 429 whatever kind of client it is. Redirecting it to the
- *    login page instead would let a brute-force loop bypass the limiter.
- * 2. A browser navigation goes to the login page, so a person who opens the workspace on
- *    another device is asked for the key rather than shown a bare 401.
- * 3. Everything else — API and `fetch` clients — gets the machine-readable 401.
- *
- * The caller is responsible for the gates that run before this one, and for
- * `applySecurityHeaders` on whatever comes back.
+ * The caller applies security headers to the resulting response.
  */
 export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFile): AuthOutcome {
   const queryKey = event.url.searchParams.get("api_key") ?? undefined;
   const queryKeyValid = queryKey !== undefined && apiKeysEqual(queryKey, configuredKey.apiKey);
-  // A query key that is wrong does not shadow a valid cookie or header: a bookmarked URL
-  // carrying a key since refreshed would otherwise lock out a browser that is signed in,
-  // and count against its rate limit on every load.
+  // Accept a valid cookie or header even when the query key is wrong. A bookmarked, expired
+  // key must not lock out a signed-in browser or consume its rate limit.
   const authenticated =
     queryKeyValid ||
     apiKeysEqual(
@@ -83,19 +65,11 @@ export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFi
 
   clearAuthFailures(event.getClientAddress());
 
-  // The key arrived in the URL, which is how `kozane open` hands it to the browser once.
-  // Exchanged for the cookie and redirected to the same page without it, so the key stops
-  // being in the address bar, in history, and in any referer the page goes on to send.
+  // For GET requests, exchange a valid query key for a cookie and redirect to the URL without
+  // the key. Do not redirect other methods because a 303 would discard their body.
   //
-  // GET only, because the exchange is a 303 and a 303 turns the retry into a GET: a POST
-  // that authenticated by `?api_key=` was answered with a redirect that dropped its body,
-  // so the write it carried never happened and nothing said so. There is only one thing
-  // that ever puts a key in a URL — `kozane open` opening a browser at the board — and that
-  // is a GET. Any other method with a key in the query authenticates and is served, and
-  // simply gets no cookie out of it.
-  //
-  // A stale key in the query, on a request the cookie or header authenticated, is dropped
-  // from the URL the same way but sets no cookie: there is nothing to exchange it for.
+  // Remove a stale query key from an otherwise authenticated GET without setting a cookie for
+  // it.
   if (queryKey !== undefined && event.request.method === "GET") {
     const headers: Record<string, string> = {};
     if (queryKeyValid) {

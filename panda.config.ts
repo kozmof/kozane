@@ -50,7 +50,7 @@ export default defineConfig({
           },
           state: {
             error: { value: "oklch(30% 0.18 18)" },
-            // Keep the error signal visible against `ink.black` , where the darker `error`
+            // Keep the error signal visible against `ink.black`, where the darker `error`
             // color disappears.
             errorBright: { value: "oklch(70% 0.17 18)" },
           },

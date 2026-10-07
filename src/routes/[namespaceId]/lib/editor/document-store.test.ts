@@ -119,10 +119,8 @@ describe("EditorDocument", () => {
     expect(d.textBetween({ line: 1, column: 0 }, { line: 1, column: 3 })).toBe("two");
   });
 
-  // The span used to be measured by counting characters and adding one per line for the
-  // newline between them, which is a claim about the file's line endings. On CRLF it ran a
-  // character short for every line the span crossed, so a copy out of the editor came back
-  // shifted — and further with every line.
+  // Verify selection offsets across CRLF line endings rather than assuming one character per
+  // newline.
   it("reads across CRLF line endings without drifting", () => {
     const d = doc("one\r\ntwo\r\nthree\r\n");
     expect(d.textBetween({ line: 1, column: 0 }, { line: 1, column: 3 })).toBe("two");
@@ -152,7 +150,7 @@ describe("EditorDocument", () => {
     d.insert({ line: 2, column: 7 }, "!!!");
     expect(d.text()).toBe("alpha\nbravo\ncharlie!!!\n");
 
-    // The caret is far from the edit when the undo happens — up at the top of the file.
+    // Move the caret away from the edit before undoing.
     expect(d.undo()).toEqual({ line: 2, column: 7 });
     expect(d.text()).toBe("alpha\nbravo\ncharlie\n");
   });
@@ -165,9 +163,8 @@ describe("EditorDocument", () => {
   });
 
   it("returns the caret to the end of a backspaced range, where the caret actually was", () => {
-    // A backspace at column 5 deletes [4,5) — the caret was at 5, not at 4, and 5 is where
-    // undo has to put it back. Recording the range's start instead left it a character
-    // short of where the typing had got to.
+    // Undo Backspace at column 5 back to column 5, the pre-edit caret, rather than the
+    // deleted range's start.
     const d = doc("hello world\n");
     d.delete({ line: 0, column: 4 }, { line: 0, column: 5 }, { line: 0, column: 5 });
     expect(d.text()).toBe("hell world\n");
@@ -223,8 +220,8 @@ describe("EditorDocument", () => {
   });
 
   it("reports the caret across a run of undos back to the start", () => {
-    // Two edits in different places, so each is its own entry: consecutive edits in one
-    // place are joined into a single undo, which the grouping tests below cover.
+    // Use edits in different places to create separate undo entries. Grouping tests cover
+    // consecutive edits at one location.
     const d = doc("a\nb\n");
     d.insert({ line: 0, column: 1 }, "X");
     d.insert({ line: 1, column: 1 }, "Y");
@@ -268,7 +265,7 @@ describe("EditorDocument", () => {
       for (const ch of "hello") at = d.insert(at, ch);
       expect(d.text()).toBe("hello");
 
-      // One press, not five: without a grouping window every keystroke is its own entry.
+      // Undo the typing group in one press.
       d.undo();
       expect(d.text()).toBe("");
     });
@@ -314,7 +311,7 @@ describe("EditorDocument", () => {
       d.insert({ line: 1, column: 3 }, "?");
       expect(d.text()).toBe("one!\ntwo?\n");
 
-      // Two entries even inside the window: a jump elsewhere ends the run.
+      // Moving elsewhere ends the typing group even within the time window.
       d.undo();
       expect(d.text()).toBe("one!\ntwo\n");
     });
@@ -376,9 +373,8 @@ describe("EditorDocument", () => {
   });
 
   describe("carets on characters wider than one column", () => {
-    // "a😀b": the emoji is one character and two columns, so column 2 names its second
-    // half. Reed refuses an edit at a byte offset inside a code point, and a line sliced
-    // there for rendering comes back with a replacement character.
+    // In `a😀b`, column 2 falls inside the emoji's surrogate pair. Snap to a valid boundary
+    // for both rendering and editing.
     const line = "a😀b\n";
 
     it("pulls a caret inside a character back to its start", () => {
@@ -419,10 +415,7 @@ describe("EditorDocument", () => {
 
     it("edits at a caret inside a character at that character's start", () => {
       const d = doc(line);
-      // Reed resolves column 2 to the end of the emoji, so an insert that reached it
-      // unsnapped would land after the emoji and not throw doing it. The text is what says
-      // which of the two sides was taken; before Reed 3.1 the same column produced an
-      // offset inside the code point and a RangeError out of the keystroke handler.
+      // Verify that a column inside the emoji snaps backward before insertion.
       expect(() => d.insert({ line: 0, column: 2 }, "X")).not.toThrow();
       expect(d.text()).toBe("aX😀b\n");
     });
@@ -430,16 +423,14 @@ describe("EditorDocument", () => {
     it("ends a deletion at the start of the character its column landed in", () => {
       const d = doc(line);
       d.delete({ line: 0, column: 0 }, { line: 0, column: 2 });
-      // "😀b\n", not "b\n": snapping the end column forward would take the emoji with it.
+      // Preserve the emoji by snapping the end column backward to its start.
       expect(d.text()).toBe("😀b\n");
     });
 
     it("keeps a range that starts inside a character covering that character", () => {
       const d = doc(line);
-      // Reed resolves column 2 and column 3 alike to the emoji's end, so a range built from
-      // the pair unsnapped is empty and the edit silently does nothing at all. Snapping the
-      // leading side backward — what Reed's own docs ask a caret UI to do — is what leaves
-      // this a deletion of the emoji rather than a no-op.
+      // Snap the leading column backward so a range ending after the emoji deletes it instead
+      // of resolving to an empty range.
       d.delete({ line: 0, column: 2 }, { line: 0, column: 3 });
       expect(d.text()).toBe("ab\n");
     });

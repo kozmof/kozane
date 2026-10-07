@@ -15,8 +15,8 @@ export type Gesture = {
 };
 
 /**
- * A gesture measured on one axis only. Card resizing is the case: the handle is on the card's
- * edge and only horizontal travel means anything, so a vertical wobble must not arm it.
+ * Gesture measured on one axis. Card resizing uses horizontal travel so vertical motion
+ * cannot activate it.
  */
 export type HorizontalGesture = {
   startClientX: number;
@@ -24,12 +24,8 @@ export type HorizontalGesture = {
 };
 
 /**
- * Whether the pointer has travelled past `threshold` from where it started, on either axis.
- *
- * Either axis rather than the diagonal distance, which is what all six original copies did and
- * is kept on purpose: the cheaper test, and the shape it describes is a square around the
- * origin rather than a circle. The difference at four pixels is under two pixels in the
- * corners and nobody can feel it.
+ * Mark movement when either axis exceeds `threshold` from the origin. This defines a square
+ * threshold region without calculating diagonal distance.
  */
 export function travelled(
   origin: Gesture,
@@ -44,16 +40,8 @@ export function travelled(
 }
 
 /**
- * Arms `gesture.moved` once the pointer has travelled, and answers whether it is armed now.
- *
- * Latching, never clearing: a drag that has moved stays moved even if the pointer comes back
- * to where it started, because the card went somewhere and came back and that is still an edit
- * worth saving. Every original copy had this property by construction — they only ever
- * assigned `true` — and it is written down here because a `=` where they had `||=` would be an
- * easy and very quiet way to lose it.
- *
- * Returns the flag so a caller can act on the same read, rather than mutating and then testing
- * the field again.
+ * Set and return `gesture.moved` once travel crosses the threshold. Keep it true even if the
+ * pointer returns to its origin.
  */
 export function markMoved(
   gesture: Gesture,
@@ -65,7 +53,7 @@ export function markMoved(
   return gesture.moved;
 }
 
-/** {@link markMoved} for a {@link HorizontalGesture}: horizontal travel only. */
+/** Apply {@link markMoved} to horizontal travel only for a {@link HorizontalGesture}. */
 export function markMovedHorizontally(
   gesture: HorizontalGesture,
   clientX: number,
@@ -75,13 +63,7 @@ export function markMovedHorizontally(
   return gesture.moved;
 }
 
-/**
- * The origin fields for a gesture starting at this pointer event, unarmed.
- *
- * Spread into whatever else the gesture carries — `{ ...gestureOrigin(e), cardId, offsetX }` —
- * so the three shared fields are written once and a state object cannot be built with
- * `moved: true` by accident.
- */
+/** Initialize pointer-origin fields with `moved` false for a new gesture. */
 export function gestureOrigin(event: { clientX: number; clientY: number }): Gesture {
   return { startClientX: event.clientX, startClientY: event.clientY, moved: false };
 }

@@ -22,9 +22,8 @@
     /** One per taskspace of this frame's scope, in the order the panel lists them. */
     groups: FileGroup[];
     /**
-     * Opens one file of one taskspace in the editor. Absent where the board has no endpoint
-     * to read a file with, and the cells are then drawn and inert — exactly what the panel's
-     * tree does with the same prop missing.
+     * Optional callback to open a taskspace file. Without it, show file cells without opening
+     * behavior.
      */
     onOpenFile?: (taskspaceId: string, path: string) => void;
     /** Points this frame's view of one taskspace at another of its directories. */
@@ -32,26 +31,16 @@
   } = $props();
 
   /**
-   * Outside the frame, below its bottom edge and right-aligned to it.
-   *
-   * Outside for the same reason the tab is outside the top edge: everything within a frame
-   * has to keep behaving like bare canvas — a card dropped in the bottom-right corner, a
-   * marquee swept across it — and a band of icons inside would be a band of board the frame
-   * had quietly taken away. Outside it also needs no clipping and no scroll region of its
-   * own, which makes a fixed two rows enough.
-   *
-   * The width is {@link stripWidth}, which can exceed the frame's: a frame may be as narrow
-   * as 120px, and the strip is not bound by a box it sits outside of. Clamped at the left so
-   * a frame near the board's edge does not lay its icons off it.
+   * Place the file strip below and right-aligned with the frame to preserve interactions
+   * inside it. The strip may be wider than the frame. Clamp its left edge to the board.
    */
   const width = $derived(stripWidth(area));
   const left = $derived(Math.max(0, area.posX + area.width - width));
   const top = $derived(area.posY + area.height + STRIP_GAP);
 
   /**
-   * Whether a taskspace's name is written above its icons. Only once a scope has more than
-   * one: the frame's tab already names the scope, and with a single taskspace the label
-   * would be a second heading over the same handful of files.
+   * Show taskspace names only when a scope has more than one taskspace. Otherwise the frame's
+   * scope label provides enough context.
    */
   const named = $derived(groups.length > 1);
 
@@ -83,10 +72,8 @@
   });
 
   /**
-   * Two lines of name and no more: a long one wraps once and is then cut off, so a cell
-   * cannot grow and push the row below it out of line. Clipped rather than ellipsised, which
-   * would want `-webkit-line-clamp` — a vendor property nothing else in the UI reaches for.
-   * The whole name is on the cell's `title` either way.
+   * Clip names after two lines to preserve row height. Expose the complete name in the cell
+   * title.
    */
   const labelClass = css({
     width: "100%",
@@ -108,12 +95,7 @@
   }
 </script>
 
-<!--
-  Drawn at the frame's own z-index, so a card parked below the frame covers these icons the
-  same way one parked above it covers the tab. Pointer events are off on everything but the
-  cells themselves: the strip is a band of ordinary board with icons sitting on it, and
-  panning or sweeping a selection through the gaps has to keep working.
--->
+<!-- Draw file icons at the frame's z-index so cards can cover them. Enable pointer events only on icon cells so gaps still allow panning and rectangle selection. -->
 <div
   class={css({ position: "absolute", display: "flex", flexDirection: "column", gap: "4px" })}
   data-scope-area-files={area.id}
@@ -154,9 +136,7 @@
           <div class={noteClass}>Loading…</div>
         {/if}
       {:else}
-        <!-- Right-aligned and wrapping, so the first cell of the first row sits against the
-             frame's right edge however many there are: the corner stays where the eye left it
-             as a directory is drilled into and come back out of. -->
+        <!-- Right-align and wrap icons to keep the strip anchored to the frame's right edge while browsing directories. -->
         <div
           class={css({
             display: "flex",
@@ -223,9 +203,7 @@
           {/each}
 
           {#if shown.overflow > 0}
-            <!-- A note, not a button. The strip says what a scope is working on; reading a
-                 directory is the panel's job, and a control here that merely sent you there
-                 would be a third way to do what the panel's own row already does. -->
+            <!-- Show this as an informational note. Directory browsing is available in the taskspace panel. -->
             <span
               class={noteClass}
               style:width="{CELL_WIDTH}px"

@@ -7,7 +7,7 @@ import { evict, touch } from "./lru.js";
  * Skip snapshot assembly when the database signature and the client's ETag still match the
  * cached values. The ETag remains a hash of the response bytes.
  *
- * With `includeScopedFiles: false` , the live snapshot reads only the database.
+ * With `includeScopedFiles: false`, the live snapshot reads only the database.
  * `databaseSignature` tracks the main file and WAL file so changes from CLI commands and other
  * processes can invalidate the cached result.
  *
@@ -15,8 +15,7 @@ import { evict, touch } from "./lru.js";
  * assembling the full snapshot.
  */
 
-/** The tag for a snapshot's exact bytes. Not a security boundary — it says "these bytes
- *  differ", nothing more. */
+/** Hash the snapshot bytes for change detection. This tag is not a security boundary. */
 export function snapshotEtag(body: string): string {
   return `"${createHash("sha1").update(body).digest("base64url")}"`;
 }
@@ -37,26 +36,14 @@ export function matchesEtag(header: string | null, etag: string): boolean {
 type RememberedEtag = { signature: string; etag: string };
 
 /**
- * Keyed by namespace id, in least-recently-used order — a workspace has a handful of
- * namespaces, but nothing here bounds how many, and this map would otherwise be the one
- * structure in the server that grows with what a client asks for.
+ * Namespace ETags in least-recently-used order. Bound the map because clients choose
+ * namespace IDs through request URLs.
  */
 const remembered = new Map<string, RememberedEtag>();
 
 /**
- * The tag this namespace's snapshot still has, or null when that cannot be established
- * without reading the database.
- *
- * A hit counts as a use, which is what the {@link touch} is for. Recency used to move only
- * in {@link rememberSnapshotEtag}, and that inverted the eviction order this map is built
- * around: an idle board answers every poll from here, recording nothing, while a namespace
- * being written to refreshes its position on each full read. So the entry most worth keeping
- * — the board left open all afternoon, whose whole value is that it never has to be read —
- * was the one aging towards eviction, and the one busy enough to be re-read anyway was safe.
- *
- * A miss touches nothing, for the same reason {@link touch} does not create: an entry absent
- * or stale is about to be replaced by the full read's `rememberSnapshotEtag`, which puts it
- * at the end itself.
+ * Return the cached ETag when the database signature still matches, or null when a full read
+ * is needed. Touch cache hits so frequently polled unchanged boards remain recent.
  */
 export function unchangedSnapshotEtag(dbUrl: string | null, namespaceId: string): string | null {
   if (!dbUrl) return null;
@@ -78,16 +65,11 @@ export function snapshotReadSignature(dbUrl: string | null): string | null {
 }
 
 /**
- * Records the tag a full read produced, against the database it was read from — which is
- * only known when the signature did not move while the read ran. `readFrom` is
- * {@link snapshotReadSignature} taken before the first query.
+ * Cache the ETag only if the database signature remained unchanged throughout the snapshot
+ * read. `readFrom` is captured before the first query.
  *
- * Reading the signature only afterwards, as this did, paired a commit that landed mid-read
- * with a tag computed before it: the next poll found the signature unchanged and answered
- * 304 with the older board, and went on doing so until some unrelated write moved the file.
- * The snapshot's reads are not one transaction, so such a read can also be torn across
- * tables. Either way a moved signature means the tag describes no single state of the
- * database, and nothing is remembered — the next poll reads again.
+ * A concurrent commit can leave the multi-query snapshot inconsistent, so skip caching it and
+ * let the next poll reread.
  */
 export function rememberSnapshotEtag(
   dbUrl: string | null,

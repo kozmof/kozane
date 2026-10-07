@@ -166,7 +166,7 @@ export async function cardSquash(
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(eq(partitionTable.namespaceId, namespaceId));
-    // Lay out columns using the workspace's `ui.canvasWidth` , then clamp overflowing rows to
+    // Lay out columns using the workspace's `ui.canvasWidth`, then clamp overflowing rows to
     // the board. `squashNamespaceCard` uses the same steps.
     const bounds = canvasBoundsForRoot(root);
     const positions = squashCardPositions(occupied, contents.length, {
@@ -431,7 +431,7 @@ export async function cardUnglue(requestedIds: string[]): Promise<void> {
 }
 
 /**
- * Print the `--times` header with the same `sortColumn` formatter as `card list --sort` ,
+ * Print the `--times` header with the same `sortColumn` formatter as `card list --sort`,
  * including its handling of invalid timestamps. Include the derived `gap` alongside the stored
  * timestamps.
  *
@@ -466,8 +466,8 @@ export async function cardShow(requestedId: string, options: CardShowOptions = {
       .from(cardTable)
       .where(eq(cardTable.id, cardId))
       .get();
-    // Not `findById`: the row is fetched by a second query rather than found in the list
-    // the id was resolved against, which is the case its docstring warns a `!` would break.
+    // Handle absence explicitly because this second query can differ from the ID-resolution
+    // result.
     if (!card) throw new Error(`Card not found: ${requestedId}`);
     // Print history only when requested so redirecting the default output writes just the card
     // text.
@@ -508,7 +508,7 @@ export async function cardNearest(requestedId: string): Promise<void> {
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       .where(eq(partitionTable.namespaceId, origin.namespaceId));
-    // Break equal distances with `compareIds` , as the card and layer sorters do. See
+    // Break equal distances with `compareIds`, as the card and layer sorters do. See
     // `lib/order.ts` for the ordering rule.
     const sorted: NearestCard[] = cards
       .map((card) => ({
@@ -521,7 +521,7 @@ export async function cardNearest(requestedId: string): Promise<void> {
 }
 
 export async function cardList(options: CardOptions = {}): Promise<void> {
-  // Validate workspace-independent options before `runWorkspaceCommand` . A malformed command
+  // Validate workspace-independent options before `runWorkspaceCommand`. A malformed command
   // should report its option error even outside a workspace.
   //
   // Throw so callers can test validation without exiting. The action's `.catch(fail)` in

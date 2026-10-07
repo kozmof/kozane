@@ -10,8 +10,8 @@ import {
 } from "../../db/schema.js";
 
 export async function status(): Promise<void> {
-  // The one workspace command that runs against a database behind the current schema:
-  // reporting the state of a workspace is exactly what is wanted when it needs attention.
+  // Allow status checks against outdated schemas so users can inspect workspaces needing
+  // migration.
   await runWorkspaceCommand(
     async ({ db, root, config }) => {
       const [[namespaces], [partitions], [cards], [scopes], [taskspaces]] = await Promise.all([

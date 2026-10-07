@@ -7,11 +7,8 @@ import { readAreaRect } from "../../../../lib/scope-area-request.js";
 import { clampRectToCanvas } from "$lib/server/canvas";
 
 /**
- * Draws another frame for this scope on this board.
- *
- * A collection, not a singleton: a scope may be framed in several places at once, so this
- * adds one rather than replacing whatever was there. Moving or removing a particular frame
- * goes to `areas/[areaId]`.
+ * Add a frame for this scope on this board without replacing existing frames. Move or remove
+ * individual frames through `areas/[areaId]`.
  */
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;

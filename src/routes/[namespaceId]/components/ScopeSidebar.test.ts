@@ -81,12 +81,8 @@ describe("ScopeSidebar taskspaces", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  // The shape a real export actually ships for a taskspace with no directory to embed:
-  // `path` is nulled (see `loadNamespaceSnapshot`) and `treeContext` carries no tree for it —
-  // no id in `staticFiles` at all, the same as when the flag was never passed and there is
-  // no `staticFiles` object to begin with. There is nothing to browse either way, so the
-  // row does not render, the same as a taskspace with no directory has always been dropped
-  // from this panel in the live app.
+  // Omit taskspace rows that have neither a live path nor an embedded tree, matching exports
+  // that contain no browsable files.
   it("does not render a taskspace row when the export has no path and no embedded tree for it", async () => {
     const { fetcher } = mount({
       readonly: true,
@@ -141,8 +137,7 @@ describe("ScopeSidebar taskspaces", () => {
     expect(await screen.findByText("README.md")).toBeTruthy();
     expect(fetcher).not.toHaveBeenCalled();
 
-    // Save-adjacent affordances stay hidden even though browsing is live: there is no disk
-    // behind a static export to re-read from.
+    // Hide write and refresh controls in static exports, which have no backing filesystem.
     expect(screen.queryByTitle("Re-read this taskspace from disk")).toBeNull();
 
     await userEvent.click(screen.getByText("README.md"));
@@ -164,9 +159,7 @@ describe("ScopeSidebar focus state", () => {
     expect(scopeButton().getAttribute("aria-pressed")).toBe("true");
   });
 
-  // The centre mark says the board is held to this scope — cards outside it are dimmed on
-  // the canvas. Resting, the frame is drawn empty, and that mark is the whole difference
-  // between the two states.
+  // Show the center mark only for the scope currently filtering the board.
   it("marks the framed region once the scope is focused", () => {
     mount({ activeScope: null });
     expect(scopeButton().querySelector("svg rect")).toBeNull();
@@ -204,8 +197,8 @@ describe("ScopeSidebar scope areas", () => {
     expect(frameMark(container)).toHaveAttribute("title", "Framed in 3 places on this board");
   });
 
-  // It reports rather than acts: a scope may be framed in several places, so the panel has
-  // no way to say which one a button would mean. Removal lives on each frame.
+  // Report frame status without a removal action because a scope may have multiple frames.
+  // Remove each frame on the canvas.
   it("offers no button to remove a frame", () => {
     mount({ frameCountByScopeId: new Map([[SCOPE.id, 2]]) });
     expect(screen.queryByRole("button", { name: /frame/i })).toBeNull();

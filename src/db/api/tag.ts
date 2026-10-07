@@ -17,84 +17,45 @@ export type CardTagHits = {
     { namespaceId: string; partitionId: string; updatedDay: string } | undefined
   >;
   /**
-   * Which namespace each card named above belongs to.
+   * Namespace IDs for cards with tag hits. Keep them beside the hits to avoid duplicating the
+   * same ownership value for every hit.
    *
-   * Beside the hits rather than on them, per the note on `TagSource`: a card's namespace is
-   * `partition.namespace_id`, so putting it on every hit would be a second copy of a column the
-   * card already has. It is returned at all because the index gathers across namespaces, and
-   * a hit then has to be able to say which board it came from — the join is already made
-   * here, so making it again in the caller would be a second query for a column in hand.
-   *
-   * The value is optional, and saying so is the point. Every card carrying a hit has an
-   * entry — the loop below writes one before it writes the hit — but `Record<string, string>`
-   * promises that a lookup cannot miss, and both readers of this already know it can: one
-   * arrives through a cache file that may have been written by another build, and the page's
-   * copy is narrowed to the cards actually being shown. Each had a hand-written
-   * `string | undefined` annotation to work around the type; the type now says it.
+   * Lookups can be absent in older caches or page-filtered maps, so values are typed as
+   * optional.
    */
   cardNamespaces: Record<string, string | undefined>;
   /**
-   * Whether {@link TAG_CARD_HITS_MAX} was reached, so `hits` is a prefix of what the cards
-   * hold rather than all of it.
-   *
-   * Reported for the reason the file walk reports its ceilings: a list that has been cut and
-   * does not say so cannot be told from a complete one, and every count taken from it — the
-   * tree beside the panel, the totals under it — then reads as exact when it is a floor.
-   *
-   * A plain boolean rather than a member of `TagScanTruncation`, which enumerates the limits
-   * a taskspace walk stops at and is reported per taskspace. There is one card query per
-   * gather and one ceiling for it to stop at, so a taskspace-shaped record would have no
-   * taskspace to name and no second reason to distinguish.
+   * Whether the card hit limit truncated the result. Counts derived from a truncated result
+   * are lower bounds. This flag applies to the card query, separately from per-taskspace scan
+   * limits.
    */
   truncated: boolean;
 };
 
 /**
- * The sigil, checked to be safe inside a `LIKE` pattern — which is where the prefilter below
- * puts it, and where `%` and `_` are wildcards rather than characters.
- *
- * A type rather than a runtime guard, so the failure is a build that does not compile rather
- * than a query that quietly stops narrowing. `TAG_SIGIL` is presented in `lib/constants.ts`
- * as the character the grammar opens with; a sigil of `_` would turn the prefilter into
- * "every card holding at least one character" and every test would still pass, because a
- * prefilter that is too generous is invisible from the outside — it costs a scan, not an
- * answer. Anything else needs an `ESCAPE` clause here before the constant changes.
+ * Require a tag sigil that is literal within a LIKE pattern. A sigil containing `%` or `_`
+ * needs escaping before it can be used in the prefilter.
  */
 type NotLikeWildcard<T extends string> = T extends "%" | "_" ? never : T;
 const SIGIL_PATTERN: NotLikeWildcard<typeof TAG_SIGIL> = TAG_SIGIL;
 
 type GetCardTagHits = NeedsDB & {
-  /** Narrows to one namespace. Omitted, every card in the workspace is read — which is what
-   *  the tag index does when no namespace is selected. */
+  /** Optional namespace filter. Omit it to read cards across the workspace. */
   namespaceId?: string;
   /** How many hits to take before stopping, defaulting to {@link TAG_CARD_HITS_MAX}.
    *  Overridable so a test can reach the ceiling without putting a hundred thousand tags in
    *  the database, the same way `TaskspaceScanLimits` opens the file walk's. */
   hitsMax?: number;
-  /** How many rows one page of the read brings back, defaulting to
-   *  {@link TAG_CARD_ROWS_PAGE}. Overridable for the same reason `hitsMax` is: a test that
-   *  has to cross a page boundary should not need a thousand cards to do it. */
+  /** Override page size for the test. Production uses the default constant. */
   rowsPage?: number;
 };
 
 /**
- * Every tag written on a card, one hit per tag per line.
+ * Derive card tags from text, with one hit per tag per line. Reading the source text avoids
+ * maintaining a separate tag index in every content-writing transaction.
  *
- * There is no `tag` table, and deliberately. A tag is part of a card's text, so the text is
- * the only thing that can be the source of truth about it: a materialized index would have
- * to be rewritten inside every transaction that writes `card.content` — `addCard`,
- * `addCards`, `updateCard`, the squash endpoint, `kozane card squash`, `db import` — and the
- * first writer to forget leaves an index that disagrees with the board and nothing that
- * would say so. Derived on read, a tag exists exactly as long as the text holding it does.
- *
- * What that costs is one scan of the cards in question. It is bounded by `contentMax` per
- * row and narrowed below to the rows that could possibly match, and it answers a page a user
- * has navigated to rather than the once-a-second board poll.
- *
- * Read a page at a time, so what the gather holds is bounded as well as what it keeps. See
- * {@link TAG_CARD_ROWS_PAGE}: a single statement for the whole workspace brought back the
- * text of every tagged card at once, which is the one read on this path that answered to no
- * ceiling at all.
+ * Read cards in pages and prefilter possible matches to bound memory use. This query serves
+ * the tag index, outside board polling.
  */
 export async function getCardTagHits({
   db,
@@ -102,9 +63,8 @@ export async function getCardTagHits({
   hitsMax = TAG_CARD_HITS_MAX,
   rowsPage = TAG_CARD_ROWS_PAGE,
 }: GetCardTagHits): Promise<CardTagHits> {
-  // A card with no colon cannot hold a tag, so SQLite drops it before any of it crosses
-  // into JavaScript to be parsed. Necessary rather than sufficient — `9:30` comes back and
-  // finds nothing — which is the right way round for a prefilter.
+  // Prefilter cards containing a colon. Some matches, such as `9:30`, still contain no tags
+  // and are rejected by the parser.
   const holdsSigil = like(cardTable.content, `%${SIGIL_PATTERN}%`);
   const where: SQL | undefined = namespaceId
     ? and(holdsSigil, eq(partitionTable.namespaceId, namespaceId))
@@ -114,9 +74,7 @@ export async function getCardTagHits({
   const cardNamespaces: Record<string, string> = {};
   const cardData: CardTagHits["cardData"] = {};
   let truncated = false;
-  // Where the last page ended. Ordered by the same column it pages on, which makes
-  // "after this one" mean the next row rather than an arbitrary one — and what makes a hit
-  // list built over several statements the same list one statement would have built.
+  // Page by the same ID used for ordering so each query resumes after the previous page.
   let after: string | undefined;
 
   pages: for (;;) {
@@ -137,15 +95,11 @@ export async function getCardTagHits({
     after = rows[rows.length - 1].id;
 
     for (const row of rows) {
-      // Checked between cards and again between the hits of one, so the ceiling is exact
-      // rather than per card — the same reason the file walk checks in both places. A card is
-      // bounded in length by `ui.contentMax`, which a workspace may raise, so one card can
-      // hold more tags on its own than this carries.
+      // Check the limit between cards and individual hits. One card can contain more hits
+      // than the limit.
       //
-      // Truncation is decided by a row that was read and not used, which is why this stays
-      // inside the page loop rather than becoming a "was there another page?" question: a
-      // gather whose last hit exactly fills the ceiling has read every card there was, and
-      // saying it was cut short would send the reader looking for tags that are all here.
+      // Mark truncation only when a row or hit is skipped, so a result that exactly fills the
+      // limit can still be complete.
       if (hits.length >= hitsMax) {
         truncated = true;
         break pages;
@@ -167,9 +121,8 @@ export async function getCardTagHits({
       }
     }
 
-    // A short page is the last one. A full one may or may not be, so the next statement is
-    // what settles it — and comes back empty, which is one extra read of no rows against
-    // holding the whole workspace to find out.
+    // Stop after a short page. A full final page requires one empty query to establish that
+    // no rows remain.
     if (rows.length < rowsPage) break;
   }
 

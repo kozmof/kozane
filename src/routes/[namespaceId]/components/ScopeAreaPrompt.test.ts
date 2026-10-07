@@ -31,8 +31,7 @@ describe("ScopeAreaPrompt", () => {
   it("offers every scope on the board, framed or not", () => {
     mount();
 
-    // A scope may be framed in several places at once, so one that already has a frame here
-    // is still on offer: framing it again is how you say it is organised in two places.
+    // Keep already-framed scopes available so the user can add another frame.
     expect(screen.getByRole("button", { name: "Now" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Later" })).toBeTruthy();
   });
@@ -71,8 +70,7 @@ describe("ScopeAreaPrompt", () => {
     expect(onCreate).not.toHaveBeenCalled();
   });
 
-  // The board has no scopes yet, which is where this feature most wants to work: drawing a
-  // rectangle and naming it is how the first scope gets made.
+  // Allow drawing and naming a frame to create the board's first scope.
   it("still offers to name one when there are no scopes at all", () => {
     mount({ scopes: [] });
     expect(screen.getByLabelText("New scope name")).toBeTruthy();

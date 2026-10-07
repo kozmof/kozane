@@ -29,7 +29,7 @@ export type TaskspaceCreateTarget = {
   kind: TaskspaceCreateKind;
 };
 
-/** What was made, for a caller with something to do about it — opening a new file. */
+/** Created entry returned to callers, including those opening a new file. */
 export type TaskspaceCreated = {
   taskspaceId: string;
   kind: TaskspaceCreateKind;
@@ -41,9 +41,8 @@ export type TaskspaceTreeContext = {
   fetcher: typeof fetch;
   namespaceId: string;
   /**
-   * A static export's embedded taskspace trees, keyed by taskspace id. When a taskspace has
-   * one, its directories are read from here instead of the live `/files` endpoint — a
-   * static export has no server behind it to ask.
+   * Embedded taskspace trees keyed by taskspace ID. Use them instead of live directory
+   * endpoints when available.
    */
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
@@ -57,24 +56,20 @@ function taskspaceOf(key: string): string {
 }
 
 /**
- * Which taskspace directories are open in the scope panel, and what was in them.
- *
- * Directories are read one at a time as they are opened, and what comes back is kept: a
- * folder closed and opened again costs nothing. Nothing re-reads on its own — the snapshot
- * poll refreshes the database, and the disk is not the database — so the panel offers a
- * refresh for picking up files written since a folder was opened.
+ * Track open directories and cache their listings. Reopening a folder reuses its result.
+ * Refresh explicitly to see disk changes because database polling does not refresh filesystem
+ * data.
  */
 export class TaskspaceTreeState {
   expanded = $state<Set<string>>(new Set());
   nodes = $state<Record<string, TaskspaceNode>>({});
 
   /**
-   * The one directory currently being typed a name into, or null. One at a time, because
-   * the input is drawn inside the tree at the directory it belongs to: two open at once
-   * would be two carets with nothing on screen saying which the keyboard has.
+   * Directory receiving a new entry name, or null. Allow only one name field at a time so
+   * keyboard focus is unambiguous.
    */
   creating = $state<TaskspaceCreateTarget | null>(null);
-  /** Why the last attempt was refused — a name already taken, above all. */
+  /** Reason the last creation attempt failed. */
   createError = $state<string | null>(null);
   createBusy = $state(false);
 
@@ -99,17 +94,9 @@ export class TaskspaceTreeState {
   }
 
   /**
-   * Reads one directory because something other than the panel needs what is in it, without
-   * opening it in the panel.
-   *
-   * {@link toggle} is the panel's way in, and it does two things: it reads the directory and
-   * it records that the directory is open. The icons a scope frame draws need only the first.
-   * Going through `toggle` would have a frame on the canvas silently unfold rows in the right
-   * panel — two surfaces reading one cache is the point of this class, two surfaces sharing
-   * one surface's open-and-closed state is not.
-   *
-   * Idempotent and cheap to call again: `load` returns at once for a directory already read
-   * and for one already in flight. `force` re-reads one that was read.
+   * Load a directory without changing whether it is open in the panel. Frames can share the
+   * listing cache without changing panel navigation. Reuse loaded or in-flight requests
+   * unless `force` requests a refresh.
    */
   async ensure(
     ctx: TaskspaceTreeContext,
@@ -159,20 +146,11 @@ export class TaskspaceTreeState {
   }
 
   /**
-   * Creates what is being typed, and answers with it so a new file can be opened in the
-   * editor. Null when nothing was made, with {@link createError} saying why and the field
-   * left open over what was typed — a name already taken is worth correcting rather than
-   * retyping.
+   * Create the entered file or directory and return it, or leave the field open with
+   * `createError` on failure.
    *
-   * `name` is one entry, not a path: a separator in it is refused here rather than sent,
-   * so that what the field creates is always the thing the row it sits under will show.
-   * The leading dot is refused for the same reason the server refuses it — the tree does
-   * not draw dot-entries, and creating one would put a file beyond both the panel and its
-   * editor the moment it existed.
-   *
-   * The directory it went into is re-read afterwards rather than patched from the answer,
-   * so the new row arrives with the same metadata every other row has, and anything else
-   * written there since the folder was opened arrives with it.
+   * Require a single non-dot-prefixed name rather than a path. Refresh the parent listing
+   * afterward to include current metadata and concurrent filesystem changes.
    */
   async submitCreate(ctx: TaskspaceTreeContext, name: string): Promise<TaskspaceCreated | null> {
     const target = this.creating;

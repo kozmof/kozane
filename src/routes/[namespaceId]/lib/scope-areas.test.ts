@@ -18,7 +18,7 @@ function area(id: string, scopeId: string, posX: number, posY = 0): ScopeArea {
   return { id, scopeId, namespaceId: "ns", posX, posY, width: 100, height: 100 };
 }
 
-/** A board of point-sized cards: a card is in a rectangle when its point is. */
+/** Point-sized card fixtures whose rectangle membership depends only on position. */
 function boardOf(cards: Record<string, { x: number; y: number }>): CardIdsInRect {
   return (rect: WorldRect) =>
     new Set(

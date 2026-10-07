@@ -4,24 +4,11 @@
   import type { CardWithGlue, ScopeArea } from "$lib/types";
 
   /**
-   * A parent for `KozaneCanvas`, so a test can watch what it writes back.
+   * Bind canvas state through a reactive parent so tests can observe assignments, optimistic
+   * edits, and rollback rendering.
    *
-   * `cards`, `zoom`, `pendingScopeAreaRect` and `scopeAreas` are `$bindable` on the canvas,
-   * and what it writes to them only reaches a caller through the binding: the rollbacks that
-   * put a card back when a save fails reassign the whole array, and a drawn scope-area
-   * rectangle is written to the prop outright. Rendering the canvas directly gives it a plain
-   * object to write to, so those assignments land nowhere and the paths that matter most read
-   * as though they never ran.
-   *
-   * It is also the only way a drag is observable in the drawn output rather than only in
-   * the row it mutated. The gestures write positions through the rows — a frame's `posX`, a
-   * card's `posY` — and a plain prop object is not state, so nothing re-renders: the frame,
-   * its cards, and the icon strip under it all stay where they were drawn. A parent that owns
-   * the arrays as state is what turns those writes into styles a test can read off the box.
-   *
-   * The props this does not take are the ones it owns: the four bindings, and the visible
-   * list it derives from them. `scopeAreas` is taken as its initial value, under its own
-   * name, so a test still passes the frames the same way it passes them to the canvas.
+   * Own the four bound values and derive visible cards from them. Accept `scopeAreas` as the
+   * initial frame state.
    */
   type HarnessProps = Omit<
     ComponentProps<typeof KozaneCanvas>,
@@ -34,9 +21,8 @@
   let zoom = $state(1);
   let pendingScopeAreaRect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
   /**
-   * A proxy over the array the test handed in, not a copy of it: `$state` wraps that same
-   * array and its rows, so a caller still reads what a gesture wrote by looking at the rows
-   * it passed.
+   * Wrap the supplied array in a state proxy so tests can inspect gesture changes through the
+   * original rows.
    */
   let scopeAreas = $state(untrack(() => initialScopeAreas));
 

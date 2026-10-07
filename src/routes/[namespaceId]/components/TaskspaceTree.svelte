@@ -50,14 +50,12 @@
 
   async function submitCreate(name: string): Promise<void> {
     const made = await tree.submitCreate(ctx, name);
-    // A new file goes straight into the editor: naming it was the point at which its
-    // contents were on someone’s mind, and a folder has nothing to open.
+    // Open newly created files in the editor. Folders need no editor.
     if (made?.kind === "file") onOpenFile?.(made.path);
   }
 
   async function startCreate(directory: string, kind: TaskspaceCreateKind): Promise<void> {
-    // Opened first when it was closed: the field is drawn among the directory’s own rows,
-    // and typing into a folder that is not showing them would be typing into nothing.
+    // Expand the directory before displaying its name field.
     if (!tree.isExpanded(taskspaceId, directory)) await tree.toggle(ctx, taskspaceId, directory);
     tree.beginCreate(taskspaceId, directory, kind);
   }
@@ -123,10 +121,7 @@
   </span>
 {/snippet}
 
-<!-- Above the listing rather than in the place the new entry will sort into: where that
-     is depends on a name not typed yet, and a field that jumps once it is guessed wrong is
-     worse than one that simply stays put. Drawn outside the branches below so that naming a
-     file in a folder still loading does not have to wait for the listing. -->
+<!-- Keep the name field above the listing so it does not move as the name changes. Render it independently of loading state. -->
 {#if creatingHere}
   <TaskspaceCreateRow
     kind={creatingHere}
@@ -145,8 +140,7 @@
 {:else if node.loading && !node.entries}
   <div class={noteClass} style:padding-left={`${indent}px`}>Loading…</div>
 {:else if node.entries}
-  <!-- Only a directory that really is empty says so: one cut off by a limit comes back with
-       no rows too, and the note below is what happened to it. -->
+  <!-- Show empty state only for a complete, empty listing. A truncated listing may also have no rows. -->
   {#if node.entries.length === 0 && !node.truncated}
     <div class={noteClass} style:padding-left={`${indent}px`}>Empty</div>
   {/if}

@@ -65,8 +65,8 @@ describe("PATCH /[namespaceId]/api/cards/stacking", () => {
     );
 
     expect(response.status).toBe(200);
-    // The floor is 0, not the layer's actual lowest card (`lowId`, 1): zIndex defaults to 0
-    // for a card nothing has ever restacked, so "back" always clears that default too.
+    // Use zero as the floor so moving to the back also places the card behind untouched cards
+    // with the default zIndex.
     await expect(getCard({ db, partitionId, cardId: midId })).resolves.toMatchObject({
       zIndex: -2,
     });
@@ -92,8 +92,7 @@ describe("PATCH /[namespaceId]/api/cards/stacking", () => {
     );
 
     expect(response.status).toBe(200);
-    // `lowId` clears the base layer's own top (`highId`, zIndex 3); `otherId` clears only
-    // its own layer's top (itself, zIndex 10) rather than anything on the base layer.
+    // Move each card above the top of its own layer.
     await expect(getCard({ db, partitionId, cardId: lowId })).resolves.toMatchObject({ zIndex: 4 });
     await expect(getCard({ db, partitionId, cardId: otherId })).resolves.toMatchObject({
       zIndex: 11,

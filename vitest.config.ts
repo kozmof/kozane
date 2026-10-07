@@ -19,7 +19,7 @@ export default defineConfig({
     conditions: ["browser"],
     alias: {
       $lib: path.resolve("./src/lib"),
-      // Mirror the route aliases from `svelte.config.js` .
+      // Mirror the route aliases from `svelte.config.js`.
       $db: path.resolve("./src/db"),
       "styled-system": path.resolve("./styled-system"),
       "@libsql/client": libsqlNodeEntry,

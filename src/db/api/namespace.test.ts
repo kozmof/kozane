@@ -154,8 +154,7 @@ describe("deleteNamespace", () => {
   });
 
   it("promotes the oldest survivor when several could replace the default", async () => {
-    // Repeated because the bug this guards against is an unordered `limit(1)`: a single run
-    // can pick the right row by luck.
+    // Repeated unordered LIMIT queries must not skip rows.
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const d = await db();
       const first = await addNamespace({ db: d, name: "First", isDefault: true });

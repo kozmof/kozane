@@ -21,7 +21,10 @@ function card(id: string, posX: number, posY: number): CardWithGlue {
   };
 }
 
-/** A board at the origin of the page, unscrolled, at zoom 1: client and world coincide. */
+/**
+ * An unscrolled board at the page origin and zoom 1 has matching client and world
+ * coordinates.
+ */
 function fakeEl(): HTMLElement {
   return {
     scrollLeft: 0,

@@ -59,9 +59,7 @@ describe("ScopeArea", () => {
     const { container } = mount();
     const frame = container.querySelector<HTMLElement>("[data-scope-area-id='a1']")!;
 
-    // The whole reason a frame can be drawn under the cards at all: everything that works on
-    // bare canvas — clicking a card, dragging one, sweeping a selection — has to keep
-    // working over the middle of a frame.
+    // Keep canvas interactions available through the frame body.
     expect(frame).toHaveStyle({ "pointer-events": "none" });
     expect(screen.getByRole("button", { name: "Scope area Now" })).toHaveStyle({
       "pointer-events": "auto",
@@ -99,14 +97,8 @@ describe("ScopeArea", () => {
 });
 
 /**
- * That the frame is drawn at all, in both states.
- *
- * These assert the colour against `token.var` rather than against a literal, which is the
- * only form of this test that can fail usefully: jsdom keeps whatever string it is handed
- * and never resolves a custom property, so `style.border` reads the same whether the
- * variable exists or not. Comparing to the token system catches the one thing that went
- * wrong here — a name that does not resolve — because the expected value comes from the
- * same place `css()` gets it.
+ * Verify colors against generated tokens because jsdom cannot distinguish valid CSS variables
+ * from unresolved names.
  */
 describe("ScopeArea colours", () => {
   function frameBody(container: HTMLElement): HTMLElement {
@@ -119,8 +111,7 @@ describe("ScopeArea colours", () => {
     const { container } = mount({ focused: false });
     const body = frameBody(container);
 
-    // An unfocused frame is still a frame: it says where the scope lives on the board,
-    // which is true whether or not the board is filtered to it.
+    // Keep the frame visible when its scope is not the active filter.
     expect(body.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
     expect(body.style.background).toContain(token.var("colors.neutral.iconDim"));
   });

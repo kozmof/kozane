@@ -150,7 +150,7 @@ describe("deleteScopeFromNamespace", () => {
 
     // Scope still exists because p2's card remains
     expect(await getScope({ db: d, scopeId })).toBeDefined();
-    // p1's card is removed; p2's card is preserved
+    // Remove p1's card and preserve p2's card.
     expect(await getScopeRelsByCards({ db: d, cardIds: [card1] })).toHaveLength(0);
     expect(await getScopeRelsByCards({ db: d, cardIds: [card2] })).toHaveLength(1);
   });
@@ -188,8 +188,7 @@ describe("deleteScopeFromNamespace", () => {
 
     await deleteScopeFromNamespace({ db: d, namespaceId: p1, scopeId });
 
-    // Same argument as the taskspace case below: a frame on another board is someone's work
-    // in progress, and the cascade would take it with the scope.
+    // Preserve scopes with a frame on another board.
     expect(await getScope({ db: d, scopeId })).toBeDefined();
     expect(await getScopeAreasInNamespace({ db: d, namespaceId: p1 })).toEqual([]);
     expect(await getScopeAreasInNamespace({ db: d, namespaceId: p2 })).toHaveLength(1);
@@ -201,8 +200,7 @@ describe("deleteScopeFromNamespace", () => {
 
     expect(await deleteScopeFromNamespace({ db: d, namespaceId, scopeId })).toBe(true);
 
-    // The scope is someone else's work in progress: attached to a taskspace, not yet
-    // filed any cards into. Deleting it here would also null out that attachment.
+    // Preserve taskspace scopes that have no cards.
     expect(await getScope({ db: d, scopeId })).toBeDefined();
     expect((await getTaskspace({ db: d, taskspaceId }))?.scopeId).toBe(scopeId);
   });
@@ -220,8 +218,8 @@ describe("deleteScopeFromNamespace", () => {
     await addScopeRel({ db: d, scopeId, cardId: card1 });
     const taskspaceId = await addTaskspace({ db: d, namespaceId: p2, scopeId, name: "ws" });
 
-    // p1 drops its only card, emptying the scope of cards entirely — but p2's
-    // taskspace still refers to it.
+    // Keep the scope after its last card is removed because p2's taskspace still references
+    // it.
     await deleteScopeFromNamespace({ db: d, namespaceId: p1, scopeId });
 
     expect(await getScope({ db: d, scopeId })).toBeDefined();
@@ -260,8 +258,7 @@ describe("getScopesInNamespace", () => {
     const { d, p1, p2 } = await twoNamespaces();
     await addScope({ db: d, name: "Fresh" });
 
-    // The sidebar creates a scope with a name and nothing else; it has to survive the
-    // next poll on the board that created it.
+    // A newly named scope with no cards must survive the next board poll.
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p1 }))).toEqual(["Fresh"]);
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p2 }))).toEqual(["Fresh"]);
   });
@@ -329,8 +326,7 @@ describe("getScopesInNamespace", () => {
       height: 480,
     });
 
-    // A frame with nothing in it yet is the ordinary way this feature starts: drawn first,
-    // filled by dragging. The board that drew it must keep the scope through the next poll.
+    // An empty frame keeps its scope present in polling results.
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p1 }))).toEqual(["Framed"]);
     // And framing it on p1 places it, so it stops being the unattached scope everyone sees.
     expect(names(await getScopesInNamespace({ db: d, namespaceId: p2 }))).toEqual([]);
@@ -442,7 +438,7 @@ describe("getScopePartitionUsage", () => {
     expect(await getScopePartitionUsage({ db: d })).toEqual([{ scopeId, partitionId, cards: 2 }]);
   });
 
-  /** The grain this exists for: a namespace would collapse these two into one line. */
+  /** Two partitions produce distinct graph edges. */
   it("keeps two partitions of one namespace apart", async () => {
     const d = await createTestDB();
     const namespaceId = await addNamespace({ db: d, name: "P" });
@@ -493,8 +489,10 @@ describe("getScopePartitionUsage", () => {
     expect(usage.map(({ partitionId }) => partitionId).sort()).toEqual([b1, b2].sort());
   });
 
-  /** A taskspace places a scope on a namespace and on no partition, so it has nothing to report
-   *  here — the map draws those against the namespace rectangle instead. */
+  /**
+   * Taskspace links place scopes in namespaces without assigning partitions. The map draws
+   * those links to the namespace rectangle.
+   */
   it("says nothing about a scope placed only by a taskspace", async () => {
     const d = await createTestDB();
     const namespaceId = await addNamespace({ db: d, name: "P" });

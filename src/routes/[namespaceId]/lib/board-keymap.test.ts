@@ -39,9 +39,8 @@ describe("runKeyBindings", () => {
   });
 
   it("runs only the first of two bindings on one key", () => {
-    // The property the `if` chain this replaces held by giving every branch a `return`, and
-    // the one `validateUiOverrides` warns about: a config binding two actions to one key
-    // gets the earlier action, and the later one is unreachable.
+    // The first eligible binding wins when multiple actions share a key, matching the
+    // collision warning in `validateUiOverrides`.
     const first = spyBinding("footers", { keys: ["f"] });
     const second = spyBinding("panels", { keys: ["f"] });
     runKeyBindings(keyEvent("f"), [first, second]);
@@ -50,8 +49,8 @@ describe("runKeyBindings", () => {
   });
 
   it("passes over a binding whose condition does not hold rather than ending the dispatch", () => {
-    // A read-only export is the case: the focus-composer binding stands down, and a toggle
-    // sharing its key must still fire.
+    // Skip the unavailable composer action in read-only exports so another eligible binding
+    // can handle its key.
     const blocked = spyBinding("focus composer", { keys: ["f"], when: () => false });
     const fallback = spyBinding("toggle footers", { keys: ["f"] });
     expect(runKeyBindings(keyEvent("f"), [blocked, fallback])).toBe(true);
@@ -81,8 +80,7 @@ describe("runKeyBindings", () => {
   });
 
   it("ignores Shift for a binding that does not mention it", () => {
-    // How every letter shortcut behaves: `toggleWarpsShortcut` is `A`, which already
-    // arrives as a capital, so the binding matches by key alone.
+    // Match letter shortcuts by `event.key`, which already reflects capitalization.
     const binding = spyBinding("toggle warps", { keys: ["A"] });
     expect(runKeyBindings(keyEvent("A", true), [binding])).toBe(true);
   });
@@ -100,8 +98,7 @@ describe("runKeyBindings", () => {
   });
 
   it("lets a binding cancel the key itself", () => {
-    // Warp navigation does this: it cancels only once it has found somewhere to go, so
-    // arrowing past the last warp leaves the key to the browser.
+    // Cancel the arrow's default action only when warp navigation finds a destination.
     const event = keyEvent("ArrowUp");
     runKeyBindings(event, [{ name: "warp", keys: ["ArrowUp"], run: (e) => e.preventDefault() }]);
     expect(event.prevented).toBe(true);
@@ -187,8 +184,7 @@ describe("isTypingTarget", () => {
   it("is true for an element that takes text without being either", () => {
     const element = document.createElement("div");
     element.contentEditable = "true";
-    // jsdom does not derive `isContentEditable` from the attribute, so it is set directly:
-    // the property is what the guard reads, and what a browser would have set here.
+    // Set `isContentEditable` directly because jsdom does not derive it from the attribute.
     Object.defineProperty(element, "isContentEditable", { value: true });
     expect(isTypingTarget(element)).toBe(true);
   });

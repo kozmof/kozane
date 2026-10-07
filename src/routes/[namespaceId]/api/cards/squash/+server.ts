@@ -8,8 +8,7 @@ import { readJsonObject, requireString } from "../../../lib/request.js";
 
 type SquashFailure = Extract<SquashCardResult, { ok: false }>["reason"];
 
-// Worth saying in the client's own words rather than behind a generic banner: each of
-// these is something the user can do about the card they picked.
+// Return actionable messages for problems with the selected card.
 const FAILURE_MESSAGE: Record<SquashFailure, string> = {
   "not-found": "Card not found in namespace",
   indivisible: "Card text does not split into more than one card",
@@ -17,10 +16,8 @@ const FAILURE_MESSAGE: Record<SquashFailure, string> = {
 };
 
 /**
- * Replaces one card with a card per segment of its text. The split pattern is the server's
- * own — the same one `kozane card squash` uses — rather than anything the client sends: an
- * arbitrary regular expression from a request body is a cost this endpoint has no reason
- * to take on.
+ * Replace one card with a card per text segment. Use the server's shared split pattern rather
+ * than accepting arbitrary client regular expressions.
  */
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -31,9 +28,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const result = await squashNamespaceCard({ db, namespaceId, cardId, ...canvasBounds() });
   if (!result.ok) throw error(400, FAILURE_MESSAGE[result.reason]);
 
-  // Whole rows, as the create endpoint answers with: the positions were laid out and
-  // clamped here, so a client reconstructing them locally would draw the pieces somewhere
-  // else until the next snapshot poll moved them. The pieces start unglued.
+  // Return full stored rows so clients use the positions laid out and clamped here. The
+  // pieces start unglued.
   return json({
     cards: result.cards.map((card) => ({ ...card, glueId: null }) satisfies CardWithGlue),
   });

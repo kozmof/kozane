@@ -120,11 +120,8 @@ describe("loadTagIndex", () => {
   });
 
   /**
-   * Counted apart from the truncations rather than as one of them. It was a truncation with
-   * the reason `"unreadable"` and the path `"./"`, which both readers drew as "was not read in
-   * full — some files could not be read (for example ./)": a sentence about a bad file, in a
-   * taskspace whose directory no longer exists. The record is what is wrong here, and `missing`
-   * is what lets a reader be told to drop it.
+   * Report a missing taskspace separately from an incomplete scan so readers can suggest
+   * cleaning up its record.
    */
   it("counts a taskspace whose directory is gone as missing, not truncated", async () => {
     const { db, namespaceId } = await setup();
@@ -140,8 +137,8 @@ describe("loadTagIndex", () => {
 
     expect(truncated).toEqual([]);
     expect(missing).toEqual([taskspaceId]);
-    // Still recorded as walked, which is the only place the name in that notice comes from:
-    // a taskspace that could not be opened contributes no hit to carry one.
+    // Record the taskspace as walked even when it yields no hits so the notice can display
+    // its name.
     expect(taskspaces[taskspaceId]?.name).toBe("notes");
   });
 
@@ -168,14 +165,8 @@ describe("loadTagIndex", () => {
     });
 
     /**
-     * Each taskspace's walk is synchronous — `readdirSync` and `readFileSync` all the way
-     * down — so a gather over several of them used to be one uninterrupted block, and the
-     * board's once-a-second poll waited behind the whole of it. The walks are still
-     * synchronous; what changed is that the loop hands the event loop back between them.
-     *
-     * Asserted by counting what a queued callback got to run: a `setImmediate` scheduled
-     * before the gather fires while the gather is still going, which it cannot do if
-     * nothing yields.
+     * Verify that queued callbacks run between synchronous taskspace walks. Yielding only to
+     * a resolved promise would not let pending I/O run.
      */
     it("lets other work run between taskspaces", async () => {
       const { db, namespaceId, partitionId } = await setup();
@@ -194,7 +185,7 @@ describe("loadTagIndex", () => {
       finished = true;
 
       expect(ranDuringGather).toBe(true);
-      // And the gather is still whole: yielding must not lose a taskspace.
+      // Yielding must not omit a taskspace from the gather.
       expect(tags(hits)).toEqual(["mine", "one:file", "three:file", "two:file"]);
     });
 
@@ -232,13 +223,8 @@ describe("loadTagIndex", () => {
     });
 
     /**
-     * One budget for the loop, not one per taskspace.
-     *
-     * There was only the per-taskspace ceiling, so what a gather cost was that ceiling times
-     * however many taskspaces a workspace had — unbounded from the page's point of view, and
-     * spent inside a synchronous walk that the server does nothing else during. The taskspace
-     * that finds the pool empty says so, which is the same promise every other limit here
-     * makes: a taskspace half-read is never reported as a taskspace holding no tags.
+     * Verify a shared workspace budget in addition to per-taskspace limits. Report when the
+     * pool prevents a complete scan.
      */
     it("bounds what one gather costs across every taskspace in it", async () => {
       const { db, namespaceId } = await setup();
@@ -254,8 +240,7 @@ describe("loadTagIndex", () => {
       });
 
       expect(tags(hits)).toEqual(["first"]);
-      // Named through the record of what was walked, which a truncated taskspace is always
-      // in — it was walked, that is how it came to be truncated.
+      // A truncated taskspace still appears in the record of scanned taskspaces.
       expect(truncated.map(({ taskspaceId }) => taskspaces[taskspaceId]?.name)).toEqual([
         "b-notes",
       ]);
@@ -295,9 +280,8 @@ describe("loadTagIndex", () => {
     });
 
     /**
-     * Reuse is proved by planting an answer only the cache could give. Rewriting the stored
-     * hits and seeing them come back says the card query did not run — where re-querying and
-     * getting the same tags would have proved nothing at all.
+     * Replace cached hits with a unique fixture value to prove reuse rather than an
+     * equivalent fresh query.
      */
     it("uses the stored card hits rather than querying again", async () => {
       const { db, partitionId, cache } = await cachedSetup();
@@ -356,11 +340,7 @@ describe("loadTagIndex", () => {
       expect(Object.keys(readTagCache(root)!.scopes).sort()).toEqual(["*", namespaceId].sort());
     });
 
-    /**
-     * The cross-process case: a fresh process has an empty in-process file cache, so what it
-     * knows about a file it can only have got from disk. Planting an answer proves it came
-     * from there rather than from a re-read.
-     */
+    /** Seed the disk cache to prove a fresh process uses it without rereading the source file. */
     it("starts a new process warm from the file entries on disk", async () => {
       const { db, namespaceId, cache } = await cachedSetup();
       await seedTaskspace(db, namespaceId, "notes", ":ondisk\n");
@@ -466,8 +446,7 @@ describe("loadTagIndex", () => {
       expect(tags((await gather(db, cache)).hits)).toEqual(["perf"]);
     });
 
-    /** Not json is the easy corruption. This is the one that got through: the top of the file
-     *  says everything a reader checked, and the scope under it holds nothing to gather. */
+    /** Reject a valid cache header with malformed scope data. */
     it("rebuilds from a cache file that is plausible at the top and wrong underneath", async () => {
       const { db, partitionId, cache } = await cachedSetup();
       await addCard({ db, partitionId, content: ":perf" });

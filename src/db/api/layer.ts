@@ -4,7 +4,7 @@ import type { NeedsNamespace, NeedsNamespaceLayer, Layer } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
-/** Ordered the way the canvas stacks them: lowest position first, id as the tiebreak. */
+/** Choose the lowest position, using the ID to break ties. */
 export async function getAllLayers({ db, namespaceId }: NeedsNamespace): Promise<Layer[]> {
   return db
     .select()
@@ -45,9 +45,8 @@ export async function addLayer({
   isDefault = false,
 }: AddLayer): Promise<{ id: string; position: number }> {
   assertNameWithinLimit(name, "Layer name");
-  // The next position is computed inside the INSERT rather than read first: two concurrent
-  // creates would otherwise see the same max and both claim it. Nested transactions are not
-  // available here either — addLayer is itself called from inside one (moveCardsToNamespace).
+  // Compute the next position inside INSERT so concurrent creates cannot claim the same
+  // position. `addLayer` can already run inside a transaction.
   const [row] = await db
     .insert(layerTable)
     .values({
@@ -78,9 +77,8 @@ export async function deleteLayer({ db, namespaceId, layerId }: DeleteLayer): Pr
 type ReorderLayers = { db: DB; namespaceId: string; layerIds: string[] };
 
 /**
- * Why a reorder was refused. `stale` means the namespace has a different number of layers
- * than the caller listed — someone else added or deleted one — and is the only reason a
- * reload fixes on its own.
+ * Reason a reorder was refused. `stale` means the layer count changed since the caller loaded
+ * it and can be resolved by reloading.
  */
 export type ReorderRejection = "duplicate" | "stale" | "foreign";
 export type ReorderResult = { ok: true } | { ok: false; reason: ReorderRejection };
@@ -102,15 +100,8 @@ export async function reorderLayers({
     if (requested.size !== existing.length) return { ok: false, reason: "stale" };
     if (!existing.every(({ id }) => requested.has(id))) return { ok: false, reason: "foreign" };
 
-    // One statement rather than one per layer. Same shape as the position and zIndex
-    // updates in card.ts, including the ELSE, and safe for the same reason: the checks
-    // above prove `layerIds` is exactly this namespace's layer set, so no row the WHERE
-    // matches lacks a WHEN. `position` carries no unique index, so there is no
-    // half-applied ordering to collide with along the way either.
-    //
-    // The ELSE writes the column back to itself, so should the WHERE and the WHENs ever
-    // diverge, the row is left where it was rather than taking a NULL into a NOT NULL
-    // column and aborting the statement.
+    // Reorder layers in one CASE statement. The validated list includes every layer, and ELSE
+    // preserves unmatched positions.
     const whens = layerIds.map((layerId, position) => sql`WHEN ${layerId} THEN ${position}`);
     await tx
       .update(layerTable)

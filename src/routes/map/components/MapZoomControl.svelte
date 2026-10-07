@@ -3,10 +3,8 @@
   import { zoomPercent } from "../lib/view.js";
 
   /**
-   * The board's zoom control, in the board's corner and to the board's limits, so the two
-   * pages are zoomed the same way. The reading doubles as the way back: there is no scrollbar
-   * on the map to say how far it has been moved, so the one thing that always says where you
-   * are is also the thing that puts you back.
+   * Use the board's zoom-control placement and limits for consistent interaction. Clicking
+   * the zoom reading resets the map view.
    */
   let {
     zoom,

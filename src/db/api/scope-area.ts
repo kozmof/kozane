@@ -11,11 +11,8 @@ type NeedsNamespaceArea = NeedsNamespace & { scopeId: string; areaId: string };
 type Rect = BoardRect;
 
 /**
- * The frames drawn on one board, oldest first — uuidv7 ids already hold creation order, and
- * nothing here has another one to offer.
- *
- * Read by the page load and by the once-a-second snapshot poll, through
- * `loadNamespaceSnapshot`. `scope_area_namespace` is what keeps that off a full scan.
+ * Read a board's frames in UUIDv7 creation order for page loads and snapshot polls. The
+ * namespace index limits the query to this board.
  */
 export async function getScopeAreasInNamespace({
   db,
@@ -30,13 +27,7 @@ export async function getScopeAreasInNamespace({
 
 type AddScopeArea = NeedsNamespace & { scopeId: string } & Rect;
 
-/**
- * Draws another frame for a scope on this board.
- *
- * A plain insert, not an upsert: a scope may be framed in several places at once, so there
- * is nothing here for a second frame to conflict with. Which frame a later move or removal
- * acts on is settled by its own id.
- */
+/** Insert each frame separately so each gets its own ID. */
 export async function addScopeArea({
   db,
   namespaceId,
@@ -55,15 +46,7 @@ export async function addScopeArea({
 
 type MoveScopeArea = NeedsNamespaceArea & Rect;
 
-/**
- * Puts one frame somewhere else on the board, or makes it another size.
- *
- * The whole stored row comes back, so a caller that drew the frame where the pointer let go
- * can correct it to the clamped rectangle that was kept. Same contract as `moveWarp`.
- *
- * `namespaceId` and `scopeId` are checked alongside the id, which alone would do: the pair is
- * the access boundary, the same way `deleteWarp` checks a namespace it does not need.
- */
+/** Moving or resizing a frame checks namespace and scope ownership before returning the row. */
 export async function moveScopeArea({
   db,
   namespaceId,
@@ -89,11 +72,7 @@ export async function moveScopeArea({
   return updated[0];
 }
 
-/**
- * Takes one frame off the board. The scope keeps every card in it, and keeps its other
- * frames: an area says where a scope is drawn, not what belongs to it, and removing one by
- * accident must not be a way to lose a membership list.
- */
+/** Removing a frame preserves scope membership and other frames. */
 export async function deleteScopeArea({
   db,
   namespaceId,

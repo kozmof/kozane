@@ -13,7 +13,7 @@
  * An explicit `BODY_SIZE_LIMIT` takes precedence. Otherwise, the limit is derived from
  * `ui.contentMax` before the handler loads.
  *
- * `kozane open` starts this entry with `HOST` and `PORT` . Systemd socket activation and
+ * `kozane open` starts this entry with `HOST` and `PORT`. Systemd socket activation and
  * `SOCKET_PATH` are not supported here.
  */
 
@@ -24,7 +24,7 @@ import { bodySizeLimitFor, contentMax } from "../dist/lib/server/content-limit.j
 
 /**
  * Set `BODY_SIZE_LIMIT` before importing the handler, which reads it at module scope.
- * `bodySizeLimitFor` allows room for a card up to the workspace's `ui.contentMax` .
+ * `bodySizeLimitFor` allows room for a card up to the workspace's `ui.contentMax`.
  *
  * Keep an explicit environment setting. If the workspace configuration cannot be read, leave
  * the adapter's default in place and let the request hooks report the configuration error.
@@ -40,8 +40,8 @@ if (process.env.BODY_SIZE_LIMIT === undefined) {
 const { handler } = await import("../build/handler.js");
 
 /**
- * Read a non-negative integer from the environment, or return `fallback` . Reject invalid text
- * so a mistyped timeout cannot silently become `NaN` .
+ * Read a non-negative integer from the environment, or return `fallback`. Reject invalid text
+ * so a mistyped timeout cannot silently become `NaN`.
  */
 function seconds(name, fallback) {
   const raw = process.env[name];

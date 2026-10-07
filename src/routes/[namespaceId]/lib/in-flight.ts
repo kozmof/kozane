@@ -1,20 +1,10 @@
 /**
- * Work in flight that a snapshot must not be applied over, counted and versioned.
+ * Count active edits and version every begin/end transition to protect them from snapshot
+ * polling.
  *
- * The board is polled once a second, and the answer describes the database as it was when
- * the request was made. Applying that over an edit the user has since started would undo
- * it on screen, so a poll stands down while anything is in flight.
- *
- * The count alone is not enough. A whole begin/end pair can land while a request is
- * outstanding — a card dropped and saved inside one second is exactly that — and by the
- * time the response arrives the count is back to zero, so the guard that stood down before
- * the request would wave the same stale snapshot through after it. {@link version} is what
- * closes that window: it moves on both begin and end and never moves back, so a caller
- * that noted it beforehand can tell "nothing happened" from "something happened and
- * finished".
- *
- * Deliberately plain fields rather than `$state`: nothing renders from these, and a rune
- * here would make every drag frame a reactive write for no reader.
+ * Check both count and version because an edit can start and finish while a poll is in
+ * flight, leaving the count at zero but its response stale. Keep these fields nonreactive
+ * because they do not drive rendering.
  */
 export class InFlight {
   #count = 0;
@@ -26,8 +16,7 @@ export class InFlight {
   }
 
   end(): void {
-    // Floored rather than allowed negative: an unbalanced `end` would otherwise leave the
-    // count below zero and report the board as idle while a later `begin` is still open.
+    // Clamp the count to zero so an unmatched `end` cannot hide later activity.
     this.#count = Math.max(0, this.#count - 1);
     this.#version += 1;
   }

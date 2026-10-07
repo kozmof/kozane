@@ -41,8 +41,7 @@ describe("applyConnectionPragmas", () => {
       client.close();
     }
 
-    // The mode is a property of the file: a connection that never asks for WAL still gets
-    // it, which is what lets the read-only clients elsewhere stay as they are.
+    // WAL mode persists in the database file and applies to read-only connections.
     expect(await pragma(url, "journal_mode")).toBe("wal");
   });
 

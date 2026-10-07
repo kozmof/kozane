@@ -330,8 +330,7 @@ describe("CardComposer — selection mode", () => {
 
     await user.keyboard("r");
 
-    // One handle, one card: with several selected there is no saying which of them a drag
-    // on a shared handle would be about to widen.
+    // Show a resize handle only for a single selected card so its target is unambiguous.
     expect(screen.queryByRole("button", { name: /Resize/ })).not.toBeInTheDocument();
     expect(onResizeToggle).not.toHaveBeenCalled();
   });

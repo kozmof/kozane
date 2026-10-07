@@ -18,8 +18,8 @@ const file = (name: string, content = "x"): TaskspaceFileNode => ({
 });
 
 /**
- * A taskspace as `--include-scoped-files` bakes one in: two levels, one file of each kind
- * the walk can produce, and a directory the walk had to cut short.
+ * Export fixture with two directory levels, every file-result kind, and a truncated
+ * directory.
  */
 const tree: TaskspaceFileTree = {
   root: directory("", [
@@ -49,9 +49,7 @@ describe("findStaticNode", () => {
     });
   });
 
-  // The live endpoints normalize a path before resolving it; this reads what it is handed,
-  // so the empty segments a leading, trailing, or doubled slash produces are dropped rather
-  // than looked up as children named "".
+  // Ignore empty path segments from leading, trailing, or repeated slashes.
   it("ignores empty segments from leading, trailing, and doubled slashes", () => {
     for (const path of ["/src", "src/", "//src//"]) {
       expect(findStaticNode(tree, path)).toMatchObject({ kind: "directory", name: "src" });
@@ -62,8 +60,7 @@ describe("findStaticNode", () => {
     expect(findStaticNode(tree, "src/missing.ts")).toBeUndefined();
   });
 
-  // A file is a leaf: descending through one is a path that names nothing, not a path to a
-  // file inside it.
+  // Reject paths that descend through a file.
   it("answers nothing for a path that descends through a file", () => {
     expect(findStaticNode(tree, "README.md/inner")).toBeUndefined();
   });
@@ -79,8 +76,8 @@ describe("staticDirectoryEntries", () => {
       truncated: null,
       entries: [
         { name: "index.ts", kind: "file", size: 10, modifiedAt: null },
-        // A file the export could not carry is still a file that was there: it lists as one,
-        // with the size the walk saw, so the panel draws a row rather than a gap.
+        // List files excluded from the export with their recorded sizes so the panel can
+        // explain their absence.
         { name: "huge.log", kind: "file", size: 9_000_000, modifiedAt: null },
         // Not followed, and reported as itself.
         { name: "link", kind: "symlink", size: null, modifiedAt: null },
@@ -95,8 +92,7 @@ describe("staticDirectoryEntries", () => {
     expect(staticDirectoryEntries(vendor)).toEqual({ entries: [], truncated: "entries" });
   });
 
-  // Nothing in an export is read at a moment a viewer could be told about: the whole tree
-  // was walked once at build time, so every row says null rather than the build's clock.
+  // Use null read timestamps because the exported tree is fixed at build time.
   it("gives every entry a null modifiedAt", () => {
     const { entries } = staticDirectoryEntries(tree.root);
     expect(entries.every(({ modifiedAt }) => modifiedAt === null)).toBe(true);

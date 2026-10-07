@@ -1,13 +1,11 @@
 export const LOGIN_PATH = "/login";
 
-// Only allow post-login redirects back to a same-origin path. Reject absolute
-// URLs, protocol-relative ("//host") and backslash ("/\\host") forms that
-// browsers resolve as off-origin, and the login page itself. Anything else
-// collapses to "/". This is the open-redirect guard for the ?next= parameter.
+// Allow post-login redirects only to same-origin paths other than the login page. Fall back
+// to `/` for rejected values.
 //
-// Control characters and backslashes are refused anywhere in the value, not only right
-// after the leading slash: the URL parser strips tab and newline before resolving, so
-// "/\t/host" reaches the browser as "//host".
+// Reject absolute URLs, protocol-relative URLs, backslashes, and control characters. Check
+// the entire value because URL parsing removes tabs and newlines before resolving a path.
+//
 // oxlint-disable-next-line no-control-regex
 const UNSAFE_NEXT_CHARS = /[\x00-\x1f\x7f\\]/;
 

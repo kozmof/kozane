@@ -37,12 +37,8 @@ describe("activityCells", () => {
   });
 
   /**
-   * The case the old anchor lost. The grid used to be laid forward from the Sunday on or
-   * before today minus a year, and 53 weeks from there ends on the Saturday before this
-   * one whenever today is a Sunday — so today had no cell, and a day's card changes could
-   * be neither seen nor clicked. Every weekday is asserted rather than the Sunday alone,
-   * because the two anchors agree on the other six and a single case would have passed
-   * against the broken one.
+   * Verify that today appears in the activity grid for every weekday, including Sundays near
+   * the end of the range.
    */
   it("gives today a cell whichever weekday it falls on", () => {
     for (const day of [
@@ -58,8 +54,7 @@ describe("activityCells", () => {
     ]) {
       const cells = activityCells([{ day, cards: 1 }], day);
       expect(cells.filter((cell) => cell.day === day)).toHaveLength(1);
-      // The grid is whole weeks: it opens on a Sunday and closes on a Saturday, and today
-      // is in the last one of them.
+      // Cover whole weeks from Sunday through Saturday, including today in the final week.
       expect(cells[0].weekday).toBe(0);
       expect(cells.at(-1)?.weekday).toBe(6);
       expect(cells.slice(-7).some((cell) => cell.day === day)).toBe(true);
@@ -153,7 +148,7 @@ describe("tagHitsForDay", () => {
   });
 
   it("drops file hits, which have no change day to be asked about", () => {
-    // Keeping them would count them on every day at once; see the note on the function.
+    // Exclude file hits because the snapshot has no file change dates.
     expect(tagHitsForDay([fileHit], tagCards, "2026-03-01")).toEqual([]);
     expect(tagHitsForDay([fileHit], tagCards, null)).toEqual([fileHit]);
   });

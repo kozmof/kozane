@@ -59,10 +59,8 @@ describe("databaseSignature", () => {
   });
 
   /**
-   * The gap the percent-decode closes. A workspace under a directory with a space in its name
-   * reaches here encoded, and the literal string stats to nothing — which switched the
-   * snapshot ETag gate and the tag cache off, correctly and permanently, on those workspaces
-   * alone and with nothing to say so.
+   * Verify that percent-encoded file paths produce signatures, including workspace paths
+   * containing spaces.
    */
   it("signs a path whose URL form is percent-encoded", () => {
     const dir = join(tempRoot(), "my notes");
@@ -76,8 +74,8 @@ describe("databaseSignature", () => {
   });
 
   it("falls back to the raw path when the URL is not valid percent-encoding", () => {
-    // A lone `%` makes `decodeURIComponent` throw. The answer is the one a missing file gives
-    // — no signature, so no gate — rather than an error on the request path.
+    // Handle malformed percent encoding without failing the request. A missing file has no
+    // signature and bypasses the cache gate.
     expect(databaseSignature("file:/nowhere/100%/kozane.db")).toBeNull();
   });
 });

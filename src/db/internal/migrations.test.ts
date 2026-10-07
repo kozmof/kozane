@@ -18,26 +18,22 @@ function tempDir(): string {
 
 describe("resolveMigrationsFolder", () => {
   it("finds a folder that actually holds a journal", () => {
-    // The whole point of the walk: not "three levels up" but "the ancestor that has one".
-    // This module is imported from `src/`, `dist/`, and — bundled — from deep inside
-    // `build/server/chunks/entries/`, which is where counting levels stopped working.
+    // Find the ancestor containing migrations from source, CLI output, and nested server
+    // bundle layouts.
     const folder = resolveMigrationsFolder();
 
     expect(folder.endsWith("drizzle")).toBe(true);
-    // Proven by using it rather than by asserting a path: an in-memory database migrated
-    // against this folder reports every migration applied.
+    // Apply the migrations in memory to verify the migrations directory.
     expect(folder).toBeTruthy();
   });
 
   it("reads the workspace's real journal, so the status of a fresh database is knowable", async () => {
-    // The regression this pins. A mis-resolved folder made `getMigrationStatus` answer
-    // `"unknown"` for every database, which the server's schema gate turns into a 503 on
-    // every request — a workspace that is perfectly fine, reported as unreadable.
+    // Verify that bundled code finds migrations so a valid workspace is not rejected as
+    // unreadable.
     const status = await getMigrationStatus(`file:${join(tempDir(), "absent.db")}`);
 
     expect(status.state).toBe("missing");
-    // "missing" rather than "unknown" is the assertion: it means the journal was read and
-    // only the database file was absent.
+    // Missing status means the journal exists but the database does not.
     if (status.state === "missing") expect(status.latest?.tag).toMatch(/^\d{4}_/);
   });
 

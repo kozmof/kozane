@@ -34,9 +34,8 @@ export function readTaskspaceMarker(
   } catch {
     throw new Error(`Invalid taskspace marker: ${markerPath}`);
   }
-  // Named before the general check below, which would otherwise answer a marker written by
-  // any earlier Kozane with "invalid" — it is not malformed, it is the previous format, and
-  // the difference is the whole of what the reader can do about it.
+  // Detect the previous marker format before general validation so the error explains the
+  // required upgrade.
   if (
     typeof parsed === "object" &&
     parsed !== null &&

@@ -35,12 +35,8 @@
     /** Opens the file palette on the selection. Absent where there is nothing to open. */
     onOpenFilePalette?: () => void;
     /**
-     * Hands the keyboard to something in front of this bar — the file palette, which is the
-     * one overlay that is open while cards are selected.
-     *
-     * The palette stops the keys typed into it from reaching here, but only those: a press
-     * with focus anywhere else would still arrive, and `Delete` arriving would delete the
-     * very cards the panel in front is about.
+     * Suspend composer shortcuts while an overlay owns the keyboard, including when focus is
+     * outside the overlay's input.
      */
     suspendShortcuts?: boolean;
     /** The card currently showing one, so the button can read as the toggle it is. */
@@ -87,8 +83,7 @@
   let showNamespacePicker = $state(false);
   // Topmost first, to read the way the layer control and the canvas stack.
   const layerChoices = $derived(orderLayers(layers).reverse());
-  // The layer the picker shows as current: only when the whole selection shares one, so a
-  // mixed selection cannot look like it all sits somewhere it does not.
+  // Show a current layer only when every selected card shares it.
   const selectionLayerId = $derived(
     selectedCards.length > 0 && selectedCards.every((c) => c.layerId === selectedCards[0].layerId)
       ? selectedCards[0].layerId
@@ -128,9 +123,8 @@
     textareaEl?.focus();
   }
 
-  // The partitions change under the composer when the page moves to another namespace — warping
-  // there does not remount this component — and when a partition is deleted. Posting a partition
-  // the board no longer has is refused by the server, so fall back to what it does have.
+  // Reconcile the selected partition after namespace navigation or deletion because this
+  // component can be reused with a different partition list.
   $effect(() => {
     if (partitions.length === 0 || partitions.some(({ id }) => id === createPartitionId)) return;
     createPartitionId = defaultPartitionId;
@@ -144,8 +138,7 @@
         ? `selection:${selectedCards.map(({ id }) => id).join(",")}`
         : "create";
     if (context === loadedComposerContext) return;
-    // Not on the first run, which is the page opening: a textarea focused on arrival took the
-    // board's single-key shortcuts and every stray keystroke as card text.
+    // Do not focus on initial page load, when the board should receive single-key shortcuts.
     const opening = loadedComposerContext === null;
     loadedComposerContext = context;
     content = editingCard?.content ?? "";
@@ -250,10 +243,7 @@
   );
 </script>
 
-<!-- Every action button's shortcut lands here: a bare mark in the corner rather than
-     another bordered control competing with the button it belongs to. Purely visual — each
-     button carries its own `aria-label` with the shortcut in it, so this is hidden rather
-     than left to however a given screen reader flattens an absolutely positioned child. -->
+<!-- Show shortcut hints as visual labels within action buttons. Hide the hints from assistive technology because each button's accessible name already includes its shortcut. -->
 {#snippet shortcutHint(key: string)}
   <span
     aria-hidden="true"
@@ -277,8 +267,7 @@
       }}
     />
     {#if mode === "selection" && layerChoices.length > 1 && onSelectionLayerChange}
-      <!-- Sits beside the partition picker because it does the same kind of thing: both move
-           the selection to another home without touching what the cards say. -->
+      <!-- Place the layer picker beside the partition picker because both move selected cards without changing their text. -->
       <LayerDropdown
         layers={layerChoices}
         layerId={selectionLayerId}

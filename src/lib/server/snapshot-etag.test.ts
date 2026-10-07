@@ -70,17 +70,15 @@ describe("unchangedSnapshotEtag", () => {
 
   it("stops answering once the database has been written to", () => {
     rememberSnapshotEtag(dbUrl, "p1", '"tag"', snapshotReadSignature(dbUrl));
-    // A different length as well as different bytes: `fileSignature` documents that two
-    // same-length rewrites inside one filesystem timestamp tick are indistinguishable to
-    // it, and this test is about a commit being noticed, not about closing that gap.
+    // Change the length as well as the content to avoid the documented same-size,
+    // same-timestamp limitation of `fileSignature`.
     touchDatabase("one plus more");
     expect(unchangedSnapshotEtag(dbUrl, "p1")).toBeNull();
   });
 
   it("remembers nothing when the database moved while the read ran", () => {
-    // The read started before the commit and may not have seen it, so its tag must not be
-    // filed under the signature the commit produced — that would answer 304 with the board
-    // as it was before the write, for as long as nothing else moved the file.
+    // Do not associate a pre-commit snapshot with the post-commit signature, which would
+    // allow stale 304 responses.
     const readFrom = snapshotReadSignature(dbUrl);
     touchDatabase("one plus a commit mid-read");
     rememberSnapshotEtag(dbUrl, "p1", '"pre-commit"', readFrom);
@@ -96,8 +94,8 @@ describe("unchangedSnapshotEtag", () => {
   });
 
   it("declines for a database with no file behind it", () => {
-    // The in-memory case, and the reason the gate is off in most of the test suite: there
-    // is nothing to stat, so there is no way to know the database has not moved.
+    // An in-memory database has no file metadata to establish whether it has changed, so the
+    // gate stays off.
     rememberSnapshotEtag(":memory:", "p1", '"tag"', snapshotReadSignature(":memory:"));
     expect(unchangedSnapshotEtag(":memory:", "p1")).toBeNull();
     expect(unchangedSnapshotEtag("file::memory:?cache=shared", "p1")).toBeNull();
@@ -126,9 +124,8 @@ describe("unchangedSnapshotEtag", () => {
     const ids = Array.from({ length: SNAPSHOT_ETAG_NAMESPACES_MAX }, (_, i) => `p${i}`);
     for (const id of ids) rememberSnapshotEtag(dbUrl, id, `"${id}"`, snapshotReadSignature(dbUrl));
 
-    // The board left open on `p0`: every poll it makes is answered from here, so nothing
-    // ever re-remembers it. Without recency moving on a hit, this read leaves `p0` at the
-    // head of the queue and the insert below evicts the one namespace actively being polled.
+    // Cache hits must refresh recency so inserting another namespace does not evict the
+    // actively polled board.
     expect(unchangedSnapshotEtag(dbUrl, "p0")).toBe('"p0"');
     rememberSnapshotEtag(dbUrl, "fresh", '"fresh"', snapshotReadSignature(dbUrl));
 

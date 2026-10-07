@@ -7,24 +7,16 @@ import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "
 import type { TagHit } from "$lib/types";
 
 /**
- * The page draws rectangles it links away from and lines it draws on a selection, and both
- * are things that can look right and be wrong: a rectangle labelled with one partition's name
- * and sized by another's count, or a tag lighting the partitions of the tag above it.
- *
- * The geometry itself is `lib/map-layout.test.ts` — this is about what ends up in the document.
+ * Test rendered labels, links, sizes, and tag selection against their data. Pure geometry has
+ * separate layout tests.
  */
 
 /**
- * The day the heatmap cases pin the clock to, and the day the card fixtures below were
- * changed on. Written down once because the two have to agree: the page filters tag rows by
- * `tagCards[id].updatedDay === selectedDay`, so a fixture holding a fixed date and a test
- * reading its day off `new Date()` agreed only on the day the fixture was written, and
- * stopped asserting anything about day filtering from the next day on.
- *
- * A Sunday, which is the weekday `activityCells` used to leave today off the grid on.
+ * Use one fixed day for the clock and card fixtures so day filtering remains deterministic.
+ * Choose Sunday to cover the heatmap's week boundary.
  */
 const TODAY = "2026-09-06";
-/** A day inside the grid but not the selected one: the card a day filter has to leave out. */
+/** A date within the grid that the selected-day filter must exclude. */
 const EARLIER = "2026-09-04";
 
 const partition = (id: string, namespaceId: string, name: string, cards: number) => ({
@@ -85,23 +77,17 @@ function pageData(over: Record<string, unknown> = {}) {
   };
 }
 
-/** Where a line for the nth row of the tree starts: the panel's right edge, level with the
- *  middle of that row. Spelled out from the constants that place the panel rather than
- *  written down, so it is the same arithmetic the page does and not a copy of its answer. */
+/**
+ * Calculate the nth tag row's line origin from layout constants at the panel's right edge and
+ * row midpoint.
+ */
 const lineStart = (row: number) =>
   `M ${TAG_PANEL_LEFT + TAG_PANEL_WIDTH} ${TAG_PANEL_TOP + row * TAG_ROW_HEIGHT + TAG_ROW_HEIGHT / 2} Q `;
 
 const draw = (over: Record<string, unknown> = {}) =>
   render(MapPage, { props: { data: pageData(over) as never, params: {}, form: null } });
 
-/**
- * The map's own drawing, and what is inside it.
- *
- * Scoped to the surface rather than asked of the page, because the links out of the header
- * are `<svg>` too — "the svg on the page" stopped being an answer the day they became icons,
- * and a test that had gone on asking would have been reading a 16px picture of a treemap
- * instead of the treemap.
- */
+/** Query the map surface specifically because header navigation also contains SVG icons. */
 const MAP = '[role="presentation"] ';
 const mapSvg = (container: HTMLElement) => container.querySelector(`${MAP}svg`);
 const mapParts = (container: HTMLElement, selector: string) => [
@@ -120,15 +106,8 @@ const rectOf = (container: HTMLElement, name: string) =>
 describe("map page", () => {
   describe("card change heatmap", () => {
     /**
-     * Pinned rather than read off the clock — see {@link TODAY}, which the card fixtures
-     * carry too.
-     *
-     * Taking it from `new Date()` made these cases assert a different thing every day they
-     * ran, and they were the only cover the grid's own window had at the page level: on the
-     * day the window excluded today they failed here, correctly, and a suite that fails one
-     * day in seven is read as flaky rather than as right.
-     *
-     * Only `Date` is faked — the timers Svelte and testing-library run on are left alone.
+     * Pin Date to the fixture's TODAY value while leaving timers real for Svelte and
+     * testing-library.
      */
     const today = TODAY;
 
@@ -221,12 +200,7 @@ describe("map page", () => {
     expect(link?.getAttribute("href")).toBe("/p2");
   });
 
-  /**
-   * A namespace holding no cards anywhere has no area to be given and lands in the strip along
-   * the bottom. It has to arrive there saying which namespace it is and looking like the empty
-   * thing it is — drawn nameless and solid, as it once was, two of them read as a pair of
-   * rectangles belonging to no namespace at all.
-   */
+  /** Show empty namespaces as named empty-strip rectangles. */
   describe("a namespace with no cards in it", () => {
     const withEmpty = () =>
       draw({
@@ -258,11 +232,7 @@ describe("map page", () => {
     });
   });
 
-  /**
-   * The links out are icons now, so the anchor has to carry the name the picture no longer
-   * does — and the back link is the same picture whether it leads to the whole list or to
-   * one namespace's board.
-   */
+  /** Give icon links accessible names that identify their destinations. */
   describe("the way out", () => {
     const linkTo = (container: HTMLElement, href: string) =>
       [...container.querySelectorAll("header a")].find((a) => a.getAttribute("href") === href);
@@ -282,18 +252,15 @@ describe("map page", () => {
       }
     });
 
-    /** The list of namespaces beside them stays words: it is a set of choices to read, not a
-     *  way out, and three namespace names are not three pictures. */
+    /** Keep namespace choices as text labels. */
     it("leaves the namespace narrowing in words", () => {
       const { container } = draw();
       expect(linkTo(container, "/map?namespaceId=p1")?.textContent?.trim()).toBe("Namespace One");
     });
 
     /**
-     * Narrowed, the link no longer leads to the namespace list — it leads to one board — and
-     * the icon is the same drawing either way. So the name is shown rather than left to the
-     * label: the two destinations are not interchangeable, and nothing in the picture says
-     * which one you are about to get.
+     * Show the selected namespace name when the back link leads to its board rather than the
+     * namespace list.
      */
     it("shows the namespace it goes back to when the map is narrowed to one", () => {
       const { container } = draw({ namespaceId: "p1" });
@@ -326,10 +293,8 @@ describe("map page", () => {
     });
 
     /**
-     * Written on the element rather than reached through `css()`, and asserted here because
-     * losing it is silent. Panda extracts its classes by reading the source: a height
-     * interpolated from a constant gets a class name and no rule, so the row keeps whatever
-     * height its text came out at while every line drawn to it goes on assuming this one.
+     * Assert inline row height because Panda cannot extract a rule from runtime
+     * interpolation. Tag-line geometry requires the rendered height to match the constant.
      */
     it("pins the row to the height the lines are drawn from", () => {
       const { container } = draw();
@@ -366,19 +331,15 @@ describe("map page", () => {
       expect(tagPaths(container)).toHaveLength(1);
     });
 
-    /** `:perf` gathers what `:perf:cache` gathers, which is the whole point of a
-     *  subcategory — so selecting the parent reaches both partitions. */
+    /** Selecting a parent tag must include partitions reached by its descendants. */
     it("reaches everything under the tag, not only what carries it exactly", () => {
       const { container } = draw({ tag: "perf" });
       expect(tagPaths(container)).toHaveLength(2);
     });
 
     /**
-     * The line leaves the panel level with its own row, and it does so in the markup rather
-     * than once something has measured the page — which makes it right in the served
-     * HTML and in a static export opened without JavaScript.
-     *
-     * `docs` is the first row of this tree, so its line leaves at half a row down.
+     * Render tag-link origins from row geometry before measurement. The first row begins half
+     * a row height below the panel top.
      */
     it("leaves from its own row, without waiting to be measured", () => {
       const { container } = draw({ tag: "docs" });
@@ -387,7 +348,7 @@ describe("map page", () => {
 
     it("leaves from further down for a row further down", () => {
       const { container } = draw({ tag: "perf" });
-      // docs, perf, perf:cache — the second row.
+      // `perf` is the second row after `docs`.
       expect(tagPaths(container)[0].getAttribute("d")?.startsWith(lineStart(1))).toBe(true);
     });
 
@@ -406,8 +367,8 @@ describe("map page", () => {
       await fireEvent.scroll(panel);
       await tick();
 
-      // The whole line is redrawn — where it lands on the partition follows where it left from —
-      // so it is the near end that is checked, and it has moved by exactly the scroll.
+      // Check the line origin moves by the panel scroll offset. Its destination is recomputed
+      // too.
       const [x, y] = startsAt().split(" ").slice(1).map(Number);
       expect(x).toBe(TAG_PANEL_LEFT + TAG_PANEL_WIDTH);
       expect(y).toBe(TAG_PANEL_TOP + TAG_ROW_HEIGHT / 2 - 30);
@@ -500,17 +461,12 @@ describe("map page", () => {
   });
 });
 
-/**
- * Moving the map about. The arithmetic is `lib/view.test.ts`; these are about the gestures
- * reaching it — and about the one thing that can only go wrong here, which is a drag across a
- * partition opening that partition's board when it should have panned.
- */
+/** Test map gestures and click suppression separately from pure view arithmetic. */
 describe("panning and zooming", () => {
   const surface = (container: HTMLElement) =>
     container.querySelector<HTMLElement>('[role="presentation"]')!;
 
-  /** Every rectangle at once, as `x,y,w,h` strings — the cheapest way to say "the map
-   *  moved" or "the map did not". */
+  /** Serialize every rectangle's position and size to compare map movement. */
   const geometry = (container: HTMLElement) =>
     mapParts(container, "svg rect").map((r) =>
       ["x", "y", "width", "height"].map((a) => r.getAttribute(a)).join(","),
@@ -522,12 +478,7 @@ describe("panning and zooming", () => {
     fireEvent.pointerUp(el, { pointerId: 1, clientX: to[0], clientY: to[1] });
   };
 
-  /**
-   * The map opens with room around it rather than fitted to the window — see `DEFAULT_ZOOM` —
-   * and the control calls that 100%, because the size it opens at is the one a reader has to
-   * compare against. The literal is the point of the test: a reading of anything else on a
-   * map nobody has touched is a fraction of a view nobody has been shown.
-   */
+  /** Label the untouched opening scale as 100%. */
   it("opens reading 100%", () => {
     draw();
     expect(screen.getByText("100%")).toBeInTheDocument();
@@ -551,10 +502,7 @@ describe("panning and zooming", () => {
     }
   });
 
-  /**
-   * The packing covers the whole box, so a drag almost always begins on a partition — and a
-   * partition is a link. Without this, panning the map would open a board instead.
-   */
+  /** Suppress partition navigation after a pan that starts on its link. */
   it("does not follow the link a drag began on", async () => {
     const { container } = draw();
     const link = [...container.querySelectorAll("a")].find((a) =>
@@ -577,11 +525,7 @@ describe("panning and zooming", () => {
     expect(click.defaultPrevented).toBe(false);
   });
 
-  /**
-   * A browser sends a captured pointer's `click` to the capturing element instead of the link
-   * under it — something jsdom does not model — so capturing on the way down made every
-   * partition unclickable. Capture has to wait until the gesture is a drag.
-   */
+  /** Delay pointer capture until dragging begins so ordinary clicks can reach partition links. */
   it("captures the pointer only once the gesture is a drag", () => {
     const { container } = draw();
     const el = surface(container);
@@ -624,8 +568,7 @@ describe("panning and zooming", () => {
     expect(screen.getByTitle("At the size the map opens at")).toBeDisabled();
   });
 
-  /** A tag's line leaves from its row in the panel, which does not move with the map — so
-   *  panning has to move the far end of the line and leave the near end alone. */
+  /** Pan the map end of a tag link while keeping its panel origin fixed. */
   it("keeps a tag's line attached to its row while the map moves under it", async () => {
     const { container } = draw({ tag: "docs" });
     const before = tagPaths(container)[0].getAttribute("d")!;
@@ -638,16 +581,9 @@ describe("panning and zooming", () => {
   });
 });
 
-/**
- * What zooming a treemap is actually for. A partition can be too small to carry its name at the
- * size the map opens at, and the way to read it is to zoom in — which only works because the
- * boxes grow and the type does not. Zoom implemented as a transform over the finished drawing
- * would enlarge the name along with the box and leave it exactly as unreadable.
- */
+/** Zoom small regions until labels fit while keeping text size constant. */
 describe("zooming into something too small to read", () => {
-  // A long tail of partitions, as a real namespace has. The last of them is drawn about 44px
-  // wide at the size these tests render at — under the width a label needs, and over it once
-  // the map has been zoomed the whole way in.
+  // Use small tail partitions whose labels fit only after zooming in.
   const counts = [500, 380, 250, 120, 60, 30, 14, 7, 3, 1];
   const tiny = () =>
     draw({
@@ -671,7 +607,7 @@ describe("zooming into something too small to read", () => {
 
   it("labels it once zoomed in far enough to hold the label", async () => {
     const { container } = tiny();
-    // Far enough to reach the ceiling from where the map opens; the clamp absorbs the rest.
+    // Exceed the zoom ceiling to verify clamping.
     for (let i = 0; i < 40; i++) await fireEvent.click(screen.getByLabelText("Zoom in"));
     await tick();
 

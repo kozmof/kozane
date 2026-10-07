@@ -73,10 +73,8 @@
   }
 
   /**
-   * The pointer left the control while the popover was open. Rather than closing on the
-   * spot, watch where it goes: inside the corridor towards the popover it is still on its
-   * way in, and anywhere else it has left for good. The grace timer is the other half of
-   * that — a pointer parked in the corridor is not travelling anywhere.
+   * Keep the popover open while the pointer travels through its approach corridor. Close it
+   * if the pointer leaves that corridor or the grace timer expires.
    */
   $effect(() => {
     if (!safeArea) return;
@@ -125,7 +123,7 @@
     renamingId = null;
   }
 
-  /** The popover lists layers top first; the callback wants them bottom to top. */
+  /** Convert the top-first display order to the callback's bottom-first order. */
   function commitDisplayOrder(displayIds: string[]) {
     onReorderLayers([...displayIds].reverse());
   }
@@ -139,7 +137,7 @@
     dropTargetId = null;
   }
 
-  /** Keyboard equivalent of a drag: `delta` is -1 for up the list, 1 for down. */
+  /** Move a layer by keyboard. `delta` is -1 for up and 1 for down the list. */
   function nudge(layerId: string, delta: -1 | 1) {
     const reordered = reorderByNudge(ordered.map(({ id }) => id), layerId, delta);
     if (reordered) commitDisplayOrder(reordered);
@@ -270,16 +268,12 @@
         minWidth: "180px",
       })}
     >
-      <!-- A plain list rather than a listbox: every row carries its own reorder handle, ×,
-           and rename field, and ARIA forbids interactive descendants inside an option — a
-           screen reader would never reach them. Selecting the layer is the name button
-           below, which reports its own state with aria-pressed. -->
+      <!-- Use a plain list so each row's rename, reorder, and remove controls remain independently accessible. The layer selection button reports its state with `aria-pressed`. -->
       <ul class={listClass} aria-label="Layers">
         {#each ordered as layer (layer.id)}
           {@const isActive = layer.id === activeLayerId}
           {@const isRenaming = renamingId === layer.id}
-          <!-- Dragging the row reorders the stack; a click on the name selects, and a
-               double-click on it renames. -->
+          <!-- Drag to reorder, click the name to select, and double-click to rename. -->
           <li
             class={cx(
               rowClass,

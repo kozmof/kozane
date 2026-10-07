@@ -250,13 +250,7 @@ describe("parseWarp", () => {
   });
 });
 
-/**
- * The scope-area wrappers, which had been the one untested block in this file — 73% of its
- * statements and 64% of its branches, all of it here. They are thin, but "thin" is what the
- * rest of the file says too and every other wrapper is covered: what these assert is the URL
- * each one builds and the method it sends, which is exactly the thing a refactor gets wrong
- * silently and no type can catch.
- */
+/** Verify scope-area API wrappers build the correct URLs and HTTP methods. */
 describe("createScopeArea", () => {
   it("POSTs the whole rectangle to the scope's areas collection", async () => {
     const { fetcher, response } = makeFetcher();
@@ -300,8 +294,7 @@ describe("moveScopeArea", () => {
   });
 
   it("addresses the frame by its own id, not by its scope", () => {
-    // A scope may be framed in several places, so the area id is what distinguishes them —
-    // a URL built from the scope alone would move whichever frame the server found first.
+    // Identify the frame by its area ID because one scope can have several frames.
     const { fetcher } = makeFetcher();
     void moveScopeArea(fetcher, "ns-1", "scope-1", "area-second", {
       posX: 1,
@@ -364,9 +357,7 @@ describe("parseScopeArea", () => {
   });
 
   it("rejects a body that is not a frame", () => {
-    // Each branch of the three guards, because a frame built from a partial body is the
-    // failure the function exists to stop: it would be drawn at `undefined` and would file
-    // every card the next drag touched into the scope.
+    // Exercise each validation branch so incomplete frame responses cannot reach the board.
     const whole = {
       id: "area-1",
       scopeId: "scope-1",
@@ -426,8 +417,7 @@ describe("parseCard", () => {
     expect(parseCard({ ok: true })).toBeNull();
   });
 
-  // The failure the annotation it replaced could not catch: a body that is almost a card.
-  // Each of these used to reach `state.cards` and be drawn from.
+  // Reject incomplete card responses before they enter `state.cards`.
   it("rejects a card missing or mistyping a field the board draws with", () => {
     expect(parseCard({ ...row, posX: undefined })).toBeNull();
     expect(parseCard({ ...row, posX: "10" })).toBeNull();

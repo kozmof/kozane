@@ -7,9 +7,7 @@ describe("plural", () => {
     expect(plural(2, "card")).toBe("2 cards");
   });
 
-  // The two copies this replaced disagreed on exactly this: one returned the noun alone and
-  // its callers wrote the count themselves, the other returned both. Pinned so a caller can
-  // read one answer off the name.
+  // Return the count followed by the singular or plural noun.
   it("includes the count, so a caller never writes it twice", () => {
     expect(plural(3, "name")).toBe("3 names");
     expect(plural(3, "name")).not.toBe("names");

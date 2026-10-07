@@ -38,7 +38,7 @@ describe("zoomedTo", () => {
     const view = zoomedTo(FITTED_VIEW, SIZE, at, 2);
     const after = viewedArea(SIZE, view);
 
-    // The same fraction across the map before and after — which is what "stayed put" means.
+    // Preserve the point's relative position within the map across zooming.
     expect((at.x - after.x) / after.width).toBeCloseTo((at.x - before.x) / before.width, 6);
     expect((at.y - after.y) / after.height).toBeCloseTo((at.y - before.y) / before.height, 6);
   });
@@ -120,9 +120,10 @@ describe("pannedBy", () => {
     expect(view).toMatchObject({ panX: -170, panY: -120 });
   });
 
-  /** A drag is a function of where it began and how far the pointer has gone since, so
-   *  running past the edge costs nothing on the way back: bringing the pointer home brings
-   *  the map with it. */
+  /**
+   * Calculate dragging from the starting view and total pointer travel so returning the
+   * pointer restores the map after reaching a boundary.
+   */
   it("returns the map when the pointer returns, however far it went first", () => {
     const start: MapView = { zoom: 2, panX: -200, panY: -100 };
     pannedBy(start, SIZE, 9e4, 9e4);
@@ -130,12 +131,7 @@ describe("pannedBy", () => {
   });
 });
 
-/**
- * The property the whole approach rests on. Zooming lays the packing into a larger rectangle
- * rather than scaling a finished drawing, so it is only a zoom at all if the same workspace
- * comes out arranged the same way — a map that rearranged itself as you zoomed into it would
- * be a different map each time you looked.
- */
+/** Verify scale-invariant packing so zooming does not reorder regions. */
 describe("what a zoom does to the packing", () => {
   const partition = (id: string, namespaceId: string, cards: number): LayoutPartition => ({
     id,
@@ -174,8 +170,10 @@ describe("what a zoom does to the packing", () => {
     }
   });
 
-  /** Which is the point of doing it this way: the box grows, the title band does not, so a
-   *  partition too small to be labelled at 100% becomes large enough to carry one. */
+  /**
+   * Zoom the rectangle without scaling the title band so previously small partitions can
+   * become large enough for labels.
+   */
   it("grows the boxes without growing what is measured in pixels", () => {
     const fitted = layoutAt(FITTED_VIEW);
     const zoomed = layoutAt({ zoom: 2, panX: 0, panY: 0 });
@@ -199,16 +197,14 @@ describe("what a zoom does to the packing", () => {
 });
 
 describe("defaultView", () => {
-  /** Half the box in each direction, which is a quarter of the area — the rectangles are
-   *  drawn at half the size the box would fit them at. */
+  /** Half the width and height gives one quarter of the fitted area. */
   it("lays the packing out at half the size of the box", () => {
     const area = viewedArea(SIZE, defaultView(SIZE));
     expect(area.width).toBe(SIZE.width * DEFAULT_ZOOM);
     expect(area.height).toBe(SIZE.height * DEFAULT_ZOOM);
   });
 
-  /** Centred, not at a pan of zero: the map would otherwise open in the top-left corner with
-   *  the tag panel across it and the rest of the window empty. */
+  /** Centre the initial map view to keep it visible beside the tag panel. */
   it("centres it, leaving the same margin on both sides", () => {
     const area = viewedArea(SIZE, defaultView(SIZE));
     expect(area.x).toBeCloseTo(SIZE.width - (area.x + area.width), 6);
@@ -234,8 +230,7 @@ describe("defaultView", () => {
 });
 
 describe("zoomPercent", () => {
-  /** The whole point: a map nobody has touched reads 100%, not a fraction of a view nobody
-   *  has been shown. */
+  /** Show 100% for the untouched initial view. */
   it("calls the size the map opens at 100%", () => {
     expect(zoomPercent(defaultView(SIZE).zoom)).toBe(100);
   });
@@ -275,9 +270,8 @@ describe("isDefaultView", () => {
   });
 
   it("compares against the clamped default, so a box too small still has a way home", () => {
-    // Unclamped, the default of a tiny box is a pan the clamp would not allow, and nothing
-    // the user could reach would ever compare equal to it — leaving "back to the map"
-    // offered forever.
+    // Compare against a clamped default so the reset action can clear even in a tiny
+    // viewport.
     const tiny = { width: 40, height: 30 };
     expect(isDefaultView(clampView(defaultView(tiny), tiny), tiny)).toBe(true);
   });

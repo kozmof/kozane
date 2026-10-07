@@ -82,7 +82,7 @@ describe("ScopeAreaFiles", () => {
     const { container } = mount({ area: { ...AREA, posX: 1000, width: 120 } });
     expect(strip(container)).toHaveStyle({
       width: `${MIN_STRIP_WIDTH}px`,
-      // Right-aligned to the frame: 1000 + 120 - 260.
+      // Align the strip with the frame's right edge at 1000 + 120 - 260.
       left: `${1000 + 120 - MIN_STRIP_WIDTH}px`,
     });
   });
@@ -150,7 +150,7 @@ describe("ScopeAreaFiles", () => {
 
     expect(screen.queryByRole("button", { name: "Open file app.ts" })).not.toBeInTheDocument();
     expect(screen.getByText("app.ts")).toBeInTheDocument();
-    // A folder is still a folder: listing one needs nothing the board does not have.
+    // Folder browsing remains available with the board's existing data.
     expect(screen.getByRole("button", { name: "Open folder src" })).toBeInTheDocument();
   });
 

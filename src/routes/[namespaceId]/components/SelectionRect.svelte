@@ -5,9 +5,8 @@
   }: {
     rect: { x: number; y: number; w: number; h: number };
     /**
-     * What the rectangle is drawn in. Defaults to the selection accent, which is what a
-     * marquee is. A scope area being drawn passes its own, so the two rectangles — one that
-     * ends at mouseup, one that is about to become a frame — do not read as the same gesture.
+     * Rectangle color, defaulting to the selection accent. Scope drawing supplies a different
+     * color to distinguish it from marquee selection.
      */
     accent?: string;
   } = $props();

@@ -10,17 +10,9 @@
   } from "../lib/tag-rows.js";
 
   /**
-   * The tag tree, floating over the map at the corner `tagLineOrigin` draws from — so the
-   * numbers that place it and the numbers a tag's lines start at are one set of numbers.
-   *
-   * A scroller: over a window-height canvas there is no page scroll, and a tree taller than
-   * the window would otherwise have tags that could not be reached. What that costs is the
-   * scroll offset, reported through `onScroll` because the page's lines have to follow the
-   * rows they leave from.
-   *
-   * No vertical padding and no border, deliberately. `tagRowCenter` counts rows from this
-   * element's top edge, so anything between that edge and the first row is an offset every
-   * line below would be out by.
+   * Place the scrollable tag panel at the shared graph origin and report scroll offsets for
+   * link positioning. Avoid top padding and borders because row coordinates begin at this
+   * edge.
    */
   let {
     tree,
@@ -37,20 +29,14 @@
     onScroll: (scrollTop: number) => void;
   } = $props();
 
-  /** Cards, and only cards: the map gathers no file tags, so `total.files` is always zero
-   *  and a two-part label would be one part that never appears. */
+  /** Show only card totals because the map does not gather file tags. */
   const countLabel = (node: TagNode) => `${node.total.cards}`;
   const countDescription = (node: TagNode) =>
     `${node.total.cards} card${node.total.cards === 1 ? "" : "s"}`;
 
   /**
-   * The row height, as an inline `style` and never through `css()`.
-   *
-   * Panda extracts its atomic classes by reading the source, so a length interpolated from a
-   * constant is a length it cannot evaluate where it stands. It emits the class name at
-   * runtime all the same and no rule to go with it, which is silent in the worst way: the row
-   * is simply whatever height its text came out at. That is the measurement every tag line is
-   * drawn from, so it is the one thing here that must not be able to quietly not apply.
+   * Set row height with inline style. Panda cannot extract a rule from a runtime-interpolated
+   * constant, and tag-line geometry depends on this exact height.
    */
   const rowStyle = `height: ${TAG_ROW_HEIGHT}px`;
 

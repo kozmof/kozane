@@ -84,8 +84,7 @@ describe("PATCH /[namespaceId]/api/cards/[cardId]", () => {
 
     await PATCH(event(db, namespaceId, cardId, jsonRequest({ width: null })));
 
-    // Null is a value here, not an omission: the card goes back to following
-    // `ui.defaultCardWidth` rather than keeping the 360 it was just given.
+    // Null restores `ui.defaultCardWidth` rather than retaining the previously pinned width.
     await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({ width: null });
   });
 

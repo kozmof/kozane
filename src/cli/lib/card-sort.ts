@@ -2,18 +2,11 @@ import type { Card } from "../../db/api/types.js";
 import { compareIds } from "../../lib/order.js";
 
 /**
- * The orders `kozane card list --sort` offers, and the column each one prints.
+ * Define the sort orders and displayed values for `kozane card list --sort`.
  *
- * Sorting happens here rather than in an `ORDER BY` because `card list` has three query
- * paths — a namespace's cards, a taskspace scope's members, and the cards tied directly to a
- * taskspace — and each has already materialised its whole list by the time anything is
- * printed. One comparator over the finished list is one behaviour to document and to test;
- * three `ORDER BY` clauses would be three places for the orders to drift apart. It is the
- * same choice `cardNearest` makes for distance.
- *
- * The cost of that choice is that `--sort` holds a namespace's whole card list in the CLI
- * process and sorts it there. It is the list `card list` was already holding to
- * print it, so sorting adds no read; what it rules out is ever streaming the listing.
+ * All three query paths already load the complete result before printing. Sort those results
+ * with one comparator so namespace, scoped-taskspace, and direct-taskspace listings agree.
+ * Sorting adds no database read but requires the complete list in memory.
  */
 
 export const CARD_SORT_KEYS = ["created", "updated", "gap"] as const;
@@ -21,22 +14,14 @@ export const CARD_SORT_KEYS = ["created", "updated", "gap"] as const;
 export type CardSortKey = (typeof CARD_SORT_KEYS)[number];
 
 /**
- * The fields the orders below read. `card list` selects these on every path.
- *
- * A `Pick` of the row rather than three field names written out again, so renaming a column
- * is a compile error here as well as in the queries. The import is type-only: this module
- * holds the ordering rules and reaches no database to apply them.
+ * Schema-derived fields required for sorting. Use a type-only import so this module performs
+ * no database access.
  */
 export type CardTimes = CardStamps & Pick<Card, "id">;
 
 /**
- * The two columns an order actually reads. {@link sortCards} needs the id as well, to break
- * a tie; nothing that only prints a value does — which is what lets `kozane card show
- * --times` render its lines through the same {@link sortColumn} the listing prints.
- *
- * {@link CardTimes} is written as this plus the id, rather than as a second `Pick` naming
- * the same two columns again, so the relationship between them is the declaration rather
- * than something a reader has to notice by comparing two lists.
+ * Timestamp columns used to format a sort value. {@link CardTimes} adds the ID needed to
+ * break sorting ties. `card show --times` can use {@link sortColumn} without an ID.
  */
 export type CardStamps = Pick<Card, "createdAt" | "updatedAt">;
 
@@ -45,80 +30,44 @@ export function isCardSortKey(value: unknown): value is CardSortKey {
 }
 
 /**
- * The range a card timestamp can hold and still name a moment this app could have written.
- * Read here by {@link namesAMoment}, and by `kozane doctor`, which reports the rows outside
- * it — one range rather than one per reader, so what a listing prints `invalid` for and what
- * `doctor` reports cannot come to disagree.
+ * Timestamp bounds used by `kozane doctor`.
  *
- * The two ends are two different rules, and both belong to the same column:
+ * The lower bound is one second after the epoch so diagnostics detect rows that inherited
+ * migration 0011's `DEFAULT 0`. Such timestamps remain printable.
  *
- * - The low end is one second past the epoch, and is about the `DEFAULT 0` migration 0011
- *   had to give both columns to add them NOT NULL to a table with rows in it.
- *   SQLite cannot drop a column default afterwards, so an `INSERT INTO card` naming neither
- *   column succeeds and lands the row at the epoch rather than failing. Such a row reads
- *   perfectly well — as 1970 — which is why it is `doctor`'s business rather than
- *   {@link sortColumn}'s.
- * - The high end is the largest instant a `Date` can represent. Past it, or below the
- *   matching negative, drizzle hands the column back as an Invalid Date: a card
- *   {@link sortCards} can place — last, deliberately — but can print no time for.
- *
- * Nothing in the app writes a card outside this range: inserts stamp both columns from one
- * moment (see `addCard`), and `db import` names both. What lands here is hand-written SQL.
+ * The upper bound is the largest instant a `Date` can represent. Values outside the
+ * representable range produce invalid dates, which the listing labels and sorts separately.
  */
 export const CARD_STAMP_EARLIEST = new Date(1_000);
 export const CARD_STAMP_LATEST = new Date(8_640_000_000_000_000);
 
 /**
- * Whether a column drizzle handed back can be printed at all, which is the upper half of
- * {@link CARD_STAMP_LATEST} asked of one value: every instant a `Date` can represent has a
- * finite `getTime`, and the Invalid Date an out-of-range column becomes does not.
- *
- * Asked rather than assumed, because `toISOString` throws `RangeError: Invalid time value`
- * on such a date — which used to leave `card list` printing one line of error in place of
- * the whole listing.
+ * Check whether a date has a finite timestamp before formatting it. `toISOString()` throws
+ * for an invalid date.
  */
 export function namesAMoment(at: Date): boolean {
   return Number.isFinite(at.getTime());
 }
 
 /**
- * What a listing prints in place of a timestamp that names no moment.
- *
- * The columns are plain integers, so a hand-edited row can hold one too large — or too
- * negative — for a `Date` to represent, and drizzle hands such a column back as an Invalid
- * Date. `kozane doctor` reports those rows; this is what they read as until someone does.
- *
- * A word rather than a blank, so a column that could not be filled is not read as a column
- * that was empty. And a word rather than the `RangeError: Invalid time value` that
- * `toISOString` throws on such a date, which used to leave the command printing one line of
- * error in place of the whole listing — hiding every sound card in the namespace to
- * report a problem with one of them.
+ * Text displayed for an invalid timestamp. Use an explicit value so an unreadable date is
+ * distinguishable from an empty column.
  */
 const UNREADABLE = "invalid";
 
 /**
- * The distance between a card's two timestamps — how long it stood before its text was
- * rewritten — and never negative.
+ * Return the nonnegative interval between creation and the last text update.
  *
- * A row whose `updated_at` precedes its `created_at` is one nothing in the app can write,
- * and only a hand-edited database or a doctored import can hold. It counts as zero, which
- * is what `formatGap` prints for it too. Clamped here rather than at the column alone,
- * because a card that sorted ahead of every untouched card while printing the same `0s`
- * they print would be a listing offering no account of its own order.
- *
- * `NaN` when either column names no moment: `Math.max` propagates it, `formatGap` prints
- * {@link UNREADABLE} for it, and {@link compareValues} sorts it last.
+ * Clamp negative intervals to zero to match `formatGap`. If either timestamp is invalid,
+ * propagate `NaN` so formatting shows {@link UNREADABLE} and sorting places it last.
  */
 function gapMilliseconds(card: CardStamps): number {
   return Math.max(0, card.updatedAt.getTime() - card.createdAt.getTime());
 }
 
 /**
- * One order's two halves, which have to agree: the number the listing is sorted by, and the
- * string it prints. `gap` clamps a backwards interval in both, so the card sorts where it
- * prints, and an unreadable column sorts last in one and reads {@link UNREADABLE} in the
- * other. A key whose halves are entries in one object cannot gain either treatment in one
- * and not the other.
+ * Pair each sort value with its display formatter so clamping and invalid-value handling
+ * remain aligned.
  */
 type CardOrder = {
   /** Ascending, and `NaN` when the columns it reads name no moment. */
@@ -128,13 +77,8 @@ type CardOrder = {
 };
 
 /**
- * Each key declared as one entry, so adding a fourth order is adding one entry here.
- *
- * The values ascend the way each key reads: oldest card first, least recently edited first,
- * shortest interval first. A card never edited since it was added has a gap of zero, so
- * `--sort gap` puts the untouched cards first and the long-reconsidered ones last.
- *
- * Timestamps print to the second, which is the precision the columns are stored at.
+ * Define each sort key and formatter together. Sort ascending by creation time, update time,
+ * or nonnegative gap. Print timestamps at stored second precision.
  */
 const ORDERS: Record<CardSortKey, CardOrder> = {
   created: { value: (card) => card.createdAt.getTime(), column: (card) => iso(card.createdAt) },
@@ -148,15 +92,8 @@ function iso(at: Date): string {
 }
 
 /**
- * Ascending, with a value that names no moment placed after every value that does.
- *
- * `NaN` is neither less than nor greater than a number, so a plain subtraction leaves such
- * a card wherever the sort happened to walk past it — and leaves the comparator itself
- * inconsistent, since two readable cards can each compare equal to the unreadable one while
- * ordering against each other, which is not an ordering `Array.prototype.sort` is entitled
- * to make anything of. Ranking it last makes the order total again, and puts the card that
- * could not be placed where a reader will see it: at the end, printed as
- * {@link UNREADABLE}.
+ * Compare values in ascending order, placing `NaN` after valid values. Handle it explicitly
+ * because subtraction cannot define a consistent ordering for invalid timestamps.
  */
 function compareValues(a: number, b: number): number {
   if (Number.isFinite(a) && Number.isFinite(b)) return a - b;
@@ -166,14 +103,10 @@ function compareValues(a: number, b: number): number {
 }
 
 /**
- * Ascending by the key, with the id breaking ties through {@link compareIds}.
+ * Return a new array sorted by the requested key, with {@link compareIds} breaking ties.
  *
- * `reverse` flips the whole comparison, ties included, so the listing is the exact reverse
- * of the one without it — two cards created in the same second keep swapping places with
- * their neighbours rather than staying pinned while everything around them moves. An
- * unreadable timestamp is carried along by that: last without `reverse`, first with it.
- *
- * Returns a new array; the caller's is left alone.
+ * `reverse` reverses the full comparison, including ties and invalid timestamps. Invalid
+ * timestamps appear last normally and first when reversed.
  */
 export function sortCards<T extends CardTimes>(cards: T[], key: CardSortKey, reverse = false): T[] {
   const { value } = ORDERS[key];
@@ -183,11 +116,7 @@ export function sortCards<T extends CardTimes>(cards: T[], key: CardSortKey, rev
   );
 }
 
-/**
- * Largest unit first, and stopping at days: months and years are not fixed lengths, so `2y`
- * is not something an interval alone can be turned into without deciding which months it
- * crossed. A card reconsidered after two years reads `730d`.
- */
+/** Format intervals using fixed units up to days. Months and years require calendar context. */
 const GAP_UNITS = [
   { suffix: "d", ms: 86_400_000 },
   { suffix: "h", ms: 3_600_000 },
@@ -196,19 +125,10 @@ const GAP_UNITS = [
 ] as const;
 
 /**
- * An interval in its largest whole unit: `0s`, `45s`, `12m`, `3h`, `5d`.
+ * Format an interval in its largest whole unit, such as `45s`, `12m`, `3h`, or `5d`.
  *
- * Truncated rather than rounded, so the number never claims more time than has passed — a
- * card rewritten twenty hours after it was added reads `20h`, not `1d`. Timestamps are
- * stored to the second, so anything under a second is a card added and edited within the
- * same second and reads `0s`.
- *
- * Anything below the smallest unit reads `0s`, a negative interval included: that matches
- * the clamp `gapMilliseconds` applies before anything is ordered by it, so the column and
- * the order agree. The clamp stands for callers reaching this with a raw difference of
- * their own. An interval that is not a number at all — one end of it naming no moment —
- * reads {@link UNREADABLE} instead, since `0s` would claim a card was rewritten the second
- * it was written.
+ * Truncate rather than round. Values below one second, including negative intervals, print as
+ * `0s`. Invalid intervals print as {@link UNREADABLE}.
  */
 export function formatGap(milliseconds: number): string {
   if (!Number.isFinite(milliseconds)) return UNREADABLE;
@@ -218,11 +138,7 @@ export function formatGap(milliseconds: number): string {
   return "0s";
 }
 
-/**
- * The column `--sort` adds to each listed card: the timestamp it sorted on, or the interval
- * for `gap`. Also each line of `kozane card show --times`, so a card reads the same way
- * whichever of the two printed it.
- */
+/** Format the selected sort value for listings and `card show --times` consistently. */
 export function sortColumn(card: CardStamps, key: CardSortKey): string {
   return ORDERS[key].column(card);
 }

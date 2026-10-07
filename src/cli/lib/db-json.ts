@@ -8,48 +8,27 @@ import { plural } from "./plural.js";
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 8;
 /**
- * Version 7 is the first written after `project` and `bundle` became `namespace` and
- * `partition`, and it is still the oldest that can be read.
+ * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
  *
- * Version 8 added `scope_area`, and did not move this floor. A table that did not exist
- * when a dump was written is not a table the dump half-answers — it is one it has nothing to
- * say about, and the right reading of a version 7 dump is that no scope had been framed yet.
- * {@link TABLE_ORDER} records the version each such table arrived in, and `parseDump` reads a
- * missing one as empty for a dump older than that and demands it for one that is not. That is
- * the whole of the accommodation: no column is translated and no value is invented.
+ * Version 8 adds `scope_area`. `parseDump` treats that table as empty in older supported
+ * dumps and requires it in versions that include it. {@link TABLE_ORDER} records each table's
+ * first version.
  *
- * The floor exists for something else, which is why it does not move for this:
- *
- * The floor used to be 2, and every version between carried an upgrade step: filling
- * `is_default`, rebuilding the default layers, defaulting the warps, filling the card
- * timestamps. Those are gone. The rename is not a column a step can fill in — a version 6
- * dump names its tables `project` and `bundle` throughout, and reading one would mean
- * carrying a translation of every table and foreign key in the file, indefinitely, for
- * dumps taken before a beta rename.
- *
- * So an older dump is refused rather than half-read. The cost is real and is the point of
- * saying so here: a dump is a user's backup, and one taken before this release can no
- * longer be imported by `kozane db import`. A workspace still on the old schema should be
- * migrated instead — migration 0014 renames the database in place and keeps every row.
+ * Dumps before version 7 are rejected. Migrate an old workspace database in place before
+ * exporting it. Migration 0014 renames the tables without discarding rows.
  */
 const OLDEST_SUPPORTED_IMPORT_VERSION = 7;
 
 /**
- * The tables a dump carries, in the order rows may be inserted: a table's foreign keys all
- * point at one already written. The reverse of this order is what a restore deletes in.
+ * Tables in foreign-key insertion order. Restore deletes them in reverse order.
  *
- * The order and the sort are decisions the schema does not hold, so they are written here.
- * The columns are not: they are read off the Drizzle table below, because a column added
- * to the schema and not to this list is silently dropped by `kozane db export` — which is
- * how `namespace.is_default` was lost after migration 0003 — and a list restated by hand
- * could only ever be checked against the schema after the fact. Drizzle reports them in
- * declaration order, which is the order this list held them in.
+ * Declare ordering here and derive columns from the Drizzle schema so new columns are
+ * included in exports automatically.
  */
 const TABLE_ORDER = [
   { name: "namespace", orderBy: ["id"] },
   { name: "scope", orderBy: ["id"] },
-  // After both the tables it points at, and before `card`, which it does not point at but
-  // reads as belonging beside — a frame is part of how a board is laid out.
+  // Place the frame table after its referenced tables and beside the card layout data.
   { name: "scope_area", orderBy: ["id"], since: 8 },
   { name: "partition", orderBy: ["id"] },
   { name: "layer", orderBy: ["id"] },
@@ -57,8 +36,7 @@ const TABLE_ORDER = [
   { name: "taskspace", orderBy: ["id"] },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
-  // Grouped by glue rather than sorted by the primary key, which is `card_id` alone: a
-  // dump read by a person is easier to check when a group's members are adjacent.
+  // Keep glue members beside their groups in the dump.
   { name: "glue_rel", orderBy: ["glue_id", "card_id"] },
   { name: "scope_rel", orderBy: ["scope_id", "card_id"] },
 ] as const;
@@ -72,12 +50,8 @@ const schemaColumns = new Map(
 );
 
 /**
- * The tables, their columns, and the order rows come back in.
- *
- * Exported so a test can assert that {@link TABLE_ORDER} still names every table the schema
- * has — the one half of this that is not derived, and so the one half that can drift. A
- * table added to the schema and left out here is exported as nothing at all, which is the
- * larger version of the column bug this derivation removes.
+ * Exported tables, their schema-derived columns, and row ordering. Export this list so tests
+ * can verify that it includes every schema table.
  */
 export const TABLES = TABLE_ORDER.map((table) => ({
   ...table,
@@ -116,10 +90,8 @@ function selectSql(table: (typeof TABLES)[number]): string {
 }
 
 /**
- * A multi-row INSERT for `rowCount` rows of `table`. Sized by the caller through
- * {@link chunked}, the same way every other bulk writer here sizes one — a restore used to
- * spend a round trip per row, which on a workspace of any size is the slowest thing the
- * CLI does.
+ * Build a multi-row insert for `rowCount` rows. The caller uses {@link chunked} to stay
+ * within the parameter budget.
  */
 function insertSql(table: (typeof TABLES)[number], rowCount: number): string {
   const columns = table.columns.map(quoteIdent).join(", ");
@@ -140,14 +112,7 @@ function emptyTables(): TableRows {
   return Object.fromEntries(TABLES.map((table) => [table.name, []])) as unknown as TableRows;
 }
 
-/**
- * One row, narrowed to what JSON can carry.
- *
- * `table` is named in both refusals below because this is `kozane db export`, and the
- * column name alone does not locate the problem: `content`, `name` and `id` each belong to
- * several tables, and a dump that cannot be written is something the holder of the workspace
- * has to go and look at.
- */
+/** Report the table and column when a value cannot be represented in JSON. */
 function rowToJson(row: Record<string, unknown>, table: TableName): JsonObject {
   const next: JsonObject = {};
   for (const [key, value] of Object.entries(row)) {
@@ -161,12 +126,9 @@ function rowToJson(row: Record<string, unknown>, table: TableName): JsonObject {
       continue;
     }
 
-    // A backstop rather than a live path, and worth saying so: the client is opened with
-    // libsql's default `intMode`, which reads integer columns as JavaScript numbers and
-    // refuses one outside the safe range during the `SELECT` itself — so a bigint does not
-    // reach here, and an oversized integer is reported by the wrapper in `exportDbJson`
-    // instead. This stays for the configuration where it would, and converts rather than
-    // refuses, because an integer that fits is an ordinary value whatever its type.
+    // The default client rejects oversized integers during `SELECT`, before they reach this
+    // branch. Support clients configured to return bigints by converting values that fit
+    // safely in a number.
     if (typeof value === "bigint") {
       const asNumber = Number(value);
       if (!Number.isSafeInteger(asNumber))
@@ -175,9 +137,8 @@ function rowToJson(row: Record<string, unknown>, table: TableName): JsonObject {
       continue;
     }
 
-    // Reached by a BLOB, which libsql hands back as an `ArrayBuffer`. No column in the
-    // schema is one, so getting here means the database holds a value the schema does not
-    // describe — a hand-edited file, or one written by something other than Kozane.
+    // A BLOB arrives as an `ArrayBuffer`. The schema has no BLOB columns, so this value is
+    // invalid for an export.
     throw new Error(`Unsupported database value for ${table}.${key}`);
   }
   return next;
@@ -230,10 +191,7 @@ function parseDump(input: unknown): DbJsonDump {
 
   for (const table of TABLES) {
     const tables = dump.tables as Partial<TableRows>;
-    // A table added after this dump was written is read as empty rather than as missing. See
-    // the note on {@link OLDEST_SUPPORTED_IMPORT_VERSION}: the dump is not incomplete, it
-    // predates the table, and the rows it would hold are ones that did not exist. Written
-    // back onto the dump so the insert loop below finds the key like any other.
+    // Treat tables omitted by older dumps as empty.
     const since = "since" in table ? table.since : undefined;
     if (since !== undefined && dump.version < since && tables[table.name] === undefined) {
       tables[table.name] = [];
@@ -273,14 +231,8 @@ export async function exportDbJson(
       try {
         rows = (await client.execute(selectSql(table))).rows;
       } catch (e) {
-        // The read itself can fail on a value the client will not hand over at all: an
-        // integer outside the safe range comes back as a bare RangeError naming neither the
-        // table nor the column it was in. `kozane db export` is where someone finds out
-        // their workspace holds one, and "Received integer which cannot be safely
-        // represented as a JavaScript number" on its own gives them nowhere to look.
-        // `cause` as well as the message: the wording below is what the user reads, and the
-        // original is what a stack trace needs — `isUniqueConstraintError` and its
-        // neighbours in `db/api/utils` walk the chain for exactly this reason.
+        // Add the table name when a read fails, including when the client rejects an unsafe
+        // integer. Preserve the original error as `cause` for diagnostics.
         throw new Error(
           `Failed to read table ${table.name} for export: ${e instanceof Error ? e.message : String(e)}`,
           { cause: e },
@@ -387,17 +339,12 @@ function validateDumpRefs(tables: TableRows): void {
 }
 
 /**
- * The limits a dump's rows are measured against — the workspace's, not the built-in
- * defaults, because `ui.contentMax` and the canvas size are settings and the workspace being
- * imported into is the one whose rules apply from here on.
+ * Workspace limits used to check imported rows. Use the target workspace's configured limits,
+ * which may differ from the source's.
  */
 export type DumpLimits = { contentMax: number; canvasWidth: number; canvasHeight: number };
 
-/**
- * How many offending rows a warning names before it stops listing them. The same figure
- * `kozane doctor` uses for the same reason: a dump where every card is over the limit should
- * produce a line, not a page.
- */
+/** Limit warning samples as doctor does to keep output bounded. */
 const LIMIT_WARNING_NAMED_MAX = 5;
 
 /** The first few ids, and a count of the rest. */
@@ -416,14 +363,9 @@ function overLimit(
 }
 
 /**
- * One table's rows off a dump, leniently — anything that is not an array of objects reads as
- * no rows.
- *
- * Lenient because of when this runs: {@link dumpLimitWarnings} is called after
- * {@link importDbJson} has already succeeded, so the shape is known good and these guards
- * can only fire on a dump that was somehow accepted anyway. What they buy is that a report
- * about a restore cannot become the reason the restore appears to have failed. `parseDump`
- * is the strict reader, and it has already run.
+ * Read a table's rows for the post-import warning report. Return no rows for an unexpected
+ * shape so reporting cannot turn a successful restore into an apparent failure. `parseDump`
+ * already validated the import.
  */
 function rowsOf(input: unknown, table: TableName): JsonObject[] {
   if (typeof input !== "object" || input === null) return [];
@@ -437,24 +379,14 @@ function rowsOf(input: unknown, table: TableName): JsonObject[] {
 }
 
 /**
- * What a dump carries that this workspace's own write paths would have refused.
+ * Report imported rows that exceed the target workspace's text, name, or canvas limits.
  *
- * Reported rather than refused, which is the whole decision here and is not the one
- * {@link validateDumpRefs} makes. A broken foreign key is a dump that cannot become a
- * database — SQLite would reject it a moment later, less legibly — so it stops the import.
- * These are different: a card longer than `ui.contentMax`, a name past {@link NAME_MAX}, a
- * position off the end of the canvas. Every one of them is a row SQLite will take and the
- * board will draw, and every one of them is measured against a setting that the workspace
- * which produced the dump may simply have had set differently. Exporting from a workspace
- * with a wider canvas and importing into one with the default is an ordinary thing to do.
+ * These configurable limits do not invalidate a backup. Warn after a successful import so
+ * workspaces with different settings can exchange dumps. Broken foreign keys are rejected
+ * separately by {@link validateDumpRefs}.
  *
- * So refusing would mean a backup that cannot be restored because of a policy difference,
- * on the one command whose whole purpose is getting a user's data back. Instead the import
- * succeeds and says what it took, which is also what makes the rows findable: `kozane
- * doctor` reports the same three conditions against the database afterwards.
- *
- * Returns one line per condition, or nothing when the dump is within every limit. Called on
- * the dump a successful import has just written, so it reports the database that now exists.
+ * Return one line per condition. `kozane doctor` can find the same conditions in the restored
+ * database later.
  */
 export function dumpLimitWarnings(input: unknown, limits: DumpLimits): string[] {
   const warnings: string[] = [];
@@ -472,8 +404,7 @@ export function dumpLimitWarnings(input: unknown, limits: DumpLimits): string[] 
         `Editing one through the board or 'kozane card edit' will refuse it until it is shortened.`,
     );
 
-  // Off the board rather than merely past the defaults: a position is stored unclamped here,
-  // and the viewport cannot reach one outside the canvas, so the card is drawn nowhere.
+  // Check positions against the configured canvas size.
   const offBoard = overLimit(
     cards,
     (row) =>
@@ -490,8 +421,8 @@ export function dumpLimitWarnings(input: unknown, limits: DumpLimits): string[] 
         `or raise ui.canvasWidth / ui.canvasHeight.`,
     );
 
-  // Every named thing shares one limit, so they share one line; the table is named with each
-  // id because a `name` collision across tables would otherwise be indistinguishable.
+  // Combine named entities into one warning. Include the table with each ID to distinguish
+  // rows across tables.
   const namedTables: TableName[] = ["namespace", "partition", "layer", "scope", "taskspace"];
   const longNames = namedTables.flatMap((table) =>
     rowsOf(input, table)

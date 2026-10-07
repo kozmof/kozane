@@ -63,8 +63,8 @@ describe("addCards", () => {
     expect(second).toMatchObject({ content: "second", posX: 30, posY: 40, layerId });
   });
 
-  // The ids come back in the order the rows were given, which is the order the text of a
-  // squashed card reads — a caller filing them into a scope pairs them up by position.
+  // Return IDs in input order so callers can associate each inserted card with its source
+  // segment.
   it("returns ids in the order the rows were given, across a chunk boundary", async () => {
     const { db, partitionId } = await setup();
     const layerId = await defaultLayerIdForPartition({ db, partitionId });
@@ -192,8 +192,7 @@ describe("getCardMarkersByNamespaces", () => {
 
     const markers = await getCardMarkersByNamespaces({ db, namespaceIds: [namespaceId] });
 
-    // `width` is null for a card that has never been resized, which is most of them: it
-    // follows `ui.defaultCardWidth` until someone pins one.
+    // A null width uses the configured default.
     expect(markers).toEqual(
       expect.arrayContaining([
         {
@@ -219,8 +218,7 @@ describe("getCardMarkersByNamespaces", () => {
     expect(markers).toHaveLength(2);
   });
 
-  // The reason the column is read at all: a resized card is drawn in a box it set itself,
-  // and that is the box `nearestCardHint` measures a warp against.
+  // Pin the width used to calculate warp distance.
   it("carries the width of a card that has been resized", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const cardId = await addCard({ db, partitionId, content: "Wide", posX: 24, posY: 48 });
@@ -252,8 +250,7 @@ describe("getCardMarkersByNamespaces", () => {
 
   it("reads only the opening of a long card", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    // Every card of every namespace with a warp is read to place one palette row, and a hint
-    // is a few dozen characters: the rest of a long card is not worth carrying.
+    // Limit the content prefix returned for hints.
     await addCard({ db, partitionId, content: "A".repeat(4000) });
 
     const [marker] = await getCardMarkersByNamespaces({ db, namespaceIds: [namespaceId] });
@@ -265,8 +262,7 @@ describe("getCardMarkersByNamespaces", () => {
 
   it("says how long the whole card is, however little of it is read", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    // What the opening cannot say: how tall the card is drawn, which is what decides
-    // whether a warp is sitting on it.
+    // Use the full character count to estimate height.
     await addCard({ db, partitionId, content: "A".repeat(4000) });
 
     const [marker] = await getCardMarkersByNamespaces({ db, namespaceIds: [namespaceId] });
@@ -324,8 +320,7 @@ describe("updateCard (width)", () => {
     const { db, partitionId } = await setup();
     const cardId = await addCard({ db, partitionId, content: "Hi" });
     const card = await getCard({ db, partitionId, cardId });
-    // Null rather than a number: the card is drawn at `ui.defaultCardWidth` and keeps
-    // following it, which is what an untouched card is supposed to do.
+    // A null width follows the configured default.
     expect(card?.width).toBeNull();
   });
 
@@ -456,15 +451,7 @@ describe("updateNamespaceCardPositions", () => {
     expect(await getCard({ db, partitionId, cardId: ownCard })).toMatchObject({ posX: 0, posY: 0 });
   });
 
-  /**
-   * A drag wide enough that one `CASE` statement could not carry it.
-   *
-   * The two CASEs and the WHERE bind five parameters per card, so a request at `BATCH_MAX`
-   * builds a statement of ten thousand — under SQLite's own ceiling today, and under it only
-   * because nobody has added a third column to the CASE. The batching makes that a
-   * property of the code rather than of a comment: enough positions to need several
-   * statements still land as one atomic write.
-   */
+  /** Verify that position updates spanning several parameter-limited statements remain atomic. */
   it("applies a drag too wide for one statement, in batches, atomically", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const layerId = await defaultLayerIdForPartition({ db, partitionId });
@@ -759,14 +746,8 @@ describe("reassignCardsToLayer", () => {
 });
 
 /**
- * The rule `kozane card list --sort` rests on: `updated_at` follows a card's text and
- * nothing else about it. The board sends a position PATCH per drag, so were arranging the
- * board to count as updating, the interval between the two timestamps would measure how
- * recently a card was tidied rather than how long it stood before being rewritten.
- *
- * Backdated rather than slept on: the columns are stored to the second, so a card added
- * and edited inside the same second has the same timestamp either way. Setting a known
- * past value makes "did this move" answerable at all.
+ * Only text changes update the timestamp. Backdate the fixture to avoid second-resolution
+ * collisions.
  */
 describe("card timestamps", () => {
   const LONG_AGO = new Date("2020-01-01T00:00:00Z");
@@ -787,13 +768,8 @@ describe("card timestamps", () => {
   });
 
   /**
-   * One moment for the whole call, not one reading of the clock per column per row.
-   * A batch big enough to be split into several statements takes real time to write, and
-   * cards that arrived together must not be separable in the listing by a second's drift
-   * they never had — the same rule `db import` follows for a whole dump.
-   *
-   * Sized past {@link INSERT_CHUNK_MAX} so more than one statement is involved, which is
-   * where per-chunk stamps would begin to differ.
+   * Use a batch larger than {@link INSERT_CHUNK_MAX} to verify that all cards receive the
+   * same timestamps across statements.
    */
   it("stamps every card of a batch insert with the same moment", async () => {
     const { db, partitionId } = await setup();
@@ -833,8 +809,7 @@ describe("card timestamps", () => {
     const cardId = await addCard({ db, partitionId, content: "Unchanged" });
     await backdate(db, cardId);
 
-    // What the board's composer sends when a card is opened and saved without an edit: the
-    // field is present, so `updateCard` writes it, and the row is left exactly as it was.
+    // Saving unchanged content must preserve its timestamp.
     await updateCard({ db, cardId, partitionId, content: "Unchanged" });
 
     const card = await getCard({ db, partitionId, cardId });

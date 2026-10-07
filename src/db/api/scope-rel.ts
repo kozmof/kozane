@@ -36,7 +36,7 @@ export async function getCardsByScopeWithPartitionName({
 }
 
 export async function addScopeRel({ db, scopeId, cardId }: ScopeRelKey): Promise<void> {
-  // Idempotent: silently ignores duplicate (scopeId, cardId) pairs
+  // Ignore duplicate scope/card pairs.
   await db.insert(scopeRelTable).values({ scopeId, cardId }).onConflictDoNothing();
 }
 
@@ -51,12 +51,8 @@ export async function removeScopeRel({ db, scopeId, cardId }: ScopeRelKey): Prom
 type AddScopeRels = NeedsScope & { cardIds: string[] };
 
 /**
- * Files many cards into one scope, in {@link chunked} statements rather than one per card.
- * Idempotent the way {@link addScopeRel} is.
- *
- * Unlike {@link addScopeMembers} this checks no ownership and opens no transaction, so it
- * suits a caller that has already established both — `kozane card squash`, which inserts
- * the cards it is filing in the same transaction a moment earlier.
+ * Add scope memberships idempotently in {@link chunked} statements. The caller must validate
+ * ownership and provide a transaction, as the squash operation does.
  */
 export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Promise<void> {
   for (const batch of chunked(cardIds))
@@ -69,11 +65,8 @@ export async function addScopeRels({ db, scopeId, cardIds }: AddScopeRels): Prom
 type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: string[] };
 
 /**
- * Refused two ways, and a caller that could only be told "no" reported the wrong one. Both
- * of these used to answer `false` for a missing scope and for foreign cards alike, and the
- * DELETE route worded that as "Some cards do not belong to this namespace" — said of a
- * request whose cards were perfectly fine and whose scope was the thing that did not
- * exist.
+ * Distinguish a missing scope from cards outside the namespace so routes can report the
+ * correct failure.
  */
 export type ScopeMemberResult = BatchResult<"foreign-cards" | "foreign-scope">;
 
@@ -95,9 +88,7 @@ export async function addScopeMembers({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    // Chunked, where this used to build one statement from every card the request named:
-    // two columns a row against `BATCH_MAX` ids is twice the parameter budget a single
-    // insert is allowed. `addScopeRels` beside it was already doing this.
+    // Chunk memberships within the parameter limit, allowing two columns per row.
     for (const batch of chunked([...new Set(cardIds)], {
       columnsPerRow: columnCount(scopeRelTable),
     }))
@@ -153,8 +144,8 @@ export async function removeScopeMembersFromNamespace({
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };
 
 /**
- * The scope memberships of a named handful of cards, for a caller that already holds the
- * ids and knows how many there are. Not for the board: see {@link getScopeRelsByNamespace}.
+ * Get memberships for a known set of card IDs. For board queries, use {@link
+ * getScopeRelsByNamespace}.
  */
 export async function getScopeRelsByCards({
   db,
@@ -165,12 +156,9 @@ export async function getScopeRelsByCards({
 }
 
 /**
- * Every scope membership of a namespace's cards, selected by the namespace rather than by
- * naming them. The counterpart to `getGlueRelsByNamespace`, for the same reason and on the
- * table that grows fastest — see the note there.
- *
- * Reaches `scope_rel` through `scope_rel_card`, which the schema declares precisely because
- * the primary key leads with `scope_id` and so cannot answer a lookup by card.
+ * Read all scope memberships for a namespace using joins, as `getGlueRelsByNamespace` does.
+ * The `scope_rel_card` index supports lookup by card because the primary key begins with
+ * `scope_id`.
  */
 export async function getScopeRelsByNamespace({
   db,

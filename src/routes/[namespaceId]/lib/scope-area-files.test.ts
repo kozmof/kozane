@@ -286,7 +286,7 @@ describe("visibleCells", () => {
 
   it("gives the last slot to the count once there are more than fit", () => {
     const window = visibleCells(cells(20), { width: CELL_WIDTH * 4, maxRows: 2 });
-    // Seven names and a "+13 more" in the eighth slot: two rows, never a third.
+    // Show seven names and a "+13 more" chip within two rows.
     expect(window.cells).toHaveLength(7);
     expect(window.overflow).toBe(13);
     expect(window.cells.length + window.overflow).toBe(20);

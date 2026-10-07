@@ -23,32 +23,25 @@ export type TaskspaceFilesReason =
   | "stale";
 
 /**
- * What each reason means over HTTP.
- *
- * Beside the reasons rather than in the routes because both the listing and the file
- * endpoints answer with it, and because being exhaustive is the point: a reason added to
- * the union without a code here is a compile error, rather than a route that quietly
- * answers `undefined` and turns a refusal into a 500.
+ * Map every file-error reason to an HTTP status shared by listing and file endpoints.
+ * Exhaustive typing makes a missing mapping a compile error.
  */
 export const TASKSPACE_FILES_STATUS: Record<TaskspaceFilesReason, number> = {
   "invalid-path": 400,
   forbidden: 403,
   "not-found": 404,
-  // Something is already at that name. A conflict rather than a bad request, for the same
-  // reason `stale` is one: nothing about what was sent is wrong, and it is the state on
-  // disk that refuses it. Creating never replaces what it finds.
+  // Creating never replaces an existing entry. Report a conflict when the name is already
+  // taken.
   exists: 409,
-  // The file changed on disk since the editor read it. A conflict rather than a bad
-  // request: nothing about what was sent is wrong, only the version it was sent against.
+  // Report a conflict if the file changed since the editor read it.
   stale: 409,
   "too-large": 413,
   "not-text": 415,
 };
 
 /**
- * A listing that could not be produced, carrying why. The reason is what the route turns
- * into a status code; keeping it a plain class rather than SvelteKit's `error()` leaves
- * this module testable on its own, as the rest of `lib/server` is.
+ * Filesystem failure with a reason the route can map to an HTTP status. Keep this error
+ * independent of SvelteKit.
  */
 export class TaskspaceFilesError extends Error {
   constructor(
@@ -77,8 +70,7 @@ function mapFsError(e: unknown, whatIsMissing: string): TaskspaceFilesError {
 }
 
 function entryKind(dirent: Dirent): TaskspaceEntryKind {
-  // Checked first: `readdir` reports dirents without following links, so a symlink to a
-  // directory answers true to both, and the link is what is actually there.
+  // Check symlinks first so the listing describes the link itself.
   if (dirent.isSymbolicLink()) return "symlink";
   if (dirent.isDirectory()) return "directory";
   if (dirent.isFile()) return "file";
@@ -102,15 +94,9 @@ type ListTaskspaceDirectory = {
 };
 
 /**
- * One directory of a taskspace, as the browser panel draws it.
- *
- * The boundary is `baseDir`, and it is enforced twice: once on the requested path, so a
- * `..` cannot walk out, and once on the resolved real path, so a symlink cannot either.
- * The caller supplies `baseDir` from the taskspace record — never from the request — so a
- * client can only ever choose where to look inside a taskspace, not which one.
- *
- * Dot-entries are skipped and never recursed into. That hides `.taskspace.json` and
- * `.git`, and keeps a stray `.env` from being announced to whoever has the page open.
+ * List a taskspace directory within the caller-supplied root. Check both the requested path
+ * and resolved real path to prevent traversal through `..` or symlinks. Hide dot-prefixed
+ * entries.
  */
 export function listTaskspaceDirectory({
   baseDir,
@@ -129,9 +115,8 @@ export function listTaskspaceDirectory({
   const requested = resolve(realBase, segments.join(sep));
   if (!isWithin(realBase, requested))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
-  // The listing hides dot-entries, so it must not list inside one either: naming `.git`
-  // outright would otherwise show what no listing offered, and what `readTaskspaceFile`
-  // already refuses to open. `.` and `..` were settled by the containment check above.
+  // Reject paths inside hidden entries as well as hiding them from listings. The containment
+  // check already handles `.` and `..`.
   if (segments.some((segment) => segment.startsWith(".") && segment !== "." && segment !== ".."))
     throw new TaskspaceFilesError("invalid-path", "Dot-entries cannot be opened");
 
@@ -141,8 +126,7 @@ export function listTaskspaceDirectory({
   } catch (e) {
     throw mapFsError(e, "Directory not found");
   }
-  // The second boundary check. `requested` was inside the taskspace as spelled; this is
-  // what it turned out to be once every link along the way was followed.
+  // Check containment again after resolving symlinks.
   if (!isWithin(realBase, real))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
 
@@ -170,7 +154,7 @@ export function listTaskspaceDirectory({
     try {
       stat = lstatSync(resolve(real, dirent.name));
     } catch {
-      continue; // deleted between the readdir and now, or unreadable — treat it as gone
+      continue; // Treat an entry deleted or made unreadable after listing as absent.
     }
     entries.push({
       name: dirent.name,
@@ -184,18 +168,9 @@ export function listTaskspaceDirectory({
 }
 
 /**
- * The taskspace-relative path of one entry — a file or a directory, existing or not yet —
- * resolved and held inside the taskspace.
- *
- * The boundary is the same one {@link listTaskspaceDirectory} holds, and for the same
- * reason: the caller supplies `baseDir` from the taskspace record, and the request chooses
- * only where to look within it. It is checked twice — once on the path as spelled, so a
- * `..` cannot walk out, and once on what it turned out to be with every link followed.
- *
- * Dot-entries are refused rather than hidden. The listing skips them, so `.env` and
- * `.taskspace.json` are never announced to the panel; without the same rule here they
- * would still be readable by anyone who typed the name, and the tree hiding them would be
- * decoration rather than a boundary.
+ * Resolve an existing or prospective entry within a trusted taskspace root. Check lexical and
+ * real-path containment, and reject dot-prefixed entries so hidden files cannot be accessed
+ * by typing their names.
  */
 function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string; base: string } {
   let realBase: string;
@@ -205,8 +180,8 @@ function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string
     throw mapFsError(e, "Taskspace directory not found");
   }
 
-  // Refused before anything is resolved: `resolve()` throws a plain TypeError on a NUL, which
-  // is not a TaskspaceFilesError and would reach the route as a 500 rather than a 400.
+  // Reject NUL before path resolution so the route returns a file error with status 400
+  // rather than an unexpected error with status 500.
   if (subPath.includes("\0"))
     throw new TaskspaceFilesError("invalid-path", "Path must not contain a NUL byte");
 
@@ -223,9 +198,8 @@ function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string
   if (!isWithin(realBase, requested))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
 
-  // The directory is resolved rather than the file, so that a file which does not exist
-  // yet still gets its containing directory checked. Whether the file itself is there is
-  // `lstat`'s answer below, and it is a different one — "not found" rather than "outside".
+  // Resolve and check the parent directory even when the target file does not yet exist.
+  // Check target existence separately with `lstat`.
   let realDir: string;
   try {
     realDir = realpathSync(dirname(requested));
@@ -239,11 +213,8 @@ function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string
 }
 
 /**
- * `real` as an ordinary file of a size the editor will take on, or the reason it is not.
- *
- * `lstat` rather than `stat`: a symlink is reported as itself, so a link pointing out of
- * the taskspace is refused here rather than followed. The listing draws links as links and
- * does not open them, and this is the same rule at the other end.
+ * Validate that `real` is a regular file within the editor's size limit. Use `lstat` to
+ * inspect and reject symlinks without following them.
  */
 function statRegularFile(real: string): number {
   let stat;
@@ -266,13 +237,8 @@ function statRegularFile(real: string): number {
 }
 
 /**
- * Text as the editor holds it, or the reason these bytes are not text.
- *
- * Strict UTF-8, because the panel round-trips what it opens: bytes decoded leniently come
- * back as replacement characters, and saving would write that corruption to disk over the
- * original. A NUL is refused on the same grounds — it is the one byte that reliably says
- * "this was never text" — so the editor cannot be pointed at a binary and used to destroy
- * it.
+ * Decode strict UTF-8 and reject NUL-containing content before editing. Lenient decoding
+ * could replace invalid bytes and corrupt the original on save.
  */
 function decodeText(bytes: Uint8Array): string {
   if (bytes.includes(0)) throw new TaskspaceFilesError("not-text", "File is not UTF-8 text");
@@ -302,11 +268,8 @@ type TaskspaceFileTarget = {
 };
 
 /**
- * One text file of a taskspace, as the editor opens it.
- *
- * The counterpart to {@link listTaskspaceDirectory}, and deliberately a separate function
- * from it: a listing carries names and metadata and nothing else, which is worth keeping
- * true of the code as well as of the answer.
+ * Read one taskspace text file for the editor. {@link listTaskspaceDirectory} returns only
+ * names and metadata.
  */
 export function readTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
   const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
@@ -336,16 +299,9 @@ export type WriteTaskspaceFile = TaskspaceFileTarget & {
 };
 
 /**
- * Saves `content` over an existing text file of a taskspace.
- *
- * Only over an existing one. Creating is {@link createTaskspaceFile}, which makes an empty
- * file and nothing more, so that a save is always a save: this function decides what may
- * be written — the size cap, valid UTF-8, the signature check — and there is no second
- * path into a file that restates any of it.
- *
- * The write goes through {@link writeFileAtomic}, so a failure leaves the original intact
- * rather than truncated, and the rename it ends with makes the returned signature
- * reliably different from the one that came in.
+ * Save validated text over an existing taskspace file after size and signature checks. Use
+ * atomic replacement so readers do not see a partial write. File creation has a separate
+ * empty-file operation.
  */
 export function writeTaskspaceFile({
   baseDir,
@@ -364,8 +320,7 @@ export function writeTaskspaceFile({
       `Content is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
     );
 
-  // Read immediately before the write rather than trusted from the open: the check is
-  // against what is on disk now, which is the only version the save can actually clobber.
+  // Check the current on-disk version immediately before writing.
   if (fileSignature(real) !== signature)
     throw new TaskspaceFilesError("stale", "File changed on disk since it was opened");
 
@@ -383,14 +338,8 @@ export function writeTaskspaceFile({
 }
 
 /**
- * Refuses the path if anything is already there.
- *
- * `lstat` rather than `stat`, so a dangling symlink counts as occupied: creating over one
- * would follow it, and a link pointing out of the taskspace is exactly what the boundary
- * exists to refuse. The check is advisory — between it and the syscall that follows, the
- * name may be taken by something else — which is why both creators below ask the kernel
- * for exclusivity as well, and this is only here to answer with the reason rather than
- * with a bare `EEXIST`.
+ * Reject occupied paths using `lstat`, including dangling symlinks. Creators also request
+ * kernel-level exclusivity because another process can claim the name after this check.
  */
 function assertNothingAt(real: string, what: string): void {
   try {
@@ -402,22 +351,9 @@ function assertNothingAt(real: string, what: string): void {
 }
 
 /**
- * Creates one empty text file in a taskspace, for the editor to open on.
- *
- * Empty, and only ever empty. The panel creates a file and then saves into it through
- * {@link writeTaskspaceFile}, so the rules about what may be written — the size cap, valid
- * UTF-8, the signature check against what is on disk — are stated in one place and applied
- * to the first save as to every later one. A create that also carried content would be a
- * second, quieter way into the same file with its own copy of those rules.
- *
- * It never replaces anything. `wx` is what actually guarantees that: the existence check
- * above answers with a reason, but two requests racing for one name are separated by the
- * kernel, and the loser is refused rather than truncating the winner's file.
- *
- * The boundary is the one {@link readTaskspaceFile} holds — same resolver, so a `..`, a
- * symlinked directory along the way, and a dot-entry are refused here exactly as they are
- * there. A file whose parent directory does not exist is `not-found` rather than created:
- * creating the parents would let one request make a tree nobody has seen.
+ * Create one empty file with exclusive `wx` access. Require an existing parent and apply the
+ * shared taskspace path rules. Send all content through {@link writeTaskspaceFile} so first
+ * and later saves use the same validation.
  */
 export function createTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
   const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
@@ -439,17 +375,8 @@ export function createTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): 
 }
 
 /**
- * Creates one directory in a taskspace, and answers with it as the tree draws it.
- *
- * A {@link TaskspaceListing} rather than a bare acknowledgement, and the same shape
- * {@link listTaskspaceDirectory} returns, so the panel can put the new folder on screen
- * from the answer it already has. It is empty, necessarily — nothing else could be true of
- * a directory a moment after `mkdir`.
- *
- * Non-recursive. A parent that is not there is `not-found`, for the reason
- * {@link createTaskspaceFile} gives: one request should not be able to conjure a tree.
- * `mkdir` is itself exclusive, so as there, a race loses rather than quietly succeeding
- * against a name somebody else just took.
+ * Create one directory and return its empty listing for the browser tree. Require an existing
+ * parent and let exclusive `mkdir` reject a name taken concurrently.
  */
 export function createTaskspaceDirectory({
   baseDir,

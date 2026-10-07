@@ -13,10 +13,7 @@ export type BoardShortcuts = Pick<
   | "removeWarpShortcut"
 >;
 
-/**
- * What the board's keys act on. The page owns every one of these — the state they read and
- * the components they reach — so the table below is only what key means what, and when.
- */
+/** Page-owned actions and state used by the keyboard binding table. */
 export type BoardCommands = {
   readonly: boolean;
   /** Whether a scope frame drawn with Alt is waiting for a scope. */
@@ -40,23 +37,16 @@ export type BoardCommands = {
 };
 
 /**
- * What each key does on the board, and under what conditions. See `board-keymap.ts` for why
- * this is a table and what the dispatcher guarantees about it.
+ * Board bindings and their conditions. See `board-keymap.ts` for dispatch rules.
  *
- * The order is load-bearing in two places:
- *
- * - The pending-frame Escape comes first, so a rectangle waiting for a scope is what
- *   Escape means while one is up, whatever else may be bound to it.
- * - The composer owns the keyboard while cards are selected, which is what keeps the
- *   warp keys from colliding with its action bar. Each of those bindings says so with
- *   `noSelection`, where the binding is rather than where a reader has to remember it.
+ * Put pending-frame Escape first so it cancels the rectangle before other actions. Use
+ * `noSelection` on warp bindings so the composer owns those keys while cards are selected.
  */
 export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): KeyBinding[] {
   return [
     {
-      // The prompt handles Escape itself while its input holds focus — the page's typing
-      // guard stops anything typed there reaching the board — and this is the same key with
-      // focus anywhere else.
+      // Handle Escape when focus is outside the prompt. The prompt handles it itself while
+      // its input is focused.
       name: "dismiss pending scope frame",
       keys: ["Escape"],
       when: c.hasPendingFrame,
@@ -89,8 +79,7 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       run: c.toggleWarps,
     },
     {
-      // Any of the four arrows opens the same list: the direction is how the hand already
-      // reaches for warping, not a choice of which warps to show.
+      // Any arrow opens the same palette.
       name: "open the warp palette",
       keys: ARROW_KEYS,
       shift: true,
@@ -103,9 +92,8 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       keys: ARROW_KEYS,
       shift: false,
       when: c.noSelection,
-      // The one binding that cancels the key conditionally rather than declaring
-      // `preventDefault`: arrowing past the last warp in a direction finds nothing, and the
-      // key has to be left to the browser when it does.
+      // Prevent the default action only when a warp is found in the requested direction.
+      // Otherwise leave the arrow key to the browser.
       run: (e) => {
         if (c.warpToward(e.key)) e.preventDefault();
       },

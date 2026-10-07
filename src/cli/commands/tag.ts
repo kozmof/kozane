@@ -33,13 +33,8 @@ export type TagOptions = { namespace?: string };
 export type TagShowOptions = TagOptions & { files?: boolean };
 
 /**
- * What a node gathers, spelled out — `1 card, 2 files`.
- *
- * Deliberately not what the tag index page prints, which is the bare total. The page draws
- * its tree in a narrow column beside the hits, where a number is all that fits and the panel
- * beside it says which kind each row is; a terminal line has room, and `kozane tag list`
- * prints no panel afterwards to say so. Same counts from the same `TagCounts` either way —
- * only the wording differs, and it differs because the space does.
+ * Format counts by kind, such as `1 card, 2 files`. The CLI has no adjacent results panel to
+ * distinguish the kinds, so it needs more detail than the tag index's total.
  */
 const countLabel = ({ cards, files }: TagCounts): string =>
   [
@@ -58,12 +53,7 @@ function printTree(nodes: TagNode[], depth = 0): void {
   }
 }
 
-/**
- * Every tag in a namespace, as a tree.
- *
- * Reads exactly what the tag index page reads — `loadTagIndex` — so the terminal and
- * the browser cannot come to different conclusions about what a tag holds.
- */
+/** List namespace tags as a tree using the same `loadTagIndex` reader as the browser. */
 export async function tagList(options: TagOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
     const namespaceId = await resolveNamespaceId(db, options.namespace);
@@ -101,30 +91,12 @@ type WarnIncomplete = {
 };
 
 /**
- * Says what the gather could not read — the cards, each taskspace it read part of, and each
- * one it could not open — so a tag missing from the list above is not read as a tag nobody
- * wrote.
- *
- * Names and wording both come from elsewhere. The name is joined from the gather's own record
- * of what it walked — this had been fetching every taskspace in the namespace again to turn an
- * id back into a name. The wording is `truncationReasons`, `missingTaskspaceLabel`, and
- * `CARDS_TRUNCATED_LABEL`, shared with the tag index page, because the two say the same thing
- * about the same gather and the scanner's own vocabulary — `budget`, `nodes` — was reaching
- * the screen unchanged.
- *
- * A reason now arrives with a sample of the paths behind it, which is the half a reader can
- * act on: `truncationPaths` turns "some files could not be read" into a place to go and look.
- * A taskspace that could not be opened has no path worth naming and one thing to do about it,
- * so it is followed by the command that does it, once however many records there are.
- *
- * A record rather than four positional arguments, two of which are now lists of ids that
- * differ only in their element type: `warnTruncated(missing, truncated, …)` would have
- * type-checked.
+ * Report incomplete card and file scans and unavailable taskspaces. Use gathered taskspace
+ * metadata and shared labels so CLI and page diagnostics agree. Include sample paths and one
+ * cleanup suggestion for missing records.
  */
 function warnIncomplete({ truncated, missing, taskspaces, cardsTruncated }: WarnIncomplete): void {
-  // First, because it is about the cards printed above and every taskspace note below is
-  // about files. To a reader whose tag is missing the two are one fact — part of the
-  // workspace was not read — so neither is worth printing without the other.
+  // Report card truncation before taskspace file warnings.
   if (cardsTruncated) console.log(`Note: ${CARDS_TRUNCATED_LABEL}.`);
   for (const { taskspaceId, reasons, paths } of truncated) {
     console.log(
@@ -134,8 +106,7 @@ function warnIncomplete({ truncated, missing, taskspaces, cardsTruncated }: Warn
   for (const taskspaceId of missing) {
     console.log(`Note: ${missingTaskspaceLabel(nameOf(taskspaces, taskspaceId))}.`);
   }
-  // After all of them rather than under each: one run of it settles every record named above,
-  // and printed per taskspace it reads as a different command each time.
+  // Print the repair command once after all affected taskspaces.
   if (missing.length > 0) {
     console.log(`  Run \`${TASKSPACE_CLEANUP_COMMAND}\` ${cleanupCommandTail(missing.length)}`);
   }
@@ -150,24 +121,12 @@ function cappedNote(shown: number, total: number, noun: string): void {
 }
 
 /**
- * What one tag gathers: the cards it is written on and the taskspace files it appears in.
- *
- * A tag gathers its subcategories, so `kozane tag show foo` includes everything written
- * `:foo:bar:baz` — the same rule the index page filters by, via the same `tagMatches`.
- *
- * Capped at {@link TAG_HITS_SHOWN_MAX} per kind, through the same `capHitsByKind` the page
- * caps with. It was uncapped, on the reasoning that a terminal can be piped to `less` — but
- * the ceiling is not there to protect the screen. A tag written in a shared header comment
- * reaches every file carrying that header, and forty thousand lines is not a more useful
- * answer than two hundred that says how many there were. Per kind for the reason the page
- * gives: the hits arrive cards first, so one ceiling across both would print no files at all
- * for a much-tagged card set.
+ * List cards and file lines matching a tag or its descendants through `tagMatches`. Apply
+ * {@link TAG_HITS_SHOWN_MAX} separately to each kind so card hits cannot hide all file hits.
  */
 export async function tagShow(tag: string, options: TagShowOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
-    // The sigil is optional here: `kozane tag show :foo` is what someone reading a card
-    // would type, and `kozane tag show foo` is what someone typing from memory would — so
-    // both forms work.
+    // Accept tag names with or without the leading sigil.
     const query = normalizeTag(tag.replace(/^:/, ""));
     if (!query) throw new Error("Tag cannot be empty.");
 
@@ -183,9 +142,8 @@ export async function tagShow(tag: string, options: TagShowOptions = {}): Promis
     });
 
     const matches = tagMatcher(query);
-    // Selected inside the cap rather than into an array first — see `capHitsByKind`. The
-    // totals it counts are of everything that matched, so the emptiness check below is the
-    // same question it was when there was a filtered array to ask it of.
+    // Select matches while applying display caps. Retain totals for all matches to
+    // distinguish empty results from truncated ones.
     const shown = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) => matches(hit.tag));
     if (shown.cardTotal === 0 && shown.fileTotal === 0) {
       console.log(`No cards or files under ${TAG_SIGIL}${query}.`);
@@ -205,44 +163,23 @@ async function printCardHits(
 ): Promise<void> {
   if (cardHits.length === 0) return;
 
-  // Short ids are drawn against every card of the namespace, so the id printed for a card is
-  // the one `kozane card show` takes, whichever tag was asked for. Ids alone, in one
-  // statement: this was a partition read followed by a card read per partition, which is a round
-  // trip per partition and the full text of every card in the namespace, to number them.
-  //
-  // Unbounded on purpose, which is worth saying where every neighbouring read is bounded.
-  // A short id is only unambiguous against the whole set it was drawn from, so numbering the
-  // at-most-`TAG_HITS_SHOWN_MAX` rows below against the cards that happen to carry this tag
-  // would print ids that `kozane card show` resolves to different cards — or to none. What is
-  // read is one id per card and nothing else, so the cost is a column rather than a corpus.
+  // Build short IDs from every card ID in the namespace so displayed prefixes remain
+  // unambiguous outside this tag result. Read only IDs in one query.
   const shortIds = shortIdMap(await getNamespaceCardIds({ db, namespaceId }));
 
   console.log("Cards:");
-  // One row per card, not per hit — `groupHitRows` is what decides that, and decides it once
-  // for the terminal and the index page alike. A card written `:perf:cache and :perf` matches
-  // a search for `perf` twice, and printing it twice says the tag is on two cards.
+  // Use shared grouping to print each card once even when several tags on it match.
   for (const { source, hits: rows } of groupHitRows(cardHits)) {
     const id = shortIds.get(source.cardId) ?? source.cardId;
     console.log(`  ${id}  ${taggedWith(rows).join(" ")}  ${rows[0].excerpt}`);
   }
-  // Of hits rather than of the rows above, which is what was cut: the cap is applied before
-  // the grouping, so a card carrying the tag twice is one row out of two hits.
+  // Count omitted hits before row grouping, matching the stage where the cap applies.
   cappedNote(cardHits.length, cardTotal, "card hits");
 }
 
 /**
- * The file rows, under the taskspace each was found in.
- *
- * Grouped by taskspace first, because a path is relative to one and says nothing on its own:
- * a namespace draws its own taskspaces and every unplaced one, so `README.md:2` printed bare
- * was two indistinguishable rows for two different files as soon as a workspace had a second
- * taskspace. The tag index page heads its file rows the same way, through the same
- * `groupHitsByTaskspace` — only the drawing below differs, which is the whole of what the
- * terminal and the page are entitled to disagree about.
- *
- * Within a taskspace, grouped by the line rather than by the file: a file may carry the tag
- * in several places, and each is somewhere to go and look. Two tags on one line are still one
- * row.
+ * Group file hits by taskspace so identical relative paths remain distinguishable. Within
+ * each taskspace, show one row per matching line, combining multiple hits on that line.
  */
 function printFileHits(
   { files: fileHits, fileTotal }: CappedHits<TagHit>,

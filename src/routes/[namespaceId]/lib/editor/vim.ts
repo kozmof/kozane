@@ -4,7 +4,7 @@ export type VimMode = "normal" | "insert";
 
 export type VimState = {
   mode: VimMode;
-  /** The first key of a two-key sequence — `g` of `gg`, `d` of `dd` — or null. */
+  /** Pending first key of a two-key command, such as `g` in `gg` or `d` in `dd`, or null. */
   pending: string | null;
 };
 
@@ -123,16 +123,10 @@ function deleteLine(doc: EditorDocument, line: number, caretBefore: Caret): Care
 }
 
 /**
- * Vim's share of the keyboard, as a function of the state and the key.
+ * Handle Vim commands against {@link EditorDocument}. Return null to let the surface handle
+ * unclaimed keys, including ordinary insert-mode input.
  *
- * Returns null when the key is not vim's, and the surface's own handling runs instead —
- * which is the whole of insert mode apart from `Escape`. Everything else in normal mode is
- * claimed, including keys with no binding, so that typing in normal mode cannot fall
- * through and insert the letter that was meant as a command.
- *
- * The document is edited through {@link EditorDocument} rather than returned as a list of
- * actions, which keeps this testable without a DOM while leaving one place that knows how
- * an edit is applied.
+ * Claim unbound normal-mode keys so they cannot fall through as text insertion.
  */
 export function handleVimKey(
   vim: VimState,
@@ -158,8 +152,7 @@ export function handleVimKey(
     return null;
   }
 
-  // Normal mode. Accelerators stay with the browser and the overlay — Ctrl+S saves —
-  // except the one vim defines.
+  // Leave accelerators to the browser or overlay except those explicitly handled by Vim.
   if (accel) {
     if (event.key === "r") {
       const to = doc.redo();
@@ -269,7 +262,6 @@ export function handleVimKey(
       return normal(doc.undo() ?? at);
   }
 
-  // An unbound key in normal mode is still vim's: swallowing it is what keeps a stray
-  // letter from being typed into the file.
+  // Consume unbound normal-mode keys so they cannot insert text.
   return normal(at, null);
 }

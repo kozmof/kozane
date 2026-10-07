@@ -13,12 +13,8 @@ import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
 import { load } from "./+page.server.js";
 
 /**
- * The loader, which is where the live page's narrowing and capping happen — the browser
- * repeats the filter and would agree either way, so a mistake here is one nothing else on
- * the page can catch.
- *
- * There is no workspace root in this process, so `loadTagIndex` answers about cards alone.
- * That is the half this file is about; the file half is `lib/server/tag-index.test.ts`.
+ * Test server-side filtering and display caps independently of browser filtering. These
+ * fixtures cover card tags, while file gathering has separate tests.
  */
 
 async function setup() {
@@ -104,8 +100,7 @@ describe("GET /tags", () => {
     expect(narrowed.hits.map((hit) => hit)).toHaveLength(1);
   });
 
-  /** The tree above the list counts every hit, so a capped list has to report what it is a
-   *  part of — otherwise the two numbers on the page read as a disagreement. */
+  /** Return uncapped totals so the page can explain partial displayed results. */
   it("caps the list it sends and says how many there were", async () => {
     const { db, partitionId, layerId } = await setup();
     const over = TAG_HITS_SHOWN_MAX + 20;
@@ -139,10 +134,8 @@ describe("GET /tags", () => {
   });
 
   /**
-   * The lookup records are keyed by every tagged card in the workspace and the list by at
-   * most a couple of hundred, so sending them whole meant sending a map of thousands to
-   * label a page of two hundred. An export is the exception and is covered below: it bakes
-   * every hit and cannot know which keys the browser will end up needing.
+   * Send lookup entries only for displayed hits. Static exports retain all entries because
+   * browser filtering happens after export.
    */
   it("sends the namespace of the cards it is showing, and not of the others", async () => {
     const { db, partitionId } = await setup();
@@ -156,10 +149,7 @@ describe("GET /tags", () => {
   });
 });
 
-/**
- * The export path, which reads `KOZANE_SSG` when the module is first evaluated — so it is
- * reached by re-importing the module under that environment rather than by a parameter.
- */
+/** Reimport the route under the export environment to exercise its module-scope flag. */
 describe("as a static export", () => {
   /** Workspace roots written to disk by the tests below, removed whichever way one ends. */
   const roots: string[] = [];
@@ -187,15 +177,8 @@ describe("as a static export", () => {
   }
 
   /**
-   * A taskspace's name is the name of a directory on someone's machine, and an export is
-   * published. `loadNamespaceSnapshot` holds exactly this line for the board; this page was
-   * shipping `getAllTaskspaces` unconditionally, which contradicted it and
-   * `docs/security-matrix.md` with it — and shipped nothing usable either, since a plain
-   * export carries no file hits for a name to label.
-   *
-   * It is no longer a rule the page states: the names it publishes are the taskspaces the
-   * gather walked, and a plain export walks none. The two tests below are the two halves of
-   * that, and both are now about the walk rather than about a separate condition.
+   * Verify that plain exports publish no taskspace metadata because they scan no files.
+   * Scoped-file exports include metadata from the taskspaces actually gathered.
    */
   it("names no taskspaces at all", async () => {
     const { db, namespaceId } = await setup();

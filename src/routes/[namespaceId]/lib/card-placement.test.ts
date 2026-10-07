@@ -26,8 +26,8 @@ describe("CardPlacement, grid runs", () => {
   it("puts the first card of a run in the middle of the view", () => {
     const placement = new CardPlacement();
     const { posX, posY } = placement.next(request({ seq: 0 }));
-    // Centre snapped to the grid, less half the card's width; two grid steps above the
-    // centre line, so the card sits in the middle rather than hanging below it.
+    // Center the card horizontally on the snapped position and place it two grid steps above
+    // the center line.
     expect(posX).toBe(Math.round((Math.round(400 / GRID) * GRID - 120) / GRID) * GRID);
     expect(posY).toBe(Math.round(300 / GRID) * GRID - 2 * GRID);
     expect(posX % GRID).toBe(0);
@@ -96,7 +96,7 @@ describe("CardPlacement, grid runs", () => {
 
   it("never places a card off the left or top of the board", () => {
     const placement = new CardPlacement();
-    // A card wider than the view: half of it would put the origin behind the left edge.
+    // A card wider than the viewport could otherwise start beyond the left edge.
     const { posX, posY } = placement.next(request({ seq: 0, cardWidth: 4000 }));
     expect(posX).toBe(0);
     expect(posY).toBeGreaterThanOrEqual(0);

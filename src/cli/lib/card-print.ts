@@ -3,15 +3,9 @@ import type { DB } from "../../db/tx.js";
 import { shortIdMap } from "./short-id.js";
 import type { CardTimes } from "./card-sort.js";
 
-/**
- * How the CLI draws a list of cards.
- *
- * Beside `card-refs.ts` and out of `commands/card.ts` for the same two reasons: a command
- * module should hold commands, and this is plain formatting over rows that the coverage
- * exclusion on `cli/commands/**` was hiding for no reason of its own.
- */
+/** Shared CLI card-list formatting, separate from command execution. */
 
-/** What {@link printCards} needs of a card: the fields every listing prints. */
+/** Card fields required by every listing. */
 export type PrintableCard = {
   id: string;
   partition: string;
@@ -19,23 +13,18 @@ export type PrintableCard = {
   posX: number;
   posY: number;
 };
-/** What `card list` selects on every one of its three paths — printable, plus what `--sort` reads. */
+/** Card columns needed to print and sort all three `card list` query results. */
 export type ListedCard = PrintableCard & CardTimes;
-/** What `card nearest` prints: printable, plus the distance it ordered by. */
+/** Printable card fields and distance for `card nearest`. */
 export type NearestCard = PrintableCard & { distance: number };
 
 /**
- * Prints one line per card, with one extra column between the position and the text when
- * the caller passes something to fill it: the distance for `card nearest`, the value it
- * ordered by for `card list --sort`.
+ * Print one row per card. An optional formatter adds a column between coordinates and text
+ * for distance or sorting values. Without it, preserve the default ID, partition, coordinate,
+ * and text columns.
  *
- * A listing that asked for neither prints exactly what it printed before either column
- * existed: `<id>  <partition>  (<x>, <y>)  <text>`.
- *
- * The column arrives as a function of the card rather than as a flag this reads a field
- * for, so it is the caller's card shape that decides what can be printed: a column reading
- * `createdAt` cannot be handed cards that carry no timestamps, which asking for a sort key
- * beside a loosely-typed union of card shapes allowed.
+ * Type the formatter against the caller's card shape so it cannot read fields missing from
+ * the result.
  */
 export async function printCards<T extends PrintableCard>(
   db: DB,

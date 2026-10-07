@@ -20,7 +20,7 @@ function taskspace(overrides: Partial<TaskspaceSummary> & { id: string }): Tasks
   };
 }
 
-/** Answers every directory listing with `names`; anything else is a POST and is not used. */
+/** Return `names` for directory listings. This helper does not handle POST requests. */
 function fetcherFor(names: string[]) {
   return vi.fn(
     async () =>

@@ -10,11 +10,8 @@ describe("isMemoryDbUrl", () => {
   });
 
   it("treats a file path as a file, even one spelling :memory: inside it", () => {
-    // The case the three `includes(":memory:")` call sites this replaced would have got
-    // wrong: a real directory whose name happens to contain the token. Exempting it from
-    // the migration gate would serve an unmigrated workspace, and from
-    // `databaseSignature` would leave the tag cache unable to tell a stale gather from a
-    // current one.
+    // A real directory containing `:memory:` must still pass the migration gate and
+    // invalidate stale tag caches when its database changes.
     expect(isMemoryDbUrl("file:/tmp/:memory:/kozane.db")).toBe(false);
     expect(isMemoryDbUrl("file:/home/u/.kozane/kozane.db")).toBe(false);
     expect(isMemoryDbUrl("")).toBe(false);

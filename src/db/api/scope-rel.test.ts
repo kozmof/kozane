@@ -57,7 +57,7 @@ describe("addScopeRels", () => {
     expect(members.map(({ id }) => id).sort()).toEqual([...cardIds].sort());
   });
 
-  // Idempotent the way addScopeRel is: a card already in the scope is left as one row.
+  // Adding an existing membership has no effect.
   it("ignores a card already filed into the scope", async () => {
     const { db, scopeId, cardId } = await setup();
     await addScopeRel({ db, scopeId, cardId });
@@ -294,9 +294,7 @@ describe("getScopeRelsByNamespace", () => {
     );
   });
 
-  // A scope is deliberately cross-namespace, so this is the case that separates "the scopes
-  // this board draws" from "every row in the table": another namespace's card filed into the
-  // same scope must not arrive on this namespace's board.
+  // Return cards in this namespace even when the scope spans other namespaces.
   it("leaves another namespace's memberships of a shared scope out", async () => {
     const { db, namespaceId, scopeId, cardId } = await setup();
     const otherNamespaceId = await addNamespace({ db, name: "Other" });
@@ -313,9 +311,8 @@ describe("getScopeRelsByNamespace", () => {
     expect(await getScopeRelsByNamespace({ db, namespaceId })).toEqual([{ scopeId, cardId }]);
   });
 
-  // `scope_rel` is the table that grows fastest, so it is the one that reaches SQLite's
-  // parameter ceiling first — and reaching it stopped the board loading rather than slowing
-  // it down. Selecting by namespace binds one parameter however many cards there are.
+  // Verify that scope relations load for a large namespace without binding one parameter per
+  // card.
   it("reads a namespace holding more cards than one statement could name", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
     const layerId = (await getDefaultLayer({ db, namespaceId }))!.id;

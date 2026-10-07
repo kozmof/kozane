@@ -21,18 +21,9 @@ import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { STRIP_GAP } from "../lib/scope-area-files.js";
 
 /**
- * What this covers, and what it deliberately leaves to `namespace-page.test.ts`.
- *
- * The geometry and ordering this component draws with — `layerStack`, `clientToWorld`,
- * `rectsIntersect`, `dragGroupIds` — are pure functions tested on their own. What only
- * exists here is the composition: which card is rendered inside which layer wrapper, what
- * that wrapper's opacity and stacking come out as, and what a warp does that a card does
- * not. Those rules have no home outside the template, so they had no test at all.
- *
- * jsdom lays nothing out — every element has a zero-sized rect — so the marquee, which
- * intersects card rects, and edge-scroll, which needs an element with edges, are not
- * assertable here and stay with `e2e/`. Dragging and resizing are, and are covered at the
- * foot of this file: see the note there for why the missing layout does not reach them.
+ * Test canvas composition, layer rendering, warp behavior, and gesture wiring. Pure geometry
+ * helpers have separate tests. Use browser tests for layout-dependent marquee and edge-scroll
+ * behavior.
  */
 
 const color = (id: string): PartitionWithColor => ({
@@ -72,10 +63,8 @@ const card = (
 const warp = (id: string): Warp => ({ id, namespaceId: "p1", posX: 100, posY: 100 });
 
 /**
- * The fetcher the default props carry. Nothing here frames a scope that owns a taskspace, so
- * the eager listing the canvas does for its frames never has anything to ask for — and a call
- * getting through is a test's premise being wrong rather than something to answer politely.
- * The cases that do want a listing pass a stub of their own.
+ * Fail unexpected directory requests. Tests with framed taskspaces must supply their own
+ * listing stub.
  */
 const notFetched: typeof fetch = () => {
   throw new Error("unexpected fetch");
@@ -169,9 +158,8 @@ describe("KozaneCanvas layer grouping", () => {
     expect(cardIdsIn(wrapperFor(container, "l2"))).toEqual(["c2"]);
   });
 
-  // A card whose layer this namespace no longer has must not vanish from the board: it is
-  // drawn on the topmost layer rather than dropped on the floor. Topmost in stacking
-  // order, which `layerStack` puts the active layer at — not the highest `position`.
+  // Render a card with a missing layer on the topmost effective layer, including active-layer
+  // promotion.
   it("draws a card whose layer is missing on the topmost layer of the stack", () => {
     const cards = [card("orphan", "deleted-layer")];
     const { container } = render(KozaneCanvas, {
@@ -220,9 +208,8 @@ describe("KozaneCanvas layer grouping", () => {
     expect(wrapperFor(container, "l1").style.opacity).toBe(String(INACTIVE_LAYER_OPACITY));
   });
 
-  // The wrappers' z-index is what orders layers against each other; `card.zIndex` only ever
-  // orders cards inside one of them. A card brought to the front of a dimmed layer does not
-  // thereby cross in front of the layer being worked on.
+  // Layer wrapper z-index controls inter-layer order. Card z-index orders cards only within
+  // their layer.
   it("lifts the active layer above the rest, whatever zIndex its cards carry", () => {
     const cards = [card("c1", "l1", { zIndex: 0 }), card("c2", "l2", { zIndex: 99 })];
     const { container } = render(KozaneCanvas, {
@@ -315,8 +302,7 @@ describe("KozaneCanvas selection and scope", () => {
     expect(pressed).toEqual(["c2"]);
   });
 
-  // `visibleCards` is what the board filters; the canvas draws that and nothing else, so a
-  // card filtered out of view is absent from the DOM rather than hidden in it.
+  // Render only `visibleCards`. Filtered cards should be absent from the DOM.
   it("draws only the cards handed to it as visible", () => {
     const cards = [card("c1", "l1"), card("c2", "l1")];
     const { container } = render(KozaneCanvas, {
@@ -330,20 +316,9 @@ describe("KozaneCanvas selection and scope", () => {
 });
 
 /**
- * Dragging and resizing, which is the state machine this component holds and the only part
- * of it with no pure function underneath.
- *
- * The header above says drag is not assertable here because jsdom lays nothing out. That is
- * true of anything measured against the viewport — the marquee, which intersects card rects,
- * and edge-scroll, which needs an element with edges — and it is not true of the drag
- * itself. The offset is taken from the same zero rect at mousedown that every move is
- * measured against, so the rect cancels: a pointer moved 60px right moves the card 60/zoom
- * canvas pixels, whatever `getBoundingClientRect` claims. What was untested here was not
- * untestable, and it is the code where a mistake is least visible — a drag that saves the
- * wrong position, or a failed save that leaves the board showing a move that did not happen.
- *
- * Written against the component rather than a lifted-out controller with a fake canvas: the
- * fake is where the bugs are not.
+ * Test dragging and resizing through the component. Relative pointer deltas remain measurable
+ * in jsdom even with zero element rectangles. Layout-dependent interactions need separate
+ * browser coverage.
  */
 
 const down = (target: Element, clientX: number, clientY: number, init: MouseEventInit = {}) =>
@@ -356,13 +331,12 @@ const move = (clientX: number, clientY: number) =>
 
 const up = () => window.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
 
-/** A settled tick: the release awaits the persist callback before it rolls anything back. */
+/** Wait for persistence to settle before checking rollback. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 /**
- * The same props, split for {@link CanvasBindingHarness}: it owns `cards` and `zoom`, and
- * derives `visibleCards` from what it owns, so passing those through would give the canvas
- * two sources for one list.
+ * Omit `cards`, `zoom`, and `visibleCards` because {@link CanvasBindingHarness} owns their
+ * state and derivation.
  */
 function boundProps(overrides: Overrides = {}) {
   const {
@@ -397,7 +371,7 @@ describe("KozaneCanvas dragging", () => {
     up();
     await settle();
 
-    // 10 + 60 and 20 + 40, each snapped to the nearest 24: 70 and 60 both land on 72.
+    // Snap 70 and 60 to the nearest grid point, 72.
     expect(props.cards[0].posX).toBe(72);
     expect(props.cards[0].posY).toBe(72);
     expect(props.onPersistPositions).toHaveBeenCalledWith([{ cardId: "c1", posX: 72, posY: 72 }]);
@@ -415,9 +389,8 @@ describe("KozaneCanvas dragging", () => {
     await settle();
 
     expect(props.onPersistPositions).not.toHaveBeenCalled();
-    // The card does follow the pointer — the threshold gates the save and the snap, not the
-    // drawing — so it is left the 2px off that nothing wrote down, until the next snapshot
-    // poll puts it back.
+    // Below-threshold movement is drawn but not snapped or saved. The next snapshot restores
+    // the stored position.
     expect(props.cards[0].posX).toBe(12);
   });
 
@@ -442,9 +415,7 @@ describe("KozaneCanvas dragging", () => {
     up();
     await settle();
 
-    // The dragged card lands on the grid, and the rest of the group travels exactly the
-    // distance it did — the snap on release moves the whole group, not just the card under
-    // the pointer, so their spacing is what it was.
+    // Snap the dragged card and move the whole group by the same offset to preserve spacing.
     expect(cards[0].posX).toBe(48);
     expect(cards[1].posX).toBe(138);
     expect(cards[1].posX - cards[0].posX).toBe(100 - 10);
@@ -461,8 +432,8 @@ describe("KozaneCanvas dragging", () => {
     down(cardEl(container, "c1"), 100, 100);
     move(160, 100);
     expect(props.onPositionActivityStart).toHaveBeenCalledTimes(1);
-    // Still open while the save is in flight: a snapshot applied here would replace the
-    // card list under the drag that produced it.
+    // Keep position activity open during the save so polling cannot replace the dragged card
+    // list.
     expect(props.onPositionActivityEnd).not.toHaveBeenCalled();
     up();
     await settle();
@@ -470,12 +441,8 @@ describe("KozaneCanvas dragging", () => {
     expect(props.onPositionActivityEnd).toHaveBeenCalledTimes(1);
   });
 
-  // The rollback path. It has to put back the position the drag started from, not the one
-  // the request carried — and it has to say so, since the card is already drawn moved.
-  //
-  // Through the harness, because the rollback replaces the whole array rather than writing
-  // through the row: that assignment reaches a caller only across the binding, and the
-  // canvas rendered on its own writes it to a plain object nobody reads.
+  // Verify rollback to the drag's original position through the binding harness. Rollback
+  // replaces the array, so the parent binding must observe it.
   it("puts the card back where it was when the save fails", async () => {
     const { initialCards, props } = boundProps({
       onPersistPositions: vi.fn(async (_positions: CardPositionPatch[]) => false),
@@ -525,8 +492,7 @@ describe("KozaneCanvas warp dragging", () => {
     up();
     await settle();
 
-    // 100 + 60 and 100 + 40, landing where the pointer did: a warp marks a point someone
-    // chose, so nothing snaps it to the card grid on the way.
+    // Move the warp to 160, 140 without snapping to the card grid.
     expect(warps[0]).toMatchObject({ posX: 160, posY: 140 });
     expect(props.onPersistWarpPosition).toHaveBeenCalledWith("w1", { posX: 160, posY: 140 });
   });
@@ -582,8 +548,8 @@ describe("KozaneCanvas warp dragging", () => {
     expect(props.onPositionActivityEnd).toHaveBeenCalledTimes(1);
   });
 
-  // The marker is already drawn where it was dropped, so a refused save has to put it back
-  // and say so. No harness here, unlike the card rollback: this writes through the row.
+  // Restore the marker and report a failed save. This rollback writes through the row and
+  // needs no binding harness.
   it("puts the marker back where it was when the save fails", async () => {
     const warps = [warp("w1")];
     const props = makeProps({
@@ -636,13 +602,12 @@ describe("KozaneCanvas resizing", () => {
     up();
     await settle();
 
-    // 240 + 60, snapped to the nearest 24 on release: 300 lands on 312.
+    // Snap the new width of 300 to 312 on release.
     expect(props.cards[0].width).toBe(312);
     expect(props.onPersistWidth).toHaveBeenCalledWith("c1", 312);
   });
 
-  // Out of range is refused rather than stored, on the server. Clamping here is what keeps
-  // the board from ever asking: a drag past either end stops at it.
+  // Clamp the drag to the allowed range before sending it to the server.
   it("stops at the ends of the width range however far the pointer goes", async () => {
     const props = armed();
     const { container } = render(KozaneCanvas, props);
@@ -678,15 +643,8 @@ describe("KozaneCanvas resizing", () => {
 });
 
 /**
- * Scope areas: the frame, and what crossing its edge does to the scope's membership.
- *
- * Containment is measured against rendered card boxes, which jsdom does not produce — every
- * element there has a zero-sized rect. So the cards in these tests are given the boxes they
- * would have on a real board, with {@link layOut}. That is a fake, and it is a narrow one:
- * the geometry it feeds is `cardIdsOverlapping` and `membershipTransition`, both tested as
- * pure functions in `namespace-page.test.ts` against real numbers. What is being tested here
- * is the wiring — that the frame reads the board before a drag and after it, and files the
- * difference — which has no home outside this component.
+ * Test scope membership updates around frame and card gestures. Supply element rectangles in
+ * jsdom and rely on separate pure-function tests for overlap calculations.
  */
 const scopeArea = (overrides: Partial<ScopeAreaRow> = {}): ScopeAreaRow => ({
   id: "a1",
@@ -700,12 +658,8 @@ const scopeArea = (overrides: Partial<ScopeAreaRow> = {}): ScopeAreaRow => ({
 });
 
 /**
- * The box the browser would give an element, read off the styles the template writes.
- *
- * Unlike {@link layOut}, which pins a box, this one moves when the element does — and only
- * once Svelte has put the new `left`/`top` on screen. That makes it the fake worth
- * having for the drop path: the release writes a card's position and then has to measure it,
- * and measuring before the flush reads where the card was rather than where it is.
+ * Derive a mock rectangle from rendered styles so it moves only after Svelte flushes the DOM.
+ * This detects measurements taken before the updated position is visible.
  */
 function layOutFromStyle(el: HTMLElement, w: number, h: number) {
   el.getBoundingClientRect = () => {
@@ -778,8 +732,8 @@ describe("KozaneCanvas scope areas", () => {
     up();
     await settle();
 
-    // The delta is what snaps to the grid, not the frame's own corner: the frame carries
-    // its cards, so moving it by a multiple of the grid leaves everything aligned as it was.
+    // Snap the movement delta so the frame and its cards retain their existing grid
+    // alignment.
     expect(props.scopeAreas[0]).toMatchObject({ posX: 148, posY: 248 });
     expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a1", {
       posX: 148,
@@ -867,9 +821,8 @@ describe("KozaneCanvas scope areas", () => {
     up();
     await settle();
 
-    // The reason membership is a transition rather than a sweep of the final state: a card
-    // that was never in the frame may still be in the scope, put there from the sidebar or
-    // the CLI, and nudging it must not file it out.
+    // Change membership only when a card crosses a frame boundary. Cards assigned through the
+    // sidebar or CLI may belong to a scope without being inside its frame.
     expect(props.onScopeMembershipChange).not.toHaveBeenCalled();
   });
 
@@ -893,15 +846,9 @@ describe("KozaneCanvas scope areas", () => {
   });
 
   it("does not file its own members out of the scope when the frame is dragged away", async () => {
-    // The card starts inside the frame at (100, 200) 640×480 and is carried with it. Its box
-    // follows its styles, so it only reports the new position once Svelte has drawn it —
-    // which is the whole hazard: measured a moment early, the frame's new rectangle is tested
-    // against the card's old box, and the member it just carried across the board reads as
-    // having left the scope.
-    //
-    // Through the harness, because this is the one scope-area test whose assertion depends on
-    // the cards actually being redrawn: the canvas writes positions through the rows, and only
-    // a parent that owns them as state turns that into a style the box can be read from.
+    // Move the frame and its contained card through the reactive harness. The mock box
+    // follows rendered styles, so measuring before Svelte flushes would incorrectly report
+    // that the card left the scope.
     const { cards: initialCards, ...props } = areaProps({
       cards: [card("c1", "l1", { posX: 150, posY: 250 })],
     });
@@ -927,8 +874,8 @@ describe("KozaneCanvas scope areas", () => {
     await settle();
 
     expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a1", {
-      // The origin stays put: a frame that moved while being resized would take its cards'
-      // relationship to it with it.
+      // Keep the frame's origin fixed during resizing to preserve its position relative to
+      // its cards.
       posX: 100,
       posY: 200,
       width: 696,
@@ -939,7 +886,7 @@ describe("KozaneCanvas scope areas", () => {
   it("lets a card out when the frame is shrunk past it", async () => {
     const props = areaProps();
     const { container } = render(KozaneCanvas, props);
-    // Near the frame's far corner: inside at 640×480, outside once it is much smaller.
+    // This card is inside the 640-by-480 frame but outside the smaller frame.
     layOut(cardEl(container, "c1"), { x: 600, y: 600, w: 240, h: 80 });
 
     down(areaHandle(container, "s1"), 0, 0);
@@ -1000,12 +947,8 @@ describe("KozaneCanvas scope areas", () => {
 });
 
 /**
- * Drawing a scope area: Alt-drag pulls a rectangle out of the canvas, and the release hands
- * it to the page to ask which scope it belongs to.
- *
- * The rectangle itself is `selectionRectFromPoints`, tested on its own — what is here is the
- * gesture: that Alt claims the press from the pan and the marquee, that a click is not a
- * draw, and that what lands in `pendingScopeAreaRect` is a rectangle the server would accept.
+ * Test Alt-drag ownership, the draw threshold, and the pending frame rectangle. Rectangle
+ * arithmetic has separate tests.
  */
 describe("KozaneCanvas scope area drawing", () => {
   function surface(container: HTMLElement): Element {
@@ -1044,8 +987,7 @@ describe("KozaneCanvas scope area drawing", () => {
     draw(container, [100, 100], [140, 130]);
     await settle();
 
-    // Past the draw threshold, so it was meant — and a frame below the minimum could not be
-    // grabbed by its tab afterwards, which is a rectangle you would have to delete.
+    // Expand a valid draw below the minimum frame size so its handles remain usable.
     expect(component.readPendingRect()).toMatchObject({ w: 120, h: 120 });
   });
 
@@ -1065,7 +1007,7 @@ describe("KozaneCanvas scope area drawing", () => {
     draw(container, [100, 100], [500, 460]);
     await settle();
 
-    // Alt is checked before Shift, and a draw moves nothing: the board is left as it was.
+    // Alt takes priority over Shift. Drawing a frame must not move the board's contents.
     expect(selection.selectedCards.size).toBe(0);
   });
 
@@ -1089,22 +1031,18 @@ describe("KozaneCanvas scope area drawing", () => {
   }
 
   /**
-   * The colour is asserted against `token.var` rather than a literal because that is the only
-   * form that can fail usefully. jsdom keeps whatever string it is handed and never resolves
-   * a custom property, so a name that does not exist reads exactly like one that does — which
-   * is why the rectangle was invisible in a real browser and green here.
+   * Compare against `token.var` because jsdom preserves unresolved custom properties and
+   * cannot detect an invalid token name itself.
    */
   it("draws the rectangle while it is still being dragged", async () => {
     const { container } = mountBound();
 
     down(surface(container), 100, 100, { altKey: true });
     move(500, 460);
-    // Svelte batches the DOM write; a browser flushes it before the next frame, and here it
-    // takes a tick. The assertion is still about the state before the release.
+    // Wait for Svelte's DOM update before asserting the in-progress draw.
     await settle();
 
-    // Before the release, which is the whole point: a rectangle you cannot see while pulling
-    // it out is a rectangle you cannot aim.
+    // Show the rectangle during the drag so the user can place it accurately.
     const drawn = rectAt(container, { left: "100px", top: "100px", width: "400px" });
     expect(drawn).not.toBeUndefined();
     expect(drawn!.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
@@ -1118,8 +1056,7 @@ describe("KozaneCanvas scope area drawing", () => {
       makeProps({ pendingScopeAreaRect: { x: 40, y: 60, w: 300, h: 200 } }),
     );
 
-    // Whatever is drawn for it has to be on screen: the prompt asks about "this rectangle",
-    // and an invisible one makes the question unanswerable.
+    // Keep the rectangle visible while the prompt asks which scope it frames.
     const drawn = rectAt(container, { left: "40px", top: "60px", width: "300px" });
     expect(drawn).not.toBeUndefined();
     expect(drawn!.style.border).toBe(`1px solid ${token.var("colors.neutral.iconDim")}`);
@@ -1159,7 +1096,7 @@ describe("KozaneCanvas scope areas: several frames per scope", () => {
     layOut(el, { x: 50, y: 50, w: 240, h: 80 });
 
     down(el, 100, 100);
-    // Out of the first frame and into the second — still inside the scope throughout.
+    // Move between frames of the same scope without leaving its membership.
     layOut(el, { x: 1050, y: 50, w: 240, h: 80 });
     move(200, 200);
     up();
@@ -1216,7 +1153,7 @@ describe("KozaneCanvas scope areas: several frames per scope", () => {
     up();
     await settle();
 
-    // Keyed by area id: the other frame of the same scope has not moved.
+    // Move only the requested area ID, leaving the scope's other frame unchanged.
     expect(props.onPersistScopeArea).toHaveBeenCalledWith("s1", "a2", expect.any(Object));
     expect(props.scopeAreas[0]).toMatchObject({ id: "a1", posX: 0, posY: 0 });
   });
@@ -1245,14 +1182,8 @@ function areaTabFor(container: HTMLElement, areaId: string): HTMLElement {
 }
 
 /**
- * The icons a frame draws beneath it.
- *
- * The arithmetic behind them — which taskspace belongs under which frame, the sort, how many
- * cells fit — is covered in `lib/scope-area-files.test.ts`, and the strip's own markup in
- * `ScopeAreaFiles.test.ts`. What only exists here is the composition: that a framed scope's
- * taskspace is read off disk without anyone asking, that the strip follows the frame it hangs
- * from, and that drilling into a folder on one frame leaves another frame of the same scope
- * where it was.
+ * Test frame file-strip integration, including eager loading, following frame movement, and
+ * independent folder navigation for frames sharing a scope.
  */
 describe("KozaneCanvas scope area files", () => {
   const taskspace = (id: string, name: string, scopeId: string): TaskspaceSummary => ({
@@ -1407,16 +1338,14 @@ describe("KozaneCanvas scope area files", () => {
     await settle();
 
     const second = container.querySelector<HTMLElement>("[data-scope-area-files='a2']")!;
-    // Each frame is its own way of looking at the scope: the one not clicked is untouched.
+    // Changing one frame leaves the scope's other frames unchanged.
     expect(first.textContent).toContain("util.ts");
     expect(second.textContent).toContain("app.ts");
     expect(second.textContent).not.toContain("util.ts");
   });
 
   it("follows the frame as it is dragged", async () => {
-    // Through the harness, for the reason it gives: a drag writes the frame's position
-    // through the row, and only a parent that owns the rows as state turns that into a
-    // style the strip can be read from.
+    // Use the harness so row mutations update the styles through parent-owned state.
     const { cards: initialCards, visibleCards: _v, zoom: _z, ...rest } = fileProps();
     const { container } = render(CanvasBindingHarness, { initialCards, ...rest });
     await settle();

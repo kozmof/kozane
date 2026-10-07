@@ -16,16 +16,8 @@ import {
 } from "./namespace-api.js";
 
 /**
- * The saves the board's canvas and composer hand to the page, against the namespace state.
- *
- * Split from `namespace-actions.svelte.ts` along the line the canvas draws: every save here
- * follows an edit the board has already made — a card dragged, a frame resized, a warp
- * dropped — and only answers whether it took, so the canvas can put the old value back if it
- * did not. The actions module is the other kind: it makes the edit and the request together.
- *
- * Where a save comes back with the stored row, the row is written back: the server clamps to
- * the canvas, so a thing dropped at the very edge would otherwise sit a few pixels off what
- * was kept until the next poll corrected it.
+ * Persist optimistic canvas and composer edits and report success for rollback handling.
+ * Apply returned rows to local state so server-clamped values appear immediately.
  */
 export function createBoardPersistence(s: NamespaceState) {
   async function persistPositions(positions: CardPositionPatch[]): Promise<boolean> {
@@ -54,19 +46,15 @@ export function createBoardPersistence(s: NamespaceState) {
     const res = await moveScopeArea(s.mutationFetcher, s.namespaceId, scopeId, areaId, rect);
     if (!res.ok) return false;
     const stored = parseScopeArea(await res.json().catch(() => null));
-    // By id, not by scope: a scope may have several frames here, and the one that moved is
-    // the one that was dragged. Every card it holds is filed against this rectangle, so it
-    // has to be the stored one.
+    // Persist the dragged frame by area ID because a scope may have multiple frames. Use its
+    // stored rectangle for card membership.
     if (stored) s.scopeAreas = s.scopeAreas.map((a) => (a.id === areaId ? stored : a));
     return true;
   }
 
   /**
-   * Saves what the composer submitted: an edit to `id`, or a new card when `id` is null,
-   * placed at whatever `placeNew` answers.
-   *
-   * Errors carry the server's own message rather than a fixed one: a refusal the composer
-   * cannot foresee — text past `ui.contentMax` above all — is the reason the writer needs.
+   * Save an existing card or create one at `placeNew` when no ID is supplied. Preserve server
+   * error messages so the composer can explain validation failures.
    */
   async function submitComposer(
     id: string | null,
@@ -103,9 +91,8 @@ export function createBoardPersistence(s: NamespaceState) {
       s.setError(await failureMessage(res, "Failed to create card"));
       return;
     }
-    // Read rather than trusted: a body missing `posX` would put this card at `undefined` on
-    // the canvas. The stored row, not a local reconstruction, because the server clamps
-    // posX/posY to the canvas. See `parseCard`.
+    // Validate the returned card and use its stored coordinates because the server clamps
+    // positions. See `parseCard`.
     const created = parseCard(await res.json().catch(() => null));
     if (!created) {
       s.setError("Failed to create card");

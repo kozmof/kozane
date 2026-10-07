@@ -182,8 +182,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]/file", () => {
         path: "demo",
       });
 
-      // The file is there and readable; the namespace the endpoint is addressed to is what
-      // refuses it, the way every other namespace-scoped endpoint here does.
+      // Reject the readable file because its taskspace belongs to another namespace.
       await expectHttpRejection(
         GET(getEvent(db, namespaceId, otherTaskspaceId, "README.md")),
         404,
@@ -192,8 +191,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]/file", () => {
     });
 
     it("reads a taskspace assigned to no namespace from any namespace's endpoint", async () => {
-      // Unplaced rather than another namespace's, and drawn on every board — so the file
-      // endpoint behind that panel has to answer about it too.
+      // Allow access to unplaced taskspaces, which appear on every board.
       const unassignedId = await addTaskspace({ db, name: "demo", path: "demo" });
 
       expect((await body(GET(getEvent(db, namespaceId, unassignedId, "README.md")))).content).toBe(

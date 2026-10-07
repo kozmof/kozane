@@ -2,9 +2,8 @@ import type { Warp } from "./types.js";
 import { WARP_HINT_MAX_CHARS } from "./constants.js";
 
 /**
- * One row of the cross-namespace warp palette. `label` is the warp's number on its own
- * board — numbering restarts per namespace, so a row and the marker it stands for always
- * carry the same digit.
+ * Cross-namespace warp palette row. Number warps within each namespace to match their board
+ * labels.
  */
 export type WarpListEntry = {
   id: string;
@@ -19,8 +18,8 @@ export type WarpListEntry = {
 };
 
 /**
- * Anything positioned on a board that can lend a warp its hint. `content` may be only the
- * opening of the card — see {@link HintCard.contentChars}.
+ * Positioned card data used for warp hints. Content can be a prefix when `contentChars`
+ * carries the full length.
  */
 export type HintCard = {
   posX: number;
@@ -33,13 +32,8 @@ export type HintCard = {
   contentChars?: number;
   zIndex?: number;
   /**
-   * The card's own drawn width, when it has pinned one. Null or omitted is the ordinary
-   * case — a card following `ui.defaultCardWidth`, which is what `metrics` carries.
-   *
-   * A resized card measured at the default width is measured as the wrong box in both
-   * directions: too narrow or too wide horizontally, and the wrong height with it, since
-   * height is what the text wraps to at that width. Both are what decides which card a
-   * warp is named after, and a plausible wrong hint is not something anyone would notice.
+   * Pinned card width, or null/omitted to use the workspace default. Use it for both
+   * horizontal bounds and estimated text wrapping.
    */
   width?: number | null;
 };
@@ -47,11 +41,7 @@ export type HintCard = {
 /** What every card on a board is drawn at, which is what turns a position into a box. */
 export type CardMetrics = { cardWidth: number; fontSize: number };
 
-/**
- * The metrics a workspace's UI settings imply. The two names differ — `defaultCardWidth`
- * is a setting, `cardWidth` is what a card is drawn at — and doing the rename in one place
- * is what keeps a caller from quietly passing the font size as the width.
- */
+/** Convert workspace UI settings to the metric names used by hint calculations. */
 export function cardMetrics(ui: {
   defaultCardWidth: number;
   defaultFontSize: number;
@@ -60,28 +50,22 @@ export function cardMetrics(ui: {
 }
 
 /**
- * How far a card's edge may sit from a warp and still describe it, in world pixels. Two
- * card widths: past that the nearest card is somewhere else on the board, and naming it
- * would point at the wrong place.
+ * Maximum distance in world pixels from a warp to a card's edge for that card to describe the
+ * warp. Use two card widths to exclude distant cards.
  */
 export const WARP_HINT_RADIUS = 480;
 
 /**
- * The card's own chrome, transcribed from KozaneCard.svelte: 8px above and below the text,
- * a footer that holds its space even when hidden, and a floor under the content block.
- *
- * Transcribed rather than imported because the component states them inside `css({...})`,
- * which Panda extracts at build time and so cannot read from a variable. Exported instead,
- * so `warp-list.test.ts` can hold these against the component's own styles: a card
- * restyled without touching them leaves every hint naming the wrong neighbour, and a
- * plausible wrong hint is not something anyone would notice.
+ * Card dimensions mirrored from KozaneCard.svelte, including vertical padding, reserved
+ * footer space, and minimum content height. Panda requires literal styles in the component.
+ * Export these values so tests can verify that they match those styles.
  */
 export const CARD_BOX = {
   /** Left plus right padding. */
   paddingX: 20,
   /** Top plus bottom padding. */
   paddingY: 16,
-  /** Only the footer's own height is estimated; the rest are the component's literals. */
+  /** Estimate footer height. Other measurements match component constants. */
   footerHeight: 24,
   minContentHeight: 44,
   lineHeightRatio: 1.65,
@@ -93,10 +77,8 @@ export const CARD_BOX = {
 const CHAR_WIDTH_RATIO = 0.6;
 
 /**
- * Code point ranges a monospace font draws at double width: the CJK blocks, Hangul, the
- * fullwidth forms, and the emoji. Kozane is a こざね法 tool, so a board of Japanese cards is
- * the ordinary case rather than the exotic one — counting those characters as narrow
- * would halve every estimate.
+ * Code point ranges treated as double-width for monospace estimates, including CJK, Hangul,
+ * fullwidth forms, and emoji.
  */
 const WIDE_RANGES: readonly (readonly [number, number])[] = [
   [0x1100, 0x115f], // Hangul Jamo
@@ -132,9 +114,8 @@ export function textCells(text: string): number {
 }
 
 /**
- * How tall a card with this content comes out, near enough. Cards store a position but no
- * size — the width is the same for all of them and the height is whatever the text wraps
- * to — so a warp that has to know what it is sitting on has to estimate it.
+ * Estimate rendered card height from text and width because the database stores no measured
+ * height.
  */
 export function estimateCardHeight(content: string, { cardWidth, fontSize }: CardMetrics): number {
   const cellsPerLine = Math.max(
@@ -148,22 +129,14 @@ export function estimateCardHeight(content: string, { cardWidth, fontSize }: Car
   return Math.max(CARD_BOX.minContentHeight, textHeight) + CARD_BOX.footerHeight;
 }
 
-/** What this card is actually drawn at: its own width if it pinned one, else the default. */
+/** Rendered card width, using its pinned width or the configured default. */
 function hintCardWidth(card: HintCard, metrics: CardMetrics): number {
   return card.width ?? metrics.cardWidth;
 }
 
 /**
- * How tall a hint card is drawn, whether it arrived whole or as an opening. A card read
- * for the palette carries only its first few hundred characters, and measuring that as the
- * whole card would draw a long note as a short one — so the opening is measured and scaled
- * by how much text there turned out to be, taking it as representative of the rest. That
- * assumption is what a hint is worth: an estimate of which card a warp is sitting on, made
- * the same way wherever the row is built, so a warp is named after the same card whether
- * it is read from its own board or from another namespace's.
- *
- * Measured at the card's own width, so a resized card wraps to the number of lines it
- * really wraps to.
+ * Estimate hint-card height at its pinned or default width. For truncated content, scale the
+ * prefix measurement by full text length, assuming the prefix represents the rest.
  */
 function hintCardHeight(card: HintCard, metrics: CardMetrics): number {
   const measured = estimateCardHeight(card.content, {
@@ -176,8 +149,8 @@ function hintCardHeight(card: HintCard, metrics: CardMetrics): number {
 }
 
 /**
- * Squared distance from a point to a card's box, which is zero anywhere inside it. Squared
- * throughout: the ordering is the same as the real distance, without the square root.
+ * Squared distance from a point to a card's box, or zero inside it. Squaring preserves
+ * distance order without a square root.
  */
 function squaredDistanceToCard(
   point: { posX: number; posY: number },
@@ -205,10 +178,8 @@ function condense(content: string): string {
 }
 
 /**
- * The text of the card describing where `warp` is, condensed to one short line. Measured
- * to each card's box rather than to the corner it is positioned by: a warp dropped on a
- * card is zero away from it, so the card under the marker always wins — which is the one
- * the eye reads it as marking, even when some other card's corner happens to sit nearer.
+ * Build a short hint from the card nearest the warp's point. Measure distance to estimated
+ * card boxes so a containing card has zero distance.
  */
 export function nearestCardHint(
   warp: { posX: number; posY: number },
@@ -224,9 +195,8 @@ export function nearestCardHint(
     const distance = squaredDistanceToCard(warp, card, metrics);
     if (distance > limit) continue;
     const zIndex = card.zIndex ?? 0;
-    // Nearer wins; between two cards the warp sits on, the one stacked on top does, since
-    // that is the one being looked at. Both comparisons are strict, so an outright tie
-    // falls to the first card — `cards` arrives in a stable order.
+    // Prefer smaller distance, then higher stacking for overlapping cards. Preserve input
+    // order for exact ties.
     if (distance > bestDistance || (distance === bestDistance && zIndex <= bestZIndex)) continue;
     best = card;
     bestDistance = distance;
@@ -237,7 +207,7 @@ export function nearestCardHint(
 
 type WarpEntriesForNamespace = {
   namespace: { id: string; name: string };
-  /** In the order `getAllWarps` returns them: creation order, which is what markers show. */
+  /** Creation order from `getAllWarps`, matching marker numbers. */
   warps: readonly Warp[];
   cards: readonly HintCard[];
   metrics: CardMetrics;
@@ -279,9 +249,8 @@ export function moveHighlight(
 }
 
 /**
- * The list without `warpId`, with the namespace it belonged to renumbered: a removed warp
- * renumbers the markers on its board, and the list has to say the same thing. Entries of
- * one namespace are contiguous, so one counter is enough.
+ * Remove `warpId` and renumber its namespace to match the board markers. Namespace entries
+ * are contiguous, so one counter suffices.
  */
 export function withoutWarp(entries: readonly WarpListEntry[], warpId: string): WarpListEntry[] {
   const removed = entries.find((entry) => entry.id === warpId);
@@ -342,8 +311,7 @@ export function buildWarpDirectory({
   metrics,
   excludeNamespaceId,
 }: BuildWarpDirectory): WarpListEntry[] {
-  // Bucketed once instead of filtered inside the loop: a workspace's cards are scanned
-  // one time between them all, rather than once for every namespace it holds.
+  // Bucket cards once to avoid rescanning them for every namespace.
   const warpsByNamespace = groupByNamespace(warps);
   const cardsByNamespace = groupByNamespace(cards);
   return namespaces.flatMap((namespace) =>

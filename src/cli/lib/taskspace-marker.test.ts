@@ -51,9 +51,8 @@ describe("readTaskspaceMarker", () => {
     expect(() => readTaskspaceMarker(dir)).toThrow("Invalid taskspace marker");
   });
 
-  // Every marker written before the rename is one of these, so the message it gets is the
-  // whole of what a user has to go on — "Invalid taskspace marker" would describe a
-  // well-formed file as broken and leave them looking for the corruption.
+  // Explain that the marker uses an older format so users can distinguish it from a malformed
+  // file.
   it("names the rename when refusing a marker written before it", () => {
     const dir = mkdtempSync(join(tmpdir(), "kozane-marker-test-"));
     dirs.push(dir);

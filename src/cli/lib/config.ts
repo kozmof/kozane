@@ -27,11 +27,8 @@ export function defaultConfig(name: string): WorkspaceConfig {
 }
 
 /**
- * Reads and validates the workspace config, rejecting the first problem found. Strict by
- * design: the CLI is reading a file the user just edited, so a bad value is reported
- * rather than silently dropped. The server validates the same config leniently through
- * the same rules (db/internal/config.ts), so the two can never disagree on validity.
- * `kozane doctor config` reports every problem instead of only the first.
+ * Use the server's parsing rules, but throw on the first error. The server skips invalid
+ * fields, and doctor reports all errors.
  */
 export function readConfig(workspaceRoot: string): WorkspaceConfig {
   const configPath = join(workspaceRoot, KOZANE_DIR, CONFIG_FILE);
@@ -49,12 +46,8 @@ export function readConfig(workspaceRoot: string): WorkspaceConfig {
 }
 
 /**
- * Writes the workspace config atomically. Not only for the half-written file a crash would
- * otherwise leave behind in the one file that says a workspace is a workspace: the rename
- * gives it a new inode, which is how the readers' cache (`db/internal/config.ts`, keyed by
- * {@link fileSignature}) tells a rewrite from the version it already parsed. Written in
- * place, two configs of the same length written inside one filesystem timestamp tick are
- * indistinguishable, and the second would go unread.
+ * Atomic replacement changes the inode, invalidating the cache even when size and timestamps
+ * match.
  */
 export function writeConfig(workspaceRoot: string, config: WorkspaceConfig): void {
   const configPath = join(workspaceRoot, KOZANE_DIR, CONFIG_FILE);

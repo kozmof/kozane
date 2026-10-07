@@ -55,12 +55,8 @@ describe("getMigrationStatus", () => {
     expect(status.state).toBe("missing");
     if (status.state !== "missing") return;
     expect(status.pendingCount).toBeGreaterThan(0);
-    // The newest migration in drizzle/, read off the directory rather than written down.
-    // It was written down, and so had to be corrected by hand every time one was generated
-    // — which is a test that fails on a change that is not a fault, and is corrected by
-    // copying the value the code just produced. Taken from the `.sql` files, this asserts
-    // something the pinned string never did: that the journal `getMigrationStatus` reads
-    // agrees with the migrations actually on disk.
+    // Derive the latest migration from the SQL files so the test checks that the journal
+    // agrees with the migrations on disk.
     const newest = readdirSync(MIGRATIONS_DIR)
       .filter((name) => name.endsWith(".sql"))
       .sort()
@@ -177,11 +173,8 @@ describe("restoreDb", () => {
     expect((await getMigrationStatus(tempDbUrl(target))).state).toBe("current");
   });
 
-  // The case a plain `copyFileSync` could not stage. A workspace runs in WAL, so a backup
-  // taken while something still holds the database keeps its most recent commits in the
-  // `-wal` beside it — copying the main file alone produced a database missing them, and the
-  // restore then refused a good backup as one that had never been migrated. Staged with
-  // `VACUUM INTO`, which reads through a connection and therefore sees the log.
+  // Keep recent commits in a WAL sidecar to verify that restore stages the complete database.
+  // Copying only the main file would miss them.
   it("restores a backup whose latest commits are still in its write-ahead log", async () => {
     const root = tempRoot();
     const source = join(root, "backup.db");
@@ -235,12 +228,8 @@ describe("restoreDb", () => {
     expect(readFileSync(target, "utf8")).toBe("original");
   });
 
-  // A write-ahead log holds commits the main file does not, so one left beside a database
-  // that has been swapped underneath it describes a history the restored database never
-  // had — SQLite would replay it and produce neither the backup nor what was there before.
-  // Written by hand rather than by provoking a checkpoint boundary: a workspace is in WAL
-  // (`db/pragmas.ts`), but the point being made is that the restore clears these whatever
-  // the mode, and staging that by hand is what says so without depending on it.
+  // Verify that restore removes old WAL sidecars so SQLite cannot replay them over the
+  // restored database. Write the fixture directly to avoid depending on checkpoint timing.
   it("clears the log files left beside the database it replaces", async () => {
     const root = tempRoot();
     const source = join(root, "backup.db");
@@ -270,22 +259,16 @@ describe("restoreDb", () => {
 });
 
 /**
- * `listBackups`, `migrationStatusMessage` and `requireCurrentMigrations` — the three exports
- * this file had been leaving to the subprocess suites, and the reason `cli/lib/db.ts` sat at
- * 62% of statements and 36% of branches while everything around it was near the thresholds.
- *
- * They are the recovery paths: what `kozane db status` prints, what `db restore` chooses
- * from, and the guard every workspace command opens with. Exercising them only through a
- * spawned `kozane` meant the wording each failure state produces — which is the entire
- * product of `migrationStatusMessage` — was asserted nowhere.
+ * Test backup discovery, migration status messages, and the migration guard directly. These
+ * recovery paths also run through the CLI subprocess tests.
  */
 const ENTRY = { idx: 0, when: 1_700_000_000_000, tag: "0000_init" };
 const LATER = { idx: 1, when: 1_800_000_000_000, tag: "0001_add_width" };
 
 describe("listBackups", () => {
   it("is empty for a workspace that has never been backed up", () => {
-    // The directory is created by the first backup, so its absence is the ordinary case
-    // rather than an error — `db restore` prints "no backups" from exactly this.
+    // The backup directory does not exist until the first backup. Treat its absence as an
+    // empty list.
     expect(listBackups(tempRoot())).toEqual([]);
   });
 
@@ -348,9 +331,8 @@ describe("migrationStatusMessage", () => {
   });
 
   it("sends a gapped database to db restore, and says migrate cannot repair it", () => {
-    // The distinction the whole state exists for: drizzle only applies migrations newer than
-    // the newest recorded one, so suggesting `db migrate` here would be advice that does
-    // nothing and reports success.
+    // Migration cannot repair a gap in history because it applies only migrations newer than
+    // the latest recorded one.
     const message = migrationStatusMessage({
       state: "gapped",
       dbPath: "/w/.kozane/kozane.db",
@@ -428,8 +410,8 @@ describe("requireCurrentMigrations", () => {
   });
 
   it("names the purpose and exits non-zero for a database that is not current", async () => {
-    // A file that was never migrated: `missing` rather than `pending`, and the guard has to
-    // stop the command either way.
+    // A database that has never been migrated is missing, not pending. The guard rejects both
+    // states.
     const root = tempRoot();
     const { errors, restore } = trapExit();
     try {
@@ -437,8 +419,7 @@ describe("requireCurrentMigrations", () => {
         requireCurrentMigrations(tempDbUrl(join(root, "absent.db")), "cards can be added"),
       ).rejects.toThrow("process.exit(1)");
       expect(errors[0]).toBe("Kozane database needs attention before cards can be added.");
-      // Not `db migrate`: the state is not one migrating repairs, and suggesting it is the
-      // mistake `migrationStatusMessage` documents.
+      // Do not suggest migration as a repair for a gap in history.
       expect(errors.join("\n")).toContain("kozane db status");
       expect(errors.join("\n")).not.toContain("Run: kozane db migrate");
     } finally {

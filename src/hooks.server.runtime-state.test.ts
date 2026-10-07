@@ -15,9 +15,8 @@ vi.mock("./db/internal/config", () => ({
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
 /**
- * pid 1 always exists and is never this process. A signal-0 probe of it fails with EPERM
- * for an unprivileged user, which `activeServerProcess` reads as "running" — exactly the
- * answer a genuinely live server would give.
+ * Use PID 1 as an existing process distinct from this test. An unprivileged signal-0 probe
+ * can return EPERM, which `activeServerProcess` treats as running.
  */
 const FOREIGN_LIVE_PID = 1;
 
@@ -72,8 +71,8 @@ describe("workspace already served by another process", () => {
       expect(response.status).toBe(503);
     }
 
-    // Logged once, not once per request: a permanent condition reported over and over reads
-    // as an intermittent fault.
+    // Log the refusal once. Repeated requests must not make a persistent conflict appear
+    // intermittent.
     expect(error).toHaveBeenCalledTimes(1);
     error.mockRestore();
   });

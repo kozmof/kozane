@@ -51,7 +51,7 @@ describe("readNamespaceSnapshot", () => {
     snapshot.cards[0].taskspaceId = null;
     snapshot.cards[0].glueId = null;
     snapshot.cards[0].width = null;
-    // A static export strips taskspace paths; an unplaced taskspace has no scope.
+    // Static exports omit taskspace paths. Taskspaces can also have no scope.
     snapshot.taskspaces[0].path = null;
     snapshot.taskspaces[0].scopeId = null;
     expect(read(snapshot)).toEqual(snapshot);

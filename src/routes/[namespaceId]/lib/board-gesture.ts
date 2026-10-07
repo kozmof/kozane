@@ -41,33 +41,26 @@ export type CardDragGesture = Gesture & {
   groupIdSet: Set<string>;
   groupPrevPositions: Map<string, Point>;
   /**
-   * Who was inside each frame when the drag began, by scope id — the `before` half of
-   * `membershipTransition`, read once at the press rather than on release.
-   *
-   * It has to be read at mousedown: by the time the pointer comes up the cards have already
-   * moved, and the board no longer holds the answer to what was inside before they did.
-   * Every frame, not only the ones under the cards being dragged, because one drag can take
-   * a card out of one frame and into another.
+   * Scope membership at the start of the drag, captured across every frame before any cards
+   * move. Compare it with membership after release.
    */
   areaMembersBefore: Map<string, Set<string>>;
   /**
-   * Where the pointer is, so the release can snap to the grid and the edge-scroll knows
-   * which way to go. Set at the press and on every move, so never null — unlike the resize
-   * trackers below, which a gesture can be released without ever having moved.
+   * Current pointer position for snapping and edge scrolling. Initialize it at press and
+   * update it on every move.
    */
   pointer: Point;
 };
 
-/** Dragging a card's width handle. Horizontal travel only; see {@link HorizontalGesture}. */
+/** Horizontal drag of a card width handle. See {@link HorizontalGesture}. */
 export type CardResizeGesture = HorizontalGesture & {
   kind: "card-resize";
   cardId: string;
   /** The width the card was drawn at when the drag began, in canvas pixels. */
   startWidth: number;
   /**
-   * The width to put back if the save fails. Distinct from `startWidth`, which is always a
-   * number: null is a card that had no width of its own and was following
-   * `ui.defaultCardWidth`, and a failed resize has to leave it doing that.
+   * Width restored after a failed save. Unlike numeric `startWidth`, this may be null to
+   * restore the card's use of `ui.defaultCardWidth`.
    */
   prevWidth: number | null;
   /** Where the pointer was last seen, so the release can snap. Null until it moves. */
@@ -75,9 +68,8 @@ export type CardResizeGesture = HorizontalGesture & {
 };
 
 /**
- * The marker being dragged. Its own member rather than folded into {@link CardDragGesture}:
- * a warp is not on a layer, is never glued to anything, and does not snap to the grid, so
- * the two share only the shape of a drag and none of its substance.
+ * Warp-marker drag state. Unlike card drags, warps have no layer or glue group and do not
+ * snap to the grid.
  */
 export type WarpDragGesture = Gesture & {
   kind: "warp-drag";
@@ -91,11 +83,8 @@ export type WarpDragGesture = Gesture & {
 };
 
 /**
- * The frame being dragged, and what it is carrying.
- *
- * `cardIds` is settled at mousedown and not recomputed while the pointer moves: the cards
- * travel with the frame, so the set cannot change on the way, and re-sweeping the board
- * every pointer move would pick up whatever the frame happened to be passing over.
+ * Frame drag state and the cards it carries. Capture `cardIds` on mousedown so passing over
+ * other cards does not add them during movement.
  */
 export type AreaDragGesture = Gesture & {
   kind: "area-drag";
@@ -108,10 +97,8 @@ export type AreaDragGesture = Gesture & {
   cardIdSet: Set<string>;
   cardPrevPositions: Map<string, Point>;
   /**
-   * Who was in the scope before the drag, across every frame it has on this board — the
-   * `before` half of `membershipTransition`. Wider than `cardIds`, which is only what this
-   * frame carries: a card sitting in another frame of the same scope is a member throughout,
-   * however this one moves. See `cardIdsInScope`.
+   * Pre-drag membership across every frame of this scope. This is broader than the cards
+   * carried by the dragged frame.
    */
   membersBefore: Set<string>;
 };
@@ -135,10 +122,8 @@ export type MarqueeGesture = Gesture & {
 };
 
 /**
- * An Alt-drag drawing a scope frame. The same fields as {@link MarqueeGesture}, and for the
- * same reason: both are a rectangle pulled out of a point, and neither moves anything while
- * it is being drawn. What differs is only what the release does with it — and the threshold
- * it is held to, which is `SCOPE_AREA_DRAW_MIN` rather than the default.
+ * Alt-drag rectangle for a new scope frame. Share point geometry with marquee selection but
+ * use `SCOPE_AREA_DRAW_MIN` and a different release action.
  */
 export type AreaDrawGesture = Gesture & {
   kind: "area-draw";
@@ -147,11 +132,8 @@ export type AreaDrawGesture = Gesture & {
 };
 
 /**
- * A drag of the board itself. Not a {@link Gesture}: panning has no click-versus-drag
- * distinction to draw — a press that goes nowhere scrolls nowhere and there is nothing to
- * commit or undo — so it carries no `moved`, and its `startX`/`startY` are kept under those
- * names because the scroll arithmetic reads them as a plain origin rather than as the
- * threshold the other members measure against.
+ * Canvas panning state. No movement threshold or commit is needed because an unmoved press
+ * changes nothing.
  */
 export type PanGesture = {
   kind: "pan";
@@ -162,17 +144,8 @@ export type PanGesture = {
 };
 
 /**
- * Whether a gesture reserved position activity at its press, and so owes the matching
- * release.
- *
- * The board calls `onPositionActivityStart` from five of the eight presses — the five that
- * move or resize something a poll would otherwise overwrite mid-drag — and nothing wrote
- * down which five. Each release handler simply remembered to call `onPositionActivityEnd`,
- * and the one path that abandoned a gesture rather than releasing it did not, because
- * there was nothing to ask.
- *
- * Asked of the kind rather than carried as a flag on each member, so a new gesture answers
- * it by being added to one list or the other rather than by its author remembering a field.
+ * Whether this gesture reserved position activity and must release it. Classify by gesture
+ * kind so cancellation can balance the same reservation as normal release.
  */
 export function holdsPositionActivity(kind: BoardGesture["kind"]): boolean {
   switch (kind) {
@@ -190,12 +163,8 @@ export function holdsPositionActivity(kind: BoardGesture["kind"]): boolean {
 }
 
 /**
- * The card being dragged, or null when the open gesture is not a card drag.
- *
- * These four readers are what the component's `draggingId`, `draggingWarpId`,
- * `draggingAreaId` and `resizingAreaId` became: each was a `$state` variable set beside its
- * gesture at the press and nulled beside it on release, which is two writes per gesture that
- * could disagree with the gesture itself. Derived from the one slot instead, so they cannot.
+ * Dragged card ID, or null for other gestures. Derive this from the gesture slot so the
+ * reported ID cannot disagree with the active gesture.
  */
 export function draggedCardId(gesture: BoardGesture | null): string | null {
   return gesture?.kind === "card-drag" ? gesture.cardId : null;

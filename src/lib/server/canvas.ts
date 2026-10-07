@@ -4,11 +4,9 @@ import { clamp, SCOPE_AREA_MIN_SIZE, type BoardRect } from "../constants.js";
 export type CanvasBounds = { canvasWidth: number; canvasHeight: number };
 
 /**
- * The board a stored position has to fall inside. The canvas is sized by the workspace
- * (`ui.canvasWidth` / `ui.canvasHeight`), so the built-in `CANVAS_W` / `CANVAS_H` defaults
- * are the right bound only for a workspace that has not changed them: clamping to them on
- * a larger board snaps a card or a warp back under the user, and clamping to them on a
- * smaller one leaves the position somewhere the viewport can never reach.
+ * Read stored-position bounds from `ui.canvasWidth` and `ui.canvasHeight`. Using built-in
+ * defaults could move cards on a larger board or leave positions unreachable on a smaller
+ * one.
  */
 export function canvasBounds(): CanvasBounds {
   const { canvasWidth, canvasHeight } = getWorkspaceUiConfig();
@@ -16,9 +14,8 @@ export function canvasBounds(): CanvasBounds {
 }
 
 /**
- * The same board, for a caller that already holds the workspace root — the CLI, which
- * writes cards to this canvas as directly as the endpoints do and has to land them on the
- * board the browser will draw rather than on the built-in default.
+ * Read canvas settings for callers that already have the workspace root, including CLI
+ * writers.
  */
 export function canvasBoundsForRoot(root: string): CanvasBounds {
   const { canvasWidth, canvasHeight } = getUiConfigForRoot(root);
@@ -39,23 +36,15 @@ export function clampToCanvas(posX: number, posY: number): { posX: number; posY:
   return clampToBounds(posX, posY, canvasBounds());
 }
 
-// Re-exported rather than declared, so the callers that reach for it through this module —
-// which is where the clamping lives — still name it here. Defined in `lib/constants/canvas.ts`
-// because the browser passes the same rectangle about and must not import from `lib/server`.
+// Re-export the shared canvas type for existing callers. Its definition lives outside server
+// code so the browser can use it too.
 export type { BoardRect };
 
 /**
- * A whole rectangle held inside the board, for a scope area: sized first, then placed.
+ * Clamp a scope rectangle's size, then its position, to the board.
  *
- * The size is settled before the position because the other order cannot be satisfied — a
- * rectangle pinned at its corner and then shrunk to fit is a different rectangle from the one
- * asked for, and on a board narrower than {@link SCOPE_AREA_MIN_SIZE} there is no position at
- * which the minimum fits. So the size is clamped to the minimum and to the board, and the
- * corner is then held so the far edge lands on the board too. A frame wider than the canvas
- * comes back the width of the canvas, at its origin.
- *
- * Integers throughout, because the columns are. Rounded here rather than by the caller so an
- * area cannot be stored at a fraction the client then redraws itself against.
+ * Limit the minimum size to what the canvas can hold before positioning the far edge. Round
+ * values to integers to match the database columns.
  */
 export function clampRectToBounds(rect: BoardRect, bounds: CanvasBounds): BoardRect {
   const { canvasWidth, canvasHeight } = bounds;

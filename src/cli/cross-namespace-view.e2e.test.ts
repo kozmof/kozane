@@ -42,9 +42,8 @@ afterEach(() => {
 });
 
 /**
- * The board narrows scopes and taskspaces to one namespace, so the CLI is the only place a
- * scope or taskspace belonging to another namespace can be seen at all. These check that it
- * genuinely is — and that `--namespace` reproduces what a board would draw.
+ * Verify workspace-wide scope and taskspace listings and namespace-filtered views matching
+ * the board.
  */
 describe("cross-namespace scope and taskspace views", () => {
   it("scope list names every namespace a scope reaches, and --namespace narrows to one", () => {
@@ -62,7 +61,7 @@ describe("cross-namespace scope and taskspace views", () => {
     cli(root, "card", "add", "--namespace", alpha, "--scope", alphaOnly, "alpha only");
 
     const all = cli(root, "scope", "list");
-    // The workspace-wide view: both namespaces named against the shared scope.
+    // Show both namespaces that use the shared scope.
     expect(all).toMatch(/Shared\s+Alpha, Beta/);
     expect(all).toMatch(/AlphaOnly\s+Alpha/);
     // Nothing refers to it yet, so it belongs to no namespace and shows on every board.

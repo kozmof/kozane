@@ -34,9 +34,8 @@
   }: {
     visible: boolean;
     panelWidth: number;
-    // Both already narrowed to this namespace by the snapshot, not filtered here: see
-    // NamespaceDataSnapshot. Nothing in this panel should assume it holds every scope or
-    // every taskspace in the workspace.
+    // The snapshot already limits scopes and taskspaces to this namespace. See
+    // NamespaceDataSnapshot.
     scopes: Scope[];
     scopeRels: ScopeRel[];
     taskspaces: TaskspaceSummary[];
@@ -51,18 +50,15 @@
     onAddToScope: (scopeId: string) => void;
     onRemoveFromScope: (scopeId: string) => void;
     /**
-     * How many frames each scope has on this board. Reported rather than acted on: a scope
-     * may be framed in several places, so the panel has no way to say which one a button
-     * would mean — each frame carries its own remove button on the canvas instead.
+     * Number of frames for each scope on this board. Frame-specific remove controls live on
+     * the canvas because a scope can have several frames.
      */
     frameCountByScopeId: Map<string, number>;
     onCreateTaskspace: () => void;
     /**
-     * Opens one file of one taskspace in the editor. Absent in a static export that has no
-     * endpoint to read a file with and no embedded tree to read one from instead — a plain
-     * export, or one built without `--include-scoped-files`. When `treeContext` carries an
-     * embedded tree for a taskspace, this stays wired up even though the export is
-     * read-only: browsing and opening are allowed, saving never is.
+     * Optional file-opening callback. Static exports can open embedded files in read-only
+     * mode but cannot save them. Omit the callback when neither a live endpoint nor embedded
+     * content is available.
      */
     onOpenFile?: (taskspaceId: string, taskspaceName: string, path: string) => void;
     // Read-only export: keep scope filtering, hide create/delete/membership controls.
@@ -89,13 +85,8 @@
     whiteSpace: "nowrap",
     overflow: "hidden",
   });
-  // Focusing a scope dims every card outside it on the canvas, so the row that did it is
-  // inverted rather than merely tinted: at a tint the board looked filtered with nothing on
-  // the panel obviously accountable for it.
-  // Deliberately square: the card around this row rounds to 2px over a 1px border, so it
-  // clips its children to a 1px inner radius. A fill carrying its own 2px curve pulls away
-  // from that clip and leaves the panel showing through as a dot in each corner — visible
-  // only once the row is filled, which is why the radius sat here harmlessly for so long.
+  // Invert the focused scope row to make the active filter visible. Keep its fill square so
+  // the parent's rounded clipping does not leave gaps at the corners.
   const sideBtnFocusedClass = css({ backgroundColor: "ink.charcoal", color: "ink.light" });
 
   function sideBtn(focused: boolean) {
@@ -154,9 +145,8 @@
   });
 
   /**
-   * Always visible, unlike the delete button beside it, which appears on hover: this is the
-   * only thing in the panel saying the scope is framed at all, and a status you have to
-   * hover to see is a poor way to be told.
+   * Keep the frame-status indicator visible without hover so users can see which scopes are
+   * framed.
    */
   function scopeFrame(focused: boolean) {
     return cx(scopeFrameBase, focused ? scopeFrameFocusedClass : scopeFrameClass);
@@ -169,8 +159,8 @@
   }
 
   /**
-   * Opens the name field at the root of `taskspaceId`, expanding it first if it was closed:
-   * the field is drawn among the taskspace’s own rows, so a closed one has nowhere to show it.
+   * Expand the taskspace before opening its root name field so the field is visible among its
+   * rows.
    */
   async function startCreate(taskspaceId: string, kind: TaskspaceCreateKind): Promise<void> {
     if (!taskspaceTree.isExpanded(taskspaceId, ""))
@@ -228,12 +218,7 @@
   });
 </script>
 
-<!-- Corner marks framing a region, nothing in the middle: this scope is not the one the
-     board is held to. Sparse enough that it needs neutral.iconDim to read at 10px.
-
-     Redrawn on a 10-unit grid rather than sharing the corner control's 14-unit one. Sharing
-     it meant scaling 14 units into 10 pixels, which puts every edge on a fraction of a pixel
-     and blurs the whole figure. Same design, drawn to the size it is actually rendered at. -->
+<!-- Use empty corner marks for an inactive scope, with neutral.iconDim for legibility. Draw on a 10-unit grid matching the rendered size to avoid blurred, fractional-pixel edges. -->
 {#snippet frameIcon()}
   <svg width="10" height="10" viewBox="0 0 10 10" fill="none" shape-rendering="crispEdges" style="flex-shrink:0">
     <path d="M4 1.5H1.5V4M6 1.5h2.5V4M8.5 6v2.5H6M4 8.5H1.5V6" stroke="var(--colors-neutral-icon-dim)" stroke-width="1" />
@@ -282,23 +267,17 @@
             aria-pressed={active}
             onclick={() => (activeScope = active ? null : scope.id)}
           >
-            <!-- The centre mark is the state, not decoration: this is the scope the board
-                 is currently held to. -->
+            <!-- The centre mark identifies the board's active scope. -->
             {#if active}{@render frameHeldIcon()}{:else}{@render frameIcon()}{/if}
             <span class={flex1Class}>{scope.name}</span>
-            <!-- This namespace's cards in the scope, not the scope's total: scopeRels is
-                 built from this namespace's cards. A shared scope reads differently on each
-                 board, which is the number each board can act on. -->
+            <!-- Count only this namespace's cards in the scope, using scopeRels. Shared scopes can have different counts on different boards. -->
             <span class={cx(countClass, active && countFocusedClass)}>
               {scopeRels.filter((r) => r.scopeId === scope.id).length}
             </span>
           </button>
           {#if !readonly}
           {@const frames = frameCountByScopeId.get(scope.id) ?? 0}
-          <!-- A report, not a control: frames are drawn on the canvas (Alt-drag) and removed
-               from the frame itself, because a scope may be framed in several places and the
-               panel cannot say which one a button would mean. The number is shown only past
-               one, where the glyph alone stops being the whole story. -->
+          <!-- Report frame status here. Draw frames with Alt-drag and remove them individually on the canvas. Show a number only when the scope has multiple frames. -->
           {#if frames > 0}
           <span class={scopeFrame(active)} title={frameTitle(frames)}>
             ▣{frames > 1 ? frames : ""}
@@ -313,8 +292,7 @@
         </div>
 
         {#if !readonly && selectedCards.size > 0}
-          <!-- Two-state here where the file palette draws three: this button is the end of
-               what you were doing, and a half-linked selection still has adding left to do. -->
+          <!-- Treat partial membership as an add action. This button completes the selection's membership rather than showing the palette's three states. -->
           {@const allInScope = scopeLinkState(scopeRels, scope.id, selectedCards) === "all"}
           <button
             class={css({

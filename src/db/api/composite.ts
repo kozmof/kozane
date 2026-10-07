@@ -1,16 +1,9 @@
 /**
- * Coordinate atomic writes across database modules without introducing circular imports. Each
- * operation opens a transaction and passes its `AnyDB` handle to the modules it calls.
+ * Coordinate transactional writes across tables when placing the operation in a table module
+ * would create circular imports.
  *
- * These operations preserve relationships while changing several tables. Card deletion
- * dissolves glue groups left with one member. Squashing inserts the pieces, copies scope
- * memberships, and removes the original together. Partition deletion moves cards before the
- * cascade runs.
- *
- * Keep a cross-module operation beside its table when its dependencies remain one-way. For
- * example, `namespace.ts` can call glue, layer, and partition helpers because those modules do
- * not import it. Put an operation here when placing it in a table module would create a
- * circular dependency.
+ * Preserve related data during card deletion, squash, and partition deletion. Keep operations
+ * beside their table when dependencies remain one-way.
  */
 
 import { withTx, type DB } from "../tx.js";
@@ -64,9 +57,8 @@ export async function createCardInTaskspaceContext({
 }: CreateCardInTaskspaceContext): Promise<string> {
   const taskspace = await getTaskspace({ db, taskspaceId });
   if (!taskspace) throw new NotFoundError(`Taskspace taskspaceId=${taskspaceId}`);
-  // A taskspace placed in a namespace originates cards only there: otherwise its scope would
-  // gather a card from a board the taskspace has no part in. An unplaced taskspace (null
-  // namespace) is shown on every board, so any partition will do.
+  // A placed taskspace can create cards only in its namespace. An unplaced taskspace appears
+  // on every board and can use any partition.
   if (
     taskspace.namespaceId &&
     !(await getPartition({ db, namespaceId: taskspace.namespaceId, partitionId }))
@@ -103,12 +95,11 @@ export async function createCardFromTaskspace({
 type DeleteNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /**
- * Deletes cards after verifying every one belongs to namespaceId, dissolving any glue
- * group the removal would leave degenerate. Refuses if any card is not owned.
+ * Delete cards only if they all belong to the namespace. Dissolve glue groups left with fewer
+ * than two cards.
  *
- * The unglue step is not optional: deleting a card cascades its glue_rel row away
- * without going through glue.ts, which would strand the surviving partner of a
- * two-card group in a group of one — a card the UI still offers to "unglue".
+ * Card deletion cascades through `glue_rel` without running the glue helpers, so explicitly
+ * clean up the affected groups.
  */
 export async function deleteNamespaceCards({
   db,
@@ -139,17 +130,12 @@ export type SquashCardResult =
   | { ok: true; cards: Card[] };
 
 /**
- * Replaces a card with one card per segment of its text, in the manner of
- * `kozane card squash`: the pieces inherit its partition, layer, taskspace, width, and scope
- * memberships, are laid out from where it sat, and the card itself is removed. All in one
- * transaction, so a failure leaves the original whole rather than half of it on the board.
+ * Replace a card with one card per text segment in a single transaction. Pieces inherit the
+ * partition, layer, taskspace, width, and scope memberships and are laid out from the
+ * original position.
  *
- * Refuses a card whose text yields a single segment — squashing it would delete and
- * recreate the same card under a new id, breaking any reference to the old one for nothing.
- *
- * The source leaves its glue group on the way out, for the reason `deleteNamespaceCards`
- * gives. The pieces start unglued: they are one card's worth of text, not a group someone
- * arranged.
+ * Reject a single segment to avoid replacing a card without changing its text. Remove the
+ * source from its glue group and leave the new pieces unglued.
  */
 export async function squashNamespaceCard({
   db,
@@ -190,17 +176,15 @@ export async function squashNamespaceCard({
       .from(cardTable)
       .innerJoin(partitionTable, inNamespace);
     const positions = squashCardPositions(
-      // Not the source's own slot: it is about to be deleted, so the first piece takes the
-      // place the card the user was looking at had.
+      // Reuse the original slot for the first piece.
       occupied.filter(({ id }) => id !== cardId),
       contents.length,
       { origin: { posX: source.posX, posY: source.posY }, canvasWidth },
     );
 
     const cards: Card[] = [];
-    // One moment for every piece, so the listing cannot separate cards the same squash
-    // produced. See {@link newCardStamps}; `kozane card squash` gets the same through
-    // `addCards`.
+    // Use one timestamp for every piece, as `addCards` does for CLI squash. See {@link
+    // newCardStamps}.
     const stamps = newCardStamps();
     const rows = contents.map((content, index) => ({
       ...stamps,
@@ -219,8 +203,7 @@ export async function squashNamespaceCard({
     for (const batch of chunked(rows, { columnsPerRow: columnCount(cardTable) }))
       cards.push(...(await tx.insert(cardTable).values(batch).returning()));
 
-    // What the source was gathered into, the pieces are gathered into: a scope is a
-    // working set, and splitting a card is not a decision to leave one.
+    // Pieces inherit the source card's scopes.
     const scopeIds = (await getScopeRelsByCards({ db: tx, cardIds: [cardId] })).map(
       ({ scopeId }) => scopeId,
     );
@@ -254,9 +237,8 @@ type RemapCardsByName = {
 };
 
 /**
- * Re-points cards at the same-named row in another namespace, creating it when the target
- * has none. Both of a card's owners — its partition and its layer — are per-namespace ids that
- * cannot survive a move, and both are preserved this way.
+ * Resolve a card's partition or layer by name in the target namespace, creating it if needed.
+ * Both ownership IDs must change when moving across namespaces.
  */
 async function remapCardsByName({
   current,
@@ -319,8 +301,7 @@ export async function moveCardsToNamespace({
       },
     });
 
-    // Cards moved cross-namespace must leave their glue groups: a glue group
-    // spanning two namespaces is never visible in the UI and leaves stale rows.
+    // Moving a card to another namespace removes it from its glue group.
     await unglueCardsInTx({ db: tx, cardIds });
 
     return { ok: true };

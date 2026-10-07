@@ -5,14 +5,10 @@
  * open` and `kozane net ssg preview` bind unless told otherwise.
  */
 /**
- * How a taskspace's stored `path` is to be read: relative to the workspace root, which
- * keeps a workspace portable, or as an absolute path, which is what `kozane taskspace
- * create --dir <outside-root>` records.
+ * Supported interpretations of stored taskspace paths. Relative paths use the workspace root
+ * for portability. Absolute paths support taskspaces outside it.
  *
- * Here rather than beside the column it types, because both sides of that column need it —
- * `taskspaceTable` declares the enum from this list, and `resolveTaskspacePath` decides
- * what to do with the value. A leaf module is the one place both can reach without either
- * importing the other.
+ * Share this list between the database schema and path resolver.
  */
 export const PATH_KINDS = ["workspace_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];

@@ -171,8 +171,7 @@ describe("getTaskspacesInNamespace", () => {
 
   it("returns a taskspace with no namespace to every namespace", async () => {
     const { d, p1, p2 } = await twoNamespaces();
-    // A reattach from a marker naming no namespace leaves namespace_id null; that row is
-    // unplaced rather than somebody else's, so it must not be invisible everywhere.
+    // Show reattached taskspaces with no namespace on every board.
     await addTaskspace({ db: d, name: "unassigned" });
 
     expect(names(await getTaskspacesInNamespace({ db: d, namespaceId: p1 }))).toEqual([

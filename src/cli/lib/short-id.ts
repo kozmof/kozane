@@ -26,11 +26,8 @@ export function shortId(id: string, allIds: string[]): string {
 }
 
 /**
- * Short IDs for a whole set at once.
- *
- * `shortId` rescans `allIds` at every prefix length, so calling it per row is
- * quadratic; this builds one prefix-count table and resolves each id by lookup.
- * Results are identical to calling `shortId(id, allIds)` for each id.
+ * Build short IDs for a complete set using one prefix-count table. This avoids repeatedly
+ * scanning all IDs and returns the same prefixes as calling `shortId` for each row.
  */
 export function shortIdMap(allIds: string[]): Map<string, string> {
   const keyed = allIds.map((id) => [id, shortIdKey(id)] as const);
@@ -73,13 +70,8 @@ export function resolveShortId(input: string, allIds: string[], label: string): 
 }
 
 /**
- * The row an id names, or an error saying it is missing.
- *
- * Every caller here has just put the id through {@link resolveShortId} against ids drawn
- * from this same list, so the row is always there and a bare `.find(...)!` was correct.
- * It stops being correct the moment the list a row is looked up in stops being the list
- * the id was resolved against — a filter added between the two, a second query — and a
- * `!` turns that into a `TypeError` on a property read somewhere further down.
+ * Find the row for a resolved ID or throw a clear error. The explicit check also catches
+ * callers that filter or replace the row list after resolving the ID.
  */
 export function findById<T extends { id: string }>(rows: T[], id: string, label: string): T {
   const row = rows.find((candidate) => candidate.id === id);

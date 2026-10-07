@@ -7,7 +7,7 @@ import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 
 /**
- * Test `kozane card list --sort` against a workspace created by `kozane init` . Set timestamps
+ * Test `kozane card list --sort` against a workspace created by `kozane init`. Set timestamps
  * directly so ordering does not depend on whether consecutive writes cross a second boundary.
  */
 
@@ -109,7 +109,7 @@ const BY_GAP = ["0s  untouched", "28d  reconsidered", "90d  oldest"];
 /**
  * Insert `THREE_CARDS` directly into an initialized workspace, optionally linked to a
  * taskspace. Direct inserts set the required histories without spawning a CLI process per card.
- * They also set `taskspace_id` , which has no CLI setter.
+ * They also set `taskspace_id`, which has no CLI setter.
  */
 async function seedThreeCards(root: string, taskspaceId: string | null = null): Promise<void> {
   await withDb(root, async (client) => {
@@ -175,8 +175,7 @@ describe("kozane card list --sort", () => {
 
     expect(listed(root, "--sort", "created")).toEqual(BY_CREATED);
     expect(listed(root, "--sort", "updated")).toEqual(BY_UPDATED);
-    // Neither of the orders above: the card never edited comes first and the one that stood
-    // longest before being rewritten comes last.
+    // Order by gap, with untouched cards first and the longest interval last.
     expect(listed(root, "--sort", "gap")).toEqual(BY_GAP);
     expect(listed(root, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());
   }, 90_000);
@@ -186,16 +185,14 @@ describe("kozane card list --sort", () => {
     cli(root, "init");
     await seedThreeCards(root);
 
-    // No time column: `<id>  <partition>  (<x>, <y>)  <text>` is what it has always printed,
-    // and what everything parsing this output expects.
+    // Preserve the default ID, partition, coordinate, and text columns without an added time
+    // column.
     expect(listed(root).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
   }, 90_000);
 
   /**
-   * The scope path: `card list` run in a taskspace directory lists that taskspace's scope
-   * members, through a different query from the namespace listing — one that selects the card
-   * columns wholesale rather than naming them. It has to sort and print identically, which
-   * is the claim `ordered` and `timeColumn` in `cardList` are there to make true.
+   * Verify sorting and timestamp output for cards listed through a taskspace's scope. This
+   * query selects all card columns and must match the namespace listing.
    */
   it("sorts a scoped taskspace listing the way it sorts a namespace listing", async () => {
     const root = tempWorkspace();
@@ -216,8 +213,8 @@ describe("kozane card list --sort", () => {
   }, 120_000);
 
   /**
-   * The third path: a taskspace with no scope lists the cards tied directly to it, and says
-   * so on stderr. Sorted by the same comparator, out of a third query.
+   * Verify sorting for a taskspace without a scope. This query lists cards linked directly to
+   * the taskspace and reports that choice on stderr.
    */
   it("sorts the cards tied directly to a taskspace that has no scope", async () => {
     const root = tempWorkspace();
@@ -273,37 +270,23 @@ describe("kozane card list --sort", () => {
     const root = tempWorkspace();
     cli(root, "init");
 
-    // Roll the workspace back to 0010 — drop the two columns and the journal row that says
-    // they were added — and write the card there, so it genuinely predates them the way a
-    // card in an upgraded workspace does. `db migrate` then re-applies 0011 over a row with
-    // no history at all.
+    // Roll back to migration 0010 before inserting the card so migration 0011 adds timestamps
+    // to an existing row.
     //
-    // Everything the journal now disclaims has to go, not only 0011's: the delete below is
-    // a `>=`, so every migration after it is re-applied too, and one that creates a name
-    // still standing fails on it. That is the whole of what a later migration has to add
-    // here — 0012's and 0013's indexes are the cases so far, and a `DROP … IF EXISTS` per
-    // migration keeps this fixture rolling back to 0010 rather than to whatever the newest
-    // migration is.
+    // Remove every schema change whose journal entry is deleted, since all those migrations
+    // will run again. Drop indexes before dropping columns they reference. Reverse migration
+    // 0014's table and index renames so it can run against the old names. SQLite renames
+    // tables referenced by an index but leaves the index name unchanged.
     //
-    // The index drops come first, and 0013's has to: `card_partition_updated` is built on
-    // `updated_at`, and SQLite refuses to drop a column an index still names — "error in
-    // index card_partition_updated after drop column". An index over a column this fixture
-    // removes belongs above the ALTERs; one over a column it keeps may sit anywhere.
-    // 0014 is one of the migrations the journal now disclaims, and it is the one that needs
-    // more than a dropped index: it renames the tables, so re-applying it over a database
-    // that already carries the new names fails on `no such table: project`. The middle block
-    // is that migration in reverse, and it has to reach the indexes too — SQLite renames the
-    // table under an index but never the index itself, and 0014 drops each old name without
-    // an `IF EXISTS`. Only `card_partition_updated` is left out, because the line above
-    // already dropped it and 0013 puts it back.
+    // Do not restore `card_partition_updated` here. It was already dropped above and
+    // migration 0013 recreates it.
     await withDb(root, async (client) => {
       await client.batch(
         [
           "DROP INDEX IF EXISTS card_partition_updated",
           "DROP INDEX IF EXISTS glue_rel_glue",
-          // 0016's whole table, for the same reason the two index drops above exist: the
-          // journal below disclaims it, so the re-apply runs `CREATE TABLE scope_area`
-          // again and fails on the one still standing. Its indexes go with the table.
+          // Drop `scope_area` so migration 0016 can recreate it after its journal entry is
+          // removed. Its indexes disappear with it.
           "DROP TABLE IF EXISTS scope_area",
 
           "ALTER TABLE `namespace` RENAME TO `project`",
@@ -360,11 +343,8 @@ describe("kozane card list --sort", () => {
   }, 90_000);
 
   /**
-   * The one way a card can carry a history it never had. Migration 0011 had to give both
-   * columns a literal `DEFAULT 0` to add them NOT NULL, and SQLite cannot drop a column
-   * default afterwards — so an `INSERT INTO card` naming neither column succeeds at the
-   * epoch instead of failing. Nothing in the app writes such a row; hand-written SQL against
-   * the workspace database does, and `doctor` is where that should be visible.
+   * Verify that `doctor` reports timestamps left at the epoch. Migration 0011 adds both
+   * columns with `DEFAULT 0`, so a raw insert that omits them can still create such a row.
    */
   it("reports a card left at the epoch by an insert that named neither column", async () => {
     const root = tempWorkspace();
@@ -389,20 +369,16 @@ describe("kozane card list --sort", () => {
     expect(result.stdout).toContain(
       "✗  Card timestamps valid — 1 card stamped outside what this app writes",
     );
-    // Named, not just counted: the check knows which row it found, and a report that made
-    // the reader go looking for it would be leaving the last step undone. The id is short,
-    // as everything else the CLI prints is.
+    // Include the invalid card's short ID alongside the count so the report identifies the
+    // row.
     expect(result.stdout).toContain("inserted by hand: epoch;");
     // And the listing it warns about does read 1970, which makes it worth reporting.
     expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
   }, 90_000);
 
   /**
-   * The other end of the same hole. The columns are plain integers, so a hand-written
-   * `INSERT` can put a number in them that no `Date` can represent — and `toISOString`
-   * throws `RangeError: Invalid time value` on such a date. That reached the user as one
-   * line of error in place of the listing: every sound card in the namespace hidden in order
-   * to report a problem with one of them.
+   * Verify that an out-of-range timestamp does not prevent the card list from printing. Raw
+   * SQL can store integers that produce an invalid `Date`, whose `toISOString()` throws.
    */
   it("lists a card whose timestamp no date can be read from, and reports it", async () => {
     const root = tempWorkspace();

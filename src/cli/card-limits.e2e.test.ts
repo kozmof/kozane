@@ -56,7 +56,7 @@ function configureCanvas(root: string, canvasWidth: number, canvasHeight: number
   configureUi(root, { canvasWidth, canvasHeight });
 }
 
-/** Every card of the workspace as `card list` prints it: `<id> <partition> (<x>, <y>) <text>`. */
+/** Cards as printed by `card list`, with ID, partition, coordinates, and text. */
 function listedPositions(root: string): { posX: number; posY: number }[] {
   return cli(root, "card", "list")
     .split("\n")

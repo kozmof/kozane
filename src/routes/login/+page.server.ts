@@ -11,7 +11,7 @@ import {
 import { safeNext } from "../../lib/server/login.js";
 import { clearAuthFailures, recordAuthFailure } from "../../lib/server/security.js";
 
-// Dynamic auth endpoint: must never be prerendered into the static export.
+// Keep authentication dynamic and exclude it from static prerendering.
 export const prerender = false;
 
 /**

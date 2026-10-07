@@ -20,9 +20,7 @@ describe("isSsgBuild", () => {
     expect(isSsgBuild()).toBe(true);
   });
 
-  // The point of the function: nine call sites compared against the literal themselves, and
-  // anything other than "1" means "not an export" — which for a `prerender` export is the
-  // answer that silently ships the wrong build.
+  // Recognize only the exact value "1" as enabling static export.
   it("is false for anything else, including the truthy spellings of yes", () => {
     for (const value of ["0", "", "true", "yes", "01", " 1"]) {
       process.env.KOZANE_SSG = value;
@@ -32,8 +30,7 @@ describe("isSsgBuild", () => {
     expect(isSsgBuild()).toBe(false);
   });
 
-  // `kozane net ssg generate` passes "" rather than unsetting it when the flag is off; the
-  // check has to read that as false, not as "present".
+  // Treat the empty string passed by the CLI as disabled.
   it("reads the empty string the CLI passes as off", () => {
     process.env.KOZANE_SSG = "";
     expect(isSsgBuild()).toBe(false);
@@ -62,8 +59,7 @@ describe("ssgIncludesScopedFiles", () => {
     expect(ssgIncludesScopedFiles()).toBe(false);
   });
 
-  // Independent of the build flag: the three page loads ask both questions separately, and
-  // one answering for the other is how a live board would start reading page data for files.
+  // Check this independently of the build flag so live pages do not read exported file data.
   it("says nothing about whether this is an export", () => {
     process.env.KOZANE_SSG = "1";
     delete process.env.KOZANE_SSG_INCLUDE_SCOPED_FILES;

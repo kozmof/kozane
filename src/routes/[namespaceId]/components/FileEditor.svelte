@@ -23,11 +23,8 @@
     vimMode?: boolean;
     readonly?: boolean;
     /**
-     * Panel width in pixels, or null until it has been dragged, when the responsive
-     * default applies. Owned by the page rather than held here so that it outlives a
-     * close: this component keeps its own `{#if}` and so is never unmounted today, but
-     * resting the requirement on that would make wrapping it in one elsewhere silently
-     * reset the width.
+     * Panel width in pixels, or null for the responsive default. The page owns this value so
+     * it survives closing or remounting the editor.
      */
     width?: number | null;
     onClose: () => void;
@@ -44,9 +41,7 @@
 
   const mode = $derived<EditorMode>(vimMode ? vim.mode : "insert");
 
-  // The keyboard belongs to this panel for as long as it is up. Without it, the board's
-  // single-key shortcuts are still live behind the overlay: `b` would toggle the side
-  // panels and `x` would remove a warp, while the file being typed into took neither.
+  // Keep keyboard events within the open editor so typing cannot trigger board shortcuts.
   $effect(() => {
     if (session.isOpen && panelEl && !panelEl.contains(document.activeElement)) surface?.focus();
   });
@@ -60,11 +55,8 @@
   });
 
   /**
-   * A press outside the panel closes the file.
-   *
-   * `mousedown` rather than `click`, because a click is only delivered where the press and
-   * the release agree: selecting text and releasing past the edge of the panel is a click
-   * on the board, and closing the file out from under a drag is not what that meant.
+   * Close on a press outside the panel. Use `mousedown` so dragging a text selection beyond
+   * the panel does not close the file.
    */
   $effect(() => {
     if (!session.isOpen) return;
@@ -81,12 +73,8 @@
   }
 
   /**
-   * Set when a close was asked for over unsaved changes.
-   *
-   * Escape and a click on the board are both easy to do by accident, and closing throws
-   * the edit away for good — the document goes with the panel, so there is no undo left to
-   * reach for. So they ask, rather than either destroying the work or refusing and leaving
-   * no way out.
+   * Whether closing is awaiting confirmation for unsaved changes. Keep the document open
+   * until the user saves or discards those changes.
    */
   let confirmingClose = $state(false);
 
@@ -105,12 +93,8 @@
     onClose();
   }
 
-  // The ways out that never touch the panel: a link to another page, the back button, a
-  // warp to another namespace, and the tab's own close box. Registered once, at init, as
-  // `beforeNavigate` requires, and so it asks about whatever file is open at the time
-  // rather than the one open now. A confirm() rather than the banner above because a
-  // navigation has to be answered on the spot — cancelling it to put a question on screen
-  // would mean re-issuing it afterwards, which the back button has no honest way to do.
+  // Guard navigation and tab closing while a file has unsaved changes. Register once and read
+  // the current file state when invoked. Navigation needs an immediate confirmation result.
   beforeNavigate((nav) =>
     guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT)),
   );
@@ -122,9 +106,7 @@
     vim = result.vim;
     session.caret = result.caret;
     session.anchor = result.anchor;
-    // A key vim claimed is vim's alone. Without this the `Escape` that leaves insert mode
-    // would go on to the panel handler below, which — reading a mode this line has already
-    // changed to normal — would take it as the Escape that closes the file.
+    // Stop keys claimed by Vim so Escape leaving insert mode cannot also close the editor.
     event.stopPropagation();
     return true;
   }
@@ -138,9 +120,8 @@
       if (!readonly) void save();
       return;
     }
-    // Escape closes, except while vim is using it to leave insert mode. Over an unsaved
-    // change it asks rather than closing; a second Escape then backs out of the asking,
-    // which is what an Escape pressed at a question should do.
+    // Escape requests closing when Vim has not claimed it. With unsaved changes, ask for
+    // confirmation. A second Escape cancels that prompt.
     if (event.key === "Escape" && !(vimMode && vim.mode === "insert")) {
       event.preventDefault();
       if (confirmingClose) confirmingClose = false;
@@ -169,16 +150,13 @@
   let panelPx = $state(0);
 
   function currentWidth(): number {
-    // The stored width wins once there is one: it is what the panel was last asked to be,
-    // and reading the rendered box back instead would round-trip through the CSS clamp and
-    // lose a drag that ran past the edge. Measurement is only for the first drag, which
-    // starts from whatever the responsive default worked out to.
+    // Use the stored width after the first drag to preserve motion beyond the CSS clamp.
+    // Measure the rendered width only when starting from the responsive default.
     return width ?? (panelPx || panelEl?.getBoundingClientRect().width || MIN_WIDTH);
   }
 
   function resizeTo(px: number): void {
-    // The ceiling is applied in CSS, which knows the viewport; the floor is applied here so
-    // the stored number cannot drift below it while a drag runs off the right of the screen.
+    // Clamp the minimum width here and let CSS enforce the viewport-dependent maximum.
     width = Math.max(MIN_WIDTH, Math.round(px));
   }
 
@@ -190,8 +168,7 @@
     const startX = event.clientX;
     const startWidth = currentWidth();
 
-    // Tracked on the window so a pointer that runs past the panel keeps resizing rather
-    // than stopping at its edge — the same reason the surface tracks a selection drag there.
+    // Track resizing on the window so dragging continues beyond the panel edge.
     const onMove = (move: MouseEvent) => resizeTo(startWidth + (startX - move.clientX));
     const onUp = () => {
       globalThis.removeEventListener("mousemove", onMove);
@@ -246,12 +223,7 @@
     style:width={panelWidth}
     bind:clientWidth={panelPx}
   >
-    <!-- The left edge, as something to take hold of. It sits over the panel's own padding
-         rather than over any text, so widening the grab area costs no clickable line.
-
-         A focusable separator is a window splitter in ARIA terms, which is an interactive
-         role; the rule below only knows the non-focusable kind, so it is exempted rather
-         than the tabindex dropped to quiet it. -->
+    <!-- Place the resize handle over panel padding to preserve text click targets. This focusable separator is an interactive splitter, which requires the accessibility-rule exception below. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       class={css({
@@ -289,10 +261,7 @@
         flexShrink: "0",
       })}
     >
-      <!-- All one tone. The taskspace is the context and the path is the subject, so the
-           two are told apart by weight of grey rather than by a colour: the badge on a card
-           footer is where the taskspace green means something, and repeating it here made
-           the header louder than the file it names. -->
+      <!-- Distinguish the taskspace and path with shades of grey. Reserve taskspace green for card-footer badges. -->
       <span class={css({ color: "neutral.secondary", flexShrink: "0" })}>
         {session.file?.taskspaceName}
       </span>
@@ -304,14 +273,7 @@
         {session.file?.path}
       </span>
       {#if session.dirty}
-        <!-- A ring of dots rather than a filled disc: unsaved is a state on its way
-             somewhere, and an outline reads as that where a solid mark reads as a count.
-             Drawn rather than set as `◌`, which is a combining-mark placeholder and comes
-             out a different size in every font. The dash is a point with a round cap, which
-             is what turns each one into a dot; the gap divides the circumference into
-             eight, so the seam where the dashes meet has nowhere to show. The gap is tied
-             to the radius — 2πr/8 — so changing the size means recomputing it, or the dots
-             bunch up on one side. -->
+        <!-- Draw the unsaved marker as eight round dots. Tie the dash gap to the circumference, `2πr/8`, to keep spacing even when the radius changes. -->
         <span class={css({ color: "select.accent", display: "flex" })} title="Unsaved changes">
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
             <circle
@@ -338,8 +300,7 @@
       <button class={barButton} onclick={requestClose}>Close</button>
     </div>
 
-    <!-- Notices. The unsaved-changes question comes first: it is the only one waiting on an
-         answer, and burying it under a stale error would leave the panel looking stuck. -->
+    <!-- Show the unsaved-changes question before error notices because it requires an answer. -->
     {#if confirmingClose}
       <div
         class={css({

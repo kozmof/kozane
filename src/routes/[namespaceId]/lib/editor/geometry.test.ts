@@ -9,9 +9,8 @@ import {
 } from "./geometry.js";
 
 /**
- * A measurer for a monospace font of a known cell width, with CJK counted double. Stands in
- * for the DOM one, which cannot be exercised in jsdom: there is no layout there, so every
- * rect comes back zero.
+ * Monospace measurement stub with double-width CJK cells. jsdom has no layout and cannot
+ * supply real DOM measurements.
  */
 function fixedMeasurer(lines: string[], cell = 10): LineMeasurer {
   const widthTo = (line: number, column: number): number => {
@@ -94,7 +93,7 @@ describe("pointToCaret", () => {
   });
 
   it("lands on the right column in a line of double-width cells", () => {
-    // "あい" — cells at 0-20 and 20-40.
+    // The two characters occupy horizontal ranges 0–20 and 20–40.
     expect(pointToCaret(5, 25, 20, 3, measure).column).toBe(0);
     expect(pointToCaret(25, 25, 20, 3, measure).column).toBe(1);
     expect(pointToCaret(38, 25, 20, 3, measure).column).toBe(2);
@@ -166,12 +165,8 @@ describe("selectionRects", () => {
 });
 
 /**
- * The DOM measurer, driven against a stubbed layout.
- *
- * jsdom reports every rect as zero and implements `Range` without the rect methods at all,
- * so the two are stubbed here to give each character a known width. What is under test is
- * the search over those measurements — the part that decides which column a click lands in
- * — rather than the browser's text metrics.
+ * Stub element and Range rectangles in jsdom to test column lookup over known character
+ * measurements.
  */
 describe("domMeasurer", () => {
   const CELL = 8;
@@ -196,7 +191,7 @@ describe("domMeasurer", () => {
       return x;
     };
 
-    // The element starts at 100; its text starts a padding further in, at 100 + PAD.
+    // The element begins at 100 and its padded text begins at `100 + PAD`.
     el.getBoundingClientRect = () =>
       ({ left: 100, right: 100 + PAD + widthOf(text.length) }) as DOMRect;
     Range.prototype.getBoundingClientRect = function (this: Range) {
@@ -210,16 +205,15 @@ describe("domMeasurer", () => {
 
   afterEach(() => {
     document.body.innerHTML = "";
-    // @ts-expect-error — removing the stub so it cannot leak into another file's run.
+    // @ts-expect-error Remove the stub so it cannot affect another test file.
     delete Range.prototype.getBoundingClientRect;
   });
 
   it("measures a column from the start of the text, not from the element", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    // None of these carry the line's padding: the caller adds it back when drawing, and
-    // counting it here too drew the caret a padding — about two characters — too far right,
-    // and past the last character at the end of a line.
+    // Return text-relative measurements without line padding. The caller adds padding when
+    // drawing.
     expect(measure.columnToX(0, 0)).toBe(0);
     expect(measure.columnToX(0, 3)).toBe(CELL * 3);
     expect(measure.columnToX(0, 5)).toBe(CELL * 5);

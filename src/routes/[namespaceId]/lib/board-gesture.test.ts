@@ -127,8 +127,7 @@ describe("the id readers", () => {
   });
 
   it("are null for every gesture that is not theirs", () => {
-    // The property the four `$state` variables these replace could not have: exactly one of
-    // them can be non-null, because there is one slot for them all to read.
+    // A single gesture slot permits at most one active gesture.
     for (const gesture of every) {
       const named = [
         draggedCardId(gesture),

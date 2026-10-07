@@ -21,8 +21,8 @@
   let newName = $state("");
   let inputEl: HTMLInputElement | undefined = $state();
 
-  // Every scope, including ones already framed here: a scope may be organised in several
-  // places on one board, and framing it again is the ordinary way to say so.
+  // Offer every scope, including those already framed here, because a scope can have multiple
+  // frames.
   const available = $derived(scopes);
 
   export function focusInput() {
@@ -60,13 +60,7 @@
   });
 </script>
 
-<!--
-  Anchored to the bottom of the viewport rather than to the rectangle: the rectangle is in
-  world space, so a panel pinned to it would have to be re-placed on every pan and zoom, and
-  would sit off screen the moment either moved. The board already answers a question this way
-  — the composer sits here too — and the rectangle stays drawn behind it, which is what says
-  which rectangle is being asked about.
--->
+<!-- Anchor the scope prompt to the viewport so it stays visible during pan and zoom. Keep the pending rectangle visible behind it. -->
 <div
   class={css({
     position: "absolute",

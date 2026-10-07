@@ -40,9 +40,8 @@ import { ARROW_KEYS } from "../../../lib/constants.js";
 import type { Card, GlueRel } from "$db/api/types.js";
 
 /**
- * The geometry these fixtures exercise reads no timestamp, so every card carries the same
- * one: a card's position and stacking are what this file is about, and `updatedAt` follows
- * a card's text rather than where it sits.
+ * Use one timestamp for these geometry fixtures. Position and stacking do not depend on
+ * `updatedAt`, which tracks text changes.
  */
 const stamped = {
   createdAt: new Date("2026-01-01T00:00:00Z"),
@@ -450,7 +449,7 @@ describe("canvas geometry", () => {
 });
 
 describe("cardIdsOverlapping", () => {
-  /** A stand-in for a rendered card: the id the sweep reads, and the box it measures. */
+  /** Rendered-card stub supplying the ID and measured box used by the sweep. */
   function cardEl(id: string, box: { left: number; top: number; right: number; bottom: number }) {
     return {
       dataset: { cardId: id },
@@ -499,10 +498,8 @@ describe("membershipTransition", () => {
   });
 
   it("says nothing about a card that was never inside the frame", () => {
-    // The reason this is a transition and not a reconciliation. A card put in the scope by
-    // hand — `kozane scope add-cards`, from anywhere on the board — sits outside the frame,
-    // and dragging it around out there must not file it out of the scope. It was not inside
-    // before and is not inside now, so it is not this function's business either way.
+    // Preserve manually assigned membership for cards that remain outside a frame. Only
+    // crossing a frame boundary should change membership here.
     expect(membershipTransition(new Set(), new Set())).toEqual({ entered: [], exited: [] });
   });
 });
@@ -687,7 +684,7 @@ describe("nearestWarpInDirection", () => {
       { id: "angled", posX: 700, posY: 600 },
       { id: "straight", posX: 900, posY: 500 },
     ];
-    // Both score 400: 200 + 2×100 and 400 + 2×0.
+    // Both candidates score 400 from 200 + 2×100 and 400 + 2×0.
     expect(nearestWarpInDirection(candidates, { x: 500, y: 500 }, "right")).toMatchObject({
       id: "straight",
     });
@@ -739,7 +736,7 @@ describe("warpInDirection", () => {
     expect(warpInDirection(column, { x: 500, y: 500 }, "left", "top")).toMatchObject({
       id: "bottom",
     });
-    // Without a current warp the wrap is unchanged: the older of the two.
+    // Without a current warp, wrapping chooses the older candidate.
     expect(warpInDirection(column, { x: 500, y: 500 }, "left")).toMatchObject({ id: "top" });
   });
 
@@ -787,7 +784,7 @@ describe("resizedCardWidth", () => {
   });
 
   it("keeps the edge under the pointer on a zoomed board", () => {
-    // Half zoom: 60 screen pixels is 120 canvas pixels.
+    // At half zoom, 60 screen pixels equal 120 canvas pixels.
     expect(resize({ deltaX: 60, zoom: 0.5 })).toBe(320);
     expect(resize({ deltaX: 60, zoom: 2 })).toBe(230);
   });
@@ -800,7 +797,7 @@ describe("resizedCardWidth", () => {
   it("holds the result inside the range, snapped or not", () => {
     expect(resize({ deltaX: -10_000 })).toBe(40);
     expect(resize({ deltaX: 10_000 })).toBe(1200);
-    // A grid multiple outside the range must not escape it: the clamp runs after the snap.
+    // Clamp after snapping so an out-of-range grid point cannot escape the bounds.
     expect(resize({ deltaX: -10_000, snapToGrid: true })).toBe(40);
     expect(resize({ deltaX: 10_000, snapToGrid: true })).toBe(1200);
   });

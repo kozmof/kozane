@@ -62,7 +62,7 @@ export const layerTable = sqliteTable(
       .notNull()
       .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
     name: text().notNull(),
-    // Index order of the layer on the canvas: a higher position stacks above a lower one.
+    // Higher positions appear above lower ones.
     position: integer().notNull().default(0),
     isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
   },
@@ -74,16 +74,7 @@ export const layerTable = sqliteTable(
   ],
 );
 
-/**
- * A saved place on a namespace's canvas. A warp holds the world coordinates of a view
- * centre, and the browser UI moves the viewport between them with the arrow keys. There
- * is no name column: warps are numbered by creation order, and uuidv7 ids already sort
- * that way.
- *
- * The index on `namespace_id` is spelled out because nothing else here implies one: the
- * namespace-scoped tables that carry a name get theirs from a unique index on
- * `(namespace_id, name)`, and a warp has no name to be unique in.
- */
+/** Warps store coordinates and are numbered by creation order. Index them by namespace. */
 export const warpTable = sqliteTable(
   "warp",
   {
@@ -102,14 +93,9 @@ export const warpTable = sqliteTable(
 export const scopeTable = sqliteTable(
   "scope",
   {
-    // A scope is intentionally cross-namespace. Do not add namespace_id here: a scope is
-    // placed by what refers to it — scope_rel/card rows, and taskspace.scope_id — not by
-    // a column, which is what lets one scope hold cards from several namespaces at once.
-    //
-    // That is not the same as every namespace seeing every scope. A board draws the scopes
-    // `getScopesInNamespace` selects, and a namespace_id here would make that a column read
-    // but would also make a shared scope impossible. The CLI keeps the workspace-wide
-    // view (`kozane scope list`).
+    // Scopes can span namespaces. Memberships and taskspace links place them, so do not add
+    // an owning namespace column. Boards use `getScopesInNamespace`, while the CLI can list
+    // all workspace scopes.
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
@@ -117,35 +103,18 @@ export const scopeTable = sqliteTable(
   },
   (t) => [
     check("scope_name_nonempty", sql`length(${t.name}) > 0`),
-    // Workspace-wide, not per namespace — the one place the absence of `namespace_id` above
-    // has a consequence a user meets rather than a reader. A scope is identified by its name
-    // across the whole workspace, which is what lets `kozane scope add docs` in one namespace
-    // and the same command in another mean the same scope, and is what `kozane scope list`
-    // reports a single row per. The cost is the other side of it: two namespaces cannot each
-    // keep a scope called `docs` that means different things, and the second `scope add` is
-    // refused as a duplicate rather than creating one.
-    //
-    // Deliberate, and the alternative is worse in the direction this project cares about: a
-    // unique index on `(namespace_id, name)` is what a scope would need to be per namespace,
-    // and there is no `namespace_id` to put in it — adding one would make a shared scope
-    // impossible, which is the whole reason the column is absent. Named in the README beside
-    // the structures it describes, because it decides what a user may call things.
+    // Scope names are unique across the workspace. Namespaces can share a scope but cannot
+    // create separate scopes with the same name.
     uniqueIndex("scope_name_unique").on(t.name),
   ],
 );
 
 /**
- * Where a scope is drawn on one namespace's canvas: a rectangle, and the cards overlapping it
- * belong to the scope.
+ * Scope frame geometry for one namespace's canvas. Store it separately because a shared scope
+ * can have different frames on different boards.
  *
- * Its own table rather than four columns on `scope`, for the reason that table's comment
- * gives for having no `namespace_id`: a scope is placed by what refers to it. Geometry is the
- * one thing about a scope that cannot be shared — a board is a namespace's own — so a scope
- * reaching three namespaces has up to three rows here, and a scope nobody has framed has none.
- *
- * Membership itself stays in `scope_rel`. This table says where the frame is; crossing its
- * edge is what writes a row there. Nothing outside the browser reads these coordinates, so a
- * scope with no area behaves exactly as it did before there was one.
+ * Membership remains in `scope_rel`. Browser overlap handling updates membership when cards
+ * cross frame boundaries. Scopes without frames still work.
  */
 export const scopeAreaTable = sqliteTable(
   "scope_area",
@@ -165,15 +134,10 @@ export const scopeAreaTable = sqliteTable(
     height: integer().notNull(),
   },
   (t) => [
-    // Deliberately not unique. A scope may be framed in several places on one board — a
-    // cluster by the inbox and another by the archive are the same scope in two places —
-    // so a frame is identified by its own id and nothing here constrains how many share a
-    // scope. Leading with `scope_id` so it answers `getScopesInNamespace`'s two questions:
-    // "is this scope framed on this board" and, on the prefix alone, "is it framed anywhere".
+    // Allow multiple frames for one scope on a board. Lead the index with `scope_id` to
+    // support checking for frames on one board or anywhere.
     index("scope_area_scope").on(t.scopeId, t.namespaceId),
-    // Read by `getScopeAreasInNamespace` on every page load and every snapshot poll. Same
-    // argument as `warp_namespace`: nothing else here implies an index on this column, and
-    // without one that read is a full scan per poll per tab.
+    // Index frames by namespace for frequent polls.
     index("scope_area_namespace").on(t.namespaceId),
   ],
 );
@@ -184,13 +148,9 @@ export const taskspaceTable = sqliteTable(
     id: text("id")
       .primaryKey()
       .$defaultFn(() => uuidv7()),
-    // nullable, but nothing writes a null on the ordinary paths: `taskspace create` and
-    // the HTTP route both resolve a namespace first, and `taskspace create` exits rather
-    // than proceed without one. What lands here empty is a reattach — `taskspace scan
-    // --apply --reattach` inserts from the on-disk marker, and a marker naming no namespace
-    // ("namespaceId": "") gives a record with none. Such a record is unplaced rather than
-    // another namespace's, which is why `getTaskspacesInNamespace` shows it on every board.
-    // Cascade delete removes the record if the linked namespace is later deleted.
+    // Normal creation resolves a namespace first. Reattaching a marker with an empty
+    // namespace ID can create an unplaced taskspace, which appears on every board. Deleting a
+    // linked namespace cascades to its taskspace records.
     namespaceId: text("namespace_id").references(() => namespaceTable.id, {
       onDelete: "cascade",
       onUpdate: "cascade",
@@ -240,74 +200,41 @@ export const cardTable = sqliteTable(
     posX: integer("pos_x").notNull().default(0),
     posY: integer("pos_y").notNull().default(0),
     zIndex: integer("z_index").notNull().default(0),
-    /**
-     * How wide the card is drawn, in canvas pixels. Nullable, and null is the ordinary
-     * case: a card without one is drawn at `ui.defaultCardWidth` and keeps following that
-     * setting as it changes. Only a card resized on the board pins a width of its own, so
-     * widening every card is still one line of config rather than a pass over the table.
-     */
+    /** A null card width follows the configured default. */
     width: integer(),
     /**
-     * Both timestamps carry a `DEFAULT 0` in the database that this declaration does not
-     * mention. Migration 0011 needed one to add the columns NOT NULL to a table with rows
-     * in it, and SQLite cannot drop a column default afterwards — the only way out is a
-     * full table rebuild, which for `card` means `DROP TABLE` under a `PRAGMA
-     * foreign_keys=OFF` that does nothing inside the migrator's transaction, cascading away
-     * every `scope_rel` and `glue_rel` row. So the default stays.
+     * Migration 0011 leaves `DEFAULT 0` on both database columns. Raw SQL inserts that omit
+     * them therefore produce epoch timestamps, which `kozane doctor` reports.
      *
-     * The writers name both columns themselves — `addCard` and `addCards` through
-     * `newCardStamps`, the board's squash likewise, `db import` from the dump — so that the
-     * two columns of one card, and every card of one batch, come from a single reading of
-     * the clock. `$defaultFn` below is the backstop for an insert that names neither, and
-     * is what keeps such an insert off the epoch; it is called once per column per row, so
-     * it is not the thing to lean on where the two values have to agree.
+     * Application writers set both timestamps explicitly from one clock reading, and batch
+     * writers share that reading across all rows. The `$defaultFn` is a fallback called
+     * separately per column and row, so do not rely on it when timestamps must match.
      *
-     * A raw `INSERT INTO card` bypasses both and takes the `DEFAULT 0`, landing at the
-     * epoch instead of failing — so write them, as the fixtures in `test-utils/db.ts` and
-     * the `db-json` tests do. `kozane doctor` reports the rows that got it wrong.
+     * Removing the SQL default requires rebuilding `card`. Dropping that table with foreign
+     * keys enabled would cascade into its relations, and foreign-key enforcement cannot be
+     * disabled inside the migrator's transaction.
      */
     createdAt: integer("created_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
     /**
-     * When the card's text last changed, and nothing else about it. A card dragged across
-     * the board, resized, restacked, or moved to another partition or layer keeps the timestamp
-     * it had — which is why `updateNamespaceCardPositions` and the `reassign*` writers do not
-     * touch this column, and only `updateCard`'s content branch does.
+     * Time of the last text change. Position, width, stacking, partition, and layer changes
+     * preserve it.
      *
-     * The board sends a position PATCH per drag. Were those to count, `updated_at` would
-     * read "last moved" for most cards, and the interval `kozane card list --sort gap`
-     * reports — how long a card stood before it was rewritten — would be reset by arranging
-     * the board rather than by thinking on it.
-     *
-     * Text that arrives unchanged does not count either: `updateCard` reads the card and
-     * compares before deciding, because the board's composer sends the textarea's contents
-     * on every save whether or not a character of it was edited.
+     * `updateCard` compares content within the SQL update so saving unchanged text also
+     * preserves the timestamp.
      */
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),
   },
   (t) => [
-    // Read on every page load and on every snapshot poll, by `getCardDataByPartitions`: the board
-    // asks for the cards of this namespace's partitions once a second for as long as a tab is
-    // open. Without it SQLite answers that with a full scan of `card`, the largest table
-    // here, per poll per tab.
+    // Index cards by partition to avoid full scans on page loads and polls.
     index("card_partition").on(t.partitionId),
-    // `reassignLayerCards` selects by layer alone — deleting a layer moves its cards to the
-    // default one, and the scan it would otherwise be is over every card in the workspace,
-    // not just the layer's.
+    // Support `reassignLayerCards` lookup by layer when moving cards off a deleted layer.
     index("card_layer").on(t.layerId),
-    // `getCardChangeCounts` groups every card in the workspace by the day its text last
-    // changed, which is what the map page's activity bands are drawn from. Without this it
-    // is a full scan of `card` — the largest table — on every load of `/map`.
-    //
-    // Leading with `partition_id` because the query joins `partition` on it and groups by it, so
-    // this covers the whole read rather than only the ordering: SQLite walks the index and
-    // never touches the table. That also makes it a wider `card_partition`, so the two are not
-    // redundant in the direction that matters — `card_partition` still answers the board's own
-    // once-a-second read with a narrower index, and this one is not a substitute for it on a
-    // path where every byte read is paid for per tab per second.
+    // Cover the partition and update-time columns read by `getCardChangeCounts` for map
+    // activity bands. Keep the narrower partition index for frequent board reads.
     index("card_partition_updated").on(t.partitionId, t.updatedAt),
   ],
 );
@@ -328,12 +255,8 @@ export const glueRelTable = sqliteTable(
       .references(() => cardTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
   },
   (t) => [
-    // The primary key is `card_id`, which answers "what group is this card in" and nothing
-    // else — and `dissolveOrphanGroups` asks the other question three times over: count the
-    // members of these groups, select the ones left alone, delete them. Without this each of
-    // those is a scan of the whole table, on the write path of every glue, unglue and card
-    // delete. Same argument as `scope_rel_card` and `taskspace_scope`, on the table whose
-    // reads are all on the far side of the key it has.
+    // Support group membership counts and cleanup by glue ID. The primary key only supports
+    // lookup by card ID.
     index("glue_rel_glue").on(t.glueId),
   ],
 );
@@ -350,9 +273,7 @@ export const scopeRelTable = sqliteTable(
   },
   (t) => [
     primaryKey({ columns: [t.scopeId, t.cardId] }),
-    // The primary key leads with `scope_id`, so it cannot answer a lookup by card — and
-    // `getScopeRelsByCards` is exactly that, once per page load and once per snapshot poll.
-    // Same argument as `taskspace_scope`, on the table that grows fastest.
+    // Support scope-relation lookup by card. The primary key begins with `scope_id`.
     index("scope_rel_card").on(t.cardId),
   ],
 );
@@ -395,7 +316,7 @@ export const cardRelations = relations(cardTable, ({ one, many }) => ({
     references: [partitionTable.id],
   }),
   layer: one(layerTable, { fields: [cardTable.layerId], references: [layerTable.id] }),
-  // nullable: card retains its row when its taskspace is deleted (onDelete: "set null")
+  // Deleting a taskspace sets the card's nullable taskspace reference to null.
   taskspace: one(taskspaceTable, {
     fields: [cardTable.taskspaceId],
     references: [taskspaceTable.id],
@@ -428,7 +349,7 @@ export const scopeAreaRelations = relations(scopeAreaTable, ({ one }) => ({
 }));
 
 export const taskspaceRelations = relations(taskspaceTable, ({ one, many }) => ({
-  // nullable: taskspace is retained as an orphan when its scope is deleted (onDelete: "set null")
+  // Deleting a scope sets the taskspace's nullable scope reference to null.
   scope: one(scopeTable, { fields: [taskspaceTable.scopeId], references: [scopeTable.id] }),
   cards: many(cardTable),
 }));

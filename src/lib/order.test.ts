@@ -3,8 +3,8 @@ import { compareIds } from "./order.js";
 
 describe("compareIds", () => {
   it("orders by codepoint, the way SQLite's binary ORDER BY id does", () => {
-    // `"a".localeCompare("B")` is negative in every locale ICU knows; SQLite puts "B" first.
-    // The listing must not change with `LANG`, so neither may this.
+    // Use mixed-case IDs to verify locale-independent ordering consistent with SQLite for
+    // these IDs.
     expect(compareIds("B", "a")).toBeLessThan(0);
     expect(compareIds("a", "B")).toBeGreaterThan(0);
     expect("a".localeCompare("B")).toBeLessThan(0);

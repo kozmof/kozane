@@ -44,24 +44,19 @@
 
   let { data }: PageProps = $props();
 
-  // Static exports (kozane net ssg generate) are read-only: no mutation endpoints exist, so all
-  // editing affordances and the live-sync poll are disabled. Build-wide and constant.
+  // Static exports have no mutation endpoints. Disable editing controls and live polling for
+  // the entire build.
   const readonly = untrack(() => data.readonly);
-  // Present only in a static export built with `--include-scoped-files`. Read-only browsing
-  // and file-opening stay live wherever a taskspace has one of these; without it, a readonly
-  // taskspace falls back to the plain, non-expandable label it always was.
-  // Derived, not captured the way `readonly` above is: these trees belong to one namespace and
-  // are keyed by its taskspace ids, and warping in from another namespace reuses this component.
-  // Holding on to the namespace we happened to land on would leave every later namespace matching
-  // nothing here — and in an export, where `path` is null, with no listable taskspaces at all.
+  // Use embedded file trees when the static export includes them. Derive these from current
+  // page data because namespace navigation reuses the component. Without an embedded tree,
+  // readonly taskspaces remain non-expandable.
   const staticFiles = $derived(data.taskspaceFiles);
 
   // ── Reactive namespace state ────────────────────────────────────
   const s = new NamespaceState();
   s.fetcher = fetch;
-  // The same path namespace navigation takes below. Loading a namespace decides more than a
-  // list of fields now — which layer it was last worked on, among them — and that belongs
-  // in one place rather than being repeated here and kept in step by hand.
+  // Use the same namespace-loading path as later navigation so layer restoration and other
+  // initialization stay consistent.
   untrack(() => s.resetFromData(data));
 
   // ── UI state ──────────────────────────────────────────────────
@@ -73,22 +68,17 @@
   // The file palette, opened from a selection. Unlike the warp palette it is up while
   // cards are selected, which is why the composer is told to stand down below.
   let filePaletteOpen = $state(false);
-  // The taskspace file the editor has open, if any. One at a time: the panel is a place to
-  // work on a file, not a set of tabs, and a second one would want somewhere to put them.
+  // The single taskspace file currently open in the editor.
   const editor = new EditorSession();
-  // Held here rather than in the panel so it outlives closing a file: the width someone
-  // dragged to is about the workspace, not about the file that happened to be open. Null
-  // until dragged, when the responsive default applies. Per tab, and not stored, so a
-  // reload starts from the default again.
+  // Keep the dragged panel width on the page so it survives closing a file. Null uses the
+  // responsive default. Reloading resets it.
   let editorWidth = $state<number | null>(null);
-  // Every other namespace's warps. Loaded with the page so the palette opens filled in, and
-  // re-fetched when it opens so a warp set elsewhere since then is not missing.
-  // `?? []`: a static export built before this feature has no directory in its page data.
+  // Load other namespaces' warps with the page, then refresh when the palette opens. Older
+  // static exports may omit this directory.
   let warpDirectory = $state.raw<WarpListEntry[]>(untrack(() => data.warpDirectory ?? []));
   let newCardSeq = 0;
-  // A drag in progress, and the save that follows it. Held apart from `s.mutations`
-  // because the canvas opens it before any request exists: the poll has to stand down for
-  // the drag itself, not only for the PATCH at the end of it.
+  // Track the drag and its save separately from requests so polling pauses before the final
+  // PATCH begins.
   const positionActivity = new InFlight();
   /**
    * Whether the composer’s action bar has the keyboard. Every board-level shortcut below
@@ -134,9 +124,7 @@
   // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
   // every keystroke that touched the selection.
   let cardById = $derived(new Map(s.cards.map((c) => [c.id, c])));
-  // `flatMap` rather than `map(...)!.filter(Boolean)`: an id whose card has gone — deleted
-  // by the CLI between one poll and the next — is dropped here, and dropping it is exactly
-  // what the `!` was asserting could not be necessary.
+  // Drop selected IDs whose cards were deleted before the next snapshot arrived.
   let selectedCardObjects = $derived(
     [...s.selection.selectedCards].flatMap((id) => cardById.get(id) ?? []),
   );
@@ -166,11 +154,8 @@
     loadedData = data;
     if (data.namespace.id !== loadedNamespaceId) {
       loadedNamespaceId = data.namespace.id;
-      // Only on a namespace change: the directory that arrives with a board is the one for
-      // that board. A same-namespace reload would otherwise throw away the copy the palette
-      // keeps fresh for itself — including a row it has just removed. `?? []`: as on the
-      // initial read above, a static export built before this feature carries no
-      // directory, and spreading `undefined` into the palette's rows would throw.
+      // Replace the warp directory only on namespace changes so same-namespace reloads
+      // preserve palette updates. Older static exports may omit the directory.
       warpDirectory = data.warpDirectory ?? [];
       s.resetFromData(data);
       newCardSeq = 0;
@@ -178,8 +163,8 @@
       showFooters = data.uiConfig.defaultShowFooter;
       warpsVisible = data.uiConfig.defaultShowWarps;
       zoom = data.uiConfig.defaultZoom;
-      // Warping in from another namespace reuses this component, so the canvas never
-      // remounts and its `initialCenter` never runs again: the landing happens here.
+      // Cross-namespace navigation reuses this component, so land here without waiting for
+      // the canvas to remount.
       openViewOnNewNamespace();
     } else {
       s.refreshFromData(data);
@@ -191,19 +176,15 @@
    * headed. Null whenever the id is absent or belongs to a warp this namespace no longer has.
    */
   function warpFromUrl() {
-    // Only in the browser: prerendering a static export forbids reading the query, and a
-    // warp landing is a client-side scroll anyway.
+    // Read query parameters only in the browser. Static prerendering cannot access them.
     if (!browser) return null;
     const warpId = page.url.searchParams.get("warp");
     return warpId ? (s.warps.find(({ id }) => id === warpId) ?? null) : null;
   }
 
   /**
-   * Where the board a namespace navigation arrived at opens: on the warp the jump named, or
-   * in the middle, as a namespace opened from a link does. Landing on the scroll offset the
-   * namespace left behind — which is what reusing the canvas would otherwise do, after a
-   * jump to a removed warp or a press of the browser's Back button — shows nothing in
-   * particular.
+   * Open a namespace at the requested warp or at its center. Do not reuse the previous
+   * namespace's scroll offset when a warp is missing or navigation has no target.
    */
   function openViewOnNewNamespace() {
     const target = untrack(warpFromUrl);
@@ -219,10 +200,8 @@
   }
 
   /**
-   * Drops the parameters an arrival was directed by, so panning away and reloading does not
-   * snap back to them. Only the ones named: anything else on the URL belongs to whoever put
-   * it there. Best-effort: the URL is cosmetic here, and a router that is not ready yet is
-   * not worth an error banner.
+   * Remove arrival parameters after use so reloading does not repeat the jump. Preserve
+   * unrelated parameters and ignore router errors during this cosmetic update.
    */
   function clearQuery(...names: string[]) {
     const url = new URL(page.url);
@@ -234,11 +213,7 @@
     }
   }
 
-  /**
-   * The card named by `?card=`, which is how the tag index says which hit was clicked. Null
-   * when the id is absent or names a card this namespace does not have — a tag page left open
-   * while the card was deleted elsewhere.
-   */
+  /** Resolve the card named by `?card=`, or return null if it is absent from this namespace. */
   function cardFromUrl() {
     if (!browser) return null;
     const cardId = page.url.searchParams.get("card");
@@ -246,23 +221,19 @@
   }
 
   /**
-   * Opens what `?card=` and `?taskspace=&path=` name: the board centred on one card, or the
-   * editor on one taskspace file. Both are how a tag hit gets back to the thing it was found
-   * in, and both drop their parameters once they have been acted on, the same as `?warp=`.
+   * Open the card named by `?card=` or the taskspace file named by `?taskspace=&path=`.
+   * Remove those parameters after use, as with `?warp=`.
    */
   function openFromUrl() {
     if (!browser) return;
 
-    // Everything the URL is read for is read here, before anything is acted on, and every
-    // parameter that was acted on is dropped in one call at the end. Acting and clearing were
-    // interleaved, which left the card's clear reading `page.url` inside a `tick` — after the
-    // file's clear had already replaced it — and made the two correct only in that order.
+    // Read all URL actions before applying them, then remove handled parameters together so
+    // asynchronous actions cannot read a partially cleared URL.
     const card = cardFromUrl();
     const taskspaceId = page.url.searchParams.get("taskspace");
     const path = page.url.searchParams.get("path");
-    // A static export can open a file only where its contents were baked in; without them
-    // there is nothing to read and no endpoint to read it from, so the link is left inert
-    // rather than opening an editor on an error.
+    // Open static-export files only when their contents are embedded. There is no live
+    // endpoint to fetch omitted content.
     const taskspace =
       taskspaceId && path && !(readonly && !staticFiles)
         ? (s.taskspaces.find(({ id }) => id === taskspaceId) ?? null)
@@ -274,10 +245,8 @@
       acted.push("taskspace", "path");
     }
     if (card) {
-      // Selected as well as centred, which is what says which card the tag matched: the
-      // pan puts it in the middle of a board that may be dense, and the middle of the screen
-      // is not a mark. The same thing `focusWarp` does for `?warp=`, in this page's other
-      // vocabulary. Not in a read-only export, where nothing clears a selection again.
+      // Select the card as well as centring it so the matched card is clear on a dense board.
+      // Skip selection in read-only exports, where it cannot be cleared.
       if (!readonly) {
         s.selection.selectedCards = new Set([card.id]);
         s.selection.primarySelectedId = card.id;
@@ -305,9 +274,8 @@
     openFromUrl();
   });
 
-  // Keep this long-lived page in sync with writes made by the CLI or another tab.
-  // The snapshot endpoint returns the current database state; refreshFromData applies it
-  // without resetting the user's current filters or selection.
+  // Poll for CLI and other-tab writes. Apply snapshots while preserving current filters and
+  // valid selections.
   onMount(() => {
     // A static export has no /api/snapshot endpoint and no writers to sync with.
     if (readonly) return;
@@ -323,9 +291,8 @@
   // ── Domain action handlers ────────────────────────────────────
   const actions = createNamespaceActions(s);
 
-  // ── Saves the canvas and composer hand back ──────────────────
-  // The canvas has already made each edit — moved the card, resized the frame — and these
-  // only save it, answering whether it took so the canvas can put the old value back.
+  // Persist optimistic canvas and composer edits. Return success so callers can roll back
+  // failed saves.
   const persistence = createBoardPersistence(s);
 
   function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
@@ -335,21 +302,15 @@
   }
 
   /**
-   * A rectangle drawn on the canvas with Alt, waiting to be told which scope it frames.
-   *
-   * Held here rather than in the canvas because the prompt is the page's to draw and the
-   * canvas's only job is to say where the pointer went. Bound both ways: the canvas writes
-   * it on release, and clearing it here is what takes the rectangle back off the board.
+   * An Alt-drawn rectangle awaiting a scope. The canvas sets it on release, and the page
+   * clears it after handling the scope prompt.
    */
   let pendingScopeAreaRect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
 
   /**
-   * How many cards the drawn rectangle covers, for the prompt to say so before a scope is
-   * picked. Counted once when the rectangle lands rather than derived, because the answer
-   * comes from measuring the DOM and there is nothing reactive behind it to derive from.
-   *
-   * This is the number shown, not the number acted on: `handleChooseScopeForArea` measures
-   * again at the moment of the answer, which is what the frame is actually built from.
+   * Card count measured when the rectangle is drawn, for display in the prompt.
+   * `handleChooseScopeForArea` measures again when the user answers to account for
+   * intervening changes.
    */
   let pendingScopeAreaCardCount = $state(0);
   $effect(() => {
@@ -365,8 +326,7 @@
   async function handleChooseScopeForArea(scopeId: string) {
     const rect = pendingScopeAreaRect;
     if (!rect) return;
-    // Measured now rather than when the rectangle was drawn: the prompt has been up for as
-    // long as it took to read, and a poll may have moved the board underneath it.
+    // Measure again because polling may have changed the board while the prompt was open.
     const covers = canvasComponent.cardIdsInWorldRect(rect);
     pendingScopeAreaRect = null;
     await actions.handleCreateScopeArea(scopeId, pendingRectAsArea(rect), covers);
@@ -400,11 +360,7 @@
     }
   }
 
-  /**
-   * Focuses a warp, revealing the markers if they were hidden. The remove key acts on the
-   * focused warp, so a focus with nothing on screen to show for it is a warp that
-   * disappears by surprise — the same reason setting a warp reveals them.
-   */
+  /** Focus a warp and reveal its marker so the remove shortcut's target is visible. */
   function focusWarp(warpId: string) {
     warpsVisible = true;
     s.focusedWarpId = warpId;
@@ -417,11 +373,8 @@
   });
 
   /**
-   * Opens a file picked in the palette.
-   *
-   * The palette is closed first, as a warp jump closes its own: the editor takes the
-   * keyboard and listens for a press outside itself, and a panel still standing in front of
-   * it would be read as "outside" by the one and fight it for focus by the other.
+   * Close the palette before opening its selected file so the editor receives focus and
+   * outside-press events correctly.
    */
   function handlePaletteOpenFile(taskspaceId: string, taskspaceName: string, path: string) {
     filePaletteOpen = false;
@@ -429,12 +382,8 @@
   }
 
   /**
-   * Opens a file clicked on the icons under a scope frame.
-   *
-   * The frame hands over a taskspace id and a path within it, which is all the canvas has
-   * any reason to carry. The editor titles its tab with the taskspace's name, so that is
-   * looked up here, from the same rows the canvas drew the icon from. Nothing to close
-   * first, unlike the palette: the icons are part of the board.
+   * Open a file from a scope frame's icon. Resolve the taskspace name here for the editor
+   * title using the same rows that supply the canvas icons.
    */
   function handleFrameOpenFile(taskspaceId: string, path: string) {
     const taskspace = s.taskspaces.find(({ id }) => id === taskspaceId);
@@ -460,17 +409,15 @@
       focusWarp(entry.id);
       return;
     }
-    // The other namespace's page decides where its own canvas opens, so the warp travels in
-    // the URL rather than in memory — which also makes the jump a link worth sharing. The
-    // trailing slash follows this page's own: a static export is built with one, and a
-    // path missing it is redirected, which is a redirect the query would have to survive.
+    // Pass cross-namespace warp targets in the URL so the destination page controls its
+    // viewport and the link can be shared. Preserve the route's trailing-slash style.
     const slash = page.url.pathname.endsWith("/") ? "/" : "";
     void goto(`${base}/${entry.namespaceId}${slash}?warp=${entry.id}`);
   }
 
   /**
-   * Removing from the palette, which is the only way to reach another namespace's warps: the
-   * `x` key only ever acts on the marker this board has focused.
+   * Remove a warp through the palette, including warps in other namespaces. The `x` shortcut
+   * affects only the focused marker on this board.
    */
   async function handleWarpDelete(entry: WarpListEntry) {
     if (entry.namespaceId === s.namespaceId) {
@@ -488,13 +435,9 @@
   }
 
   /**
-   * The warps an arrow key may still travel to: all of them, less the focused one once the
-   * view has arrived on it. A warp within half a viewport of the canvas edge cannot be
-   * brought to the middle of the view, so it goes on reading as lying ahead after the jump
-   * has landed — and pressing the same arrow again would keep choosing it instead of
-   * wrapping round the board. Dropping it only once the view is as centred on it as the
-   * board allows leaves the ordinary case alone: pan away from a warp and it is a
-   * destination again.
+   * Exclude the focused warp once the viewport is as centered on it as canvas bounds allow.
+   * Otherwise an edge warp remains ahead of the center and repeated arrow navigation keeps
+   * choosing it. Panning away makes it eligible again.
    */
   function reachableWarps() {
     const focused = s.warps.find(({ id }) => id === s.focusedWarpId);
@@ -521,10 +464,8 @@
   }
 
   /**
-   * What each key does on the board; the table and its order are `lib/board-bindings.ts`.
-   *
-   * `$derived` because the shortcuts come from `data.uiConfig`, which a namespace navigation
-   * replaces — the table has to be the one for the config now in force.
+   * Derive keyboard bindings from the current namespace configuration.
+   * `lib/board-bindings.ts` defines their order.
    */
   const keyBindings = $derived(
     boardKeyBindings(data.uiConfig, {
@@ -559,20 +500,15 @@
   );
 
   function handleKeydown(e: KeyboardEvent) {
-    // The gates, in order, and none of them is about what a key means — see the note in
-    // `lib/board-keymap.ts` on why they stay here rather than becoming bindings.
-    //
-    // The palettes own the keyboard while they are open, including the key that closes them.
+    // Apply keyboard ownership gates before resolving shortcuts. Open palettes own all keys,
+    // including their close shortcut.
     if (warpPaletteOpen) return;
     if (filePaletteOpen) return;
-    // So does the editor. Its own handler stops propagation, but a click on the panel
-    // chrome — a button rather than the text — leaves focus somewhere that does not, and
-    // the board must not act on a key aimed at an open file.
+    // An open editor owns the keyboard even when focus is on panel controls that do not stop
+    // propagation.
     if (editor.isOpen) return;
-    // A held key repeats around thirty times a second, and every shortcut below is a
-    // discrete command rather than something to hold: without this, resting on the
-    // set-warp key drops a warp per repeat — each one a POST and a marker stacked on the
-    // last, with only the topmost reachable to remove.
+    // Ignore repeated keydown events because shortcuts perform discrete actions, including
+    // creating warp markers.
     if (e.repeat) return;
     if (isTypingTarget(e.target)) return;
     if (hasCommandModifier(e)) return;
@@ -696,9 +632,7 @@
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />
 
-    <!-- Takes the composer's place while it is up: both sit at the bottom centre, and the
-         question "which scope is this rectangle" is the one thing on screen worth answering
-         until it is answered. -->
+    <!-- Replace the composer with the scope prompt while the rectangle awaits a scope. -->
     {#if !readonly && pendingScopeAreaRect}
     <ScopeAreaPrompt
       scopes={s.scopes}

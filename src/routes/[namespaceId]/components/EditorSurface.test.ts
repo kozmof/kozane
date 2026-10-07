@@ -5,11 +5,8 @@ import EditorSurface from "./EditorSurface.svelte";
 import { EditorDocument } from "../lib/editor/document-store.svelte.js";
 
 /**
- * jsdom has no layout, so every rect the DOM measurer asks for is zero and the caret and
- * selection always paint at the origin. What is exercised here is the input side — which
- * keys and composition events turn into which edits — and pixel geometry is left to
- * `geometry.test.ts`, which measures against a stub, and to the Playwright specs, which
- * run somewhere with real layout.
+ * Test input handling in jsdom, which provides no layout measurements. Test geometry with
+ * stub measurements and Playwright's real browser layout.
  */
 function mount(content: string, props: Record<string, unknown> = {}) {
   const doc = new EditorDocument(content);
@@ -24,7 +21,7 @@ describe("EditorSurface", () => {
   it("draws only the lines a viewport covers", () => {
     const many = Array.from({ length: 5000 }, (_, i) => `line ${i}`).join("\n");
     mount(many);
-    // Far fewer than five thousand: the DOM holds the window, not the document.
+    // Render only the visible window rather than all five thousand lines.
     expect(document.querySelectorAll("[style*='top']").length).toBeLessThan(200);
   });
 
@@ -137,8 +134,7 @@ describe("EditorSurface", () => {
     await userEvent.keyboard("{Control>}z{/Control}");
     expect(doc.text()).toBe("alpha\nbravo\n");
 
-    // Typing now proves where the caret actually is: back at the undone edit, not left
-    // down on the second line where it was when undo was pressed.
+    // Type to verify that undo returned the caret to the edit on the first line.
     await userEvent.keyboard("X");
     expect(doc.text()).toBe("alphaX\nbravo\n");
   });
@@ -164,8 +160,7 @@ describe("EditorSurface", () => {
     await userEvent.keyboard("{Control>}z{/Control}");
     expect(doc.text()).toBe("hello world\n");
 
-    // Typing shows where the caret really is: back at column 5, where the backspace was
-    // pressed from, rather than at 4 where the deletion began.
+    // Type to verify that undo restored the caret to column 5, before the backspace.
     await userEvent.keyboard("X");
     expect(doc.text()).toBe("helloX world\n");
   });
@@ -216,7 +211,7 @@ describe("EditorSurface", () => {
 
     await fireEvent.compositionStart(sink, { data: "" });
     await fireEvent.compositionUpdate(sink, { data: "にほn" });
-    // Still nothing committed — an abandoned composition must leave no edit behind.
+    // Abandoning composition must leave no committed edit.
     expect(doc.text()).toBe("\n");
 
     await fireEvent.compositionEnd(sink, { data: "日本" });
@@ -346,10 +341,8 @@ describe("EditorSurface", () => {
   });
 
   it("suppresses the mousedown default that would blur the sink again", () => {
-    // jsdom does not implement the focus-moving default action of mousedown, so the focus
-    // assertion above passes with or without the fix. This is the part that actually keeps
-    // a real browser from clearing focus a moment after `focus()` was called: the surface
-    // is plain divs, so the default is to focus nothing.
+    // Check default prevention because jsdom does not simulate mousedown focus changes. In a
+    // browser, the default action could clear the focus set by the handler.
     mount("hello\n");
     const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true, button: 0 });
     screen.getByTestId("editor-surface").dispatchEvent(event);
@@ -359,9 +352,8 @@ describe("EditorSurface", () => {
   it("leaves a scrollbar drag to the browser", () => {
     mount("hello\n");
     const surface = screen.getByTestId("editor-surface");
-    // A laid-out element has to be faked: jsdom reports every box as zero, and the
-    // scrollbar region is defined entirely by the gap between the border box and the
-    // client box.
+    // Mock layout because jsdom reports zero-sized boxes. Scrollbar detection uses the
+    // difference between border and client boxes.
     Object.defineProperty(surface, "clientWidth", { value: 300, configurable: true });
     Object.defineProperty(surface, "clientHeight", { value: 200, configurable: true });
     surface.getBoundingClientRect = () => ({ left: 0, top: 0 }) as DOMRect;
@@ -389,13 +381,11 @@ describe("EditorSurface", () => {
   });
 
   it("leaves the view where a scroll put it rather than springing back to the caret", async () => {
-    // The panel follows the caret when the caret moves. Following it when the view moves
-    // is the same code with the scroll position as a dependency, and it pinned a long file
-    // to the caret's line: the wheel moved nothing and the scrollbar sprang back on release.
+    // Scroll when the caret moves, but do not reset manual scrolling when only the viewport
+    // moves.
     mount(Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n");
     const surface = screen.getByTestId("editor-surface");
-    // Faked as above, and for the same reason: jsdom has no layout, so it reports a zero
-    // client box and never moves a scroll position of its own.
+    // Mock dimensions and scroll positions because jsdom does not perform layout.
     let scrolled = 0;
     Object.defineProperty(surface, "clientHeight", { value: 200, configurable: true });
     Object.defineProperty(surface, "scrollTop", {
@@ -413,9 +403,7 @@ describe("EditorSurface", () => {
   });
 
   it("lets keys through to whatever is hosting it, which is what owns Escape and saving", async () => {
-    // The surface claims no key from its host: `FileEditor` is what stops propagation, and
-    // it can only do that for keys that reach it. A surface that swallowed everything here
-    // would leave Ctrl+S and Escape dead.
+    // Let keys reach `FileEditor`, which handles Ctrl+S, Escape, and propagation.
     const seen: string[] = [];
     const onWindowKey = (e: KeyboardEvent) => seen.push(e.key);
     globalThis.addEventListener("keydown", onWindowKey);
@@ -440,7 +428,7 @@ describe("EditorSurface test hooks", () => {
     );
     expect(drawn).toContain(0);
     expect(drawn).toContain(1);
-    // Never more lines than the document has: the window is drawn, not the document.
+    // Never render more lines than the document contains.
     expect(drawn.length).toBeLessThanOrEqual(doc.lineCount);
   });
 

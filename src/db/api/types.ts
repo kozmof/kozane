@@ -16,27 +16,13 @@ import type {
 
 export type NeedsDB = { db: AnyDB };
 /**
- * For the operations that must run inside a transaction someone else opened, and say so in
- * their type rather than in their name. `Tx` is the branded transaction handle from
- * `db/tx.ts`, so a caller holding a plain `DB` cannot reach one of these by accident.
- *
- * Named here beside {@link NeedsDB} because these functions take the same single-object
- * parameter every other query in this module takes — the alternative, a positional
- * `(db, ids)`, was two arguments of the same shape as everything else's first two and read
- * differently for no reason.
+ * Require a branded transaction handle for operations that run inside a caller-owned
+ * transaction. A plain DB handle cannot satisfy this type.
  */
 export type NeedsTx = { db: Tx };
 /**
- * One entity each, and the only place each id is spelled.
- *
- * The compounds below are intersections of these rather than fresh object literals, which
- * is a correction and not a tidy-up: `NeedsNamespacePartition` used to be written
- * `NeedsNamespace & { partitionId: string }`, so `{ partitionId: string }` appeared twice
- * and the two spellings were held together by nobody. TypeScript is structural — the two
- * were the same type either way, which means a function declaring one has always accepted
- * the other, and the name never drew a distinction the compiler could check. Composing them
- * says that outright. A genuine distinction would need a brand, the way `DB` and `Tx` are
- * branded in `db/tx.ts`, and nothing here wants one: an argument bag is not a capability.
+ * Shared single-entity ID parameters. Compose compound argument types through intersections
+ * so each field has one declaration.
  */
 export type NeedsNamespace = NeedsDB & { namespaceId: string };
 export type NeedsPartition = NeedsDB & { partitionId: string };
@@ -47,9 +33,8 @@ export type NeedsTaskspace = NeedsDB & { taskspaceId: string };
 export type NeedsCards = NeedsDB & { cardIds: string[] };
 
 /**
- * A namespace and a batch of its cards — the shape every operation acting on a selection
- * takes, and the reason they can share one ownership check and one rejection vocabulary.
- * See {@link BatchRejection} in `utils.ts`.
+ * Namespace and card IDs for a batch operation. Share ownership checks and {@link
+ * BatchRejection} reasons across operations.
  */
 export type NeedsNamespaceCards = NeedsNamespace & NeedsCards;
 export type NeedsNamespacePartition = NeedsNamespace & NeedsPartition;

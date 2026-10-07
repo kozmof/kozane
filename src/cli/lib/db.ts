@@ -21,10 +21,8 @@ import {
 import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "../../db/pragmas.js";
 import { dbPath } from "./config.js";
 
-// Reading a migration state now lives in `db/internal/migrations.ts`, which the server can
-// reach and `src/cli` cannot be reached from — see the note there. What stays here is the
-// half with policy in it: how to word a status, and what to do about a bad one. Re-exported
-// so the commands and tests that already name them through this module still can.
+// Read migration state through `db/internal/migrations.ts`, which the server can also import.
+// Keep CLI messages and recovery policy here, and re-export the readers for existing callers.
 export { getMigrationStatus, resolveMigrationsFolder };
 export type { MigrationStatus, MigrationJournalEntry } from "../../db/internal/migrations.js";
 
@@ -71,12 +69,8 @@ function migrationLabel(migration: { tag: string; when: number } | null): string
 }
 
 /**
- * A migration status as the CLI reports it, and the way out of it.
- *
- * Here rather than beside a command because three commands print it and one library
- * function does — `requireCurrentMigrations` below. It used to live in `commands/db.ts`,
- * which made `open` and `ssg` import from a sibling command module to get at it, and put
- * it out of reach of anything in `lib/` entirely.
+ * Format migration status and recovery guidance for CLI commands and
+ * `requireCurrentMigrations`.
  */
 export function migrationStatusMessage(status: MigrationStatus): string {
   const lines = [
@@ -107,22 +101,11 @@ export function migrationStatusMessage(status: MigrationStatus): string {
 }
 
 /**
- * Stops the command unless every migration is applied.
+ * Stop the command unless all migrations are applied.
  *
- * The one rule for schema drift, so that a workspace left behind by an upgrade fails the
- * same way whichever command reaches it first. `kozane open` and `kozane net ssg generate`
- * already refused this way; the workspace commands did not, and split three ways instead —
- * `layer add`, `scope add` and `namespace create` called {@link runMigrations} outright,
- * while `card add`, `taskspace create` and the rest went straight at the stale schema and
- * failed with whatever SQLite said about a missing column.
- *
- * Migrating here was the worse of the two. `kozane db migrate` takes a backup first and
- * refuses a gapped history; a bare `runMigrations` on the way into an unrelated command
- * does neither, so the one operation the docs promise is backed up was also the one that
- * could happen without anybody asking for it.
- *
- * Never suggests `db migrate` for a state it cannot repair: a gapped history needs a
- * restore, and `migrationStatusMessage` says so.
+ * Require explicit migration so `db migrate` can take a backup and validate migration
+ * history. Use `migrationStatusMessage` to recommend a restore for gaps that migration cannot
+ * repair.
  */
 export async function requireCurrentMigrations(dbUrl: string, purpose: string): Promise<void> {
   const status = await getMigrationStatus(dbUrl);
@@ -140,14 +123,13 @@ export async function requireCurrentMigrations(dbUrl: string, purpose: string): 
 }
 
 export async function runMigrations(dbUrl: string): Promise<void> {
-  // `timeout` for the connection a transaction leaves behind — see `openDb`.
+  // Apply the connection timeout used after transactions. See `openDb`.
   const client = createClient({ url: dbUrl, timeout: BUSY_TIMEOUT_MS });
   const db = drizzle(client, { schema });
 
   try {
-    // The same pragmas the server opens with, `kozane init` included — so a workspace is in
-    // WAL from the migration that creates it rather than from whichever connection happened
-    // to open it first. See `db/pragmas.ts`.
+    // Use the server's database pragmas, including during initialization, so the workspace
+    // uses WAL from its first migration.
     await applyConnectionPragmas(client, dbUrl);
     await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
   } finally {
@@ -156,27 +138,10 @@ export async function runMigrations(dbUrl: string): Promise<void> {
 }
 
 /**
- * Puts a self-contained copy of `backupPath` at `stagedPath`, for the restore to validate
- * and then rename into place.
+ * Stage a self-contained backup for validation and atomic replacement.
  *
- * `VACUUM INTO` rather than `copyFileSync`, and the difference is the whole of a bug that a
- * plain copy had no way to show. A database in WAL — which is what a workspace runs in, see
- * `db/pragmas.ts` — keeps its most recent commits in the `-wal` beside it until a
- * checkpoint, so copying the main file alone can produce a database missing everything
- * committed since. What arrived here was not a corrupt file but an older one, and an older
- * Kozane database is a plausible database: `validateRestoreCandidate` below read it as one
- * that had never been migrated, and refused a backup that was perfectly good.
- *
- * That is the visible half. The other half is worse and quieter: a backup whose `-wal`
- * happened to hold nothing but recent rows would have passed every check here and restored a
- * workspace silently missing them.
- *
- * `VACUUM INTO` reads through a connection, so it sees the log and writes one file with
- * everything in it, whatever mode the source is in and whether or not it has a sidecar. It
- * is what `backupDb` already uses, for the same reason.
- *
- * A source that is not a database at all fails here rather than at the integrity check, so
- * the wording is the one this refuses everything unreadable with.
+ * Use `VACUUM INTO` so committed rows in a WAL sidecar are included. Copying only the main
+ * file can omit recent data or schema changes. An unreadable database fails during staging.
  */
 async function stageRestoreCandidate(backupPath: string, stagedPath: string): Promise<void> {
   const client = createClient({ url: `file:${backupPath}` });
@@ -228,14 +193,9 @@ function sidecarPaths(dbFile: string): string[] {
 }
 
 /**
- * Validate a backup, flush it, then atomically replace the workspace database.
- *
- * The rename alone is not the whole replacement. A workspace runs in WAL — see
- * `db/pragmas.ts` — so the file being replaced has a `-wal` beside it holding commits the
- * main file does not, and SQLite would go on replaying that log over the restored database.
- * The result is neither the backup nor what was there before. Removing the sidecars is
- * correct in every journal mode — in the others there are none to remove — so this does not
- * depend on the mode staying what it is today.
+ * Validate and flush the staged backup, then atomically replace the workspace database.
+ * Remove old sidecars so SQLite cannot replay the previous database's WAL over the
+ * replacement.
  */
 export async function restoreDb(backupPath: string, targetPath: string): Promise<void> {
   const stagedPath = `${targetPath}.restore-${process.pid}-${Date.now()}`;
@@ -250,9 +210,8 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
       closeSync(fd);
     }
     renameSync(stagedPath, targetPath);
-    // After the rename rather than before: until the new file is in place there is still a
-    // database here that its log belongs to, and a crash between the two would otherwise
-    // leave the old database stripped of commits it had.
+    // Remove old sidecars after replacing the database. A crash before replacement must leave
+    // its WAL available.
     for (const sidecar of sidecarPaths(targetPath)) rmSync(sidecar, { force: true });
     const directoryFd = openSync(dirname(targetPath), "r");
     try {
@@ -261,8 +220,7 @@ export async function restoreDb(backupPath: string, targetPath: string): Promise
       closeSync(directoryFd);
     }
   } finally {
-    // The staged copy is opened by `validateRestoreCandidate`, which is enough to give it
-    // sidecars of its own; they are no part of the restored database either way.
+    // Validation can create sidecars for the staged copy. Remove those too.
     for (const path of [stagedPath, ...sidecarPaths(stagedPath)]) rmSync(path, { force: true });
   }
 }

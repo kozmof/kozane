@@ -96,10 +96,8 @@ describe("scanTagLines", () => {
   });
 
   /**
-   * Cut by character, not by UTF-16 code unit. Slicing by unit through an astral character
-   * leaves half of one at the end, and the excerpt is not transient — it is written into
-   * `.kozane/tag-index.json` and read back — so the half character is drawn as `�` from then
-   * on. The emoji is placed to straddle the cut exactly.
+   * Place an astral character across the excerpt boundary to verify truncation preserves
+   * complete code points in cached text.
    */
   it("cuts a long excerpt without splitting a character in half", () => {
     // The emoji is the 200th character and the 200th and 201st code units, so a cut by unit
@@ -119,12 +117,7 @@ describe("scanTagLines", () => {
     expect(scanTagLines("")).toEqual([]);
   });
 
-  /**
-   * A URL is an address, not text someone wrote a tag in. The bracket cases are the ones
-   * that matter: the pattern opens a tag after `(` or `[`, both of which are legal inside a
-   * URL, so without the span rule an address gathered a card under a tag the card did not
-   * draw — the renderer having always treated the URL as one piece.
-   */
+  /** Ignore tag-like text inside URL spans, including brackets valid within URLs. */
   describe("URLs", () => {
     it("leaves a colon inside a URL alone", () => {
       expect(tags("see https://example.com/it:is/fine")).toEqual([]);
@@ -149,29 +142,27 @@ describe("scanTagLines", () => {
     });
 
     /**
-     * A URL ends whatever was being written into it, because its characters are cut out
-     * before the pattern sees them rather than merely skipped once it has matched.
-     *
-     * Skipping tested where a match began, which let a candidate that opened in prose and
-     * ran into an address through whole: the tag reached past the `://` and took part of the
-     * host with it. Both cases below were real, and both produced a tag the card did not draw
-     * — the renderer having always cut.
+     * Cut URL spans out before matching so a tag candidate cannot extend from prose into an
+     * address.
      */
     it("ends a tag at the URL it runs into, rather than reading through it", () => {
       expect(tags(":todo:https://example.com/issue/1")).toEqual(["todo"]);
       expect(tags("notes :refhttps://x.com")).toEqual(["ref"]);
     });
 
-    /** The other half of the same rule: with nothing but the sigil left in front of the
-     *  address, there is no tag at all. A tag written right up against a URL used to put
-     *  `http` in the tree of every workspace where anyone did it. */
+    /**
+     * A sigil immediately followed by a URL is not a tag. Do not parse the URL's scheme as a
+     * tag name.
+     */
     it("does not read a URL's scheme as a tag when only the sigil precedes it", () => {
       expect(tags("see :http://example.com")).toEqual([]);
       expect(tags("read :https://docs.example.com later")).toEqual([]);
     });
 
-    /** A URL is a boundary, not a joiner: what follows one starts a text of its own, and a
-     *  colon there opens a tag only if the characters between say it may. */
+    /**
+     * A URL ends the preceding text span. Check tag boundaries independently in the text that
+     * follows it.
+     */
     it("does not let a URL's last character open a tag after it", () => {
       expect(tags("(https://x.com):foo")).toEqual([]);
       expect(tags("https://x.com/:foo")).toEqual([]);
@@ -244,9 +235,8 @@ describe("groupHitRows", () => {
     expect(rows[0].hits).toHaveLength(2);
   });
 
-  // The row has to carry the card, not only a key built from it: a caller reading the
-  // identity of a row off its key gets `card:c1`, which is a string like an id is a string
-  // and so links to a board that does not exist.
+  // Carry the card ID separately from the row key. The prefixed key is not a valid ID for
+  // navigation.
   it("carries the source a row is, beside the key it is drawn under", () => {
     const [row] = groupHitRows([cardHit("c1", "perf")]);
     expect(row.key).toBe("card:c1");
@@ -286,10 +276,8 @@ describe("groupHitRows", () => {
 });
 
 /**
- * The grouping both listings head their file rows with. A path is relative to a taskspace
- * and says nothing on its own, so drawing one bare is two identical rows for two different
- * files as soon as a workspace has a second taskspace — which is why neither the terminal
- * nor the page may be the only one to know this.
+ * Group file rows by taskspace so identical relative paths identify different files in CLI
+ * and browser results.
  */
 describe("groupHitsByTaskspace", () => {
   const hitIn = (taskspaceId: string, path: string, line: number, tag = "perf"): TagHit => ({
@@ -335,8 +323,7 @@ describe("groupHitsByTaskspace", () => {
     expect(group.rows[0].hits).toHaveLength(2);
   });
 
-  /** The same path in two taskspaces is two different files, which is the whole reason the
-   *  grouping exists — and `hitRowKey` keeps their rows apart as well. */
+  /** Keep identical paths in different taskspaces distinct in grouping and row keys. */
   it("does not merge the same path in two taskspaces", () => {
     const groups = grouped([hitIn("t1", "notes/todo.md", 3), hitIn("t2", "notes/todo.md", 3)]);
 
@@ -381,9 +368,8 @@ describe("tagMatches", () => {
   });
 
   /**
-   * The other side is a precondition rather than a courtesy, and this says so out loud: a
-   * tag reaches here having been through `normalizeTag` at the moment it was matched, which
-   * is what lets the filter behind every gather skip folding and composing once per hit.
+   * Require normalized tags so filtering does not repeat case folding and Unicode
+   * normalization for every hit.
    */
   it("takes the tag as already normalized", () => {
     expect(tagMatches("foo", normalizeTag("Foo:bar"))).toBe(true);
@@ -511,10 +497,8 @@ describe("capHitsByKind", () => {
   });
 
   /**
-   * The bug this exists for. `loadTagIndex` returns every card hit before any file hit, so a
-   * single ceiling laid across the list was spent on cards before the files were reached: a
-   * tag on more cards than the ceiling listed no files at all, and the panel said only that
-   * it was showing part of a list — which reads as "there are no files under this tag".
+   * Cap cards and files separately so earlier card hits cannot consume the entire file
+   * allowance.
    */
   it("does not let one kind spend the other's ceiling", () => {
     const capped = capHitsByKind([...cards(5), ...files(3)], 4);
@@ -547,15 +531,13 @@ describe("truncationReasons", () => {
     expect(truncationReasons(["depth", "unreadable"]).split("; ")).toHaveLength(2);
   });
 
-  /** These cross a serialization boundary — the loader's return becomes the page's data — so
-   *  a reason the drawing end does not know must not become `undefined` in a sentence. */
+  /** Handle unknown serialized truncation reasons without rendering undefined. */
   it("says something a reader can use for a reason it does not know", () => {
     const said = truncationReasons(["quota" as never]);
 
     expect(said).not.toBe("quota");
     expect(said).not.toContain("undefined");
-    // The fallback is a sentence about the taskspace, in the voice of the table above —
-    // naming the ceiling is the thing this whole table exists to stop.
+    // Use reader-facing fallback wording instead of an internal limit name.
     expect(said).toMatch(/not read/);
   });
 });

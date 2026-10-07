@@ -29,11 +29,7 @@
 
   let { data }: PageProps = $props();
 
-  /**
-   * What the URL asks for. `data.*` on the live page, where the server read the query and
-   * narrowed against it; from the URL in a static export, which is prerendered and so has no
-   * query at build time. Either way one value, so everything below reads the same on both.
-   */
+  /** Use server query data for live pages and browser URL filters for static exports. */
   const selectedTag = $derived.by(() => {
     if (data.tag) return data.tag;
     if (!browser) return null;
@@ -51,10 +47,8 @@
   );
 
   /**
-   * Whether a hit belongs to the selected namespace. The same rule the board draws by: a card
-   * belongs to the namespace its partition does, and a taskspace to its own namespace or to none
-   * at all — an unplaced taskspace appears on every board, so it belongs to every namespace's
-   * index too.
+   * Match the board's namespace visibility rules. Cards belong to their partition's
+   * namespace, while unplaced taskspaces appear in every namespace.
    */
   function inSelectedNamespace(hit: TagHit): boolean {
     if (!selectedNamespaceId) return true;
@@ -64,18 +58,8 @@
   }
 
   /**
-   * Selected and capped in one pass, by the same function and to the same number the server
-   * caps by, so an export and the live page list alike.
-   *
-   * The selection is a no-op on the live page — the server sent exactly this set — and is the
-   * real one in a static export, where every hit of every namespace was baked in. One path
-   * rather than a branch that only one of the two ever takes.
-   *
-   * Handed to `capHitsByKind` rather than run as a `filter` before it, so an export holding
-   * the whole workspace's hits does not copy everything one tag matched to draw two
-   * hundred rows of each kind. Per kind, which matters here for the same reason it matters on
-   * the server: the hits arrive cards first, so one ceiling across both would let a much-used
-   * tag's cards push its files off the page entirely.
+   * Filter and cap hits per kind in one pass with the shared server helper. Live results are
+   * already filtered, while static exports contain the full gathered dataset.
    */
   const shown = $derived.by(() => {
     if (!selectedTag) return capHitsByKind<TagHit>([], TAG_HITS_SHOWN_MAX);
@@ -88,23 +72,13 @@
   });
   const shownCount = $derived(shown.cards.length + shown.files.length);
 
-  /** What each list below is a part of. The server counted before capping; in an export
-   *  nothing was capped before the filter just above, so the counts are taken from that. */
+  /** Use server totals for live results and locally filtered totals for exports. */
   const cardTotal = $derived(data.cardTotal ?? shown.cardTotal);
   const fileTotal = $derived(data.fileTotal ?? shown.fileTotal);
 
   /**
-   * What is not being shown, said per kind, or nothing when everything is.
-   *
-   * The tree's count is of the whole thing, so a cut list has to say it is one or the two
-   * numbers read as a disagreement. Per kind because the caps are: "the first 200 of 900"
-   * over a list that also holds files would be a second disagreement in place of the first.
-   *
-   * Counted in hits, and said so — the word makes the number true rather than a
-   * third disagreement. The cap is applied before `groupHitRows`, so a card carrying `:perf`
-   * and `:perf:cache` is two of what is counted here, one row below, and one card in the
-   * tree beside it; calling that "cards" made the notice contradict both. `kozane tag show`
-   * says "card hits" for exactly this reason, and now says it in the same words.
+   * Report omitted hits separately for cards and files. Count hits rather than grouped rows
+   * or distinct sources because display caps apply before grouping.
    */
   const cappedNotice = $derived.by(() => {
     const parts = [];
@@ -118,12 +92,8 @@
   });
 
   /**
-   * The tree, narrowed the same way the panel is, so the count beside a tag is a count of
-   * what selecting it would list.
-   *
-   * Only a static export ever has anything to narrow: the live server already built the tree
-   * from the namespace it was asked about, so on that path this is false and the tree it sent
-   * is already the right one.
+   * Filter the exported tree with the panel so tag counts match selectable results. Live
+   * responses are already filtered by namespace.
    */
   const narrowsNamespace = $derived(selectedNamespaceId !== null && data.namespaceId === null);
   const tree = $derived(
@@ -137,20 +107,12 @@
    */
   const cardRows = $derived(groupHitRows(shown.cards));
 
-  /** File hits gathered under the taskspace they were found in, so a path is read against
-   *  the directory it is relative to rather than on its own — and within that, one row per
-   *  line, since each is somewhere to go and look. `groupHitsByTaskspace` in `$lib/tag`,
-   *  which `kozane tag show` heads its file rows with too. */
+  /** Group file hits by taskspace and then by line through the shared CLI and browser helper. */
   const fileRowsByTaskspace = $derived(groupHitsByTaskspace(shown.files));
 
   /**
-   * Namespace names by id, built once rather than searched per row. It was a linear `find`
-   * called from inside an `{#each}`, so drawing a tag with two hundred cards on it walked the
-   * namespace list two hundred times. Nothing anyone would have measured at this size; it is a
-   * shape worth not having on the page that exists to draw a lot of rows at once.
-   *
-   * Taskspaces need no map of their own: the loader sends them as a record already keyed by
-   * id, which is what `TagIndex.taskspaces` is.
+   * Index namespace names once for row lookups. Taskspace metadata already arrives keyed by
+   * ID.
    */
   const namespaceNames = $derived(new Map(data.namespaces.map(({ id, name }) => [id, name])));
 
@@ -162,14 +124,15 @@
    *  said anything about them. See where they are drawn, at the foot of the hits. */
   const missing = $derived(data.missing ?? []);
 
-  /** The workspace default, which is where an unplaced taskspace's file is opened: it is on
-   *  every board, so no one of them is more its own than another. */
+  /** Open unplaced taskspace files on the workspace's default board. */
   const defaultNamespaceId = $derived(
     data.namespaces.find(({ isDefault }) => isDefault)?.id ?? data.namespaces[0]?.id ?? null,
   );
 
-  /** `?namespaceId=` is kept across tag links, so narrowing to a namespace survives browsing the
-   *  tree. Both parameters are optional and independent: either, both, or neither. */
+  /**
+   * Preserve `?namespaceId=` across tag links. Namespace and tag parameters are independent
+   * and optional.
+   */
   const tagHref = (tag: string) => {
     const params = new URLSearchParams();
     if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
@@ -185,13 +148,9 @@
   };
 
   /**
-   * A board link needs a board. A card names its own namespace; a file names its taskspace's,
-   * falling back to the selected one and then to the default for an unplaced taskspace.
-   *
-   * Null where there is no board to name, and the card case can reach that too — the loader
-   * takes the same care over this lookup, because `Record<string, string>` says it cannot
-   * miss when it can. A card whose namespace is not among the data drew `/undefined?card=…`,
-   * which is a row that looks right and goes nowhere.
+   * Resolve a destination board from a card's namespace or a file's taskspace. For unplaced
+   * taskspaces, fall back to the selected namespace and then the default. Return null if no
+   * board can be identified.
    */
   const cardHref = (cardId: string) => {
     const namespaceId = data.cardNamespaces[cardId];
@@ -209,19 +168,12 @@
    *  link opens the tree down to it rather than showing a collapsed root. */
   const isOpen = (node: TagNode) => !!selectedTag && tagMatches(node.tag, selectedTag);
 
-  /** One number: what selecting this tag would put in the panel. Cards and files were drawn
-   *  apart, which left the question the tree is actually read for — how much is under this
-   *  tag — as a sum for the reader to do. Which kind each hit is, the panel says row by row. */
+  /** Display the combined card and file count for each tag. */
   const countLabel = ({ cards, files }: TagCounts) => `${cards + files}`;
 
   /**
-   * The same count in words, for a reader who cannot see the column it is drawn in.
-   *
-   * Spelled out per kind rather than as the bare sum above, because the two audiences are in
-   * different positions: the column is read down and its unit is obvious from the panel
-   * beside it, while a row read aloud is read alone. That is the same judgement
-   * `countLabel` in `cli/commands/tag.ts` makes for the terminal, and it lands on the same
-   * wording — `1 card, 2 files` — because it is the same question about the same counts.
+   * Provide an accessible count naming each kind, such as `1 card, 2 files`, so the row can
+   * be understood without the adjacent results panel.
    */
   const countDescription = ({ cards, files }: TagCounts) =>
     [
@@ -244,8 +196,7 @@
   });
   const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
   const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
-  /** The taskspace a group of file rows was found in. Quiet, like the rest of the metadata
-   *  around a hit — it says what the paths beneath it are relative to, and nothing more. */
+  /** Taskspace heading that identifies the base directory for relative file paths. */
   const taskspaceHeadingClass = css({
     fontSize: "11px",
     fontWeight: "400",
@@ -253,9 +204,10 @@
     color: "neutral.muted",
     marginBottom: "6px",
   });
-  /** The card's own text, and the line a file's tag sits on. It is what the panel is for, so
-   *  it is drawn in the colour body text is drawn in everywhere else — the surrounding
-   *  metadata is what stays quiet. */
+  /**
+   * Render card text and matching file excerpts as primary content, with quieter surrounding
+   * metadata.
+   */
   const excerptClass = css({
     fontSize: "12.5px",
     color: "ink.black",
@@ -264,23 +216,15 @@
     overflowWrap: "anywhere",
   });
 
-  /** Everything the gather has to say about what it could not read, in one voice: the cards'
-   *  ceiling, a taskspace read in part, and a taskspace not read at all. Quieter than a row,
-   *  because none of it is what the reader came for — and all of it is the same aside, so
-   *  none of it should look more urgent than the rest. */
+  /**
+   * Use consistent secondary styling for card truncation, partial taskspace scans, and
+   * unavailable taskspaces.
+   */
   const noteClass = css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" });
 
   /**
-   * The two row shapes, and the part that is only true of a row you can follow.
-   *
-   * Split because a row does not always have somewhere to go: `cardHref` and `fileHref` both
-   * return null where the data names no board, and an `<a>` given no `href` is not a link —
-   * it cannot be focused, clicked, or reached from the keyboard. Drawn as one anyway, it kept
-   * the border that lifts on hover and the pointer that goes with it, so the only rows on the
-   * page that do nothing were also the ones that most looked like they would.
-   *
-   * So the hover lift lives here, on the shape that is actually a link, and a row without a
-   * destination is drawn as a plain `<div>` that says what it found and stays still.
+   * Apply link styling only to rows with destinations. Render rows without a board as plain
+   * elements so hover and pointer cues do not imply an unavailable action.
    */
   const linkableRowClass = css({
     textDecoration: "none",
@@ -310,8 +254,7 @@
   {#if href}
     <a {href} class="{shape} {linkableRowClass}">{@render body()}</a>
   {:else}
-    <!-- No board to send this row to — see `cardHref` and `fileHref`. It still says what was
-         found, which is the half of a row that does not depend on being able to follow it. -->
+    <!-- Show the result without link behavior when no destination board exists. -->
     <div class={shape}>{@render body()}</div>
   {/if}
 {/snippet}
@@ -320,10 +263,7 @@
   <ul class={css({ listStyle: "none", margin: "0", padding: "0" })}>
     {#each nodes as node (node.tag)}
       <li>
-        <!-- `aria-current` rather than the weight and background alone, which is the whole
-             of what said "this one" before: a screen reader was given a tree of identical
-             rows, and the namespace nav in the header above marks its selection this way
-             already. -->
+        <!-- Use `aria-current` to expose the selected tag to screen readers as well as marking it visually. -->
         <a
           href={tagHref(node.tag)}
           aria-current={selectedTag === node.tag ? "page" : undefined}
@@ -363,10 +303,7 @@
       fontFamily: "mono",
     })}
   >
-    <!-- Back to the namespace list, or to one namespace's board when the page has been narrowed
-         to it. The icon is the same drawing either way, so the name is what says which — and
-         it is worth the room, because the two destinations are not interchangeable and the
-         picture alone cannot tell them apart. -->
+    <!-- Label the back destination explicitly, whether it is the namespace list or a selected board. -->
     <a
       href="{base}/{selectedNamespaceId ?? ''}"
       title={selectedNamespace ? undefined : "Namespaces"}
@@ -469,11 +406,7 @@
             >
               {#each cardRows as { key, source, hits } (key)}
                 {@const cardId = source.cardId}
-                <!-- Two lookups that can each miss, and the second is indexed by the result
-                     of the first: a card whose partition row was not among what the loader read
-                     would otherwise index `data.partitions` by `undefined`. The `{#if}` below
-                     already draws nothing for a missing partition; this is what keeps the step
-                     between the two records from being the thing that decides it. -->
+                <!-- Guard both optional lookups before reading partition metadata. -->
                 {@const partitionId = data.cardPartitionIds[cardId]}
                 {@const partition = partitionId ? data.partitions[partitionId] : undefined}
                 <li>
@@ -511,9 +444,7 @@
           {/if}
 
           {#each fileRowsByTaskspace as { taskspaceId, rows } (taskspaceId)}
-            <!-- Named, because the paths below are relative to this taskspace and read as
-                 nothing on their own: two taskspaces holding a `notes/todo.md` draw two
-                 identical rows otherwise. -->
+            <!-- Show the taskspace name to distinguish identical relative paths in different taskspaces. -->
             <h3 class={taskspaceHeadingClass}>{taskspaceName(taskspaceId)}</h3>
             <ul
               class={css({
@@ -546,9 +477,7 @@
           {/each}
         {/if}
 
-        <!-- Above the taskspace notes, because it is about the cards listed above and they
-             are about the files. Same words as `kozane tag list` prints, from the same
-             constant — see `CARDS_TRUNCATED_LABEL`. -->
+        <!-- Show card truncation before file warnings using the shared CLI label. -->
         {#if data.cardsTruncated}
           <p class={noteClass}>
             The cards were not read in full — {CARDS_TRUNCATED_LABEL}, so a tag written on one
@@ -556,10 +485,7 @@
           </p>
         {/if}
 
-        <!-- The name is joined from the gather's own record of what it walked, which is
-             guaranteed to hold it: a truncation can only be raised about a taskspace this
-             gather walked. The reasons are put into words by the same helper the terminal
-             uses, and so are the paths behind them — which is the half a reader can act on. -->
+        <!-- Use gathered taskspace names and shared reader-facing reasons and path samples. -->
         {#each data.truncated as { taskspaceId, reasons, paths } (taskspaceId)}
           <p class={noteClass}>
             {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}{truncationPaths(
@@ -568,19 +494,12 @@
           </p>
         {/each}
 
-        <!-- Last, and apart from the truncations above: those say a taskspace was read and
-             not to the end of it, and this says there was nothing to read. The words are the
-             terminal's, from `missingTaskspaceLabel`; the command after them is set as code
-             here and quoted there, which is why only the words around it are shared.
-
-             Read through `??`, for the reason `truncationPaths` takes an absent list: a
-             static export built before this field existed carries page data without it, and
-             the build serving that export is this one. -->
+        <!-- Report unavailable roots separately from partial scans. Use shared wording and format the repair command for the page. Treat absent lists from older exports as empty. -->
         {#each missing as taskspaceId (taskspaceId)}
           <p class={noteClass}>{missingTaskspaceLabel(taskspaceName(taskspaceId))}.</p>
         {/each}
         {#if missing.length > 0}
-          <!-- Once, under all of them: one run of it settles every record named above. -->
+          <!-- Show the command once below all affected records. -->
           <p class={noteClass}>
             Run <code class={css({ fontFamily: "mono" })}>{TASKSPACE_CLEANUP_COMMAND}</code>
             {cleanupCommandTail(missing.length)}

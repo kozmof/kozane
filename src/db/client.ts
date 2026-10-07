@@ -12,22 +12,14 @@ export type { DB, Tx, AnyDB } from "./tx.js";
 export { withTx } from "./tx.js";
 
 /**
- * A database and the means to hand it back, for a caller that opens one, asks it something,
- * and is done with it — `kozane doctor` above all, which reads a workspace it is not going
- * to go on serving.
- *
- * {@link createDb} keeps the client for the life of the process, which is right for the
- * server and for a `runWorkspaceCommand` that exits when its command does. It is not right
- * for a check that runs alongside others and returns, so the client is returned here rather
- * than closed over, the way the helpers in `cli/lib/db.ts` close theirs in a `finally`.
+ * Database handle and cleanup function for callers that open a short-lived connection. Close
+ * it when finished, including on failure.
  */
 export type OpenedDb = { db: DB; close: () => void };
 
 export async function openDb(url: string): Promise<OpenedDb> {
-  // `timeout` as well as the pragma: libsql's `transaction()` hands its connection to the
-  // transaction and opens a fresh one for whatever comes next, and only an option given here
-  // reaches that one. Without it every statement after the first transaction ran with a
-  // busy timeout of 0, failing at once on a lock a `kozane card add` held.
+  // Set the client timeout for new connections after the transaction. A connection-local
+  // pragma is insufficient.
   const client = createClient({ url, timeout: BUSY_TIMEOUT_MS });
   await applyConnectionPragmas(client, url);
   const db = drizzle(client, { schema });
@@ -45,24 +37,13 @@ export async function createDb(url: string): Promise<DB> {
 
 let _dbPromise: Promise<DB> | null = null;
 /**
- * How to hand back the connection {@link getDb} opened, so {@link resetDb} can close it.
- *
- * Held because `getDb` memoizes a `DB` and a `DB` has no way back to its client — the type
- * is drizzle's handle, and `close` lives on the libsql client underneath it. Without this,
- * `resetDb` dropped the promise and left the socket and file descriptors open: one leak per
- * call, which in a suite that resets between cases is one per test.
+ * Cleanup function for the connection cached by {@link getDb}. The Drizzle handle does not
+ * expose the underlying client's close operation.
  */
 let _dbClose: (() => void) | null = null;
 /**
- * The URL {@link getDb} opened, or null before it has opened one.
- *
- * Recorded rather than re-derived, because the two are not the same question. `getDBURL()`
- * reads the environment now; this is what the connection every request is served from was
- * actually built against. They agree today — `kozane open` passes `DATABASE_URL` explicitly,
- * including the temporary file a `--memory` server runs on — but the snapshot ETag gate in
- * `lib/server/snapshot-etag.ts` decides whether to answer 304 without reading the database,
- * and an answer about the wrong file is a stale board rather than a slow one. So it asks
- * which database is open instead of which one ought to be.
+ * URL of the cached connection, or null before it opens. File-based cache checks must inspect
+ * this database rather than resolving a URL from the current environment again.
  */
 let _openedDbUrl: string | null = null;
 
@@ -88,14 +69,7 @@ export function openedDbUrl(): string | null {
   return _openedDbUrl;
 }
 
-/**
- * Forgets the process-wide connection, closing it first.
- *
- * Closing is the point: this is what a test calls between cases, and a `getDb` that had
- * opened a database left its client alive with nothing holding a reference to it. The close
- * is guarded because a connection already gone — the process exiting, a second reset — must
- * not turn tidying up into the error being reported.
- */
+/** Close and forget the process-wide connection. Ignore close failures during cleanup. */
 export function resetDb(): void {
   try {
     _dbClose?.();

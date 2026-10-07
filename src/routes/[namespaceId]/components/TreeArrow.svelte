@@ -1,8 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
 
-  // One arrow, rotated a quarter turn when what it points at is open: right for closed, down
-  // for open, the way an editor's file tree reads.
+  // Point right when closed and rotate down when open.
   let { expanded }: { expanded: boolean } = $props();
 
   const arrowClass = css({

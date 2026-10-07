@@ -25,16 +25,14 @@ import {
 import { rejectBatch } from "../../lib/rejection.js";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
-  // The widest statement any endpoint builds: each position contributes to both CASE
-  // expressions and to the WHERE, so the batch cap `requireObjectArray` applies matters
-  // more here than anywhere else.
+  // Each position adds parameters to both CASE expressions and WHERE. Enforce the batch cap
+  // with `requireObjectArray`.
   const positions = requireObjectArray(
     body,
     "positions",
     (row) => ({
       cardId: requireString(row, "cardId"),
-      // Clamped on the way in, which is why the response echoes the stored row rather than
-      // the request: see the note on POST below.
+      // Return stored rows because incoming positions are clamped. See POST below.
       ...clampToCanvas(requireFiniteNumber(row, "posX"), requireFiniteNumber(row, "posY")),
     }),
     { message: "positions is required" },
@@ -70,8 +68,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     if (!partition) throw error(400, "Partition not found in namespace");
     if (scopeId && !(await getScope({ db: tx, scopeId }))) throw error(400, "Scope not found");
 
-    // An unknown layer is rejected rather than silently redirected to the default one:
-    // a card that quietly lands on another layer is invisible to the client that asked.
+    // Reject unknown layers so cards cannot silently move to a layer the client did not
+    // request.
     const layer = requestedLayerId
       ? await getLayer({ db: tx, namespaceId, layerId: requestedLayerId })
       : await getDefaultLayer({ db: tx, namespaceId });
@@ -93,10 +91,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     return { id: cardId, stored };
   });
 
-  // The whole stored row, not just the id: posX/posY were clamped above, so a client
-  // that echoed back what it sent would render the card in the wrong place until the
-  // next snapshot poll corrected it. A new card has no width of its own — it is drawn
-  // at `ui.defaultCardWidth` until someone resizes it.
+  // Return stored coordinates after clamping so the client renders the saved position
+  // immediately. New cards use the configured default width.
   return json({
     id,
     ...stored,

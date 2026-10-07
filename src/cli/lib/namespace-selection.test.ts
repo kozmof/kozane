@@ -24,8 +24,7 @@ describe("resolveNamespaceId", () => {
       expect(await resolveNamespaceId(db)).toBe(chosen);
     });
 
-    // The one case that cannot be guessed: picking arbitrarily here would file cards into
-    // whichever namespace the table happened to hand over first.
+    // Do not choose an arbitrary namespace when the selection is ambiguous.
     it("refuses several namespaces with no default, naming the command that sets one", async () => {
       const db = await createTestDB();
       await addNamespace({ db, name: "first" });
@@ -71,8 +70,7 @@ describe("resolveNamespaceId", () => {
       );
     });
 
-    // The default is not a fallback for a bad --namespace: a command naming a namespace that
-    // is not there must fail rather than quietly write somewhere else.
+    // An invalid explicit namespace must not fall back to the default.
     it("rejects an unknown id rather than falling back to the default", async () => {
       const db = await createTestDB();
       await addNamespace({ db, name: "fallback", isDefault: true });

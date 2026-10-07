@@ -54,8 +54,7 @@ describe("addScopeArea", () => {
     await addScopeArea({ db: d, namespaceId: p1, scopeId, ...RECT });
     await addScopeArea({ db: d, namespaceId: p2, scopeId, ...RECT, posX: 0 });
 
-    // The whole reason geometry is its own table: a scope is cross-namespace, and each
-    // board draws it where that board put it.
+    // Scope-area geometry belongs to each namespace.
     expect(await getScopeAreasInNamespace({ db: d, namespaceId: p1 })).toHaveLength(1);
     expect(await getScopeAreasInNamespace({ db: d, namespaceId: p2 })).toHaveLength(1);
   });

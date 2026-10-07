@@ -22,7 +22,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
 const REORDER_REJECTION_MESSAGE: Record<ReorderRejection, string> = {
   duplicate: "layerIds must not name the same layer twice",
-  // Worth saying out loud: this is the one a reload fixes, and the UI passes it through.
+  // Return the message to the UI so the user knows to reload.
   stale: "The namespace's layers changed elsewhere. Reload to see the current order.",
   foreign: "layerIds must only name layers of this namespace",
 };

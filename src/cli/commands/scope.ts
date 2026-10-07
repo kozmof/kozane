@@ -28,11 +28,8 @@ export async function scopeAdd(name: string): Promise<void> {
 export type ScopeListOptions = { namespace?: string };
 
 /**
- * Every scope in the workspace and the namespaces each one reaches.
- *
- * Workspace-wide on purpose: a board draws only its own namespace's scopes, so this is where
- * a scope shared with — or stranded in — another namespace is visible at all. `--namespace`
- * narrows it to exactly what that namespace's board would show.
+ * List every scope and the namespaces it reaches. Include scopes outside the current board.
+ * `--namespace` narrows the result to that namespace's visible scopes.
  */
 export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
@@ -61,9 +58,7 @@ export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
     }
 
     for (const scope of scopes) {
-      // "(unused)" rather than a blank column: a scope no namespace has reached yet is
-      // visible from every board, and that is worth saying rather than leaving to be read
-      // as missing data.
+      // Print an explicit unused label for scopes not placed in any namespace.
       const where = namespacesByScope.get(scope.id)?.sort().join(", ") ?? "(unused)";
       console.log(`${shortId(scope.id, scopeIds)}  ${scope.name}  ${where}`);
     }

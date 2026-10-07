@@ -12,17 +12,7 @@ import {
 } from "./response.js";
 import { readCard } from "./snapshot-reader.js";
 
-/**
- * The URL of one namespace-scoped endpoint.
- *
- * Every request here went out as `/${namespaceId}/api/…`, which is right only while `base`
- * is empty. It is empty in every mode that has these endpoints to call — a static export
- * is the one build with a non-empty base, and it is read-only, so the poll and every
- * mutation are switched off before a URL is ever built. That made the missing prefix
- * harmless and invisible in equal measure: the first request added to a path a read-only
- * board still walks would have gone to the wrong origin under `--base`, and nothing here
- * would have said so. One place to be wrong is better than twenty-eight.
- */
+/** Build a namespace endpoint URL with the configured base path. */
 function apiUrl(namespaceId: string, path: string): string {
   return `${base}/${namespaceId}/api${path}`;
 }
@@ -66,11 +56,7 @@ export function createCard(
   return jsonRequest(fetcher, apiUrl(namespaceId, "/cards"), "POST", card);
 }
 
-/**
- * The message a failed request explains itself with. SvelteKit's `error()` answers with
- * `{ message }`, and some of those are worth showing verbatim — "the layers changed
- * elsewhere, reload" tells the user what to do in a way a generic banner cannot.
- */
+/** Read the server's failure message so callers can show specific recovery guidance. */
 export async function failureMessage(res: Response, fallback: string): Promise<string> {
   const body = await res.json().catch(() => null);
   const message = (body as { message?: unknown } | null)?.message;
@@ -114,36 +100,16 @@ export function squashCard(
 }
 
 /**
- * The row a card POST answers with, or null when the body is not one.
- *
- * The same contract as {@link parseWarp}, and it exists for the same reason: the response
- * is the stored row — the server clamps `posX`/`posY` to the canvas — so it is drawn rather
- * than discarded, and an unexpected body would put a card at `undefined`. The board used to
- * read it as `const created: CardWithGlue | null = await res.json()`, which narrows nothing:
- * `json()` resolves to `any`, so the annotation was a claim about the body rather than a
- * check on it, and `!created` caught only an outright `null`.
- *
- * The field-by-field work is {@link readCard}'s, which is what the snapshot poll already
- * holds every card to. Only the `undefined`/`null` convention differs, and it is converted
- * here so these read like the other parsers in this module.
+ * Validate a created card through {@link readCard}, returning null for an invalid response.
+ * Use the stored row so clamped coordinates reach the board.
  */
 export function parseCard(value: unknown): CardWithGlue | null {
   return readCard(value) ?? null;
 }
 
 /**
- * The cards a squash answers with, or null when the body is not a list of them.
- *
- * All or nothing, the way `readNamespaceSnapshot` treats its lists: the pieces of one card
- * are one result, and half of them is not a smaller version of it — the board replaces the
- * original with the whole set and selects them, so a list with one unreadable element has
- * no partial application that means anything. An empty list is refused too: a squash that
- * split nothing is the server's "does not split into more than one card", which the caller
- * already reports from the response status.
- *
- * This replaces an `Array.isArray(cards)` check that left every element `any` — enough to
- * type-check `[...state.cards, ...cards]`, and enough to put a row with no `posX` on the
- * canvas.
+ * Validate every card in a nonempty squash response. Reject the whole result if any element
+ * is invalid because partial replacement would lose part of the source card.
  */
 export function parseCards(value: unknown): CardWithGlue[] | null {
   const rows = readArray(value, "cards");
@@ -241,9 +207,8 @@ export function createWarp(
 }
 
 /**
- * The row a warp POST answers with, or null when the body is not one. Unlike the other
- * mutations, which read a single field out of their response, a created warp is kept whole
- * and drawn on the board — so an unexpected body would put a marker at `undefined`.
+ * Validate the created warp row before placing it on the board. Return null for an invalid
+ * response.
  */
 export function parseWarp(value: unknown): Warp | null {
   const id = readString(value, "id");
@@ -279,11 +244,8 @@ export function fetchWarpDirectory(fetcher: typeof fetch, namespaceId: string): 
 }
 
 /**
- * The rows the warp directory answers with, or null when the body is not a list of them.
- * Checked for the same reason {@link parseWarp} is, and more so: a palette row is rendered
- * whole and then scrolled to, so an unexpected body would list rows reading `undefined`
- * and send the view to `NaN`. All or nothing — a list half of which cannot be trusted is
- * not one to replace a working list with.
+ * Validate the complete warp directory before replacing the current list. Reject partial or
+ * malformed results.
  */
 export function parseWarpEntries(value: unknown): WarpListEntry[] | null {
   if (!Array.isArray(value)) return null;
@@ -344,10 +306,8 @@ export function removeCardsFromScope(
 }
 
 /**
- * Puts the scope's frame on this board, or moves and resizes the one already there — one
- * request for both, matching the endpoint. `rect` is the whole rectangle in world
- * coordinates, never a delta: the server clamps it to the canvas and answers with what it
- * kept.
+ * Create or update a scope frame using its complete canvas rectangle. The server clamps it
+ * and returns stored geometry.
  */
 export function createScopeArea(
   fetcher: typeof fetch,
@@ -384,9 +344,8 @@ export function deleteScopeArea(
 }
 
 /**
- * The row a scope-area PUT answers with, or null when the body is not one. Kept whole and
- * drawn, for the reason {@link parseWarp} is: an unexpected body would put a frame at
- * `undefined` and file every card the next drag touches into it.
+ * Parse the stored row returned by a scope-area PUT, or return null for an invalid body.
+ * Validate the full frame before using its geometry for display or membership.
  */
 export function parseScopeArea(value: unknown): ScopeArea | null {
   const id = readString(value, "id");
@@ -455,10 +414,7 @@ export function createTaskspace(
   return jsonRequest(fetcher, apiUrl(namespaceId, "/taskspaces"), "POST", taskspace);
 }
 
-/**
- * One directory of a taskspace. `path` is relative to the taskspace root and empty for the
- * root itself; the panel asks again with a deeper path each time a folder is opened.
- */
+/** Read one taskspace directory by relative path. An empty path names the root. */
 export function fetchTaskspaceFiles(
   fetcher: typeof fetch,
   namespaceId: string,
@@ -470,12 +426,8 @@ export function fetchTaskspaceFiles(
 }
 
 /**
- * Creates one empty file in a taskspace. Answers as {@link fetchTaskspaceFile} would for it,
- * so the editor can open on what comes back rather than asking again; `409` when something
- * is already at that name.
- *
- * Empty is all it makes — the first save goes through {@link saveTaskspaceFile} like every
- * later one.
+ * Create an empty file and return its readable state. Existing names return 409. Write
+ * content through {@link saveTaskspaceFile}.
  */
 export function createTaskspaceFile(
   fetcher: typeof fetch,
@@ -505,9 +457,8 @@ export function createTaskspaceFolder(
 }
 
 /**
- * The text of one taskspace file, for the editor. A sibling of {@link fetchTaskspaceFiles}
- * and deliberately a different endpoint: that one answers with names and metadata, and
- * this is the only one that returns what is in a file.
+ * Fetch taskspace file text for the editor. {@link fetchTaskspaceFiles} uses a separate
+ * endpoint for names and metadata.
  */
 export function fetchTaskspaceFile(
   fetcher: typeof fetch,
@@ -520,9 +471,8 @@ export function fetchTaskspaceFile(
 }
 
 /**
- * Saves the editor's text back. `signature` is what the file was read at, and the server
- * refuses the write with a 409 if the file has changed since — so a save cannot discard an
- * edit made on disk while the panel had it open.
+ * Save text with the signature from the last read. The server returns 409 if the file changed
+ * in the meantime.
  */
 export function saveTaskspaceFile(
   fetcher: typeof fetch,

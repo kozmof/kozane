@@ -21,9 +21,8 @@ export type PortSources = {
 };
 
 /**
- * Resolves the port to listen on. Precedence: `--port`, then the env var, then the
- * workspace config, then the built-in default. Throws on an invalid explicit value
- * rather than silently falling through to the next source.
+ * Resolve the port from the flag, environment, configuration, then default. Reject invalid
+ * explicit values.
  */
 export function resolvePort({
   flag,

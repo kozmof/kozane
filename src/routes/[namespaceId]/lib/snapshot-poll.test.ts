@@ -3,9 +3,8 @@ import { InFlight } from "./in-flight.js";
 import { SNAPSHOT_POLL_MS, startSnapshotPoll } from "./snapshot-poll.js";
 import type { NamespaceDataSnapshot } from "$lib/types.js";
 
-// A whole snapshot, not a stand-in for one: the poll reads what it is sent through
-// `readNamespaceSnapshot` and drops a body that is not a snapshot, so a fixture missing half
-// its lists would be testing the drop path in every case. No cast, for the same reason.
+// Use a complete, typed snapshot because `readNamespaceSnapshot` rejects incomplete
+// responses. Partial fixtures would exercise only rejection.
 const SNAPSHOT: NamespaceDataSnapshot = {
   namespace: { id: "p1" },
   cards: [],
@@ -129,8 +128,8 @@ describe("startSnapshotPoll", () => {
   it("drops an answer when work started and finished while it was on its way", async () => {
     const harness = start(
       vi.fn().mockImplementation(async () => {
-        // The drag the user starts and finishes inside the round trip: by the time the
-        // response lands the activity is idle again, so only its version records it.
+        // A drag can start and finish during the request. Its activity version must detect it
+        // even after the board becomes idle.
         harness.activity.begin();
         harness.activity.end();
         return snapshotResponse();

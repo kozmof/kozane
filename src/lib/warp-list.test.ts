@@ -25,21 +25,16 @@ function card(posX: number, posY: number, content: string, zIndex = 0) {
   return { posX, posY, content, zIndex };
 }
 
-// Round numbers to keep the boxes in these tests easy to follow: 30 characters to a line,
-// and a one-line card 200 wide by 68 tall.
+// Use simple dimensions for these tests. Each line holds 30 characters, and a one-line card
+// measures 200 by 68.
 const METRICS = { cardWidth: 200, fontSize: 10 };
-// `HintCard` rather than what `card()` returns, so a test can also hand over the optional
-// fields a real card carries — `width` above all, which decides the box it is measured in.
+// Use `HintCard` so fixtures can supply optional geometry fields such as width.
 const hintFor = (point: { posX: number; posY: number }, cards: HintCard[]) =>
   nearestCardHint(point, cards, METRICS);
 
 describe("CARD_BOX", () => {
-  // Read out of the component rather than repeated here. Panda extracts `css({...})` at
-  // build time and so cannot take these from a variable, which leaves the two copies free
-  // to drift apart — and a drifted copy shows up only as hints quietly naming the wrong
-  // neighbouring card, which is not something anyone would think to check.
-  // From the repository root, the way the Vitest config resolves its own paths: a test
-  // file's own URL is not a file: one once Vite has transformed it.
+  // Read card style constants from the component to detect drift in the hint geometry model.
+  // Resolve from the repository root because Vite transforms test-module URLs.
   const cardSource = readFileSync(
     resolve("src/routes/[namespaceId]/components/KozaneCard.svelte"),
     "utf8",
@@ -97,7 +92,7 @@ describe("estimateCardHeight", () => {
   });
 
   it("counts an astral character once, not once per surrogate half", () => {
-    // 15 emoji are 30 cells: exactly one line, not the two a UTF-16 length would give.
+    // Fifteen emoji occupy 30 cells and fit on one line.
     expect(estimateCardHeight("🌱".repeat(15), METRICS)).toBe(44 + 24);
   });
 });
@@ -134,8 +129,7 @@ describe("nearestCardHint", () => {
   });
 
   it("names the card the warp sits on, not the one with the nearest corner", () => {
-    // The warp is inside the first card; the second only has a corner closer to the
-    // position the first card is anchored by.
+    // The first card contains the warp. A nearby corner of the second must not win.
     const hint = hintFor(warp("w1", 150, 30), [
       card(0, 0, "under the marker"),
       card(200, 30, "next door"),
@@ -164,10 +158,8 @@ describe("nearestCardHint", () => {
   });
 
   it("measures a card read as an opening by how long it turned out to be", () => {
-    // How the palette reads another namespace's cards: the first few hundred characters,
-    // plus the length of the whole. Measured as the short text it arrives as, the tall
-    // card would stop above the warp and its neighbour would be named instead — so one
-    // warp would carry one hint on its own board and another in the palette.
+    // Use full content length when estimating height from a truncated text prefix so
+    // cross-namespace hints match board hints.
     const long = "x".repeat(1500);
     const opening = long.slice(0, 240);
     const below = card(0, 700, "the card below");
@@ -381,10 +373,8 @@ describe("buildWarpDirectory", () => {
 });
 
 /**
- * A card that has been resized pins a `width`, and that is the box it is drawn in. Measured
- * at `ui.defaultCardWidth` instead, a resized card is the wrong size in both directions —
- * the height follows from what the text wraps to at that width — and the hint can name the
- * wrong neighbour, which is not a thing anyone would spot.
+ * Estimate resized cards using their pinned width, which also changes text wrapping and
+ * height.
  */
 describe("nearestCardHint with a card's own width", () => {
   it("measures a widened card at the width it is drawn at", () => {
@@ -399,7 +389,7 @@ describe("nearestCardHint with a card's own width", () => {
   });
 
   it("measures a narrowed card as the taller card it wraps into", () => {
-    // 60 characters: two lines at the default width, five at 100 wide.
+    // Sixty characters occupy two lines at default width and five at width 100.
     const content = "x".repeat(60);
     const warpPoint = warp("w1", 0, 600);
 

@@ -2,9 +2,7 @@ import http from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 
-// Serves a `kozane net ssg generate` export the way a static host (e.g. GitHub Pages) does:
-// directory requests resolve to index.html, extensionless directory paths get a
-// trailing-slash redirect, and unknown paths fall back to 404.html.
+// Redirect directory indexes to a trailing slash. Return 404 for unknown paths.
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -36,8 +34,7 @@ export type Resolution =
 
 export async function resolveRequest(root: string, rawUrl: string): Promise<Resolution> {
   const pathname = rawUrl.split("?")[0].split("#")[0];
-  // Carried through the trailing-slash redirect below: a link into the site can hold a
-  // query the page reads for itself, and dropping it silently lands on the wrong place.
+  // Preserve the query string when redirecting.
   const query = rawUrl.slice(pathname.length).split("#")[0];
   let decoded: string;
   try {

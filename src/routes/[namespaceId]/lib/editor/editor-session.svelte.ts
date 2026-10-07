@@ -6,7 +6,7 @@ import { type Caret, EditorDocument } from "./document-store.svelte.js";
 export type EditorSessionContext = {
   fetcher: typeof fetch;
   namespaceId: string;
-  /** A static export's embedded taskspace trees — see {@link TaskspaceTreeContext}. */
+  /** Embedded taskspace trees for static export. See {@link TaskspaceTreeContext}. */
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
@@ -27,12 +27,8 @@ export type OpenFileRef = {
 };
 
 /**
- * The file the editor has open, and everything about it that is not the text itself.
- *
- * Loading, saving, and the two ways either can go wrong are here rather than in the
- * component so they can be tested without rendering anything. The document is a
- * {@link EditorDocument}; this owns its lifecycle, which matters because a Reed store left
- * subscribed keeps a reconciliation scheduler alive for a file nobody has open.
+ * Manage the open file's loading, saving, errors, and {@link EditorDocument} lifecycle.
+ * Dispose subscriptions when closing so the document scheduler does not remain active.
  */
 export class EditorSession {
   file = $state<OpenFileRef | null>(null);
@@ -44,9 +40,8 @@ export class EditorSession {
   saving = $state(false);
   error = $state<string | null>(null);
   /**
-   * Set when a save was refused because the file changed on disk. Held separately from
-   * `error` because it is the one failure with something to offer beyond an apology —
-   * the panel puts a "reload from disk" beside it.
+   * Whether saving was refused because the file changed on disk. Keep this separate from
+   * other errors so the panel can offer reloading.
    */
   conflict = $state(false);
 
@@ -116,9 +111,8 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
 
-    // Read before the request rather than after it: an edit made while the save is in
-    // flight must leave the file dirty, and it would not if the revision were taken from
-    // the document once the answer came back.
+    // Capture the revision before sending the save so edits made during the request remain
+    // dirty.
     const revision = doc.state.revision;
 
     try {

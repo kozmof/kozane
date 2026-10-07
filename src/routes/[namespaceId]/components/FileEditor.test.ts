@@ -5,8 +5,7 @@ import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "../lib/editor/editor-session.svelte.js";
 import { beforeNavigate } from "$app/navigation";
 
-// Mocked rather than left to the test stub so the registered guard can be called: there is
-// no router here to deliver a navigation to it.
+// Mock navigation registration so the test can invoke the guard without a router.
 vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn() }));
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
@@ -238,9 +237,8 @@ describe("FileEditor", () => {
 
 describe("FileEditor resizing", () => {
   /**
-   * The splitter reports its own width, which is what the assertions read. jsdom drops CSS
-   * `clamp()` from an inline style, so the rendered width is not observable here; the value
-   * the splitter is set to is, and it is the thing under test.
+   * Assert the splitter's reported width because jsdom does not preserve the inline CSS clamp
+   * used to render it.
    */
   async function splitter() {
     return screen.findByRole("separator", { name: "Resize editor" });
@@ -325,7 +323,7 @@ describe("FileEditor resizing", () => {
     const { session } = await mount();
     const bar = await splitter();
     await fireEvent.keyDown(bar, { key: "Escape" });
-    // Escape still closes the file: the splitter claims the arrows and nothing else.
+    // The splitter handles arrows while Escape still closes the file.
     await waitFor(() => expect(session.isOpen).toBe(false));
   });
 

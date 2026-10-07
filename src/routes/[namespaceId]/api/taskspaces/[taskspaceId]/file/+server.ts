@@ -9,12 +9,9 @@ import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { optionalString, readJsonObject, requireString } from "../../../../lib/request.js";
 
 /**
- * The text of one file of a taskspace, for the editor the scope panel opens.
- *
- * Deliberately a separate endpoint from the sibling `files/` listing rather than a mode of
- * it, so that "names and metadata only" stays true of that route without qualification.
- * What may be read here is narrower than what is listed there: regular files only, under a
- * size cap, valid UTF-8, and never a dot-entry.
+ * Read a taskspace file for the editor. Accept only regular, non-hidden files with valid
+ * UTF-8 within the size limit. Keep this separate from `files/`, which returns only names and
+ * metadata.
  */
 export const GET: RequestHandler = async ({ locals, params, url }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
@@ -26,17 +23,9 @@ export const GET: RequestHandler = async ({ locals, params, url }) => {
 };
 
 /**
- * Creates one empty file and answers with it as the editor would have opened it —
- * `path`, an empty `content`, and the `signature` those empty bytes have — so the panel can
- * go straight into editing without a second request for a file it just made.
- *
- * Empty is all it makes. Content arrives through `PUT` like every other save, so the rules
- * about what may be written are applied to the first one as to the rest; a body carrying
- * `content` is refused rather than quietly ignored, since silently dropping what someone
- * sent is worse than telling them where it goes.
- *
- * `409` when something is already at that name: creating never replaces what it finds, and
- * a client that meant to overwrite has `PUT` and a signature for saying so.
+ * Create an empty file and return its path, content, and signature so editing can begin
+ * without another request. Reject supplied content, which belongs in PUT, and return 409 if
+ * the name is already taken.
  */
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
@@ -53,12 +42,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 };
 
 /**
- * Saves the editor's text back over an existing file.
- *
- * `signature` is what the editor read the file at. It is compared against the file as it
- * is now, so a save that would discard a change made on disk since then is refused with a
- * 409 rather than silently winning. Sending it is not optional — a body without one is a
- * request to overwrite whatever happens to be there.
+ * Save text over an existing file only when the required read signature still matches. Return
+ * 409 if the file changed since the editor read it.
  */
 export const PUT: RequestHandler = async ({ locals, params, request }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);

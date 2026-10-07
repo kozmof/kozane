@@ -1,60 +1,30 @@
 /**
- * How much the disposable caches in `.kozane/` will hold before they are rebuilt rather than read.
- *
- * Every one of these bounds a file that owns nothing: `docs/cache.md` is the statement of
- * that, and it makes an oversized or unreadable cache a rebuild rather than an error.
- * The snapshot ETag map is here too — it is not on disk, but it is the same kind of thing: a
- * remembered answer with a ceiling on how many are kept.
+ * Size limits for disposable caches. Rebuild missing, invalid, or oversized cache files. The
+ * in-memory snapshot ETag map has a separate entry limit.
  */
 import { TAG_SCAN_NODES_MAX } from "./tag.js";
 
 /**
- * How many scopes a gathered tag index keeps. A workspace has few namespaces and the index is
- * looked at one scope at a time, so this is a backstop against a file that grows forever
- * rather than a limit anyone reaches: at a realistic size one scope is around a megabyte.
+ * Maximum scopes retained in the tag-index cache. Bound the cache file's growth as namespaces
+ * change.
  */
 export const TAG_CACHE_SCOPES_MAX = 16;
 
 /**
- * How many taskspace directories a gathered tag index keeps parsed files for — in this
- * process and in the file on disk alike.
+ * Maximum taskspace directories retained in memory and on disk. Share the limit so a scan
+ * does not repeatedly restore entries evicted only from memory.
  *
- * One number for both, because they hold the same directories: a memory ceiling below the
- * file's would mean re-importing on every scan what was evicted from one but kept in the
- * other. It was two constants in two modules, each with a comment saying it had to equal the
- * other, which is a convention rather than a guarantee.
- *
- * The precise cleanup is neither of them: a gather across the whole workspace knows every
- * taskspace there is and drops what is not among them. This bounds the case that cannot do
- * that — a workspace only ever looked at one namespace at a time, or a long-lived `kozane open`
- * against taskspaces that come and go — and is set well above the number anyone has, so that
- * eviction is the exception rather than the rhythm.
+ * Workspace-wide gathers also remove directories no longer in the workspace. This ceiling
+ * bounds caches used only through narrower gathers.
  */
 export const TAG_CACHE_DIRS_MAX = 64;
 
 /**
- * How many parsed files one taskspace directory keeps, in this process and in the file on
- * disk alike — the ceiling {@link TAG_CACHE_DIRS_MAX} does not give.
+ * Maximum parsed files cached per taskspace, shared by memory and disk stores.
  *
- * That one bounds how many directories are held and says nothing about how many files any
- * one of them holds, and the two are not the same guarantee. `pruneStale` is the precise
- * cleanup and needs a directory to have been listed to the end before it may call an
- * entry stale — so a taskspace large enough that every scan of it stops at a ceiling is
- * exactly the one nothing prunes, and its entries accumulated across scans for the life of
- * the process. A million-file checkout walked twenty thousand nodes at a time reaches all
- * of it eventually, a different slice each scan, and kept every slice.
- *
- * Set to {@link TAG_SCAN_NODES_MAX} rather than to a smaller round number, and that
- * equality is the whole design: one walk visits at most that many nodes, so it can never
- * write more entries than this keeps, and eviction therefore cannot drop something the
- * current scan has just parsed. A lower ceiling would evict the front of the very walk
- * filling it, and every scan would re-read the files the one before it had already read.
- *
- * Least-recently-used within the directory, and a cache hit touches its entry — which it
- * has to, since a hit writes nothing and would otherwise sink to the front and be evicted
- * ahead of a file that changed. After a scan the order is that scan's walk order, so what
- * is kept is what was most recently seen, and what is dropped is what the taskspace no
- * longer shows.
+ * Incomplete scans cannot reliably prune stale files, so cap the cache independently of
+ * cleanup. Match {@link TAG_SCAN_NODES_MAX} to retain a complete scan's entries. Evict
+ * least-recently-used entries and refresh recency on cache hits.
  */
 export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
 
@@ -81,12 +51,7 @@ export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 export const TREEMAP_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 
 /**
- * How many namespaces the snapshot endpoint remembers an ETag for.
- *
- * The map is keyed by namespace id, and a namespace id arrives in a URL — so without a ceiling
- * it is the one structure in the server whose size a client chooses. A workspace has a
- * handful of namespaces and a browser has one board open at a time, so this is far above what
- * any real use reaches; it is here so that "far above" is a number rather than an
- * assumption. Least-recently-used, so the boards actually being polled are the ones kept.
+ * Maximum namespace ETags retained in least-recently-used order. Bound the map because
+ * namespace IDs arrive in request URLs.
  */
 export const SNAPSHOT_ETAG_NAMESPACES_MAX = 32;

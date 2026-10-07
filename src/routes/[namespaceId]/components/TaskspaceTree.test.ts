@@ -101,10 +101,8 @@ describe("TaskspaceTree", () => {
   });
 
   /**
-   * A static export's directory can be cut off for reasons a live listing has no equivalent
-   * of, and every one of them leaves the same empty row — so a directory the export never
-   * walked into would otherwise read as a folder with nothing in it, which is the one thing
-   * it is not.
+   * Report why exported directories were truncated so an unread subtree is not presented as
+   * empty.
    */
   describe("a directory of a static export cut off by a limit", () => {
     async function mountStatic(root: TaskspaceFileTree["root"]) {

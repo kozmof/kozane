@@ -20,16 +20,9 @@ function getMemoryUsageRate(): number {
 }
 
 /**
- * Readiness, as a probe reads it.
- *
- * A database that will not answer is reported rather than thrown. Left to throw, the one
- * endpoint whose job is to say whether the server is healthy answers with a rendered error
- * page — a probe then has only the status code to go on, and the body says nothing about
- * what failed. 503 rather than 500 because the condition is the workspace's and clears
- * without a restart, which is the same distinction `hooks.server.ts` draws for the key
- * file.
- *
- * `status` is the field to alert on, and it is present either way.
+ * Report readiness with a status field on both success and failure. Return 503 for an
+ * unavailable database so probes receive structured diagnostics rather than a rendered error
+ * page.
  */
 export const GET: RequestHandler = async ({ locals }) => {
   try {

@@ -12,12 +12,12 @@ import { scanUrls, type UrlSpan } from "./urls.js";
  * no database or filesystem dependencies. It also supplies the shared grouping and display
  * helpers.
  *
- * A tag starts with `:` at the start of text, after whitespace, or after an opening `(` , `[` ,
- * or `{` . Each segment contains Unicode letters, numbers, underscores, or hyphens. Colons
- * separate levels, so `:foo:bar:baz` has the body `foo:bar:baz` .
+ * A tag starts with `:` at the start of text, after whitespace, or after an opening `(`, `[`,
+ * or `{`. Each segment contains Unicode letters, numbers, underscores, or hyphens. Colons
+ * separate levels, so `:foo:bar:baz` has the body `foo:bar:baz`.
  *
  * Ordinary punctuation such as `12:30` and `key: value` does not open a tag. URL spans are
- * excluded before scanning, using `lib/urls.ts` , so a tag cannot start inside or continue into
+ * excluded before scanning, using `lib/urls.ts`, so a tag cannot start inside or continue into
  * a URL. The index and renderer use this same boundary rule.
  *
  * A trailing colon does not cancel a tag. `:foo:` contains the tag `foo` followed by
@@ -25,30 +25,20 @@ import { scanUrls, type UrlSpan } from "./urls.js";
  *
  * The grammar applies uniformly to every source. Symbol literals such as `:active` and
  * emoticons such as `:D` can therefore become tags. The file scanner skips generated and
- * dependency directories listed in `TAG_SCAN_SKIP_DIRS` , but does not apply language-specific
+ * dependency directories listed in `TAG_SCAN_SKIP_DIRS`, but does not apply language-specific
  * exclusions to handwritten source.
  */
 
-// Bounded rather than `+` on purpose, and it does two jobs. It enforces
-// TAG_SEGMENT_CHARS_MAX and TAG_LEVELS_MAX in the pattern itself, so a candidate past
-// either fails to match rather than being matched and then checked. And it bounds
-// backtracking: the trailing lookaheads reject a candidate by failing after the body has
-// been matched, which sends the engine back through the body looking for a shorter one, and
-// an unbounded body would make that O(n) per position — quadratic over a file of the size
-// the scanner is handed, from a line of nothing but colons and letters.
+// Bound segment length and depth in the regex to reject oversized tags and limit backtracking
+// when trailing lookaheads fail.
 const SEGMENT = String.raw`[\p{L}\p{N}_-]{1,${TAG_SEGMENT_CHARS_MAX}}`;
 
 /**
- * The two lookaheads are what make an over-long or over-deep candidate no tag at all
- * rather than a truncated one:
+ * Reject oversized tag candidates instead of accepting a truncated prefix.
  *
- * - `(?![\p{L}\p{N}_-])` — the body must have run out of word characters on its own. A
- *   65-character run therefore matches nothing, because every shorter body the engine backs
- *   off to is still followed by a letter.
- * - `(?!:[\p{L}\p{N}_-])` — no further level may be waiting. A ninth level fails here and
- *   keeps failing as the engine backs off level by level, so the whole candidate is
- *   rejected. A `:` not followed by a word character is allowed through, which is what
- *   lets `:foo:` be the tag `foo` with a colon after it.
+ * The first trailing lookahead requires the segment to end on its own. The second rejects a
+ * remaining colon followed by another segment. A trailing colon without a segment remains
+ * valid punctuation.
  */
 const TAG_RE = new RegExp(
   String.raw`(?<=^|[\s(\[{])${TAG_SIGIL}(${SEGMENT}(?::${SEGMENT}){0,${TAG_LEVELS_MAX - 1}})` +
@@ -61,7 +51,7 @@ const TAG_RE = new RegExp(
  * spellings while keeping the original text in each hit's line.
  *
  * NFC preserves width distinctions, so `:Ｆｏｏ` and `:Foo` remain separate tags, as do `:ｱｲｳ` and
- * `:アイウ` . NFKC would merge these but would also merge other compatibility characters. A future
+ * `:アイウ`. NFKC would merge these but would also merge other compatibility characters. A future
  * width-only normalization should address that case separately.
  *
  * Normalize after lowercasing so the resulting key is in NFC even when lowercasing changes its
@@ -71,34 +61,22 @@ export function normalizeTag(tag: string): string {
   return tag.toLowerCase().normalize("NFC");
 }
 
-/** The levels of a tag, outermost first: `foo:bar:baz` is `["foo", "bar", "baz"]`. */
+/** Tag levels from outermost to innermost. `foo:bar:baz` becomes `["foo", "bar", "baz"]`. */
 export function splitTag(tag: string): string[] {
   return tag.split(":");
 }
 
 /**
- * Whether `tag` is `query` or sits under it. Prefix by level, not by character, which is the
- * whole point of subcategories: `foo` gathers `foo:bar:baz`, and does not gather `foobar`.
- *
- * `tag` must already be normalized; `query` need not be. See {@link tagMatcher}.
+ * Match a normalized tag to a query or its descendants by complete levels. `foo` matches
+ * `foo:bar` but not `foobar`. The query need not be normalized.
  */
 export function tagMatches(query: string, tag: string): boolean {
   return tagMatcher(query)(tag);
 }
 
 /**
- * {@link tagMatches} with the query normalized once, for the callers that ask it of every hit
- * in a workspace — the index page's filter, the CLI's, and the server's.
- *
- * Only the query is normalized, and the asymmetry is the point rather than an oversight.
- * Every tag this is asked about came out of {@link normalizeTag} at the moment it was
- * matched — that is the only way a tag string is ever made, on either path — so folding and
- * composing it again is work with no answer in it, once per hit per gather. The query is the
- * one string that arrives from outside: a URL, a CLI argument, a person typing.
- *
- * So: `query` is whatever was asked for, `tag` is a normalized tag. That precondition is what
- * pays for the loop, and it is why {@link tagMatches} states it too — the two must agree, or
- * a caller reaching for the convenient one would get a different answer than the loop does.
+ * Normalize the query once and return a matcher for repeated comparisons. Input tags must
+ * already be normalized, as scanner-produced tags are.
  */
 export function tagMatcher(query: string): (tag: string) => boolean {
   const q = normalizeTag(query);
@@ -117,45 +95,24 @@ export interface TagPosition {
 }
 
 /**
- * Every tag in a text, by position rather than by line — what a renderer needs, since it has
- * to cut the text around each tag to draw it as something other than plain text.
- *
- * Offsets, not a search for the tag's text: normalizing folds case and composes characters,
- * either of which can change a string's length, so looking the normalized tag back up in the
- * original is arithmetic that is right until it is quietly wrong. The regex already knows
- * where it matched.
- *
- * `urls` is taken rather than found again where the caller has already found them —
- * `lib/text-segments.ts` needs the very same spans to draw its anchors — so one text is
- * scanned for URLs once and the anchor and the cut come out of the one list. Omitted, they
- * are found here, which is what every other caller does.
+ * Return tag positions in the original text for rendering. Keep source offsets because
+ * normalization can change text length. Reuse supplied URL spans or scan them when omitted.
  */
 export function scanTagPositions(text: string, urls?: UrlSpan[]): TagPosition[] {
-  // A text with no sigil holds no tag, and this is the cheapest way to know it. The URL scan
-  // goes with it, so a card of prose — the common case — pays one substring search.
+  // Skip tag and URL scanning when the text contains no sigil.
   if (!text.includes(TAG_SIGIL)) return [];
   return scanTagMatches(text, urls ?? scanUrls(text));
 }
 
 /**
- * The one scanner, which every reading of a text goes through: the index's, the terminal's,
- * and the card's.
- *
- * A URL is cut out rather than stepped over. The text is split at the spans `urls` names and
- * each gap is matched as its own text, so the pattern is never shown an address at all — and
- * a candidate running into one stops at its edge. `:todo:https://x.com` is the tag `todo`,
- * matched in the gap `:todo:`; `see :http://x.com` is no tag, because its gap is `see :` and
- * nothing follows the sigil. See the URL rule in the module note.
- *
- * Offsets are into `text` as given, not into the gap a match was found in: a renderer cuts
- * the original around them.
+ * Scan tags only in the gaps between URL spans so tags cannot start inside or continue into
+ * an address. Return offsets in the original text for all callers.
  */
 function scanTagMatches(text: string, urls: UrlSpan[]): TagPosition[] {
   const positions: TagPosition[] = [];
 
-  // The gaps between the spans, in order. `scanUrls` returns disjoint spans in ascending
-  // order — `matchAll` cannot overlap and trimming only shortens one — so one pass builds
-  // them, and a text holding no URL is the single gap of the whole text.
+  // Process gaps between ordered, nonoverlapping URL spans. Without URLs, scan the full text
+  // as one gap.
   const gaps: [number, number][] = [];
   let start = 0;
   for (const { url, index } of urls) {
@@ -165,10 +122,8 @@ function scanTagMatches(text: string, urls: UrlSpan[]): TagPosition[] {
   if (start < text.length) gaps.push([start, text.length]);
 
   for (const [from, to] of gaps) {
-    // Sliced rather than matched in place from a bounded `lastIndex`, because the lookbehind
-    // has to read a gap's first character as the start of a text — it is the start of one,
-    // what precedes it being an address rather than prose. Matching in place would let the
-    // last character of a URL open a tag on the far side of the cut.
+    // Scan each gap as its own string so lookbehind treats its first character as a new text
+    // boundary, independent of the preceding URL.
     for (const match of text.slice(from, to).matchAll(TAG_RE)) {
       positions.push({
         tag: normalizeTag(match[1]),
@@ -182,7 +137,7 @@ function scanTagMatches(text: string, urls: UrlSpan[]): TagPosition[] {
 
 /** One tag found in a text, and where in that text it was found. */
 export interface TagLineHit {
-  /** Normalized, and without the sigil: `foo:bar:baz`. */
+  /** Normalized tag without its sigil, such as `foo:bar:baz`. */
   tag: string;
   /** 1-based, counting the lines of the text as given. */
   line: number;
@@ -191,18 +146,8 @@ export interface TagLineHit {
 }
 
 /**
- * The line, trimmed, and cut to {@link TAG_EXCERPT_CHARS_MAX} — by character rather than by
- * UTF-16 code unit.
- *
- * `slice` cuts by code unit, which splits an astral character in half and leaves an unpaired
- * surrogate at the end of the excerpt. That is not a passing display problem: the excerpt is
- * written into `.kozane/tag-index.json` and read back from it, and every renderer draws the
- * half character as `�`. Astral characters are not exotic on this path — the grammar takes
- * Japanese and the length limits exist partly for it, and emoji sit in the same notes.
- *
- * The code-unit length is checked first, and settles it for nearly every line: a string can
- * only hold fewer characters than code units, so one short of the limit by that measure is
- * short of it by either, and the spread never happens.
+ * Trim an excerpt to {@link TAG_EXCERPT_CHARS_MAX} code points without splitting surrogate
+ * pairs. Use code-unit length as a fast check before expanding longer strings.
  */
 function excerptOf(line: string): string {
   const trimmed = line.trim();
@@ -215,23 +160,15 @@ function excerptOf(line: string): string {
 }
 
 /**
- * Every tag in a text, with the line it was written on.
- *
- * The half of tagging that both sources share: a card and a taskspace file are both just
- * text, so each calls this and wraps what comes back in a source of its own (see `TagSource`
- * in `lib/types.ts`). Nothing else about the two paths differs, which is what keeps one
- * grammar from becoming two.
- *
- * A tag written twice on one line is reported once. The two hits would carry the same tag,
- * the same line, and the same excerpt, so the second says nothing the first did not.
+ * Find tags and their line numbers in card or file text. Callers attach their own
+ * `TagSource`. Report repeated occurrences of the same tag on one line only once.
  */
 export function scanTagLines(text: string): TagLineHit[] {
   const hits: TagLineHit[] = [];
   const lines = text.split(/\r?\n/);
 
   for (const [index, line] of lines.entries()) {
-    // Cheapest possible skip, and most lines take it: a line with no colon cannot hold
-    // a tag, and the scanner is handed whole files.
+    // Skip lines without colons because they cannot contain tags.
     if (!line.includes(TAG_SIGIL)) continue;
 
     let excerpt: string | null = null;
@@ -250,13 +187,8 @@ export function scanTagLines(text: string): TagLineHit[] {
 }
 
 /**
- * The thing a hit was found in, as a key: the card, or the file, whichever tag matched and
- * wherever in it. Two tags on one card are one card, and two tags on two lines of one file
- * are one file — which is what "3 cards" on the index has to mean to be worth reading.
- *
- * Paired with {@link hitRowKey}, which is the same idea at a different grain. The two are
- * deliberately not one function: this one answers "how many things is this?", and a file is
- * one thing however many of its lines carry the tag.
+ * Identify the source card or file for distinct counts, regardless of matched tag or line.
+ * Use {@link hitRowKey} separately for displayed rows.
  */
 export function sourceKey(source: TagSource): string {
   return source.kind === "card"
@@ -265,15 +197,8 @@ export function sourceKey(source: TagSource): string {
 }
 
 /**
- * The row a hit is drawn on, as a key. What {@link sourceKey} is for counting, this is for
- * listing, and the grain differs by source because what a reader would go and look at does:
- * a card is one place to open however many of its lines carry the tag, while each line of a
- * file is its own place to go.
- *
- * Here rather than in the two callers that need it. The terminal and the index page list the
- * same hits, and each had written this out — including the `kind === "file" ? … : ""` that a
- * narrowed union needs — which is two chances to group by different things and no way to
- * notice.
+ * Identify one display row per card or per file line. Share this grouping rule between CLI
+ * and browser listings.
  */
 export function hitRowKey(source: TagSource): string {
   return source.kind === "card"
@@ -282,13 +207,8 @@ export function hitRowKey(source: TagSource): string {
 }
 
 /**
- * A hit narrowed to the source it came from, so the caller that has already decided it is
- * listing cards gets `source.cardId` rather than a union it has to narrow again.
- *
- * Predicates rather than `hit.source.kind === "card"` written at each `filter`, because a
- * bare comparison does not narrow the array it filters: every caller then re-narrowed inside
- * the loop with a `continue` that could never fire, and read the identity it wanted off
- * whatever else was to hand. See {@link groupHitRows}.
+ * Narrow hits by source so filtered arrays expose the corresponding source fields. See {@link
+ * groupHitRows}.
  */
 export type TagHitOf<T, K extends TagSource["kind"]> = T & {
   source: Extract<TagSource, { kind: K }>;
@@ -312,30 +232,9 @@ export interface CappedHits<T extends { source: TagSource }> {
 }
 
 /**
- * A tag's hits, capped per kind.
- *
- * Per kind, and that is the whole reason this exists rather than a `slice` at each caller.
- * `loadTagIndex` returns every card hit before any file hit, so one cap laid across the two
- * spent itself on cards: a tag written on more cards than the ceiling listed *no files at
- * all*, and the panel said only that it was showing the first two hundred of three hundred
- * — which reads as "there are no files under this tag" to the one person who came looking
- * for one. Two ceilings cannot starve each other.
- *
- * Both the live page and a static export cap through here, so the server's list and the
- * browser's come out the same. See `TAG_HITS_SHOWN_MAX`. The terminal caps through it too:
- * `kozane tag show` prints the same two lists.
- *
- * One pass, keeping and counting together, rather than two `filter`s and two `slice`s. The
- * point of a ceiling is that the answer is small however large the question is, and building
- * two full arrays of everything that matched to throw away all but the first two
- * hundred of each spent the whole of what the cap was there to avoid.
- *
- * `keep` is that argument carried one step further back, to where it was still being spent.
- * Every caller selects before it caps — a tag, a namespace, whether files count at all — and
- * each was doing it with a `filter` into an array of everything that matched, which is the
- * very allocation the paragraph above is about. Asked here, the selection happens inside the
- * one pass and nothing larger than the two capped lists is ever built. Omitted, every hit is
- * considered, which is what a caller with nothing to select by wants.
+ * Filter, count, and cap hits in one pass. Keep separate limits for cards and file lines so
+ * neither kind excludes the other. Apply optional `keep` filtering before counting and avoid
+ * allocating uncapped result arrays.
  */
 export function capHitsByKind<T extends { source: TagSource }>(
   hits: T[],
@@ -362,11 +261,8 @@ export function capHitsByKind<T extends { source: TagSource }>(
 }
 
 /**
- * How many cards and how many files a tag holds. Distinct ones, per {@link sourceKey},
- * rather than a count of hits.
- *
- * Kept apart because the two are gathered differently and a reader wants to know which is
- * which: cards are a database read, files a disk walk.
+ * Count distinct cards and files per {@link sourceKey}, keeping the two source kinds
+ * separate.
  */
 export interface TagCounts {
   cards: number;
@@ -375,26 +271,20 @@ export interface TagCounts {
 
 /** One node of the tag hierarchy the index page draws. */
 export interface TagNode {
-  /** The whole path down to this node: `foo:bar`. What a link to it names. */
+  /** Full path to this node, such as `foo:bar`, used in links. */
   tag: string;
-  /** This node's own level: `bar`. What is drawn beside its siblings. */
+  /** This node's level, such as `bar`, displayed beside its siblings. */
   name: string;
   children: TagNode[];
   /** Hits whose tag is exactly this node. */
   own: TagCounts;
-  /** Hits on this node and everything under it — what `tagMatches` would gather. */
+  /** Hits on this node and its descendants, matching `tagMatches` behavior. */
   total: TagCounts;
 }
 
 /**
- * A node while it is still being counted. The counts are sets of {@link sourceKey} rather
- * than numbers, because a distinct count cannot be arrived at by adding: the same card
- * reaches a node once per tag it carries, and reaches an ancestor once per descendant tag
- * as well.
- *
- * One set per kind, so counting is `size` rather than a walk that re-reads the `card:` prefix
- * off keys {@link sourceKey} wrote — a coupling between two functions that had no way to be
- * kept true, for a count the shape of the data already knows.
+ * Accumulate distinct source sets by kind while building tree counts. Adding numeric counts
+ * would double-count sources matching several descendant tags.
  */
 type Tally = { cards: Set<string>; files: Set<string> };
 
@@ -435,13 +325,8 @@ function freezeNodes(nodes: Iterable<MutableNode>): TagNode[] {
 }
 
 /**
- * The hierarchy a flat list of hits describes.
- *
- * Every level of every tag becomes a node, whether or not anyone wrote that level on its
- * own: `:foo:bar` alone still produces a `foo` with no hits of its own and one underneath
- * it, because a tree that skipped it would have no way to draw where `bar` hangs from. That
- * is what `own` and `total` separate — `own` is what was written here, `total` is what
- * selecting this tag on the index page gathers.
+ * Build every level of the tag hierarchy, including unwritten ancestors. `own` counts hits at
+ * the exact node, while `total` includes descendants.
  */
 export function buildTagTree(hits: TagHit[]): TagNode[] {
   const roots = new Map<string, MutableNode>();
@@ -470,33 +355,20 @@ export function buildTagTree(hits: TagHit[]): TagNode[] {
 }
 
 /**
- * One row of a tag listing: the hits drawn on it, and the one source they share.
- *
- * `source` beside `key` rather than only `key`, and that is the whole point of the shape. The
- * key is `card:<id>`, which is a string, and so is the card id it is built from — so a caller
- * that read the identity of a row off its key type-checked, linked to `/card:<id>`, and
- * looked its partition up under a key nothing holds. The row now carries the thing itself, and
- * the key is only ever what an `{#each}` or a `Map` is keyed by.
+ * Display row with grouped hits and their shared source identity. Use `key` only for row
+ * bookkeeping, and read actual card or file identity from `source`.
  */
 export interface TagHitRow<T extends { source: TagSource }> {
   /** {@link hitRowKey}. Unique among the rows of one listing, and nothing else. */
   key: string;
-  /** What this row is: the card to open, or the file and line to go and look at. */
+  /** The card or file and line that this row opens. */
   source: T["source"];
   hits: T[];
 }
 
 /**
- * Hits gathered under whatever identifies the row they will be drawn on, in first-seen order
- * — which is the order the underlying read produced, so the terminal and the page list them
- * the same way.
- *
- * Keyed by {@link hitRowKey} rather than by a key function each caller passes. The parameter
- * was the only thing the two copies of this had in common, and it was the part they could
- * have got wrong: one row per card, one row per line of a file.
- *
- * Handed a list narrowed by {@link isCardHit} or {@link isFileHit}, every row's `source` is
- * narrowed with it, so drawing one needs no `kind` check at all.
+ * Group hits by {@link hitRowKey} in first-seen order. Preserve narrowed source types for
+ * card-only or file-only inputs.
  */
 export function groupHitRows<T extends { source: TagSource }>(hits: T[]): TagHitRow<T>[] {
   const rows = new Map<string, TagHitRow<T>>();
@@ -516,19 +388,8 @@ export interface TaskspaceHitGroup<T extends { source: TagSource }> {
 }
 
 /**
- * File hits gathered under the taskspace each was found in, in first-seen order, and grouped
- * into rows within it.
- *
- * Here for the reason {@link groupHitRows} and {@link hitRowKey} are, and it is the same
- * reason a third time: a path is relative to a taskspace and says nothing on its own — two
- * taskspaces holding a `notes/todo.md` draw two identical rows otherwise — so both listings
- * head their file rows this way, and each had written the grouping out. Two copies of "what
- * is one taskspace's worth of rows" is two chances to answer it differently, in the one place
- * where being wrong looks exactly like being right.
- *
- * Taskspace first and row second, in that order and not the reverse: {@link hitRowKey} is
- * unique across a whole listing, so grouping by row first would produce rows that then have
- * to be re-split by taskspace, and a row can only belong to one.
+ * Group file hits by taskspace, then by display row, preserving first-seen order. Taskspace
+ * headings distinguish identical relative paths.
  */
 export function groupHitsByTaskspace<T extends { source: TagSource }>(
   hits: TagHitOf<T, "file">[],
@@ -545,25 +406,12 @@ export function groupHitsByTaskspace<T extends { source: TagSource }>(
   }));
 }
 
-/**
- * The distinct tags a row matched by, sigil and all, sorted — so a card found under both
- * `:perf` and `:perf:cache` says which, in one order rather than in whichever the hits
- * happened to arrive in.
- */
+/** Sorted distinct tags matched by a row, including their sigils. */
 export function taggedWith(hits: { tag: string }[]): string[] {
   return [...new Set(hits.map(({ tag }) => `${TAG_SIGIL}${tag}`))].sort();
 }
 
-/**
- * What each reason a scan stopped short says to the person reading it.
- *
- * The vocabulary in {@link TagScanTruncation} names the budget that ran out, which is what
- * the scanner needs to say and not what a reader needs to hear: both places that print one —
- * the tag index panel and `kozane tag list` — put it on screen unchanged, so a user was told
- * their notes directory "was not read in full (budget, unreadable)". Here for the same
- * reason the row grouping is: the terminal and the page say the same thing about the same
- * taskspace, so they say it in the same words.
- */
+/** Shared reader-facing labels for scan truncation reasons used by the CLI and tag page. */
 const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
   entries: "a directory held more entries than one scan lists",
   depth: "some directories sit deeper than the scan goes",
@@ -575,26 +423,9 @@ const TRUNCATION_LABELS: Record<TagScanTruncation, string> = {
 };
 
 /**
- * Those labels, joined, for a taskspace that stopped at several.
- *
- * Falls back to a phrase for a value not in the table above. That is not defensive dressing:
- * these cross a serialization boundary — the loader's return becomes the page's `data` — so a
- * reason added on the server and deployed against an older page would otherwise draw
- * `undefined` into the sentence.
- *
- * A phrase and not the reason itself, which is what it was. The whole purpose of the table is
- * that the scanner's vocabulary is not the reader's: `budget` and `nodes` name the ceiling
- * that ran out, and printing one of them raw is the exact sentence this function exists to
- * stop — "your notes directory was not read in full (budget)". A reason this build has no
- * wording for is a reason it cannot explain, and saying so is more use than showing the name
- * of a limit the reader has no way to look up.
- *
- * Read through a partial view of the table, so that fallback is something the types agree
- * can happen. Declared total above and read as partial here, deliberately, because the two
- * ends want opposite things: a new member of {@link TagScanTruncation} must be a compile
- * error at the table, which only a total record gives, while the lookup is of a value that
- * may have come from a build this one does not share a union with — where a total record
- * says the `??` is dead code and invites its removal.
+ * Join truncation labels with fallback wording for unknown serialized values. Declare the
+ * label table exhaustively but allow missing lookups at this boundary so older clients handle
+ * newer reasons.
  */
 export function truncationReasons(reasons: TagScanTruncation[]): string {
   const labels: Partial<Record<TagScanTruncation, string>> = TRUNCATION_LABELS;
@@ -604,41 +435,20 @@ export function truncationReasons(reasons: TagScanTruncation[]): string {
 /** What is said about a reason this build has no wording for. See {@link truncationReasons}. */
 const UNKNOWN_TRUNCATION_LABEL = "some of it was not read, for a reason this page cannot name";
 
-/**
- * What the card side reaching its ceiling says to the person reading it.
- *
- * Here beside {@link TRUNCATION_LABELS} for the reason those are here: the terminal and the
- * index page tell the reader the same thing about the same gather, so they tell it in the
- * same words. Not a member of that table, because it is not one of the limits a taskspace
- * walk stops at — see `CardTagHits.truncated`.
- */
+/** Shared message for card-hit truncation, separate from taskspace scan limits. */
 export const CARDS_TRUNCATED_LABEL =
   "more cards carry tags than one gather reads, so the counts above are a floor";
 
 /**
- * What a taskspace nothing could be read from says to the person reading it.
- *
- * Not one of {@link TRUNCATION_LABELS} and deliberately not phrased like one: those complete
- * "was not read in full", and a taskspace that could not be opened was not read at all. It
- * was a truncation once — reason `"unreadable"`, path `./` — and told a user whose taskspace
- * directory had been deleted that "some files could not be read (for example ./)", which
- * describes a taskspace with one bad file in it. See `TagIndex.missing`.
- *
- * Takes the name rather than returning a sentence to put one into, because the name is the
- * subject: the reader has to know which of their taskspaces this is about before anything
- * else in the sentence is worth reading.
+ * Describe an unavailable taskspace by name. Keep this separate from partial-scan labels
+ * because its root was not read at all.
  */
 export const missingTaskspaceLabel = (name: string): string =>
   `${name} could not be read — its directory has been deleted, moved, or made unreadable since the record naming it was written, so no tag written in it is listed here`;
 
 /**
- * The command that puts that right, and the words that go around it.
- *
- * Split from the sentence because the two readers set a command differently — the terminal
- * quotes it, the page marks it up — and the words either side of it should still be written
- * once. `taskspace scan` is the whole repair and not only the cleanup: a taskspace that was
- * moved rather than deleted looks identical from here, and the same run re-points that record
- * instead of dropping it.
+ * Shared taskspace repair command and surrounding text. Keep them separate so the terminal
+ * and page can format the command differently.
  */
 export const TASKSPACE_CLEANUP_COMMAND = "kozane taskspace scan --apply --cleanup";
 
@@ -648,20 +458,8 @@ export const cleanupCommandTail = (count: number): string =>
   count === 1 ? "to drop the record." : "to drop the records.";
 
 /**
- * A few paths behind a truncation, as a phrase, or empty where the reasons name no file.
- *
- * Beside the wording above for the same reason, and it is the half the reader actually acts
- * on: "some files could not be read" describes a taskspace with one permission-denied file
- * and one that is entirely inaccessible identically, and gives neither reader anywhere to go.
- * A sample is enough — see `TAG_SCAN_TRUNCATED_PATHS_MAX` — so it says it is one, rather than
- * reading as the complete list of what went wrong.
- *
- * Takes an absent list as an empty one, for the reason {@link truncationReasons} falls back to
- * the raw reason: these cross a serialization boundary. A static export built before this
- * field existed carries `truncated` entries without it, and the page reading that export is
- * whatever build is serving it — so the one case the type cannot describe is exactly the one
- * that reaches a user, as a page that renders nothing at all rather than a notice missing its
- * paths.
+ * Format a sample of affected paths, or return an empty phrase when none are supplied. Accept
+ * absent path lists from older serialized results.
  */
 export function truncationPaths(paths: string[] | undefined): string {
   if (!paths || paths.length === 0) return "";

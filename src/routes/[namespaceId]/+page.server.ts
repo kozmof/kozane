@@ -7,13 +7,12 @@ import { getWorkspaceUiConfig } from "$db/internal/config";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
-// Static export (kozane net ssg generate): prerender one page per namespace. `entries` tells
-// SvelteKit which [namespaceId] values to bake out, and `readonly` flows to the UI
-// so it hides all editing affordances and the live-sync poll.
+// Prerender one page per namespace for static exports. `entries` supplies namespace IDs, and
+// `readonly` disables editing controls and live polling.
 export const prerender = isSsgBuild();
 const readonly = process.env.KOZANE_READONLY === "1";
-// `kozane net ssg generate --include-scoped-files`: opt-in, because it bakes scope/
-// taskspace organization and taskspace file contents into a payload built to be published.
+// Include scope organization and taskspace file contents only when `--include-scoped-files`
+// is requested.
 const includeScopedFiles = ssgIncludesScopedFiles();
 
 export const entries: EntryGenerator = async () => {
@@ -36,9 +35,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       db,
       namespaceId,
       includeTaskspacePaths: !prerender,
-      // The live board has always shown scopes; a static export shows them only when
-      // built with `--include-scoped-files`, which is the same flag that also decides
-      // whether file contents are baked in — see the note on `includeScopedFiles`.
+      // Live boards include scopes. Static exports include them only with
+      // `--include-scoped-files`.
       includeScopes: !prerender || includeScopedFiles,
       includeScopedFiles: prerender && includeScopedFiles,
     }),

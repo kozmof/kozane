@@ -14,22 +14,16 @@ export function apiKeyPath(workspaceRoot: string): string {
 
 /** Writes a key file without exposing partial contents after a crash or disk-full error. */
 export function writeApiKey(workspaceRoot: string, value: ApiKeyFile): void {
-  // Owner-only: the file holds the workspace's one credential.
+  // Restrict access to the owner because this file holds the workspace credential.
   writeFileAtomic(apiKeyPath(workspaceRoot), JSON.stringify(value, null, 2) + "\n", {
     mode: 0o600,
   });
 }
 
 /**
- * The key file as it was last read, per workspace, with the identity of the bytes it came
- * from. Every request consults the key, so re-reading and re-parsing the file each time put
- * blocking I/O on the event loop once per request — including every static asset and every
- * poll from every open tab.
- *
- * The cache is validated rather than timed out, so `kozane api key refresh` still takes
- * effect on the very next request. `mtimeNs` is nanosecond-precise and `writeApiKey`
- * renames a fresh file into place, giving it a new inode, so a replaced key cannot be
- * mistaken for the old one — not even when written twice within the same millisecond.
+ * Cache each workspace's parsed key with its file signature. Check the signature on access so
+ * atomic key replacement takes effect on the next request without reading and parsing
+ * unchanged content.
  */
 type CachedApiKey = { signature: string; value: ApiKeyFile };
 const apiKeyCache = new Map<string, CachedApiKey>();
@@ -67,8 +61,8 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
   // Frozen because every caller from here on is handed the same object rather than a fresh
   // parse of the file, and a shared value that can be written through is a trap.
   const result: ApiKeyFile = Object.freeze({ apiKey: value.apiKey, createdAt: value.createdAt });
-  // Only a file that parsed is remembered: a malformed one is re-read and re-thrown each
-  // time, which makes a fixed file take effect without a restart.
+  // Cache only successfully parsed files so repairing a malformed file takes effect without a
+  // restart.
   apiKeyCache.set(path, { signature, value: result });
   return result;
 }
@@ -78,14 +72,8 @@ export type ApiKeyResult =
   { ok: true; key: ApiKeyFile | null } | { ok: false; message: string };
 
 /**
- * The workspace's key, or why it could not be read.
- *
- * {@link readApiKey} throws, which is right for a caller that can let the throw travel —
- * and wrong for the three that cannot. Every HTTP request consults the key file, so an
- * unreadable one is not a fault of the request being served: unguarded, a hand-edited
- * `api.json` turns every page load and every poll into an unexplained 500, which is the
- * one failure mode that says nothing about the file behind it. The server and `kozane
- * open` answer with the message instead, and `kozane doctor` reports it as a check.
+ * Return the workspace key or a readable failure reason. Use this result where callers must
+ * report a workspace error instead of propagating an exception.
  */
 export function readApiKeyResult(workspaceRoot: string): ApiKeyResult {
   try {

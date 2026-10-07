@@ -111,7 +111,7 @@ describe("request host allowlist", () => {
     expect(isAllowedRequestHost("[::1]:17173")).toBe(true);
   });
 
-  // The rebinding case: a name someone else controls, resolved to this address.
+  // Exercise DNS rebinding with an externally controlled name that resolves to this address.
   it("rejects a name that is not the workspace's own", () => {
     expect(isAllowedRequestHost("attacker.example:17173")).toBe(false);
     expect(isAllowedRequestHost("kozane.local")).toBe(false);
@@ -142,8 +142,8 @@ describe("request host allowlist", () => {
 describe("loopback origin canonicalization", () => {
   const pinned = "http://127.0.0.1:5173";
 
-  // The bug this exists for: the workspace page's create-namespace form, submitted from a
-  // browser sitting on one loopback name against a server that pinned another.
+  // Submit the create-namespace form from a different loopback name than the server's
+  // configured origin.
   it("rewrites another spelling of the same server to the pinned origin", () => {
     expect(canonicalLoopbackOrigin("http://localhost:5173", pinned)).toBe(pinned);
     expect(canonicalLoopbackOrigin("http://[::1]:5173", pinned)).toBe(pinned);
@@ -215,7 +215,7 @@ describe("remote throttle warning", () => {
     expect(remoteThrottleWarning("0.0.0.0", "x-forwarded-for")).toBeNull();
   });
 
-  // The condition itself: bound to the world, counting every client as the proxy.
+  // Binding to all interfaces must not make every client a trusted proxy.
   it("warns when a remote binding has no address header", () => {
     expect(remoteThrottleWarning("0.0.0.0", undefined)).toMatch(/ADDRESS_HEADER/);
     expect(remoteThrottleWarning("192.168.1.10", undefined)).toMatch(/throttles all of them/);

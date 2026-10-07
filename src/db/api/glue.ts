@@ -7,16 +7,11 @@ import { chunked } from "../../lib/constants.js";
 import { columnCount, type BatchResult } from "./utils.js";
 
 /**
- * The glue rows of a named handful of cards. For a caller that already holds the ids and
- * knows how many there are — a route acting on a selection, which `BATCH_MAX` caps.
+ * Read glue relations for a bounded selection of cards. Callers must keep the selection
+ * within the statement's parameter budget.
  *
- * Not for the board: see {@link getGlueRelsByNamespace}.
- *
- * Deliberately not batched through `readByIds`, unlike the id-list reads in `card.ts`.
- * Batching it would make handing it a whole board work — slowly, at a round trip per two
- * thousand cards, once a second for as long as a tab is open. The hard failure is the point:
- * every caller here is a bounded selection, and the one that was not is why
- * {@link getGlueRelsByNamespace} exists. See the test that pins this.
+ * Use {@link getGlueRelsByNamespace} for a complete board. This function deliberately does
+ * not batch large selections because polling a board that way would require repeated queries.
  */
 export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
   if (cardIds.length === 0) return [];
@@ -24,19 +19,8 @@ export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: s
 }
 
 /**
- * Every glue row of a namespace's cards, selected by the namespace rather than by naming them.
- *
- * The same answer {@link getGlueRelsByCards} gives when handed every card of a namespace, and
- * the reason it is a separate function is the "every": that form binds one SQL parameter
- * per card, and the board asks for it on every page load and every snapshot poll. SQLite
- * refuses a statement past its variable limit — and builds the whole thing in memory before
- * finding out — so a namespace large enough stops loading rather than loading slowly. It is
- * the one read that took an id list nothing bounded: `BATCH_MAX` caps what a request may
- * name, and this list came out of the database.
- *
- * The join binds one parameter whatever the board holds, and walks indexes the schema
- * already has at every step: `partition`'s primary key from `card`, and `glue_rel`'s from the
- * card side, whose `card_id` is itself the primary key.
+ * Read all glue relations for a namespace through joins. Bind only the namespace ID so board
+ * loads and snapshot polls remain independent of SQLite's parameter limit.
  */
 export async function getGlueRelsByNamespace({
   db,
@@ -51,11 +35,8 @@ export async function getGlueRelsByNamespace({
 }
 
 /**
- * Dissolves any of `glueIds` left holding fewer than two cards, for callers that removed
- * the cards themselves. Deleting a card through a cascade — a namespace going away takes its
- * partitions, their cards, and those cards' `glue_rel` rows with it — never passes through
- * this module, so the parent `glue` rows would survive with nothing pointing at them.
- * Collect the ids before the cascade; they cannot be found afterwards.
+ * Dissolve groups with fewer than two cards after callers delete cards directly or through
+ * cascades. Collect the glue IDs before deletion, while their relations still exist.
  */
 export async function dissolveOrphanGlueGroupsInTx({
   db,
@@ -67,10 +48,8 @@ export async function dissolveOrphanGlueGroupsInTx({
 async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<string[]> {
   if (affectedGlueIds.length === 0) return [];
 
-  // Survivors are counted and then subtracted, rather than selecting orphans with
-  // `HAVING count() <= 1`: a group whose members were all removed produces no
-  // GROUP BY row at all, so a HAVING filter can never see it and its `glue` row
-  // would leak. Anything not proven to still hold ≥2 members is an orphan.
+  // Count surviving groups and subtract from the original count. HAVING cannot find groups
+  // with no remaining rows.
   const memberCounts = await db
     .select({ glueId: glueRelTable.glueId, members: count() })
     .from(glueRelTable)
@@ -115,9 +94,7 @@ async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
 
   // Create a new glue group for all specified cards.
   const [{ id: newGlueId }] = await db.insert(glueTable).values({}).returning({ id: glueTable.id });
-  // Chunked like every other bulk insert here: a route may name up to `BATCH_MAX` cards,
-  // and a row per card at two columns each puts one statement well past the parameter
-  // budget `STATEMENT_PARAMS_MAX` sets.
+  // Chunk glue-member inserts within the parameter limit.
   for (const batch of chunked(cardIds, { columnsPerRow: columnCount(glueRelTable) }))
     await db.insert(glueRelTable).values(batch.map((cardId) => ({ glueId: newGlueId, cardId })));
 
@@ -162,11 +139,8 @@ export async function unglueCardsInTx({
 type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 
 /**
- * The new group, or the refusal. A tagged result rather than the `string | null` this was:
- * `null` is a serviceable "no" while ownership is the only way to be told it, and stops
- * being one the moment a second reason is added — every caller reading it would go on
- * reporting the first. Same argument as {@link CardBatchResult}, and the same vocabulary,
- * so one route helper words them all.
+ * Return the new group ID or a specific refusal reason. Share the result vocabulary with
+ * {@link CardBatchResult} so routes can use the same error helper.
  */
 export type GlueResult = BatchResult<"foreign-cards", { glueId: string }>;
 

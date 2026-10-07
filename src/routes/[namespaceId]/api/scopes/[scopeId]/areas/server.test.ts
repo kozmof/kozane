@@ -73,8 +73,7 @@ describe("POST /[namespaceId]/api/scopes/[scopeId]/areas", () => {
       }),
     );
 
-    // The whole rectangle is held, not only its corner: a frame half off the board is one
-    // whose far half can never be reached, and every card it would hold with it.
+    // Keep the entire rectangle within the canvas so its contents remain reachable.
     const stored = await response.json();
     expect(stored.posX + stored.width).toBeLessThanOrEqual(5600);
     expect(stored.posY + stored.height).toBeLessThanOrEqual(4000);

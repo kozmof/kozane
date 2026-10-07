@@ -73,10 +73,7 @@ async function seedDb(dbUrl: string): Promise<void> {
             1_700_000_000_001,
           ],
         },
-        // Both timestamps are written rather than left to the column default that migration
-        // 0011 needed to add them NOT NULL: a row that takes that default lands at
-        // the epoch, and a seed that exports as 1970 is not the seed these round trips mean
-        // to be testing.
+        // Set timestamps explicitly to avoid the epoch default.
         {
           sql: "INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
           args: ["card-1", "partition-1", "layer-1", "taskspace-1", "First", 10, 20],
@@ -174,10 +171,8 @@ describe("db JSON export/import", () => {
     expect(dump.tables.namespace[0].is_default).toBe(1);
   });
 
-  // The four tests that stood here imported a version 2, 3, 4 and 5 dump apiece, each one
-  // checking the upgrade step that filled in what its version predated. Those steps are gone
-  // along with the ability to read those dumps, so what is left to state is the refusal — and
-  // that it explains itself, because the file being refused is somebody's backup.
+  // Verify that unsupported dump versions are rejected with an explanation suitable for a
+  // user restoring a backup.
   it.each([2, 3, 4, 5, 6])(
     "refuses a version %i export, taken before the rename",
     async (version) => {
@@ -202,9 +197,7 @@ describe("db JSON export/import", () => {
     const targetUrl = await migratedDbUrl("v7-target.db");
     await seedDb(sourceUrl);
 
-    // A version 7 dump is one taken before there was a `scope_area` table to export, so it
-    // carries no such key at all. That is not a dump missing something — it is a dump from
-    // before the thing existed, and the right reading of it is that nothing was framed.
+    // Version 7 predates `scope_area`, so an absent key means there were no saved frames.
     const dump = await exportDbJson(sourceUrl);
     const legacy = {
       ...dump,
@@ -216,8 +209,7 @@ describe("db JSON export/import", () => {
     const counts = await importDbJson(targetUrl, legacy as never);
 
     expect(counts.scope_area).toBe(0);
-    // And the rest of the dump still lands: the accommodation is one absent table, not a
-    // lenient reading of the file.
+    // Restore the other tables when an older dump omits a table.
     expect(counts.card).toBe(2);
     expect(counts.scope_rel).toBe(1);
   });
@@ -259,11 +251,8 @@ describe("export table list", () => {
       .map((table) => getTableConfig(table as SQLiteTable));
 
   /**
-   * The columns are read off the schema now rather than restated, so this no longer catches a
-   * drift — it asserts that the derivation reaches every table with the columns it declares,
-   * which is the property the export depends on. A column missing here is a column
-   * `kozane db export` silently drops, which is how `namespace.is_default` was lost after
-   * migration 0003.
+   * Verify that exported columns include every declared schema column. Omitting one would
+   * silently lose data from the dump.
    */
   it("covers every column of every table in the Drizzle schema", () => {
     const exported = new Map<string, readonly string[]>(
@@ -284,17 +273,11 @@ describe("export table list", () => {
   });
 
   /**
-   * The half that is still written by hand, and so the half that can still drift. A table
-   * added to the schema and left out of `TABLE_ORDER` is exported as nothing at all — worse
-   * than the missing column above, and invisible for the same reason.
-   *
-   * The order itself is asserted rather than only its membership: an insert has to name a
-   * table after every table its foreign keys point at, and a restore deletes in the reverse
-   * of this order for the same reason.
+   * Verify that `TABLE_ORDER` includes every schema table and places referenced tables before
+   * their dependents. Restore deletes rows in reverse order.
    */
   it("orders every table after the tables its foreign keys point at", () => {
-    // Keyed as plain strings: the names come back off the Drizzle tables below, which report
-    // a `string` rather than the literal union `TABLE_ORDER` gives these.
+    // Use string keys because Drizzle types table names as strings.
     const position = new Map<string, number>(TABLES.map((table, index) => [table.name, index]));
 
     expect([...position.keys()].sort()).toEqual(
@@ -306,8 +289,7 @@ describe("export table list", () => {
     for (const table of schemaTables()) {
       for (const reference of table.foreignKeys) {
         const target = getTableConfig(reference.reference().foreignTable).name;
-        // A self-reference would be neither before nor after itself; there are none, and one
-        // added later needs a rule of its own rather than this one.
+        // A self-reference needs a separate ordering rule. The current schema has none.
         expect(target).not.toBe(table.name);
         expect({
           table: table.name,
@@ -320,11 +302,8 @@ describe("export table list", () => {
 });
 
 /**
- * `validateDumpRefs` exists to name the offending row, because SQLite's own
- * `FOREIGN KEY constraint failed` names nothing. None of its branches had a test, which is
- * how three of the export's foreign keys — `card.layer_id`, `layer.namespace_id` and
- * `warp.namespace_id` — came to have no check at all while the docblock claimed every one
- * was covered.
+ * Verify that invalid foreign keys identify the offending row. SQLite's constraint error does
+ * not identify it.
  */
 describe("import reference validation", () => {
   let sequence = 0;
@@ -445,9 +424,7 @@ describe("import reference validation", () => {
     }, "scope_area scope-area-1: references unknown namespace_id namespace-missing");
   });
 
-  // A taskspace assigned to no namespace at all is an ordinary record, not a dangling
-  // reference: `taskspace scan --apply --reattach` makes one from a marker that names no
-  // namespace, and it shows on every board. Same for a card on no taskspace.
+  // Taskspaces may have no namespace, and cards may have no taskspace.
   it("accepts the nullable references that are allowed to be null", async () => {
     const dump = await seededDump();
     dump.tables.taskspace[0].namespace_id = null;
@@ -466,9 +443,8 @@ describe("import reference validation", () => {
 });
 
 describe("import batching", () => {
-  // Rows used to go in one statement per row. `chunked` splits them by the parameter
-  // budget instead, so a table wider than the batch size still lands in one piece — and a
-  // count that spans several batches is the case a wrong `VALUES` shape would break.
+  // Exercise multiple insert batches, including a table wider than the batch size, to verify
+  // the generated `VALUES` shape.
   it("restores a table spanning several insert batches", async () => {
     const sourceUrl = await migratedDbUrl("batch-source.db");
     const targetUrl = await migratedDbUrl("batch-target.db");
@@ -496,7 +472,7 @@ describe("import batching", () => {
       card: cardCount + 2,
     });
 
-    // Round-tripped whole: same rows, same values, in the same order.
+    // Check that the round trip preserves row values and order.
     const imported = await exportDbJson(targetUrl);
     expect(imported.tables.card).toEqual(dump.tables.card);
   });
@@ -508,9 +484,8 @@ describe("export refuses what JSON cannot carry", () => {
     await seedDb(dbUrl);
     const client = createClient({ url: dbUrl });
     try {
-      // A BLOB in a TEXT column. SQLite's TEXT affinity does not convert one, so it is
-      // stored as a blob and libsql hands it back as an ArrayBuffer — which is how a
-      // hand-edited or foreign database reaches the exporter.
+      // SQLite can store a BLOB in a TEXT column. The client returns it as an `ArrayBuffer`,
+      // which the exporter must handle as an invalid value.
       await client.execute({
         sql: "UPDATE card SET content = ? WHERE id = ?",
         args: [new Uint8Array([0xde, 0xad, 0xbe, 0xef]), "card-1"],
@@ -653,10 +628,8 @@ describe("import rejects a malformed dump", () => {
 
 describe("import rolls back a dump SQLite refuses", () => {
   it("leaves the target workspace exactly as it was", async () => {
-    // Passes `validateDumpRefs` — every reference resolves — and fails on insert, because
-    // `scope_name_nonempty` is a CHECK constraint and nothing before the transaction looks
-    // at the contents of a name. That is the case the ROLLBACK exists for: the delete loop
-    // has already emptied every table by the time the insert fails.
+    // All references pass validation, but the insert violates `scope_name_nonempty`. Verify
+    // that rollback restores the rows deleted earlier in the transaction.
     const sourceUrl = await migratedDbUrl("rollback-source.db");
     await seedDb(sourceUrl);
     const dump = await exportDbJson(sourceUrl);
@@ -667,8 +640,7 @@ describe("import rolls back a dump SQLite refuses", () => {
 
     await expect(importDbJson(targetUrl, dump)).rejects.toThrow();
 
-    // Everything still there, which is the whole point: a failed import must not be a
-    // successful delete.
+    // A failed import must preserve existing data.
     const after = await exportDbJson(targetUrl);
     expect(after.tables.card).toHaveLength(2);
     expect(after.tables.namespace).toHaveLength(1);
@@ -679,8 +651,7 @@ describe("import rolls back a dump SQLite refuses", () => {
   });
 
   it("leaves the database usable for the import that follows", async () => {
-    // The rollback has to release the transaction, not merely undo it: a connection left
-    // inside a failed BEGIN would make the next import fail for a reason of its own.
+    // Rollback must release the transaction so a later import can succeed.
     const sourceUrl = await migratedDbUrl("rollback-retry-source.db");
     await seedDb(sourceUrl);
     const good = await exportDbJson(sourceUrl);
@@ -772,8 +743,7 @@ describe("dumpLimitWarnings", () => {
     expect(warning).not.toContain("inside");
   });
 
-  // The edge is on the board: `clampToBounds` clamps to `0..canvasWidth` inclusive, so a card
-  // at exactly the far edge is one the write paths would have accepted.
+  // The canvas boundary is inclusive.
   it("counts the far edge as on the board", () => {
     const dump = dumpOf({ card: [card("edge", { pos_x: 1000, pos_y: 800 })] });
     expect(dumpLimitWarnings(dump, limits)).toEqual([]);
@@ -812,9 +782,8 @@ describe("dumpLimitWarnings", () => {
     expect(dumpLimitWarnings(dump, limits)).toHaveLength(3);
   });
 
-  // Lenient on purpose: this runs after the import has committed, so a report must not be
-  // able to turn a restore that worked into one that appears to have failed. `parseDump` is
-  // the strict reader and has already run by then.
+  // Warnings run after commit. Invalid configuration must not turn a successful restore into
+  // an error.
   it("reads a shape it was not given as nothing to warn about", () => {
     expect(dumpLimitWarnings(null, limits)).toEqual([]);
     expect(dumpLimitWarnings("not a dump", limits)).toEqual([]);

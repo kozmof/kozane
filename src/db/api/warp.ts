@@ -3,10 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import type { NeedsDB, NeedsNamespace, NeedsNamespaceWarp, Warp } from "./types.js";
 import { assertFound } from "./utils.js";
 
-/**
- * Ordered the way the UI numbers them: oldest first. Warps carry no name and no position
- * column, so creation order is the only ordering there is, and uuidv7 ids already hold it.
- */
+/** Number warps in UUIDv7 creation order. */
 export async function getAllWarps({ db, namespaceId }: NeedsNamespace): Promise<Warp[]> {
   return db
     .select()
@@ -38,8 +35,7 @@ type MoveWarp = NeedsNamespaceWarp & { posX: number; posY: number };
  * that drew the marker where the pointer let go can correct it to what was kept.
  */
 export async function moveWarp({ db, namespaceId, warpId, posX, posY }: MoveWarp): Promise<Warp> {
-  // namespaceId is checked alongside the id for the reason deleteWarp checks it: the id
-  // alone would do, and the pair is the access boundary.
+  // Check namespace ownership even though the ID is unique.
   const updated = await db
     .update(warpTable)
     .set({ posX, posY })

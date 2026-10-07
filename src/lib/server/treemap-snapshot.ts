@@ -27,8 +27,10 @@ export const TREEMAP_CACHE_FILE = "treemap.json";
 
 export type TreemapPartition = PartitionCardCount & { bg: string; dot: string };
 
-/** The workspace facts needed to derive every map view. Geometry and query selections are
- * deliberately absent: they are cheap browser-side projections of these facts. */
+/**
+ * Workspace data used to derive map views. Compute geometry and query selections in the
+ * browser.
+ */
 export type TreemapSnapshot = {
   namespaces: Namespace[];
   partitions: TreemapPartition[];

@@ -44,14 +44,8 @@ export async function cardsInNamespace({
 }
 
 /**
- * Whether every id names a card of this namespace, as the refusal a caller can return.
- *
- * The check five of these operations open with, written once. Each of them was spelling out
- * the same `cardsInNamespace(...)` call and the same length comparison, and comparing against
- * whichever of `cardIds` or a deduplicated copy of it the function happened to hold — which
- * is a real difference: `inArray` collapses duplicates, so a list naming one card twice
- * comes back one short and reads as unowned. Deduplicating here means a caller cannot get
- * that wrong by forgetting to.
+ * Verify that every distinct card ID belongs to the namespace. Deduplicate before comparing
+ * counts because an `IN` query returns each row only once.
  */
 export async function cardsBelongToNamespace({
   db,
@@ -68,16 +62,8 @@ export async function getAllCards({ db, partitionId }: NeedsPartition): Promise<
 }
 
 /**
- * The ids of every card in a namespace, and nothing else about them.
- *
- * For the callers that want a namespace's cards only to number them —
- * {@link shortIdMap} draws its short ids against the whole namespace, so the id printed for a
- * card is the one `kozane card show` takes whichever command printed it. That is the entire
- * requirement, and reading the rows to meet it read every card's `content` as well.
- *
- * One statement, in place of the `getAllPartitions` then `getAllCards`-per-partition that
- * `kozane tag show` was doing: a namespace of thirty partitions cost thirty-one round trips and
- * came back with the text of every card in it, to build a map of ids.
+ * Read only the IDs of a namespace's cards for callers building short-ID maps. Use one query
+ * across its partitions.
  */
 export async function getNamespaceCardIds({ db, namespaceId }: NeedsNamespace): Promise<string[]> {
   const rows = await db
@@ -98,23 +84,11 @@ export async function getCardsByPartitions({
 }
 
 /**
- * The card columns the browser is sent, and only those.
+ * Columns sent to the browser in a card snapshot. The `satisfies` check keeps this selection
+ * aligned with `CardData`, and `readCard` validates the same fields.
  *
- * `CardData` names them once as a type; this names them once as a query. The two are held
- * together by the `satisfies` below rather than by anyone remembering: a key added to
- * `CardData` is missing here and a key removed from it is excess here, and both are compile
- * errors. `readCard` in `snapshot-reader.ts` is the third member of that set, and breaks the
- * same way — so a column reaches the board only when all three have been changed to admit it.
- *
- * The board makes this worth spelling out rather than selecting the row and letting
- * the extra columns ride along. Precisely: drizzle's `select()` enumerates the columns the
- * schema declares, so a column that exists only in the database never arrives here anyway
- * — but one added to `cardTable` did, by the act of adding it. `CardData` is a hand-written
- * `Pick`, so it would not gain the column and nothing on the path would object, and the
- * board is a published surface: served to every browser on page load, and baked into
- * `kozane net ssg generate` output, whose exact contents `docs/security-matrix.md`
- * enumerates. Opting a column in is one line here; opting one out after it has been
- * exported is not a thing that can be done.
+ * Select columns explicitly so adding a schema field does not automatically expose it in page
+ * loads, polling responses, or static exports.
  */
 const CARD_DATA_SELECTION = {
   id: cardTable.id,
@@ -129,12 +103,8 @@ const CARD_DATA_SELECTION = {
 } satisfies Record<keyof CardData, AnyColumn>;
 
 /**
- * The cards of a namespace's partitions, narrowed to what a board draws.
- *
- * The read behind both halves of the snapshot — the page load and the once-a-second poll —
- * which is the pair `loadNamespaceSnapshot` exists to keep identical. It used to select the
- * whole row: the poll's reader rebuilt each card from the fields it knows, so the two paths
- * already agreed on what the client kept, and disagreed on what crossed the wire.
+ * Read the card fields used by the board. Page loads and snapshot polls share this selection
+ * through `loadNamespaceSnapshot`.
  */
 export async function getCardDataByPartitions({
   db,
@@ -152,54 +122,33 @@ export type CardMarker = {
   posX: number;
   posY: number;
   zIndex: number;
-  /** The opening of the card's text — enough to name it, not the whole of it. */
+  /** Opening text used to build a card hint. */
   content: string;
-  /**
-   * How many characters the whole card holds, which is what says how far past `content` it
-   * goes. Without it a long card would be measured as the short one it arrives as: the
-   * hint names the card nearest the warp, and how near a card is depends on how tall it is.
-   */
+  /** Keep the full `contentChars` count for height estimates when returning a content prefix. */
   contentChars: number;
   /**
-   * The card's own drawn width, or null where it follows `ui.defaultCardWidth`. Read for
-   * the same reason `contentChars` is: the hint names the card nearest the warp, and how
-   * near a card is depends on the box it is drawn in — which a resized card sets itself.
+   * Pinned card width, or null to use `ui.defaultCardWidth`. The hint's distance calculation
+   * uses the card's drawn bounds.
    */
   width: number | null;
 };
 type GetCardMarkers = NeedsDB & { namespaceIds: string[] };
 
 /**
- * How much of a card's text this reads. A hint is at most {@link WARP_HINT_MAX_CHARS}
- * characters once its whitespace is collapsed, so several times that is more than enough
- * to build one, while a card may hold ten thousand — and every card of every
- * namespace with a warp is read to place one palette row.
+ * Maximum source text read for a warp hint. Keep this bounded while reading the full
+ * character count separately to estimate card height.
  *
- * The single case this changes: a card whose first {@link HINT_SOURCE_MAX_CHARS}
- * characters are all whitespace reads as blank here, and a blank card lends no hint. How
- * tall the card is drawn does not depend on the cut, because `contentChars` carries the
- * length the text goes on to.
+ * A card whose entire prefix is whitespace provides no hint, even if later text is nonblank.
  */
 const HINT_SOURCE_MAX_CHARS = WARP_HINT_MAX_CHARS * 5;
 
 /**
- * Just enough of every card in `namespaceIds` to say what is near a point: the warp palette
- * names a warp after the card closest to it, and pulling whole rows for several namespaces
- * to read three columns is not worth it.
+ * Read the card data needed to find a hint near each warp. Limit text per row and exclude
+ * blank cards.
  *
- * Bounded by width of row, not by count of rows. Three of the four edges could be narrowed
- * here — a card is drawn no wider than the largest of `ui.defaultCardWidth` and the widths
- * cards pin for themselves, and one starting further below a warp than `WARP_HINT_RADIUS`
- * can never reach it — but the fourth cannot: a card's drawn height comes from how much
- * text it holds, so an arbitrarily tall card sitting well above a warp still reaches it.
- * Filtering on the three sound edges alone would drop exactly the cards the remaining one
- * is there to keep, so the narrowing has to be all four or none, and all four means the
- * height model in SQL.
- *
- * What is filtered is the one thing that costs nothing to be sure of: a card whose text is
- * blank lends no hint (`nearestCardHint` skips it), so it need not be sent. `trim` here
- * runs on the whole column rather than the opening below, which only ever discards rows
- * the caller would have discarded anyway.
+ * Keep cards at every position because their estimated height depends on text length. A tall
+ * card starting far above a warp can still reach it. Restricting positions would require
+ * matching the height model in SQL.
  */
 export async function getCardMarkersByNamespaces({
   db,
@@ -262,18 +211,11 @@ type AddCard = NeedsPartition & {
   zIndex?: number;
 };
 /**
- * The two timestamps a new card is written with, both from one reading of the clock.
+ * Create both card timestamps from one clock reading. Per-column defaults could cross a
+ * second boundary and make a new card appear edited.
  *
- * Written rather than left to the `$defaultFn` on the column, which drizzle calls once per
- * column per row. Two calls can straddle a second boundary, and the columns are stored to
- * the second, so a card could be inserted already reading as rewritten a second after it
- * was written — `kozane card list --sort gap` would report `1s` for a card nobody had
- * touched. One `now` for both columns makes that unrepresentable rather than unlikely.
- *
- * Called once per batch by the writers that add many cards at once, for the same reason
- * `db import` stamps a whole dump at one moment: `kozane card squash` and the board's
- * squash turn one card into a hundred, and pieces that arrived together should not be
- * separable in the listing by a second's drift they never had.
+ * Call once per batch so cards created together also share timestamps across insert
+ * statements.
  */
 export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
   const now = new Date();
@@ -312,20 +254,14 @@ type AddCards = NeedsPartition & {
 };
 
 /**
- * Inserts many cards onto one partition and layer, in {@link chunked} statements rather than
- * one round trip each. `kozane card squash` turns a pasted file into a card per sentence,
- * which is the one CLI path that writes cards by the hundred; the board's squash endpoint
- * batches the same way (see `squashNamespaceCard`).
+ * Insert cards into one partition and layer using {@link chunked} statements. Return IDs in
+ * input order.
  *
- * Returns the new ids in the order the rows were given, which is the order the text reads.
- * `layerId` is required rather than defaulted: every caller here has already resolved one,
- * and looking it up per chunk is the round trip this exists to avoid.
+ * Require a resolved `layerId` to avoid a default-layer lookup for each chunk.
  */
 export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
-  // Outside the loop: one moment for every card of this call, not one per chunk. See
-  // {@link newCardStamps} — a squash long enough to be split into several statements is
-  // exactly the case where per-chunk stamps would start to differ.
+  // Share one timestamp across all chunks. See {@link newCardStamps}.
   const stamps = newCardStamps();
   const ids: string[] = [];
   for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
@@ -338,24 +274,13 @@ export async function addCards({ db, partitionId, layerId, cards }: AddCards): P
   return ids;
 }
 
-// Card deletion lives in composite.ts: removing a card cascades its glue_rel rows
-// away, so the delete has to be paired with glue-group cleanup, and glue.ts cannot
-// be imported from here without a cycle. See `deleteNamespaceCards`.
-
-// ── Namespace-scoped transactional operations (verify ownership before mutating) ─
+// Delete cards through the composite operation to clean up glue groups without a circular
+// import.
 
 type GetCardPartitionNames = NeedsDB & { cardIds: string[] };
 /**
- * The partition each of `cardIds` is in.
- *
- * In statement-sized batches through {@link readByIds}, because an `IN` list is subject to
- * the same SQLite variable ceiling an `INSERT` is. Every caller but one hands this a handful
- * of ids; the one that does not is the tag index's static export, which is built before
- * anyone has chosen a tag and so asks about every tagged card in the workspace at once.
- *
- * This function's own loop was the first of these and is now the shared one — see
- * {@link readByIds} for why the batch is sized by {@link BATCH_MAX} rather than by
- * `chunked`'s row-count default.
+ * Find each card's partition using {@link readByIds} to stay within SQLite's parameter
+ * budget. Static tag export can request every tagged card at once.
  */
 export async function getCardPartitionNames({
   db,
@@ -379,9 +304,8 @@ export async function getCardPartitionNames({
 export type CardChangeCount = { day: string; partitionId: string; cards: number };
 
 /**
- * Daily content-change counts by partition. Card creation counts as the first change because
- * new cards begin with matching created/updated timestamps; arrangement-only writes do not
- * appear because those deliberately leave updated_at unchanged.
+ * Count content changes by day and partition. Creation counts as the first change.
+ * Arrangement updates leave `updated_at` unchanged and do not add changes.
  */
 export async function getCardChangeCounts({
   db,
@@ -462,28 +386,20 @@ type CardUpdate = Partial<
   >
 > & {
   /**
-   * An expression rather than a `Date`, because whether this column moves at all is decided
-   * by the row being written — see {@link contentUpdatedAt}.
+   * Use a SQL expression so the stored row determines whether its timestamp changes. See
+   * {@link contentUpdatedAt}.
    */
   updatedAt?: SQL;
 };
 
 /**
- * What to write to `updated_at` alongside a new `content`: the moment, but only if the text
- * actually changes, and otherwise the value the row already holds.
+ * Update the timestamp only when card text changes.
  *
- * The comparison is in the statement rather than in a read before it. Text that arrives
- * unchanged is not a revision — the board's composer sends the textarea's contents on every
- * save, edited or not, and a card re-saved untouched must not lengthen the interval `kozane
- * card list --sort gap` reports — so something has to compare it. Comparing in the `SET`
- * clause makes the compare and the write one statement: no transaction to wrap them in, no
- * second round trip on a path the board takes on every save, and no window in which a
- * competing writer can leave the timestamp decided on text neither statement stored.
+ * Compare against the existing content in the `SET` expression so the decision and write are
+ * atomic. Unchanged text must not reset the gap reported by `card list --sort gap`.
  *
- * SQLite evaluates a `SET` expression against the pre-update row, so `card.content` here is
- * the text being replaced. `<>` needs no null guard: the column is NOT NULL. `unixepoch()`
- * returns seconds, which is what `integer({ mode: "timestamp" })` stores and what migration
- * 0011 wrote.
+ * The content column is non-null, and `unixepoch()` returns the seconds expected by the
+ * timestamp column.
  */
 function contentUpdatedAt(content: string): SQL {
   return sql`CASE WHEN ${cardTable.content} <> ${content} THEN unixepoch() ELSE ${cardTable.updatedAt} END`;
@@ -502,11 +418,8 @@ export async function updateCard({
   width,
 }: UpdateCard): Promise<void> {
   const fields: CardUpdate = {};
-  // `updatedAt` follows a card's text and nothing else. The rest of what this function can
-  // change — where the card sits, how wide it is drawn, which partition or layer holds it — is
-  // arrangement rather than revision, and leaves the timestamp alone. See the column's own
-  // note in `schema.ts`, and `updateNamespaceCardPositions` below, which writes positions by
-  // the hundred and likewise does not bump it.
+  // Only text changes update `updatedAt`. Position, width, partition, layer, and stacking
+  // changes preserve it.
   if (content !== undefined) {
     fields.content = content;
     fields.updatedAt = contentUpdatedAt(content);
@@ -534,36 +447,24 @@ export type CardPositionUpdate = {
 };
 
 /**
- * How many bound parameters one row of a `CASE`-per-column update costs: the id and the
- * value in each CASE, plus the id once more in the WHERE.
- *
- * Written as the arithmetic rather than as a number, so a third column joining the CASE
- * narrows the batches by itself. That is the same guarantee `columnCount` gives the inserts,
- * and the reason both go through {@link chunked}: the update used to be bounded only by
- * `BATCH_MAX`, on the strength of a comment saying that left room for "the widest of those
- * statements" — true at two columns and checked by nothing at three.
+ * Parameters required per row in a CASE update. Count the ID and value for each column, plus
+ * the ID in the WHERE clause, so adding a column reduces the chunk size automatically.
  */
 function caseUpdateParamsPerRow(columns: number): number {
   return 2 * columns + 1;
 }
 
 /**
- * The rows of a CASE update, split so no one statement outgrows
- * {@link STATEMENT_PARAMS_MAX} at the width its caller writes.
- *
- * Every caller runs the batches inside one transaction, so splitting the statement does not
- * split the write: a drag of two thousand cards still lands whole or not at all.
+ * Chunk CASE statements within the parameter limit. A shared transaction keeps the update
+ * atomic.
  */
 function caseUpdateBatches<T>(rows: T[], columns: number): T[][] {
   return chunked(rows, { size: BATCH_MAX, columnsPerRow: caseUpdateParamsPerRow(columns) });
 }
 
-// Each CASE ends in an ELSE that writes the column back to itself, so a row matched by
-// the WHERE without a matching WHEN is left as it was. The two are built from the same
-// list and cannot diverge today; the ELSE is what keeps the failure mode of a future
-// divergence "this row was not moved" rather than "NULL into a NOT NULL column", which
-// aborts the whole statement. The row-count assertion in `updateNamespaceCardPositions`
-// still fails the transaction if it ever happens, so it cannot pass silently either.
+// Preserve the column value when no WHEN branch matches. This avoids writing NULL if the CASE
+// and WHERE lists ever diverge. The row-count check still fails the transaction on an
+// incomplete update.
 function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; posY: SQL } {
   const whenX = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posX}`);
   const whenY = positions.map((p) => sql`WHEN ${p.cardId} THEN ${p.posY}`);
@@ -597,10 +498,7 @@ export async function updateNamespaceCardPositions({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    // Two columns written by CASE, so the batch is sized at that width; see
-    // `caseUpdateParamsPerRow`. The row count is asserted per batch, which is the same
-    // assertion it was as one statement — every batch is a disjoint set of ids, and they
-    // sum to `unique.length`.
+    // Size batches for two CASE-updated columns. Assert the row count in each disjoint batch.
     for (const batch of caseUpdateBatches(unique, 2)) {
       const updated = await tx
         .update(cardTable)
@@ -631,10 +529,8 @@ type ReassignCardsToLayer = {
 
 export type CardStacking = { cardId: string; zIndex: number };
 /**
- * Refused for one of two reasons, and they are different things to be told: the cards are
- * not this namespace's, or the layer is not. The caller used to get a bare `{ ok: false }`
- * and so could only name one of them — the route worked around that by looking the layer up
- * itself first, outside the transaction that then looked it up again.
+ * Distinguish invalid card ownership from an invalid destination layer so callers can report
+ * the correct failure.
  */
 export type ReassignLayerResult = BatchResult<
   "foreign-cards" | "foreign-layer",
@@ -677,17 +573,12 @@ async function layerStackBounds(tx: Tx, layerId: string): Promise<{ top: number;
 }
 
 /**
- * Moves cards onto another layer of their own namespace. Refuses when a card is not in the
- * namespace or the layer is not either — a card must never end up on a layer its namespace
- * cannot see.
+ * Move cards to another layer in the same namespace. Reject cards or a destination layer
+ * outside that namespace.
  *
- * A card arriving from elsewhere is restacked above what the target layer already holds.
- * zIndex only ever orders cards within one layer, so a value chosen against a different
- * set of neighbours means nothing here: carried over, a card that had been brought to the
- * front of a crowded layer would land on top of a quiet one for no reason the user gave.
- * Cards already on the target layer are left alone, so re-picking the layer they are on
- * changes nothing. `stacking` reports what each moved card ended up with, so a caller
- * holding its own copy of the cards can follow.
+ * Restack arriving cards above the destination's existing cards while preserving their
+ * relative order. Leave cards already on the destination layer unchanged. Return the assigned
+ * stacking values for client state updates.
  */
 export async function reassignCardsToLayer({
   db,
@@ -698,9 +589,8 @@ export async function reassignCardsToLayer({
   if (cardIds.length === 0) return { ok: true, stacking: [] };
 
   return withTx(db, async (tx) => {
-    // The destination first, then the cards — the order the routes used to impose from
-    // outside by pre-checking the layer, and the order their messages were written for: a
-    // request naming both a foreign layer and foreign cards is told about the layer.
+    // Check the destination first so a request with both an invalid layer and invalid cards
+    // reports the layer error consistently.
     const layer = await tx
       .select({ id: layerTable.id })
       .from(layerTable)
@@ -717,14 +607,12 @@ export async function reassignCardsToLayer({
 
     const { top } = await layerStackBounds(tx, layerId);
 
-    // Their order relative to each other is what the user arranged, so it is kept; the id
-    // breaks ties the same way the rest of the app does.
+    // Preserve relative stacking order, using IDs to break ties.
     const stacking = [...arriving]
       .sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id))
       .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
 
-    // One column written by CASE — `layerId` is a plain value, the same for every row, and
-    // binds once per statement rather than once per row.
+    // Only zIndex uses a CASE expression. `layerId` binds once per statement.
     for (const batch of caseUpdateBatches(stacking, 1))
       await tx
         .update(cardTable)
@@ -747,18 +635,14 @@ type ReassignCardsStackOrder = {
   direction: "front" | "back";
 };
 
-/** Refused the one way a glue group's cards can be: some do not belong to this namespace. */
+/** Some cards in the glue group do not belong to this namespace. */
 export type ReassignStackOrderResult = BatchResult<"foreign-cards", { stacking: CardStacking[] }>;
 
 /**
- * Moves cards to the front or back of their own layer's stack, together.
+ * Move cards together to the front or back of their current layers.
  *
- * A glue group is not required to share a layer — nothing enforces that — so the cards are
- * grouped by whichever layer they are actually on and restacked within it. Their order
- * relative to each other survives the move, the same way {@link reassignCardsToLayer} keeps
- * it for cards arriving on a new layer: read the group's current zIndex order once, then
- * hand out a consecutive run of values above (or below) whatever that layer already holds,
- * in that order.
+ * Group by layer because a glue group can span layers. Preserve relative order within each
+ * group and assign consecutive values above or below the existing stack.
  */
 export async function reassignCardsStackOrder({
   db,
@@ -834,7 +718,7 @@ export async function reassignCardsToPartition({
   if (cardIds.length === 0) return { ok: true };
 
   return withTx(db, async (tx) => {
-    // Destination first, as in `reassignCardsToLayer`; see the note there.
+    // Check the destination first, as in `reassignCardsToLayer`.
     const partition = await tx
       .select({ id: partitionTable.id })
       .from(partitionTable)

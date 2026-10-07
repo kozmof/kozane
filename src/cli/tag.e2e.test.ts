@@ -131,11 +131,8 @@ describe("tag CLI flow", () => {
   }, 30_000);
 
   /**
-   * A path is relative to a taskspace and says nothing on its own. The index page had always
-   * headed its file rows with the taskspace they were found in; the terminal printed the bare
-   * path, so two taskspaces each holding a `README.md` drew two rows nothing could tell
-   * apart — and a namespace draws every unplaced taskspace as well as its own, so a second one
-   * is not an unusual workspace.
+   * Distinguish identical relative paths in different taskspaces by printing the taskspace
+   * name above each group.
    */
   it("says which taskspace a file row was found in", () => {
     const root = tempWorkspace();
@@ -149,15 +146,13 @@ describe("tag CLI flow", () => {
 
     expect(output).toContain("notes:");
     expect(output).toContain("drafts:");
-    // Both rows are still drawn — the heading tells them apart rather than merging them.
+    // Keep both rows and distinguish them with their headings.
     expect(output.split("\n").filter((line) => line.includes("README.md:1"))).toHaveLength(2);
   }, 30_000);
 
   /**
-   * A record left behind by a directory that is gone, which is what `taskspace scan` calls
-   * missing. It reached this output as a truncation — "was not read in full — some files
-   * could not be read (for example ./)" — which describes a taskspace with one bad file in
-   * it rather than a record pointing nowhere, and left the reader with nothing to do about it.
+   * Report a missing taskspace directory separately from files that could not be read within
+   * an existing directory.
    */
   it("names a taskspace whose directory is gone, and how to drop the record", () => {
     const root = tempWorkspace();
@@ -170,7 +165,7 @@ describe("tag CLI flow", () => {
 
     expect(output).toContain("Note: notes could not be read");
     expect(output).toContain("kozane taskspace scan --apply --cleanup");
-    // The words that go with a truncation, which this is not: nothing here was read in part.
+    // A missing root is distinct from a partially scanned taskspace.
     expect(output).not.toContain("was not read in full");
   }, 30_000);
 

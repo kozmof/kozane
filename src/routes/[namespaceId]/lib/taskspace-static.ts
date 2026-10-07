@@ -5,11 +5,7 @@ import type {
   TaskspaceTruncation,
 } from "$lib/types";
 
-/**
- * Walks a static export's embedded tree to the node at `path` — `""` is the taskspace root
- * itself. The counterpart to a live directory/file request, for a payload that already
- * holds the whole taskspace rather than answering one path at a time.
- */
+/** Find a node in an embedded export tree. An empty path names the taskspace root. */
 export function findStaticNode(
   tree: TaskspaceFileTree,
   path: string,
@@ -36,9 +32,8 @@ function entrySize(node: TaskspaceFileNode): number | null {
 }
 
 /**
- * A directory node's children, in the shape the live `/files` listing answers with — so
- * the tree panel can draw a static export's rows without knowing where they came from.
- * `modifiedAt` has no equivalent in an export baked from a single point in time.
+ * Convert embedded directory children to the live listing shape. Exported nodes have no
+ * modification timestamp.
  */
 export function staticDirectoryEntries(node: Extract<TaskspaceFileNode, { kind: "directory" }>): {
   entries: TaskspaceEntry[];

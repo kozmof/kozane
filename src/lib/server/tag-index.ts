@@ -8,16 +8,9 @@ import { createScanPool, scanTaskspaceTags, type ScanLimits } from "./taskspace-
 import { openTagCache } from "./tag-cache.js";
 
 /**
- * Hands the event loop back, so whatever is already queued runs before the caller resumes.
- *
- * `setImmediate` and not `await null` or a resolved promise: those two resume in the
- * microtask queue, which is drained before the loop moves on to anything else, so neither
- * lets a pending request in. This yields to the check phase, which is after I/O callbacks —
- * a poll that arrived while the previous taskspace was being walked is answered here.
- *
- * `setTimeout` where there is no `setImmediate`: the browser has none, and though nothing in
- * a browser reaches this file — it is under `lib/server` and built on `node:fs` — the test
- * environment is jsdom and would otherwise fail on the name rather than on anything real.
+ * Yield to the event loop between synchronous scans. Use `setImmediate` so pending I/O can
+ * run, with `setTimeout` as a fallback for test environments that lack it. A resolved promise
+ * would only yield to microtasks.
  */
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => {
@@ -27,13 +20,8 @@ function yieldToEventLoop(): Promise<void> {
 }
 
 /**
- * What one taskspace could not tell us, and which one it was. Empty for a taskspace read
- * whole, and absent from the list entirely rather than present with nothing to say.
- *
- * The id alone, because {@link TagIndex.taskspaces} names it. It carried a `taskspaceName`
- * of its own until the index started carrying every walked taskspace: a truncation can only
- * be raised about a taskspace this gather walked, and a walked taskspace is in that record,
- * so the name was a second copy of an entry the same return value already held.
+ * Reasons a taskspace scan stopped early. Omit fully scanned taskspaces from this list.
+ * Resolve taskspace names through {@link TagIndex.taskspaces}.
  */
 export type TagIndexTruncation = {
   taskspaceId: string;
@@ -44,81 +32,40 @@ export type TagIndexTruncation = {
 };
 
 /**
- * A taskspace this gather walked: what to call it, and which board it belongs to.
- *
- * Both, together, because both are joined against the same id and by the same callers — the
- * terminal and the page each label a file row with the name and send it back to a board with
- * the namespace. Two records keyed alike would be two chances to hold one and not the other.
- *
- * `namespaceId` is null for a taskspace belonging to no namespace. Null is not missing data: an
- * unplaced taskspace is drawn on every board (see `getTaskspacesInNamespace`), so a hit in one
- * has no single board to be sent back to.
+ * Name and namespace for a scanned taskspace. Keep them together because readers use both to
+ * label file hits and link to boards. A null namespace identifies an unplaced taskspace shown
+ * on every board.
  */
 export type TagIndexTaskspace = { name: string; namespaceId: string | null };
 
-/**
- * Those, by taskspace id — named once here rather than written out at each reader, so the
- * optional value below is a property of the record instead of a convention three signatures
- * have to keep. See {@link TagIndex.taskspaces}.
- */
+/** Scanned taskspace metadata keyed by ID, with optional lookup values. */
 export type TagIndexTaskspaces = Record<string, TagIndexTaskspace | undefined>;
 
 export type TagIndex = {
-  /** Card hits and file hits in one list, which is the point: a tag is a tag whichever it
-   *  was written in, and `hit.source.kind` is the only thing that separates them. */
+  /** Card and file hits share one list. `hit.source.kind` identifies their source. */
   hits: TagHit[];
   /** Cached partition/namespace/change-day dimensions for every card carrying a hit. */
   cardData: CardTagHits["cardData"];
   /** Which namespace each card carrying a hit belongs to. See `CardTagHits`. */
   cardNamespaces: Record<string, string | undefined>;
   /**
-   * Every taskspace this gather walked, by id — not every taskspace there is.
+   * Metadata for taskspaces considered by this gather. Return an empty map when file scanning
+   * is disabled, and allow missing lookups in page-filtered or older data.
    *
-   * The set the gather looked at is exactly the set a reader of it needs to name: a file hit
-   * can only have come from one of these, and so can a truncation. Both callers were joining
-   * a name from a taskspace list of their own, which is a second read of rows this already
-   * had in hand — and the page's list was the whole workspace's, so it published the names of
-   * taskspaces its own answer never mentioned.
-   *
-   * Empty when no file was scanned at all, which is what `includeFiles: false` means. That is
-   * what keeps a static export from naming a taskspace it carries no hit from, without the
-   * page needing a second rule to say so.
-   *
-   * The value is optional for the reason `CardTagHits.cardNamespaces` is: every taskspace this
-   * gather walked has an entry, and a lookup can still miss — the page narrows this record to
-   * the taskspaces its rows name, and the live page and a static export reach it through
-   * different builds. Both readers already answer for a miss (`nameOf` here,
-   * `taskspaceName` on the page); a record of non-optional values was promising them
-   * something neither relied on.
+   * Reuse gathered metadata so readers do not fetch or publish unrelated taskspace names.
    */
   taskspaces: TagIndexTaskspaces;
   truncated: TagIndexTruncation[];
   /**
-   * The taskspaces this gather could not open at all, by id — a record whose directory has
-   * been deleted, moved, or made unreadable since it was written.
-   *
-   * Apart from {@link TagIndex.truncated} rather than one of its reasons, which is where this
-   * was. The two are different things to have to tell someone: a truncation says a taskspace
-   * was read and not to the end, and a reader acts on it by looking at the file it names;
-   * this says a record points at nothing, and the way to act on it is to drop the record —
-   * `kozane taskspace scan --apply --cleanup`, which both readers print. Folded in as a
-   * reason it read as the first, and told the user that "some files could not be read" in a
-   * taskspace that no longer exists.
-   *
-   * Ids only, for the reason {@link TagIndexTruncation} carries only an id:
-   * {@link TagIndex.taskspaces} names every taskspace this gather walked, and one it could
-   * not read is still one it walked.
+   * IDs of taskspaces whose root directories could not be opened. Keep these separate from
+   * partial scans so readers can suggest checking or cleaning up the records. Resolve names
+   * through {@link TagIndex.taskspaces}.
    */
   missing: string[];
   /**
-   * Whether the card side stopped at {@link TAG_CARD_HITS_MAX}, so the hits above hold a
-   * prefix of the workspace's card tags rather than all of them.
-   *
-   * Apart from {@link TagIndex.truncated}, which is per taskspace and carries the walk's own
-   * vocabulary of reasons. There is one card query per gather and one ceiling for it to
-   * reach, so this is the whole of what there is to say about it. Both are printed together
-   * by every reader, because to someone looking at a tag that is missing they are the same
-   * fact: part of the workspace was not read.
+   * Whether card scanning stopped at {@link TAG_CARD_HITS_MAX}. If true, the hits contain
+   * only part of the workspace's card tags. Display this alongside the per-taskspace notices
+   * in {@link TagIndex.truncated}.
    */
   cardsTruncated: boolean;
 };
@@ -126,61 +73,35 @@ export type TagIndex = {
 type LoadTagIndex = {
   db: AnyDB;
   /**
-   * Narrows the index to one namespace's cards, and to the taskspaces that namespace's board
-   * draws. Omitted, every card and every taskspace in the workspace is read — which is what
-   * the tag index page does when its URL names no namespace.
+   * Optional namespace filter. Include that namespace's cards and visible taskspaces, or the
+   * entire workspace when omitted.
    */
   namespaceId?: string;
   /**
-   * Whether taskspace files are scanned at all.
-   *
-   * The live page passes `true`. A static export passes `false` unless built with
-   * `--include-scoped-files`, for the reason the note on `includeScopes` in
-   * `namespace-snapshot.ts` gives at more length: a file hit carries a path inside the
-   * workspace and a line of that file's content, and page data baked into a publishable
-   * export is readable via view-source however the UI draws it. So it has to be decided
-   * here, not in the component.
+   * Whether to scan taskspace files. Live pages enable scanning. Static exports enable it
+   * only with `--include-scoped-files`, because file hits expose paths and content in
+   * exported page data. Apply this restriction here before serializing the data.
    */
   includeFiles: boolean;
   /**
-   * The workspace root a taskspace's stored path is resolved against. Omitted, it is
-   * discovered from the environment, which is how a server route gets one. The CLI passes
-   * the root `requireWorkspace()` already found, for the reason `getUiConfigForRoot` gives:
-   * same directory either way, and passing it means the command does not rest on the two
-   * ways of arriving at it agreeing.
+   * Workspace root used to resolve taskspace paths. Discover it from the environment when
+   * omitted. The CLI passes the root already found by `requireWorkspace()`.
    */
   root?: string | null;
-  /** Passed through to each taskspace scan. For tests; nothing in the app sets it. */
+  /** Scan limit overrides used by tests. */
   limits?: ScanLimits;
   /**
-   * The database to validate a persisted gather against, where the gather is to be kept at
-   * all.
-   *
-   * Opt-in rather than automatic. The page and the CLI pass it; a caller that says nothing
-   * gathers afresh, which is what the existing tests do and what any caller wanting a
-   * guaranteed-cold read can rely on.
-   *
-   * The directory it is kept in is `root` above, and is deliberately not repeated here. It
-   * was, and that made two workspace roots on one call with nothing to hold them together:
-   * a caller could seed this process's file entries from one workspace's cache while walking
-   * another's taskspaces, and both fields would type-check.
+   * Optional database identity for persistent caching. Omit it to gather afresh. Store the
+   * cache under the gather's workspace root so source data and cached files cannot name
+   * different workspaces.
    */
   cache?: { dbUrl: string };
 };
 
 /**
- * Every tag in a workspace, or in one namespace of it: the ones on cards and the ones in
- * taskspace files.
- *
- * The one read behind both callers — the tag index page and `kozane tag list|show` — for the
- * same reason `loadNamespaceSnapshot` is one read behind the page load and the poll: two
- * copies of "gather the tags" is two answers to the same question, and the CLI quietly
- * disagreeing with the page about what a tag holds is a bug nobody would think to look for.
- *
- * Narrowed to a namespace, the taskspaces read are the ones `getTaskspacesInNamespace` returns —
- * that namespace's, plus any belonging to no namespace — so the tags come from the taskspaces
- * that namespace's board lists, and no others. Across the workspace it is every taskspace
- * there is, which is the same set `kozane taskspace list` prints.
+ * Gather card and file tags for the page and CLI through one shared reader.
+ * Namespace-filtered gathers include that namespace's taskspaces and unplaced taskspaces,
+ * matching the board.
  */
 export async function loadTagIndex({
   db,
@@ -228,41 +149,27 @@ export async function loadTagIndex({
     : await getAllTaskspaces({ db });
 
   const scanned: { baseDir: string; changed: boolean }[] = [];
-  // One budget for the whole loop, on top of each taskspace's own. The walk below is
-  // synchronous — `listTaskspaceDirectory` and `readTaskspaceFile` are `readdirSync` and
-  // `readFileSync` — so while it runs this process serves nothing else, not even the board's
-  // poll. A per-taskspace ceiling bounds what any one of them costs and says nothing about
-  // what a workspace of a dozen costs; this is that second bound. See
-  // `TAG_SCAN_WORKSPACE_BYTES_MAX`.
+  // Share a workspace-wide scan budget in addition to each taskspace's limit so total
+  // synchronous work is bounded.
   const pool = createScanPool(limits?.gather);
   let scannedAny = false;
   for (const taskspace of rows) {
     if (!taskspace.path) continue;
-    // Between taskspaces, and not before the first: one uninterrupted run of synchronous
-    // walks is what made a gather over a dozen taskspaces a single stall the whole process
-    // sat inside. Yielding here does not make any one walk interruptible — that needs the
-    // boundary functions themselves to be async, which is a change to the module the live
-    // file endpoints hold their path containment in — but it does put the board's poll and
-    // every other request back in front of the next taskspace rather than behind all of
-    // them. A gather of one taskspace is unchanged, and pays nothing for this.
+    // Yield between taskspaces so queued requests can run. Individual walks remain
+    // synchronous, and a single-taskspace gather needs no yield.
     if (scannedAny) await yieldToEventLoop();
     scannedAny = true;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
-    // Before the scan, so the files this taskspace parsed last time are already in hand when
-    // the walk asks about them. The walk still happens and still checks every signature —
-    // this only decides whether an unchanged file is re-read or merely re-stat'ed.
+    // Load cached file entries before scanning. The walk still validates signatures but can
+    // avoid rereading unchanged files.
     store?.seedFiles(baseDir);
     const scan = scanTaskspaceTags(baseDir, taskspace.id, limits?.taskspace, pool);
     scanned.push({ baseDir, changed: scan.changed });
     changed ||= scan.changed;
-    // Recorded whenever the taskspace was looked at, not only when it yielded a hit: a
-    // truncation names a taskspace too, and the page has to be able to name it back.
+    // Record every visited taskspace so notices can name it even when it yields no hits.
     taskspaces[taskspace.id] = { name: taskspace.name, namespaceId: taskspace.namespaceId };
-    // Appended rather than spread as arguments. `push(...scan.hits)` passes one argument per
-    // hit, and an engine's argument limit is reached somewhere past a hundred thousand of
-    // them — so a taskspace holding enough tags took the page down with
-    // `RangeError: Maximum call stack size exceeded` rather than answering. `TAG_SCAN_HITS_MAX`
-    // now bounds a scan well below that, and this does not depend on it staying there.
+    // Append hits individually to avoid the engine's function-argument limit for large
+    // arrays.
     for (const hit of scan.hits) hits.push(hit);
     if (scan.truncated.length > 0)
       truncated.push({
@@ -270,8 +177,7 @@ export async function loadTagIndex({
         reasons: scan.truncated,
         paths: scan.paths,
       });
-    // Beside the truncations and not among them: a taskspace that could not be opened has no
-    // reason to give and nothing for one to be about. See `TagIndex.missing`.
+    // Track missing taskspaces separately from partial scans. See `TagIndex.missing`.
     if (scan.missing) missing.push(taskspace.id);
   }
 

@@ -1,17 +1,7 @@
 /**
- * Readers for the JSON a mutation answers with.
- *
- * The mirror of `request.ts`: that one guards what arrives at an endpoint, and this guards
- * what comes back from one. `Response.json()` resolves to `any`, so the action layer read
- * its results straight off it — `parsed.id`, `parsed.defaultLayerId`, `parsed.position` —
- * and a body without those fields wrote `undefined` into board state rather than failing.
- * A partition with no id, an `activeLayerId` of `undefined`: both survive to the next poll,
- * and neither says anything about what went wrong.
- *
- * Every reader answers `undefined` for "absent, or not that type", which is the single
- * answer callers act on — they roll the board back and raise the banner they already have,
- * exactly as they do for a failed request. The narrowing is real, so the values that come
- * out need no casts.
+ * Validate mutation response fields before applying them to board state. Return undefined for
+ * missing or invalid values so callers can report failure and roll back rather than storing
+ * unchecked JSON values.
  */
 
 function record(source: unknown): Record<string, unknown> | undefined {
@@ -25,12 +15,9 @@ export function readString(source: unknown, key: string): string | undefined {
 }
 
 /**
- * A string field that is allowed to be empty, unlike {@link readString}, which treats an
- * empty string as absent because every field it reads is an id.
- *
- * Card text and layer names are the cases: a card with no text yet is an ordinary card the
- * board draws as "Empty card…", and refusing it here would drop the whole snapshot it
- * arrived in. `undefined` still means "absent, or not a string".
+ * Read a string that may be empty, such as card text or a layer name. Unlike {@link
+ * readString}, do not treat empty strings as absent. Return `undefined` for absent or
+ * non-string values.
  */
 export function readText(source: unknown, key: string): string | undefined {
   const value = record(source)?.[key];
@@ -38,9 +25,8 @@ export function readText(source: unknown, key: string): string | undefined {
 }
 
 /**
- * A number that can be stored and drawn with. Infinities and `NaN` are refused for the
- * reason `optionalNumber` refuses them on the way in: they travel through JSON as `null`
- * or arrive from a hand-made body, and either one puts a card at `NaN` on the canvas.
+ * Read a finite number suitable for storage and rendering. Reject infinities and NaN, as
+ * `optionalNumber` does for requests.
  */
 export function readFiniteNumber(source: unknown, key: string): number | undefined {
   const value = record(source)?.[key];
@@ -52,10 +38,7 @@ export function readBoolean(source: unknown, key: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-/**
- * A string field that may legitimately be `null` — a warp hint for a card with no text is
- * the case that needs it. `undefined` still means "not valid", so the two stay distinct.
- */
+/** Read a string or a valid null value. Return undefined for invalid input. */
 export function readNullableString(source: unknown, key: string): string | null | undefined {
   const value = record(source)?.[key];
   if (value === null) return null;
@@ -63,8 +46,8 @@ export function readNullableString(source: unknown, key: string): string | null 
 }
 
 /**
- * The {@link readNullableString} of numbers: `null` is a value, `undefined` a refusal.
- * `card.width` is the field that needs it — null is a card following `ui.defaultCardWidth`.
+ * Read a number or a valid null value. Return undefined for invalid input. A null card width
+ * uses the workspace default.
  */
 export function readNullableFiniteNumber(source: unknown, key: string): number | null | undefined {
   const value = record(source)?.[key];
@@ -72,17 +55,13 @@ export function readNullableFiniteNumber(source: unknown, key: string): number |
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-/**
- * A list whose elements are read one at a time, for the responses that carry rows rather
- * than scalars. Unlike {@link readStringArray} this says nothing about the elements —
- * the caller reads each with the readers above.
- */
+/** Validate a list through the caller's item reader. */
 export function readArray(source: unknown, key: string): unknown[] | undefined {
   const value = record(source)?.[key];
   return Array.isArray(value) ? value : undefined;
 }
 
-/** All or nothing: one bad element makes the whole list untrustworthy, so none is returned. */
+/** Reject the entire list if any element is invalid. */
 export function readStringArray(source: unknown, key: string): string[] | undefined {
   const value = record(source)?.[key];
   if (!Array.isArray(value)) return undefined;

@@ -39,35 +39,19 @@
     onRemove: () => void;
   } = $props();
 
-  // The tab sits above the frame rather than inside it, so it never covers a card in the
-  // top-left corner — which is where the first card dragged in tends to land.
+  // Place the tab above the frame so it does not cover cards near the top-left corner.
   const TAB_HEIGHT = 22;
 
   /**
-   * What the frame is drawn in — the selection accent when the board is held to this scope,
-   * and an icon-weight grey otherwise. Both states are drawn: a frame is where a scope lives
-   * on the board, which is true whether or not it is the one being filtered to.
-   *
-   * Through `token.var` rather than a hand-written `var(--colors-…)`: Panda kebab-cases the
-   * camelCase half of a token name, so `neutral.iconDim` is `--colors-neutral-icon-dim`, and
-   * spelling it by hand got it wrong. An undefined custom property makes every declaration
-   * that reads it invalid, and CSS drops an invalid declaration silently — so the frame had
-   * no border and no fill and simply did not appear. This form is type-checked against the
-   * same token list `css()` uses, so the next wrong name is a build error instead.
+   * Use the selection accent for the focused scope and gray otherwise. Resolve colors through
+   * `token.var` so token names are checked and generated CSS variable names stay correct.
    */
   const accent = $derived(
     focused ? token.var("colors.select.accent") : token.var("colors.neutral.iconDim"),
   );
 </script>
 
-<!--
-  Drawn under every card, and never dimmed with a layer: a frame is a place on the board, the
-  same as a warp marker, and the cards it holds may sit on any layer at all.
-
-  The body takes no pointer events. Everything inside a frame — clicking a card, dragging one,
-  sweeping a selection across the middle of it — has to keep working exactly as it does on bare
-  canvas, so only the tab and the corner handle are grabbable.
--->
+<!-- Draw frames below cards without layer dimming. Let pointer events pass through the body so normal canvas interactions work inside it. Only the tab and resize handle capture input. -->
 <div
   class={css({ position: "absolute" })}
   data-scope-area-id={area.id}

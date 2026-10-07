@@ -72,8 +72,7 @@ describe("getAllWorkspaceWarps", () => {
       warps.filter((w) => w.namespaceId === id).map(({ id }) => id);
     expect(byNamespace(namespaceId)).toEqual([mineFirst.id, mineSecond.id]);
     expect(byNamespace(otherId)).toEqual([theirs.id]);
-    // Grouped, so a consumer can walk one namespace's warps without re-sorting: each
-    // namespace's id starts exactly one run.
+    // Keep each namespace's warps together.
     const ids = warps.map((w) => w.namespaceId);
     expect(ids.filter((id, i) => id !== ids[i - 1])).toHaveLength(new Set(ids).size);
   });
@@ -109,8 +108,7 @@ describe("moveWarp", () => {
     ]);
   });
 
-  // The number a marker shows is its place in creation order, so a move must not reorder
-  // them: dragging warp 1 past warp 2 leaves it warp 1.
+  // Moving a warp does not renumber it.
   it("keeps the creation order its numbering rests on", async () => {
     const { db, namespaceId } = await setup();
     const first = await addWarp({ db, namespaceId, posX: 0, posY: 0 });

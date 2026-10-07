@@ -3,9 +3,8 @@ import { render } from "@testing-library/svelte";
 import NavIcon from "./NavIcon.svelte";
 
 /**
- * The icons carry no text, so what there is to test is that each one draws the thing its
- * page is about — a set, an area, a label — and that none of them announces itself, since
- * the link around an icon is what a screen reader should read.
+ * Verify that each icon represents its destination and stays hidden from assistive
+ * technology. The enclosing link provides the accessible name.
  */
 const KINDS = ["namespaces", "map", "tags"] as const;
 
@@ -21,11 +20,7 @@ describe("NavIcon", () => {
     expect(new Set(drawn).size).toBe(3);
   });
 
-  /**
-   * The meaning is the point, not just the arrangement. Rows of rectangles say "a list",
-   * which is what the namespace page is — so the tag index draws the connections too, and a
-   * drawn connection makes a shape a tree rather than an indented list.
-   */
+  /** Draw connections between nested tags so the icon represents a tree. */
   describe("the tag index, as a tree", () => {
     const rects = () =>
       [...svgOf("tags").querySelectorAll("rect")].map((rect) => ({
@@ -54,7 +49,7 @@ describe("NavIcon", () => {
       for (const child of children) expect(child.x).toBeGreaterThan(root.x);
     });
 
-    /** The trunk has to reach what it connects to; a line stopping short joins nothing. */
+    /** Extend the trunk through every connected branch. */
     it("runs the trunk down as far as the last branch it feeds", () => {
       const trunk = rects().find((r) => r.h > r.w && Math.min(r.w, r.h) <= 1.5)!;
       const branches = rects().filter((r) => r.w > r.h && Math.min(r.w, r.h) <= 1.5);
@@ -65,8 +60,7 @@ describe("NavIcon", () => {
     });
   });
 
-  /** The map is a treemap, so its icon is one: rectangles of unequal size. The namespace list
-   *  is the opposite — many of a size, no one of them the large one. */
+  /** Use unequal areas for the map icon and equal-sized items for the namespace list. */
   it("draws the map unequal and the namespace list even", () => {
     const areas = (kind: "namespaces" | "map") =>
       [...svgOf(kind).querySelectorAll("rect")].map(
@@ -77,9 +71,8 @@ describe("NavIcon", () => {
   });
 
   /**
-   * The icon has no colour of its own, which is what lets the link set it: at rest that is
-   * `neutral.iconDim`, an icon's weight rather than a label's, and on hover it darkens the
-   * whole way. A fill written into the drawing would take that away.
+   * Let the icon inherit the link's colour, including its dimmed resting state and darker
+   * hover state.
    */
   it("takes its colour from the link around it", () => {
     for (const kind of KINDS) {

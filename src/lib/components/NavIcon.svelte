@@ -1,53 +1,34 @@
 <script lang="ts">
   /**
-   * The ways across a workspace, drawn instead of written.
+   * Draw navigation icons for the namespace list, map, and tag tree. Use distinct shapes that
+   * reflect each page's content.
    *
-   * Each is drawn as the thing its page is about rather than as a decoration standing in for
-   * it: many of a size for the list of namespaces, an area carved up by how much each part
-   * holds for the map, and a tree branching into its own children for the tag index.
-   *
-   * They have to differ in what they mean and not only in how they are arranged, which is
-   * the mistake worth recording. The tag index was rows of rectangles at first, and rows of
-   * rectangles say "a list" — which is what the namespace page is. Two icons that look
-   * different while meaning the same thing have to be remembered rather than recognised.
-   * A tree says nesting, which is what a tag namespace is and what no other page here has.
-   *
-   * The icon carries no text, so the link around it has to carry the name: every caller
-   * gives its anchor an `aria-label`, and a `title` so a pointer can ask. This is
-   * `aria-hidden` precisely so that the anchor's name is the one thing announced.
+   * Keep the icon hidden from assistive technology. The enclosing link must provide an
+   * `aria-label` and a pointer-accessible title.
    */
   type Kind = "namespaces" | "map" | "tags";
 
   let { kind, size = 16 }: { kind: Kind; size?: number } = $props();
 
   /**
-   * Everything is drawn on a 16-unit grid inside a 2-unit margin — the ink sits between 2
-   * and 14 whichever icon it is, so none of them looks larger than the others beside it.
-   *
-   * All three are rectangles, and `rx` does the rest: SVG clamps a corner radius to half the
-   * side it is rounding, so one value gives the wide bars a soft corner and turns the tree's
-   * 1.2-thin connectors into capsules without either being asked for separately.
+   * Draw within a shared 16-unit grid and 2-unit margin. SVG clamps `rx` to half the side
+   * length, rounding narrow connectors into capsules.
    */
   const RECTS: Record<Kind, { x: number; y: number; w: number; h: number }[]> = {
-    // The namespace list: many of a size, no one of them the large one. An even grid, so what
-    // is read is the regularity rather than any one cell.
+    // Represent the namespace list with an even grid of equal cells.
     namespaces: [
       { x: 2, y: 2, w: 5.5, h: 5.5 },
       { x: 8.5, y: 2, w: 5.5, h: 5.5 },
       { x: 2, y: 8.5, w: 5.5, h: 5.5 },
       { x: 8.5, y: 8.5, w: 5.5, h: 5.5 },
     ],
-    // The map: unequal rectangles tiling the box between them, down to the gutters. A
-    // treemap has no margins inside it — every part of it stands for cards — so drawing it
-    // packed is what separates it from an arrangement of rectangles that merely looks tidy.
+    // Draw the map as unequal rectangles packed into a treemap.
     map: [
       { x: 2, y: 2, w: 7, h: 12 },
       { x: 10, y: 2, w: 4, h: 7 },
       { x: 10, y: 10, w: 4, h: 4 },
     ],
-    // The tag index: a tag, and the tags written underneath it. The trunk drops from the
-    // root and stops at the last branch it has to reach, which makes the shape a
-    // tree rather than three bars that happen to be indented — the connection is drawn.
+    // Connect nested tags with a trunk ending at the last branch.
     tags: [
       { x: 2, y: 2, w: 5, h: 3 },
       { x: 3.9, y: 5, w: 1.2, h: 6.9 },

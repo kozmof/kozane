@@ -6,13 +6,13 @@
     where,
     onCreate,
   }: {
-    /** What the new entry goes into, for the titles: "this folder", "this taskspace". */
+    /** Destination label used in titles, such as "this folder" or "this taskspace". */
     where: string;
     onCreate: (kind: TaskspaceCreateKind) => void;
   } = $props();
 
-  // Shared with the refresh control beside it in the scope panel, which fades in on the
-  // same hover: `hover-reveal` is what the containing row's rule looks for.
+  // Share `hover-reveal` with the refresh control so the containing row reveals both
+  // together.
   const btnClass = css({
     width: "20px",
     height: "20px",
@@ -28,15 +28,12 @@
     opacity: "0",
     transition: "opacity 0.12s, color 0.12s",
     "&:hover": { color: "ink.black" },
-    // Reachable by keyboard: without this the controls are focusable but invisible, and
-    // tabbing through the panel lands on a button nothing on screen accounts for.
+    // Reveal controls on keyboard focus so tabbing never lands on an invisible button.
     "&:focus-visible": { opacity: "1" },
   });
 </script>
 
-<!-- A page with a corner turned up, and a folder, each with the same plus at its lower
-     right: the pair reads as one set of controls at 11px, where a label would not fit and
-     two unrelated glyphs would not group. -->
+<!-- Use page and folder glyphs with matching plus signs to group the creation controls at their small display size. -->
 {#snippet newFileIcon()}
   <svg width="13" height="13" viewBox="0 0 10 10" fill="none" aria-hidden="true">
     <path d="M2 1h2.8l1.7 1.7V5.4" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round" />

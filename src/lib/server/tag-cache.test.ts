@@ -15,8 +15,7 @@ import {
 
 let root: string;
 
-/** One scope's stored card hits. Most cases care only about which cards it names — the size
- *  ones pad `cardNamespaces` to reach a ceiling — so the rest of the shape is defaulted here. */
+/** Build cached card hits with defaults. Size-limit cases pad `cardNamespaces` separately. */
 const scope = (cardNamespaces: Record<string, string> = {}): TagCache["scopes"][string] => ({
   hits: [],
   cardData: {},
@@ -43,16 +42,8 @@ afterEach(() => {
 });
 
 /**
- * The shape `TAG_CACHE_VERSION` is the version of, written out by hand.
- *
- * `satisfies` rather than a type annotation, and that is the whole point of it being here: a
- * field added to `TagCache` is missing from this literal and a field removed from it is
- * excess here, and both are compile errors — so the shape cannot change without someone
- * arriving at this line and deciding whether the version has to move with it. The version was
- * a number nothing held to anything: bumping it was a convention, and a build that changed
- * the shape and forgot would read last version's file back as if it were this one's.
- *
- * The value is pinned too, so the diff that changes the shape also shows the bump.
+ * Pin the serialized cache shape and version together. `satisfies` makes added or removed
+ * fields require reviewing this fixture and deciding whether to bump the version.
  */
 it("pins the shape the cache version is the version of", () => {
   const shape = {
@@ -86,13 +77,8 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   /**
-   * The read is `readFileSync` and `JSON.parse` on the path a page load waits on, so a cache
-   * that has grown past the ceiling is refused before it is opened — reading it to
-   * decide would be the whole of the cost this avoids.
-   *
-   * Laid down directly rather than through `writeTagCache`, which refuses to produce one. A
-   * file this size can still arrive — from another build, or from a workspace whose ceiling
-   * was larger — and that is the case this half of the rule answers.
+   * Write an oversized cache directly to verify rejection before reading and parsing. The
+   * normal writer refuses to produce such files.
    */
   it("answers with nothing for a cache grown past what is worth reading", () => {
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
@@ -104,11 +90,8 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   /**
-   * The write side of the same ceiling, and the half that was missing.
-   *
-   * Refused on the read alone, a cache this size is rebuilt, serialized, and laid down again
-   * on every single gather — megabytes through `JSON.stringify` and out to disk, once per
-   * page load, to produce a file this build has already decided it will never read back.
+   * Verify that the writer rejects caches the reader would discard, avoiding repeated
+   * serialization of unusable files.
    */
   it("does not write a cache too large to be read back", () => {
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
@@ -119,11 +102,8 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   /**
-   * The gap `TAG_CACHE_BYTES_MAX` itself calls out: a refused write said nothing, so a
-   * workspace past the ceiling paid a cold gather on every load with no way to learn why.
-   * One line at the point the write is actually skipped, once per workspace root per
-   * process — not once per gather, which every page load and `kozane tag` invocation would
-   * otherwise repeat forever.
+   * Report skipped oversized cache writes once per workspace per process so users can
+   * diagnose repeated cold gathers without a warning on every load.
    */
   it("warns once per root when a write is skipped for size, not on every gather", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -162,8 +142,7 @@ describe("readTagCache / writeTagCache", () => {
     warn.mockRestore();
   });
 
-  /** And it does not destroy the cache already there in the attempt: the write is refused
-   *  outright, so what a smaller gather left behind is still readable. */
+  /** Refusing an oversized write must preserve the existing cache. */
   it("leaves an existing cache alone when the new one is too large to write", () => {
     writeTagCache(root, cache({ db: "small" }));
     const padding = "x".repeat(TAG_CACHE_BYTES_MAX);
@@ -205,8 +184,7 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)).toBeNull();
   });
 
-  // The shape that used to get through: right at the top, wrong underneath, and dereferenced
-  // by `loadTagIndex` the moment it was trusted.
+  // Reject valid outer structure with malformed nested data before `loadTagIndex` reads it.
   it("answers with nothing for a scope holding no hits to spread", () => {
     writeFileSync(tagCachePath(root), JSON.stringify(cache({ scopes: { "*": {} } as never })));
 
@@ -222,10 +200,8 @@ describe("readTagCache / writeTagCache", () => {
   });
 
   /**
-   * A scope that does not say whether it was cut is one written before the field existed, and
-   * its hits are a complete-looking list that may in fact be a prefix. Required rather than
-   * defaulted to `false`, which would restore exactly the silence the field was added to end —
-   * for as long as the database signature stayed fresh.
+   * Reject cached results lacking the truncation flag. Defaulting it to false could make a
+   * partial result appear complete.
    */
   it("answers with nothing for a scope that does not say whether it was cut", () => {
     const scopes = { "*": { hits: [], cardNamespaces: {} } };
@@ -235,8 +211,7 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)).toBeNull();
   });
 
-  /** Every field of the shape, not only the ones something reads today: the predicate claims
-   *  the whole type, so it has to check the whole type. */
+  /** Validate every field because the predicate asserts the entire type. */
   it("answers with nothing for a cache that does not say when it was built", () => {
     const { builtAt: _dropped, ...rest } = cache();
 

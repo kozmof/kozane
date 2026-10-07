@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runMigrations } from "./cli/lib/db";
 
-// Like the runtime-state suite next door, and for the same reason: the schema answer is
-// remembered in module state, so it gets its own file rather than leaking into the request
-// tests.
+// Isolate the module's cached state for each migration-hook suite.
 const state = vi.hoisted(() => ({ root: null as string | null, dbUrl: "" }));
 vi.mock("./db/internal/config", () => ({
   getWorkspaceRoot: () => state.root,
@@ -14,7 +12,7 @@ vi.mock("./db/internal/config", () => ({
 }));
 vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
 
-/** A workspace directory and the path its database would live at — created or not. */
+/** Workspace directory and expected database path, whether or not the file exists. */
 function workspace(): { root: string; dbPath: string } {
   const root = mkdtempSync(join(tmpdir(), "kozane-migrations-"));
   mkdirSync(join(root, ".kozane"));
@@ -62,11 +60,10 @@ describe("workspace database behind this version", () => {
     const resolve = vi.fn();
     const response = await handle({ event: event() as never, resolve: resolve as never });
 
-    // The file is absent, which is "missing" rather than "pending": nothing to migrate yet.
+    // Distinguish a missing database from pending migrations.
     expect(response.status).toBe(503);
     await expect(response.text()).resolves.toContain("kozane init");
-    // The request never reaches the app, so no query runs against a schema that cannot
-    // answer it — which is the failure this gate replaces.
+    // Reject the request before application queries reach an incompatible schema.
     expect(resolve).not.toHaveBeenCalled();
     error.mockRestore();
   });
@@ -75,8 +72,7 @@ describe("workspace database behind this version", () => {
     const { root, dbPath } = workspace();
     state.root = root;
     state.dbUrl = `file:${dbPath}`;
-    // Migrated, then rewound: the table is dropped, so every migration reads as pending
-    // against a file that is nonetheless there. What an upgrade leaves behind.
+    // Drop the migration table from an existing database to exercise pending status.
     await runMigrations(state.dbUrl);
     const { createClient } = await import("@libsql/client");
     const client = createClient({ url: state.dbUrl });

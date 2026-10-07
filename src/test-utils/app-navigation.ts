@@ -1,5 +1,5 @@
 // Stub SvelteKit's `$app/navigation` module. Defaults do nothing. Tests can observe calls with
-// `vi.spyOn(navigation, "goto")` .
+// `vi.spyOn(navigation, "goto")`.
 export function goto(_url: string | URL): Promise<void> {
   return Promise.resolve();
 }

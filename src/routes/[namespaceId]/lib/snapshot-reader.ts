@@ -22,19 +22,8 @@ import {
 } from "./response.js";
 
 /**
- * The board, read off a snapshot response rather than trusted from it.
- *
- * `response.ts` guards what a mutation answers with, and this is the same guard on the
- * one response that was still going in unchecked — the once-a-second poll, which reloads
- * the entire board. `await response.json()` resolves to `any`, so a body with `cards`
- * missing put `undefined` where the card list goes and the board rendered from it; a card
- * with no `posX` landed at `NaN` on the canvas. Neither says anything about what went
- * wrong, and both survive to the next poll, which applies the same body again.
- *
- * All or nothing, per list and overall: a snapshot describes one consistent state of the
- * database, and half of one is not a smaller version of it. An unreadable snapshot is
- * simply not applied — the board keeps what it has and the next poll tries again, which is
- * already how the poll treats a failed request.
+ * Validate the full snapshot and every list element before applying it. Reject invalid
+ * results as a whole so the board keeps its current state and can retry on the next poll.
  */
 
 /** Reads every element of `key`'s array with `readOne`, or nothing if any element fails. */
@@ -55,21 +44,8 @@ function readRows<T>(
 }
 
 /**
- * One card, read off whatever carried it rather than trusted from it.
- *
- * Exported because the poll is not the only response that carries a card. `POST /api/cards`
- * answers with the stored row and `POST /api/cards/squash` with a list of them, and both
- * were read straight off `response.json()` — one through a `const created: CardWithGlue |
- * null` annotation, which accepts `any` without narrowing anything, and one behind an
- * `Array.isArray` that leaves the elements `any`. A body missing `posX` therefore put a
- * card at `undefined` on the canvas, which is the failure `readNamespaceSnapshot` already
- * exists to prevent on the one response that polls for it.
- *
- * So the rule the rest of this module states — a card is read, never trusted — applies to
- * every response that hands one over, and there is one function that does it. The
- * `parseCard`/`parseCards` pair in `namespace-api.ts` wraps this in the `T | null`
- * convention the other mutation parsers there use; see {@link readNamespaceSnapshot} for
- * the all-or-nothing rule a list of these is held to.
+ * Validate a card from any API response. Share this reader between snapshots, card creation,
+ * and squash results. Mutation parsers adapt its failure value to their null convention.
  */
 export function readCard(row: unknown): CardWithGlue | undefined {
   const id = readString(row, "id");
@@ -91,10 +67,8 @@ export function readCard(row: unknown): CardWithGlue | undefined {
   ) {
     return undefined;
   }
-  // Nullable by design: a card with no taskspace, no glue group, and no width of its own
-  // is the ordinary case, so `null` here is a value rather than a failure. `undefined`
-  // from these readers means "present but the wrong type", which is why each is compared
-  // against it rather than coalesced away.
+  // Null is valid for taskspace, glue-group, and width fields. Compare against `undefined`,
+  // which indicates invalid input, rather than coalescing null away.
   const taskspaceId = readNullableString(row, "taskspaceId");
   const glueId = readNullableString(row, "glueId");
   const width = readNullableFiniteNumber(row, "width");
@@ -198,8 +172,8 @@ function readTaskspace(row: unknown): TaskspaceSummary | undefined {
   const id = readString(row, "id");
   const name = readText(row, "name");
   const pathKind = readPathKind(row);
-  // Both nullable on the table: an unplaced taskspace has no scope, and a static export
-  // strips the path (see `includeTaskspacePaths`).
+  // Both fields are nullable. A taskspace may have no scope, and exports omit paths unless
+  // `includeTaskspacePaths` is enabled.
   const scopeId = readNullableString(row, "scopeId");
   const path = readNullableString(row, "path");
   if (

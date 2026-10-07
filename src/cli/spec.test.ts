@@ -5,35 +5,17 @@ import type { Command } from "commander";
 import { buildProgram } from "./program.js";
 
 /**
- * `spec/cli.md` against the command tree it specifies.
- *
- * Fifteen hundred lines of specification with nothing tying them to the code: a command
- * could be renamed, gain an argument, or be removed outright, and the spec would go on
- * describing the old one. Running the check found the larger version of that — fifteen
- * commands the spec has never mentioned at all, listed in {@link UNSPECIFIED} below.
- *
- * The check runs in both directions, and they catch different things. Spec → code catches a
- * section describing something that is no longer there. Code → spec catches a command
- * shipped without one, which is what had been happening.
+ * Compare the CLI specification with the command tree in both directions. Catch obsolete
+ * documentation and commands without documentation.
  */
 
 const SPEC_PATH = resolve("spec/cli.md");
 
 /**
- * Commands `spec/cli.md` does not document.
+ * Full command paths temporarily exempted from documentation checks, without arguments.
  *
- * Empty, and the check below is what keeps it that way: a command added without a section
- * fails rather than quietly joining a list of exemptions. It held fifteen entries — every
- * `partition` and `warp` subcommand, the two `scope` membership commands, and seven of
- * `card` — each of them something a user could run today against no specified behaviour.
- * They are written up now.
- *
- * Kept as a list rather than deleted outright so that a command shipped ahead of its
- * documentation has somewhere honest to be recorded, instead of the check being loosened.
- * An entry here is a debt; an entry that has since been documented is a failure, which is
- * what the last test below is for.
- *
- * Written as full command paths without their arguments, the same key the check uses.
+ * Keep this list empty when all commands are documented. The tests reject entries that have
+ * since been documented.
  */
 const UNSPECIFIED: readonly string[] = [];
 
@@ -45,21 +27,15 @@ type CommandEntry = {
 };
 
 /**
- * Every runnable command in the tree, by path.
- *
- * A group such as `net` or `api key` is not runnable and is not listed: it carries no action
- * and exists only to hold its children. `doctor` is the one that is both — it runs a check
- * of its own and hosts `doctor config` — so the test is on having an action handler rather
- * than on having no children.
+ * List commands with action handlers by full path. Groups without actions are excluded, while
+ * commands such as `doctor` can have both an action and subcommands.
  */
 function runnableCommands(command: Command, prefix: string[] = []): CommandEntry[] {
   const entries: CommandEntry[] = [];
   for (const sub of command.commands) {
     const path = [...prefix, sub.name()];
-    // `_actionHandler` is Commander's own field and is not in its public types; nothing else
-    // distinguishes a group from a leaf that happens to have subcommands. Compared against
-    // null rather than undefined: the constructor initialises it to null, so an
-    // `!== undefined` test calls every group runnable.
+    // Commander exposes no public action-handler predicate. Check `_actionHandler` against
+    // null, its initial value, to distinguish groups from runnable commands.
     const runnable = (sub as unknown as { _actionHandler?: unknown })._actionHandler != null;
     if (runnable) {
       const args = sub.registeredArguments
@@ -87,19 +63,9 @@ function pathOf(signature: string): string {
 }
 
 /**
- * That {@link runnableCommands} still tells a leaf from a group.
- *
- * It reads `_actionHandler`, which is Commander's own field and is not in its public types,
- * because nothing public distinguishes a group from a leaf that happens to have subcommands.
- * That probe is load-bearing for every check below, and it fails in the one direction none of
- * them would report: renamed or removed upstream, the field reads `undefined` for every
- * command, `runnableCommands` returns an empty list, and the two checks that walk from the
- * code — "documents every command" and the argument spelling — pass over nothing at all. The
- * suite would go green on a tree it had stopped looking at.
- *
- * So the probe is checked against commands whose kind is known by construction, in both
- * directions, with a floor on the count underneath. A Commander upgrade that moves the field
- * fails here, naming the cause, instead of quietly emptying the checks that gate the build.
+ * Verify the private action-handler probe against known commands and a minimum count. If
+ * Commander changes the field, fail here instead of letting an empty command list make the
+ * documentation checks pass.
  */
 describe("the leaf/group probe the checks below rest on", () => {
   const commands = runnableCommands(buildProgram());
@@ -111,7 +77,7 @@ describe("the leaf/group probe the checks below rest on", () => {
   });
 
   it("does not count a group that only holds children", () => {
-    // `net` and `api key` carry no action of their own; running either prints help.
+    // `net` and `api key` have no action handlers. Running either prints help.
     expect(paths.has("net")).toBe(false);
     expect(paths.has("api key")).toBe(false);
     expect(paths.has("net ssg")).toBe(false);
@@ -125,8 +91,7 @@ describe("the leaf/group probe the checks below rest on", () => {
   });
 
   it("finds the whole tree rather than a fraction of it", () => {
-    // A floor, not a count: a number to keep in step with every new command is the thing
-    // `vitest.config.ts` warns against. This only has to fail if the probe stops working.
+    // Check a minimum count so the test catches an empty probe without pinning the inventory.
     expect(commands.length).toBeGreaterThan(40);
   });
 });
@@ -149,9 +114,8 @@ describe("spec/cli.md against the command tree", () => {
       .map((signature) => ({ signature, expected: declared.get(pathOf(signature)) }))
       .filter(({ signature, expected }) => expected !== undefined && expected !== signature);
 
-    // Catches an argument added, removed, renamed, or made optional without the heading
-    // following it — the drift a spec accumulates fastest, because the prose below the
-    // heading usually still reads plausibly.
+    // Catch arguments added, removed, renamed, or made optional without a matching
+    // documentation heading.
     expect(wrong).toEqual([]);
   });
 

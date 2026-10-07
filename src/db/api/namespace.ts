@@ -6,8 +6,7 @@ import { withTx, type DB, type Tx } from "../tx.js";
 import { addPartition } from "./partition.js";
 import { addLayer } from "./layer.js";
 import { DEFAULT_PARTITION_NAME, DEFAULT_LAYER_NAME } from "../../lib/constants.js";
-// Safe to import here, unlike from card.ts (see the note above `deleteNamespaceCards`):
-// glue.ts reaches into card.ts, and card.ts does not reach back into this module.
+// Importing glue is safe because card does not import this module.
 import { dissolveOrphanGlueGroupsInTx } from "./glue.js";
 
 export async function getAllNamespaces({ db }: NeedsDB): Promise<Namespace[]> {
@@ -33,11 +32,7 @@ export async function addNamespace({ db, name, isDefault = false }: AddNamespace
 }
 
 type CreateNamespace = { db: DB; name: string; isDefault?: boolean };
-/**
- * A namespace along with the default partition and layer a usable canvas needs. Written in one
- * transaction: a namespace that came out of a half-finished create would have no partition to
- * put a card in and no layer to put it on, and the browser page assumes both exist.
- */
+/** Create the namespace, default partition, and default layer in one transaction. */
 export async function createNamespace({
   db,
   name,
@@ -98,9 +93,7 @@ export async function deleteNamespace({ db, namespaceId }: DeleteNamespace): Pro
       .get();
     assertFound(namespace ? [namespace] : [], `Namespace namespaceId=${namespaceId}`);
 
-    // Read while the cards still exist: deleting the namespace cascades partitions, cards, and
-    // their glue_rel rows away, and a `glue` row is referenced by nothing, so afterwards
-    // there is no way left to tell which groups the namespace emptied out.
+    // Collect glue IDs before namespace deletion cascades to their members.
     const glueIds = await namespaceGlueIds(tx, namespaceId);
     await tx.delete(namespaceTable).where(eq(namespaceTable.id, namespaceId));
     // Groups the namespace did not empty entirely are left alone by the sweep, so a group

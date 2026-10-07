@@ -64,7 +64,7 @@ describe("KozaneCard", () => {
 
   it("does not show glue icon when glueId is null", () => {
     const { container } = render(KozaneCard, { props: makeProps() });
-    // Only the partition dot SVG should not appear in footer area — glue svg is absent
+    // The footer should contain no partition-dot or glue SVG.
     const footerSvgs = container.querySelectorAll("svg");
     expect(footerSvgs.length).toBe(0);
   });
@@ -178,8 +178,8 @@ describe("KozaneCard", () => {
 
   it("hides the resize handle until the card is armed", () => {
     render(KozaneCard, { props: makeProps() });
-    // Absent rather than merely invisible: an unarmed board must carry no grab targets
-    // along its card edges for a drag or a rectangle selection to catch on.
+    // Remove inactive handles from the DOM so they cannot intercept drags or rectangle
+    // selections.
     expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
   });
 
@@ -199,17 +199,11 @@ describe("KozaneCard", () => {
     await user.click(screen.getByLabelText("Drag to resize card width"));
 
     expect(onResizeMouseDown).toHaveBeenCalledOnce();
-    // The handle sits on top of the card: without the stopPropagation it carries, this
-    // press would move the card instead of widening it.
+    // Stop propagation so pressing the resize handle does not start a card drag.
     expect(onCardMouseDown).not.toHaveBeenCalled();
   });
 
-  /**
-   * What a card does with the text it is given, beyond drawing it: a URL becomes an anchor
-   * and a tag becomes a link to the index. Both are `segmentText`'s reading of the content,
-   * which the tag index gathers by too — so these are also where a card is checked to draw
-   * exactly what the index would find in it.
-   */
+  /** Verify URL and tag rendering through the same `segmentText` parser used by tag gathering. */
   describe("text segments", () => {
     const withContent = (content: string, overrides: Record<string, unknown> = {}) =>
       makeProps({ card: { ...makeProps().card, content }, ...overrides });
@@ -225,11 +219,7 @@ describe("KozaneCard", () => {
       expect(link).toHaveAttribute("href", "/tags?tag=perf:cache");
     });
 
-    /**
-     * The card knows a tag when it sees one but not which namespace's index to send it to, so
-     * a caller with no router — a component test, a static context — still gets the tag
-     * marked rather than a link to nowhere.
-     */
+    /** Mark tags without creating links when no tag-link builder is supplied. */
     it("marks a tag without linking it when there is nowhere to link to", () => {
       render(KozaneCard, { props: withContent("caching work :perf") });
 
@@ -242,8 +232,7 @@ describe("KozaneCard", () => {
         props: withContent("about :Perf", { tagHref: (tag: string) => `/tags?tag=${tag}` }),
       });
 
-      // The text is what the writer typed; the link is the normalized tag, which is the one
-      // the index is keyed by. A card that drew `:perf` would be rewriting the card.
+      // Preserve the author's displayed text while linking through the normalized tag value.
       expect(screen.getByRole("link", { name: ":Perf" })).toHaveAttribute("href", "/tags?tag=perf");
     });
 
@@ -268,8 +257,8 @@ describe("KozaneCard", () => {
       // nothing inside it is one. This is the case where the card and the index disagreed.
       const links = screen.getAllByRole("link");
       expect(links).toHaveLength(1);
-      // The closing paren is sentence punctuation rather than part of the address, so the
-      // span stops before it — and the colon inside the span still opens nothing.
+      // Exclude the closing parenthesis from the URL and ignore tag-like text inside the URL
+      // span.
       expect(links[0]).toHaveAttribute("href", "http://example.com/(:foo");
     });
 
@@ -285,14 +274,9 @@ describe("KozaneCard", () => {
         }),
       });
 
-      // jsdom implements no navigation and reports "Not implemented: navigation to another
-      // Document" on stderr when a real `<a href>` is followed — the one line of noise in an
-      // otherwise clean run. Swallowed here rather than globally, and in the capture phase
-      // for a reason this very test explains: the card stops the click propagating, which is
-      // what the assertions below check, so a bubble-phase listener would never run. Capture
-      // descends before the target is reached, so this cancels the navigation without seeing
-      // or changing anything the card does. The click, the anchor and its `href` are
-      // untouched.
+      // Cancel navigation in capture phase to avoid jsdom's unsupported-navigation warning.
+      // The card stops bubbling, so a bubble listener would not run. Preserve the click
+      // behavior under test.
       const swallowNavigation = (event: MouseEvent) => event.preventDefault();
       document.addEventListener("click", swallowNavigation, true);
       try {
@@ -301,8 +285,8 @@ describe("KozaneCard", () => {
         document.removeEventListener("click", swallowNavigation, true);
       }
 
-      // Same propagation stop a URL carries: following the link must not move the card or
-      // change what is selected on the board being left behind.
+      // Stop propagation when following a link so it neither drags the card nor changes the
+      // selection.
       expect(onCardMouseDown).not.toHaveBeenCalled();
       expect(onCardClick).not.toHaveBeenCalled();
     });

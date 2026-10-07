@@ -5,22 +5,16 @@ import type { NeedsDB, NeedsNamespace, NeedsTaskspace, Taskspace } from "./types
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 /**
- * Every taskspace in the workspace, whichever namespace it belongs to. The workspace-wide
- * view — `kozane taskspace list`, `kozane taskspace scan` — rather than the board's; the
- * browser asks {@link getTaskspacesInNamespace}.
+ * List every workspace taskspace for CLI listing and scanning. Use {@link
+ * getTaskspacesInNamespace} for board data.
  */
 export async function getAllTaskspaces({ db }: NeedsDB): Promise<Taskspace[]> {
   return db.select().from(taskspaceTable);
 }
 
 /**
- * The taskspaces one namespace's board has reason to draw: its own, plus the ones assigned
- * to no namespace at all.
- *
- * `namespace_id` is nullable, and a row carrying none is unplaced rather than somebody
- * else's — see the note on `taskspaceTable` for how one gets that way. Those rows appear
- * on every board; a reattached taskspace whose marker named no namespace would otherwise be
- * invisible everywhere, with nothing in the UI able to place it.
+ * List taskspaces assigned to this namespace and unplaced taskspaces, which appear on every
+ * board.
  */
 export async function getTaskspacesInNamespace({
   db,
@@ -35,15 +29,8 @@ export async function getTaskspacesInNamespace({
 type GetTaskspaceInNamespace = NeedsNamespace & { taskspaceId: string };
 
 /**
- * One taskspace, but only if this namespace's board can see it — its own, or one assigned to
- * no namespace at all. Exactly the filter {@link getTaskspacesInNamespace} applies, for a
- * single row, so "shown in the panel" and "reachable through the namespace's endpoints" stay
- * the same set rather than two that happen to agree.
- *
- * The HTTP routes look a taskspace up this way rather than by id alone. That is not what
- * keeps a request inside a directory — `taskspace-files.ts` holds that boundary, and holds
- * it however the row was found — but a namespace's endpoint answering about another
- * namespace's taskspace is a surprise nothing else in the API offers.
+ * Find one taskspace visible to this namespace using the same ownership rule as the board
+ * listing. Filesystem helpers separately enforce path containment.
  */
 export async function getTaskspaceInNamespace({
   db,

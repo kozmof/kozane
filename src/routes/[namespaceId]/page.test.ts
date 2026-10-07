@@ -6,9 +6,7 @@ import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 import { goto, replaceState } from "$app/navigation";
 import { page } from "$app/state";
 
-// The page navigates between namespaces, tidies its own URL, and guards an unsaved file
-// against a navigation away; all three are the router's job, which does not exist outside a
-// real SvelteKit app.
+// Stub router behavior for namespace navigation, URL cleanup, and unsaved-file guards.
 vi.mock("$app/navigation", () => ({
   goto: vi.fn(),
   replaceState: vi.fn(),
@@ -51,7 +49,7 @@ const data = {
       width: null,
     },
   ],
-  // Around the centre of the view the stubbed canvas metrics below produce: (1400, 1000).
+  // Place fixtures around the stubbed view centre at (1400, 1000).
   warps: [
     { id: "warp-1", namespaceId: "namespace-1", posX: 1800, posY: 1000 },
     { id: "warp-2", namespaceId: "namespace-1", posX: 2400, posY: 1000 },
@@ -64,9 +62,8 @@ const data = {
   taskspaces: [],
   otherNamespaces: [],
   uiConfig: {
-    // Spread first so a setting added to UiConfig arrives here at its default instead of
-    // failing this file to type-check. Everything below is deliberately not a default:
-    // the page has to read each one rather than hardcode what it happens to be.
+    // Start with defaults for newly added settings, then override these values to verify the
+    // page reads configuration instead of hardcoding defaults.
     ...DEFAULT_UI_CONFIG,
     defaultFontSize: 11.5,
     defaultFontFamily: "monospace",
@@ -201,9 +198,8 @@ describe("Namespace page", () => {
   });
 
   /**
-   * One poll, start to finish. `waitFor` sees a mock the moment it is called, which for
-   * the snapshot body is well before the page has applied it and released its in-flight
-   * guard — so the next poll would be dropped rather than sent.
+   * Wait for a complete poll, including state application and release of the in-flight guard,
+   * before starting another.
    */
   async function poll(fetch: ReturnType<typeof vi.fn>) {
     const before = fetch.mock.calls.length;
@@ -255,8 +251,7 @@ describe("Namespace page", () => {
     });
     let resolveSnapshot!: (response: ReturnType<typeof tagged>) => void;
     const inFlight = new Promise<ReturnType<typeof tagged>>((r) => (resolveSnapshot = r));
-    // Routed by URL rather than by call order: the drop saves positions in between, and a
-    // mutation's reply handed to the poll would be applied to the board as if it were one.
+    // Route mocked responses by URL because mutations and polls can interleave.
     let firstPoll = true;
     const fetch = vi.fn((url: unknown, _init?: RequestInit) => {
       if (!String(url).endsWith("/api/snapshot"))
@@ -271,8 +266,7 @@ describe("Namespace page", () => {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    // The poll goes out first; the drag starts while it is still in flight, which is what
-    // makes the page drop the answer when it finally lands.
+    // Start dragging after the poll begins so its response must be discarded.
     window.dispatchEvent(new Event("focus"));
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
 
@@ -362,7 +356,7 @@ describe("Namespace page", () => {
       },
     });
 
-    // Partition filtering still works — the read-only export is for browsing.
+    // Keep partition filtering available in read-only exports.
     expect(screen.getByText("All cards")).toBeInTheDocument();
 
     // The composer, the create-partition/scope inputs, and the taskspace input
@@ -504,7 +498,7 @@ describe("Composer failures", () => {
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
 
-    // Double-click is what opens a card for editing; a single click only selects it.
+    // Double-click to edit a card. A single click selects it.
     await fireEvent.dblClick(screen.getByRole("button", { name: "Card: Alpha" }));
     const textarea = await screen.findByLabelText("Edit card");
     await fireEvent.input(textarea, { target: { value: "far too much text" } });
@@ -550,7 +544,7 @@ describe("Card width", () => {
     await fireEvent.mouseMove(window, { clientX: 340 });
     expect(card).toHaveStyle({ width: "310px" });
 
-    // The release snaps to the 24px grid the board is laid out on: 310 -> 312.
+    // Snap 310 to 312 on the 24-pixel grid at release.
     await fireEvent.mouseUp(window);
     expect(card).toHaveStyle({ width: "312px" });
 
@@ -584,8 +578,7 @@ describe("Card width", () => {
     await fireEvent.mouseMove(window, { clientX: 340 });
     await fireEvent.mouseUp(window);
 
-    // Back to following `ui.defaultCardWidth`, which is where the card started: the
-    // failed save leaves it with no width of its own rather than with a stale 312.
+    // Restore null after the failed resize so the card follows `ui.defaultCardWidth` again.
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ width: "210px" }),
     );
@@ -611,7 +604,7 @@ describe("Card width", () => {
       props: { data: wide, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    // A static export renders the widths it was built with; it just cannot change them.
+    // Render exported card widths while disabling resize actions.
     expect(screen.getByRole("button", { name: "Card: Alpha" })).toHaveStyle({ width: "336px" });
     expect(screen.getByRole("button", { name: "Card: Beta" })).toHaveStyle({ width: "210px" });
 
@@ -627,9 +620,8 @@ describe("Layers", () => {
   }
 
   /**
-   * The button that selects a layer in the popover. Its accessible name is the layer name
-   * followed by its card count, so it is anchored at the start to keep "Delete Draft" and
-   * "Reorder Draft" — the row's other buttons — out of the match.
+   * Match the layer selection button at the start of its accessible name to exclude delete
+   * and reorder controls.
    */
   function layerOption(name: string): HTMLElement {
     return screen.getByRole("button", { name: new RegExp(`^${name}`) });
@@ -645,7 +637,7 @@ describe("Layers", () => {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    // "Base" is the default layer, so it starts active: full opacity and the top rank.
+    // The default Base layer starts active, fully opaque and above the others.
     expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "1", "z-index": "1" });
     expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "0.3", "z-index": "0" });
   });
@@ -670,7 +662,7 @@ describe("Layers", () => {
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
     await fireEvent.click(layerOption("Draft"));
 
-    // The wrapper lets events through; the card itself still receives them.
+    // Let wrapper events reach the card.
     expect(layerGroup(container, "l1")).toHaveStyle({ "pointer-events": "none" });
     const card = screen.getByRole("button", { name: "Card: Alpha" });
     expect(card).toHaveStyle({ "pointer-events": "auto" });
@@ -681,7 +673,7 @@ describe("Layers", () => {
   it("does not sweep cards on dimmed layers into a rectangle selection", async () => {
     const spread = {
       ...data,
-      // Alpha stays on Base, the active layer; Beta moves to the dimmed Draft.
+      // Keep Alpha on active Base and move Beta to dimmed Draft.
       cards: [data.cards[0], { ...data.cards[1], layerId: "l2" }],
     };
     const { container } = render(NamespacePage, {
@@ -766,8 +758,8 @@ describe("Layers", () => {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    // Warping to another namespace keeps this component and swaps its data: the composer
-    // has to swap with it, or it goes on offering a partition that board does not have.
+    // Update the composer when namespace navigation reuses the page so it offers the new
+    // board's partitions.
     const other = {
       ...data,
       namespace: { id: "namespace-2", name: "Research", isDefault: false },
@@ -840,8 +832,8 @@ describe("Layers", () => {
     });
 
     await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
-    // The popover lists top first: Draft, then Base. Dragging Base onto Draft's row
-    // puts Base on top. The row is what is draggable, not the button inside it.
+    // The popover lists Draft above Base. Drag Base's row onto Draft to place it on top. Drag
+    // the row rather than its button.
     const base = layerRow(container, "l1");
     const draft = layerRow(container, "l2");
     await fireEvent.dragStart(base);
@@ -855,7 +847,7 @@ describe("Layers", () => {
       // Bottom to top: Draft is now below Base.
       body: JSON.stringify({ layerIds: ["l2", "l1"] }),
     });
-    // Base is still the selected layer, so it keeps the top rank; Draft drops to 0.
+    // Keep active Base above Draft after reordering.
     expect(layerGroup(container, "l1")).toHaveStyle({ "z-index": "1", opacity: "1" });
     expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0", opacity: "0.3" });
   });
@@ -885,7 +877,7 @@ describe("Layers", () => {
     await fireEvent.keyDown(screen.getByLabelText("Reorder Base"), { key: "ArrowUp" });
 
     await waitFor(() => expect(screen.getByText("Failed to reorder layers")).toBeInTheDocument());
-    // Base is selected, so it is on top either way; Draft must be back underneath it.
+    // Restore Draft below active Base.
     expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0" });
   });
 
@@ -923,7 +915,7 @@ describe("Layers", () => {
     const control = await openLayerPopover({ left: 0, top: 40, right: 180, bottom: 200 });
 
     await fireEvent.mouseLeave(control, { clientX: 100, clientY: 20 });
-    // Off to the side: this pointer was never coming here.
+    // Place the pointer away from the target.
     await fireEvent.mouseMove(document, { clientX: 300, clientY: 35 });
 
     await waitFor(() =>
@@ -968,7 +960,7 @@ describe("Layers", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardIds: ["card-1"], layerId: "l2" }),
     });
-    // The card followed the move, and so did the selection: Draft is now in front.
+    // Select Draft after moving the card there so its layer appears in front.
     await waitFor(() =>
       expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" }),
     );
@@ -1019,7 +1011,7 @@ describe("Layers", () => {
   });
 
   it("keeps a dragged card at full strength even when its layer is dimmed", async () => {
-    // The drop at the end of the drag saves positions; nothing here inspects that call.
+    // The drag also saves positions, but this test does not inspect that request.
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }),
@@ -1037,7 +1029,7 @@ describe("Layers", () => {
     await fireEvent.mouseDown(card, { clientX: 0, clientY: 0 });
     await fireEvent.mouseMove(window, { clientX: 40, clientY: 40 });
 
-    // Floated to the top of the stack, and no longer faded: a drag is meant to be watched.
+    // Show the dragged card at full opacity above the stack.
     await waitFor(() =>
       expect(layerGroup(container, "l1")).toHaveStyle({ opacity: "1", "z-index": "1" }),
     );
@@ -1054,8 +1046,8 @@ describe("Layers", () => {
     });
 
     await fireEvent.click(screen.getByRole("button", { name: /Now/ }));
-    // card-1 is outside the scope. On the active layer it fades; on a dimmed layer the
-    // layer's own 0.3 is the whole story, and multiplying them would leave it invisible.
+    // Do not multiply scope dimming by layer dimming. The layer's opacity alone should apply
+    // to an inactive layer.
     const card = screen.getByRole("button", { name: "Card: Alpha" });
     expect(card).toHaveStyle({ opacity: "0.3" });
 
@@ -1132,10 +1124,8 @@ describe("Layers", () => {
 });
 
 describe("Warps", () => {
-  // jsdom does no layout, so the canvas would report a zero-sized viewport and every warp
-  // would land on the same scroll offset. These are the numbers a real 800×600 viewport on
-  // the fixture's 2800×2000 canvas would produce, which puts the initial view centre at
-  // (1400, 1000) — the point the fixture's warps are arranged around.
+  // Supply an 800×600 viewport on the 2800×2000 fixture canvas because jsdom provides no
+  // layout. This centers the initial view at (1400, 1000).
   const metrics: Record<string, number> = {
     clientWidth: 800,
     clientHeight: 600,
@@ -1206,7 +1196,7 @@ describe("Warps", () => {
     vi.stubGlobal("fetch", fetch);
     renderPage({ warps: [] });
 
-    // Past the right edge of the canvas rect: a side panel, or another window.
+    // Place the pointer beyond the canvas's right edge.
     await fireEvent.mouseMove(window, { clientX: 1200, clientY: 150 });
     await fireEvent.keyDown(window, { key: "w" });
 
@@ -1227,9 +1217,7 @@ describe("Warps", () => {
     vi.stubGlobal("fetch", fetch);
     renderPage({ warps: [] });
 
-    // A held key repeats about thirty times a second: every repeat that reached the
-    // handler would be another POST and another marker stacked on the same point, with
-    // only the topmost reachable to remove.
+    // Ignore key repeats so holding the shortcut cannot create overlapping warp markers.
     await fireEvent.keyDown(window, { key: "w" });
     await fireEvent.keyDown(window, { key: "w", repeat: true });
     await fireEvent.keyDown(window, { key: "w", repeat: true });
@@ -1278,7 +1266,7 @@ describe("Warps", () => {
 
     await fireEvent.keyDown(window, { key: "ArrowRight" });
 
-    // Centred on warp 1 at x=1800: 1800 − half the 800px viewport.
+    // Centre warp 1 by subtracting half the 800-pixel viewport from x=1800.
     expect(canvas.scrollLeft).toBe(1400);
     expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
 
@@ -1301,7 +1289,7 @@ describe("Warps", () => {
     expect(canvas.scrollTop).toBe(700);
     expect(screen.getByLabelText("Warp 1")).toHaveAttribute("aria-pressed", "true");
 
-    // The same the other way: warp 2 is the rightmost, so → restarts at the leftmost.
+    // Moving right from the rightmost warp wraps to the leftmost.
     await fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
     await fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -1309,9 +1297,8 @@ describe("Warps", () => {
   });
 
   it("wraps round rather than sticking on a warp the board cannot centre", async () => {
-    // 2700 on the fixture's 2800-wide board: the scroll runs out before the warp reaches
-    // the middle of an 800px viewport, so the warp goes on lying right of the view centre
-    // even once the view has arrived on it — and pressing → again used to land back on it.
+    // Place the warp beyond the viewport's reachable center so repeated right navigation must
+    // move past it rather than select it again.
     const { container } = renderPage({
       warps: [
         { id: "warp-1", namespaceId: "namespace-1", posX: 600, posY: 1000 },
@@ -1342,8 +1329,8 @@ describe("Warps", () => {
     await fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
 
-    // Dragged back to the middle of the board: the focused warp is somewhere to the right
-    // again, so it is what → goes to, rather than something to wrap past.
+    // After panning back, the focused warp is to the right and becomes the next rightward
+    // destination.
     canvas.scrollLeft = 1000;
     await fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(canvas.scrollLeft).toBe(2000);
@@ -1351,8 +1338,8 @@ describe("Warps", () => {
   });
 
   it("does one thing when one key is bound to two warp actions", async () => {
-    // `kozane doctor config` warns about a collision, but the config still loads and the
-    // page still has to behave: one press must not both set a warp and remove one.
+    // A shortcut collision must trigger only one action, even though the configuration loads
+    // with a warning.
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ id: "warp-new", namespaceId: "namespace-1", posX: 1400, posY: 1000 }),
@@ -1386,7 +1373,7 @@ describe("Warps", () => {
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps/warp-1", { method: "DELETE" });
-    // Two warps left, renumbered: what was warp 2 is now warp 1.
+    // Renumber the two remaining warps so the former warp 2 becomes warp 1.
     expect(screen.queryByLabelText("Warp 3")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-2");
   });
@@ -1408,8 +1395,8 @@ describe("Warps", () => {
     const { container } = renderPage();
     const canvas = canvasOf(container);
 
-    // Cmd/Ctrl+A is select-all, and `event.key` is the bare "w"/"a" either way: without a
-    // modifier guard each of these reads as a warp shortcut.
+    // Check modifiers so Cmd/Ctrl shortcuts with the same `event.key` do not trigger warp
+    // actions.
     await fireEvent.keyDown(window, { key: "w", metaKey: true });
     await fireEvent.keyDown(window, { key: "w", ctrlKey: true });
     await fireEvent.keyDown(window, { key: "q", metaKey: true });
@@ -1499,7 +1486,7 @@ describe("Warps", () => {
       await openPalette();
 
       expect(screen.getByText("Namespace (this namespace)")).toBeInTheDocument();
-      // By role: "Research" is also the name of a partition in the left panel.
+      // Find by role because a partition is also named Research.
       expect(screen.getByRole("listbox", { name: "Research" })).toBeInTheDocument();
       const rows = screen.getAllByRole("option");
       expect(rows).toHaveLength(4);
@@ -1565,7 +1552,7 @@ describe("Warps", () => {
       await openPalette();
       await fireEvent.click(screen.getByRole("option", { name: /Warp 2/ }));
 
-      // Centred on warp 2 at x=2400: 2400 − half the 800px viewport.
+      // Centre warp 2 by subtracting half the 800-pixel viewport from x=2400.
       expect(canvas.scrollLeft).toBe(2000);
       expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
       expect(screen.queryByRole("dialog", { name: "Warps" })).not.toBeInTheDocument();
@@ -1685,7 +1672,7 @@ describe("Warps", () => {
 
       const { container } = renderPage();
 
-      // Warp 2 sits at x=2400, y=1000: half a viewport back from each.
+      // Centre the viewport on warp 2 at (2400, 1000).
       expect(canvasOf(container).scrollLeft).toBe(2000);
       expect(canvasOf(container).scrollTop).toBe(700);
       expect(screen.getByLabelText("Warp 2")).toHaveAttribute("aria-pressed", "true");
@@ -1702,8 +1689,8 @@ describe("Warps", () => {
       await fireEvent.keyDown(window, { key: "ArrowRight" });
       expect(canvasOf(container).scrollLeft).toBe(1400);
 
-      // Navigating with no warp to land on: the Back button, or a jump to a warp that has
-      // been removed since the palette listed it.
+      // Handle navigation without a destination warp, including Back and links to removed
+      // warps.
       await rerender({
         data: { ...data, namespace: { id: "namespace-2", name: "Research", isDefault: false } },
         params: { namespaceId: "namespace-2" },
@@ -1735,10 +1722,8 @@ describe("Warps", () => {
   });
 
   /**
-   * How a hit on the tag index gets back to the thing it was found in: `?card=` for a card,
-   * `?taskspace=&path=` for a line of a taskspace file. Both are acted on once and then
-   * dropped from the URL, the same as `?warp=`, so panning away and reloading does not snap
-   * back to them.
+   * Tag links use `?card=` or `?taskspace=&path=` to open their sources. Consume and remove
+   * these parameters once so reloading does not repeat the jump.
    */
   describe("landing from the tag index", () => {
     const visit = (url: string) => (page.url = new URL(url) as typeof page.url);
@@ -1747,9 +1732,7 @@ describe("Warps", () => {
     const target = { ...data.cards[0], id: "card-far", content: "Gamma", posX: 1800, posY: 1000 };
     const withTarget = { cards: [...data.cards, target] };
 
-    // The module mock is shared by every test in this file, so what an earlier one recorded
-    // would otherwise count as a call made here — and "the url was left alone" is exactly the
-    // assertion that cannot tell the difference.
+    // Clear shared mock calls so earlier tests cannot affect URL-cleanup assertions.
     beforeEach(() => {
       vi.mocked(replaceState).mockClear();
     });
@@ -1766,8 +1749,7 @@ describe("Warps", () => {
 
       await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1400));
       expect(canvasOf(container).scrollTop).toBe(700);
-      // Selected as well as centred: the middle of a dense board is not a mark, so the pan
-      // alone would not say which card the tag matched.
+      // Select the centred card so the matched source is clear on a dense board.
       expect(screen.getByRole("button", { name: "Card: Gamma" })).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -1835,8 +1817,7 @@ describe("Warps", () => {
 
       expect(await screen.findByLabelText("Editing notes/todo.md")).toBeInTheDocument();
       await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(1400));
-      // Both were acted on, so both are dropped — in one call, which is what keeps the two
-      // from clearing a URL the other had already replaced.
+      // Remove both handled URL parameters in one navigation.
       expect(replaceState).toHaveBeenCalledWith("/namespace-1", {});
     });
 
@@ -1972,8 +1953,8 @@ describe("Squash", () => {
 });
 
 describe("Scoped-file export", () => {
-  // What `--include-scoped-files` bakes into an export: a tree per taskspace, and taskspace
-  // rows whose `path` is null, because a published page has no local directory to name.
+  // Embed taskspace trees with `--include-scoped-files`, but keep local paths null in
+  // published data.
   function exportData(suffix: string) {
     const taskspaceId = `taskspace-${suffix}`;
     return {
@@ -2015,10 +1996,8 @@ describe("Scoped-file export", () => {
       props: { data: first, params: { namespaceId: "namespace-a" }, form: null },
     });
 
-    // Warping between namespaces reuses this component. The embedded trees are keyed by
-    // taskspace id and belong to one namespace, so holding the ones the page opened on
-    // would leave the arriving namespace's taskspaces matching nothing — and with `path`
-    // null in an export, matching nothing is what decides they are not listed at all.
+    // Refresh embedded trees when namespace navigation reuses the component. Static
+    // taskspaces have no live path to fall back to.
     const second = exportData("b");
     await rerender({ data: second, params: { namespaceId: "namespace-b" }, form: null });
 

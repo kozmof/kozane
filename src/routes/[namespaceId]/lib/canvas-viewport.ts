@@ -16,17 +16,8 @@ import {
 export type BoardPoint = { posX: number; posY: number };
 
 /**
- * The board's scroll container read as a window onto the canvas: where it is looking, how a
- * pointer maps into world coordinates and back, and how to move it.
- *
- * Every question here is the same three readings — the element's box, its scroll offset, and
- * the zoom — put through one of the pure functions in `namespace-page.ts`. `KozaneCanvas`
- * asked them inline, a dozen times over, each spelling out `canvasEl.scrollLeft` and
- * `canvasEl.scrollTop` for itself. The arithmetic was already tested; this is the one place
- * that feeds it the DOM.
- *
- * Takes getters rather than values because all three change under it: the element is bound
- * after the component's script runs, and zoom and the canvas size are props.
+ * Read canvas bounds, scroll offsets, and zoom for coordinate conversion and viewport
+ * movement. Use getters because the bound element and props can change.
  */
 export class CanvasViewport {
   readonly #el: () => HTMLElement;
@@ -71,7 +62,7 @@ export class CanvasViewport {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
-  /** A world point rounded to whole pixels and kept on the canvas — what the server stores. */
+  /** Round a canvas point to whole pixels and clamp it to the board. */
   onCanvas({ x, y }: Point): BoardPoint {
     const { canvasWidth, canvasHeight } = this.#bounds();
     return {
@@ -116,8 +107,8 @@ export class CanvasViewport {
   }
 
   /**
-   * Whether the viewport already shows this point as centred as the board allows — near an
-   * edge a point cannot reach the middle at all. See `isViewCenteredOn`.
+   * Whether the viewport is as centered on this point as canvas bounds allow. See
+   * `isViewCenteredOn`.
    */
   isCenteredOn(posX: number, posY: number): boolean {
     const el = this.#el();

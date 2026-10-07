@@ -2,24 +2,10 @@ import { clampZoom } from "../../[namespaceId]/lib/namespace-page.js";
 import type { Point, Rect } from "./treemap.js";
 
 /**
- * Panning and zooming the map, as arithmetic.
+ * Compute pan and zoom by changing the layout rectangle instead of scaling the completed SVG.
+ * Card-proportional areas grow while text, gaps, and controls retain their pixel sizes.
  *
- * The map is a packing rather than a scene, so the view is not applied to it afterwards the
- * way a `<g transform>` would: it decides the rectangle the packing is laid out into. At
- * 100% with no pan that rectangle is the box on the page, which is what the map has always
- * been drawn into; zoomed to 200% it is a rectangle twice that size, positioned by the pan.
- *
- * The difference is what happens to everything that is measured in pixels rather than in
- * cards. A `<g transform>` scales the lot — a namespace's title band, the gaps between
- * rectangles, the labels, the scope rail — so zooming in to read a small partition's name
- * enlarges the name along with the box and it is no more readable than it was. Laying out
- * into a larger rectangle scales only what is proportional to card counts, which is exactly
- * the part zooming in is for: the boxes grow, the type stays the size type should be, and a
- * partition too small to be labelled becomes large enough to carry its label.
- *
- * Squarifying is scale-invariant, so this is safe: multiplying the area by a constant
- * multiplies every candidate row's worst aspect ratio by nothing at all, and the algorithm
- * takes the same decisions. Zooming therefore magnifies the map rather than rearranging it.
+ * The squarified packing algorithm is scale-invariant for a uniformly scaled input rectangle.
  */
 
 export type MapView = {
@@ -32,44 +18,20 @@ export type MapView = {
 export type Size = { width: number; height: number };
 
 /**
- * The map filling its box exactly: zoom 1, and no pan.
- *
- * Not where the map opens — see {@link defaultView} — and not what the control in the corner
- * calls 100% either, which is {@link zoomPercent}'s business. It stays the unit everything
- * here is written in, because it is the one view the box itself defines: `viewedArea`
- * multiplies by `zoom`, and 1 has to mean the box for that to be arithmetic rather than a
- * convention.
+ * Fitted reference view with zoom 1 and no pan. Opening zoom and displayed percentages are
+ * defined separately.
  */
 export const FITTED_VIEW: MapView = { zoom: 1, panX: 0, panY: 0 };
 
 /**
- * How large the rectangles are when the map opens, as a multiple of the size the box would
- * fit them at.
- *
- * Half, because the canvas is the whole window: fitted, a workspace of a few namespaces is a
- * handful of rectangles each the size of a dinner plate, which says nothing more than the
- * same shapes at half the size and leaves nowhere to go but in. Opening at half gives the
- * map room around it, and it makes the zoom control a control in both directions rather than
- * one that can only take you further in.
- *
- * `ui.defaultZoom` is still deliberately not read, though the board opens at it. On a board,
- * zoom 1 means one canvas pixel per screen pixel and a workspace may well want another
- * ratio; here it means fitted to the box, and the two numbers would not mean the same thing.
- * `ui.zoomStep` is shared, because that is about the input device rather than either page.
+ * Opening map scale relative to the fitted view. Use a map-specific default because board
+ * zoom has different units. Share only `ui.zoomStep` for input sensitivity.
  */
 export const DEFAULT_ZOOM = 0.5;
 
 /**
- * Where the map opens: {@link DEFAULT_ZOOM}, centred in the box.
- *
- * A function of the box rather than a constant, which is what centring costs — and it is
- * worth paying rather than opening at a pan of zero, which would leave the map in the
- * top-left corner with the tag panel across it and the rest of the window empty.
- *
- * Taking the size at the moment it is asked for, rather than being stored once, is also what
- * keeps the opening view right across hydration: the server centres in
- * `MAP_DEFAULT_VIEWPORT` and the browser centres in the box it measured, and neither has to
- * know about the other.
+ * Center {@link DEFAULT_ZOOM} in the current viewport. Compute it from current dimensions so
+ * server and browser defaults each use their own measured box.
  */
 export function defaultView(size: Size): MapView {
   const zoom = clampZoom(DEFAULT_ZOOM);
@@ -80,18 +42,7 @@ export function defaultView(size: Size): MapView {
   };
 }
 
-/**
- * The zoom as the control in the corner reports it: a percentage of the size the map opens
- * at, not of the size the box would fit it at.
- *
- * The two differ because {@link DEFAULT_ZOOM} is not 1, and the opening view is the one a
- * reader actually has to compare against — it is what they were looking at a moment ago,
- * whereas "fitted to the box" is a view they may never see. A control that read 50% before
- * anyone had touched it was reporting a fraction of something nobody had been shown.
- *
- * So {@link FITTED_VIEW} reads as 200%, and the range `clampZoom` allows reads as 50%–400%.
- * The band is the board's; only the number written on it is this page's own.
- */
+/** Display zoom as a percentage of the opening scale, with the default view labeled 100%. */
 export function zoomPercent(zoom: number): number {
   return Math.round((zoom / DEFAULT_ZOOM) * 100);
 }
@@ -130,14 +81,7 @@ export function clampView(view: MapView, size: Size): MapView {
   };
 }
 
-/**
- * The view zoomed to `zoom`, with `at` — a point in the box, in its own pixels — left where
- * it was.
- *
- * That makes a wheel zoom feel attached to the pointer: the partition under the cursor
- * is the one that stays put, rather than the top-left corner, so zooming in on something is
- * done by pointing at it.
- */
+/** Zoom around a point in viewport pixels, preserving the map position under that point. */
 export function zoomedTo(view: MapView, size: Size, at: Point, zoom: number): MapView {
   const next = clampZoom(zoom);
   // How much the area is about to grow by. The point keeps its position within the area, so
@@ -153,32 +97,22 @@ export function zoomedTo(view: MapView, size: Size, at: Point, zoom: number): Ma
   );
 }
 
-/** The view zoomed a step, about the middle of the box — what the `−` and `+` buttons do,
- *  neither of which is pointing anywhere in particular the way the wheel is. */
+/** Zoom one step around the viewport center for button controls. */
 export function zoomedBy(view: MapView, size: Size, delta: number): MapView {
   return zoomedTo(view, size, { x: size.width / 2, y: size.height / 2 }, view.zoom + delta);
 }
 
 /**
- * The view moved by a screen-pixel offset.
- *
- * A drag passes the view it began at and how far the pointer has travelled altogether,
- * rather than the last view and the last few pixels. Both give the same answer until the
- * clamp bites, and then they differ in a way that is felt: applied step by step, a drag that
- * ran past the edge would have to travel back through everything the clamp had thrown away
- * before the map moved again. Computed from where the drag began, the map is under the
- * pointer wherever the pointer goes, and returning the pointer returns the map.
+ * Move the starting view by the total screen-pixel offset since drag start. This preserves
+ * the return path after clamping, so returning the pointer restores the original view.
  */
 export function pannedBy(view: MapView, size: Size, dx: number, dy: number): MapView {
   return clampView({ ...view, panX: view.panX + dx, panY: view.panY + dy }, size);
 }
 
 /**
- * Whether the map is where it opens.
- *
- * Compared by value, and against the clamped default: a map panned back by hand counts as
- * home, and a box too small to hold the default does not leave the way back permanently
- * offered — the clamp makes those two the same test rather than two.
+ * Compare the current view with the clamped opening view so returning manually also counts as
+ * reset.
  */
 export function isDefaultView(view: MapView, size: Size): boolean {
   const home = clampView(defaultView(size), size);

@@ -25,13 +25,13 @@
     onMouseDown: (event: MouseEvent) => void;
   } = $props();
 
-  // The number rides along with the circle: half the diameter keeps a two-digit label
-  // inside a small marker, and the floor keeps it readable once the marker is tiny.
+  // Scale the label with the marker, using half its diameter and a minimum size for
+  // readability.
   const fontSize = $derived(Math.max(7, Math.round(size * 0.5)));
   const focusRing = $derived(Math.max(2, Math.round(size * 0.18)));
 </script>
 
-<!-- Centred on the warp's own coordinates: a warp marks a point, not a corner. -->
+<!-- Centre the marker on the warp's coordinates. -->
 <button
   class={css({
     position: "absolute",

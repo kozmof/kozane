@@ -54,10 +54,8 @@ afterEach(() => {
 
 describe("database CLI flow", () => {
   /**
-   * A workspace is very often initialized inside a checkout, and `.kozane/` holds an API key,
-   * this machine's runtime state, and a tag cache quoting lines out of every taskspace file
-   * scanned — including taskspaces pointed outside the repository with `--dir`. None of it
-   * belongs in source control, and the ignore file goes when the workspace does.
+   * Verify that `.kozane/` stays out of Git, including credentials, runtime state, and tag
+   * excerpts from taskspaces outside the repository.
    */
   it("ignores its own directory, so a workspace inside a checkout is not committed", () => {
     const root = tempWorkspace();
@@ -143,13 +141,8 @@ describe("database CLI flow", () => {
 });
 
 /**
- * `kozane db import` takes rows the endpoints and the card commands would have refused, and
- * says so instead of refusing.
- *
- * The decision is in `dumpLimitWarnings`: these limits are workspace settings, so a dump
- * exported from a workspace with a wider canvas or a larger `ui.contentMax` has to remain
- * restorable into one with the defaults. Refusing would mean a backup that cannot be restored
- * because of a policy difference, on the command whose whole purpose is getting data back.
+ * Verify that imports restore rows beyond the target workspace's configured limits and report
+ * warnings. Different workspace settings must not make a backup unrestorable.
  */
 describe("kozane db import — limits", () => {
   it("imports rows past this workspace's limits and warns about them", () => {
@@ -159,8 +152,7 @@ describe("kozane db import — limits", () => {
     const dump = join(root, "limits.json");
     cli(root, "db", "export", dump);
 
-    // Edited in the dump rather than written through a command, which is the only way such a
-    // row arrives: every write path clamps or refuses first.
+    // Edit the dump to create a row normal write validation would reject.
     const parsed = JSON.parse(readFileSync(dump, "utf-8")) as {
       tables: { card: Record<string, unknown>[]; scope: Record<string, unknown>[] };
     };
@@ -170,7 +162,7 @@ describe("kozane db import — limits", () => {
     writeFileSync(dump, JSON.stringify(parsed), "utf-8");
 
     const result = runCli(root, "db", "import", dump, "--force");
-    // Imported, not refused: the rows are there and the command succeeded.
+    // Verify successful import and retained rows despite limit warnings.
     expect(result.status).toBe(0);
     expect(result.stdout).toContain(`Database imported: ${dump}`);
     expect(result.stdout).toContain("card: 1");

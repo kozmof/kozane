@@ -69,7 +69,7 @@ describe("getCardTagHits", () => {
 
     const { hits, cardNamespaces } = await getCardTagHits({ db, namespaceId });
     expect(hits).toEqual([]);
-    // Not named either: a card with no tag is not a card this answers about.
+    // Untagged cards do not contribute namespaces.
     expect(cardNamespaces).toEqual({});
   });
 
@@ -129,11 +129,7 @@ describe("getCardTagHits", () => {
     expect(hits.map(({ tag }) => tag)).toEqual(["perf", "perf"]);
   });
 
-  /**
-   * The card side has a ceiling of its own, and had none for a long while: the file walk was
-   * bounded three ways over and this was bounded not at all, though both fill the same array,
-   * are written to the same cache file, and are sent to the same page.
-   */
+  /** Check the card-hit limit. */
   describe("the hit ceiling", () => {
     it("stops at the ceiling and says so", async () => {
       const { db, namespaceId, partitionId } = await setup();
@@ -145,8 +141,7 @@ describe("getCardTagHits", () => {
       expect(truncated).toBe(true);
     });
 
-    /** Exact rather than per card, the same as the file walk's: one card can hold more tags
-     *  on its own than the whole gather carries. */
+    /** Apply the limit per hit, not per card. */
     it("holds the ceiling exactly, within a single card", async () => {
       const { db, namespaceId, partitionId } = await setup();
       await addCard({ db, partitionId, content: ":one\n:two\n:three" });
@@ -201,8 +196,7 @@ describe("getCardTagHits", () => {
      *  Paging must not read that as the end of the cards. */
     it("reads on past a whole page of cards that hold no tag", async () => {
       const { db, namespaceId, partitionId } = await setup();
-      // Written first, so they fill the earlier pages: ids are uuidv7, which the read orders
-      // by, and are therefore in creation order.
+      // Use UUIDv7 order to place these fixtures on earlier pages.
       for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `time 3:4${i}` });
       await addCard({ db, partitionId, content: ":perf" });
 

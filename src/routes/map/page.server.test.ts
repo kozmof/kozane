@@ -17,9 +17,8 @@ import type { TagHit } from "$lib/types";
 import { tagPartitionIndex, type MapTagCard } from "./lib/graph.js";
 
 /**
- * The loader, which is where every decision the map draws is actually made: which namespaces
- * are packed, what each rectangle's area comes from, which lines a scope gets, and what the
- * tag graph knows. The page repeats none of it.
+ * Test the loader's namespace, partition-area, scope-edge, and tag-graph data used to derive
+ * map views.
  */
 
 type MapData = {
@@ -118,8 +117,7 @@ describe("GET /map", () => {
       expect(partition(data, partitionId)).toMatchObject({ name: "B", cards: 0 });
     });
 
-    /** A partition is the same colour here as on its own board, which is what the colours are
-     *  for — so they come from the same list, in the same order, the board reads. */
+    /** Assign partition colors from the same ordered palette inputs as the board. */
     it("colours a partition the way its board does", async () => {
       const { db, namespaceId } = await setup();
       const second = await addPartition({ db, namespaceId, name: "Second" });
@@ -151,8 +149,7 @@ describe("GET /map", () => {
       expect(data.namespaces).toHaveLength(2);
     });
 
-    /** Unchecked, a namespace id naming nothing narrows every read to nothing and draws as an
-     *  empty workspace — a bad link that looks like an empty one. */
+    /** Reject unknown namespace IDs instead of rendering an apparently empty workspace. */
     it("refuses a namespace that does not exist", async () => {
       const { db } = await setup();
       await expect(run(db, "?namespaceId=ghost")).rejects.toMatchObject({ status: 404 });
@@ -207,8 +204,7 @@ describe("GET /map", () => {
       expect(scope.spokes).toEqual([{ kind: "partition", id: partitionId, cards: 1 }]);
     });
 
-    /** A hub attached to nothing says less than leaving it out; `kozane scope list` is where
-     *  a workspace's scopes are enumerated. */
+    /** Omit scopes without graph targets. The CLI provides a complete scope listing. */
     it("leaves out a scope nothing has been put in", async () => {
       const { db } = await setup();
       await addScope({ db, name: "Fresh" });
@@ -296,10 +292,7 @@ describe("GET /map", () => {
   });
 });
 
-/**
- * The export path, which reads `KOZANE_SSG` when the module is first evaluated — so it is
- * reached by re-importing the module under that environment rather than by a parameter.
- */
+/** Reimport the route under the export environment to test its module-scope flag. */
 describe("as a static export", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -328,11 +321,7 @@ describe("as a static export", () => {
     return { db, namespaceId, partitionId };
   }
 
-  /**
-   * A plain export carries no scopes — `loadNamespaceSnapshot` holds that line for the board
-   * and `docs/security-matrix.md` states it as a promise about what is published. A map that
-   * drew them anyway would be the one page that broke it.
-   */
+  /** Verify that plain exports omit scopes from the map as they do from boards. */
   it("carries no scope at all", async () => {
     const { db } = await withScope();
     expect((await loadUnderSsg(db)).scopes).toEqual([]);

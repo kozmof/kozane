@@ -10,10 +10,8 @@ import type {
   Warp,
 } from "../db/api/types.js";
 
-// zIndex is required: the column is NOT NULL DEFAULT 0, so every card the server
-// hands out has one, and making it optional here only spread `?? 0` through the UI.
-// `width` is the opposite case and stays nullable: null is a card that follows
-// `ui.defaultCardWidth`, which is most of them.
+// `zIndex` is required because its column is NOT NULL DEFAULT 0. `width` stays nullable so
+// cards can follow `ui.defaultCardWidth`.
 export type CardData = Pick<
   Card,
   | "id"
@@ -42,12 +40,8 @@ export interface PartitionWithColor {
 export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
 /**
- * One row of a taskspace directory listing. Names and metadata only — the listing endpoint
- * never reads a file, so nothing here can carry the contents of one.
- *
- * A symlink is reported as itself rather than as whatever it points at, and is not
- * expandable in the panel: following one is how a listing confined to a taskspace would
- * stop being confined to it.
+ * Directory entry metadata without file contents. Report symlinks as links and do not expand
+ * them in the panel.
  */
 export type TaskspaceEntryKind = "directory" | "file" | "symlink" | "other";
 
@@ -68,43 +62,24 @@ export interface TaskspaceListing {
 }
 
 /**
- * The limits any walk of a taskspace directory tree stops at, and the vocabulary the two
- * walks below both draw from.
- *
- * Named because the two of them shared these four members by writing them out twice, which
- * is a convention rather than a relationship: renaming `"nodes"` on one side, or adding a
- * fifth shared limit to one walk and not the other, left the pair silently disagreeing about
- * words the same page prints. What is genuinely particular to one walk stays particular to
- * it — see {@link TagScanTruncation}, which extends this and says why.
- *
- * Each is a distinct thing to be told, because a directory that ran past the entry cap, one
- * that sat deeper than the walk goes, one that arrived after the tree's total entry budget
- * was spent, and one that could not be read at all all leave a node that would otherwise be
- * indistinguishable from a genuinely empty directory.
+ * Shared tree-walk truncation reasons. Distinguish listing, depth, entry-budget, and read
+ * failures so incomplete directories are not presented as empty. Individual scans can add
+ * their own reasons.
  */
 export type WalkTruncation = "entries" | "depth" | "nodes" | "unreadable";
 
 /**
- * Why a directory is not all there in a static export, or null when it is. Exactly
- * {@link WalkTruncation}: the export walk stops at the shared limits and at nothing else. An
- * alias rather than the four members again, so that a limit added to one walk is a decision
- * about which of them it belongs to rather than a line copied into both.
- *
- * A live listing only ever reaches the entry cap.
+ * Reason a static-export directory listing is incomplete, or null when complete. Alias {@link
+ * WalkTruncation} to share the walk's limits. Live listings can reach only the entry cap.
  */
 export type TaskspaceTruncation = WalkTruncation;
 
 /**
- * One entry of a taskspace's file tree as `kozane net ssg generate --include-scoped-files`
- * bakes it into a static export. The counterpart to {@link TaskspaceEntry} for a listing
- * read once at build time rather than per directory on demand: a directory carries its
- * children inline, and a file carries its content inline — there is no further request the
- * static page could make to fetch either.
+ * Embedded static-export tree node. Directories include children and readable files include
+ * content because static pages have no file endpoint.
  *
- * A file too large, not valid UTF-8 text, or past the taskspace's total byte budget is
- * `file-skipped` rather than omitted outright, so the tree still shows it was there and why
- * nothing came back for it — the same reasons the live editor already answers with, plus
- * `"budget"` for the export-only total-size ceiling.
+ * Keep skipped files visible with a reason when size, encoding, or export budgets prevent
+ * embedding them.
  */
 export type TaskspaceFileNode =
   | {
@@ -117,9 +92,7 @@ export type TaskspaceFileNode =
   | {
       kind: "file-skipped";
       name: string;
-      /** `"unreadable"` covers the same rare, permission/race cases the live editor answers
-       *  with 403/404 for — the file was there when its directory was listed but not when
-       *  the export went to read it. */
+      /** Unreadable files include permission failures and files removed after listing. */
       reason: "too-large" | "not-text" | "budget" | "unreadable";
       size: number | null;
     }
@@ -131,25 +104,11 @@ export interface TaskspaceFileTree {
 }
 
 /**
- * Where a tag was written. The two things a workspace holds text in, and the only place the
- * card path and the file path differ at all: one grammar reads both (`scanTagLines` in
- * `lib/tag.ts`), and each caller wraps what comes back in the source it knows.
+ * Tag source identity for a card or taskspace file. Join card metadata by ID instead of
+ * copying it into every hit.
  *
- * Identity, and nothing a row already holds. A card's partition, position, and layer are
- * columns of `card`, so a reader that wants them joins by `cardId` against cards it has
- * already got — the board keeps every one of them in its snapshot. Copying them in here
- * would put a second, staler copy of those columns behind every occurrence of every tag.
- *
- * A file is the other case rather than the same duplication: nothing anywhere holds a row
- * for one, so the taskspace, the path within it, and the line are its identity.
- *
- * That is also why only one of the two carries a `line`, though `scanTagLines` computes it
- * for both. A file hit is a place to go and look, and the line is half of where; a card hit
- * opens the card, which is one place however many of its lines carry the tag — a line number
- * there would be a field every reader has to decide to ignore. What the line was needed for
- * is already kept: `excerpt` is that line, so a card matched deep in its text shows the text
- * that matched rather than its opening words. `hitRowKey` in `lib/tag.ts` is where the two
- * grains meet, and is the only place that needs to know they differ.
+ * File identity includes taskspace, path, and line. Card hits open the whole card and retain
+ * matching text in the excerpt rather than a navigation line number.
  */
 export type TagSource =
   | { kind: "card"; cardId: string }
@@ -157,7 +116,7 @@ export type TagSource =
 
 /** One tag, once, where it was written. */
 export interface TagHit {
-  /** Normalized and whole: `foo:bar:baz`, without the sigil. See `normalizeTag`. */
+  /** Full normalized tag without its sigil, such as `foo:bar:baz`. See `normalizeTag`. */
   tag: string;
   source: TagSource;
   /** The line the tag sits on, trimmed and capped. Enough to recognize the hit by. */
@@ -193,26 +152,22 @@ export interface NamespaceDataSnapshot {
   layers: Layer[];
   warps: Warp[];
   /**
-   * Not every scope in the workspace: the ones this namespace has reason to draw, as
-   * `getScopesInNamespace` decides. A scope another namespace alone is working in is absent,
-   * and the client must not treat this as the full list — `kozane scope list` is that.
+   * Scopes visible to this namespace, not the complete workspace list. Use the workspace-wide
+   * CLI listing for that view.
    */
   scopes: Scope[];
   scopeRels: ScopeRel[];
   /**
-   * Where those scopes are framed on this board. Any number per scope, each identified by its
-   * own `id` rather than its `scopeId`, and most scopes have none: an area is drawn only for a
-   * scope someone has given a place to. Narrowed the same way `scopes` is — another
-   * namespace's frames are not this board's business.
+   * Scope frames on this board, each identified by its own ID. A scope can have multiple
+   * frames or none.
    */
   scopeAreas: ScopeArea[];
   glueRels: GlueRel[];
-  /** Likewise narrowed: this namespace's taskspaces, plus the ones assigned to no namespace. */
+  /** This namespace's taskspaces plus unplaced taskspaces. */
   taskspaces: TaskspaceSummary[];
   /**
-   * Present only in a static export built with `--include-scoped-files`: one file tree per
-   * taskspace that had a resolvable path, keyed by taskspace id. Absent everywhere else —
-   * the live board reads files on demand through the real endpoints and never needs this.
+   * Embedded file trees keyed by taskspace ID, present only in static exports that include
+   * scoped files. Live boards fetch files on demand.
    */
   taskspaceFiles?: Record<string, TaskspaceFileTree>;
 }

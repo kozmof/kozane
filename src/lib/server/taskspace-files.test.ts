@@ -538,17 +538,9 @@ describe("createTaskspaceDirectory", () => {
 });
 
 /**
- * The paths a real filesystem takes that a tidy one does not: a permission the process does
- * not have, a symlink that points at itself, an entry that is neither a file nor a
- * directory, and a directory that can be listed but not inspected.
- *
- * Every case here is about `mapFsError` and the catch blocks around it — the part of this
- * module that decides whether an awkward filesystem reads to the route as 403, 404 or 400.
- * The boundary tests above are about what the module refuses on purpose; these are about
- * what it does when the refusal comes from the kernel instead.
- *
- * `skipIf` on the permission cases for the reason `taskspace-tags.test.ts` gives on its own:
- * nothing is unreadable to root, so the denial they rest on does not happen there.
+ * Test filesystem failures, including permissions, symlink loops, unsupported entries, and
+ * entries that cannot be inspected. Verify their route-facing error categories. Skip
+ * permission cases when running as root.
  */
 describe("taskspace files on an awkward filesystem", () => {
   const asRoot = process.getuid?.() === 0;
@@ -562,8 +554,8 @@ describe("taskspace files on an awkward filesystem", () => {
   });
 
   afterEach(() => {
-    // Permissions are put back before the tree is removed: a directory left at 0o000 cannot
-    // be recursed into, and the cleanup would leave it behind in the temp directory.
+    // Restore permissions before cleanup so the temporary directory can be traversed and
+    // removed.
     for (const name of ["ro", "nox", "locked-dir"]) {
       try {
         chmodSync(join(base, name), 0o755);
@@ -604,7 +596,7 @@ describe("taskspace files on an awkward filesystem", () => {
     });
 
     it("reports a missing parent directory as not-found rather than creating it", () => {
-      // Non-recursive on purpose: one request must not be able to conjure a tree.
+      // Create only the requested directory, without creating missing ancestors.
       expect(reasonOf(() => createTaskspaceFile({ baseDir: base, subPath: "no/such/a.txt" }))).toBe(
         "not-found",
       );
@@ -684,8 +676,8 @@ describe("taskspace files on an awkward filesystem", () => {
       const { signature } = readTaskspaceFile({ baseDir: base, subPath: "readonly.txt" });
       chmodSync(base, 0o555);
       try {
-        // The directory is what is locked, not the file: `writeFileAtomic` renames a
-        // temporary file into place, so it needs to write the directory entry.
+        // Restrict directory permissions because atomic replacement must modify the directory
+        // entry.
         expect(
           reasonOf(() =>
             writeTaskspaceFile({
@@ -722,10 +714,8 @@ describe("taskspace files on an awkward filesystem", () => {
 
   describe("an entry that cannot be inspected after it has been listed", () => {
     it.skipIf(asRoot)("leaves it out of the listing rather than failing the whole read", () => {
-      // Read permission without execute: `readdir` answers with the names, and `lstat` on
-      // each of them is refused. That is the same shape as an entry deleted between the two
-      // calls, which is the race this branch is really for — and the only version of it a
-      // test can arrange deterministically.
+      // Allow listing names but deny entry inspection to reproduce a failed `lstat`
+      // deterministically.
       const dir = join(base, "nox");
       mkdirSync(dir);
       writeFileSync(join(dir, "a.txt"), "x");

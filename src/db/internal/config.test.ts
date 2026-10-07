@@ -88,12 +88,7 @@ describe("getTaskspaceDefaultDir", () => {
 });
 
 describe("two workspaces in one process", () => {
-  /**
-   * `getUiConfigForRoot` takes its root from the caller, so a single process can be asked
-   * about two workspaces — and used to hold one cache slot for whichever was asked about
-   * last. Each read evicted the other's entry, and the answers were only ever right
-   * because the signature happened to carry the inode.
-   */
+  /** Verify that configuration reads for two workspace roots keep independent cache entries. */
   it("keeps each workspace's settings apart", () => {
     const other = mkdtempSync(join(tmpdir(), "kozane-config-other-"));
     mkdirSync(join(other, ".kozane"));
@@ -124,10 +119,7 @@ describe("two workspaces in one process", () => {
       expect(getUiConfigForRoot(root).defaultZoom).toBe(1.5);
       expect(getUiConfigForRoot(other).defaultZoom).toBe(2.5);
 
-      // A different length as well as different bytes: `fileSignature` documents that two
-      // same-length rewrites inside one filesystem timestamp tick are indistinguishable to
-      // it, and this test is about the cache being keyed per workspace, not about closing
-      // that gap.
+      // Use different lengths to avoid a metadata collision in this test.
       writeFileSync(otherConfig, JSON.stringify({ name: "other", ui: { defaultZoom: 3.25 } }));
 
       expect(getUiConfigForRoot(other).defaultZoom).toBe(3.25);

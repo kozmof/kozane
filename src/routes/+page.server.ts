@@ -5,8 +5,7 @@ import { getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
 import { isSsgBuild } from "$lib/server/ssg";
 
-// Static export (kozane net ssg generate): prerender to HTML and hide the local workspace path,
-// which is a machine-specific absolute path that must not be published.
+// Prerender static exports and omit the machine-specific workspace path from published data.
 export const prerender = isSsgBuild();
 const readonly = process.env.KOZANE_READONLY === "1";
 
@@ -36,9 +35,7 @@ const namespaceActions = {
 } satisfies Actions;
 
 /**
- * Dropped entirely in read-only mode: the static export prerenders this page, and SvelteKit
- * refuses to prerender a page that exports actions at all — an empty object still counts.
- * The cast keeps the page's `form` type describing what the action returns, which is what a
- * non-static build always has.
+ * Omit actions entirely during static prerendering because even an empty actions object
+ * prevents prerendering. Preserve the live action's form type through the cast.
  */
 export const actions = (readonly ? undefined : namespaceActions) as typeof namespaceActions;

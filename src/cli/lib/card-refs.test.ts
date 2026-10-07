@@ -46,9 +46,8 @@ describe("movedCoordinate", () => {
 
 describe("resolveCardGroup", () => {
   it("resolves short ids across the whole workspace, not one namespace", async () => {
-    // The property that makes `kozane card namespace` possible: an abbreviation is
-    // unambiguous in the set of every card there is, so a prefix resolves here whichever
-    // namespace printed it.
+    // Resolve short IDs against all workspace cards, independent of which namespace printed
+    // them.
     const db = await createTestDB();
     const here = await namespace(db, "Here");
     const there = await namespace(db, "There");
@@ -95,8 +94,8 @@ describe("loadCards", () => {
   });
 
   it("batches an id list past what one statement will bind", async () => {
-    // `card glue --add` expands a selection to whole glue groups, which have no ceiling
-    // short of the namespace — so this is asked for more ids than SQLite takes parameters.
+    // A glue selection can include every card in the namespace, so test an ID list larger
+    // than one statement's parameter budget.
     const db = await createTestDB();
     const { partitionId } = await namespace(db, "Here");
     const ids: string[] = [];

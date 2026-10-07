@@ -18,37 +18,16 @@ import {
 import { authenticateRequest } from "./lib/server/request-auth";
 import { LOGIN_PATH } from "./lib/server/login";
 
-// Default to localhost so that running `node build/index.js` directly without
-// the CLI never accidentally exposes the server on all interfaces.
-// The CLI (kozane open) always sets HOST explicitly, so this is a no-op there.
+// Set a loopback fallback for direct use of adapter-node's generated entry. This depends on
+// hooks loading before that entry reads HOST.
 //
-// A backstop, and no longer the mechanism. `bin/server.js` is Kozane's server entry and
-// calls `listen` itself with `DEFAULT_SERVER_HOST`, so nothing about the address Kozane
-// binds depends on this line, or on when it runs.
-//
-// It stays for the entry Kozane does not use. `build/index.js` is excluded from the
-// published package now — `files` in `package.json` drops it, and
-// `scripts/check-package-entry.mjs` fails the release if it comes back — but `vite build`
-// still emits it, so it is there in every checkout and `pnpm build && node build/index.js`
-// is a thing a contributor can do. Adapter-node's default there is `env('HOST', '0.0.0.0')`,
-// and this assignment is what keeps that off every interface.
-//
-// It happens to win that race — `index.js` statically imports the handler chunk, that chunk
-// ends in a top-level `await server.init(...)`, and `init()` reaches hooks through a dynamic
-// import, so hooks evaluates before the entry's body reads HOST. That chain is two SvelteKit
-// internals deep and could change in a minor release without an error, which is precisely
-// why it is not what the supported path relies on any more.
-//
-// `scripts/smoke-production.mjs` starts a server with HOST unset and asserts the socket is
-// loopback and that the machine's routable address is refused, so a regression on either
-// path fails a check rather than shipping.
+// The supported `bin/server.js` entry binds to `DEFAULT_SERVER_HOST` explicitly and does not
+// depend on this import order. The generated `build/index.js` is excluded from the published
+// package but remains in local builds.
 process.env.HOST ??= "127.0.0.1";
 
-// After the line above, which is what decides whether this is a remote binding at all.
-// At module scope rather than per request: it is a property of how the process was
-// started, and both supported starts reach it — `kozane open` spawns `bin/server.js`,
-// which loads hooks, and so does a `node bin/server.js` under a process manager, which
-// never passes through the CLI at all. A warning and not a refusal; see the note on it.
+// Report remote-binding configuration once after HOST is resolved. Both CLI and direct server
+// startup load these hooks.
 {
   const throttleWarning = remoteThrottleWarning();
   if (throttleWarning) console.warn(`[kozane] ${throttleWarning}`);
@@ -56,47 +35,20 @@ process.env.HOST ??= "127.0.0.1";
 
 let registeredRoot: string | null = null;
 /**
- * Whether the `exit` hook that releases this process's reservation is in place.
- *
- * One listener for the process, installed with the first reservation and reading
- * {@link registeredRoot} when it runs rather than closing over the root it was installed
- * for. A listener per reservation is what this was, and `process.once` keeps every handler
- * it is given: reserve a second workspace and the first hook is still there, waiting to
- * release a root this process has stopped serving. Production never gets there — the root is
- * resolved once and cached for the life of the process — but a suite that builds a fresh
- * workspace per test does, and stacks handlers until Node warns about a leaked emitter at
- * eleven. Only the current reservation is this process's to release, so one listener is all
- * there is work for.
+ * Whether the process exit listener is installed. Register one listener and read the current
+ * {@link registeredRoot} when it runs so changing reservations does not accumulate listeners.
  */
 let exitHookInstalled = false;
 /**
- * Set once the workspace turns out to belong to another server. Remembered rather than
- * rediscovered per request: without it every request races for the same lock file and
- * answers with a fresh 500, which reads as an intermittent fault rather than the one
- * condition it is. The reservation is not attempted at module load, where a plain `vite
- * build` that happens to run inside a workspace would claim it.
+ * Check reservation conflicts lazily so importing the module during a build does not claim
+ * the workspace.
  */
 let runtimeStateConflict: string | null = null;
 let conflictCheckedAt = 0;
 /**
- * How long a refusal about the workspace is trusted before it is established again.
- *
- * Both of the two gates that can clear without this process restarting: another server
- * holding the workspace ({@link registerRuntimeState}) and a database behind this version
- * ({@link checkMigrations}). Each keeps its own timestamp — they are answered independently
- * and neither should reset the other's clock — and shares this interval, because the thing
- * being traded off is the same in both: how soon the server notices someone has fixed it,
- * against how often an unfixed workspace pays for asking.
- *
- * Both were once latched for the lifetime of the process, which made "the other server has
- * since stopped", or "`kozane db migrate` has since been run", indistinguishable from the
- * condition still standing: every request went on failing until this one was restarted too.
- * Long enough that a browser reloading against a genuinely occupied workspace does not go
- * back to racing for the lock file, or re-opening the database once a request to read its
- * migration state.
- *
- * Named for the workspace rather than for the conflict it first covered, which is what it
- * was called while the runtime-state gate was its only reader.
+ * Delay before retrying a refused workspace reservation or migration check. Separate
+ * timestamps let each condition recover independently while limiting repeated filesystem and
+ * database work.
  */
 const WORKSPACE_RECHECK_MS = 5_000;
 
@@ -112,8 +64,7 @@ function registerRuntimeState(root: string | null): string | null {
   });
   if (active) {
     const message = `Kozane workspace is already served by process ${active.pid}. Stop that server, or run this one against another workspace.`;
-    // Only when it is news: re-checking on a timer would otherwise write the same line to
-    // the log every few seconds for as long as the other server runs.
+    // Log only new or changed conflicts.
     if (runtimeStateConflict !== message) console.error(`[kozane] ${message}`);
     runtimeStateConflict = message;
     conflictCheckedAt = Date.now();
@@ -134,32 +85,17 @@ function registerRuntimeState(root: string | null): string | null {
 }
 
 /**
- * The schema check's answer, or null while it has not been made. Held rather than repeated:
- * a current workspace is checked once and never again, because the only thing that could
- * migrate it out from under a running server is `kozane db migrate`, which refuses to run
- * while one holds the workspace.
- *
- * A stale answer is re-checked on the interval {@link WORKSPACE_RECHECK_MS} sets, for the
- * same reason the runtime-state conflict is: `kozane db migrate` in another terminal is the
- * ordinary way out of this state, and a latched answer would go on refusing every request
- * until the server was restarted too.
+ * Cache migration status in this process and periodically recheck stale results so migrations
+ * take effect without a restart.
  */
 let migrationBlock: { message: string; checkedAt: number } | null = null;
 let migrationsVerified = false;
 
 /**
- * Why this process may not serve the workspace's database, or null when it may.
+ * Return the reason the workspace database cannot be served, or null when it is ready.
  *
- * The gap this closes: every CLI command runs `requireCurrentMigrations` through
- * `runWorkspaceCommand`, and `kozane open` runs it before spawning anything — but the server
- * itself never did. Started any other way — `node bin/server.js` under a process manager, a
- * container that mounts a workspace an older release wrote — it opened whatever was there and
- * failed at the first query, with SQLite's wording about a missing column standing in for
- * "this workspace needs migrating".
- *
- * 503 and not 500, and answered rather than thrown, for the reason the unreadable key file
- * is: the condition belongs to the workspace rather than to the request, and it clears
- * without a restart.
+ * Check server startup paths that do not pass through CLI migration validation. Report
+ * recoverable workspace conditions as 503 responses.
  */
 async function checkMigrations(): Promise<string | null> {
   if (migrationsVerified) return null;
@@ -174,10 +110,9 @@ async function checkMigrations(): Promise<string | null> {
     return null;
   }
 
-  // An in-memory database is migrated by the act of opening it (`openDb`), and there is no
-  // file for a second connection to look at: `getMigrationStatus` would open its own empty
-  // one, find no `__drizzle_migrations` table, and report every migration pending. The same
-  // exemption `kozane open --memory` takes for the same reason.
+  // Opening an in-memory database applies its migrations. Skip `getMigrationStatus`, which
+  // would inspect a separate empty database and report pending migrations. `kozane open
+  // --memory` uses the same exemption.
   if (isMemoryDbUrl(url)) {
     migrationsVerified = true;
     return null;
@@ -199,45 +134,44 @@ async function checkMigrations(): Promise<string | null> {
           ? "No Kozane workspace database found. Run 'kozane init' first."
           : `Kozane database state could not be read: ${status.error}. Run 'kozane doctor'.`;
 
-  // Only when it is news, for the reason `registerRuntimeState` gives: re-checking on a
-  // timer would otherwise write the same line every few seconds for as long as it stands.
+  // Log only changed status so periodic checks do not repeat the same message.
   if (migrationBlock?.message !== message) console.error(`[kozane] ${message}`);
   migrationBlock = { message, checkedAt: Date.now() };
   return message;
 }
 
 /**
- * The gates every request passes, in the order they run. The order is load-bearing, so it
- * is written down rather than left to be inferred from the sequence below:
+ * Apply request gates in this order.
  *
- * 1. SSG bypass. A prerender pass is not a request from anyone and skips the rest.
- * 2. Runtime state. Another server holding this workspace is a condition of the
- *    workspace, not of the request, so it answers before anything about the request is read.
- * 3. Key file readable. Likewise the workspace's, and answered rather than thrown: see
- *    `readApiKeyResult`.
- * 4. Remote binding has a key, and 5. remote binding is over TLS. Both refuse a
- *    misconfigured server, so they run before any question of who is asking — a
- *    workspace bound to the world without a key must not answer a login page either.
- * 6. Host, for a keyless workspace only. The one mode with no key to check, so the
- *    name the request arrived under is all there is to go on; see `isAllowedRequestHost`.
- *    Skipped entirely once a key exists, where gate 8 is the real answer.
- * 7. Login page exemption. After 3–6 so those still apply to it, and before the key
- *    check so that redirecting an unauthenticated browser to it cannot loop.
- * 8. The key check (`authenticateRequest`).
- * 9. The schema, and 10. the database, both only for a request that got this far.
- *    The schema is a condition of the workspace like gates 2–5, and would sit with them but
- *    for what it costs: answering it opens the database file, so asking it before the key
- *    check would do that work for every unauthenticated prober, and would tell one the
- *    workspace's migration state. `migrationsVerified` makes the steady-state cost one check
- *    per process.
+ * 1. Bypass gates during static prerendering.
+ *
+ * 2. Reserve the workspace.
+ *
+ * 3. Verify that the key file is readable.
+ *
+ * 4. Require a key for remote binding.
+ *
+ * 5. Require TLS for remote binding.
+ *
+ * 6. Check the Host header for keyless workspaces.
+ *
+ * 7. Allow the login page without authentication.
+ *
+ * 8. Authenticate the request.
+ *
+ * 9. Check migrations.
+ *
+ * 10. Open the database.
+ *
+ * Check workspace configuration before serving login. Authenticate before inspecting
+ * migrations to avoid opening the database or exposing its migration state to unauthenticated
+ * requests.
  */
 const handleRequest: Handle = async ({ event, resolve }) => {
   const root = getWorkspaceRoot();
 
-  // Static export build (kozane net ssg generate): prerendering issues synthetic requests
-  // against the local workspace DB. Skip the API-key/TLS gating entirely — the
-  // export is inherently public and read-only, and enforcing auth here would make
-  // prerendering fail with 401s on any workspace that has an API key configured.
+  // Static prerendering makes local requests against the workspace database. Skip
+  // authentication and TLS checks so export also works for key-protected workspaces.
   if (isSsgBuild()) {
     event.locals.db = await getDb();
     return resolve(event);
@@ -248,12 +182,8 @@ const handleRequest: Handle = async ({ event, resolve }) => {
 
   const key = root ? readApiKeyResult(root) : ({ ok: true, key: null } as const);
   if (!key.ok) {
-    // Answered rather than thrown, the way the database below is. The key file is consulted
-    // on every request, so an unreadable one is not a fault of the request being served:
-    // left to throw, a hand-edited `api.json` turns every page load and every poll into a
-    // 500 that says nothing about the file behind it. 503 rather than 500 because the
-    // condition is the workspace's, not this request's, and it clears without a restart —
-    // `readApiKey` re-reads a malformed file every time, so fixing it takes effect at once.
+    // Return 503 for an unreadable key file. This workspace condition can clear without
+    // restarting because malformed files are reread on subsequent requests.
     return applySecurityHeaders(
       new Response(`${key.message}. Fix the file, or run 'kozane api key refresh' to replace it.`, {
         status: 503,

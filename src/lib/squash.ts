@@ -1,9 +1,8 @@
 import { CANVAS_W } from "./constants.js";
 
 /**
- * Splits on a period followed by whitespace — a space or a line break alike — on `。`, or on
- * a blank line. A period with a non-space after it is left alone, so `example.com` survives
- * as one word.
+ * Split at a period followed by whitespace, at `。`, or at a blank line. Preserve periods
+ * followed by non-whitespace, as in `example.com`.
  */
 export const DEFAULT_SQUASH_PATTERN = String.raw`\.\s|。|\r?\n[ \t]*\r?\n`;
 
@@ -27,28 +26,21 @@ type SquashLayout = {
 };
 
 /**
- * Grid slots for `count` cards, skipping any slot a card already sits on. Rows fill left to
- * right and wrap at the right-hand edge of the board.
- *
- * Nothing here knows how tall a card is drawn — that depends on its text, its width, and
- * the font — so the spacing is fixed rather than measured, and a long card may still
- * overlap the one below it until someone drags it.
+ * Place cards in free grid slots, filling rows left to right and wrapping at the board edge.
+ * Spacing is fixed because rendered heights are unavailable, so long cards may overlap later
+ * rows.
  */
 export function squashCardPositions(
   occupied: CardPosition[],
   count: number,
   { origin = { posX: 0, posY: 0 }, canvasWidth = CANVAS_W }: SquashLayout = {},
 ): CardPosition[] {
-  // At least one: an origin within a column's width of the right edge still has to put its
-  // cards somewhere, and a column count of zero would place every one of them on top of the
-  // last. They are clamped back onto the board by the caller that stores them.
+  // Allow at least one column near the right edge. The caller clamps stored positions to the
+  // board.
   const columns = Math.max(1, Math.floor((canvasWidth - origin.posX) / SQUASH_COLUMN_SPACING));
   const occupiedKeys = new Set(occupied.map(({ posX, posY }) => `${posX},${posY}`));
-  // A slot is skipped only when a card already sits on it, and each slot names a distinct
-  // point, so `count + occupied` slots hold `count` free ones however the two interleave.
-  // The loop reads as "keep going until enough are found", which is the same thing right
-  // up until the arithmetic above stops agreeing with it — and then it is an endless loop
-  // inside a request. Bounded, the worst case is a layout that came out wrong instead.
+  // Bound the search by requested cards plus occupied slots. This provides enough free
+  // distinct slots without risking an endless loop if placement arithmetic changes.
   const slotLimit = count + occupiedKeys.size;
   const positions: CardPosition[] = [];
   for (let slot = 0; positions.length < count && slot < slotLimit; slot++) {
@@ -61,10 +53,8 @@ export function squashCardPositions(
     occupiedKeys.add(key);
     positions.push(position);
   }
-  // Unreachable by the argument above, and filled rather than left short because the
-  // caller indexes this list per card: one position per card is the contract, and a
-  // caller crashing on `positions[i].posX` is a worse way to learn the bound was wrong
-  // than a few cards stacked on the origin.
+  // Return one position per card even if the bound above fails. Fall back to the origin for
+  // any remaining positions.
   while (positions.length < count) positions.push({ ...origin });
   return positions;
 }

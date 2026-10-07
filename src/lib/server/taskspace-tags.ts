@@ -17,38 +17,23 @@ import { evict, touch, touchOrCreate } from "./lru.js";
 import { listTaskspaceDirectory, readTaskspaceFile } from "./taskspace-files.js";
 
 /**
- * The tags written in the files of one taskspace.
+ * Scan taskspace files for tags through the shared directory and file readers. Reuse their
+ * containment, hidden-file, symlink, size, and UTF-8 checks.
  *
- * The file half of tagging, and the half that cannot be a database read: a taskspace is an
- * ordinary directory on disk that anything may write to, so the only way to know what tags
- * are in it is to look. Everything below is about making looking cheap enough to do while
- * someone waits.
- *
- * Built on {@link listTaskspaceDirectory} and {@link readTaskspaceFile}, the same two
- * functions the live `/files` and `/file` endpoints hold a request to. Every boundary they
- * enforce therefore applies here without being restated: dot-entries hidden and never
- * recursed into, so a `.git` and an `.env` are not scanned; symlinks reported and never
- * followed, so the walk cannot leave the taskspace; the 1 MB per-file cap; and strict UTF-8,
- * so a binary is refused rather than parsed as if it were text.
- *
- * One rule is this walk's own, because it is the only one that reads a whole tree at once
- * rather than the directory a user asked for: {@link TAG_SCAN_SKIP_DIRS} is not descended
- * into. See the note there for what that is worth — without it a working tree's generated
- * output spends the budget before the walk reaches anything anyone wrote.
+ * Also skip {@link TAG_SCAN_SKIP_DIRS} so generated output does not consume the budget before
+ * authored files.
  */
 
-/** What is left to spend on this scan. The same running-totals shape, and the same reasoning,
- *  as `Budget` in `taskspace-snapshot.ts`: the boundary functions read one directory and one
- *  file at a time, so a budget can only be spent, not computed up front. */
+/**
+ * Remaining scan budget. Track spending as directories and files are read, as `Budget` does
+ * in `taskspace-snapshot.ts`.
+ */
 type Budget = { remaining: number; nodes: number };
 
-/** What one taskspace's walk may spend, each defaulting to the constant it is named after.
- *  Overridable so a test can reach a limit without putting twenty thousand entries on disk.
- *
- *  `files` is the odd one: not what the walk may spend but what it may leave behind — how
- *  many parsed files this directory keeps afterwards. It is here rather than in a separate
- *  bag because it is overridable for the same reason as the rest, and reaching
- *  {@link TAG_CACHE_FILES_MAX} honestly means writing twenty thousand files. */
+/**
+ * Per-taskspace scan limits, overridable for tests. `files` bounds retained cache entries
+ * rather than work performed during the scan.
+ */
 export type TaskspaceScanLimits = {
   bytes?: number;
   nodes?: number;
@@ -61,33 +46,14 @@ export type TaskspaceScanLimits = {
 export type GatherScanLimits = { workspaceBytes?: number; workspaceNodes?: number };
 
 /**
- * Both, for the one caller that sets them together — `loadTagIndex` takes a single `limits`
- * and hands each half to the function that spends it.
- *
- * Named halves rather than one flat bag of five optional numbers, which is what this was.
- * Every field was optional and the two audiences were told apart only by a prefix, so
- * {@link createScanPool} silently ignored three of them and {@link scanTaskspaceTags}
- * silently ignored the other two — with nothing in either signature to say which it read.
- *
- * A record of the two rather than their intersection, which is how this first split them.
- * Intersected, the halves are named types and the fields are still one flat set: `{ bytes }`
- * meant for the gather type-checks as the taskspace's and is spent as the taskspace's, which
- * is the same silent misreading in a smaller costume — and the prefixes were all that told
- * the two apart, so the one mistake worth catching was the one still available. Nested, a
- * limit is in the half that spends it or it is a compile error.
+ * Separate workspace and taskspace limit overrides into named fields so each consumer
+ * receives only its own limits.
  */
 export type ScanLimits = { taskspace?: TaskspaceScanLimits; gather?: GatherScanLimits };
 
 /**
- * What is left to spend across a whole gather — one pool, passed to every taskspace in it.
- *
- * Mutable and shared, for the reason {@link Budget} is: what a taskspace costs is only known
- * once it has been walked, so the loop can subtract but cannot divide up front. A taskspace
- * takes the smaller of its own ceiling and what is left here, which is what keeps the first
- * one in the list from spending the gather on itself.
- *
- * See {@link TAG_SCAN_WORKSPACE_BYTES_MAX} for why a per-taskspace ceiling was not enough on
- * its own.
+ * Remaining workspace-wide budget shared by all taskspace scans. Each scan spends at most its
+ * own limit and the pool's remaining allowance.
  */
 export type ScanPool = { bytes: number; nodes: number };
 
@@ -105,97 +71,42 @@ export type TaskspaceTagScan = {
    */
   truncated: TagScanTruncation[];
   /**
-   * Whether the taskspace directory itself could not be opened — deleted, moved, or made
-   * unreadable since the record naming it was written.
-   *
-   * Its own field and not a {@link TagScanTruncation}, which is what it was. A truncation is
-   * a scan that read a taskspace and stopped short of the end of it, and every reader of one
-   * says exactly that: "was not read in full", followed by a reason about the files it did
-   * not reach. None of that holds here — there was nothing to read and no file to name, and
-   * the sentence it produced ("some files could not be read", the file in question being
-   * `./`) described a taskspace with one bad file rather than a record pointing at nothing.
-   * The distinction {@link TagScanTruncation} already draws between `"too-large"` and
-   * `"unreadable"`, carried one step further out: this is not a limit the scan met, it is a
-   * taskspace that is not there to meet one.
-   *
-   * A directory the walk cannot list below the root stays a truncation. That taskspace was
-   * read as far as it goes, and one unreadable directory inside it is a fact about a file.
+   * Whether the taskspace root could not be opened. Report unavailable roots separately from
+   * truncated scans. An unreadable directory below the root remains a truncation.
    */
   missing: boolean;
   /**
-   * A few of the paths behind {@link TaskspaceTagScan.truncated}, relative to the taskspace,
-   * or empty where the scan read everything.
-   *
-   * Because a reason on its own is not somewhere to look. "Some files could not be read" is
-   * true of a taskspace with one permission-denied file and of one that is entirely
-   * inaccessible, and a reader told the first has no way to find the file and no reason to
-   * believe the rest of the answer. A directory is named with a trailing `/`, so a path that
-   * could not be listed is not read as a file of that name.
-   *
-   * A sample, capped at {@link TAG_SCAN_TRUNCATED_PATHS_MAX}, and never the whole set — see
-   * `noteTruncatedPath`. Not every reason has a path: `nodes`, `depth`, and `hits` are
-   * ceilings on the walk rather than facts about a file, so a scan that stopped only at those
-   * names nothing.
+   * Sample paths associated with truncation, capped by {@link TAG_SCAN_TRUNCATED_PATHS_MAX}.
+   * Use trailing slashes for directories. Scan-wide depth, entry, and hit limits need not
+   * name a path.
    */
   paths: string[];
   /**
-   * Whether this scan learned anything the cache did not already hold — a file read for the
-   * first time or read again after a change, or a stale entry dropped.
-   *
-   * False is the ordinary case for a taskspace nobody has touched, and is what lets
-   * `loadTagIndex` skip rewriting a cache file that would come back byte-for-byte the same.
+   * Whether the scan read changed content or pruned cache entries. An unchanged result lets
+   * the gather skip rewriting the persistent cache.
    */
   changed: boolean;
 };
 
 /**
- * One file's tags as they were last read, kept against the identity of the bytes they came
- * from. `signature` is `${modifiedAt}:${size}` — both of which {@link listTaskspaceDirectory}
- * already returns, from an `lstat` the walk does whether or not there is a cache. So
- * revalidating a file costs no syscall of its own: a scan of an untouched tree is all walk
- * and no reads, and only a file that actually changed is read and parsed again.
+ * Cached file tags keyed by the listing's modification time and size. Reuse listing metadata
+ * to avoid an extra stat per file.
  *
- * Weaker than `fileSignature` in two ways, both from taking what the listing already has
- * rather than paying for a `stat` of its own. There is no inode, so a file replaced by
- * rename — which is how editors and Kozane's own writers save — is caught by its mtime rather
- * than outright. And `modifiedAt` is an ISO string, so the resolution is a millisecond where
- * `fileSignature` reports nanoseconds. Two writes of the same length inside one millisecond
- * are therefore indistinguishable here.
- *
- * Out of reach of a person editing a file, which is what this is for, and the cost of being
- * wrong is a stale entry rather than a wrong answer anywhere durable: the tag index is
- * rebuilt from it, not trusted as a record. If it ever needs closing, `fileSignature` closes
- * both halves for one extra `stat` per file.
- *
- * A file whose `modifiedAt` is null has no signature at all, and so is never cached and never
- * answered from the cache — see {@link fileTagHits}. Composing one out of the null read as a
- * signature like any other, so every such file in a taskspace shared the one key `null:0` and
- * the first of them answered for all the rest.
+ * This signature omits the inode and has millisecond timestamp precision. Same-length writes
+ * within a millisecond can therefore leave stale hits. Files without a modification time are
+ * not cached.
  */
 export type CachedFile = { signature: string; hits: TagLineHit[] };
 
 /**
- * Files parsed in this process: taskspace directory, then path within it. Lives for the life
- * of the server — the entries are small, a path, a signature, and the tags of one file, and a
- * taskspace whose files are re-read on every visit is the cost this exists to remove.
- *
- * Nested rather than keyed by a joined string so that one taskspace's entries can be handed
- * out and taken back whole; see {@link exportTaskspaceTagCache}.
+ * Parsed file cache grouped by taskspace directory and relative path. Grouping lets
+ * persistence import or export a taskspace's entries together.
  */
 const fileCache = new Map<string, Map<string, CachedFile>>();
 
 /**
- * One directory's entries, created on first sight, and moved to the end of the map either
- * way — which makes insertion order least-recently-used.
- *
- * Eviction happens here rather than on a timer because here is where the map grows. It was
- * missing entirely: pruning is per directory — {@link pruneStale} drops files that are gone
- * from one that was walked — so a taskspace deleted, re-pathed, or simply not looked at
- * again kept every file it had ever parsed for the life of the server, and a long-lived
- * `kozane open` grew without bound over a workspace whose taskspaces come and go.
- *
- * The directory just touched is never the one evicted, since it is at the end; an evicted one
- * costs a re-read the next time it is scanned, and nothing else.
+ * Get or create a directory cache, mark it most recent, and evict older directories when the
+ * limit is exceeded.
  */
 function dirEntries(baseDir: string): Map<string, CachedFile> {
   // Only where the map can have grown. Eviction walks every key, and this is called once per
@@ -208,45 +119,28 @@ function dirEntries(baseDir: string): Map<string, CachedFile> {
 }
 
 /**
- * Marks a directory as the most recently used, without creating one for a directory this
- * process does not hold.
- *
- * Separate from {@link dirEntries} because a scan that answers entirely from the cache writes
- * nothing, and so would never touch the map that is about to evict it — the taskspace nobody
- * has edited is exactly the one worth keeping. Creating on the way past instead would leave
- * an empty record for a taskspace whose directory could not even be listed, and
- * {@link exportTaskspaceTagCache} would then report it as scanned-and-empty.
+ * Mark an existing directory cache as recent without creating an entry for an unreadable or
+ * unscanned directory.
  */
 const touchDir = (baseDir: string): void => touch(fileCache, baseDir);
 
 /**
- * Drops all but the last {@link TAG_CACHE_FILES_MAX} files of one directory.
- *
- * Once per scan rather than once per file: {@link evict} walks every key, so calling it on
- * each parse would be a pass over the whole directory per file — quadratic in exactly the
- * taskspace this exists to bound. A single walk cannot write more entries than the ceiling
- * keeps (see the note on the constant), so waiting until the end of one cannot let the map
- * exceed it by more than that walk's own worth.
+ * Evict old file entries once per scan. Running the full eviction pass per file would make
+ * large scans quadratic.
  */
 function evictFiles(baseDir: string, max: number): void {
   const entries = fileCache.get(baseDir);
   if (entries) evict(entries, max);
 }
 
-/** Forgets every cached file. For tests, which write a temporary directory, delete it, and
- *  write a fresh one at a path the first may well have used — the same reason
- *  `clearTaskspaceFileTreeCache` exists. */
+/** Clear parsed-file caches between tests that reuse temporary paths. */
 export function clearTaskspaceTagCache(): void {
   fileCache.clear();
 }
 
 /**
- * One taskspace's parsed files, for a caller that keeps them somewhere this process cannot
- * reach — `tag-cache.ts` writes them to disk, so the next process starts warm instead of
- * re-reading every file to learn what it already knew.
- *
- * Undefined for a directory nothing has scanned, which is different from one scanned and
- * found empty.
+ * Export a taskspace's parsed entries for persistence. Return undefined for an unscanned
+ * directory, distinct from a scanned empty one.
  */
 export function exportTaskspaceTagCache(baseDir: string): Record<string, CachedFile> | undefined {
   const entries = fileCache.get(baseDir);
@@ -254,20 +148,9 @@ export function exportTaskspaceTagCache(baseDir: string): Record<string, CachedF
 }
 
 /**
- * Seeds one taskspace's files from such a store.
- *
- * Safe against a store that has gone stale in the meantime, and not by being careful here:
- * every entry is still checked against the file's current signature before it is used, so
- * seeding a wrong or ancient entry costs one re-read and never a wrong answer. Existing
- * entries win, being at worst as old as these and at best fresher.
- *
- * Seeding nothing creates nothing, which is the same distinction {@link touchDir} keeps and
- * for the same reason. A store holding `{}` for a directory — what a taskspace scanned and
- * found empty of readable files writes — would otherwise create an empty record here, and if
- * that directory has since been deleted or made unreadable the walk creates no record of its
- * own, so {@link exportTaskspaceTagCache} would answer `{}` rather than `undefined` and the
- * caller would keep the entry instead of dropping it. An empty record is cheap; a record
- * that says "scanned, and empty" about a directory nothing could scan is not.
+ * Seed cached files from persistence without replacing newer in-memory entries. Validate
+ * signatures again before reuse. Do not create directory records from empty seeds, which
+ * could make an unreadable directory appear successfully scanned.
  */
 export function importTaskspaceTagCache(
   baseDir: string,
@@ -279,10 +162,8 @@ export function importTaskspaceTagCache(
   for (const [subPath, entry] of incoming) {
     if (!existing.has(subPath)) existing.set(subPath, entry);
   }
-  // The store on disk is written under the same ceiling, so this normally has nothing to do.
-  // It is here for the file that arrives from somewhere else — an older version's, one
-  // carried between machines, one edited by hand — which must not be able to seed this
-  // process past a bound the process itself observes.
+  // Apply cache limits to imported entries too, including files written by older builds or
+  // edited externally.
   evict(existing, TAG_CACHE_FILES_MAX);
 }
 
@@ -307,30 +188,18 @@ function fileTagHits(
   const entries = fileCache.get(baseDir);
   const cached = entries?.get(subPath);
   if (entries && signature !== null && cached?.signature === signature) {
-    // Marked as used, which a hit would otherwise never do: it writes nothing, so under the
-    // eviction in `evictFiles` an unchanged file would sink to the front of the directory
-    // and be dropped ahead of one that changed — the exact inversion of what the ceiling is
-    // for. See `TAG_CACHE_FILES_MAX`.
+    // Refresh recency on cache hits so unchanged files are retained ahead of older unused
+    // entries.
     touch(entries, subPath);
     return { hits: cached.hits };
   }
 
-  // Refused here rather than by the read below, because the read is not what it would cost.
-  // `readTaskspaceFile` turns a file past the per-file cap away without opening it, so
-  // charging for one and then being refused spends budget on bytes nobody ever looked at —
-  // and a single large asset beside the notes was enough to spend the whole of it and leave
-  // the text files after it reported as `"budget"`.
-  //
-  // Its own reason rather than `"unreadable"`, which is what this said. A file over the cap
-  // is a file this scan declines to open, not one that failed: reported as unreadable, a
-  // taskspace holding one video told the reader "some files could not be read", which
-  // describes something being wrong with their taskspace rather than with their file.
+  // Reject oversized files before charging the read budget because the file reader will not
+  // open them. Report the size limit separately from unreadable content.
   if (size > TASKSPACE_FILE_BYTES_MAX) return { skipped: "too-large" };
 
-  // Charged before the read rather than after, so a file the budget cannot afford is not
-  // read at all. A cache hit above is deliberately free: those bytes were paid for once,
-  // and charging for them again would make a repeat scan of an unchanged taskspace run out
-  // of budget at exactly the point the first one did.
+  // Charge the budget before reading so over-budget files are never opened. Cache hits are
+  // free, allowing later scans to reach additional files.
   if (size > budget.remaining) return { skipped: "budget" };
   budget.remaining -= size;
 
@@ -338,10 +207,8 @@ function fileTagHits(
   try {
     hits = scanTagLines(readTaskspaceFile({ baseDir, subPath }).content);
   } catch {
-    // Not UTF-8 text, unreadable, or gone since the listing named it. The listing that named
-    // it ran moments earlier and is not a lease on what is still there — the same
-    // degrade-and-carry-on `buildFileNode` does, and for the same reasons. Not cached: a file
-    // that could not be read has no signature worth remembering.
+    // Skip files that disappeared, became unreadable, or contain invalid text. Do not cache
+    // failed reads.
     return { skipped: "unreadable" };
   }
 
@@ -349,18 +216,16 @@ function fileTagHits(
   return { hits, parsed: true };
 }
 
-/**
- * One walk's running state. A record rather than eight positional parameters, which is what
- * this was: four of them were numbers, two of those were a depth and a depth ceiling next to
- * each other, and a call could be got wrong without a type error to say so.
- */
+/** State for one walk. Named fields distinguish limits and counters that share a numeric type. */
 type Scan = {
   baseDir: string;
   taskspaceId: string;
   budget: Budget;
   depthMax: number;
-  /** How many hits this walk will carry. See `TAG_SCAN_HITS_MAX`: the byte budget bounds
-   *  what is read and says nothing about how many tags reading it produces. */
+  /**
+   * Maximum hits for this walk. The byte budget alone does not bound the number of tags. See
+   * `TAG_SCAN_HITS_MAX`.
+   */
   hitsMax: number;
   hits: TagHit[];
   truncated: Set<TagScanTruncation>;
@@ -369,22 +234,15 @@ type Scan = {
    *  there. */
   seen: Set<string>;
   /**
-   * The directories this walk listed to the end, by path within the taskspace — `""` for the
-   * taskspace root.
-   *
-   * Per directory rather than one flag for the whole walk, and that is the whole of what
-   * makes pruning work on a large taskspace. A directory is here when its listing succeeded,
-   * was not itself cut short, and its every entry was visited; nothing about what happened
-   * below it bears on that, since a child that stopped at a budget still leaves this
-   * directory's own entries fully enumerated. So "not seen, and its directory was completed"
-   * means gone, which is the only thing {@link pruneStale} needs to be true.
+   * Directories whose listings were complete and whose returned entries were all visited. Use
+   * these to identify stale files even if other subtrees were truncated. An empty path names
+   * the root.
    */
   completed: Set<string>;
   /** The first few paths behind {@link Scan.truncated}, for a reader who has to go and find
    *  the file the scan is complaining about. See {@link TaskspaceTagScan.paths}. */
   paths: string[];
-  /** Whether this walk read a file it did not already hold. What decides whether there is
-   *  anything new to persist — see `openTagCache` in `tag-index.ts`. */
+  /** Whether the scan read new file data that should be persisted. */
   parsed: boolean;
   /** Whether the taskspace root itself could not be listed. See
    *  {@link TaskspaceTagScan.missing}. */
@@ -392,20 +250,15 @@ type Scan = {
 };
 
 /**
- * Records a path the scan stopped at, up to {@link TAG_SCAN_TRUNCATED_PATHS_MAX} of them.
- *
- * A sample and not a list: the point is to give the reader somewhere to look, and a taskspace
- * with ten thousand unreadable files does not become clearer for naming all of them — it
- * becomes a truncation notice that is itself too large to read, carried through the cache and
- * out to the page.
+ * Record at most {@link TAG_SCAN_TRUNCATED_PATHS_MAX} example paths for truncation
+ * diagnostics.
  */
 function noteTruncatedPath(scan: Scan, path: string): void {
   if (scan.paths.length < TAG_SCAN_TRUNCATED_PATHS_MAX) scan.paths.push(path);
 }
 
-// `Set<string>` explicitly: `TAG_SCAN_SKIP_DIRS` is `as const`, so the names stay a literal
-// union for anything that wants to enumerate them, and inferring that union here would leave
-// a set that cannot be asked about an arbitrary directory name.
+// Use `Set<string>` so lookups accept arbitrary directory names rather than only the literals
+// in `TAG_SCAN_SKIP_DIRS`.
 const skipDirs = new Set<string>(TAG_SCAN_SKIP_DIRS);
 
 function walk(scan: Scan, subPath: string, depth: number): void {
@@ -418,21 +271,14 @@ function walk(scan: Scan, subPath: string, depth: number): void {
   try {
     listing = listTaskspaceDirectory({ baseDir: scan.baseDir, subPath });
   } catch {
-    // A directory the server user cannot read, or one gone since it was named. Either way it
-    // must not take a page load down with it, so it is reported and skipped.
-    //
-    // At depth 0 it is neither: the directory that could not be listed is the taskspace, so
-    // there is no taskspace here to have read part of. That is not a truncation and is not
-    // reported as one — see `TaskspaceTagScan.missing`. No path is noted either, because the
-    // one it would name is `./`, which tells a reader nothing the taskspace's own name has
-    // not already told them.
+    // Report and skip unreadable directories. If the root itself cannot be listed, mark the
+    // taskspace missing instead of partially scanned.
     if (depth === 0) {
       scan.missing = true;
       return;
     }
     scan.truncated.add("unreadable");
-    // The directory itself, which is what could not be read here — every other path noted is
-    // a file. Named as a directory so the reader is not sent looking for a file of that name.
+    // Mark the path as a directory so diagnostics distinguish it from an unreadable file.
     noteTruncatedPath(scan, `${subPath}/`);
     return;
   }
@@ -449,10 +295,8 @@ function walk(scan: Scan, subPath: string, depth: number): void {
       scan.truncated.add("nodes");
       return;
     }
-    // Full, so there is nothing left for the rest of the tree to be read into. Returning
-    // unwinds the same way the nodes budget does — each enclosing loop meets this on its
-    // next entry — and stops the walk from spending bytes and syscalls producing hits that
-    // would only be dropped.
+    // Stop traversal when the hit buffer is full to avoid reading content whose hits would be
+    // discarded.
     if (scan.hits.length >= scan.hitsMax) {
       scan.truncated.add("hits");
       return;
@@ -461,8 +305,8 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     const childPath = subPath ? `${subPath}/${entry.name}` : entry.name;
 
     if (entry.kind === "directory") {
-      // Not a truncation, the same as a dot-entry is not: this is the tree as this scan
-      // defines it, not a tree it ran out of room to finish. See TAG_SCAN_SKIP_DIRS.
+      // Skipped directories are outside the scan's scope and do not count as truncation. See
+      // `TAG_SCAN_SKIP_DIRS`.
       if (skipDirs.has(entry.name)) continue;
       walk(scan, childPath, depth + 1);
       continue;
@@ -480,9 +324,8 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     if (found.parsed) scan.parsed = true;
     const taskspaceId = scan.taskspaceId;
     for (const { tag, line, excerpt } of found.hits) {
-      // Here as well as at the top of the loop, so the ceiling is exact rather than
-      // per-file: one generated file can hold more tags on its own than the whole scan
-      // carries, and checking only between files would let it through in full.
+      // Check within each file to enforce the exact hit limit, even when one file contains
+      // more tags than the scan can return.
       if (scan.hits.length >= scan.hitsMax) {
         scan.truncated.add("hits");
         break;
@@ -495,42 +338,24 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     }
   }
 
-  // Every entry visited and the listing was whole, so this directory holds exactly the files
-  // named in `seen` under it. Reached only by falling out of the loop: every ceiling above
-  // returns instead, which is what keeps a directory the walk abandoned partway out of the
-  // set. A `listing.truncated` above has already returned for the same reason.
+  // Mark the directory complete only after visiting every entry in a complete listing. All
+  // budget and truncation exits return before this point.
   if (!listing.truncated) scan.completed.add(subPath);
 }
 
-/** The directory a path within a taskspace sits in — `""` for one at the root, matching how
- *  {@link Scan.completed} names the root the walk starts at. */
+/**
+ * Parent directory of a taskspace-relative path. Use an empty string for the root, matching
+ * {@link Scan.completed}.
+ */
 function parentDir(subPath: string): string {
   const cut = subPath.lastIndexOf("/");
   return cut === -1 ? "" : subPath.slice(0, cut);
 }
 
 /**
- * Forgets cached files the walk did not reach, in the directories it listed to the end.
- *
- * Per directory rather than per walk, which is the difference between pruning usually and
- * pruning almost never. The guard was one flag for the whole scan — a truncation anywhere
- * meant nothing anywhere was pruned — and its reasoning was right about the danger and wrong
- * about the scope: a scan that stopped at a budget did not reach directories that are still
- * there, so treating "not seen" as "gone" would throw away good entries. But that only ever
- * applied to the directories it did not finish. A taskspace large enough to hit a ceiling is
- * exactly the one whose entries most need dropping, and it was the one that never dropped
- * any: on Kozane's own checkout every scan reports a truncation, so every scan skipped this
- * entirely and the map grew with each renamed file for the life of the process — the
- * unbounded growth this function exists to prevent, reintroduced by its own guard.
- *
- * {@link Scan.completed} makes the narrower question answerable, and the two
- * conditions together are exact: a file whose directory was enumerated in full and which was
- * not among what that enumeration named is not there any more.
- *
- * Without this the map only ever grew. A file renamed, deleted, or moved left its entry
- * behind for the life of the process, and `exportTaskspaceTagCache` wrote every one of them
- * to disk, so a long-lived server against a working tree accumulated the tags of every file
- * that had ever been there.
+ * Prune unseen cached files only when their parent directory was fully listed. Preserve
+ * entries from incomplete directories because absence from a partial scan does not establish
+ * deletion.
  */
 function pruneStale(baseDir: string, seen: Set<string>, completed: Set<string>): boolean {
   const entries = fileCache.get(baseDir);
@@ -539,9 +364,8 @@ function pruneStale(baseDir: string, seen: Set<string>, completed: Set<string>):
   let pruned = false;
   for (const subPath of entries.keys()) {
     if (seen.has(subPath)) continue;
-    // Not seen, but nothing here established that anyone looked: the directory it sits in was
-    // never listed, or was listed and cut short. Its entry is kept, which costs one stale
-    // record and never a re-read of a file that is still there.
+    // Keep entries whose directories were not fully listed. An incomplete scan cannot
+    // establish that a file was deleted.
     if (!completed.has(parentDir(subPath))) continue;
     entries.delete(subPath);
     pruned = true;
@@ -550,12 +374,9 @@ function pruneStale(baseDir: string, seen: Set<string>, completed: Set<string>):
 }
 
 /**
- * Every tag in one taskspace, with the file and line it was written on.
- *
- * Never throws. A taskspace whose directory has been deleted, moved, or made unreadable
- * comes back as no hits and `missing`, because a tag page listing five taskspaces must not
- * become a 500 over one of them. Not as a truncation: nothing here was read in part. See
- * {@link TaskspaceTagScan.missing}.
+ * Scan a taskspace's tags with their source files and lines. Return no hits and `missing` for
+ * deleted, moved, or unreadable taskspaces so one unavailable taskspace does not fail the
+ * page. See {@link TaskspaceTagScan.missing}.
  */
 export function scanTaskspaceTags(
   baseDir: string,
@@ -563,14 +384,11 @@ export function scanTaskspaceTags(
   limits: TaskspaceScanLimits = {},
   pool?: ScanPool,
 ): TaskspaceTagScan {
-  // Before the walk, so that a taskspace answered entirely from the cache — which writes
-  // nothing, and so touches the map nowhere else — is still the most recently used.
+  // Touch the directory before scanning so a cache-only scan still refreshes recency.
   touchDir(baseDir);
 
-  // The smaller of this taskspace's own ceiling and what the gather has left. Both bind: one
-  // taskspace cannot cost more than its share, and the taskspaces together cannot cost more
-  // than the page. A pool run down to nothing leaves a scan that reads no file and reports
-  // `"budget"`, which is the true answer — those files were not read.
+  // Apply the smaller of the taskspace limit and remaining workspace budget. Report budget
+  // truncation when no allowance remains.
   const bytes = Math.min(limits.bytes ?? TAG_SCAN_TOTAL_BYTES_MAX, pool?.bytes ?? Infinity);
   const nodes = Math.min(limits.nodes ?? TAG_SCAN_NODES_MAX, pool?.nodes ?? Infinity);
 
@@ -600,10 +418,8 @@ export function scanTaskspaceTags(
   }
 
   const pruned = pruneStale(baseDir, scan.seen, scan.completed);
-  // After pruning, which is the precise cleanup and usually leaves nothing for this to do.
-  // This is the backstop for the taskspace pruning cannot reach: one too large for a scan to
-  // finish, whose directories are therefore never `completed` and whose entries would
-  // otherwise accumulate a slice at a time, scan after scan, for the life of the process.
+  // Cap the cache after pruning to bound entries from taskspaces too large for a scan to
+  // finish.
   evictFiles(baseDir, limits.files ?? TAG_CACHE_FILES_MAX);
 
   return {

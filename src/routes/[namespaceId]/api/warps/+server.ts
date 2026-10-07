@@ -13,9 +13,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const posY = optionalNumber(body, "posY");
   if (posX === undefined || posY === undefined) throw error(400, "posX and posY are required");
 
-  // Clamped and rounded here rather than trusted: the columns are integers, and a warp
-  // outside the canvas would scroll to a place the viewport can never reach. The bound is
-  // the workspace's own canvas size, which is what the browser draws.
+  // Round coordinates to integers and clamp them to the configured canvas so warps remain
+  // reachable.
   const clamped = clampToCanvas(posX, posY);
   const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
 

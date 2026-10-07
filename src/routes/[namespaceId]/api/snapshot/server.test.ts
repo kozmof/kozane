@@ -12,9 +12,8 @@ import { _resetSnapshotEtagsForTest } from "$lib/server/snapshot-etag.js";
 import { GET } from "./+server.js";
 
 /**
- * Which database the endpoint believes it is serving. Real `openedDbUrl` answers null until
- * `getDb` has opened one, which never happens in this process — so the ETag gate is off for
- * every test below except the ones that switch it on by naming a file here.
+ * Mock the active database URL to control the ETag gate. Leave it null in tests that do not
+ * exercise file signatures.
  */
 const opened = vi.hoisted(() => ({ url: null as string | null }));
 vi.mock("$db/client", async (importOriginal) => ({
@@ -96,7 +95,7 @@ describe("GET /[namespaceId]/api/snapshot", () => {
     const cardId = await addCard({ db, partitionId, content: "Alpha" });
     const etag = (await GET(event(db, namespaceId))).headers.get("etag")!;
 
-    // An edit in place: nothing is added or removed, so a tag counting rows would miss it.
+    // Detect edits that leave row counts unchanged.
     await updateCard({ db, cardId, partitionId, content: "Beta" });
 
     const response = await GET(event(db, namespaceId, { "if-none-match": etag }));
@@ -106,8 +105,7 @@ describe("GET /[namespaceId]/api/snapshot", () => {
   });
 
   it("notices a write that reached the database without passing through the server", async () => {
-    // What the poll exists for: `kozane card add` writes to the same file directly, and no
-    // counter this server keeps could have seen it.
+    // Detect direct database writes from the CLI that bypass this server's state.
     const { db, namespaceId, partitionId } = await setup();
     const etag = (await GET(event(db, namespaceId))).headers.get("etag")!;
 
@@ -170,8 +168,8 @@ describe("GET /[namespaceId]/api/snapshot — the unchanged-database gate", () =
     await addCard({ db, partitionId, content: "Alpha" });
     const etag = (await GET(event(db, namespaceId))).headers.get("etag")!;
 
-    // The whole point of the gate: the second poll is answered from the file's identity
-    // alone, so a database that throws on contact still produces the 304.
+    // Answer the second poll with 304 using file identity alone, without querying the
+    // database.
     const response = await GET(event(unreadableDb(), namespaceId, { "if-none-match": etag }));
 
     expect(response.status).toBe(304);
