@@ -54,7 +54,7 @@
     <div
       role="listbox"
       aria-label="Layers"
-      class={css({ position: "absolute", bottom: "calc(100% + 6px)", left: "0", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "2px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", padding: "4px", minWidth: "160px", zIndex: "100" })}
+      class={css({ position: "absolute", bottom: "calc(100% + 6px)", left: "0", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "2px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", padding: "4px", minWidth: "160px", zIndex: "100" })}
     >
       {#each layers as layer (layer.id)}
         {@const isActive = layer.id === layerId}

@@ -25,7 +25,7 @@
     color: "#fff",
     borderRadius: "2px",
     fontSize: "12.5px",
-    boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+    boxShadow: "0 1px 5px rgba(0,0,0,0.03)",
     whiteSpace: "nowrap",
   })}
   role="alert"

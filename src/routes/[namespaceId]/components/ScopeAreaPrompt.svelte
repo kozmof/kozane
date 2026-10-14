@@ -72,7 +72,7 @@
     backgroundColor: "ink.light",
     border: "1px solid token(colors.neutral.border)",
     borderRadius: "3px",
-    boxShadow: "0 1px 10px rgba(0,0,0,0.06)",
+    boxShadow: "0 0.5px 5px rgba(0,0,0,0.06)",
     zIndex: "60",
     overflow: "hidden",
   })}

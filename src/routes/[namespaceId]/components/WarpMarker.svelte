@@ -62,7 +62,7 @@
     : 'var(--colors-neutral-border)'}"
   style:box-shadow={focused
     ? `0 0 0 ${focusRing}px color-mix(in oklch, var(--colors-select-accent) 22%, transparent)`
-    : "0 1px 3px rgba(0,0,0,0.018)"}
+    : "0 0.5px 1.5px rgba(0,0,0,0.018)"}
   onmousedown={(e) => {
     // The canvas below starts a pan on mousedown, and a shift-drag draws a selection
     // rectangle. Pressing a marker means neither: it focuses the warp, and may go on to

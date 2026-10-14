@@ -42,7 +42,7 @@
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.018)",
+    boxShadow: "0 0.5px 1.5px rgba(0,0,0,0.018)",
   });
   // Split rather than overridden so neither state depends on which atom Panda emits last.
   const triggerRestClass = css({
@@ -127,7 +127,7 @@
             background: "ink.white",
             border: "1px solid token(colors.neutral.border)",
             borderRadius: "2px",
-            boxShadow: "0 4px 16px rgba(0,0,0,0.03)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
             padding: "4px",
             minWidth: "160px",
             maxHeight: "260px",

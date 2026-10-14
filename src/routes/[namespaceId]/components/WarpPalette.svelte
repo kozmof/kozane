@@ -129,7 +129,7 @@
       background: "ink.white",
       border: "1px solid token(colors.neutral.border)",
       borderRadius: "4px",
-      boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+      boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
       padding: "6px",
       outline: "none",
     })}

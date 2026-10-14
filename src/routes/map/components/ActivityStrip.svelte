@@ -46,7 +46,7 @@
     backgroundColor: "ink.light",
     border: "1px solid token(colors.neutral.dim)",
     borderRadius: "3px",
-    boxShadow: "0 1px 6px rgba(0,0,0,0.025)",
+    boxShadow: "0 0.5px 3px rgba(0,0,0,0.025)",
     fontFamily: "mono",
   })}
 >

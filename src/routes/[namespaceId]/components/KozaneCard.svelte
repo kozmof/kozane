@@ -89,8 +89,8 @@
   style:border-radius="0px"
   style:border={border}
   style:box-shadow={isDragging
-    ? "0 2px 4px rgba(0,0,0,0.07)"
-    : "0 1px 2px rgba(0,0,0,0.01)"}
+    ? "0 1px 2px rgba(0,0,0,0.07)"
+    : "0 0.5px 1px rgba(0,0,0,0.01)"}
   style:cursor={isDragging ? "grabbing" : "grab"}
   style:user-select="none"
   style:pointer-events="auto"

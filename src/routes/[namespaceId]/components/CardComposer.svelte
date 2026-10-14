@@ -421,7 +421,7 @@
           {@render shortcutHint(shortcuts.moveCardsShortcut)}
         </button>
         {#if showNamespacePicker}
-          <div class={css({ position: "absolute", bottom: "100%", left: "0", minWidth: "100%", width: "max-content", maxWidth: "220px", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", boxShadow: "0 4px 16px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
+          <div class={css({ position: "absolute", bottom: "100%", left: "0", minWidth: "100%", width: "max-content", maxWidth: "220px", marginBottom: "4px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", boxShadow: "0 2px 8px rgba(0,0,0,0.03)", zIndex: "60", overflow: "hidden" })}>
             {#each otherNamespaces as namespace (namespace.id)}
               <button
                 class={css({ width: "100%", padding: "8px 12px", background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "ink.black", fontFamily: "inherit", textAlign: "left", display: "block", "&:hover": { background: "ink.lighter" } })}
