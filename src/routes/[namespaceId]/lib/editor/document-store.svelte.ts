@@ -1,5 +1,5 @@
 import { history, position, query, rendering, scan, store } from "@kozmof/reed";
-import type { SelectionRange } from "@kozmof/reed";
+import type { ByteOffset, SelectionRange } from "@kozmof/reed";
 
 type DocumentState = ReturnType<ReturnType<typeof store.createDocumentStore>["getSnapshot"]>;
 type ReedStore = ReturnType<typeof store.createDocumentStore>;
@@ -66,15 +66,14 @@ export class EditorDocument {
     return current;
   }
 
-  /**
-   * The revision the file was last read or saved at. What `dirty` is measured against, so
-   * an edit and its undo leave the file reported as unmodified again.
-   */
-  savedRevision = $state(0);
+  /** Text last read or saved; Reed revisions also advance on undo/redo. */
+  #savedContent = $state("");
+  #savedByteLength = $state(0);
 
   constructor(content: string) {
     this.#store = store.createDocumentStore({ content, undoGroupTimeout: UNDO_GROUP_MS });
     this.#current = this.#store.getSnapshot();
+    this.markSaved(content);
     this.#unsubscribe = this.#store.subscribe(() => {
       this.#current = this.#store.getSnapshot();
     });
@@ -88,7 +87,7 @@ export class EditorDocument {
   dispose(): void {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
-    this.#store.dispose?.();
+    this.#store.dispose();
   }
 
   get lineCount(): number {
@@ -104,12 +103,16 @@ export class EditorDocument {
   }
 
   get dirty(): boolean {
-    return this.state.revision !== this.savedRevision;
+    return (
+      this.state.pieceTable.totalLength !== this.#savedByteLength ||
+      this.text() !== this.#savedContent
+    );
   }
 
-  /** Marks the current revision as what is on disk. Called after a save. */
-  markSaved(): void {
-    this.savedRevision = this.state.revision;
+  /** Record the content sent to disk, which may precede edits made during an async save. */
+  markSaved(content = this.text()): void {
+    this.#savedContent = content;
+    this.#savedByteLength = byteLength(content);
   }
 
   /**
@@ -171,7 +174,7 @@ export class EditorDocument {
       : at + 1;
   }
 
-  #byteOffset({ line, column }: Caret): number {
+  #byteOffset({ line, column }: Caret): ByteOffset {
     // Snap every caret before resolving its offset so a position inside a surrogate pair
     // resolves to the character's start consistently.
     const offset = rendering.lineColumnToPosition(
@@ -180,7 +183,7 @@ export class EditorDocument {
       snapColumn(this.lineText(line), column),
     );
     // Clamp unresolved carets beyond the document to its end.
-    return offset ?? this.state.pieceTable.totalLength;
+    return offset ?? position.byteOffset(this.state.pieceTable.totalLength);
   }
 
   #caretAt(byteOffset: number): Caret {
@@ -245,21 +248,9 @@ export class EditorDocument {
     return this.#caretAt(from + byteLength(text));
   }
 
-  /**
-   * Read text between two carets in O(n) document time. Use Reed's line offsets to account
-   * for actual line endings, then add snapped UTF-16 columns before slicing.
-   */
+  /** Read only the selected byte range, preserving Unicode boundaries and line endings. */
   textBetween(start: Caret, end: Caret): string {
-    const whole = this.text();
-    // One encode for both ends. A line start always falls on a character boundary, whatever
-    // the line ending is, so decoding the prefix up to one is lossless.
-    const bytes = new TextEncoder().encode(whole);
-    const charOffset = ({ line, column }: Caret): number => {
-      const lineStart = this.#byteOffset({ line, column: 0 });
-      const at = snapColumn(this.lineText(line), column);
-      return new TextDecoder().decode(bytes.subarray(0, lineStart)).length + at;
-    };
-    return whole.slice(charOffset(start), charOffset(end));
+    return query.getText(this.state.pieceTable, this.#byteOffset(start), this.#byteOffset(end));
   }
 
   /** The caret this document's own selection points at, or null when it has none. */

@@ -111,14 +111,13 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
 
-    // Capture the revision before sending the save so edits made during the request remain
-    // dirty.
-    const revision = doc.state.revision;
+    // Capture exactly the content sent so edits made during the request remain dirty.
+    const content = doc.text();
 
     try {
       const res = await saveTaskspaceFile(ctx.fetcher, ctx.namespaceId, ref.taskspaceId, {
         path: ref.path,
-        content: doc.text(),
+        content,
         signature: this.#signature,
       });
       if (!res.ok) {
@@ -128,7 +127,7 @@ export class EditorSession {
       }
       const body = await res.json();
       this.#signature = body?.signature ?? null;
-      doc.savedRevision = revision;
+      doc.markSaved(content);
       return true;
     } catch {
       this.error = "Failed to save file";

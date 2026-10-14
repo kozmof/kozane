@@ -87,33 +87,33 @@
     return orderCarets(anchor, caret);
   });
 
-  // Recomputed against the document's revision as well as the carets, because the same
-  // (line, column) pair sits at a different pixel once the text around it has changed.
-  const rects = $derived.by(() => {
+  let rects = $state<ReturnType<typeof selectionRects>>([]);
+  let caretXY = $state({ x: 0, y: 0 });
+  let caretWidth = $state(2);
+
+  // DOM ranges must see the newly rendered text. Effects run after DOM updates;
+  // derived values used during rendering can still measure the previous line content.
+  $effect(() => {
     void doc.state.revision;
     void lines;
-    if (!selection) return [];
-    return selectionRects(selection.start, selection.end, LINE_HEIGHT, measure, (line) =>
-      doc.lineText(line).length,
-    );
-  });
-
-  const caretXY = $derived.by(() => {
-    void doc.state.revision;
-    void lines;
-    return caretPoint(caret, LINE_HEIGHT, measure);
-  });
-
-  /** Normal-mode block cursor width, matching the current cell. */
-  const caretWidth = $derived.by(() => {
-    void doc.state.revision;
-    if (mode !== "normal") return 2;
+    void composing;
+    void preedit;
+    rects = selection
+      ? selectionRects(selection.start, selection.end, LINE_HEIGHT, measure, (line) =>
+          doc.lineText(line).length,
+        )
+      : [];
+    caretXY = caretPoint(caret, LINE_HEIGHT, measure);
     const text = doc.lineText(caret.line);
-    if (caret.column >= text.length) return FONT_SIZE * 0.6;
-    return Math.max(
-      2,
-      measure.columnToX(caret.line, caret.column + 1) - measure.columnToX(caret.line, caret.column),
-    );
+    caretWidth = mode !== "normal"
+      ? 2
+      : caret.column >= text.length
+        ? FONT_SIZE * 0.6
+        : Math.max(
+            2,
+            measure.columnToX(caret.line, caret.column + 1) -
+              measure.columnToX(caret.line, caret.column),
+          );
   });
 
   export function focus(): void {

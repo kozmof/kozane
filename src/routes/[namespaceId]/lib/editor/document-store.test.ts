@@ -365,6 +365,38 @@ describe("EditorDocument", () => {
     expect(d.dirty).toBe(true);
   });
 
+  it("becomes clean when undo restores the opened content despite increasing revisions", () => {
+    const d = doc("hello");
+    d.insert({ line: 0, column: 5 }, "!");
+    const editedRevision = d.state.revision;
+    d.undo();
+    expect(d.state.revision).toBeGreaterThan(editedRevision);
+    expect(d.dirty).toBe(false);
+    d.redo();
+    expect(d.dirty).toBe(true);
+  });
+
+  it("recognizes saved content after redo and detects equal-length replacements", () => {
+    const d = doc("hello");
+    d.replace({ line: 0, column: 0 }, { line: 0, column: 1 }, "H");
+    expect(d.dirty).toBe(true);
+    d.markSaved();
+    d.undo();
+    expect(d.dirty).toBe(true);
+    d.redo();
+    expect(d.dirty).toBe(false);
+  });
+
+  it("recognizes an in-flight save's content when later edits are undone", () => {
+    const d = doc("hello");
+    const saved = d.text();
+    d.insert({ line: 0, column: 5 }, "!");
+    d.markSaved(saved);
+    expect(d.dirty).toBe(true);
+    d.undo();
+    expect(d.dirty).toBe(false);
+  });
+
   it("clamps a caret into the document and into its line", () => {
     const d = doc("hello\nhi\n");
     expect(d.clamp({ line: 99, column: 0 })).toEqual({ line: 2, column: 0 });

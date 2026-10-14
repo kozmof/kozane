@@ -38,6 +38,29 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("abc\n");
   });
 
+  it("draws the cursor after each new character using the updated line DOM", async () => {
+    // jsdom has no layout: measure the actual range length at ten pixels per column.
+    Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value() {
+        return { width: this.toString().length * 10 };
+      },
+    });
+    try {
+      const { doc, sink } = mount("");
+      sink.focus();
+      for (const [index, ch] of [..."abc"].entries()) {
+        await userEvent.keyboard(ch);
+        expect(doc.text()).toBe("abc".slice(0, index + 1));
+        expect(screen.getByTestId("editor-cursor").style.left).toBe(
+          String(12 + (index + 1) * 10) + "px",
+        );
+      }
+    } finally {
+      Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+    }
+  });
+
   it("inserts a newline on Enter", async () => {
     const { doc, sink } = mount("ab\n", { caret: { line: 0, column: 1 } });
     sink.focus();
