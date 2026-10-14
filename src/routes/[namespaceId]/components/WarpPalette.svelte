@@ -127,7 +127,7 @@
       maxHeight: "min(60vh, 520px)",
       overflowY: "auto",
       background: "ink.white",
-      border: "1px solid token(colors.neutral.border)",
+      border: "1px solid token(colors.neutral.dim)",
       borderRadius: "4px",
       padding: "6px",
       outline: "none",

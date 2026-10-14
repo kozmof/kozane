@@ -133,7 +133,7 @@
     width: "min(520px, calc(100vw - 32px))",
     maxHeight: "min(70vh, 640px)",
     background: "ink.white",
-    border: "1px solid token(colors.neutral.border)",
+    border: "1px solid token(colors.neutral.dim)",
     borderRadius: "4px",
     outline: "none",
   });
