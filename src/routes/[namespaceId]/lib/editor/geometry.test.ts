@@ -109,6 +109,44 @@ describe("selectionRects", () => {
   const measure = fixedMeasurer(lines);
   const lineLength = (line: number) => (lines[line] ?? "").length;
 
+  it("clips a million-line selection to the mounted viewport", () => {
+    const rects = selectionRects(
+      { line: 0, column: 2 },
+      { line: 999999, column: 3 },
+      20,
+      measure,
+      lineLength,
+      [500000, 500001, 500002],
+    );
+    expect(rects).toEqual(
+      [500000, 500001, 500002].map((line) => ({
+        top: line * 20,
+        left: 0,
+        width: null,
+        height: 20,
+      })),
+    );
+  });
+
+  it("clips selection endpoints without highlighting unselected mounted lines", () => {
+    expect(
+      selectionRects(
+        { line: 1, column: 2 },
+        { line: 2, column: 3 },
+        20,
+        measure,
+        lineLength,
+        [0, 1, 2, 3],
+      ),
+    ).toEqual([
+      { top: 20, left: 20, width: null, height: 20 },
+      { top: 40, left: 0, width: 30, height: 20 },
+    ]);
+    expect(
+      selectionRects({ line: 0, column: 0 }, { line: 3, column: 0 }, 20, measure, lineLength, []),
+    ).toEqual([]);
+  });
+
   it("draws nothing for an empty selection", () => {
     expect(
       selectionRects({ line: 1, column: 2 }, { line: 1, column: 2 }, 20, measure, lineLength),

@@ -73,6 +73,7 @@ export function selectionRects(
   lineHeight: number,
   measure: LineMeasurer,
   lineLength: (line: number) => number,
+  mountedLines?: readonly number[],
 ): SelectionRect[] {
   if (start.line === end.line && start.column === end.column) return [];
 
@@ -86,6 +87,15 @@ export function selectionRects(
       height: lineHeight,
     });
   };
+
+  // Keep selection overlays bounded by the viewport, including select-all.
+  if (mountedLines) {
+    for (const line of mountedLines) {
+      if (line < start.line || line > end.line) continue;
+      push(line, line === start.line ? start.column : 0, line === end.line ? end.column : null);
+    }
+    return rects;
+  }
 
   if (start.line === end.line) {
     push(start.line, start.column, end.column);

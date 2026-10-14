@@ -99,8 +99,10 @@
     void composing;
     void preedit;
     rects = selection
-      ? selectionRects(selection.start, selection.end, LINE_HEIGHT, measure, (line) =>
-          doc.lineText(line).length,
+      ? selectionRects(
+          selection.start, selection.end, LINE_HEIGHT, measure,
+          (line) => doc.lineText(line).length,
+          lines.map((line) => line.lineNumber),
         )
       : [];
     caretXY = caretPoint(caret, LINE_HEIGHT, measure);
@@ -111,7 +113,7 @@
         ? FONT_SIZE * 0.6
         : Math.max(
             2,
-            measure.columnToX(caret.line, caret.column + 1) -
+            measure.columnToX(caret.line, doc.columnAfter(caret.line, caret.column)) -
               measure.columnToX(caret.line, caret.column),
           );
   });

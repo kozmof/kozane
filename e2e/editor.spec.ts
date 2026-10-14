@@ -117,6 +117,8 @@ test.beforeAll(async () => {
     Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n",
   );
 
+  writeFileSync(join(taskspaceDir, "large.md"), "line text\n".repeat(49999) + "last");
+
   // The marker and routes use full UUIDs. The CLI prints short IDs.
   namespaceId = JSON.parse(readFileSync(join(taskspaceDir, ".taskspace.json"), "utf8"))
     .namespaceId as string;
@@ -485,4 +487,56 @@ test("leaves a file untouched when it is closed without saving", async ({ page }
 
   await expect(page.getByRole("dialog")).toBeHidden();
   expect(readFileSync(join(taskspaceDir, "notes.md"), "utf8")).toBe("untouched\n");
+});
+
+test("edits and selects a 50,000-line file with bounded DOM", async ({ page }, info) => {
+  await openFile(page, "large.md");
+  const sink = page.getByTestId("editor-sink");
+  await sink.focus();
+  await page.keyboard.press("Control+End");
+  await expect(page.locator('[data-line="49999"]')).toHaveText("last");
+  const samples = await sink.evaluate(async (element) => {
+    const input = element as HTMLTextAreaElement;
+    const surface = document.querySelector('[data-testid="editor-surface"]')!;
+    const durations: number[] = [];
+    for (let i = 0; i < 25; i++) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const duration = await new Promise<number>((resolve, reject) => {
+        const observer = new MutationObserver(() => {
+          clearTimeout(timeout);
+          observer.disconnect();
+          resolve(performance.now() - start);
+        });
+        const timeout = setTimeout(() => {
+          observer.disconnect();
+          reject(new Error("Typed text did not render"));
+        }, 5000);
+        observer.observe(surface, { subtree: true, characterData: true, childList: true });
+        const start = performance.now();
+        input.value = "x";
+        input.dispatchEvent(
+          new InputEvent("input", { bubbles: true, data: "x", inputType: "insertText" }),
+        );
+      });
+      if (i >= 5) durations.push(duration);
+    }
+    return durations.sort((a, b) => a - b);
+  });
+  await info.attach("large-editor-timing.json", {
+    body: JSON.stringify({
+      lines: 50000,
+      samples: samples.length,
+      p95InputToDomMs: samples[18],
+      scope: "Synthetic input to DOM mutation; excludes paint",
+    }),
+    contentType: "application/json",
+  });
+  await expect(page.locator('[data-line="49999"]')).toHaveText("last" + "x".repeat(25));
+  await expect(page.getByText("Ln 50000, Col 30", { exact: true })).toBeVisible();
+  await page.keyboard.press("Control+a");
+  const lineCount = await page.locator("[data-line]").count();
+  expect(lineCount).toBeLessThan(100);
+  await expect(page.getByTestId("editor-selection")).toHaveCount(lineCount);
+  await page.keyboard.press("Control+Home");
+  await expect(page.locator('[data-line="0"]')).toBeVisible();
 });

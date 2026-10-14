@@ -1,8 +1,9 @@
 import { history, position, query, rendering, scan, store } from "@kozmof/reed";
-import type { ByteOffset, SelectionRange } from "@kozmof/reed";
+import { GraphemeCache } from "./graphemes.js";
+import type { ByteOffset, ContentChangeEvent, SelectionRange } from "@kozmof/reed";
 
 type DocumentState = ReturnType<ReturnType<typeof store.createDocumentStore>["getSnapshot"]>;
-type ReedStore = ReturnType<typeof store.createDocumentStore>;
+type ReedStore = ReturnType<typeof store.createDocumentStoreWithEvents>;
 
 /** A caret or a selection end, in the coordinates the render layer draws in. */
 export type Caret = {
@@ -40,14 +41,14 @@ export function sameCaret(a: Caret, b: Caret): boolean {
  * The editor uses line and column coordinates. Columns count UTF-16 code units, while Reed
  * positions are UTF-8 byte offsets. Convert between them here and use Reed's types directly.
  *
- * Keep carets on code-point boundaries. `clamp`, `columnBefore`, and `columnAfter` prevent a
- * column from splitting a surrogate pair. This editor snaps such columns backward to the
- * character's start, matching click placement. Reed's own conversion snaps forward, so the
- * explicit backward snap is still needed.
+ * Keep carets on grapheme boundaries so combining marks and emoji sequences move
+ * and delete together. Positions inside a cluster snap backward to its start.
  */
 export class EditorDocument {
   #store: ReedStore;
+  #graphemes = new GraphemeCache();
   #unsubscribe: (() => void) | null = null;
+  #unsubscribeContent: (() => void) | null = null;
 
   /**
    * Immutable Reed snapshot, temporarily undefined during construction. Initialize it before
@@ -70,10 +71,18 @@ export class EditorDocument {
   #savedContent = $state("");
   #savedByteLength = $state(0);
 
+  #dirty = $derived(
+    this.state.pieceTable.totalLength !== this.#savedByteLength ||
+      this.text() !== this.#savedContent,
+  );
+
   constructor(content: string) {
-    this.#store = store.createDocumentStore({ content, undoGroupTimeout: UNDO_GROUP_MS });
+    this.#store = store.createDocumentStoreWithEvents({ content, undoGroupTimeout: UNDO_GROUP_MS });
     this.#current = this.#store.getSnapshot();
-    this.markSaved(content);
+    this.markSaved();
+    this.#unsubscribeContent = this.#store.addEventListener("content-change", (event) => {
+      this.#updateText(event);
+    });
     this.#unsubscribe = this.#store.subscribe(() => {
       this.#current = this.#store.getSnapshot();
     });
@@ -87,6 +96,9 @@ export class EditorDocument {
   dispose(): void {
     this.#unsubscribe?.();
     this.#unsubscribe = null;
+    this.#unsubscribeContent?.();
+    this.#unsubscribeContent = null;
+    this.#graphemes.clear();
     this.#store.dispose();
   }
 
@@ -103,10 +115,7 @@ export class EditorDocument {
   }
 
   get dirty(): boolean {
-    return (
-      this.state.pieceTable.totalLength !== this.#savedByteLength ||
-      this.text() !== this.#savedContent
-    );
+    return this.#dirty;
   }
 
   /** Record the content sent to disk, which may precede edits made during an async save. */
@@ -135,52 +144,89 @@ export class EditorDocument {
     return rendering.getLineContent(this.state, line) ?? "";
   }
 
-  /** Read the whole document in O(n) time for saving, outside the rendering path. */
-  text(): string {
-    return scan.getValue(this.state.pieceTable);
+  #textTable: DocumentState["pieceTable"] | undefined;
+  #textValue = "";
+  #textEdit: { base: string; from: number; to: number; inserted: string } | undefined;
+
+  #updateText({ action, prevState, nextState, affectedRanges }: ContentChangeEvent): void {
+    // History can replace the table without a content event. Rebuild lazily in text()
+    // if this cache does not describe the state immediately before the edit.
+    if (action.type === "APPLY_REMOTE" || this.#textTable !== prevState.pieceTable) return;
+    const charOffset = (byte: ByteOffset): number | undefined => {
+      const at = rendering.positionToLineColumn(prevState, byte);
+      return at ? query.getCharStartOffset(prevState, at.line) + at.column : undefined;
+    };
+    const from = charOffset(action.start);
+    const to = action.type === "INSERT" ? from : charOffset(action.end);
+    if (from === undefined || to === undefined) return;
+    const inserted =
+      action.type === "DELETE"
+        ? ""
+        : query.getText(nextState.pieceTable, action.start, affectedRanges[0][1]);
+    let edit = this.#textEdit;
+    // Keep nearby edits over an unchanged base. Slicing each preceding concatenation
+    // can flatten the full document string on every keystroke.
+    if (!edit || from < edit.from - 4096 || to > edit.from + edit.inserted.length + 4096) {
+      edit = { base: this.#textValue, from, to, inserted };
+    } else {
+      const start = Math.min(from, edit.from);
+      const end = edit.to + Math.max(0, to - edit.from - edit.inserted.length);
+      const window =
+        edit.base.slice(start, edit.from) + edit.inserted + edit.base.slice(edit.to, end);
+      edit = {
+        base: edit.base,
+        from: start,
+        to: end,
+        inserted: window.slice(0, from - start) + inserted + window.slice(to - start),
+      };
+    }
+    this.#textEdit = edit;
+    this.#textValue = edit.base.slice(0, edit.from) + edit.inserted + edit.base.slice(edit.to);
+    this.#textTable = nextState.pieceTable;
   }
 
-  /**
-   * Clamp the caret to the document, its line, and a character boundary. Move positions
-   * inside a surrogate pair back to the character's start so rendering and Reed edits use
-   * valid boundaries.
-   */
+  /** Reuse text across reads and local edits; decode once after an uncached history change. */
+  text(): string {
+    const table = this.state.pieceTable;
+    if (table !== this.#textTable) {
+      this.#textValue = scan.getValue(table);
+      this.#textTable = table;
+      this.#textEdit = undefined;
+    }
+    return this.#textValue;
+  }
+
+  /** Clamp to the document and snap backward to the start of a grapheme cluster. */
   clamp({ line, column }: Caret): Caret {
     const lastLine = Math.max(0, this.lineCount - 1);
     const safeLine = Math.min(Math.max(0, line), lastLine);
-    return { line: safeLine, column: snapColumn(this.lineText(safeLine), column) };
+    return {
+      line: safeLine,
+      column: this.#graphemes.snap(safeLine, this.lineText(safeLine), column),
+    };
   }
 
-  /**
-   * Return the column one character before `column` for leftward movement or backspace.
-   * Preserve surrogate pairs.
-   */
+  /** Move backward by one whole grapheme for leftward movement and backspace. */
   columnBefore(line: number, column: number): number {
     const text = this.lineText(line);
-    const at = snapColumn(text, column);
-    if (at <= 0) return 0;
-    return isLowSurrogate(text.charCodeAt(at - 1)) && isHighSurrogate(text.charCodeAt(at - 2))
-      ? at - 2
-      : at - 1;
+    const index = this.#graphemes.index(line, text, column);
+    return this.#graphemes.boundaries(line, text)[Math.max(0, index - 1)];
   }
 
-  /** Move one character forward, paired with {@link columnBefore}. */
+  /** Move forward by one whole grapheme, paired with {@link columnBefore}. */
   columnAfter(line: number, column: number): number {
     const text = this.lineText(line);
-    const at = snapColumn(text, column);
-    if (at >= text.length) return text.length;
-    return isHighSurrogate(text.charCodeAt(at)) && isLowSurrogate(text.charCodeAt(at + 1))
-      ? at + 2
-      : at + 1;
+    const index = this.#graphemes.index(line, text, column);
+    const boundaries = this.#graphemes.boundaries(line, text);
+    return boundaries[Math.min(boundaries.length - 1, index + 1)];
   }
 
   #byteOffset({ line, column }: Caret): ByteOffset {
-    // Snap every caret before resolving its offset so a position inside a surrogate pair
-    // resolves to the character's start consistently.
+    // Resolve offsets at whole grapheme boundaries, including clicks inside a cluster.
     const offset = rendering.lineColumnToPosition(
       this.state,
       line,
-      snapColumn(this.lineText(line), column),
+      this.#graphemes.snap(line, this.lineText(line), column),
     );
     // Clamp unresolved carets beyond the document to its end.
     return offset ?? position.byteOffset(this.state.pieceTable.totalLength);
@@ -276,23 +322,4 @@ export class EditorDocument {
 
 function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
-}
-
-function isHighSurrogate(code: number): boolean {
-  return code >= 0xd800 && code <= 0xdbff;
-}
-
-function isLowSurrogate(code: number): boolean {
-  return code >= 0xdc00 && code <= 0xdfff;
-}
-
-/**
- * Clamp the column to the text and move it backward to the start of a character if it splits
- * a surrogate pair.
- */
-function snapColumn(text: string, column: number): number {
-  const at = Math.min(Math.max(0, column), text.length);
-  return isLowSurrogate(text.charCodeAt(at)) && isHighSurrogate(text.charCodeAt(at - 1))
-    ? at - 1
-    : at;
 }

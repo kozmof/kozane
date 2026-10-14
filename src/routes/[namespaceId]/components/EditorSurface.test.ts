@@ -25,6 +25,15 @@ describe("EditorSurface", () => {
     expect(document.querySelectorAll("[style*='top']").length).toBeLessThan(200);
   });
 
+  it("keeps select-all highlights bounded by the rendered lines", async () => {
+    const { sink } = mount("line\n".repeat(5000));
+    sink.focus();
+    await userEvent.keyboard("{Control>}a{/Control}");
+    const highlights = screen.getAllByTestId("editor-selection");
+    expect(highlights.length).toBeLessThan(100);
+    expect(highlights.length).toBe(document.querySelectorAll("[data-line]").length);
+  });
+
   it("shows the text it was given", () => {
     mount("hello\nworld\n");
     expect(screen.getByText("hello")).toBeInTheDocument();
@@ -59,6 +68,20 @@ describe("EditorSurface", () => {
     } finally {
       Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
     }
+  });
+
+  it("moves over and backspaces a complete emoji sequence", async () => {
+    const { doc, sink } = mount("a👩🏽‍💻b");
+    sink.focus();
+    await userEvent.keyboard("{ArrowRight}{ArrowRight}{Backspace}");
+    expect(doc.text()).toBe("ab");
+  });
+
+  it("forward-deletes a base letter with its combining mark", async () => {
+    const { doc, sink } = mount("ae\u0301b");
+    sink.focus();
+    await userEvent.keyboard("{ArrowRight}{Delete}");
+    expect(doc.text()).toBe("ab");
   });
 
   it("inserts a newline on Enter", async () => {

@@ -1,3 +1,4 @@
+import { scan } from "@kozmof/reed";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { EditorDocument, orderCarets, sameCaret } from "./document-store.svelte.js";
 
@@ -34,6 +35,110 @@ describe("sameCaret", () => {
 });
 
 describe("EditorDocument", () => {
+  it("keeps cached text accurate across Unicode, CRLF, and overlapping edits", () => {
+    const d = doc("日本😀\r\nsecond\r\nlast");
+    const read = scan.getValue;
+    const decode = vi.spyOn(scan, "getValue");
+    const check = () => expect(d.text()).toBe(read(d.state.pieceTable));
+    try {
+      d.insert({ line: 1, column: 2 }, "🗂\r\n新");
+      check();
+      d.replace({ line: 0, column: 1 }, { line: 2, column: 1 }, "本\r\n😀");
+      check();
+      d.delete({ line: 0, column: 0 }, { line: 1, column: 2 });
+      check();
+      d.insert({ line: 0, column: 0 }, "a");
+      check();
+      d.markSaved();
+      expect(d.dirty).toBe(false);
+      expect(decode).not.toHaveBeenCalled();
+    } finally {
+      decode.mockRestore();
+      d.dispose();
+    }
+  });
+
+  it("rebuilds the text cache once after undo and handles edits before a history read", () => {
+    const d = doc("hello");
+    d.insert({ line: 0, column: 5 }, "!");
+    d.undo();
+    const decode = vi.spyOn(scan, "getValue");
+    try {
+      expect(d.text()).toBe("hello");
+      expect(d.text()).toBe("hello");
+      expect(decode).toHaveBeenCalledTimes(1);
+      d.redo();
+      d.insert({ line: 0, column: 6 }, "?");
+      expect(d.text()).toBe("hello!?");
+      expect(d.text()).toBe("hello!?");
+      expect(decode).toHaveBeenCalledTimes(2);
+      d.insert({ line: 0, column: 7 }, ".");
+      expect(d.text()).toBe("hello!?.");
+      expect(decode).toHaveBeenCalledTimes(2);
+    } finally {
+      decode.mockRestore();
+      d.dispose();
+    }
+  });
+
+  it("edits distant locations without retaining a stale local edit window", () => {
+    const d = doc("a".repeat(10000));
+    d.insert({ line: 0, column: 1 }, "日本");
+    d.insert({ line: 0, column: 9000 }, "😀");
+    d.replace({ line: 0, column: 0 }, { line: 0, column: 3 }, "X");
+    expect(d.text()).toBe(scan.getValue(d.state.pieceTable));
+    d.dispose();
+  });
+
+  it("avoids full decoding while editing a million-line document", () => {
+    const content = "日本😀\n".repeat(999999) + "last";
+    const d = doc(content);
+    const decode = vi.spyOn(scan, "getValue");
+    try {
+      expect(d.lineCount).toBe(1000000);
+      let at = { line: 999999, column: 4 };
+      for (const ch of "abcdefghij") at = d.insert(at, ch);
+      expect(d.lineText(999999)).toBe("lastabcdefghij");
+      expect(d.text().length).toBe(content.length + 10);
+      expect(d.visibleLines(999990, 10, 0)).toHaveLength(10);
+      d.markSaved();
+      d.replace({ line: 999999, column: 0 }, { line: 999999, column: 1 }, "L");
+      expect(d.dirty).toBe(true);
+      expect(d.dirty).toBe(true);
+      expect(decode).not.toHaveBeenCalled();
+    } finally {
+      decode.mockRestore();
+      d.dispose();
+    }
+  }, 30000);
+
+  it.each(["e\u0301", "👩🏽‍💻", "🇯🇵", "葛󠄀"])("moves and edits whole grapheme %s", (cluster) => {
+    const d = doc("a" + cluster + "b");
+    const end = 1 + cluster.length;
+    expect(d.columnAfter(0, 1)).toBe(end);
+    expect(d.columnBefore(0, end)).toBe(1);
+    expect(d.clamp({ line: 0, column: 2 })).toEqual({ line: 0, column: 1 });
+    expect(d.textBetween({ line: 0, column: 2 }, { line: 0, column: end })).toBe(cluster);
+    d.delete({ line: 0, column: d.columnBefore(0, end) }, { line: 0, column: end });
+    expect(d.text()).toBe("ab");
+    d.undo();
+    expect(d.text()).toBe("a" + cluster + "b");
+    d.replace({ line: 0, column: 2 }, { line: 0, column: end }, "X");
+    expect(d.text()).toBe("aXb");
+    d.dispose();
+  });
+
+  it("refreshes grapheme boundaries after edits and undo", () => {
+    const d = doc("ex");
+    d.insert({ line: 0, column: 1 }, "\u0301");
+    expect(d.columnAfter(0, 0)).toBe(2);
+    d.undo();
+    expect(d.columnAfter(0, 0)).toBe(1);
+    d.redo();
+    expect(d.columnBefore(0, 2)).toBe(0);
+    d.dispose();
+  });
+
   it("reports the text it was opened with", () => {
     expect(doc("hello\nworld\n").text()).toBe("hello\nworld\n");
   });
