@@ -135,7 +135,7 @@
     background: "ink.white",
     border: "1px solid token(colors.neutral.border)",
     borderRadius: "4px",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
     outline: "none",
   });
   const bodyClass = css({ flex: "1", overflowY: "auto", padding: "6px" });
