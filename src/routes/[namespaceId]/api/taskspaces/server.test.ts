@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, existsSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "crypto";
 import { tmpdir } from "os";
@@ -54,6 +54,25 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
     _resetWorkspaceRootForTest();
     rmSync(tmpRoot, { recursive: true, force: true });
+  });
+
+  it("refuses a name whose parent is a symlink out of the workspace", async () => {
+    const outside = join(tmpdir(), `kozane-taskspace-outside-${randomUUID()}`);
+    mkdirSync(outside);
+    try {
+      symlinkSync(outside, join(tmpRoot, "escape"));
+
+      await expectHttpRejection(
+        POST(event(db, namespaceId, jsonRequest({ name: "escape/draft", scopeId }))),
+        400,
+        "Taskspace path must be inside the workspace root",
+      );
+      expect(existsSync(join(outside, "draft"))).toBe(false);
+      // The row recorded before the directory was attempted is taken back.
+      expect(await getAllTaskspaces({ db })).toHaveLength(0);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 
   it("rejects missing name", async () => {

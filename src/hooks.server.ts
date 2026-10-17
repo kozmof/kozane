@@ -1,5 +1,6 @@
 import type { Handle } from "@sveltejs/kit";
 import { error } from "@sveltejs/kit";
+import { building } from "$app/environment";
 import { randomUUID } from "node:crypto";
 import { getDb } from "./db/client";
 import { getDBURL, getWorkspaceRoot } from "./db/internal/config";
@@ -172,7 +173,11 @@ const handleRequest: Handle = async ({ event, resolve }) => {
 
   // Static prerendering makes local requests against the workspace database. Skip
   // authentication and TLS checks so export also works for key-protected workspaces.
-  if (isSsgBuild()) {
+  //
+  // Require SvelteKit's `building` flag as well as the export flag. A running server never
+  // has `building` set, so a stray `KOZANE_SSG=1` in its environment cannot open every gate
+  // below to anyone who can reach it.
+  if (building && isSsgBuild()) {
     event.locals.db = await getDb();
     return resolve(event);
   }
@@ -243,15 +248,33 @@ const handleRequest: Handle = async ({ event, resolve }) => {
   return applySecurityHeaders(await resolve(event));
 };
 
+/**
+ * Tag a response with its request ID. Every gated path already returns a fresh response from
+ * `applySecurityHeaders`, whose headers can be set in place. Copy only a response whose
+ * headers are immutable, which the prerender path can hand back.
+ */
+function withRequestId(response: Response, requestId: string): Response {
+  try {
+    response.headers.set("x-request-id", requestId);
+    return response;
+  } catch {
+    const headers = new Headers(response.headers);
+    headers.set("x-request-id", requestId);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  }
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
   const requestId = randomUUID();
   const startedAt = performance.now();
   event.locals.requestId = requestId;
 
   try {
-    const response = await handleRequest({ event, resolve });
-    const headers = new Headers(response.headers);
-    headers.set("x-request-id", requestId);
+    const response = withRequestId(await handleRequest({ event, resolve }), requestId);
     if (process.env.KOZANE_LOG_REQUESTS === "1") {
       console.log(
         JSON.stringify({
@@ -265,11 +288,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         }),
       );
     }
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    return response;
   } catch (requestError) {
     console.error(
       JSON.stringify({

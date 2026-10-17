@@ -23,70 +23,70 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { namespaceId, cardId } = params;
   const body = await readJsonObject(request);
 
+  // Validate the body before opening the transaction. None of these checks reads the
+  // database, so running them inside it would only hold the write lock longer against CLI
+  // writers.
+  const rawContent = optionalString(body, "content");
+  let content: string | undefined;
+  if (rawContent !== undefined) {
+    const checked = checkCardContent(rawContent, contentMax());
+    if (!checked.ok) throw error(400, checked.issue);
+    content = checked.content;
+  }
+
+  const requestedPartitionId =
+    body.partitionId === undefined ? undefined : requireString(body, "partitionId");
+  const requestedLayerId = body.layerId === undefined ? undefined : requireString(body, "layerId");
+
+  // Rounded as `clampToBounds` does, because the position columns are integers.
+  const rawPosX = optionalNumber(body, "posX");
+  const rawPosY = optionalNumber(body, "posY");
+  const { canvasWidth, canvasHeight } = canvasBounds();
+  const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
+  const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
+  const zIndex = optionalNumber(body, "zIndex");
+  if (zIndex !== undefined && !Number.isInteger(zIndex))
+    throw error(400, "zIndex must be an integer");
+
+  // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
+  // widths rather than clamping them.
+  const width = optionalNullableNumber(body, "width");
+  const [widthMin, widthMax] = CARD_WIDTH_RANGE;
+  if (typeof width === "number" && !Number.isInteger(width))
+    throw error(400, "width must be an integer");
+  if (typeof width === "number" && (width < widthMin || width > widthMax))
+    throw error(400, `width must be between ${widthMin} and ${widthMax}`);
+
+  if (
+    content === undefined &&
+    requestedPartitionId === undefined &&
+    requestedLayerId === undefined &&
+    posX === undefined &&
+    posY === undefined &&
+    zIndex === undefined &&
+    width === undefined
+  )
+    throw error(400, "No fields to update");
+
   // Every lookup runs inside the transaction that writes, as in the collection POST, so a
   // card, partition, or layer removed by another writer in between is a 404 or 400 here
   // rather than a foreign-key or not-found 500.
   const stacking = await withTx(db, async (tx): Promise<CardStacking[]> => {
     const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
 
-    const rawContent = optionalString(body, "content");
-    let content: string | undefined;
-    if (rawContent !== undefined) {
-      const checked = checkCardContent(rawContent, contentMax());
-      if (!checked.ok) throw error(400, checked.issue);
-      content = checked.content;
-    }
-
-    let newPartitionId: string | undefined;
-    if (body.partitionId !== undefined) {
-      const requestedPartitionId = requireString(body, "partitionId");
-      const newPartition = await getPartition({
-        db: tx,
-        namespaceId,
-        partitionId: requestedPartitionId,
-      });
-      if (!newPartition) throw error(400, "New partition not found in namespace");
-      newPartitionId = requestedPartitionId;
-    }
-
-    let newLayerId: string | undefined;
-    if (body.layerId !== undefined) {
-      const requestedLayerId = requireString(body, "layerId");
-      const newLayer = await getLayer({ db: tx, namespaceId, layerId: requestedLayerId });
-      if (!newLayer) throw error(400, "New layer not found in namespace");
-      newLayerId = requestedLayerId;
-    }
-
-    // Rounded as `clampToBounds` does, because the position columns are integers.
-    const rawPosX = optionalNumber(body, "posX");
-    const rawPosY = optionalNumber(body, "posY");
-    const { canvasWidth, canvasHeight } = canvasBounds();
-    const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
-    const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
-    const zIndex = optionalNumber(body, "zIndex");
-    if (zIndex !== undefined && !Number.isInteger(zIndex))
-      throw error(400, "zIndex must be an integer");
-
-    // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
-    // widths rather than clamping them.
-    const rawWidth = optionalNullableNumber(body, "width");
-    const [widthMin, widthMax] = CARD_WIDTH_RANGE;
-    if (typeof rawWidth === "number" && !Number.isInteger(rawWidth))
-      throw error(400, "width must be an integer");
-    if (typeof rawWidth === "number" && (rawWidth < widthMin || rawWidth > widthMax))
-      throw error(400, `width must be between ${widthMin} and ${widthMax}`);
-    const width = rawWidth;
+    if (
+      requestedPartitionId !== undefined &&
+      !(await getPartition({ db: tx, namespaceId, partitionId: requestedPartitionId }))
+    )
+      throw error(400, "New partition not found in namespace");
+    const newPartitionId = requestedPartitionId;
 
     if (
-      content === undefined &&
-      newPartitionId === undefined &&
-      newLayerId === undefined &&
-      posX === undefined &&
-      posY === undefined &&
-      zIndex === undefined &&
-      width === undefined
+      requestedLayerId !== undefined &&
+      !(await getLayer({ db: tx, namespaceId, layerId: requestedLayerId }))
     )
-      throw error(400, "No fields to update");
+      throw error(400, "New layer not found in namespace");
+    const newLayerId = requestedLayerId;
 
     // A layer change restacks the card above the destination's cards, as the batch layer
     // route does, so it does not keep a zIndex from the layer it left. An explicit zIndex in

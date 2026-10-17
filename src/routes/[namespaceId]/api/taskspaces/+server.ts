@@ -1,4 +1,4 @@
-import { mkdir, open, rmdir, unlink } from "node:fs/promises";
+import { mkdir, open, realpath, rmdir, unlink } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
@@ -12,6 +12,9 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
+
+/** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
+class OutsideWorkspaceError extends Error {}
 
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -53,6 +56,12 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   try {
     // Shared parents are safe to create, but claim the taskspace directory atomically.
     await mkdir(dirname(targetDir), { recursive: true });
+    // The textual check above cannot see symlinks. A parent such as `tasks -> /elsewhere`
+    // would place the directory outside the workspace, so check where the parent really is
+    // before claiming anything inside it.
+    const realParent = await realpath(dirname(targetDir));
+    const parentRel = relative(await realpath(root), realParent);
+    if (parentRel.startsWith("..") || isAbsolute(parentRel)) throw new OutsideWorkspaceError();
     await mkdir(targetDir);
     targetCreated = true;
     const marker = await open(markerPath, "wx", 0o600);
@@ -80,6 +89,8 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       await unlink(markerPath).catch(() => undefined);
       await rmdir(targetDir).catch(() => undefined);
     }
+    if (e instanceof OutsideWorkspaceError)
+      throw error(400, "Taskspace path must be inside the workspace root");
     const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
     if (code === "EEXIST") throw error(409, "Taskspace directory already exists");
     throw error(500, "Failed to initialize taskspace directory");

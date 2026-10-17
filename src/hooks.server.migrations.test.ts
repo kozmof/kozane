@@ -5,7 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { runMigrations } from "./cli/lib/db";
 
 // Isolate the module's cached state for each migration-hook suite.
-const state = vi.hoisted(() => ({ root: null as string | null, dbUrl: "" }));
+const state = vi.hoisted(() => ({ root: null as string | null, dbUrl: "", building: false }));
+vi.mock("$app/environment", () => ({
+  get building() {
+    return state.building;
+  },
+}));
 vi.mock("./db/internal/config", () => ({
   getWorkspaceRoot: () => state.root,
   getDBURL: () => state.dbUrl,
@@ -34,6 +39,7 @@ describe("workspace database behind this version", () => {
     vi.resetModules();
     process.env.HOST = "127.0.0.1";
     delete process.env.KOZANE_SSG;
+    state.building = false;
   });
 
   it("serves a workspace whose migrations are all applied", async () => {
@@ -138,6 +144,7 @@ describe("workspace database behind this version", () => {
     state.root = root;
     state.dbUrl = `file:${dbPath}`;
     process.env.KOZANE_SSG = "1";
+    state.building = true;
 
     const { handle } = await import("./hooks.server");
     const resolve = vi.fn(async () => new Response("ok"));

@@ -78,6 +78,25 @@ describe("production request hook", () => {
     });
   });
 
+  it("still authenticates a running server whose environment carries the export flag", async () => {
+    // The export bypass is for prerendering only. Outside a build, a stray `KOZANE_SSG=1`
+    // must not open the gates of a key-protected workspace.
+    process.env.KOZANE_SSG = "1";
+    try {
+      state.root = workspace("secret");
+      const resolver = vi.fn(async () => new Response("ok"));
+      const response = await handle({
+        event: event("http://localhost/api") as never,
+        resolve: resolver as never,
+      });
+
+      expect(response.status).toBe(401);
+      expect(resolver).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.KOZANE_SSG;
+    }
+  });
+
   it("answers 503 naming the file when the API key cannot be read", async () => {
     const root = workspace();
     // What a hand-edit leaves behind. Unguarded this threw out of the hook, and every

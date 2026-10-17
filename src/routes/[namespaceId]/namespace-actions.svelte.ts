@@ -107,11 +107,12 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError("Failed to glue cards");
       return;
     }
+    const glued = new Set(cardIds);
     state.glueRels = [
-      ...state.glueRels.filter((r) => !cardIds.includes(r.cardId)),
+      ...state.glueRels.filter((r) => !glued.has(r.cardId)),
       ...cardIds.map((cardId) => ({ glueId, cardId })),
     ];
-    state.cards = state.cards.map((c) => (cardIds.includes(c.id) ? { ...c, glueId } : c));
+    state.cards = state.cards.map((c) => (glued.has(c.id) ? { ...c, glueId } : c));
   }
 
   async function unglue(cardIds: string[], errorMsg: string) {
@@ -622,8 +623,9 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError("Failed to remove cards from scope");
       return;
     }
+    const removed = new Set(cardIds);
     state.scopeRels = state.scopeRels.filter(
-      (r) => !(r.scopeId === scopeId && cardIds.includes(r.cardId)),
+      (r) => !(r.scopeId === scopeId && removed.has(r.cardId)),
     );
     state.selection.selectedCards = new Set();
   }
