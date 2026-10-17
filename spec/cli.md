@@ -620,6 +620,9 @@ namespace's default partition is used. Without `--layer`, that namespace's defau
 When `--scope` is provided, card creation and scope membership are committed in one
 transaction.
 
+`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit —
+the same rules the HTTP API applies.
+
 Example:
 
 ```bash
@@ -714,7 +717,8 @@ kozane card edit <cardId> <content>
 kozane card edit 3f9a2c1 "Investigate caching, then measure"
 ```
 
-`<content>` is bounded by the workspace's content limit, the same one `card add` applies.
+`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit,
+the same rules `card add` applies.
 Text identical to what the card already holds leaves `updated_at` alone, so an edit that
 changed nothing does not read as a card that was worked on.
 
@@ -774,6 +778,10 @@ namespace is taken from the cards, and they must all come from the same one.
 
 Moved cards leave their glue groups. A group spanning two namespaces is never drawn by the UI,
 so it would only ever be rows nothing could act on.
+
+Moved cards are restacked above the cards already on each destination layer, keeping their
+relative order. A card linked to a taskspace placed in another namespace loses that link,
+since a placed taskspace only originates cards in its own namespace.
 
 ---
 

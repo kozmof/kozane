@@ -133,6 +133,11 @@ or moved between partitions and layers keeps the timestamp it had — that inter
 `kozane card list --sort gap` reports, and arranging the board must not reset it. Text that
 arrives unchanged does not count either.
 
+A change of `layerId` restacks the card above the destination layer's cards, as
+`PATCH /[namespaceId]/api/cards/layer` does. An explicit `zIndex` in the same body is applied
+after the restack and wins. Answers `{ ok: true, stacking: [{ cardId, zIndex }] }`, where
+`stacking` is empty unless the layer changed.
+
 `404` when the card is not this namespace's. `400` for an unknown destination partition or
 layer, a non-integer `zIndex`, or an out-of-range `width`.
 
@@ -171,6 +176,10 @@ so a group spanning more than one layer needs telling apart by layer, not just b
 
 Moves many cards to another namespace, with their partition and layer resolved on the far
 side. Body: `targetNamespaceId`, `cardIds`.
+
+Moved cards are restacked above the cards already on each destination layer and leave their
+glue groups. A card linked to a taskspace placed in another namespace loses that link;
+links to unplaced taskspaces, and to taskspaces of the target namespace, are kept.
 
 `400` when the target is the source, or when the cards are not this namespace's.
 

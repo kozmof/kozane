@@ -552,11 +552,11 @@ export function createNamespaceActions(state: NamespaceState) {
 
     const scopeRes = await api.createScope(state.mutationFetcher, state.namespaceId, scopeName);
     const scope = scopeRes.ok ? await scopeRes.json().catch(() => null) : null;
-    if (!scope?.id) {
+    const scopeId = readString(scope, "id");
+    if (scopeId === undefined) {
       state.setError(await api.failureMessage(scopeRes, "Failed to create scope"));
       return null;
     }
-    const scopeId = scope.id as string;
     state.scopes = [...state.scopes, { id: scopeId, name: scopeName }];
 
     const taskspaceRes = await api.createTaskspace(state.mutationFetcher, state.namespaceId, {
@@ -564,7 +564,8 @@ export function createNamespaceActions(state: NamespaceState) {
       scopeId,
     });
     const taskspace = taskspaceRes.ok ? await taskspaceRes.json().catch(() => null) : null;
-    if (!taskspace?.id) {
+    const taskspaceId = readString(taskspace, "id");
+    if (taskspaceId === undefined) {
       const message = await api.failureMessage(taskspaceRes, "Failed to create taskspace");
       // Remove the scope created for this failed taskspace. If cleanup also fails, leave it
       // available for deletion in the sidebar.
@@ -573,7 +574,6 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError(message);
       return null;
     }
-    const taskspaceId = taskspace.id as string;
     state.taskspaces = [
       ...state.taskspaces,
       {

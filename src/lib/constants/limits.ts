@@ -19,6 +19,19 @@ export function contentLimitIssue(content: string, contentMax: number): string |
     ? `content must be a string under ${contentMax} characters`
     : null;
 }
+
+export type CardContentCheck = { ok: true; content: string } | { ok: false; issue: string };
+
+/**
+ * Trim card text and check it is nonblank and within `contentMax`. Share this between HTTP
+ * routes and CLI commands so every writer stores card text under the same rules.
+ */
+export function checkCardContent(raw: string, contentMax: number): CardContentCheck {
+  const content = raw.trim();
+  if (!content) return { ok: false, issue: "content must not be empty" };
+  const issue = contentLimitIssue(content, contentMax);
+  return issue ? { ok: false, issue } : { ok: true, content };
+}
 export const NAME_MAX = 255;
 /**
  * Maximum IDs a request may name. This limits request work but does not size multi-parameter

@@ -17,7 +17,7 @@ import { addCard, getAllCards, getCard, getCardPartitionNames, updateCard } from
 import { addScopeRel, getAllCardsByScope } from "./scope-rel.js";
 import { BATCH_MAX } from "../../lib/constants.js";
 import { getGlueRelsByCards, glueCards } from "./glue.js";
-import { glueTable } from "../schema.js";
+import { cardTable, glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer, getAllLayers, getDefaultLayer, getLayer } from "./layer.js";
 
@@ -331,6 +331,64 @@ describe("moveCardsToNamespace", () => {
     await expect(
       moveCardsToNamespace({ db, sourceNamespaceId: srcId, targetNamespaceId: dstId, cardIds: [] }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  async function readCard(db: Awaited<ReturnType<typeof createTestDB>>, cardId: string) {
+    return db.select().from(cardTable).where(eq(cardTable.id, cardId)).get();
+  }
+
+  it("restacks moved cards above the destination layer's cards in their relative order", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const dstPartition = await addPartition({ db, namespaceId: dstId, name: "General" });
+    await addCard({ db, partitionId: dstPartition, content: "Resident", zIndex: 10 });
+    const lower = await addCard({ db, partitionId: srcPartition, content: "Lower", zIndex: 1 });
+    const upper = await addCard({ db, partitionId: srcPartition, content: "Upper", zIndex: 4 });
+
+    await moveCardsToNamespace({
+      db,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
+      cardIds: [upper, lower],
+    });
+
+    expect((await readCard(db, lower))?.zIndex).toBe(11);
+    expect((await readCard(db, upper))?.zIndex).toBe(12);
+  });
+
+  it("drops a link to a taskspace placed in another namespace and keeps the rest", async () => {
+    const { db, srcId, dstId, srcPartition } = await setupMove();
+    const sourceTaskspace = await addTaskspace({ db, namespaceId: srcId });
+    const targetTaskspace = await addTaskspace({ db, namespaceId: dstId });
+    const unplacedTaskspace = await addTaskspace({ db });
+    const fromSource = await addCard({
+      db,
+      partitionId: srcPartition,
+      content: "Source",
+      taskspaceId: sourceTaskspace,
+    });
+    const fromTarget = await addCard({
+      db,
+      partitionId: srcPartition,
+      content: "Target",
+      taskspaceId: targetTaskspace,
+    });
+    const fromUnplaced = await addCard({
+      db,
+      partitionId: srcPartition,
+      content: "Unplaced",
+      taskspaceId: unplacedTaskspace,
+    });
+
+    await moveCardsToNamespace({
+      db,
+      sourceNamespaceId: srcId,
+      targetNamespaceId: dstId,
+      cardIds: [fromSource, fromTarget, fromUnplaced],
+    });
+
+    expect((await readCard(db, fromSource))?.taskspaceId).toBeNull();
+    expect((await readCard(db, fromTarget))?.taskspaceId).toBe(targetTaskspace);
+    expect((await readCard(db, fromUnplaced))?.taskspaceId).toBe(unplacedTaskspace);
   });
 
   it("moves a card to an existing same-name partition in the target namespace", async () => {

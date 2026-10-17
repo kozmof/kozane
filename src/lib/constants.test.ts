@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clamp,
   chunked,
+  checkCardContent,
   contentLimitIssue,
   CANVAS_W,
   CANVAS_H,
@@ -148,5 +149,23 @@ describe("constants", () => {
 
   it("CONTENT_MAX is 200000", () => {
     expect(CONTENT_MAX).toBe(200_000);
+  });
+});
+
+describe("checkCardContent", () => {
+  it("trims surrounding whitespace", () => {
+    expect(checkCardContent("  text \n", CONTENT_MAX)).toEqual({ ok: true, content: "text" });
+  });
+
+  it("refuses blank text", () => {
+    expect(checkCardContent(" \n\t", CONTENT_MAX)).toEqual({
+      ok: false,
+      issue: "content must not be empty",
+    });
+  });
+
+  it("measures the limit after trimming", () => {
+    expect(checkCardContent(` ${"x".repeat(5)} `, 5)).toEqual({ ok: true, content: "xxxxx" });
+    expect(checkCardContent("x".repeat(6), 5)).toMatchObject({ ok: false });
   });
 });

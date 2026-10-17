@@ -2,11 +2,11 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getPartition } from "$db/api/partition";
 import { getLayer } from "$db/api/layer";
-import { updateCard } from "$db/api/card";
+import { reassignCardsToLayerInTx, updateCard, type CardStacking } from "$db/api/card";
 import { withTx } from "$db/tx";
 import { deleteNamespaceCards } from "$db/api/composite";
 import { requireCardInNamespace } from "../../../lib/guards.js";
-import { clamp, contentLimitIssue } from "$lib/constants";
+import { checkCardContent, clamp } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { canvasBounds } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
@@ -26,16 +26,16 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   // Every lookup runs inside the transaction that writes, as in the collection POST, so a
   // card, partition, or layer removed by another writer in between is a 404 or 400 here
   // rather than a foreign-key or not-found 500.
-  await withTx(db, async (tx) => {
+  const stacking = await withTx(db, async (tx): Promise<CardStacking[]> => {
     const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
 
     const rawContent = optionalString(body, "content");
-    if (rawContent !== undefined && !rawContent.trim())
-      throw error(400, "content must not be empty");
-    const contentIssue =
-      rawContent === undefined ? null : contentLimitIssue(rawContent, contentMax());
-    if (contentIssue) throw error(400, contentIssue);
-    const content = rawContent !== undefined ? rawContent.trim() : undefined;
+    let content: string | undefined;
+    if (rawContent !== undefined) {
+      const checked = checkCardContent(rawContent, contentMax());
+      if (!checked.ok) throw error(400, checked.issue);
+      content = checked.content;
+    }
 
     let newPartitionId: string | undefined;
     if (body.partitionId !== undefined) {
@@ -88,21 +88,29 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     )
       throw error(400, "No fields to update");
 
-    await updateCard({
-      db: tx,
-      cardId,
-      partitionId,
-      newPartitionId,
-      layerId: newLayerId,
-      content,
-      posX,
-      posY,
-      zIndex,
-      width,
-    });
+    // A layer change restacks the card above the destination's cards, as the batch layer
+    // route does, so it does not keep a zIndex from the layer it left. An explicit zIndex in
+    // the same body is applied afterwards and wins.
+    let stacking: CardStacking[] = [];
+    if (newLayerId !== undefined) {
+      const moved = await reassignCardsToLayerInTx({
+        db: tx,
+        namespaceId,
+        cardIds: [cardId],
+        layerId: newLayerId,
+      });
+      // Both were checked above inside this transaction, so a refusal here is a bug.
+      if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
+      stacking = moved.stacking;
+    }
+
+    const rest = { newPartitionId, content, posX, posY, zIndex, width };
+    if (Object.values(rest).some((value) => value !== undefined))
+      await updateCard({ db: tx, cardId, partitionId, ...rest });
+    return stacking;
   });
 
-  return json({ ok: true });
+  return json({ ok: true, stacking });
 };
 
 export const DELETE: RequestHandler = async ({ locals, params }) => {

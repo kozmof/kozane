@@ -70,13 +70,21 @@ function resolvesThroughDotEntry(realBase: string, real: string): boolean {
   return rel !== "" && rel.split(sep).some((segment) => segment.startsWith("."));
 }
 
-function mapFsError(e: unknown, whatIsMissing: string): TaskspaceFilesError {
+/**
+ * Translate filesystem errors with a client-facing meaning. Return any other error, such as
+ * ENOSPC, EIO, or EROFS, unchanged so the route reports a server failure rather than a
+ * missing file.
+ */
+function mapFsError(e: unknown, whatIsMissing: string): unknown {
   const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
   if (code === "EACCES" || code === "EPERM")
     return new TaskspaceFilesError("forbidden", "Permission denied");
   if (code === "ELOOP")
     return new TaskspaceFilesError("invalid-path", "Path resolves through a symlink loop");
-  return new TaskspaceFilesError("not-found", whatIsMissing);
+  if (code === "ENAMETOOLONG") return new TaskspaceFilesError("invalid-path", "Path is too long");
+  if (code === "ENOENT" || code === "ENOTDIR")
+    return new TaskspaceFilesError("not-found", whatIsMissing);
+  return e;
 }
 
 function entryKind(dirent: Dirent): TaskspaceEntryKind {

@@ -192,6 +192,44 @@ describe("PATCH /[namespaceId]/api/cards/[cardId]", () => {
     await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({ layerId });
   });
 
+  it("restacks a card moved to another layer above that layer's cards", async () => {
+    const { db, namespaceId, partitionId, cardId } = await setup();
+    const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
+    await addCard({ db, partitionId, layerId, content: "Resident", zIndex: 7 });
+
+    const response = await PATCH(event(db, namespaceId, cardId, jsonRequest({ layerId })));
+
+    await expect(response.json()).resolves.toEqual({
+      ok: true,
+      stacking: [{ cardId, zIndex: 8 }],
+    });
+    await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
+      layerId,
+      zIndex: 8,
+    });
+  });
+
+  it("applies an explicit zIndex after the layer restack", async () => {
+    const { db, namespaceId, partitionId, cardId } = await setup();
+    const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
+    await addCard({ db, partitionId, layerId, content: "Resident", zIndex: 7 });
+
+    await PATCH(event(db, namespaceId, cardId, jsonRequest({ layerId, zIndex: 2 })));
+
+    await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
+      layerId,
+      zIndex: 2,
+    });
+  });
+
+  it("answers an empty stacking list when the layer is unchanged", async () => {
+    const { db, namespaceId, cardId } = await setup();
+
+    const response = await PATCH(event(db, namespaceId, cardId, jsonRequest({ posX: 10 })));
+
+    await expect(response.json()).resolves.toEqual({ ok: true, stacking: [] });
+  });
+
   it("rejects a layer from another namespace", async () => {
     const { db, namespaceId, partitionId, cardId } = await setup();
     const before = await getCard({ db, partitionId, cardId });

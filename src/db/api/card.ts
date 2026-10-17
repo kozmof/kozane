@@ -587,45 +587,56 @@ export async function reassignCardsToLayer({
   layerId,
 }: ReassignCardsToLayer): Promise<ReassignLayerResult> {
   if (cardIds.length === 0) return { ok: true, stacking: [] };
+  return withTx(db, (tx) => reassignCardsToLayerInTx({ db: tx, namespaceId, cardIds, layerId }));
+}
 
-  return withTx(db, async (tx) => {
-    // Check the destination first so a request with both an invalid layer and invalid cards
-    // reports the layer error consistently.
-    const layer = await tx
-      .select({ id: layerTable.id })
-      .from(layerTable)
-      .where(and(eq(layerTable.id, layerId), eq(layerTable.namespaceId, namespaceId)))
-      .get();
-    if (!layer) return { ok: false, reason: "foreign-layer" };
+/**
+ * {@link reassignCardsToLayer} inside a caller-owned transaction, for routes that combine a
+ * layer move with other writes atomically.
+ */
+export async function reassignCardsToLayerInTx({
+  db: tx,
+  namespaceId,
+  cardIds,
+  layerId,
+}: Omit<ReassignCardsToLayer, "db"> & { db: Tx }): Promise<ReassignLayerResult> {
+  if (cardIds.length === 0) return { ok: true, stacking: [] };
+  // Check the destination first so a request with both an invalid layer and invalid cards
+  // reports the layer error consistently.
+  const layer = await tx
+    .select({ id: layerTable.id })
+    .from(layerTable)
+    .where(and(eq(layerTable.id, layerId), eq(layerTable.namespaceId, namespaceId)))
+    .get();
+  if (!layer) return { ok: false, reason: "foreign-layer" };
 
-    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
-    if (!owned.ok) return owned;
+  const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+  if (!owned.ok) return owned;
 
-    const requested = await readStackRows(tx, cardIds);
-    const arriving = requested.filter((card) => card.layerId !== layerId);
-    if (arriving.length === 0) return { ok: true, stacking: [] };
+  const requested = await readStackRows(tx, cardIds);
+  const arriving = requested.filter((card) => card.layerId !== layerId);
+  if (arriving.length === 0) return { ok: true, stacking: [] };
 
-    const { top } = await layerStackBounds(tx, layerId);
+  const { top } = await layerStackBounds(tx, layerId);
 
-    // Preserve relative stacking order, using IDs to break ties.
-    const stacking = [...arriving]
-      .sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id))
-      .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
+  // Preserve relative stacking order, using IDs to break ties.
+  const stacking = [...arriving]
+    .sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id))
+    .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
 
-    // Only zIndex uses a CASE expression. `layerId` binds once per statement.
-    for (const batch of caseUpdateBatches(stacking, 1))
-      await tx
-        .update(cardTable)
-        .set({ layerId, zIndex: buildZIndexCaseWhen(batch) })
-        .where(
-          inArray(
-            cardTable.id,
-            batch.map(({ cardId }) => cardId),
-          ),
-        );
+  // Only zIndex uses a CASE expression. `layerId` binds once per statement.
+  for (const batch of caseUpdateBatches(stacking, 1))
+    await tx
+      .update(cardTable)
+      .set({ layerId, zIndex: buildZIndexCaseWhen(batch) })
+      .where(
+        inArray(
+          cardTable.id,
+          batch.map(({ cardId }) => cardId),
+        ),
+      );
 
-    return { ok: true, stacking };
-  });
+  return { ok: true, stacking };
 }
 
 type ReassignCardsStackOrder = {

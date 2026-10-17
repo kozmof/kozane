@@ -96,6 +96,24 @@ describe("card add", () => {
     expect(cli(root, "card", "list")).toContain("No cards found.");
   });
 
+  it("trims text and refuses blank text, as the API does", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const id = outputId(cli(root, "card", "add", "  Padded  "));
+    expect(cli(root, "card", "show", id)).toMatch(/^Padded$/m);
+
+    const blank = run(root, ["card", "add", "   "]);
+    expect(blank.status).not.toBe(0);
+    expect(blank.stderr).toContain("content must not be empty");
+
+    const blankEdit = run(root, ["card", "edit", id, "  "]);
+    expect(blankEdit.status).not.toBe(0);
+    expect(blankEdit.stderr).toContain("content must not be empty");
+
+    cli(root, "card", "edit", id, "  Edited  ");
+    expect(cli(root, "card", "show", id)).toMatch(/^Edited$/m);
+  });
+
   // The same text must fail under the lower configured limit and succeed under the higher one.
   it("accepts text a lower ui.contentMax would refuse once it is raised", () => {
     const root = tempWorkspace();

@@ -15,6 +15,7 @@ import {
   cardsBelongToNamespace,
   getCardPartitionNames,
   getCardLayerNames,
+  reassignCardsToLayerInTx,
 } from "./card.js";
 import {
   deletePartition,
@@ -34,8 +35,8 @@ import {
   columnCount,
   type CardBatchResult,
 } from "./utils.js";
-import { and, eq, inArray } from "drizzle-orm";
-import { partitionTable, cardTable, scopeRelTable } from "../schema.js";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
 import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
@@ -269,6 +270,11 @@ async function remapCardsByName({
  * For each unique source name, a matching partition/layer is found in the target
  * namespace or created if absent. All updates are atomic.
  * Refuses if any card does not belong to sourceNamespaceId.
+ *
+ * Arriving cards are restacked above each destination layer's cards, as a layer move is.
+ * A card whose taskspace is placed in another namespace loses that link, because a placed
+ * taskspace only originates cards in its own namespace (see
+ * {@link createCardInTaskspaceContext}).
  */
 export async function moveCardsToNamespace({
   db,
@@ -296,10 +302,35 @@ export async function moveCardsToNamespace({
       current: cardLayers.map(({ cardId, layerName }) => ({ cardId, name: layerName })),
       targets: await getAllLayers({ db: tx, namespaceId: targetNamespaceId }),
       create: async (name) => (await addLayer({ db: tx, namespaceId: targetNamespaceId, name })).id,
+      // Partitions were remapped above, so the cards already belong to the target namespace
+      // and the layer move's ownership check holds.
       assign: async (layerId, ids) => {
-        await tx.update(cardTable).set({ layerId }).where(inArray(cardTable.id, ids));
+        const moved = await reassignCardsToLayerInTx({
+          db: tx,
+          namespaceId: targetNamespaceId,
+          cardIds: ids,
+          layerId,
+        });
+        if (!moved.ok) throw new Error(`moveCardsToNamespace: layer move refused: ${moved.reason}`);
       },
     });
+
+    const foreignTaskspaces = tx
+      .select({ id: taskspaceTable.id })
+      .from(taskspaceTable)
+      .where(
+        and(
+          isNotNull(taskspaceTable.namespaceId),
+          ne(taskspaceTable.namespaceId, targetNamespaceId),
+        ),
+      );
+    for (const batch of chunked([...new Set(cardIds)], { size: BATCH_MAX }))
+      await tx
+        .update(cardTable)
+        .set({ taskspaceId: null })
+        .where(
+          and(inArray(cardTable.id, batch), inArray(cardTable.taskspaceId, foreignTaskspaces)),
+        );
 
     // Moving a card to another namespace removes it from its glue group.
     await unglueCardsInTx({ db: tx, cardIds });

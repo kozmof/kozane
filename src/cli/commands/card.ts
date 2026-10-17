@@ -46,7 +46,7 @@ import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx } from "../../db/tx.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
-import { contentLimitIssue } from "../../lib/constants.js";
+import { checkCardContent, contentLimitIssue } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
@@ -76,11 +76,13 @@ type CardShowOptions = { times?: boolean };
 type CardGlueOptions = { add?: boolean; alignList?: boolean };
 type CardMoveOptions = { x?: number | string; y?: number | string };
 
-export async function cardAdd(content: string, options: CardAddOptions = {}): Promise<void> {
+export async function cardAdd(rawContent: string, options: CardAddOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    // Validate against the workspace's `ui.contentMax` after loading its configuration.
-    const contentIssue = contentLimitIssue(content, contentMaxForRoot(root));
-    if (contentIssue) throw new Error(contentIssue);
+    // Validate against the workspace's `ui.contentMax` after loading its configuration, with
+    // the same trimming and blank check the HTTP routes apply.
+    const checked = checkCardContent(rawContent, contentMaxForRoot(root));
+    if (!checked.ok) throw new Error(checked.issue);
+    const { content } = checked;
 
     const namespaceId = await resolveNamespaceId(db, options.namespace);
     const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
@@ -252,10 +254,11 @@ export async function cardMove(requestedCardId: string, { x, y }: CardMoveOption
   });
 }
 
-export async function cardEdit(requestedCardId: string, content: string): Promise<void> {
+export async function cardEdit(requestedCardId: string, rawContent: string): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    const issue = contentLimitIssue(content, contentMaxForRoot(root));
-    if (issue) throw new Error(issue);
+    const checked = checkCardContent(rawContent, contentMaxForRoot(root));
+    if (!checked.ok) throw new Error(checked.issue);
+    const { content } = checked;
     const { allIds, cardIds } = await resolveCardGroup(db, [requestedCardId]);
     // `resolveShortId` already established that this id names a card, so there is no row to
     // look up here beyond the partition the update has to name.
