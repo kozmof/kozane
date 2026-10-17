@@ -7,10 +7,12 @@ use them in different ways.
 The name "Kozane" comes from こざね法 (kozane method), developed by Japanese anthropologist Tadao Umesao.
 
 ## Structures
-
+### Main
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
 - Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
 - Card: A unit of text.
+
+### Others
 - Layer: A way to arrange cards in layers.
 - Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it. A scope belongs to the workspace rather than to one namespace, so its name is unique across the whole workspace. A scope named `docs` in one namespace is the same scope in every other namespace that uses that name.
 - Warp: A saved point to jump to. Warps are not related to cards.

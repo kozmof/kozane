@@ -282,10 +282,10 @@ function checkShortcuts(
 
 export type ParseUiOptions = {
   /**
-   * `true` (the CLI reading a config the user just edited): reject an invalid field
-   * with an error naming it. `false` (the server loading a config at request time):
-   * drop the field and fall back to its default, because a bad value in one setting
-   * must not take the whole workspace down.
+   * When `true`, reject an invalid field with an error naming it. The CLI uses this when
+   * reading a config the user just edited. When `false`, drop the field and fall back to its
+   * default. The server uses this when loading a config at request time, because a bad value
+   * in one setting must not take the whole workspace down.
    */
   strict: boolean;
 };

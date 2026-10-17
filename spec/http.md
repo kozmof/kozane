@@ -64,17 +64,17 @@ something the server did not save.
 Errors are SvelteKit errors with a status code and a message a client may show. These endpoints
 use the following statuses.
 
-| Status        | Meaning                                                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `400`         | The body is malformed, or names a row this namespace does not have                                                              |
-| `401` / `429` | See [Authentication](#authentication)                                                                                           |
-| `403`         | The file or directory cannot be read                                                                                            |
-| `404`         | The resource the URL names does not exist                                                                                       |
-| `409`         | The file changed on disk since it was read, or the directory already exists                                                     |
-| `413` / `415` | The file is too large, or is not UTF-8 text                                                                                     |
-| `426`         | A remote binding was reached over plain HTTP                                                                                    |
-| `500`         | An unexpected failure, with the cause logged rather than returned                                                               |
-| `503`         | The workspace is unavailable — no workspace, an unreadable key file, a database behind the schema, or another server holding it |
+| Status        | Meaning                                                                                                                                       |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `400`         | The body is malformed, or names a row this namespace does not have                                                                            |
+| `401` / `429` | See [Authentication](#authentication)                                                                                                         |
+| `403`         | The file or directory cannot be read                                                                                                          |
+| `404`         | The resource the URL names does not exist                                                                                                     |
+| `409`         | The file changed on disk since it was read, or the directory already exists                                                                   |
+| `413` / `415` | The file is too large, or is not UTF-8 text                                                                                                   |
+| `426`         | A remote binding was reached over plain HTTP                                                                                                  |
+| `500`         | An unexpected failure, with the cause logged rather than returned                                                                             |
+| `503`         | The workspace is unavailable because it is missing, its key file is unreadable, its database is behind the schema, or another server holds it |
 
 The distinction between `400` and `404` is deliberate and consistent. A route naming a
 single resource in its path answers `404` when that resource is absent, because the resource

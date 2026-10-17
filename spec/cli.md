@@ -1,14 +1,12 @@
 # Kozane CLI Specification
 
-Kozane provides data structures for organizing text and modeling thinking processes.
-The names of these structures do not fix how you use them, so different projects can
-use them in different ways.
-
 ## Structures
-
+### Main
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
 - Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
 - Card: A unit of text.
+
+### Others
 - Layer: A way to arrange cards in layers.
 - Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
 - Warp: A saved point to jump to. Warps are not related to cards.
@@ -1134,7 +1132,7 @@ Behavior:
 
 - Requires migrations to be current.
 - Writes to `file` if given, otherwise prints to stdout.
-- Writes export format version 6. Older files can still be imported: version 2
+- Writes export format version 6. Older files can still be imported. Version 2
   (exported before namespaces had a default flag) comes back with every namespace
   non-default, version 3 (before layers) gets a rebuilt default layer per namespace,
   version 4 (before warps) comes back with no warps, and version 5 (before the

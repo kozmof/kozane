@@ -278,7 +278,8 @@ export const scopeRelTable = sqliteTable(
   ],
 );
 
-// Relations enable the .query.* relational API (db.query.namespaceTable.findMany({ with: { partitions: true } }))
+// Relations enable the relational query API, such as
+// `db.query.namespaceTable.findMany({ with: { partitions: true } })`.
 
 export const namespaceRelations = relations(namespaceTable, ({ many }) => ({
   partitions: many(partitionTable),

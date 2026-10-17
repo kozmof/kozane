@@ -91,7 +91,7 @@
   let caretXY = $state({ x: 0, y: 0 });
   let caretWidth = $state(2);
 
-  // DOM ranges must see the newly rendered text. Effects run after DOM updates;
+  // DOM ranges must see the newly rendered text. Effects run after DOM updates, while
   // derived values used during rendering can still measure the previous line content.
   $effect(() => {
     void doc.state.revision;
