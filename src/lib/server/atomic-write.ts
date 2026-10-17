@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 /**
  * Count temporary files within this process to distinguish writes in the same millisecond.
@@ -54,7 +54,12 @@ export function writeFileAtomic(
   { mode }: WriteFileAtomicOptions = {},
 ): void {
   const finalMode = mode ?? existingMode(target);
-  const temporary = `${target}.tmp-${process.pid}-${Date.now()}-${temporaryCounter++}`;
+  // Dot-prefix the temporary name so a file left behind by a crash stays out of taskspace
+  // listings and tag scans, which skip dot-entries.
+  const temporary = join(
+    dirname(target),
+    `.${basename(target)}.tmp-${process.pid}-${Date.now()}-${temporaryCounter++}`,
+  );
   let fd: number | undefined;
   try {
     fd = finalMode === undefined ? openSync(temporary, "wx") : openSync(temporary, "wx", finalMode);

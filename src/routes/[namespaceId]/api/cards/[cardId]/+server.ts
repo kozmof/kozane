@@ -45,7 +45,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
   const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
   const zIndex = optionalNumber(body, "zIndex");
-  if (zIndex !== undefined && !Number.isInteger(zIndex))
+  if (zIndex !== undefined && !Number.isSafeInteger(zIndex))
     throw error(400, "zIndex must be an integer");
 
   // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range

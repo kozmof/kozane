@@ -12,6 +12,7 @@ import type { CardData } from "../../lib/types.js";
 import { BATCH_MAX, WARP_HINT_MAX_CHARS, chunked } from "../../lib/constants.js";
 import { compareIds } from "../../lib/order.js";
 import {
+  NotFoundError,
   assertFound,
   columnCount,
   readByIds,
@@ -405,6 +406,48 @@ function contentUpdatedAt(content: string): SQL {
   return sql`CASE WHEN ${cardTable.content} <> ${content} THEN unixepoch() ELSE ${cardTable.updatedAt} END`;
 }
 
+/**
+ * Refuse a destination partition or layer outside the card's current namespace. Routes check
+ * this too, but enforcing it here keeps every caller from moving a card across namespaces.
+ */
+async function assertSameNamespace({
+  db,
+  partitionId,
+  newPartitionId,
+  layerId,
+}: NeedsPartition & { newPartitionId?: string; layerId?: string }): Promise<void> {
+  const current = await db
+    .select({ namespaceId: partitionTable.namespaceId })
+    .from(partitionTable)
+    .where(eq(partitionTable.id, partitionId))
+    .get();
+  if (!current) throw new NotFoundError(`Partition partitionId=${partitionId}`);
+  const { namespaceId } = current;
+
+  if (newPartitionId !== undefined) {
+    const target = await db
+      .select({ id: partitionTable.id })
+      .from(partitionTable)
+      .where(
+        and(eq(partitionTable.id, newPartitionId), eq(partitionTable.namespaceId, namespaceId)),
+      )
+      .get();
+    if (!target)
+      throw new NotFoundError(
+        `Partition partitionId=${newPartitionId} in namespace namespaceId=${namespaceId}`,
+      );
+  }
+  if (layerId !== undefined) {
+    const target = await db
+      .select({ id: layerTable.id })
+      .from(layerTable)
+      .where(and(eq(layerTable.id, layerId), eq(layerTable.namespaceId, namespaceId)))
+      .get();
+    if (!target)
+      throw new NotFoundError(`Layer layerId=${layerId} in namespace namespaceId=${namespaceId}`);
+  }
+}
+
 export async function updateCard({
   db,
   cardId,
@@ -431,6 +474,8 @@ export async function updateCard({
   if (newPartitionId !== undefined) fields.partitionId = newPartitionId;
   if (layerId !== undefined) fields.layerId = layerId;
   if (Object.keys(fields).length === 0) throw new Error("updateCard: no fields to update");
+  if (newPartitionId !== undefined || layerId !== undefined)
+    await assertSameNamespace({ db, partitionId, newPartitionId, layerId });
 
   const updated = await db
     .update(cardTable)

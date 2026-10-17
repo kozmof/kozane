@@ -342,7 +342,9 @@ export function writeTaskspaceFile({
       `Content is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
     );
 
-  // Check the current on-disk version immediately before writing.
+  // Check the current on-disk version immediately before writing. This narrows but does not
+  // close the race: another process can still write between this check and the rename below,
+  // and that write is replaced. Node offers no compare-and-swap rename to close it fully.
   if (fileSignature(real) !== signature)
     throw new TaskspaceFilesError("stale", "File changed on disk since it was opened");
 

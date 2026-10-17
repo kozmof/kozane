@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
 import { createTestDB } from "../../test-utils/db.js";
 import {
-  createCardInTaskspaceContext,
   createCardFromTaskspace,
   deleteNamespaceCards,
   moveCardsToNamespace,
@@ -107,13 +106,11 @@ describe("deleteNamespaceCards", () => {
   });
 });
 
-// Call `createCardInTaskspaceContext` directly to avoid the in-memory connection boundary.
-// `createCardFromTaskspace` adds the transaction wrapper.
-describe("createCardInTaskspaceContext", () => {
+describe("createCardFromTaskspace context rules", () => {
   it("creates a card and returns its id", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
     const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardInTaskspaceContext({
+    const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
       partitionId,
@@ -125,7 +122,7 @@ describe("createCardInTaskspaceContext", () => {
   it("card is stored in the correct partition with the taskspaceId set", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
     const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardInTaskspaceContext({
+    const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
       partitionId,
@@ -139,7 +136,7 @@ describe("createCardInTaskspaceContext", () => {
   it("auto-adds the card to the scope when taskspace has a scope", async () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
     const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardInTaskspaceContext({
+    const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
       partitionId,
@@ -153,7 +150,7 @@ describe("createCardInTaskspaceContext", () => {
     const { db, namespaceId, partitionId, scopeId } = await setup();
     const wcId = await addTaskspace({ db, namespaceId });
 
-    const cardId = await createCardInTaskspaceContext({
+    const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
       partitionId,
@@ -168,7 +165,7 @@ describe("createCardInTaskspaceContext", () => {
   it("throws NotFoundError for a missing taskspaceId", async () => {
     const { db, partitionId } = await setup();
     await expect(
-      createCardInTaskspaceContext({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
+      createCardFromTaskspace({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
     ).rejects.toThrow(NotFoundError);
   });
 
@@ -180,7 +177,7 @@ describe("createCardInTaskspaceContext", () => {
     const foreignPartition = await addPartition({ db, namespaceId: otherNs, name: "F" });
 
     await expect(
-      createCardInTaskspaceContext({
+      createCardFromTaskspace({
         db,
         taskspaceId: wcId,
         partitionId: foreignPartition,
@@ -193,7 +190,7 @@ describe("createCardInTaskspaceContext", () => {
   it("accepts any partition for a taskspace with no namespace", async () => {
     const { db, partitionId } = await setup();
     const wcId = await addTaskspace({ db });
-    const cardId = await createCardInTaskspaceContext({
+    const cardId = await createCardFromTaskspace({
       db,
       taskspaceId: wcId,
       partitionId,

@@ -136,7 +136,7 @@ describe("POST /[namespaceId]/api/cards", () => {
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ partitionId, content: "   " }))),
       400,
-      "content is required",
+      "content must not be empty",
     );
   });
 

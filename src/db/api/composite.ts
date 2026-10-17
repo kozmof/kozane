@@ -6,7 +6,7 @@
  * beside their table when dependencies remain one-way.
  */
 
-import { withTx, type DB } from "../tx.js";
+import { withTx, type DB, type Tx } from "../tx.js";
 import {
   addCard,
   newCardStamps,
@@ -41,16 +41,14 @@ import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 
-type CreateCardInTaskspaceContext = NeedsTaskspace & NeedsPartition & { content: string };
-type CreateCardFromTaskspace = CreateCardInTaskspaceContext & { db: DB };
+type CreateCardFromTaskspace = NeedsTaskspace & NeedsPartition & { content: string; db: DB };
+type CreateCardInTaskspaceContext = Omit<CreateCardFromTaskspace, "db"> & { db: Tx };
 
 /**
- * Core logic for creating a card within a taskspace context.
- * Exported separately so it can be tested without a transaction.
- * Production callers should use `createCardFromTaskspace`, which wraps
- * this in a transaction to keep the card insert and scope_rel insert atomic.
+ * Core logic for creating a card within a taskspace context. Require a transaction so the
+ * card insert and scope_rel insert stay atomic. Callers go through `createCardFromTaskspace`.
  */
-export async function createCardInTaskspaceContext({
+async function createCardInTaskspaceContext({
   db,
   taskspaceId,
   partitionId,
@@ -274,7 +272,7 @@ async function remapCardsByName({
  * Arriving cards are restacked above each destination layer's cards, as a layer move is.
  * A card whose taskspace is placed in another namespace loses that link, because a placed
  * taskspace only originates cards in its own namespace (see
- * {@link createCardInTaskspaceContext}).
+ * {@link createCardFromTaskspace}).
  */
 export async function moveCardsToNamespace({
   db,

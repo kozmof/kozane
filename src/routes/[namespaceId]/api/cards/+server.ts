@@ -8,7 +8,7 @@ import { addScopeRel } from "$db/api/scope-rel";
 import { withTx } from "$db/tx";
 import { addCard, updateNamespaceCardPositions, type CardPositionUpdate } from "$db/api/card";
 import { deleteNamespaceCards } from "$db/api/composite";
-import { contentLimitIssue } from "$lib/constants";
+import { checkCardContent } from "$lib/constants";
 import { clampToCanvas } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
 import {
@@ -19,7 +19,6 @@ import {
   requireObjectArray,
   requireString,
   requireStringArray,
-  requireTrimmedString,
   requireUniqueStrings,
 } from "../../lib/request.js";
 import { rejectBatch } from "../../lib/rejection.js";
@@ -50,16 +49,15 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { namespaceId } = params;
   const body = await readJsonObject(request);
   const partitionId = requireString(body, "partitionId");
-  const content = requireTrimmedString(body, "content");
+  const checked = checkCardContent(requireString(body, "content"), contentMax());
+  if (!checked.ok) throw error(400, checked.issue);
+  const content = checked.content;
   const posX = optionalNumber(body, "posX") ?? 0;
   const posY = optionalNumber(body, "posY") ?? 0;
   const zIndex = optionalNumber(body, "zIndex") ?? 0;
-  if (!Number.isInteger(zIndex)) throw error(400, "zIndex must be an integer");
+  if (!Number.isSafeInteger(zIndex)) throw error(400, "zIndex must be an integer");
   const scopeId = optionalString(body, "scopeId");
   const requestedLayerId = optionalString(body, "layerId");
-
-  const contentIssue = contentLimitIssue(content, contentMax());
-  if (contentIssue) throw error(400, contentIssue);
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.

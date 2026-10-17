@@ -377,6 +377,26 @@ describe("updateCard", () => {
     expect(await getCard({ db, partitionId, cardId })).toBeUndefined();
   });
 
+  it("refuses a partition or layer from another namespace", async () => {
+    const { db, partitionId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    const { id: otherLayerId } = await addLayer({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "Base",
+    });
+    const otherPartitionId = await addPartition({ db, namespaceId: otherNamespaceId, name: "G" });
+    const cardId = await addCard({ db, partitionId, content: "Hi" });
+
+    await expect(
+      updateCard({ db, cardId, partitionId, newPartitionId: otherPartitionId }),
+    ).rejects.toThrow(NotFoundError);
+    await expect(updateCard({ db, cardId, partitionId, layerId: otherLayerId })).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
+  });
+
   it("can update position fields with content", async () => {
     const { db, partitionId } = await setup();
     const cardId = await addCard({ db, partitionId, content: "Original", posX: 1, posY: 2 });
