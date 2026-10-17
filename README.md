@@ -1,6 +1,6 @@
 # Kozane
 
-Kozane provides data structures for organizing text and modeling thinking processes.
+Kozane provides data structures for organizing text.
 The names of these structures do not fix how you use them, so different projects can
 use them in different ways.
 
