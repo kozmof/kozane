@@ -58,7 +58,7 @@ On a request:
 3. If the stored signature and schema version match, it uses the cached data.
 4. Otherwise, it gathers current data and atomically replaces the cache.
 
-Updates are therefore lazy. A database write does not edit every cache immediately; the next
+Updates are therefore lazy. A database write does not edit every cache immediately. The next
 request notices the changed signature and rebuilds what it needs.
 
 The signature is captured before gathering. If another process changes the database while a
@@ -79,14 +79,14 @@ non-fatal. Concurrent writers may replace one another's disposable results, but 
 never write to the SQLite database or to a registered taskspace file.
 
 Each cache has a 16 MiB read and write limit. A larger file is ignored, and an oversized
-fresh result is not persisted. This bounds the synchronous file read on the request path; a
-workspace exceeding the limit pays for a fresh gather instead.
+fresh result is not persisted. This bounds the synchronous file read on the request path. A
+workspace over the limit pays for a fresh gather instead.
 
 ## Security and backups
 
 Cache files can contain card text excerpts, scope and namespace names, and taskspace excerpts.
 Keep `.kozane/` private and apply the same filesystem permissions and backup protections used
-for the database and taskspaces. The cache files themselves do not need to be backed up: a
+for the database and taskspaces. The cache files themselves do not need to be backed up, because a
 restore without them rebuilds them from the restored database rows and taskspace file
 contents.
 
@@ -104,7 +104,7 @@ namespaces, scopes, partitions, or taskspace files.
 
 If a view appears stale, first reload it. If it remains stale, stop the server, remove the
 relevant cache, and restart. A cache that cannot be recreated usually indicates that
-`.kozane/` is not writable; the feature should still work, but every access will gather the
+`.kozane/` is not writable. The feature still works, but every access gathers the
 data again.
 
 `kozane init` places a `.gitignore` inside `.kozane/` that excludes the whole directory. For

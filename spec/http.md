@@ -6,9 +6,9 @@ Kozane's browser UI is a SvelteKit application, and everything it does to a work
 does through the endpoints below. They are the same surface a script or a monitoring probe
 reaches, so this document records the request and response shape each one implements today.
 
-Scope: the JSON endpoints, meaning every `+server.ts` under `src/routes`. Page routes
+This document covers the JSON endpoints, meaning every `+server.ts` under `src/routes`. Page routes
 (`/`, `/[namespaceId]`, `/map`, `/tags`, `/login`) render HTML and are covered by
-[the browser UI handbook](../docs/browser-ui-handbook.md); the login form action is
+[the browser UI handbook](../docs/browser-ui-handbook.md). The login form action is
 described under [Authentication](#authentication) rather than given a section here.
 
 `src/routes/spec.test.ts` checks this document against the route tree in both directions, so
@@ -21,16 +21,16 @@ leaving the spec behind.
 
 ### Namespace scoping
 
-Every endpoint but `/health` is addressed under a namespace: `/[namespaceId]/api/...`. The
+Every endpoint but `/health` is addressed under a namespace, as `/[namespaceId]/api/...`. The
 namespace in the URL is what the request acts within, and a row belonging to another
-namespace is refused rather than acted on. Scopes are the one exception — they are
+namespace is refused rather than acted on. Scopes are the one exception. They are
 cross-namespace by design, so `POST /[namespaceId]/api/scopes` ignores the namespace in the
 path and creates a scope the whole workspace can reach.
 
 ### Authentication
 
 Once `.kozane/api.json` exists, every request needs the key. API clients send
-`Authorization: Bearer <key>` or `X-API-Key: <key>`; browsers hold it in the
+`Authorization: Bearer <key>` or `X-API-Key: <key>`. Browsers hold it in the
 `kozane_api_key` cookie, which the login page's form action sets. A request without a valid
 key is answered `401` with `WWW-Authenticate: Bearer realm="Kozane"`, except a top-level
 browser navigation, which is redirected (`303`) to `/login?next=…`. Repeated failures from
@@ -41,17 +41,17 @@ key file authenticates nobody and answers every request. See
 ### Request bodies
 
 Every endpoint that takes a body takes exactly one JSON object, sent with
-`Content-Type: application/json`; any other content type, or none, is
+`Content-Type: application/json`. Any other content type, or none, is
 `415 Request body must be sent as application/json`. A body that is not valid
-JSON is `400 Request body must be valid JSON`; one that parses to an array or a scalar is
+JSON is `400 Request body must be valid JSON`. A body that parses to an array or a scalar is
 `400 Request body must be a JSON object`.
 
 Names (`name` fields) are trimmed, must be non-blank, and are at most 255 characters. Card
 text is at most the workspace's configured `content.max` (default 200,000 characters). Id
 arrays must contain non-empty strings, must not repeat an id, and must hold at most 2,000
-items — an oversized list is refused as a list rather than partway into a statement.
+items. An oversized list is refused as a whole rather than partway into a statement.
 
-Positions are clamped to the workspace's canvas bounds rather than refused; a card dragged
+Positions are clamped to the workspace's canvas bounds rather than refused, because a card dragged
 past the edge still means to land somewhere. Widths are refused instead, because a width out
 of range is a caller with the wrong units.
 
@@ -61,8 +61,8 @@ A write that has nothing to report answers `{"ok": true}`. Endpoints that clamp 
 compute what they stored answer with the stored row instead, so a client cannot draw
 something the server did not save.
 
-Errors are SvelteKit errors: the status code, and a message a client may show. The statuses
-these endpoints use:
+Errors are SvelteKit errors with a status code and a message a client may show. These endpoints
+use the following statuses.
 
 | Status        | Meaning                                                                                                                         |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -73,12 +73,12 @@ these endpoints use:
 | `409`         | The file changed on disk since it was read, or the directory already exists                                                     |
 | `413` / `415` | The file is too large, or is not UTF-8 text                                                                                     |
 | `426`         | A remote binding was reached over plain HTTP                                                                                    |
-| `500`         | An unexpected failure; the cause is logged, not returned                                                                        |
+| `500`         | An unexpected failure, with the cause logged rather than returned                                                               |
 | `503`         | The workspace is unavailable — no workspace, an unreadable key file, a database behind the schema, or another server holding it |
 
-The distinction between `400` and `404` is deliberate and consistent: a route naming a
+The distinction between `400` and `404` is deliberate and consistent. A route naming a
 single resource in its path answers `404` when that resource is absent, because the resource
-_is_ the URL. A batch route names no resource but the namespace, which exists, so an id it
+is the URL. A batch route names no resource but the namespace, which exists, so an id it
 cannot act on is a bad request.
 
 ---
@@ -91,12 +91,12 @@ Creates one card.
 
 Body: `partitionId` (required), `content` (required, trimmed, non-blank), `posX`, `posY`,
 `zIndex` (integer), `scopeId`, `layerId`. Omitting `layerId` lands the card on the
-namespace's default layer; naming a layer the namespace does not have is refused rather than
+namespace's default layer. Naming a layer the namespace does not have is refused rather than
 redirected to the default, because a card that quietly lands elsewhere is invisible to the
 client that asked for it. `scopeId`, when given, adds the new card to that scope in the same
 transaction.
 
-Answers the whole stored card — `id`, `partitionId`, `layerId`, `content`, the clamped
+Answers the whole stored card, with `id`, `partitionId`, `layerId`, `content`, the clamped
 `posX`/`posY`, `zIndex`, and `taskspaceId`, `glueId`, `width` as `null`.
 
 `400` for a missing or over-long field, an unknown partition, an unknown scope, a layer not
@@ -104,7 +104,7 @@ in this namespace, or a namespace with no default layer.
 
 ### `PATCH /[namespaceId]/api/cards`
 
-Moves many cards at once — what a drag of a selection sends.
+Moves many cards at once. A drag of a selection sends this.
 
 Body: `positions`, a non-empty array of `{ cardId, posX, posY }` with unique `cardId`s and
 finite numbers. Positions are clamped to the canvas.
@@ -124,12 +124,12 @@ same transaction.
 Edits one card. Every field is optional, and a body naming none of them is
 `400 No fields to update`.
 
-Body: `content` (trimmed; blank is refused), `partitionId`, `layerId`, `posX`, `posY`,
+Body: `content` (trimmed, and blank is refused), `partitionId`, `layerId`, `posX`, `posY`,
 `zIndex` (integer), `width` (integer within 40–1200, or `null` to drop the card's own width
 and follow `ui.defaultCardWidth`).
 
 Only a change of `content` moves the card's `updatedAt`. A card dragged, resized, restacked,
-or moved between partitions and layers keeps the timestamp it had — that interval is what
+or moved between partitions and layers keeps the timestamp it had. That interval is what
 `kozane card list --sort gap` reports, and arranging the board must not reset it. Text that
 arrives unchanged does not count either.
 
@@ -150,7 +150,7 @@ the card is not this namespace's.
 
 Moves many cards to one partition. Body: `partitionId`, `cardIds`.
 
-`400` naming which of the two was wrong: the partition, or the cards.
+`400` naming which of the two was wrong, the partition or the cards.
 
 ### `PATCH /[namespaceId]/api/cards/layer`
 
@@ -162,15 +162,15 @@ holding a `zIndex` from the layer they came from.
 
 ### `PATCH /[namespaceId]/api/cards/stacking`
 
-Moves many cards to the front or back of their own layer's stack, together — a glue group
-above all, which is not required to share one layer. Body: `cardIds`, `direction`
+Moves many cards to the front or back of their own layer's stack, together. This is mainly for a glue group,
+which is not required to share one layer. Body: `cardIds`, `direction`
 (`"front"` or `"back"`).
 
 Answers `{ ok: true, stacking: [{ cardId, zIndex }] }`, the same shape a layer move answers
-with: the cards are grouped by whichever layer each is actually on and restacked within it,
+with. The cards are grouped by whichever layer each is actually on and restacked within it,
 so a group spanning more than one layer needs telling apart by layer, not just by id.
 
-`400` naming which was wrong: the cards, or `direction` itself.
+`400` naming which was wrong, the cards or `direction` itself.
 
 ### `POST /[namespaceId]/api/cards/move`
 
@@ -178,22 +178,22 @@ Moves many cards to another namespace, with their partition and layer resolved o
 side. Body: `targetNamespaceId`, `cardIds`.
 
 Moved cards are restacked above the cards already on each destination layer and leave their
-glue groups. A card linked to a taskspace placed in another namespace loses that link;
-links to unplaced taskspaces, and to taskspaces of the target namespace, are kept.
+glue groups. A card linked to a taskspace placed in another namespace loses that link.
+Links to unplaced taskspaces, and to taskspaces of the target namespace, are kept.
 
 `400` when the target is the source, or when the cards are not this namespace's.
 
 ### `POST /[namespaceId]/api/cards/squash`
 
 Replaces one card with a card per segment of its text, inserting the pieces, carrying the
-original's scope memberships over, and removing it — all or none. Body: `cardId`.
+original's scope memberships over, and removing it, all or none. Body: `cardId`.
 
 The split pattern is the server's own, the same one `kozane card squash` uses. It is
-deliberately not a request field: an arbitrary regular expression from a body is a cost this
+deliberately not a request field, because an arbitrary regular expression from a body is a cost this
 endpoint has no reason to take on.
 
 Answers `{ cards: [...] }` as whole rows, positions laid out and clamped, each with
-`glueId: null` — the pieces start unglued.
+`glueId: null`, so the pieces start unglued.
 
 `400` when the card is not this namespace's, when its text does not split into more than one
 card, or when it splits into more than 2,000.
@@ -211,8 +211,8 @@ two. Answers `{ glueId }`. Cards already in other groups are moved into this one
 
 ### `DELETE /[namespaceId]/api/glues`
 
-Ungroups cards. Body: `cardIds`. Answers `{ ok: true, clearedCardIds }` — the cards that
-actually left a group, which is what lets the board update only those. A group left with one
+Ungroups cards. Body: `cardIds`. Answers `{ ok: true, clearedCardIds }`, the cards that
+actually left a group, so the board can update only those. A group left with one
 member is dissolved.
 
 ---
@@ -223,7 +223,7 @@ member is dissolved.
 
 Creates a partition. Body: `name`. Answers `{ id }`.
 
-`400` for a duplicate name within the namespace; `404` when the namespace does not exist.
+`400` for a duplicate name within the namespace. `404` when the namespace does not exist.
 
 ### `PATCH /[namespaceId]/api/partitions/[partitionId]`
 
@@ -232,7 +232,7 @@ duplicate name.
 
 ### `DELETE /[namespaceId]/api/partitions/[partitionId]`
 
-Deletes a partition, moving its cards to the namespace's default partition first — the
+Deletes a partition, moving its cards to the namespace's default partition first. The
 cards are not deleted with it. Answers `{ ok: true, defaultPartitionId }`.
 
 `400` for the default partition, which cannot be deleted. `404` when it is not this
@@ -247,7 +247,7 @@ namespace's.
 Creates a layer at the top of the stack. Body: `name`. Answers `{ id, name, position,
 isDefault: false }`.
 
-`400` for a duplicate name within the namespace; `404` when the namespace does not exist.
+`400` for a duplicate name within the namespace. `404` when the namespace does not exist.
 
 ### `PATCH /[namespaceId]/api/layers`
 
@@ -255,7 +255,7 @@ Renumbers the namespace's layers from a full bottom-to-top ordering. Body: `laye
 naming every layer of the namespace exactly once.
 
 `400` for a repeated id, an id belonging to another namespace, or a list that no longer
-matches the namespace's layers — that last one is the case a reload fixes, and it says so.
+matches the namespace's layers. A reload fixes that last case, and the error says so.
 
 ### `PATCH /[namespaceId]/api/layers/[layerId]`
 
@@ -277,7 +277,7 @@ Deletes a layer, moving its cards to the namespace's default layer first. Answer
 
 Creates a scope. Body: `name`. Answers `{ id }`.
 
-The namespace in the path is not used: a scope is cross-namespace, placed by what refers to
+The namespace in the path is not used, because a scope is cross-namespace, placed by what refers to
 it rather than by a column. A new scope refers to nothing yet, so every board draws it until
 a card or taskspace places it.
 
@@ -291,7 +291,7 @@ Deletes a scope. Taskspaces that were in it are kept and become unattached.
 
 ### `POST /[namespaceId]/api/scopes/[scopeId]/members`
 
-Adds cards to a scope. Body: `cardIds`. `400` naming which was wrong — the scope, or the
+Adds cards to a scope. Body: `cardIds`. `400` naming which was wrong, the scope or the
 cards.
 
 ### `DELETE /[namespaceId]/api/scopes/[scopeId]/members`
@@ -303,14 +303,14 @@ Removes cards from a scope, the ones belonging to this namespace. Body: `cardIds
 Draws another frame for this scope on this board. Body: `posX`, `posY`, `width`, `height`,
 all required. Answers the whole stored row.
 
-A collection, not a singleton. A scope may be framed in several places on one board — a
-cluster by the inbox and another by the archive are the same scope in two places — so this
+A collection, not a singleton. A scope may be framed in several places on one board, such as a
+cluster by the inbox and another by the archive, so this
 adds a frame rather than replacing whatever was there. A card inside any of a scope's frames
-belongs to that scope. A scope may also be framed on several boards at once; each board's
+belongs to that scope. A scope may also be framed on several boards at once, and each board's
 frames are its own.
 
-The rectangle is clamped to the canvas and rounded before it is stored — whole, so the far
-edge lands on the board too — which is why the stored row comes back rather than an `{ ok }`.
+The whole rectangle is clamped to the canvas and rounded before it is stored, so the far
+edge lands on the board too. That is why the stored row comes back rather than an `{ ok }`.
 A frame smaller than 120 canvas pixels on a side is grown to it.
 
 Membership is not part of this request. The cards a frame holds are decided in the browser,
@@ -321,11 +321,11 @@ which is the only place a card's rendered height is known, and filed through the
 
 ### `PATCH /[namespaceId]/api/scopes/[scopeId]/areas/[areaId]`
 
-Moves or resizes one frame. Body and clamping as for the `POST`; the rectangle is always
+Moves or resizes one frame. Body and clamping as for the `POST`. The rectangle is always
 whole, never a delta. Answers the stored row.
 
-The scope in the path is redundant for the lookup — an area id is a UUID — and is checked
-alongside it as an access boundary, the same way the namespace is.
+The scope in the path is redundant for the lookup, because an area id is a UUID. It is checked
+alongside the id as an access boundary, the same way the namespace is.
 
 `400` when any of the four is missing. `404` when this board has no such frame.
 
@@ -342,7 +342,7 @@ Takes one frame off the board. The scope keeps every card in it, and keeps its o
 ### `POST /[namespaceId]/api/warps`
 
 Saves a place on the canvas the arrow keys can move the viewport to. Body: `posX`, `posY`,
-both required. Both are clamped to the canvas and rounded to integers — a warp outside it
+both required. Both are clamped to the canvas and rounded to integers, because a warp outside it
 would scroll to a place the viewport can never reach.
 
 Answers the whole stored warp. `404` when the namespace does not exist.
@@ -362,7 +362,7 @@ Deletes a warp. `404` when it is not this namespace's.
 ### `GET /[namespaceId]/api/warp-directory`
 
 Every namespace's warps, as the palette lists them, each with a hint naming the card nearest
-it. Fetched when the palette opens rather than on the snapshot poll: a warp set in another
+it. Fetched when the palette opens rather than on the snapshot poll, because a warp set in another
 namespace is rare enough that re-reading every namespace's cards once a second would be
 waste.
 
@@ -374,11 +374,11 @@ waste.
 
 ### `POST /[namespaceId]/api/taskspaces`
 
-Creates a taskspace: the record, its directory under the workspace's taskspace directory,
+Creates a taskspace, which is the record, its directory under the workspace's taskspace directory,
 and the `.taskspace.json` marker inside it. Body: `name`, `scopeId` (both required).
 
 The directory is claimed atomically, and a failure anywhere in the sequence removes only
-what this request created — the record, the marker, and the directory, never recursing into
+what this request created. That is the record, the marker, and the directory, never recursing into
 it.
 
 Answers `{ id, path, pathKind: "workspace_relative" }`. A taskspace outside the workspace
@@ -391,16 +391,16 @@ there. `503` when there is no workspace.
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 
 One directory of a taskspace, as the file panel draws it. Query: `path`, a `/`-separated
-path relative to the taskspace root; omitted, the root itself.
+path relative to the taskspace root. When omitted, the root itself is listed.
 
-Names and metadata only — this endpoint never reads a file. Dot-entries are never listed or
+Names and metadata only. This endpoint never reads a file. Dot-entries are never listed or
 recursed into, so `.git` and a stray `.env` stay off the panel. Symlinks are listed as
-themselves and never followed. A directory past 5,000 entries is answered truncated, and
+themselves and never followed. A directory past 500 entries is answered truncated, and
 says so.
 
 The taskspace is looked up under the namespace's own filter, so a namespace's endpoint
 answers only about the taskspaces its board draws. What keeps a request inside the directory
-is the containment check below it, which holds however the row was found: the requested path
+is the containment check below it, which holds however the row was found. The requested path
 is checked before resolution, so `..` cannot walk out, and again after, so a symlink cannot
 either.
 
@@ -413,11 +413,11 @@ Creates one directory. Body: `path`, a `/`-separated path relative to the tasksp
 
 On this route rather than beside the file creation below because what it makes is a name and
 nothing else, which is what this route deals in. Answers `201` with the new directory in the
-same shape the `GET` above uses — empty, necessarily.
+same shape the `GET` above uses, which is necessarily empty.
 
-Non-recursive: a parent that is not there is a `404` rather than created. `409` when the name
-is already taken, by a file, a directory, or a symlink; creating never replaces what it
-finds. Otherwise as the listing above — the same containment, and the same refusal of
+Non-recursive, so a missing parent is a `404` rather than created. `409` when the name
+is already taken by a file, a directory, or a symlink, because creating never replaces what it
+finds. Otherwise as the listing above, with the same containment and the same refusal of
 dot-entries.
 
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/file`
@@ -426,7 +426,7 @@ The text of one file. Query: `path`.
 
 A separate endpoint from the listing rather than a mode of it, so "names and metadata only"
 stays true of that route without qualification. What may be read here is narrower than what
-is listed there: regular files only, under 1MB, valid UTF-8, never a dot-entry.
+is listed there. Only regular files under 1MB in valid UTF-8 can be read, and never a dot-entry.
 
 Answers the content and the signature it was read at, which a save sends back.
 
@@ -436,12 +436,12 @@ Answers the content and the signature it was read at, which a save sends back.
 
 Creates one empty file. Body: `path`.
 
-Answers `201` with the file as the `GET` above would return it — the path, an empty
-`content`, and the `signature` those bytes have — so the editor can open on what comes back
+Answers `201` with the file as the `GET` above would return it, with the path, an empty
+`content`, and the `signature` those bytes have. The editor can open on what comes back
 rather than asking again for a file it just made.
 
 Empty is all it makes. Contents arrive through the `PUT` below, so the rules about what may
-be written apply to the first save as to every later one; a body carrying `content` is a
+be written apply to the first save as to every later one. A body carrying `content` is a
 `400` rather than quietly ignored.
 
 `409` when something is already at that name. `404` when the parent directory is not there,
@@ -449,12 +449,12 @@ which this never creates. Otherwise as above.
 
 ### `PUT /[namespaceId]/api/taskspaces/[taskspaceId]/file`
 
-Saves text back over an existing file. Body: `path`, `content`, `signature` — all three
+Saves text back over an existing file. Body: `path`, `content`, `signature`, all three
 required, and `signature` may be `null` but may not be left out.
 
 `signature` is what the editor read the file at, compared against the file as it is now, so
-a save that would discard a change made on disk since then is refused. Leaving it out is not
-a way to force the write; it is a `400`.
+a save that would discard a change made on disk since then is refused. Leaving it out does not
+force the write. It is a `400`.
 
 `409` when the file changed underneath the editor. Otherwise as above.
 
@@ -464,16 +464,16 @@ a way to force the write; it is a `400`.
 
 ### `GET /[namespaceId]/api/snapshot`
 
-Everything a board draws — cards, partitions, layers, warps, scopes, scope areas, scope and
-glue relations, taskspaces — as one object. The page load and this endpoint run the same read, so
+Everything a board draws as one object, including cards, partitions, layers, warps, scopes, scope areas, scope and
+glue relations, and taskspaces. The page load and this endpoint run the same read, so
 the board a poll replaces cannot be assembled differently from the board it replaces.
 
 Polled once a second per open tab. Send back the `ETag` as `If-None-Match` and an unchanged
-board answers `304` with no body. The tag is a hash of the response bytes; a gate in front
+board answers `304` with no body. The tag is a hash of the response bytes. A gate in front
 of the read compares the database file's identity first, so an unchanged workspace is
 answered without running the queries at all.
 
-`Cache-Control: no-store` throughout: the client revalidates with the tag itself, and letting
+`Cache-Control: no-store` is sent throughout. The client revalidates with the tag itself, and letting
 the browser cache as well would turn a `304` back into the full response this exists to
 avoid.
 
@@ -485,8 +485,8 @@ avoid.
 
 ### `GET /health`
 
-Readiness, as a probe reads it. Answers `{ status, cpuUsage, memoryUsage }` — `200` with
-`status: "ok"` when the database answers a query, `503` with `status: "error"` and an
+Readiness, as a probe reads it. Answers `{ status, cpuUsage, memoryUsage }`, with `200` and
+`status: "ok"` when the database answers a query, or `503` with `status: "error"` and an
 `error` field when it does not.
 
 Alert on `status` rather than on the status code alone. The cause of a failure is written to

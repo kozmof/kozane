@@ -153,7 +153,7 @@
           aria-label="Create namespace"
           class={css({
             // Square, and centred against the taller input by the row's `align-items`.
-            // Nudged a pixel up from there: geometric centre reads low next to the input's
+            // Nudged a pixel up from there, because geometric centre reads low next to the input's
             // text, which sits above the input's own centre line.
             position: "relative",
             top: "-1px",

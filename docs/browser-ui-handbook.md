@@ -65,8 +65,8 @@ there after a reload and in another tab.
   order they were made. One press makes one warp, however long the key is held.
 - Warp — press `←`, `→`, `↑`, or `↓`. The view moves to the nearest warp in that
   direction and the marker highlights. Once there is none, the board wraps
-  round: `→` off the rightmost warp arrives at the leftmost, and `↓` off the
-  bottom one at the top, so a row of warps cycles under one key. Zoom is left as
+  round. `→` off the rightmost warp arrives at the leftmost, and `↓` off the
+  bottom one arrives at the top, so a row of warps cycles under one key. Zoom is left as
   it is.
 - Warp to another namespace — press `Shift` with any arrow key. A list of every warp
   in the workspace opens, grouped by namespace, with this namespace's warps first and
@@ -78,7 +78,7 @@ there after a reload and in another tab.
   Each row has a remove button, which is the only way to remove another namespace's
   warps without going there.
 - Move — drag a marker. It follows the pointer and stays where it is dropped,
-  without snapping to the card grid: a warp marks a point someone picked, not a
+  without snapping to the card grid, because a warp marks a point someone picked, not a
   slot in a layout. Dragging one does not renumber it, since the numbers follow
   the order the warps were made. A read-only export holds its markers fixed.
 - Remove — the highlighted warp is the selected one, and `x` removes it. Click a
@@ -129,9 +129,9 @@ card's text and partition. Change the text or pick a different partition, then p
   selection.
 - Shift-drag on empty canvas draws a rectangle, and every card it touches is
   selected.
-- Alt-drag on empty canvas draws a scope area instead — see [Scope
-  areas](#scope-areas). The rectangle is the same gesture; what the release
-  does with it is not.
+- Alt-drag on empty canvas draws a scope area instead. See [Scope
+  areas](#scope-areas). The gesture is the same, but the release
+  does something different.
 - Click empty canvas to clear the selection. So does `Esc`.
 
 The first card in a selection is the primary card, which some actions such as
@@ -183,9 +183,9 @@ Select one card and press `r`, or click "Resize". A handle appears on the card's
 right edge. Drag it to set the width, which snaps to the same 24-pixel grid
 positions do, and the new width saves when you let go. Widths run from 40 to
 1200 pixels. Press `r` again, click "Done resizing", or clear the selection to
-put the handle away — the width you set stays either way.
+put the handle away. The width you set stays either way.
 
-Resizing acts on the one selected card, including a card in a glue group: glue
+Resizing acts on the one selected card, including a card in a glue group, because glue
 binds where cards are, not how wide they are. A card you have never resized has
 no width of its own and goes on following `ui.defaultCardWidth`. A static export
 draws the widths it was built with but cannot change them, like every other
@@ -194,14 +194,14 @@ write.
 ## Squashing a card into its pieces
 
 A card you wrote in one go often holds several thoughts. Squashing splits it into
-one card per thought, which is the kozane method's own move: small cards you can
+one card per thought, which is the kozane method's own move of making small cards you can
 arrange.
 
 Select one card and press `s`, or click "Squash". The text is split on a period
-followed by whitespace — a space or a line break alike — on `。`, or on a blank
+followed by whitespace (a space or a line break), on `。`, or on a blank
 line, the same rule `kozane card squash` uses, so dots inside `example.com` are
 left alone. Each segment becomes a card, and the original is removed. The whole
-thing is one transaction: either every piece is on the board or the card is
+thing is one transaction, so either every piece is on the board or the card is
 untouched.
 
 The first piece takes the place the card was in, and the rest are laid out to its
@@ -211,13 +211,13 @@ long piece can overlap the one below it until you drag it. Every piece inherits
 the card's partition, layer, and width, and joins every scope the card was in. The
 pieces are left selected, so the next action applies to all of them at once.
 
-What the pieces do not inherit is the card's history: each is a new card, created
+The pieces do not inherit the card's history. Each is a new card, created
 when you squashed it. `kozane card list --sort created` lists them as written
-today, whatever the card they came out of had stood since.
+today, however old the original card was.
 
-"Squash" is greyed out for a card whose text has nothing to split on: squashing
-it would replace the card with a copy under a new ID for no gain. A card in a
-glue group can still be squashed — the card leaves the group on its way out, and
+"Squash" is greyed out for a card whose text has nothing to split on, because squashing
+it would only replace the card with a copy under a new ID. A card in a
+glue group can still be squashed. The card leaves the group, and
 the pieces start unglued.
 
 ## Gluing cards
@@ -247,7 +247,7 @@ its namespace, and every namespace starts with a layer named `Base`.
 
 One layer is selected at a time. Its cards are drawn at full strength above all
 the others, and the remaining layers fade well back, in their own order. Cards
-on a dimmed layer stay live. You can still click, drag, and edit them, and a
+on a dimmed layer stay live. Click, drag, and edit them as usual, and a
 card you drag rises above the layers on top of it and comes back to full
 strength while it moves. "Bring to front" and "Send to back" reorder a card
 within its own layer.
@@ -286,10 +286,10 @@ with a member count each. The count is this namespace's cards in the scope,
 not the scope's total.
 
 A scope can hold cards from several namespaces, but the panel lists only the
-ones this namespace has reason to draw: scopes holding one of its cards,
+ones this namespace has reason to draw. These are scopes holding one of its cards,
 scopes one of its taskspaces is attached to, and scopes nothing anywhere
-refers to yet — so a scope you have just named, and not yet filed anything
-into, stays put. A scope only another namespace is working in is not shown.
+refers to yet. A scope you have just named, and not yet filed anything
+into, stays in the list. A scope only another namespace is working in is not shown.
 Run `kozane scope list` to see every scope in the workspace and which
 namespaces reach each one.
 
@@ -302,45 +302,45 @@ namespaces reach each one.
   scope.
 - Delete — hover a scope and click the `×`. This removes this namespace's cards
   from the scope. The cards themselves are kept, and the scope disappears
-  workspace-wide only once nothing anywhere refers to it — no cards in any
+  workspace-wide only once nothing anywhere refers to it. That means no cards in any
   namespace, no taskspaces, and no frame on any board.
 
 ### Scope areas
 
-A scope can also be given a frame on the canvas — a rectangle with the scope's
+A scope can also be given a frame on the canvas, which is a rectangle with the scope's
 name on a tab above it. Cards overlapping the frame belong to the scope, so a
 scope can be filled by dragging rather than by selecting and clicking.
 
 A scope can have several frames on one board, or none. A "Now" scope might have
-a cluster by the inbox and another by the archive: the same scope in two places.
-A card inside **any** of a scope's frames belongs to it.
+a cluster by the inbox and another by the archive, so the same scope sits in two places.
+A card inside any of a scope's frames belongs to it.
 
 - Add a frame — hold `Alt` and drag a rectangle on the canvas, the same way
   `Shift` drags a selection. On release, a prompt asks which scope the
-  rectangle belongs to: pick one from the list, or type a name to make a new
+  rectangle belongs to. Pick one from the list, or type a name to make a new
   scope and frame it in one go. Whatever the rectangle covers joins the scope.
   `Escape`, or the `×` on the prompt, discards the rectangle.
 
-  Every scope on the board is on offer, including ones already framed here —
-  framing a scope again is how you say it is organised in more than one place.
+  Every scope on the board is on offer, including ones already framed here.
+  Framing a scope again says it is organised in more than one place.
   A rectangle smaller than 120 canvas pixels on a side is grown to that, so the
-  frame can still be grabbed by its tab afterwards; an `Alt`-click that goes
+  frame can still be grabbed by its tab afterwards. An `Alt`-click that goes
   nowhere is discarded without asking.
 
 - Move one — drag its tab. The cards inside travel with it, so a cluster can be
   relocated as a unit, and anything the frame comes to rest on joins the scope.
 - Resize one — drag the corner handle. Growing the frame takes in what it now
-  covers; shrinking it past a card lets that card out, unless the card is also
+  covers. Shrinking it past a card lets that card out, unless the card is also
   inside another frame of the same scope.
 - Drag a card across an edge — dragging one into any of a scope's frames adds
-  it to the scope; dragging one out removes it, once it is outside all of them.
+  it to the scope. Dragging one out removes it once it is outside all of them.
 - Remove one — click the `×` beside its tab. Removal is on the frame rather
   than in the panel because a scope may be framed in several places, and only
   the frame itself can say which one you mean. The scope keeps every card in
-  it, and keeps its other frames: a frame says where a scope is drawn, not what
+  it, and keeps its other frames, because a frame says where a scope is drawn, not what
   belongs to it.
 
-The panel reports rather than acts: a scope row shows `▣` when the scope is
+The panel reports frames but does not edit them. A scope row shows `▣` when the scope is
 framed here, with a count beside it past one.
 
 Only cards that actually cross an edge change hands. A card put in a scope
@@ -350,38 +350,38 @@ and moving it around outside every frame leaves its membership alone.
 Frames are drawn under the cards and belong to no layer, so they never dim with
 one, and clicking, dragging or sweeping a selection over the middle of one
 works exactly as it does on bare canvas. Each board has its own frames for a
-shared scope — the rectangles are this namespace's, the scope is not.
+shared scope. The rectangles belong to this namespace, but the scope does not.
 
 #### Files on a frame
 
 If a framed scope has a [taskspace](#taskspaces), the frame draws what is in
-it: icons with names, below the frame's bottom edge and lined up with its right
-one. They are the board's answer to "what is this scope working on", so nothing
-has to be unfolded first — the taskspace's top directory is read as soon as the
+it as icons with names, below the frame's bottom edge and lined up with its right
+edge. They show what the scope is working on without unfolding anything,
+because the taskspace's top directory is read as soon as the
 frame is on screen.
 
-Below the frame rather than inside it, so the icons take no room a card could
-have had: everything within a frame goes on behaving like bare canvas. They
+The icons sit below the frame rather than inside it, so they take no room a card could
+have had. Everything within a frame behaves like bare canvas. They
 travel with the frame when you drag it.
 
 - Open a file — click it. It opens in the editor, the same as clicking it in the
   right panel.
 - Look in a folder — click it. The icons become that folder's contents, and a
-  `‹ back` cell returns you to the folder above. This is per frame: a scope
+  `‹ back` cell returns you to the folder above. This is per frame, so a scope
   framed in two places can have one frame showing `src` and the other showing
   the top directory.
 - Folders come first, then files, each by name. A symbolic link is drawn as
   itself and does not open, for the reason the panel's tree gives.
 
-Two rows of icons at most. Past that the last cell reads `+12 more` and says so
-rather than running down the board — reading a whole directory is the right
+A frame shows two rows of icons at most. Past that, the last cell reads `+12 more`
+instead of running down the board, because reading a whole directory is the right
 panel's job. A frame too narrow for a useful row lays its icons out wider than
-itself instead of cutting them; nothing is clipped, because none of this is
+itself instead of cutting them. Nothing is clipped, because none of this is
 inside the frame.
 
 The icons and the right panel read the same listings, so a folder opened in one
 costs the other nothing, and the panel's `⟳` refreshes both. Like the panel,
-they do not refresh on their own: live sync watches the database, not the disk.
+they do not refresh on their own, because live sync watches the database, not the disk.
 A scope with more than one taskspace gets a labelled group of icons apiece.
 
 ## Taskspaces
@@ -392,8 +392,8 @@ create one, select the scope, type a name in the taskspace input, and press
 `Enter` or `+`. A scope must be active first. Cards that belong to a working
 copy show a `taskspace` badge in their footer.
 
-The taskspaces under a scope are narrowed like the scopes themselves: this
-namespace's, plus any that belong to no namespace. Run `kozane taskspace list`
+The taskspaces under a scope are narrowed like the scopes themselves, to this
+namespace's taskspaces plus any that belong to no namespace. Run `kozane taskspace list`
 to see every taskspace in the workspace with the namespace it belongs to.
 Manage taskspaces on disk with `kozane taskspace scan` and
 `kozane taskspace create`, described in the
@@ -412,24 +412,24 @@ left out, and none of them can be opened by typing the name either. A symbolic
 link is listed as itself and cannot be opened, because following one is not
 something a read confined to the taskspace can do.
 
-The tree does not refresh on its own — live sync watches the database, not the
+The tree does not refresh on its own, because live sync watches the database, not the
 disk. Hover an open taskspace and click `⟳` to re-read it. A directory of more
 than 500 entries is cut off, and the panel says so at the end of the listing.
 
 The panel is one of three ways to the same files. A scope's frame on the canvas
-draws its taskspace as icons — see [Files on a frame](#files-on-a-frame) — and
-a selection opens the file palette, below.
+draws its taskspace as icons (see [Files on a frame](#files-on-a-frame)), and
+a selection opens the file palette described below.
 
 ### Opening a file from a selection
 
-Selecting cards and pressing `e` — or the action bar's "Edit a file" — puts up a
+Select cards and press `e`, or click the action bar's "Edit a file", to open a
 panel listing every scope this board draws, each with its taskspaces and their
-files. It is the short way to an editor: the right panel shows one scope's
+files. It is the short way to an editor. The right panel shows one scope's
 taskspaces at a time and only while that scope is focused, so reaching a file
 there means focusing a scope first and unfolding your way down.
 
 Clicking a file opens it in the editor and nothing else. Scopes start unfolded,
-and so does every taskspace's tree — nothing here needs the extra click the
+and so does every taskspace's tree, so nothing here needs the extra click the
 right panel asks for before showing files. Click a scope's name to fold it
 away when the board has more of them than you want to look at, or a
 taskspace's to fold just that one. The new-file and new-folder controls work
@@ -437,22 +437,22 @@ here exactly as they do in the right panel, and a file made from this panel
 opens straight away.
 
 Each scope also says how it stands with the selection. A scope holding every
-selected card reads "Linked"; otherwise there is a button to link them, saying
+selected card reads "Linked". Otherwise there is a button to link them, saying
 how many are left when some are already in. Linking here leaves the cards
 selected, unlike the right panel's "Link", because the selection is what the
 panel is about.
 
-The row of three fields at the bottom is the other short path: name a scope, a
+The row of three fields at the bottom is the other short path. Name a scope, a
 taskspace, and a file, and all three are created, the selected cards are linked
 to the new scope, and the editor opens on the empty file. `Enter` moves from
-Scope to Taskspace to File; press it in the File field, or use Create, to
+Scope to Taskspace to File. Press it in the File field, or use Create, to
 make all three.
 
 Two things can refuse it, and both say so in their own words. Scope names are
 unique across the whole workspace, and a taskspace claims a directory named after
 it, so a name already taken on disk is refused too. If the taskspace cannot be
 made, the scope created a moment earlier is removed again rather than left
-behind; past that point what succeeded is kept, and the tree's own controls
+behind. Past that point, what succeeded is kept, and the tree's own controls
 finish the job.
 
 Press `Esc` or click outside to close. The panel holds the keyboard while it is
@@ -460,18 +460,18 @@ up, so the selection behind it is safe.
 
 ### Adding a file or folder
 
-Hover a taskspace or any folder in its tree for two controls beside it: one adds
-a file, the other a folder. Either opens a name field among that folder's rows,
-opening the folder first if it was closed. Press `Enter` to create, `Esc` to
-give up; clicking elsewhere gives up too.
+Hover a taskspace or any folder in its tree to show two controls beside it. One adds
+a file, and the other adds a folder. Either opens a name field among that folder's rows,
+opening the folder first if it was closed. Press `Enter` to create, or `Esc` to
+give up. Clicking elsewhere gives up too.
 
-The field takes one name, not a path — a `/` in it is refused, so what you type
+The field takes one name, not a path. A `/` in it is refused, so what you type
 is always made in the folder the field sits under. Names starting with a dot are
 refused as well, since the tree does not draw dot-entries and the file would
 vanish the moment it existed.
 
 A new file is created empty and opens in the editor straight away, ready to type
-into. A new folder simply appears in the tree. Neither ever replaces anything: a
+into. A new folder simply appears in the tree. Neither ever replaces anything. A
 name already taken is refused, and the panel says so with the field still open
 over what you typed, so you can correct the name rather than retype it.
 
@@ -488,8 +488,8 @@ history with it. A second `Esc` backs out of the question.
 
 Leaving the page asks too. A link to another page, the back button, and a warp
 to another namespace each put up a confirmation over an unsaved file and stay
-put if it is declined; closing or reloading the tab gets the browser's own
-"leave site?" dialog, whose wording is the browser's and not ours.
+put if it is declined. Closing or reloading the tab shows the browser's own
+"leave site?" dialog, whose wording Kozane does not control.
 
 Drag the panel's left edge to make it wider or narrower, or focus the edge and
 use `←` and `→`. The width lasts as long as the tab is open, including across
@@ -497,25 +497,25 @@ closing one file and opening another, and starts from the default again after a
 reload.
 
 Only text files can be opened, and only up to 1 MB. A file larger than that, or
-one that is not valid UTF-8, is refused rather than truncated or mangled: the
-panel writes back what it holds, so anything it could not read exactly is
-something it must not be allowed to save over. Saving only ever replaces a file
-that is already there — a new one is made empty by the tree's own control, as
-above, and everything on this page then governs the first save as any other.
+one that is not valid UTF-8, is refused rather than truncated or mangled. The
+panel writes back what it holds, so it must not save over anything it could not read exactly.
+Saving only ever replaces a file
+that is already there. A new file is made empty by the tree's own control, as
+above, and its first save follows the same rules as any other.
 
 The file is read when it is opened, and the save is checked against what is on
-disk at that moment. If the file changed underneath — another editor, a build, a
-`git checkout` — the save is refused and the panel offers to reload from disk.
-Reloading discards what is in the editor, which is the point: the alternative is
+disk at that moment. If the file changed underneath, for example from another editor, a build, or a
+`git checkout`, the save is refused and the panel offers to reload from disk.
+Reloading discards what is in the editor. The alternative would be
 silently throwing away the change that arrived while you were typing.
 
 Undo and redo are `Ctrl+Z` and `Ctrl+Shift+Z` (or `Cmd`), and the history belongs
-to the editing session rather than to the file — closing the panel ends it. Undo
+to the editing session rather than to the file, so closing the panel ends it. Undo
 moves the caret to the edit it takes back, so what changed is on screen rather
 than somewhere you have to go looking for.
 
 A run of typing comes back in one press rather than a character at a time.
-Consecutive edits are joined into one entry while they continue each other; a
+Consecutive edits are joined into one entry while they continue each other. A
 pause, a move to somewhere else in the file, or a switch from typing to deleting
 each start a new one.
 
@@ -530,27 +530,27 @@ from, so the rows stay inert there and clicking one does nothing.
 
 ## Tags
 
-A tag is a word you write inside a card, opened with a colon: `:perf`. It gathers
-that card with everything else carrying the same tag — including taskspace files, since a
+A tag is a word you write inside a card that starts with a colon, such as `:perf`. It gathers
+that card with everything else carrying the same tag, including taskspace files, since a
 tag is just text and a file is too.
 
-Subcategorize with more colons. `:perf:cache` sits under `:perf`, and `:perf` gathers it: pick
+Subcategorize with more colons. `:perf:cache` sits under `:perf`, and `:perf` gathers it. Pick
 the parent to see everything beneath it, or the child to narrow down. There is nothing to
 set up first. A tag exists because someone wrote it, and stops existing when the last text
 holding it is edited or deleted.
 
-A colon is ordinary punctuation too, so `3:45` and `key: value` stay plain text — a tag only
-opens after a space, an opening bracket, or at the start of a line, which a colon in the
-middle of a word never is. A link is an address rather than text, so
-`https://example.com/it:is/fine` is one link and no tag — and a tag written against a link
-stops where it starts, which makes `:todo:https://example.com` the tag `:todo` and
-`:https://example.com` no tag rather than the tag `:https`. Levels take letters, digits,
-`-`, and `_`, up to 64 characters each and 8 levels deep; past either, it is not treated as
+A colon is ordinary punctuation too, so `3:45` and `key: value` stay plain text. A tag only
+opens after a space, after an opening bracket, or at the start of a line, and a colon in the
+middle of a word is none of those. A link is an address rather than text, so
+`https://example.com/it:is/fine` is one link and no tag. A tag written against a link
+stops where the link starts, which makes `:todo:https://example.com` the tag `:todo`, and
+`:https://example.com` is no tag rather than the tag `:https`. Levels take letters, digits,
+`-`, and `_`, up to 64 characters each and 8 levels deep. Past either limit, the text is not treated as
 a tag at all. `:Perf` and `:perf` are the same tag.
 
-There is no rule that closes a tag once it opens — nothing plays the part a closing quote
-mark would, because a colon does not pair up the way one does. That does cost something in a
-taskspace of source code: `:foo` is also how Ruby, Elixir, and Clojure write a symbol or a
+No rule closes a tag once it opens, because a colon does not pair up the way a quote
+mark does. That costs something in a
+taskspace of source code, because `:foo` is also how Ruby, Elixir, and Clojure write a symbol or a
 keyword argument, so a file in one of those languages can pick up tags nobody meant to write.
 The tree over such a taskspace can carry that noise alongside the tags that were meant.
 
@@ -558,30 +558,30 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 
 ### The tag index
 
-The tag index lives at `/tags`. There are two ways in: the tree icon in the corner of the
-namespace list, which opens it on the whole workspace, and any tag on a card, which opens it
-on that tag. It has two halves: the tree of
-every tag on the left, with a count of the cards and files each one gathers, and the selected
+The tag index lives at `/tags`. Open it from the tree icon in the corner of the
+namespace list, which shows the whole workspace, or from any tag on a card, which opens it
+on that tag. The tree of
+every tag is on the left, with a count of the cards and files each one gathers, and the selected
 tag's hits on the right. `?tag=` says which tag is open, so any view of the page is a link
 you can send.
 
 It reaches the whole workspace by default. Unlike a board, which draws one namespace, the
-index gathers every namespace's cards and every taskspace at once — a tag lives in the text
+index gathers every namespace's cards and every taskspace at once. A tag lives in the text
 rather than in a table, so nothing stops the same one being used on two boards.
 
 The row of namespace names in the top right narrows it. Picking one adds `?namespaceId=<id>` to
-the URL and reduces the tree to that namespace's cards and the taskspaces its board draws;
-picking the one already selected clears it again and goes back to the whole workspace. The
+the URL and reduces the tree to that namespace's cards and the taskspaces its board draws.
+Picking the one already selected clears it again and goes back to the whole workspace. The
 narrowing sticks as you browse the tree. A tag link in a card opens the index already
 narrowed to that card's namespace.
 
-**Cards only**, beside the namespace names, puts the taskspace files down and leaves the tags
+"Cards only", beside the namespace names, puts the taskspace files away and leaves the tags
 written on cards. It adds `?files=0` to the URL and skips the disk walk rather than hiding
-what it found, so it is also the quickest the page gets. It is the answer for a taskspace
-that is a source checkout: a tag is just text, so a symbol or keyword argument in a language
+what it found, so it is also the quickest the page gets. Use it for a taskspace
+that is a source checkout. A tag is just text, so a symbol or keyword argument in a language
 that writes those with a leading colon opens a tag the same as a word someone wrote on
-purpose — `{ id: :active }` gathers under `:active` — and the tree over such a taskspace can
-be largely that. **Include files** puts them back.
+purpose. For example, `{ id: :active }` gathers under `:active`, and the tree over such a taskspace can
+fill up with these. "Include files" puts them back.
 `kozane tag show --no-files` is the same switch in the terminal.
 
 - Cards show their text and partition, and their namespace when you are looking across the
@@ -593,100 +593,97 @@ Counts are of distinct cards and files. A card carrying `:perf` twice is one car
 appears once in the list, labelled with each tag it matched.
 
 Taskspace files are read when you open the page, within the same limits the taskspace panel
-works under: dot-entries like `.git` and `.env` are never read, symlinks are never
+works under. Dot-entries like `.git` and `.env` are never read, symlinks are never
 followed, and a file that is not text or is over 1 MB is skipped. Files that have not
 changed since the last read are not read again, so coming back to the page is quick. A
 taskspace too large to read in full says so at the bottom of the list, rather than leaving
 you to think a tag is missing. When the reason is about particular files it names a few of
-them, so you can go and look; a name ending in `/` is a directory that could not be listed.
-The cards have a ceiling of their own — a hundred thousand hits for one gather — and it is
+them, so you can go and look. A name ending in `/` is a directory that could not be listed.
+The cards have a ceiling of their own, a hundred thousand hits for one gather, and it is
 reported in the same place, for the same reason.
 
-Generated and vendored directories are left out as well — `node_modules`, `build`, `dist`,
-`out`, `target`, `coverage`, `vendor`, `bower_components`, `__pycache__`, and `tmp`, at any
-depth.
+Generated and vendored directories are left out as well, at any depth. These are `node_modules`, `build`, `dist`,
+`out`, `target`, `coverage`, `vendor`, `bower_components`, `__pycache__`, and `tmp`.
 They hold no text anyone wrote a tag in, and they are large enough that scanning them means
 running out of budget before reaching the files you work on. A `.gitignore` is deliberately
-not consulted: what you would rather not commit and what you would rather not tag are
+not consulted, because what you would rather not commit and what you would rather not tag are
 different questions, and notes and drafts are often on the wrong side of it.
 
 One tag's list shows at most 200 card hits and at most 200 file hits. The two limits are
-separate on purpose: a tag written on thousands of cards would otherwise use up a single
+separate on purpose. A tag written on thousands of cards would otherwise use up a single
 limit before the files were reached, and the list would look as though the tag were in no
 file at all. The count beside the tag in the tree is always the true one, so a shortened
-list says which part of it you are looking at; pick a subcategory to narrow down to the rest.
+list says which part of it you are looking at. Pick a subcategory to narrow down to the rest.
 `kozane tag show` holds the same two ceilings and says the same thing when it cuts a list.
 
 The limits count hits rather than rows, and the notice says so, because a card carrying a
 tag twice is two hits and one row. So a cut list can show slightly fewer rows than the
-number it names — the count in the tree, which is of cards and files, is the one to read
-for how much is under a tag.
+number it names. Read the count in the tree, which counts cards and files,
+to see how much is under a tag.
 
 A static export made with `kozane net ssg generate` carries one tag index for the whole
 workspace, covering the cards on every exported board, and both the tag and the namespace
 narrowing keep working there. Tags in taskspace files are left out unless the export was
 built with `--include-scoped-files`, because a file hit names a path inside the workspace
 and quotes a line of that file. The same flag governs whether the export names your
-taskspaces at all — without it, an exported tag index mentions no taskspace, the same as an
-exported board does not.
+taskspaces at all. Without it, an exported tag index mentions no taskspace, the same as an
+exported board.
 
 ## The map
 
-The map lives at `/map`, reached from the icon in the corner of the namespace list: unequal
-rectangles packed together, which is what the page draws. It is one picture
-of the whole workspace, and it is read-only: nothing on it changes anything, and there is
+The map lives at `/map`. Open it from the icon of unequal
+rectangles in the corner of the namespace list. It is one read-only picture
+of the whole workspace. Nothing on it changes anything, and there is
 no live-sync poll behind it.
 
 It fills the window. The header and the tag panel are drawn over the picture rather than
-beside it, so the rectangles get the whole of the page rather than what is left after the
-furniture — a treemap laid into a smaller box is the same map with every rectangle scaled
-down, and the small ones lose their labels first. The page itself does not scroll: the map
-is moved by dragging it.
+beside it, so the rectangles get the whole page. A treemap laid into a smaller box is the same map with every rectangle scaled
+down, and the small ones lose their labels first. The page itself does not scroll. Drag
+the map to move it.
 
 Every namespace is a rectangle, and the partitions inside it are rectangles of their own. A
-rectangle's **area is its card count** — a partition holding two hundred cards is drawn a
+rectangle's area is its card count. A partition holding two hundred cards is drawn a
 hundred times the size of one holding two, and a namespace's size is the cards its partitions
 hold between them. A partition holding nothing has no area to be given, so empty partitions are
 drawn as dashed outlines in a strip along the bottom of their namespace rather than left out.
-A namespace with no cards at all is drawn the same way, in a strip along the foot of the map
-— named, as an outline, and without its own partitions drawn inside it, since a namespace holding
+A namespace with no cards at all is drawn the same way, in a strip along the foot of the map.
+It is named and drawn as an outline, without its own partitions inside it, since a namespace holding
 no cards holds none in any of them. Partitions keep the colours their own board gives them.
 
 Below the rectangles is a row of circles, one per scope, each with a line to every partition
 it reaches. A scope is drawn this way rather than as a rectangle of its own because a scope
-is not inside a namespace — the same scope holds cards from several partitions and often from
+is not inside a namespace. The same scope holds cards from several partitions and often from
 several namespaces, which is exactly what the lines show. A scope reaching a namespace only
 through a taskspace has no partition to point at, so its line runs to the namespace instead.
 Hover a circle to raise its own lines out of the rest.
 
-The map opens centred, with room around it, and the control in the corner calls that 100% —
+The map opens centred, with room around it, and the control in the corner calls that 100%.
 100% is the size the map opens at rather than the size that would fill the window, because
-the view you were looking at a moment ago is the one worth measuring against. Filling the
+the view you were just looking at is the one worth measuring against. Filling the
 window is 200%, and the range runs from 50% to 400%.
 
 Drag anywhere on the map to move it, and hold `Ctrl` or `Cmd` while scrolling to zoom
-toward the pointer — the same two gestures as the canvas, and the same `ui.zoomStep` behind
+toward the pointer. These are the same two gestures as the canvas, with the same `ui.zoomStep` behind
 them. The control in the bottom-right corner zooms in steps, and the reading beside it is
-also the way back: click the percentage to return to the size the map opened at. A drag that
+also the way back. Click the percentage to return to the size the map opened at. A drag that
 starts on a partition pans the map rather than opening that partition's board, so there is no part
 of the map you have to avoid grabbing.
 
-Zooming in enlarges the rectangles and leaves the labels the size they were, so it does what
-you would want it for: a partition too small to be named where the map opens becomes large
+Zooming in enlarges the rectangles and leaves the labels the size they were, so a partition too small to be named where the map opens becomes large
 enough to carry its name. The gaps between rectangles and the band each namespace's name sits
-in stay put too — only the part that stands for cards grows.
+in stay the same size too. Only the part that stands for cards grows.
 
-The tags are on the left, as a tree over the map: `:perf` with `:perf:cache` beneath it,
+The tags are on the left, as a tree over the map, with `:perf:cache` beneath `:perf`,
 the way a directory holds a subdirectory. The number beside each is how many cards it
 gathers, that tag and everything under it. A tree taller than the window scrolls inside its
 own panel, and the lines follow their rows as it does. Click a tag to draw a line from its
 row to every partition holding a card that carries it, and the rest of the map stands back so
-the lines read. The lines stay until you clear them, and clicking the selected tag again is
-how: pointing at a row does nothing, so a pointer crossing the panel on its way somewhere
+the lines read. The lines stay until you clear them by clicking the selected tag again.
+Pointing at a row does nothing, so a pointer crossing the panel on its way somewhere
 else leaves the drawing alone. A click also puts `?tag=` in the URL, so any view of the map
 is a link you can send.
 
-Unlike the tag index, the map counts cards only — it reads no taskspace files. A file tag
+Unlike the tag index, the map counts cards only and reads no taskspace files. A file tag
 has no partition rectangle to be drawn against, and gathering one would put a number in the
 tree that means something different from the number beside it.
 
@@ -695,41 +692,44 @@ the tag index carries and with the same `?namespaceId=` behind it. Narrowed, the
 that namespace's rectangle alone, and only the scopes and tags that reach it.
 
 The activity grid at the bottom centre shows its UTC date range above a trailing year of
-card changes. A new card counts as its first change; moving, resizing, or otherwise arranging
+card changes. A new card counts as its first change. Moving, resizing, or otherwise arranging
 a card does not. Darker squares are busier UTC days. Click a square to size the treemap from
 the cards changed on that day and filter the tag tree, its counts, and its partition links to
-those same cards; the heading then shows that specific date. Click the selected square again
-or choose **Clear** to restore total card and tag counts and the full range heading. The
+those same cards. The heading then shows that specific date. Click the selected square again
+or choose "Clear" to restore total card and tag counts and the full range heading. The
 selection is stored as `?day=YYYY-MM-DD` and keeps any namespace or tag selection already in
 the URL.
 
 The server keeps the map's workspace-wide partition counts, daily activity, scope graph, and
 card-tag dimensions together in `.kozane/treemap.json`. The file is a disposable cache tied
-to the database signature: any database change rebuilds the whole semantic snapshot, while
+to the database signature. Any database change rebuilds the whole semantic snapshot, while
 namespace and day selections are derived from it without caching viewport-dependent geometry.
 See [Cache behavior](./cache.md) for its validation, refresh, and recovery rules.
 
 A static export made with `kozane net ssg generate` carries the map, and both the tag
 selection and the namespace narrowing keep working there without a server. The scope circles
-are left out unless the export was built with `--include-scoped-files` — a plain export
-carries no scopes anywhere, and the map holds the same line.
+are left out unless the export was built with `--include-scoped-files`. A plain export
+carries no scopes anywhere, and the map follows the same rule.
 
 ## Getting between the pages
 
 The links between the three workspace-wide pages are icons rather than words, and each one
-draws the thing its page is about: an even grid of four squares for the list of namespaces, no
-one of them the large one; unequal rectangles packed together for the map, which is a
-treemap; and a tree branching into two children for the tag index, which is what a tag
-namespace is. They sit in the corner of each page's header, and each one names itself on
-hover — which is also what a screen reader reads, since the picture says nothing on its own.
+draws the thing its page is about.
+
+- Namespace list — an even grid of four squares.
+- Map — unequal rectangles packed together, like a treemap.
+- Tag index — a tree branching into two children, which is what a tag namespace is.
+
+They sit in the corner of each page's header, and each one names itself on
+hover. A screen reader reads the same name, since the picture says nothing on its own.
 
 The connections in that last one are drawn rather than implied, and that is what makes it a
 tree instead of an indented list. Rows on their own say "a list", which is what the namespace
-page already is — two icons that look different while meaning much the same thing have to be
+page already is. Two icons that look different but mean much the same thing have to be
 remembered rather than recognised.
 
-The back link on the map and the tag index is the grid. Unnarrowed it leads to the namespace
-list and stands alone; narrowed to a namespace it leads to that namespace's board, and the
+The back link on the map and the tag index is the grid. Unnarrowed, it leads to the namespace
+list and stands alone. Narrowed to a namespace, it leads to that namespace's board, and the
 namespace's name is drawn beside it. The icon is the same drawing either way, so the name is
 what says which of the two you are about to get.
 

@@ -67,7 +67,7 @@ export class EditorDocument {
     return current;
   }
 
-  /** Text last read or saved; Reed revisions also advance on undo/redo. */
+  /** Text last read or saved. Reed revisions also advance on undo/redo. */
   #savedContent = $state("");
   #savedByteLength = $state(0);
 
@@ -185,7 +185,7 @@ export class EditorDocument {
     this.#textTable = nextState.pieceTable;
   }
 
-  /** Reuse text across reads and local edits; decode once after an uncached history change. */
+  /** Reuse text across reads and local edits, and decode once after an uncached history change. */
   text(): string {
     const table = this.state.pieceTable;
     if (table !== this.#textTable) {

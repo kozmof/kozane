@@ -7,7 +7,7 @@ exposing a workspace by accident.
 Every mode below is served by `bin/server.js`, which is what calls `listen`. It binds `HOST`
 when one is set and `127.0.0.1` otherwise, so the address a mode reaches is decided by Kozane
 rather than inherited from a framework default. The Node adapter's own entry, which defaults
-to every interface, is not shipped — `bin/server.js` is the only way the package starts a
+to every interface, is not shipped. `bin/server.js` is the only way the package starts a
 server, and `pnpm pack:check` enforces that. Point a process manager at it.
 
 When a workspace has an API key, two rules hold in every server mode.
@@ -49,32 +49,32 @@ The cookie is not marked `Secure`, which is correct for loopback HTTP because
 the traffic never leaves the host. `kozane open` sets the server `ORIGIN` to the
 loopback URL so the login form passes SvelteKit's cross-site check.
 
-`ORIGIN` names one spelling, and a loopback server answers to three:
+`ORIGIN` names one spelling, but a loopback server answers to three.
 `http://localhost:5173`, `http://127.0.0.1:5173` and `http://[::1]:5173` are the
 same server, but the check compares origins as strings. So `bin/server.js`
 rewrites the `Origin` header of a request that arrived under another of those
-names before the check sees it — HTTP and a loopback host on both sides.
+names before the check sees it, as long as both sides use HTTP and a loopback host.
 Same-port aliases are accepted. When local port forwarding exposes a different
 port (for example, localhost:5174 forwarding to 127.0.0.1:5173), the incoming
 `Origin` must match the request's `Host` header. Browsers set that header from
-the destination URL; a form from an unrelated origin cannot choose it.
+the destination URL, so a form from an unrelated origin cannot choose it.
 Forwarded-host headers are not trusted. Missing origins and mismatched ports
 without a matching Host are still refused.
 Without the rewrite, a workspace opened at `localhost` while `ORIGIN` said
-`127.0.0.1` still drew every page and took every canvas edit — those are `GET`s
-and JSON — and answered `403` only to the create-namespace form, the
+`127.0.0.1` still drew every page and took every canvas edit, because those are `GET`s
+and JSON. It answered `403` only to the create-namespace form, which is the
 application's one HTML form.
 
 The URL `kozane open` opens becomes the browser launcher's command line, where
-other local users can read it; `--no-open` and the login page avoid that.
+other local users can read it. Use `--no-open` and the login page to avoid that.
 
 ### Host checking without a key
 
 A keyless workspace checks the `Host` header and answers `403` to anything that
 is not a loopback name. Without a key there is no credential to check, and a
-hostname someone else controls can be pointed at `127.0.0.1` — DNS rebinding —
-after which a page they serve is treated by the browser as this server's own
-origin. `ORIGIN` does not settle that on its own: SvelteKit's cross-site check
+hostname someone else controls can be pointed at `127.0.0.1`. After this DNS rebinding,
+the browser treats a page they serve as this server's own
+origin. `ORIGIN` does not settle that on its own, because SvelteKit's cross-site check
 covers form-shaped `POST`s, and reading the board is a `GET`.
 
 To reach a keyless workspace under another name, such as a hosts-file alias or a
@@ -84,9 +84,9 @@ local proxy, list it in `KOZANE_ALLOWED_HOSTS` (comma-separated):
 KOZANE_ALLOWED_HOSTS=kozane.local kozane open
 ```
 
-Generating a key is the better answer. Once a workspace has one the check does
-not apply, because the key is then the thing being verified — and the API-key
-cookie belongs to the loopback origin, so a rebound page never receives it.
+Generating a key is the better answer. Once a workspace has one, the check does
+not apply, because the key is then the thing being verified. The API-key
+cookie also belongs to the loopback origin, so a rebound page never receives it.
 
 ## Local with `--allow-remote`
 
@@ -141,9 +141,9 @@ server. Composing, dragging, deleting, taskspaces, and live sync are all
 disabled.
 
 Every namespace in the workspace is exported, so narrowing scopes to a namespace
-hides nothing here: a scope used by any namespace is on that namespace's page, and
-one used by none is on every page. It is a question of which page a scope
-appears on, not of whether it is published.
+hides nothing here. A scope used by a namespace is on that namespace's page, and
+one used by none is on every page. Narrowing changes which page a scope
+appears on, not whether it is published.
 
 Do not export a workspace that holds anything you would not publish. Card text,
 partition names, scope names, layer names, and warp positions are all part of the
@@ -152,16 +152,15 @@ export by design, because that is what is being published.
 Filesystem paths are not. The machine-specific workspace path is stripped, and
 taskspace paths are redacted from the page data the export bakes in, so the
 directories a workspace was worked in are not served to whoever opens the site.
-By default taskspaces do not appear in a static export at all: a plain `kozane
+By default, taskspaces do not appear in a static export at all. A plain `kozane
 net ssg generate` carries no scopes, no taskspace names, and no files.
 
 The map at `/map` is exported on the same terms. It publishes namespace names,
-partition names, card counts, and the tag tree — card and partition content, which
-the export carries by design. Its scope graph is not: a plain export draws no
-scope circles and names no scope, the same line every other page holds, and it
-is gathered at all only when the export was built to carry scopes.
+partition names, card counts, and the tag tree, which is card and partition content
+the export carries by design. Its scope graph is not published. Like every other page, a plain export draws no
+scope circles and names no scope. The graph is gathered only when the export is built to carry scopes.
 
-`--include-scoped-files` is the exception, and it publishes real file contents:
+`--include-scoped-files` is the exception, and it publishes real file contents.
 
 ```sh
 kozane net ssg generate --out ./site --include-scoped-files
@@ -170,25 +169,24 @@ kozane net ssg generate --out ./site --include-scoped-files
 The export then carries the scopes each namespace draws, the names of the
 taskspaces under those scopes, and a read-only copy of each of those taskspaces'
 files, contents inline. A taskspace that belongs to no scope is not drawn by the
-board, so it is left out of the export entirely — neither its name nor a byte of
-it goes out. Everything else about the file boundary is the same as the live
-server's, because the same code reads it: dot-entries are never included, so
-`.git`, `.env`, and `.taskspace.json` stay out; symlinks are listed but never
-followed; a file over 1 MB or one that is not valid UTF-8 is listed by name
-with its contents withheld, as is a file past the 20 MB of content each taskspace
-is exported within.
+board, so it is left out of the export entirely, including its name. The rest of the file boundary matches the live
+server, because the same code reads it.
+
+- Dot-entries are never included, so `.git`, `.env`, and `.taskspace.json` stay out.
+- Symlinks are listed but never followed.
+- A file over 1 MB, a file that is not valid UTF-8, and a file past the 20 MB
+  content cap for each taskspace are listed by name with their contents withheld.
 
 The other two ceilings drop what they stop at rather than naming it. Past 50,000
 entries per taskspace, or more than 64 directories deep, the walk stops and marks
-the directory it stopped in as truncated — so the enclosing directory is in the
-export saying it is not all there, but the entries beyond the cut are not in it
+the directory it stopped in as truncated. The enclosing directory is in the
+export and says it is incomplete, but the entries beyond the cut are not in it
 at all, not even by name. Read an export as a floor on what went out, not a
-census: what is there is there, and what a truncated directory was holding is
-answered only by the working copy.
+census. Only the working copy shows what a truncated directory held.
 
-What that leaves is a judgment only you can make: these are your working
-directories, published in full to whoever opens the site, with no key in front of
-them. Use the flag only on a workspace whose taskspace files you would publish
+The flag publishes your working
+directories in full to whoever opens the site, with no key in front of
+them. Use it only on a workspace whose taskspace files you would publish
 deliberately.
 
 ## Taskspace files
@@ -198,94 +196,92 @@ and creates new files and folders in it, so the server reads and writes the
 filesystem on behalf of whoever has the page open. What that reaches is bounded.
 
 Both the listing and the file endpoints are confined the same way. The directory
-comes from the taskspace record and the workspace root; the request chooses only
+comes from the taskspace record and the workspace root. The request chooses only
 where to look inside it. A path that walks out with `..` is refused, and so is
-one that resolves out through a symlink — the boundary is checked twice, once on
-the path as written and once on what it turned out to be with every link
+one that resolves out through a symlink. The boundary is checked twice, once on
+the path as written and once on the resolved path with every link
 followed. Dot-entries are refused outright, which keeps `.git`,
 `.taskspace.json`, and a stray `.env` both out of the listing and beyond reach of
-anyone who types the name. Both are gated like everything else: when a workspace
+anyone who types the name. Both are gated like everything else. When a workspace
 has an API key, a request without it gets 401.
 
-**Listing** answers with entry names, kinds, sizes, and modification times, and
+The listing answers with entry names, kinds, sizes, and modification times, and
 nothing else. Symlinks are listed but never followed.
 
-**Reading** returns the text of one regular file. Symlinks, directories, and
+A read returns the text of one regular file. Symlinks, directories, and
 anything that is not a regular file are refused, as is a file over 1 MB or one
 that is not valid UTF-8.
 
-**Scanning for tags** walks a taskspace and reads the text files in it, to gather
+The tag scan walks a taskspace and reads the text files in it, to gather
 the tags written inside them for the tag index page and `kozane tag list|show`.
-It reaches nothing a read does not: the walk is built on the same listing and
+It reaches nothing a read does not. The walk is built on the same listing and
 reading described here, so dot-entries are not scanned, symlinks are not
-followed, and a file that is not UTF-8 text or is over 1 MB is passed over. What
-it returns for each hit is a path, a line number, and that one line — not the
-file. The walk is bounded by its own byte, entry, and depth budgets — per
-taskspace, and again across a whole gather, so a workspace of many taskspaces
-costs no more to read than a workspace of a few — and by a ceiling on how many
+followed, and a file that is not UTF-8 text or is over 1 MB is passed over. For each
+hit it returns a path, a line number, and that one line, not the
+file. The walk has its own byte, entry, and depth budgets, per
+taskspace and again across a whole gather, so many taskspaces
+cost no more to read than a few. It also has a ceiling on how many
 tags one taskspace may yield, since a file can hold far more tags per byte read
-than any byte budget implies. It says when it stopped at any of them. It also
-does not descend into generated or vendored
-directories — `node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
-`vendor`, `bower_components`, `__pycache__`, `tmp` — which narrows what is read further
-still, in the same direction as every other rule here.
+than any byte budget implies. It reports when it stops at any of these limits. It also
+skips generated and vendored directories (`node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
+`vendor`, `bower_components`, `__pycache__`, and `tmp`), which narrows what is read further.
 
 What that scan gathered is kept in `.kozane/tag-index.json` so the next page load
-does not repeat it, and the lines it quotes are kept with it. That is a file
-inside the workspace holding excerpts of files that may sit outside it — a
+does not repeat it, and the lines it quotes are kept with it. This file
+inside the workspace holds excerpts of files that may sit outside it, because a
 taskspace created with `kozane taskspace create --dir <path>` can point anywhere
-the server user can read. It is a cache and never a record: deleting it costs one
+the server user can read. It is a cache, not a record. Deleting it costs one
 slow load, and it is rebuilt from the files themselves. Past 16 MB it is ignored
 and rebuilt rather than read, since reading it happens while a page load waits.
 Treat it as you would the taskspaces it summarizes.
 See [Cache behavior](./cache.md) for the complete cache lifecycle and cleanup guidance.
 
 `kozane init` writes a `.gitignore` inside `.kozane/` that ignores the whole
-directory, so a workspace created inside a checkout does not commit this cache —
-nor the API key or this machine's runtime state, which live beside it. It is one
+directory, so a workspace created inside a checkout does not commit this cache,
+the API key, or this machine's runtime state, which live beside it. It is one
 file inside the workspace directory rather than a line appended to the
 repository's own `.gitignore`, so removing the workspace removes it too. A
 workspace that predates this, or one whose directory was created by hand, does
-not have it; add it if the repository is shared.
+not have it. Add it if the repository is shared.
 
-**Writing** replaces the contents of a file that is already there. It never
+A write replaces the contents of a file that is already there. It never
 creates one, never writes outside the taskspace, and never writes a path
-containing a dot-entry. The write is atomic — a temporary file, then a rename —
+containing a dot-entry. The write is atomic (a temporary file, then a rename),
 so a failure leaves the original intact rather than truncated. A save also
 carries the file's identity as it was read, and is refused with 409 if the file
 changed on disk since, so a save cannot silently discard someone else's edit.
 
-**Creating** makes one empty file, or one directory, and nothing else. It never
-replaces what it finds: a name already taken — by a file, a directory, or a
-symlink — is refused with 409, and the kernel, not the check preceding it, is
-what settles two requests racing for one name. It is confined exactly as reading
+Creating makes one empty file, or one directory, and nothing else. It never
+replaces what it finds. A name already taken by a file, a directory, or a
+symlink is refused with 409. The kernel, not the check before it,
+settles two requests racing for one name. It is confined exactly as reading
 and writing are, by the same resolution and the same two boundary checks, so a
-`..`, a symlinked directory along the way, and a dot-entry are refused here as
-there — a dot-file the panel could neither list nor open cannot be created
-either. Neither form creates parent directories: a path whose parent is not
-there is a 404 rather than a tree conjured by one request. Contents arrive only
+`..`, a symlinked directory along the way, and a dot-entry are refused here too.
+A dot-file the panel could neither list nor open cannot be created
+either. Neither form creates parent directories, so a path whose parent is missing
+returns 404 instead of creating a tree. Contents arrive only
 through a save, so everything stated above about writing governs what can end up
 in a file made this way.
 
 Two consequences are worth stating plainly.
 
-- A taskspace created outside the workspace root — `kozane taskspace create --dir
-<path>` — is both readable and writable, because the boundary is the taskspace
+- A taskspace created outside the workspace root with `kozane taskspace create --dir
+  <path>` is both readable and writable, because the boundary is the taskspace
   directory rather than the root. Point a taskspace at a directory only if you
   would let anyone who can reach the server read and rewrite the text files in
   it.
 - On a local server with no API key, which is the state after a plain `kozane
-init`, any local user or process that can reach the port can rewrite those
+  init`, any local user or process that can reach the port can rewrite those
   files. That is the same trust boundary the database already sits behind, but
   it now extends to the working directory a taskspace points at. Generate a key
   with `kozane api key generate` if that is not what you want.
 
-A static export has neither: no server to ask, and taskspace paths are stripped
+A static export has neither risk. It has no server to ask, and taskspace paths are stripped
 from it. Nothing in an export can be written, and nothing can be read from it
-that was not baked in at build time — by default no taskspace at all, and with
-`--include-scoped-files` exactly the files described above.
+that was not baked in at build time. By default that is no taskspace at all, and with
+`--include-scoped-files` it is exactly the files described above.
 
-The tag index page follows the same rule, and has to: a file hit carries a path
+The tag index page follows the same rule, and has to. A file hit carries a path
 inside the workspace and a line of that file's content, and page data baked into
 an export is readable by view-source however the page draws it. So a plain export
 carries only the tags written on cards, and a tag written solely in a taskspace
@@ -295,7 +291,7 @@ baked in alongside the files themselves.
 The taskspaces themselves are named under the same flag and not otherwise. A
 taskspace's name is the name of a directory on the machine the workspace was
 built on, so an export that mentions no taskspace must not carry a list of them
-either — the rule is the board's, and the tag index holds it because it publishes
+either. The rule comes from the board, and the tag index follows it because it publishes
 the same kind of page.
 
 ## Where each rule lives

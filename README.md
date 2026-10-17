@@ -1,19 +1,19 @@
 # Kozane
 
 Kozane provides data structures for organizing text and modeling thinking processes.
-The names of these structures do not imply fixed intentions; different use cases may
+The names of these structures do not fix how you use them, so different projects can
 use them in different ways.
 
 The name "Kozane" comes from こざね法 (kozane method), developed by Japanese anthropologist Tadao Umesao.
 
 ## Structures
 
-- **Namespace:** A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
-- **Partition:** A sub-container assigned to each card. Every namespace has a default partition named "General."
-- **Card:** A unit of text.
-- **Layer:** A way to arrange cards in layers.
-- **Scope:** A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it. A scope belongs to the workspace rather than to one namespace, so its name has to be unique across the whole workspace: naming a scope `docs` in one namespace means no other namespace can have a different scope by that name — it is the same scope, reachable from both.
-- **Warp:** A saved point to jump to. Warps are not related to cards.
+- Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
+- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
+- Card: A unit of text.
+- Layer: A way to arrange cards in layers.
+- Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it. A scope belongs to the workspace rather than to one namespace, so its name is unique across the whole workspace. A scope named `docs` in one namespace is the same scope in every other namespace that uses that name.
+- Warp: A saved point to jump to. Warps are not related to cards.
 
 ## Status
 
@@ -61,12 +61,11 @@ kozane open
 
 To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a namespace named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default namespace named `main`. Run `kozane namespace default <id>` to change which namespace commands use when `--namespace` is omitted.
 
-The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key a monitoring probe has to send it too — see [Production operations](./docs/production.md).
+The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key, a monitoring probe has to send it too. See [Production operations](./docs/production.md).
 
 For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
-The two surfaces Kozane implements are specified in full: the commands in
-[the CLI specification](./spec/cli.md), and the endpoints the browser and any API client
-reach in [the HTTP API specification](./spec/http.md).
+The [CLI specification](./spec/cli.md) covers every command, and the
+[HTTP API specification](./spec/http.md) covers every endpoint the browser and API clients use.
 
 ## Adding cards from text
 
@@ -124,7 +123,7 @@ kozane tag list          # every tag in the namespace, as a tree, with counts
 kozane tag show perf     # the cards and files under it, subcategories included
 ```
 
-A tag exists only while it appears in text, and only where a colon opens a word: it
+A tag exists only while it appears in text, and only where a colon opens a word. It
 has to sit at the start of a line, after whitespace, or after an opening bracket, so
 ordinary punctuation like `3:45` or `key: value` is never mistaken for one.
 
@@ -182,15 +181,17 @@ kozane net ssg generate --out ./site --base /kozane
 
 The output directory includes a `.nojekyll` file so GitHub Pages serves SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages for it. Static export requires the source build toolchain, so run it from a cloned repository after `pnpm install`.
 
-By default, the export includes only the card board — no scopes, no taskspaces. Pass `--include-scoped-files` to also bake in scopes, taskspace names, and a read-only, browsable copy of each taskspace's files:
+By default, the export includes only the card board, without scopes or taskspaces. Pass `--include-scoped-files` to also bake in scopes, taskspace names, and a read-only, browsable copy of each taskspace's files:
 
 ```sh
 kozane net ssg generate --out ./site --include-scoped-files
 ```
 
-This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported — those are the ones a board draws — so a taskspace you haven't put in a scope stays off the export entirely. Each exported taskspace is capped at 20MB of embedded content and 50,000 entries; files beyond the content cap, along with any oversized (>1MB) or non-text file, are still listed by name but open with an explanation instead of their contents, and a directory past the entry cap is marked as not included. Dotfiles are never included and symlinks are listed but never followed, the same as in the live file panel. A taskspace pointed at a large checkout will hit these limits — `node_modules` and its like are not excluded, only dotfiles are.
+This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported, because those are the ones a board draws. A taskspace outside every scope stays off the export entirely.
 
-Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a namespace is drawn on every namespace's board, so its files are embedded in every namespace's page: across five namespaces, a 20MB taskspace is 100MB of export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a namespace if you do not want it published board-wide.
+Each exported taskspace is capped at 20MB of embedded content and 50,000 entries. Files beyond the content cap, files over 1MB, and non-text files are still listed by name, but they open with an explanation instead of their contents. A directory past the entry cap is marked as not included. Dotfiles are never included, and symlinks are listed but never followed, the same as in the live file panel. Only dotfiles are excluded, so a taskspace pointed at a large checkout with `node_modules` will hit these limits.
+
+Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a namespace is drawn on every namespace's board, so its files are embedded in every namespace's page. Across five namespaces, a 20MB taskspace adds 100MB to the export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a namespace if you do not want it published board-wide.
 
 Preview it over HTTP, not by opening the files directly.
 

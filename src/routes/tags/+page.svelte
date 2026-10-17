@@ -315,7 +315,7 @@
         gap: "6px",
         padding: "6px",
         borderRadius: "2px",
-        // An icon's weight, and a label's for the name beside it: the two are not the same
+        // An icon's weight, and a label's for the name beside it. The two are not the same
         // kind of mark, and a name drawn as light as the picture is hard to read at the size
         // a header sets. Both darken together on hover, or half the link would light up.
         color: "neutral.iconDim",

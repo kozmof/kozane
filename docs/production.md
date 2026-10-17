@@ -50,31 +50,31 @@ Use a process supervisor such as systemd, Docker, or your platform's service man
 automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
 with the API key. It verifies that the database accepts queries, answering `200` with
 `{"status":"ok",...}` when it does and `503` with `{"status":"error",...}` when it does not.
-Alert on the `status` field rather than on the status code alone; the cause of a failure is
+Alert on the `status` field rather than on the status code alone. The cause of a failure is
 written to the log, not to the response.
 
-Run only one Kozane server per workspace. This is not only a matter of writers contending for
-one SQLite file — several things the server keeps are process-local and quietly stop meaning
+Run only one Kozane server per workspace. Two servers would contend for
+one SQLite file, and several things the server keeps are process-local and quietly stop meaning
 what they say once there are two of them. The authentication throttle counts failures in
 memory, so two processes give an attacker twice the attempts. The snapshot ETag memo and the
 API-key cache are each validated against the database and key files, so a second process is
 correct but pays the work again. Do not run Kozane behind a load balancer across replicas, and
-do not scale it to more than one instance or worker; scale the machine instead.
+do not scale it to more than one instance or worker. Scale the machine instead.
 
 The rule is enforced by an exclusive runtime reservation.
 `kozane open` checks the reservation before it starts anything and refuses outright. A server
 started directly (`node bin/server.js`) against a workspace another process already holds
 answers every request with HTTP 503 naming the process that holds it, and logs the conflict
 once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server, which stops accepting
-connections, drains the ones in flight, and exits — releasing the reservation.
+connections, drains the ones in flight, and exits, which releases the reservation.
 
 `bin/server.js` is the server entry, and the one to point a process manager at. It binds
 `HOST` if set and `127.0.0.1` otherwise, which is why running it without a HOST cannot put a
-workspace on a public interface. Set `HOST` explicitly when you mean to bind beyond loopback
-— see the [Security matrix](./security-matrix.md).
+workspace on a public interface. Set `HOST` explicitly to bind beyond loopback.
+See the [Security matrix](./security-matrix.md).
 
 It is also the only server entry the package contains. The Node adapter emits its own,
-`build/index.js`, which binds every interface by default; that file is excluded from the
+`build/index.js`, which binds every interface by default. That file is excluded from the
 published package, and `pnpm pack:check` fails the release if it reappears.
 
 Each HTTP response includes `X-Request-Id`. Request completion and errors are emitted as JSON.

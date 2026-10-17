@@ -16,7 +16,7 @@ export function isMemoryDbUrl(url: string): boolean {
 
 /**
  * Build the `file:` URL for a local database path. Percent-encode it so a workspace path
- * containing `#`, `?`, or `%` names the file it should: libsql rejects a raw `#` as a
+ * containing `#`, `?`, or `%` names the file it should. libsql rejects a raw `#` as a
  * fragment and would read a raw `%41` as an escape.
  */
 export function fileDbUrl(path: string): string {

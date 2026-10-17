@@ -1,17 +1,17 @@
 # Kozane CLI Specification
 
 Kozane provides data structures for organizing text and modeling thinking processes.
-The names of these structures do not imply fixed intentions; different use cases may
+The names of these structures do not fix how you use them, so different projects can
 use them in different ways.
 
 ## Structures
 
-- **Namespace:** A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
-- **Partition:** A sub-container assigned to each card. Every namespace has a default partition named "General."
-- **Card:** A unit of text.
-- **Layer:** A way to arrange cards in layers.
-- **Scope:** A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
-- **Warp:** A saved point to jump to. Warps are not related to cards.
+- Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
+- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
+- Card: A unit of text.
+- Layer: A way to arrange cards in layers.
+- Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
+- Warp: A saved point to jump to. Warps are not related to cards.
 
 ---
 
@@ -22,21 +22,21 @@ use them in different ways.
 `namespace`, `card`, `layer`, `scope`, `taskspace` and `status` all open the workspace the
 same way, and it is the same three steps every time.
 
-1. **Find the workspace**, walking up from the current directory. Without one, the command
+1. Find the workspace, walking up from the current directory. Without one, the command
    exits 1 with `No Kozane workspace found. Run "kozane init" first.`
-2. **Require the database to be current.** A database missing migrations stops the command
-   with the same report `kozane open` gives, and a pointer to `kozane db migrate` — or to
-   `kozane db status` and `kozane doctor` when the history has gaps, which `db migrate`
-   cannot repair. No command migrates on its way past: migrations take a backup first, and
+2. Require the database to be current. A database missing migrations stops the command
+   with the same report `kozane open` gives, and a pointer to `kozane db migrate`. When the history
+   has gaps, which `db migrate` cannot repair, it points to `kozane db status` and `kozane doctor`
+   instead. No command migrates on its way past, because migrations take a backup first, and
    that only happens when `kozane db migrate` is asked for by name. `kozane status` is the
    exception and reports on a workspace whatever state it is in.
-3. **Open the session database.** While a `kozane open --memory` server is running, that is
+3. Open the session database. While a `kozane open --memory` server is running, that is
    its temporary database rather than `.kozane/kozane.db`, so these commands act on the
    board that is actually open.
 
 Anything thrown after that becomes `Error: <message>` on stderr and exit 1.
 
-`init`, `open`, `doctor`, `net ssg` and the `db` commands are outside this: each opens the
+`init`, `open`, `doctor`, `net ssg` and the `db` commands skip these steps. Each opens the
 on-disk database directly, because each has a reason to run when the steps above would
 refuse.
 
@@ -117,7 +117,7 @@ Behavior:
    database and select its sole namespace automatically, so `--namespace` can be omitted.
 3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
 4. Spawns the server at `bin/server.js`. That entry, rather than adapter-node's
-   `build/index.js`, is what binds the socket: it calls `listen` with Kozane's own
+   `build/index.js`, is what binds the socket. It calls `listen` with Kozane's own
    `DEFAULT_SERVER_HOST` so the default is loopback rather than the adapter's `0.0.0.0`.
 5. Prints the local URL, then (unless `--no-open`) opens the browser after 1 s.
 
@@ -252,26 +252,26 @@ is actually wrong. `doctor` itself keeps running through a broken config.
 
 `Card timestamps valid` runs only when the migrations are current, since it reads columns
 that migration 0011 adds. It reports cards whose `created_at` or `updated_at` falls outside
-the range a timestamp this app wrote can hold — at or before the epoch, or past the largest
+the range a timestamp this app wrote can hold, meaning at or before the epoch, or past the largest
 instant a date can represent. The epoch is what a hand-written `INSERT INTO card` naming
 neither column leaves behind, since the columns carry a `DEFAULT 0` that SQLite will not let
-the schema drop; a value beyond the date range is one only hand-written SQL can put there.
+the schema drop. Only hand-written SQL can put a value beyond the date range there.
 Every insert the app makes writes both columns, so any such card means the database was
 edited by hand and `kozane card list --sort` will report those cards as `1970` or
 `invalid`.
 
-The check names the cards it found, by short ID — up to five, then `and N more`:
+The check names the cards it found by short ID, up to five, then `and N more`.
 
 ```
   ✗  Card timestamps valid — 2 cards stamped outside what this app writes, likely inserted by hand: 6fd3a2b, 41c0e9d; kozane card list --sort reports them as 1970 or invalid
 ```
 
 `Database integrity` runs only when the migrations are current, and runs both
-`PRAGMA integrity_check` and `PRAGMA foreign_key_check`. They answer different questions:
-the first is about the file — page structure, index entries that do not match their table —
-and the second about the rows, which can find something the first calls sound. `PRAGMA
+`PRAGMA integrity_check` and `PRAGMA foreign_key_check`. They answer different questions.
+The first is about the file, such as page structure and index entries that do not match their table.
+The second is about the rows, which can find something the first calls sound. `PRAGMA
 foreign_keys` is a per-connection setting, so a row written over a connection that left it
-off is a dangling reference in a structurally perfect file; `sqlite3` on the command line
+off is a dangling reference in a structurally perfect file. `sqlite3` on the command line
 starts in that state, and every connection Kozane opens sets the pragma. A failure points at
 `kozane db restore`, or at `kozane db export` first where anything is still readable.
 
@@ -280,20 +280,22 @@ starts in that state, and every connection Kozane opens sets the pragma. A failu
 ```
 
 `Rows within workspace limits` reports rows past the limits every write path holds a new row
-to: card text longer than `ui.contentMax`, a card positioned outside the
+to. These are card text longer than `ui.contentMax`, a card positioned outside the
 `ui.canvasWidth` × `ui.canvasHeight` board, and a name longer than 255 characters in any of
 `namespace`, `partition`, `layer`, `scope` or `taskspace`. Nothing in the schema enforces
-these — they are settings, and a `CHECK` constraint could not follow one being changed — so
-there are two ways such a row arrives: hand-written SQL, and
+these, because they are settings, and a `CHECK` constraint could not follow one being changed.
+Such a row arrives in one of two ways. One is hand-written SQL. The other is
 [`kozane db import`](#kozane-db-import), which takes them on purpose and warns rather than
 refusing, because a dump exported from a workspace with different settings has to stay
-Cards are named by short ID, the way `Card timestamps valid` names them; an over-long name is
+restorable.
+
+Cards are named by short ID, the way `Card timestamps valid` names them. An over-long name is
 located by its table and full ID instead, since a short ID would have to be unambiguous
 across five tables rather than within one. Up to five of each, then `and N more`.
 
 Measured with SQLite's `length()`, which counts characters, where the write paths measure
-UTF-16 code units — so a card made of astral characters such as emoji may be past the limit
-the endpoints enforce without being named here. The direction is the safe one: nothing is
+UTF-16 code units. A card made of astral characters such as emoji may be past the limit
+the endpoints enforce without being named here. The difference errs on the safe side, so nothing is
 reported that a write path would accept.
 
 ```
@@ -318,8 +320,8 @@ kozane doctor config --strict
 | `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo, and two `ui.*Shortcut` keys bound to the same key |
 | `ℹ` note    | unset optional keys, each listed with the default standing in for it                                                           |
 
-Required: `name`, `taskspace.defaultDir`, `taskspace.searchRoots`. Optional: everything
-under `server` and `ui`, each of which falls back to its built-in default.
+The required keys are `name`, `taskspace.defaultDir`, and `taskspace.searchRoots`. Everything
+under `server` and `ui` is optional and falls back to its built-in default.
 
 Exit code `1` when there is at least one error, `0` otherwise. `--strict` makes warnings
 fail too, for setups where an unknown key should break the build.
@@ -499,8 +501,8 @@ unique within the workspace.
 ### `kozane scope list`
 
 Lists every scope in the workspace using collision-safe short IDs, followed by the namespaces
-that scope reaches — through a card filed into it or a taskspace attached to it. A scope no
-namespace has reached yet is shown as `(unused)`; those are visible from every board.
+that scope reaches through a card filed into it or a taskspace attached to it. A scope no
+namespace has reached yet is shown as `(unused)`, and those are visible from every board.
 
 ```bash
 kozane scope list
@@ -524,15 +526,15 @@ kozane scope add-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
 kozane scope add-cards e3ee90b 3f9a2c1 72ac1f8
 ```
 
-Every card must belong to the selected namespace; a card from another namespace is refused
+Every card must belong to the selected namespace. A card from another namespace is refused
 rather than moved. A card already in the scope is left as it is, so the command can be run
 twice without doubling anything. Output is the number of cards added and the scope's short
 ID.
 
 ### `kozane scope remove-cards <scopeId> <cardIds>`
 
-Removes one or more cards from a scope. The cards themselves are not deleted — a scope
-gathers cards and removing one from the gathering leaves it on its board.
+Removes one or more cards from a scope. The cards themselves are not deleted. A scope
+gathers cards, and removing one from the gathering leaves it on its board.
 
 ```bash
 kozane scope remove-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
@@ -620,7 +622,7 @@ namespace's default partition is used. Without `--layer`, that namespace's defau
 When `--scope` is provided, card creation and scope membership are committed in one
 transaction.
 
-`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit —
+`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit,
 the same rules the HTTP API applies.
 
 Example:
@@ -656,7 +658,7 @@ cat foo.txt | kozane card squash --namespace eb155d6 --scope e3ee90b
 
 All generated cards and their optional scope memberships are committed in one
 transaction, so an error does not leave a partially created set. Every generated card
-is new, and is created and last-updated at the moment the command runs — the same moment
+is new, and is created and last-updated at the moment the command runs. That is the same moment
 for all of them, so `kozane card list --sort created` never splits one command's cards
 across a second.
 
@@ -685,7 +687,7 @@ A card reconsidered a month later
 
 Without the flag the output is the card's text and nothing else, so
 `kozane card show <cardId> > card.txt` writes the card rather than the card and a header.
-The same rules apply as in the listing: only a change to a card's text moves `updated`, and
+The same rules apply as in the listing. Only a change to a card's text moves `updated`, and
 a timestamp that names no moment reads `invalid`.
 
 ---
@@ -710,7 +712,7 @@ layer is stacked above the cards already there.
 ### `kozane card edit <cardId> <content>`
 
 Replaces a card's text outright. The card keeps its position, partition, layer, scope
-memberships, and glue group; only the text changes.
+memberships, and glue group. Only the text changes.
 
 ```bash
 kozane card edit <cardId> <content>
@@ -738,7 +740,7 @@ unglued from a group of itself. Output is the number of cards deleted and their 
 ### `kozane card move <cardId>`
 
 Moves a card to a position on its namespace's canvas. At least one of `--x` and `--y` is
-required; the axis not given is left where it was.
+required. The axis not given is left where it was.
 
 ```bash
 kozane card move <cardId> [--x <position>] [--y <position>]
@@ -760,12 +762,12 @@ kozane card partition 72ac1f8 3f9a2c1 e3ee90b
 ```
 
 The namespace is taken from the cards rather than from an option, and the partition is resolved
-within it — so a partition of another namespace is refused, as is a set of cards drawn from more
+within it, so a partition of another namespace is refused, as is a set of cards drawn from more
 than one namespace. Positions, layers, and scope memberships are untouched.
 
 ### `kozane card namespace <namespaceId> <cardIds>`
 
-Moves cards to another namespace, matching partition and layer _by name_ rather than by ID.
+Moves cards to another namespace, matching partition and layer by name rather than by ID.
 
 ```bash
 kozane card namespace <namespaceId> <cardIds...>
@@ -773,7 +775,7 @@ kozane card namespace eb155d6 3f9a2c1
 ```
 
 A card in a partition named `General` lands in the target namespace's `General`, and likewise for
-its layer; where the target has no partition or layer of that name, one is created. The source
+its layer. Where the target has no partition or layer of that name, one is created. The source
 namespace is taken from the cards, and they must all come from the same one.
 
 Moved cards leave their glue groups. A group spanning two namespaces is never drawn by the UI,
@@ -829,14 +831,14 @@ to every form of the command, the taskspace forms included:
 | `gap`     | Shortest interval between the two timestamps first. |
 
 Cards with equal values are ordered by ID. `--reverse` flips the whole listing, ties
-included, and is refused without `--sort` — there is no defined order to reverse.
+included, and is refused without `--sort`, because there is no defined order to reverse.
 
-**Only a change to a card's text counts as updating it.** Moving a card across the board,
+Only a change to a card's text counts as updating it. Moving a card across the board,
 resizing it, restacking it, or moving it to another partition or layer leaves both timestamps
 as they were. So `gap` measures how long a card stood before it was rewritten, not how
-recently it was rearranged; a card never edited since it was added has a gap of `0s`.
+recently it was rearranged. A card never edited since it was added has a gap of `0s`.
 
-`--sort` adds the value it ordered by as a column between the position and the text: an
+`--sort` adds the value it ordered by as a column between the position and the text. This is an
 ISO timestamp to the second for `created` and `updated`, and the interval in its largest
 whole unit for `gap` (`0s`, `45s`, `12m`, `3h`, `5d`). Without `--sort` the line is
 unchanged.
@@ -861,20 +863,20 @@ Cards created before this option existed carry the timestamp of the migration th
 the columns, so they read as never since edited until their text is next changed.
 
 A card whose column holds a value no date can be read from prints `invalid` in place of the
-timestamp or interval, and sorts after every card that does name a moment — first, rather
-than last, under `--reverse`. The rest of the listing prints as it would have. Only
+timestamp or interval, and sorts after every card that does name a moment. Under `--reverse` it sorts first
+instead. The rest of the listing prints as it would have. Only
 hand-written SQL can put such a value in the column, and `kozane doctor` reports it.
 
 Both timestamps are read by the CLI only. The board is not sent them and cannot order or
 display by them, and `kozane net ssg generate` output does not contain them.
 
-A card whose timestamps were never written — which only a hand-written `INSERT INTO card`
-naming neither column can produce — is reported by `kozane doctor` and lists as `1970`.
+A card whose timestamps were never written, which only a hand-written `INSERT INTO card`
+naming neither column can produce, is reported by `kozane doctor` and lists as `1970`.
 
 Squashing a card replaces it with one new card per piece, on the board and through
 `kozane card squash` alike. The pieces are created when the squash ran, not when the text
 was first written, so a card thought about for a month and then squashed leaves pieces that
-read as created today with a gap of `0s` — all of them at the one moment, however many
+read as created today with a gap of `0s`. All of them share the one moment, however many
 pieces there were.
 
 ---
@@ -907,7 +909,7 @@ kozane card glue 3f9a2c1 72ac1f8
 All the cards must belong to the same namespace, which is taken from the first ID given.
 
 By default the named cards become the group, and any group they were already in is left
-behind. `--add` instead expands the selection to whole groups first: naming one member of an
+behind. `--add` instead expands the selection to whole groups first. Naming one member of an
 existing group brings its fellow members along, and the result is the merge of every group
 touched. That is what makes `card glue --add` able to join two groups by naming one card
 from each.
@@ -916,14 +918,14 @@ from each.
 starting from the first card's position. Each card's height is estimated from its text and
 its drawn width, so the spacing follows what the board will actually show, and every
 position is clamped to the canvas bounds. Because `--add` decides the final set, the two
-options compose: the list is laid out over the expanded group.
+options compose, and the list is laid out over the expanded group.
 
 Output is the number of cards glued, the group's short ID, the short ID of each card, and a
 line for each option in force.
 
 ### `kozane card unglue <cardIds>`
 
-Removes one or more cards from their glue groups. The cards themselves are untouched — they
+Removes one or more cards from their glue groups. The cards themselves are untouched. They
 keep their text, position, partition, and layer, and simply stop moving with the group.
 
 ```bash
@@ -948,7 +950,7 @@ If the namespace has no warps, the command prints `No warps found.`
 
 ### `kozane warp add`
 
-Adds a warp — a saved place on the namespace's canvas — at a position.
+Adds a warp, which is a saved place on the namespace's canvas, at a position.
 
 ```bash
 kozane warp add [--namespace <namespaceId>] [--x <number>] [--y <number>]
@@ -956,7 +958,7 @@ kozane warp add --x 1200 --y 800
 ```
 
 The position is clamped to the workspace's canvas bounds, and the clamped position is what
-the command prints alongside the new warp's short ID. Warps carry no name: they are numbered
+the command prints alongside the new warp's short ID. Warps carry no name. They are numbered
 by creation order, which `warp list` prints.
 
 ### `kozane warp delete <warpId>`
@@ -980,7 +982,7 @@ Lists every tag in a namespace as a tree, with how many cards and files each one
 kozane tag list [--namespace <namespaceId>]
 ```
 
-A count is of distinct cards and files, not of occurrences: a card written
+A count is of distinct cards and files, not of occurrences. A card written
 `:perf:cache and :perf` is one card under `:perf`. A parent's count includes everything
 under it, so `:perf` counts what `:perf:cache` holds as well.
 
@@ -1001,7 +1003,7 @@ Note: notes was not read in full — some files were larger than the scan had bu
 A path ending in `/` is a directory that could not be listed rather than a file of that name.
 
 A taskspace whose directory is not there at all is reported apart from those, because it is
-not a taskspace that was read in part — the record points somewhere that has been deleted,
+not a taskspace that was read in part. The record points somewhere that has been deleted,
 moved, or made unreadable since it was written. The note names it and the command that
 settles it, once however many such records a gather meets:
 
@@ -1010,12 +1012,12 @@ Note: notes could not be read — its directory has been deleted, moved, or made
   Run `kozane taskspace scan --apply --cleanup` to drop the record.
 ```
 
-That command is the whole repair rather than only the cleanup: a taskspace that was _moved_
+That command is the whole repair rather than only the cleanup. A taskspace that was moved
 looks identical from here, and the same run re-points its record instead of dropping it.
 
 The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
 and re-read every file to reach the answer the first one reached. Nothing is trusted from it
-unchecked: card hits are used only while the database is byte-for-byte the one they came
+unchecked. Card hits are used only while the database is byte-for-byte the one they came
 from, and a file's tags only while that file's size and modification time are unchanged.
 Anything else is gathered again. Deleting the file costs one slow run.
 
@@ -1029,8 +1031,8 @@ Lists the cards and taskspace files under a tag, subcategories included.
 kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
-The tag may be given with or without its sigil — `kozane tag show perf` and
-`kozane tag show :perf` are the same request — since typing it the way it reads on a card is
+The tag may be given with or without its sigil, so `kozane tag show perf` and
+`kozane tag show :perf` are the same request. Typing it the way it reads on a card is
 as natural as typing it bare. `--no-files` lists cards alone and skips the disk walk entirely.
 
 Each card row carries its short ID, the tags it matched by, and its text. Each file row
@@ -1038,7 +1040,7 @@ carries the path and line, the tags matched, and the line the tag sits on. A car
 under two tags is one row naming both.
 
 File rows are grouped under the taskspace they were found in, because a path is relative to
-one and says nothing on its own — a namespace draws its own taskspaces and every unplaced one,
+one and says nothing on its own. A namespace draws its own taskspaces and every unplaced one,
 so two `README.md`s in one listing is an ordinary workspace rather than an unusual one. The
 browser's tag index heads its file rows the same way.
 
@@ -1181,9 +1183,9 @@ partition: 2
 card: 42
 ```
 
-A broken reference stops the import; a row past a limit does not. The difference is that a
+A broken reference stops the import, but a row past a limit does not. The difference is that a
 dangling foreign key is a dump that cannot become a database, while `ui.contentMax` and the
-canvas size are _settings_ — a dump exported from a workspace that set them differently has
+canvas size are settings. A dump exported from a workspace that set them differently has
 to remain restorable into one that did not, and refusing would mean a backup that cannot be
 restored because of a policy difference. So those rows are imported and reported:
 
@@ -1226,7 +1228,7 @@ Restored: .kozane/backups/kozane.20240101T120000.db
 ### `kozane taskspace list`
 
 Lists every taskspace in the workspace as `<id>  <name>  <namespace>  <scope>  <path>`, using
-collision-safe short IDs. This is the workspace-wide view: a board draws only its own
+collision-safe short IDs. This is the workspace-wide view. A board draws only its own
 namespace's taskspaces plus the unassigned ones, so a taskspace created from another namespace
 is visible here and nowhere else.
 
@@ -1237,7 +1239,7 @@ kozane taskspace list --namespace <namespaceId>
 
 `--namespace` narrows the list to what that namespace's board draws, which includes taskspaces
 with no namespace of their own. An em dash in the namespace or scope column is a real state
-rather than missing data: an unassigned taskspace appears on every board, and an unscoped
+rather than missing data. An unassigned taskspace appears on every board, and an unscoped
 one gathers no cards. Short IDs are always computed against every taskspace in the
 workspace, so an ID printed here is the same one whether or not the list was narrowed.
 
@@ -1410,7 +1412,7 @@ falls back to its default. Two shortcuts bound to the same key are kept, so both
 still happen, and the pair is reported as a warning.
 
 `ui.defaultCardWidth` is what a card is drawn at until it is resized on the board. A card
-resized there keeps a width of its own and stops following the setting; every other card
+resized there keeps a width of its own and stops following the setting. Every other card
 goes on tracking it. Both are held to the same 40–1200 range.
 
 `ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
@@ -1418,15 +1420,15 @@ inside them. A card or a warp written past the edge is clamped to it, and the re
 reports the position as stored rather than as sent.
 
 `ui.contentMax` is how much text one card may hold, within a 100–1000000 range. It counts
-UTF-16 code units, the way `String.length` does: a CJK character is one, an emoji past the
-BMP is two. Both writers enforce it: the card endpoints answer `400`, and `kozane card add`
+UTF-16 code units, the way `String.length` does, so a CJK character is one and an emoji past the
+BMP is two. Both writers enforce it. The card endpoints answer `400`, and `kozane card add`
 and `kozane card squash` exit non-zero without writing anything. `card squash` holds each
-segment to it separately and names the one that was too long. Raising it is not free —
+segment to it separately and names the one that was too long. Raising it has a cost, because
 the board's once-a-second poll carries every card's whole text.
 
 The HTTP body ceiling is sized from it at startup, so a card the endpoint would accept is
 never refused by the transport first. Set `BODY_SIZE_LIMIT` to override that, in the
-adapter's own notation (`512K`, `2M`); a workspace that sets neither gets room for one card
+adapter's own notation (`512K`, `2M`). A workspace that sets neither gets room for one card
 of `ui.contentMax` at the worst byte cost an escaped character can reach.
 
 ---

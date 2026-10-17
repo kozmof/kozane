@@ -356,7 +356,7 @@
       // An answer that is not a list of rows is treated as no answer at all.
       if (parsed) warpDirectory = parsed;
     } catch {
-      // The copy that came with the page stays: a stale list beats an empty one.
+      // Keep the copy that came with the page, because a stale list beats an empty one.
     }
   }
 

@@ -160,7 +160,7 @@ export function claimServerState(
       try {
         if (existsSync(path) && readFileSync(path, "utf8") === previousContents) unlinkSync(path);
       } catch {
-        // Another process changed the reservation; retry the exclusive create.
+        // Another process changed the reservation, so retry the exclusive create.
       }
     }
   }

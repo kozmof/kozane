@@ -65,7 +65,7 @@
     : "0 0.5px 1.5px rgba(0,0,0,0.018)"}
   onmousedown={(e) => {
     // The canvas below starts a pan on mousedown, and a shift-drag draws a selection
-    // rectangle. Pressing a marker means neither: it focuses the warp, and may go on to
+    // rectangle. Pressing a marker means neither. It focuses the warp, and may go on to
     // drag it somewhere else.
     e.stopPropagation();
     e.preventDefault();

@@ -99,7 +99,7 @@
     style:color={focused ? "var(--colors-ink-light)" : "var(--colors-neutral-secondary)"}
     style:border-color={accent}
     onmousedown={(e) => {
-      // Same reason `WarpMarker` does this: the canvas underneath starts a pan on mousedown
+      // `WarpMarker` does this for the same reason. The canvas underneath starts a pan on mousedown
       // and a marquee on shift-mousedown, and a press on the tab means neither.
       e.stopPropagation();
       e.preventDefault();
@@ -138,7 +138,7 @@
       style:pointer-events="auto"
       style:color={focused ? accent : "var(--colors-neutral-secondary)"}
       onmousedown={(e) => {
-        // The tab beside this one arms a drag on mousedown; this must not.
+        // The tab beside this one arms a drag on mousedown, but this must not.
         e.stopPropagation();
         e.preventDefault();
       }}

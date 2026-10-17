@@ -225,7 +225,7 @@ export async function dbRestore(file?: string): Promise<void> {
       const safety = await backupDb(workspaceRoot);
       console.log(`Current database backed up: ${safety}`);
     } catch {
-      // current db may be corrupted; proceed anyway
+      // The current db may be corrupted, so proceed anyway.
     }
   }
 

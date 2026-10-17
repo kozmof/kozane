@@ -309,8 +309,8 @@
         display: "flex",
         gap: "10px",
         marginLeft: "auto",
-        // Sideways rather than onto a second line — see `MAP_HEADER_HEIGHT`. A workspace of
-        // thirty namespaces scrolls its list; it does not take a second band off the map.
+        // Scroll sideways rather than wrap onto a second line. See `MAP_HEADER_HEIGHT`. A workspace
+        // of thirty namespaces scrolls its list instead of taking a second band off the map.
         overflowX: "auto",
         whiteSpace: "nowrap",
         scrollbarWidth: "none",
@@ -359,8 +359,8 @@
         class={css({
           position: "absolute",
           inset: "0",
-          // Zoomed in, the packing is larger than the window. Clipped to it rather than
-          // drawn past the edges — and it is the bottom of the stack, so the header and the
+          // Zoomed in, the packing is larger than the window. Clip it to the window rather than
+          // drawing past the edges. It is the bottom of the stack, so the header and the
           // panel are over it rather than under.
           overflow: "hidden",
           touchAction: "none",

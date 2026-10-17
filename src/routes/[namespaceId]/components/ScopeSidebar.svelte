@@ -302,7 +302,7 @@
               color: allInScope ? "ink.secondary" : "ink.light",
               border: "none",
               // Both blocks are dark once the scope is focused, so the usual dim rule would
-              // read as a bright bar between them; the seam only has to out-light both fills.
+              // read as a bright bar between them. The seam only has to out-light both fills.
               borderTop: active ? "1px solid token(colors.neutral.muted)" : "1px solid token(colors.neutral.dim)",
               cursor: "pointer",
               fontSize: "11px",

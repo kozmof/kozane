@@ -215,7 +215,7 @@
   role="presentation"
   onmouseenter={() => {
     hovering = true;
-    // Arrived: whatever corridor was being watched has served its purpose.
+    // The pointer arrived, so whatever corridor was being watched has served its purpose.
     safeArea = null;
   }}
   onmouseleave={leaveControl}

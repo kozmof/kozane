@@ -48,7 +48,7 @@ describe("EditorSurface", () => {
   });
 
   it("draws the cursor after each new character using the updated line DOM", async () => {
-    // jsdom has no layout: measure the actual range length at ten pixels per column.
+    // jsdom has no layout, so measure the actual range length at ten pixels per column.
     Object.defineProperty(Range.prototype, "getBoundingClientRect", {
       configurable: true,
       value() {

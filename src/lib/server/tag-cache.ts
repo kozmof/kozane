@@ -174,7 +174,7 @@ export function writeTagCache(root: string, cache: TagCache): void {
     writeFileAtomic(tagCachePath(root), serialized);
   } catch {
     // Ignored: see above. `JSON.stringify` is inside the try for the same reason the write
-    // is — a gather large enough to exceed the engine's maximum string length throws here,
+    // is. A gather large enough to exceed the engine's maximum string length throws here,
     // and that is a cache that cannot be written, not a page that cannot be served.
   }
 }
