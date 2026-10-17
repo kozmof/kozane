@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDB } from "../../test-utils/db.js";
+import { createTestDB, seedCards, SQLITE_VARIABLE_MAX } from "../../test-utils/db.js";
 import {
   createCardFromTaskspace,
   deleteNamespaceCards,
@@ -103,6 +103,21 @@ describe("deleteNamespaceCards", () => {
     const remaining = await getGlueRelsByCards({ db, cardIds: [c2, c3] });
     expect(remaining).toHaveLength(2);
     expect(remaining.every((rel) => rel.glueId === glueId)).toBe(true);
+  });
+
+  it("deletes more cards than one statement could name", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const layerId = (await getDefaultLayer({ db, namespaceId }))!.id;
+    const cardIds = await seedCards(db, {
+      partitionId,
+      layerId,
+      count: SQLITE_VARIABLE_MAX + 1,
+    });
+
+    await expect(deleteNamespaceCards({ db, namespaceId, cardIds })).resolves.toEqual({
+      ok: true,
+    });
+    expect(await getAllCards({ db, partitionId })).toEqual([]);
   });
 });
 
@@ -622,6 +637,40 @@ describe("squashNamespaceCard", () => {
     }
     // In the order the text reads, above whatever the source sat above.
     expect(result.cards.map(({ zIndex }) => zIndex)).toEqual([4, 5]);
+  });
+
+  it("raises cards above the source so no piece ties with or passes them", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const layerId = (await getDefaultLayer({ db, namespaceId }))!.id;
+    const cardId = await addCard({
+      db,
+      partitionId,
+      layerId,
+      content: "One. Two. Three",
+      zIndex: 4,
+    });
+    const below = await addCard({ db, partitionId, layerId, content: "Below", zIndex: 3 });
+    const above = await addCard({ db, partitionId, layerId, content: "Above", zIndex: 5 });
+    const otherLayer = await addLayer({ db, namespaceId, name: "Other" });
+    const elsewhere = await addCard({
+      db,
+      partitionId,
+      layerId: otherLayer.id,
+      content: "Elsewhere",
+      zIndex: 5,
+    });
+
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.cards.map(({ zIndex }) => zIndex)).toEqual([4, 5, 6]);
+    expect(result.stacking).toEqual([{ cardId: above, zIndex: 7 }]);
+    const zIndexOf = async (id: string) =>
+      (await db.select().from(cardTable).where(eq(cardTable.id, id)).get())?.zIndex;
+    expect(await zIndexOf(above)).toBe(7);
+    expect(await zIndexOf(below)).toBe(3);
+    expect(await zIndexOf(elsewhere)).toBe(5);
   });
 
   /** Give the pieces new shared timestamps rather than copying the source card's history. */

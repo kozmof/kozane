@@ -192,8 +192,10 @@ The split pattern is the server's own, the same one `kozane card squash` uses. I
 deliberately not a request field, because an arbitrary regular expression from a body is a cost this
 endpoint has no reason to take on.
 
-Answers `{ cards: [...] }` as whole rows, positions laid out and clamped, each with
-`glueId: null`, so the pieces start unglued.
+Answers `{ cards: [...], stacking: [{ cardId, zIndex }] }`. `cards` are whole rows, positions
+laid out and clamped, each with `glueId: null`, so the pieces start unglued. The pieces take
+consecutive `zIndex` values from the original's, and `stacking` lists the cards above it on
+its layer, raised to make room.
 
 `400` when the card is not this namespace's, when its text does not split into more than one
 card, or when it splits into more than 2,000.
@@ -205,7 +207,9 @@ card, or when it splits into more than 2,000.
 ### `POST /[namespaceId]/api/glues`
 
 Glues cards into one group, so a drag of any of them moves all. Body: `cardIds`, at least
-two. Answers `{ glueId }`. Cards already in other groups are moved into this one.
+two. Answers `{ glueId, clearedCardIds }`. Cards already in other groups are moved into this
+one. A group left with one member is dissolved, and `clearedCardIds` names those leftover
+cards so the board can clear them.
 
 `400` when fewer than two ids are named, or when any is not this namespace's.
 

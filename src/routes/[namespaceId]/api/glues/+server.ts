@@ -12,7 +12,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
   const result = await glueNamespaceCards({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
-  return json({ glueId: result.glueId });
+  return json({ glueId: result.glueId, clearedCardIds: result.clearedCardIds });
 };
 
 export const DELETE: RequestHandler = async ({ locals, params, request }) => {

@@ -16,6 +16,7 @@ import {
   getCardPartitionNames,
   getCardLayerNames,
   reassignCardsToLayerInTx,
+  type CardStacking,
 } from "./card.js";
 import {
   deletePartition,
@@ -35,7 +36,7 @@ import {
   columnCount,
   type CardBatchResult,
 } from "./utils.js";
-import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
 import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
@@ -111,7 +112,8 @@ export async function deleteNamespaceCards({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds: uniqueIds });
     if (!owned.ok) return owned;
     await unglueCardsInTx({ db: tx, cardIds: uniqueIds });
-    await tx.delete(cardTable).where(inArray(cardTable.id, uniqueIds));
+    for (const batch of chunked(uniqueIds, { size: BATCH_MAX }))
+      await tx.delete(cardTable).where(inArray(cardTable.id, batch));
     return { ok: true };
   });
 }
@@ -126,7 +128,12 @@ type SquashNamespaceCard = {
 
 export type SquashCardResult =
   | { ok: false; reason: "not-found" | "indivisible" | "too-many" }
-  | { ok: true; cards: Card[] };
+  | {
+      ok: true;
+      cards: Card[];
+      /** Cards on the source's layer raised to make room for the pieces. */
+      stacking: CardStacking[];
+    };
 
 /**
  * Replace a card with one card per text segment in a single transaction. Pieces inherit the
@@ -135,6 +142,10 @@ export type SquashCardResult =
  *
  * Reject a single segment to avoid replacing a card without changing its text. Remove the
  * source from its glue group and leave the new pieces unglued.
+ *
+ * The pieces take consecutive zIndex values from the source's. Cards above the source on its
+ * layer are raised by the extra count so no piece ties with, or rises past, a card that sat
+ * above the source.
  */
 export async function squashNamespaceCard({
   db,
@@ -181,6 +192,13 @@ export async function squashNamespaceCard({
       { origin: { posX: source.posX, posY: source.posY }, canvasWidth },
     );
 
+    const extra = contents.length - 1;
+    const stacking = await tx
+      .update(cardTable)
+      .set({ zIndex: sql`${cardTable.zIndex} + ${extra}` })
+      .where(and(eq(cardTable.layerId, source.layerId), gt(cardTable.zIndex, source.zIndex)))
+      .returning({ cardId: cardTable.id, zIndex: cardTable.zIndex });
+
     const cards: Card[] = [];
     // Use one timestamp for every piece, as `addCards` does for CLI squash. See {@link
     // newCardStamps}.
@@ -215,7 +233,7 @@ export async function squashNamespaceCard({
     await unglueCardsInTx({ db: tx, cardIds: [cardId] });
     await tx.delete(cardTable).where(eq(cardTable.id, cardId));
 
-    return { ok: true, cards };
+    return { ok: true, cards, stacking };
   });
 }
 
@@ -278,9 +296,10 @@ export async function moveCardsToNamespace({
   db,
   sourceNamespaceId,
   targetNamespaceId,
-  cardIds,
+  cardIds: requestedIds,
 }: MoveCardsToNamespace): Promise<CardBatchResult> {
-  if (cardIds.length === 0) return { ok: true };
+  if (requestedIds.length === 0) return { ok: true };
+  const cardIds = [...new Set(requestedIds)];
   return withTx(db, async (tx) => {
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId: sourceNamespaceId, cardIds });
     if (!owned.ok) return owned;
@@ -291,7 +310,8 @@ export async function moveCardsToNamespace({
       targets: await getAllPartitions({ db: tx, namespaceId: targetNamespaceId }),
       create: (name) => addPartition({ db: tx, namespaceId: targetNamespaceId, name }),
       assign: async (partitionId, ids) => {
-        await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, ids));
+        for (const batch of chunked(ids, { size: BATCH_MAX }))
+          await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, batch));
       },
     });
 
@@ -322,7 +342,7 @@ export async function moveCardsToNamespace({
           ne(taskspaceTable.namespaceId, targetNamespaceId),
         ),
       );
-    for (const batch of chunked([...new Set(cardIds)], { size: BATCH_MAX }))
+    for (const batch of chunked(cardIds, { size: BATCH_MAX }))
       await tx
         .update(cardTable)
         .set({ taskspaceId: null })

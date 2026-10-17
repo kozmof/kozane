@@ -10,7 +10,13 @@ import type { DB } from "../tx.js";
 import { addNamespace } from "./namespace.js";
 import { addPartition } from "./partition.js";
 import { addCard } from "./card.js";
-import { getGlueRelsByCards, getGlueRelsByNamespace, glueCards, unglueCards } from "./glue.js";
+import {
+  getGlueRelsByCards,
+  getGlueRelsByNamespace,
+  glueCards,
+  glueNamespaceCards,
+  unglueCards,
+} from "./glue.js";
 import { glueTable } from "../schema.js";
 import { INSERT_CHUNK_MAX } from "../../lib/constants.js";
 import { addLayer } from "./layer.js";
@@ -79,6 +85,31 @@ describe("glueCards", () => {
     const rels = await getGlueRelsByCards({ db, cardIds: [cardB, cardC] });
     expect(rels.every((rel) => rel.glueId === newGlueId)).toBe(true);
     expect(await db.select().from(glueTable).where(eq(glueTable.id, oldGlueId))).toEqual([]);
+  });
+});
+
+describe("glueNamespaceCards", () => {
+  it("names the leftover members of groups it dissolved", async () => {
+    const db = await createTestDB();
+    const { namespaceId, cardIds } = await namespaceWithCards(db, "P", 3);
+    const [cardA, cardB, cardC] = cardIds;
+    await glueCards({ db, cardIds: [cardA, cardB] });
+
+    const result = await glueNamespaceCards({ db, namespaceId, cardIds: [cardA, cardC] });
+
+    expect(result).toEqual({ ok: true, glueId: expect.any(String), clearedCardIds: [cardB] });
+    expect(await getGlueRelsByCards({ db, cardIds: [cardB] })).toEqual([]);
+  });
+
+  it("names no cards when every old group survives", async () => {
+    const db = await createTestDB();
+    const { namespaceId, cardIds } = await namespaceWithCards(db, "P", 4);
+    const [cardA, cardB, cardC, cardD] = cardIds;
+    await glueCards({ db, cardIds: [cardA, cardB, cardC] });
+
+    const result = await glueNamespaceCards({ db, namespaceId, cardIds: [cardA, cardD] });
+
+    expect(result.ok && result.clearedCardIds).toEqual([]);
   });
 });
 
@@ -200,5 +231,16 @@ describe("getGlueRelsByNamespace", () => {
 
     await expect(getGlueRelsByCards({ db, cardIds }).catch(isTooManyVariables)).resolves.toBe(true);
     await expect(getGlueRelsByNamespace({ db, namespaceId })).resolves.toHaveLength(2);
+  });
+
+  it("glues and unglues more cards than one statement could name", async () => {
+    const db = await createTestDB();
+    const { cardIds } = await namespaceWithCards(db, "big", SQLITE_VARIABLE_MAX + 1);
+
+    const glueId = await glueCards({ db, cardIds });
+    const cleared = await unglueCards({ db, cardIds });
+
+    expect(cleared).toHaveLength(cardIds.length);
+    expect(await db.select().from(glueTable).where(eq(glueTable.id, glueId))).toEqual([]);
   });
 });

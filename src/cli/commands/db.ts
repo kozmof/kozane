@@ -73,6 +73,15 @@ export async function dbMigrate(): Promise<void> {
     process.exit(1);
   }
 
+  // A running server checks migrations once and then trusts the schema for the rest of its
+  // life, so migrating underneath it would leave it querying a schema it was not built for.
+  const server = activeServerProcess(workspaceRoot);
+  if (server) {
+    console.error(`Refusing to migrate while Kozane server process ${server.pid} is running.`);
+    console.error("Stop the server, then run the migration again.");
+    process.exit(1);
+  }
+
   let backupPath: string;
   try {
     backupPath = await backupDb(workspaceRoot);

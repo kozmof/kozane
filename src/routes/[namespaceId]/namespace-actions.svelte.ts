@@ -102,17 +102,22 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError("Failed to glue cards");
       return;
     }
-    const glueId = readString(await res.json().catch(() => null), "glueId");
+    const parsed = await res.json().catch(() => null);
+    const glueId = readString(parsed, "glueId");
     if (glueId === undefined) {
       state.setError("Failed to glue cards");
       return;
     }
+    // Leftover members of groups this glue emptied. A missing list leaves them to the next poll.
+    const cleared = new Set(readStringArray(parsed, "clearedCardIds") ?? []);
     const glued = new Set(cardIds);
     state.glueRels = [
-      ...state.glueRels.filter((r) => !glued.has(r.cardId)),
+      ...state.glueRels.filter((r) => !glued.has(r.cardId) && !cleared.has(r.cardId)),
       ...cardIds.map((cardId) => ({ glueId, cardId })),
     ];
-    state.cards = state.cards.map((c) => (glued.has(c.id) ? { ...c, glueId } : c));
+    state.cards = state.cards.map((c) =>
+      glued.has(c.id) ? { ...c, glueId } : cleared.has(c.id) ? { ...c, glueId: null } : c,
+    );
   }
 
   async function unglue(cardIds: string[], errorMsg: string) {
@@ -190,12 +195,23 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError(await api.failureMessage(res, "Failed to squash card"));
       return;
     }
-    const cards = api.parseCards(await res.json().catch(() => null));
+    const parsed = await res.json().catch(() => null);
+    const cards = api.parseCards(parsed);
     if (!cards) {
       state.setError("Failed to squash card");
       return;
     }
-    state.cards = [...state.cards.filter((c) => c.id !== cardId), ...cards];
+    // Cards above the original were raised to make room for the pieces.
+    const zIndexByCardId = readStacking(parsed);
+    state.cards = [
+      ...state.cards
+        .filter((c) => c.id !== cardId)
+        .map((c) => {
+          const zIndex = zIndexByCardId.get(c.id);
+          return zIndex === undefined ? c : { ...c, zIndex };
+        }),
+      ...cards,
+    ];
     state.glueRels = state.glueRels.filter((r) => r.cardId !== cardId);
     // The pieces inherit the card's scope memberships server-side, so the sidebar's counts
     // follow them here rather than waiting a poll to catch up.

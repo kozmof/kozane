@@ -3,8 +3,8 @@ import { count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsBelongToNamespace } from "./card.js";
-import { chunked } from "../../lib/constants.js";
-import { columnCount, type BatchResult } from "./utils.js";
+import { BATCH_MAX, chunked } from "../../lib/constants.js";
+import { columnCount, readByIds, type BatchResult } from "./utils.js";
 
 /**
  * Read glue relations for a bounded selection of cards. Callers must keep the selection
@@ -13,7 +13,10 @@ import { columnCount, type BatchResult } from "./utils.js";
  * Use {@link getGlueRelsByNamespace} for a complete board. This function deliberately does
  * not batch large selections because polling a board that way would require repeated queries.
  */
-export async function getGlueRelsByCards({ db, cardIds }: NeedsDB & { cardIds: string[] }) {
+export async function getGlueRelsByCards({
+  db,
+  cardIds,
+}: NeedsDB & { cardIds: string[] }): Promise<GlueRel[]> {
   if (cardIds.length === 0) return [];
   return db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
 }
@@ -49,12 +52,14 @@ async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<
   if (affectedGlueIds.length === 0) return [];
 
   // Count surviving groups and subtract from the original count. HAVING cannot find groups
-  // with no remaining rows.
-  const memberCounts = await db
-    .select({ glueId: glueRelTable.glueId, members: count() })
-    .from(glueRelTable)
-    .where(inArray(glueRelTable.glueId, affectedGlueIds))
-    .groupBy(glueRelTable.glueId);
+  // with no remaining rows. Each batch holds whole groups, so its counts are complete.
+  const memberCounts = await readByIds(affectedGlueIds, (batch) =>
+    db
+      .select({ glueId: glueRelTable.glueId, members: count() })
+      .from(glueRelTable)
+      .where(inArray(glueRelTable.glueId, batch))
+      .groupBy(glueRelTable.glueId),
+  );
 
   const survivors = new Set(
     memberCounts.filter(({ members }) => members > 1).map(({ glueId }) => glueId),
@@ -64,33 +69,53 @@ async function dissolveOrphanGroups(db: Tx, affectedGlueIds: string[]): Promise<
   if (orphanGlueIds.length === 0) return [];
 
   // Collect lone members before deleting so callers know which cards were cleared.
-  const loneRels = await db
-    .select({ cardId: glueRelTable.cardId })
-    .from(glueRelTable)
-    .where(inArray(glueRelTable.glueId, orphanGlueIds));
+  const loneRels = await readByIds(orphanGlueIds, (batch) =>
+    db
+      .select({ cardId: glueRelTable.cardId })
+      .from(glueRelTable)
+      .where(inArray(glueRelTable.glueId, batch)),
+  );
 
-  await db.delete(glueRelTable).where(inArray(glueRelTable.glueId, orphanGlueIds));
-  await db.delete(glueTable).where(inArray(glueTable.id, orphanGlueIds));
+  for (const batch of chunked(orphanGlueIds, { size: BATCH_MAX })) {
+    await db.delete(glueRelTable).where(inArray(glueRelTable.glueId, batch));
+    await db.delete(glueTable).where(inArray(glueTable.id, batch));
+  }
 
   return loneRels.map((r) => r.cardId);
 }
 
-async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
+/**
+ * Remove cards from their groups, then dissolve groups left with fewer than two cards. Return
+ * the lone cards of those dissolved groups, which may include cards outside `cardIds`.
+ */
+async function detachCards(db: Tx, cardIds: string[]): Promise<string[]> {
+  const existingRels = await readByIds(cardIds, (batch) =>
+    db.select().from(glueRelTable).where(inArray(glueRelTable.cardId, batch)),
+  );
+
+  const affectedGlueIds = [...new Set(existingRels.map((r) => r.glueId))];
+
+  for (const batch of chunked(cardIds, { size: BATCH_MAX }))
+    await db.delete(glueRelTable).where(inArray(glueRelTable.cardId, batch));
+
+  return dissolveOrphanGroups(db, affectedGlueIds);
+}
+
+/**
+ * A new group, plus the cards outside it that gluing left ungrouped by emptying their old
+ * groups. Clients clear `clearedCardIds` so a dissolved group does not linger until the next
+ * poll.
+ */
+type GlueOutcome = { glueId: string; clearedCardIds: string[] };
+
+async function glueCardsCore(db: Tx, cardIds: string[]): Promise<GlueOutcome> {
   if (cardIds.length < 2) throw new Error("glueCards requires at least 2 cards");
   if (new Set(cardIds).size !== cardIds.length)
     throw new Error("glueCards: cardIds must be unique");
 
-  const existingRels = await db
-    .select()
-    .from(glueRelTable)
-    .where(inArray(glueRelTable.cardId, cardIds));
-
-  const affectedGlueIds = [...new Set(existingRels.map((r) => r.glueId))];
-
   // Remove selected cards from their existing groups.
-  await db.delete(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
-
-  await dissolveOrphanGroups(db, affectedGlueIds);
+  const glued = new Set(cardIds);
+  const clearedCardIds = (await detachCards(db, cardIds)).filter((id) => !glued.has(id));
 
   // Create a new glue group for all specified cards.
   const [{ id: newGlueId }] = await db.insert(glueTable).values({}).returning({ id: glueTable.id });
@@ -98,27 +123,18 @@ async function glueCardsCore(db: Tx, cardIds: string[]): Promise<string> {
   for (const batch of chunked(cardIds, { columnsPerRow: columnCount(glueRelTable) }))
     await db.insert(glueRelTable).values(batch.map((cardId) => ({ glueId: newGlueId, cardId })));
 
-  return newGlueId;
+  return { glueId: newGlueId, clearedCardIds };
 }
 
 async function unglueCardsCore(db: Tx, cardIds: string[]): Promise<string[]> {
-  const existingRels = await db
-    .select()
-    .from(glueRelTable)
-    .where(inArray(glueRelTable.cardId, cardIds));
-
-  const affectedGlueIds = [...new Set(existingRels.map((r) => r.glueId))];
-
-  await db.delete(glueRelTable).where(inArray(glueRelTable.cardId, cardIds));
-
-  const dissolvedCardIds = await dissolveOrphanGroups(db, affectedGlueIds);
+  const dissolvedCardIds = await detachCards(db, cardIds);
 
   return [...new Set([...cardIds, ...dissolvedCardIds])];
 }
 
 type GlueCards = { db: DB; cardIds: string[] };
 export async function glueCards({ db, cardIds }: GlueCards): Promise<string> {
-  return withTx(db, (tx) => glueCardsCore(tx, cardIds));
+  return withTx(db, async (tx) => (await glueCardsCore(tx, cardIds)).glueId);
 }
 
 type UnglueCards = { db: DB; cardIds: string[] };
@@ -127,7 +143,10 @@ export async function unglueCards({ db, cardIds }: UnglueCards): Promise<string[
   return withTx(db, (tx) => unglueCardsCore(tx, cardIds));
 }
 
-/** Dissolves all glue groups containing any of the given cards. Runs inside an existing transaction. */
+/**
+ * Remove the given cards from their glue groups and dissolve groups left with fewer than two
+ * cards. Runs inside an existing transaction.
+ */
 export async function unglueCardsInTx({
   db,
   cardIds,
@@ -142,7 +161,7 @@ type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
  * Return the new group ID or a specific refusal reason. Share the result vocabulary with
  * {@link CardBatchResult} so routes can use the same error helper.
  */
-export type GlueResult = BatchResult<"foreign-cards", { glueId: string }>;
+export type GlueResult = BatchResult<"foreign-cards", GlueOutcome>;
 
 /** Glues cards together after verifying all belong to namespaceId. */
 export async function glueNamespaceCards({
@@ -153,7 +172,7 @@ export async function glueNamespaceCards({
   return withTx(db, async (tx) => {
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
-    return { ok: true, glueId: await glueCardsCore(tx, cardIds) };
+    return { ok: true, ...(await glueCardsCore(tx, cardIds)) };
   });
 }
 

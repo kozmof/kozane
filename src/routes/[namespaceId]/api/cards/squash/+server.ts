@@ -29,8 +29,9 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (!result.ok) throw error(400, FAILURE_MESSAGE[result.reason]);
 
   // Return full stored rows so clients use the positions laid out and clamped here. The
-  // pieces start unglued.
+  // pieces start unglued. `stacking` names the cards raised above them.
   return json({
     cards: result.cards.map((card) => ({ ...card, glueId: null }) satisfies CardWithGlue),
+    stacking: result.stacking,
   });
 };

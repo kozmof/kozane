@@ -1104,9 +1104,11 @@ Behavior:
 
 1. Checks migration status and exits early if already current.
 2. Exits with an error if the database file is missing, or status is unknown or gapped.
-3. Creates a timestamped backup in `.kozane/backups/` before migrating.
-4. Runs Drizzle migrations.
-5. Reports the new status.
+3. Exits with an error while a Kozane server is serving the workspace. The server checks
+   migrations only until they are current, so it must be stopped before the schema changes.
+4. Creates a timestamped backup in `.kozane/backups/` before migrating.
+5. Runs Drizzle migrations.
+6. Reports the new status.
 
 Output:
 

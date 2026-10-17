@@ -131,6 +131,27 @@ describe("additional database CLI branches", () => {
     expect(output).toContain("Status  : current");
   }, 30_000);
 
+  it("refuses to migrate while an active server process is recorded", async () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const dbPath = join(root, ".kozane", "kozane.db");
+    const client = createClient({ url: `file:${dbPath}` });
+    try {
+      await client.batch(ROLLBACK_TO_0004, "write");
+    } finally {
+      client.close();
+    }
+    writeServerState(root, process.pid);
+
+    const result = runCli(root, "db", "migrate");
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain(
+      `Refusing to migrate while Kozane server process ${process.pid} is running`,
+    );
+    expect(existsSync(join(root, ".kozane", "backups"))).toBe(false);
+  }, 30_000);
+
   it("keeps glue and scope rows when the layer migration rebuilds the card table", async () => {
     const root = tempWorkspace();
     cli(root, "init");
