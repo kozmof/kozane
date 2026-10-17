@@ -17,8 +17,8 @@
 
 ### What every workspace command does first
 
-`namespace`, `card`, `layer`, `scope`, `taskspace` and `status` all open the workspace the
-same way, and it is the same three steps every time.
+`namespace`, `partition`, `card`, `layer`, `scope`, `warp`, `tag`, `taskspace` and `status`
+all open the workspace the same way, and it is the same three steps every time.
 
 1. Find the workspace, walking up from the current directory. Without one, the command
    exits 1 with `No Kozane workspace found. Run "kozane init" first.`
@@ -49,10 +49,10 @@ kozane init
 Behavior:
 
 1. Refuses if `.kozane/` already exists.
-2. Creates `.kozane/`.
+2. Creates `.kozane/` with a `.gitignore` that excludes the whole directory.
 3. Writes `.kozane/config.json` with defaults (workspace name = current directory name).
 4. Runs Drizzle migrations to create `.kozane/kozane.db`.
-5. Creates a namespace named `main`, marks it as the workspace default, and creates its default `General` partition.
+5. Creates a namespace named `main`, marks it as the workspace default, and creates its default `General` partition and `Base` layer.
 
 Output:
 
@@ -171,15 +171,21 @@ any static host. The export carries a full snapshot of the database and has no s
 every write operation is disabled in it.
 
 ```bash
-kozane net ssg generate [--out <dir>] [--base <path>]
+kozane net ssg generate [--out <dir>] [--base <path>] [--include-scoped-files]
 ```
 
 Options:
 
-| Flag            | Default   | Description                                                |
-| --------------- | --------- | ---------------------------------------------------------- |
-| `--out <dir>`   | `./site`  | Output directory, emptied and rewritten on each run        |
-| `--base <path>` | site root | Base path when hosted under a subdirectory, e.g. `/kozane` |
+| Flag                     | Default   | Description                                                      |
+| ------------------------ | --------- | ---------------------------------------------------------------- |
+| `--out <dir>`            | `./site`  | Output directory, emptied and rewritten on each run              |
+| `--base <path>`          | site root | Base path when hosted under a subdirectory, e.g. `/kozane`       |
+| `--include-scoped-files` | false     | Also export scopes, taskspace names, and a copy of their files   |
+
+Without `--include-scoped-files`, the export carries no scopes, taskspaces, or files. With it,
+only taskspaces that belong to a scope are exported, and their real file contents become
+public. See the [Security matrix](../docs/security-matrix.md#static-export-ssg) for the limits
+and what stays out.
 
 Requires migrations to be current, and requires the source build toolchain, so run it from
 a cloned repository after `pnpm install`. The output directory gets a `.nojekyll` file so
@@ -209,7 +215,7 @@ Exits with an error if the directory holds no `index.html`.
 
 ### `kozane doctor`
 
-Checks the Kozane namespace environment and reports health.
+Checks the Kozane workspace and reports its health.
 
 ```bash
 kozane doctor
@@ -405,7 +411,7 @@ kozane namespace create <name>
 Behavior:
 
 1. Requires a Kozane workspace (walks up from CWD).
-2. Requires the database to be current, as every workspace command does (see below).
+2. Requires the database to be current, as every workspace command does (see above).
 3. Inserts a `namespace` DB record → gets a stable UUID.
 4. Creates a default "General" partition and a default "Base" layer for the namespace.
 
@@ -436,7 +442,7 @@ kozane namespace default <id>
 
 ### `kozane namespace delete <id>`
 
-Deletes a namespace by ID (cascade-deletes its partitions and cards). If it was the default, another remaining namespace is promoted automatically.
+Deletes a namespace by full or short ID. Its partitions, cards, layers, warps, scope frames, and taskspace records are deleted with it. Scopes and taskspace directories on disk are kept. If it was the default, another remaining namespace is promoted automatically.
 
 ```bash
 kozane namespace delete <id>
@@ -1132,12 +1138,10 @@ Behavior:
 
 - Requires migrations to be current.
 - Writes to `file` if given, otherwise prints to stdout.
-- Writes export format version 6. Older files can still be imported. Version 2
-  (exported before namespaces had a default flag) comes back with every namespace
-  non-default, version 3 (before layers) gets a rebuilt default layer per namespace,
-  version 4 (before warps) comes back with no warps, and version 5 (before the
-  card timestamps) comes back with every card created at the moment of the import
-  and never since edited.
+- Writes export format version 8. `kozane db import` also accepts version 7, which
+  predates scope frames and comes back with none. Versions before 7 use the old
+  `project` and `bundle` table names and are refused. Import one with Kozane 0.10 or
+  earlier, then run `kozane db migrate`, which renames the tables in place.
 
 Output (to file):
 
@@ -1456,7 +1460,7 @@ Renaming or moving the directory does not change the taskspace's identity, and
 
 ---
 
-## Namespace detection
+## Workspace detection
 
 Any command that needs a workspace (all except `init`) walks up from `process.cwd()`
 looking for `.kozane/config.json`. This allows running commands from any
@@ -1507,11 +1511,11 @@ taskspaces placed anywhere on the filesystem.
 
 ## Collision handling (taskspace scan)
 
-| Situation                                  | Behavior                                               |
-| ------------------------------------------ | ------------------------------------------------------ |
-| Marker found, DB record missing            | Reported as orphan, `--apply --reattach` re-links      |
-| DB record exists, marker missing           | Reported as missing, `--apply --cleanup` deletes       |
-| Same `taskspaceId` in multiple directories | Reported as duplicate, `kozane taskspace fork` planned |
+| Situation                                  | Behavior                                                                     |
+| ------------------------------------------ | ---------------------------------------------------------------------------- |
+| Marker found, DB record missing            | Reported as orphan, `--apply --reattach` re-links                            |
+| DB record exists, marker missing           | Reported as missing, `--apply --cleanup` deletes                             |
+| Same `taskspaceId` in multiple directories | Not reported, the last directory found wins, `kozane taskspace fork` planned |
 
 ---
 
@@ -1546,8 +1550,9 @@ UI (SvelteKit):
   layers
   warps, including the cross-namespace warp list
   scope builder
-  taskspace creation
+  taskspace creation, browsing, and file editing
   tag index page
+  workspace map
 
 Filesystem:
   .taskspace.json marker

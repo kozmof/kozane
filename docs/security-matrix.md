@@ -152,8 +152,8 @@ export by design, because that is what is being published.
 Filesystem paths are not. The machine-specific workspace path is stripped, and
 taskspace paths are redacted from the page data the export bakes in, so the
 directories a workspace was worked in are not served to whoever opens the site.
-By default, taskspaces do not appear in a static export at all. A plain `kozane
-net ssg generate` carries no scopes, no taskspace names, and no files.
+By default, taskspaces do not appear in a static export at all. A plain
+`kozane net ssg generate` carries no scopes, no taskspace names, and no files.
 
 The map at `/map` is exported on the same terms. It publishes namespace names,
 partition names, card counts, and the tag tree, which is card and partition content
@@ -266,14 +266,14 @@ in a file made this way.
 
 Two consequences are worth stating plainly.
 
-- A taskspace created outside the workspace root with `kozane taskspace create --dir
-<path>` is both readable and writable, because the boundary is the taskspace
-  directory rather than the root. Point a taskspace at a directory only if you
-  would let anyone who can reach the server read and rewrite the text files in
-  it.
-- On a local server with no API key, which is the state after a plain `kozane
-init`, any local user or process that can reach the port can rewrite those
-  files. That is the same trust boundary the database already sits behind, but
+- A taskspace created outside the workspace root with
+  `kozane taskspace create --dir <path>` is both readable and writable, because
+  the boundary is the taskspace directory rather than the root. Point a taskspace
+  at a directory only if you would let anyone who can reach the server read and
+  rewrite the text files in it.
+- On a local server with no API key, which is the state after a plain
+  `kozane init`, any local user or process that can reach the port can rewrite
+  those files. That is the same trust boundary the database already sits behind, but
   it now extends to the working directory a taskspace points at. Generate a key
   with `kozane api key generate` if that is not what you want.
 
@@ -298,7 +298,8 @@ the same kind of page.
 ## Where each rule lives
 
 - Host and key checks at startup — `src/cli/commands/open.ts`
-- Per-request key, TLS, redirect, and rate-limit gating — `src/hooks.server.ts`
+- Per-request TLS, host, and missing-key gating — `src/hooks.server.ts`
+- Per-request key check, login redirect, and rate-limit response — `src/lib/server/request-auth.ts`
 - Loopback, TLS, and rate-limit helpers — `src/lib/server/security.ts`
 - Login page and `next` guard — `src/routes/login/` and `src/lib/server/login.ts`
 - Taskspace listing, read, and write boundary — `src/lib/server/taskspace-files.ts`

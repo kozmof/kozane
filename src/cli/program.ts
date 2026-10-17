@@ -262,7 +262,7 @@ export function buildProgram(): Command {
 
   layer
     .command("rename <layer> <name>")
-    .description("Rename a layer by name, ID, or short ID — an exact name wins")
+    .description("Rename a layer by name, ID, or short ID, where an exact name wins")
     .option("--namespace <namespaceId>", "Namespace ID or short ID the layer belongs to")
     .action((id, name, opts) => layerRename(id, name, opts));
 
@@ -343,7 +343,7 @@ export function buildProgram(): Command {
     .option("--scope <scopeId>", "Add the card to a scope ID or short ID")
     .option(
       "--layer <layer>",
-      "Layer name, ID, or short ID — an exact name wins (defaults to the default layer)",
+      "Layer name, ID, or short ID, where an exact name wins (defaults to the default layer)",
     )
     .option("--x <number>", "Horizontal card position", integer)
     .option("--y <number>", "Vertical card position", integer)
@@ -357,7 +357,7 @@ export function buildProgram(): Command {
     .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
     .option(
       "--layer <layer>",
-      "Layer name, ID, or short ID — an exact name wins (defaults to the default layer)",
+      "Layer name, ID, or short ID, where an exact name wins (defaults to the default layer)",
     )
     .option(
       "--pattern <regex>",

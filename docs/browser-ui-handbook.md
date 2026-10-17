@@ -140,7 +140,7 @@ The first card in a selection is the primary card, which some actions such as
 ## Acting on a selection
 
 Whenever one or more cards are selected, the composer becomes an action bar
-showing the selection count. The actions and their keyboard shortcuts:
+showing the selection count. The table lists each action and its keyboard shortcut.
 
 | Action             | Key      | Availability                       |
 | ------------------ | -------- | ---------------------------------- |
@@ -215,7 +215,7 @@ The pieces do not inherit the card's history. Each is a new card, created
 when you squashed it. `kozane card list --sort created` lists them as written
 today, however old the original card was.
 
-"Squash" is greyed out for a card whose text has nothing to split on, because squashing
+"Squash" is grayed out for a card whose text has nothing to split on, because squashing
 it would only replace the card with a copy under a new ID. A card in a
 glue group can still be squashed. The card leaves the group, and
 the pieces start unglued.
@@ -322,7 +322,7 @@ A card inside any of a scope's frames belongs to it.
   `Escape`, or the `×` on the prompt, discards the rectangle.
 
   Every scope on the board is on offer, including ones already framed here.
-  Framing a scope again says it is organised in more than one place.
+  Framing a scope again says it is organized in more than one place.
   A rectangle smaller than 120 canvas pixels on a side is grown to that, so the
   frame can still be grabbed by its tab afterwards. An `Alt`-click that goes
   nowhere is discarded without asking.
@@ -382,15 +382,14 @@ inside the frame.
 The icons and the right panel read the same listings, so a folder opened in one
 costs the other nothing, and the panel's `⟳` refreshes both. Like the panel,
 they do not refresh on their own, because live sync watches the database, not the disk.
-A scope with more than one taskspace gets a labelled group of icons apiece.
+A scope with more than one taskspace gets a labeled group of icons apiece.
 
 ## Taskspaces
 
-A taskspace is a filesystem directory tied to a scope, used to write scope
-cards to disk. Open a scope in the right panel to see its taskspaces. To
-create one, select the scope, type a name in the taskspace input, and press
-`Enter` or `+`. A scope must be active first. Cards that belong to a working
-copy show a `taskspace` badge in their footer.
+A taskspace is a filesystem directory tied to a scope. Open a scope in the
+right panel to see its taskspaces. To create one, select the scope, type a name
+in the taskspace input, and press `Enter` or `+`. Cards linked to a taskspace
+show a `taskspace` badge in their footer.
 
 The taskspaces under a scope are narrowed like the scopes themselves, to this
 namespace's taskspaces plus any that belong to no namespace. Run `kozane taskspace list`
@@ -587,7 +586,7 @@ disk walk entirely.
   the file editor.
 
 Counts are of distinct cards and files. A card carrying `:perf` twice is one card, and it
-appears once in the list, labelled with each tag it matched.
+appears once in the list, labeled with each tag it matched.
 
 Taskspace files are read when you open the page, within the same limits the taskspace panel
 works under. Dot-entries like `.git` and `.env` are never read, symlinks are never
@@ -645,7 +644,7 @@ hold between them. A partition holding nothing has no area to be given, so empty
 drawn as dashed outlines in a strip along the bottom of their namespace rather than left out.
 A namespace with no cards at all is drawn the same way, in a strip along the foot of the map.
 It is named and drawn as an outline, without its own partitions inside it, since a namespace holding
-no cards holds none in any of them. Partitions keep the colours their own board gives them.
+no cards holds none in any of them. Partitions keep the colors their own board gives them.
 
 Below the rectangles is a row of circles, one per scope, each with a line to every partition
 it reaches. A scope is drawn this way rather than as a rectangle of its own because a scope
@@ -654,7 +653,7 @@ several namespaces, which is exactly what the lines show. A scope reaching a nam
 through a taskspace has no partition to point at, so its line runs to the namespace instead.
 Hover a circle to raise its own lines out of the rest.
 
-The map opens centred, with room around it, and the control in the corner calls that 100%.
+The map opens centered, with room around it, and the control in the corner calls that 100%.
 100% is the size the map opens at rather than the size that would fill the window, because
 the view you were just looking at is the one worth measuring against. Filling the
 window is 200%, and the range runs from 50% to 400%.
@@ -688,7 +687,7 @@ The row of namespace names in the top right narrows the map to one namespace, th
 the tag index carries and with the same `?namespaceId=` behind it. Narrowed, the map draws
 that namespace's rectangle alone, and only the scopes and tags that reach it.
 
-The activity grid at the bottom centre shows its UTC date range above a trailing year of
+The activity grid at the bottom center shows its UTC date range above a trailing year of
 card changes. A new card counts as its first change. Moving, resizing, or otherwise arranging
 a card does not. Darker squares are busier UTC days. Click a square to size the treemap from
 the cards changed on that day and filter the tag tree, its counts, and its partition links to
@@ -715,15 +714,10 @@ draws the thing its page is about.
 
 - Namespace list — an even grid of four squares.
 - Map — unequal rectangles packed together, like a treemap.
-- Tag index — a tree branching into two children, which is what a tag namespace is.
+- Tag index — a tree branching into two children, the way tags nest.
 
 They sit in the corner of each page's header, and each one names itself on
 hover. A screen reader reads the same name, since the picture says nothing on its own.
-
-The connections in that last one are drawn rather than implied, and that is what makes it a
-tree instead of an indented list. Rows on their own say "a list", which is what the namespace
-page already is. Two icons that look different but mean much the same thing have to be
-remembered rather than recognised.
 
 The back link on the map and the tag index is the grid. Unnarrowed, it leads to the namespace
 list and stands alone. Narrowed to a namespace, it leads to that namespace's board, and the

@@ -47,7 +47,7 @@ JSON is `400 Request body must be valid JSON`. A body that parses to an array or
 `400 Request body must be a JSON object`.
 
 Names (`name` fields) are trimmed, must be non-blank, and are at most 255 characters. Card
-text is at most the workspace's configured `content.max` (default 200,000 characters). Id
+text is at most the workspace's configured `ui.contentMax` (default 200,000 UTF-16 code units). Id
 arrays must contain non-empty strings, must not repeat an id, and must hold at most 2,000
 items. An oversized list is refused as a whole rather than partway into a statement.
 
@@ -70,7 +70,7 @@ use the following statuses.
 | `401` / `429` | See [Authentication](#authentication)                                                                                                         |
 | `403`         | The file or directory cannot be read                                                                                                          |
 | `404`         | The resource the URL names does not exist                                                                                                     |
-| `409`         | The file changed on disk since it was read, or the directory already exists                                                                   |
+| `409`         | The file changed on disk since it was read, or the name is already taken                                                                      |
 | `413` / `415` | The file is too large, or is not UTF-8 text                                                                                                   |
 | `426`         | A remote binding was reached over plain HTTP                                                                                                  |
 | `500`         | An unexpected failure, with the cause logged rather than returned                                                                             |
@@ -487,7 +487,7 @@ avoid.
 
 Readiness, as a probe reads it. Answers `{ status, cpuUsage, memoryUsage }`, with `200` and
 `status: "ok"` when the database answers a query, or `503` with `status: "error"` and an
-`error` field when it does not.
+`error` field with a fixed message when it does not.
 
 Alert on `status` rather than on the status code alone. The cause of a failure is written to
 the log, not to the response.

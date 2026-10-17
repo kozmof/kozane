@@ -20,7 +20,7 @@ and registered taskspace files when they are next requested.
 
 The treemap cache is one versioned, workspace-wide semantic snapshot containing:
 
-- namespaces and partitions, including partition card counts and display colours
+- namespaces and partitions, including partition card counts and display colors
 - card-change counts grouped by UTC day and partition
 - scopes and their namespace and partition relationships
 - card tag hits, with each tagged card's namespace, partition, and UTC change day
