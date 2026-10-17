@@ -77,6 +77,43 @@ describe("taskspace CLI flow", () => {
     expect(duplicate.stderr).toContain("already contains a Kozane taskspace");
   }, 30_000);
 
+  it("refuses a name that is not one plain path segment unless --dir is given", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+
+    const nested = runCli(root, "taskspace", "create", "a/b", "--no-scope");
+    expect(nested.status).not.toBe(0);
+    expect(nested.stderr).toContain("name must not contain");
+
+    const hidden = runCli(root, "taskspace", "create", ".hidden", "--no-scope");
+    expect(hidden.status).not.toBe(0);
+    expect(hidden.stderr).toContain("name must not start with '.'");
+
+    // With --dir the name is only a label.
+    const target = join(root, "explicit");
+    expect(cli(root, "taskspace", "create", "a/b", "--no-scope", "--dir", target)).toContain(
+      "Taskspace created.",
+    );
+  }, 30_000);
+
+  it("stores a directory beside the workspace that shares its prefix as absolute", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    // `<root>-sibling` starts with the root's own path as a string.
+    const sibling = `${root}-sibling`;
+    tempRoots.push(sibling);
+    const target = join(sibling, "x");
+    cli(root, "taskspace", "create", "beside", "--no-scope", "--dir", target);
+
+    // Move the workspace under another parent. A path stored relative to the root would now
+    // resolve somewhere that does not exist.
+    const parent = mkdtempSync(join(tmpdir(), "kozane-taskspace-moved-"));
+    tempRoots.push(parent);
+    const moved = join(parent, "ws");
+    renameSync(root, moved);
+    expect(cli(moved, "taskspace", "list")).toContain(target);
+  }, 30_000);
+
   it("accepts an explicit namespace and rejects an unknown namespace", () => {
     const root = tempWorkspace();
     cli(root, "init");

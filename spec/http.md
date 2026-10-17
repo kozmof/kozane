@@ -388,8 +388,11 @@ it.
 Answers `{ id, path, pathKind: "workspace_relative" }`. A taskspace outside the workspace
 root can only be made by the CLI (`kozane taskspace create --dir`).
 
-`400` when the scope does not exist, or when the name would place the directory outside the
-workspace root. `404` when the namespace does not exist. `409` when the directory is already
+The name becomes the directory, so it must be one plain path segment. It may not contain `/`,
+`\`, or NUL, and may not start with `.`.
+
+`400` when the name is not one plain segment, when the scope does not exist, or when the
+configured taskspace directory would place the directory outside the workspace root. `404` when the namespace does not exist. `409` when the directory is already
 there. `503` when there is no workspace.
 
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/files`

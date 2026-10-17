@@ -1,5 +1,5 @@
 import { mkdir, open, realpath, rmdir, unlink } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
@@ -7,6 +7,7 @@ import { getNamespace } from "$db/api/namespace";
 import { getScope } from "$db/api/scope";
 import { readJsonObject, requireBoundedName, requireTrimmedString } from "../../lib/request.js";
 import { getWorkspaceRoot, getTaskspaceDefaultDir } from "$db/internal/config";
+import { taskspaceNameIssue } from "$lib/constants";
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
@@ -16,10 +17,20 @@ import {
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
 class OutsideWorkspaceError extends Error {}
 
+/**
+ * True when a nonempty `relative()` result stays below its base. Compare whole segments so a
+ * name such as `..notes` is not mistaken for a parent reference.
+ */
+function isInside(rel: string): boolean {
+  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
   const name = requireBoundedName(body);
+  const nameIssue = taskspaceNameIssue(name);
+  if (nameIssue) throw error(400, nameIssue);
   const scopeId = requireTrimmedString(body, "scopeId");
 
   if (!(await getNamespace({ db, namespaceId: params.namespaceId })))
@@ -33,10 +44,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const targetDir = resolve(join(root, defaultDir, name));
 
   // Containment is checked through `relative` rather than a string prefix so the
-  // separator stays platform-correct and `name` cannot escape with "..".
+  // separator stays platform-correct. The name is one segment, but `defaultDir` comes from
+  // the config file and may itself point outside the root.
   const storedPath = relative(resolve(root), targetDir);
-  if (!storedPath || storedPath.startsWith("..") || isAbsolute(storedPath))
-    throw error(400, "Taskspace path must be inside the workspace root");
+  if (!isInside(storedPath)) throw error(400, "Taskspace path must be inside the workspace root");
 
   // The guard above ensures targetDir is always inside the workspace root,
   // so the path is always stored as workspace_relative. Absolute paths are
@@ -61,7 +72,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     // before claiming anything inside it.
     const realParent = await realpath(dirname(targetDir));
     const parentRel = relative(await realpath(root), realParent);
-    if (parentRel.startsWith("..") || isAbsolute(parentRel)) throw new OutsideWorkspaceError();
+    if (parentRel !== "" && !isInside(parentRel)) throw new OutsideWorkspaceError();
     await mkdir(targetDir);
     targetCreated = true;
     const marker = await open(markerPath, "wx", 0o600);

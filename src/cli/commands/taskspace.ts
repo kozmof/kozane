@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { basename, join, resolve, relative, isAbsolute } from "node:path";
+import { basename, join, resolve, relative, isAbsolute, sep } from "node:path";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
@@ -23,6 +23,7 @@ import {
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { getAllScopes } from "../../db/api/scope.js";
+import { taskspaceNameIssue } from "../../lib/constants.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
 
@@ -189,6 +190,13 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
           )
         : undefined;
 
+    // The name becomes the directory only without `--dir`, so only then must it be one plain
+    // path segment.
+    const nameIssue = options.dir ? null : taskspaceNameIssue(name);
+    if (nameIssue) {
+      console.error(`Error: ${nameIssue}. Use --dir to choose the directory yourself.`);
+      process.exit(1);
+    }
     const targetDir = options.dir
       ? resolve(options.dir)
       : resolve(root, config.taskspace.defaultDir, name);
@@ -201,10 +209,16 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       }
     }
 
-    const pathKind = targetDir.startsWith(root)
-      ? ("workspace_relative" as const)
-      : ("absolute" as const);
-    const storedPath = pathKind === "workspace_relative" ? relative(root, targetDir) : targetDir;
+    // Compare whole segments. A string prefix would file `/ws2/x` under the root `/ws` as
+    // the workspace-relative path `../ws2/x`.
+    const fromRoot = relative(resolve(root), targetDir);
+    const insideRoot =
+      fromRoot !== "" &&
+      fromRoot !== ".." &&
+      !fromRoot.startsWith(`..${sep}`) &&
+      !isAbsolute(fromRoot);
+    const pathKind = insideRoot ? ("workspace_relative" as const) : ("absolute" as const);
+    const storedPath = insideRoot ? fromRoot : targetDir;
 
     const namespaceId = await resolveNamespaceId(db, options.namespace);
 

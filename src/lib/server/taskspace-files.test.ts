@@ -7,6 +7,7 @@ import {
   readdirSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
@@ -328,6 +329,29 @@ describe("readTaskspaceFile / writeTaskspaceFile", () => {
       }),
     ).toThrow(expect.objectContaining({ reason: "stale" }));
     expect(readFileSync(join(base, "notes.md"), "utf-8")).toBe("changed underneath\n");
+  });
+
+  it("refuses a save after a same-size write that kept the file's metadata", () => {
+    // Pin the timestamp to a whole second so it can be restored exactly, standing in for a
+    // write that lands within one filesystem timestamp tick.
+    const path = join(base, "notes.md");
+    const tick = new Date("2026-01-01T00:00:00Z");
+    writeFileSync(path, "before\n");
+    utimesSync(path, tick, tick);
+    const opened = read("notes.md");
+
+    writeFileSync(path, "BEFORE\n");
+    utimesSync(path, tick, tick);
+
+    expect(() =>
+      writeTaskspaceFile({
+        baseDir: base,
+        subPath: "notes.md",
+        content: "after\n",
+        signature: opened.signature,
+      }),
+    ).toThrow(expect.objectContaining({ reason: "stale" }));
+    expect(readFileSync(path, "utf-8")).toBe("BEFORE\n");
   });
 
   it("refuses to create a file that is not already there", () => {

@@ -56,14 +56,19 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     rmSync(tmpRoot, { recursive: true, force: true });
   });
 
-  it("refuses a name whose parent is a symlink out of the workspace", async () => {
+  it("refuses a default directory that is a symlink out of the workspace", async () => {
     const outside = join(tmpdir(), `kozane-taskspace-outside-${randomUUID()}`);
     mkdirSync(outside);
     try {
       symlinkSync(outside, join(tmpRoot, "escape"));
+      writeFileSync(
+        join(tmpRoot, ".kozane", "config.json"),
+        JSON.stringify({ name: "test", taskspace: { defaultDir: "escape" } }),
+      );
+      _resetWorkspaceRootForTest();
 
       await expectHttpRejection(
-        POST(event(db, namespaceId, jsonRequest({ name: "escape/draft", scopeId }))),
+        POST(event(db, namespaceId, jsonRequest({ name: "draft", scopeId }))),
         400,
         "Taskspace path must be inside the workspace root",
       );
@@ -102,6 +107,44 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
   it("rejects path traversal via name", async () => {
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: "../../outside", scopeId }))),
+      400,
+      "name must not contain '/', '\\', or NUL",
+    );
+  });
+
+  it("rejects a nested name, which would land outside the default directory", async () => {
+    await expectHttpRejection(
+      POST(event(db, namespaceId, jsonRequest({ name: "a/b", scopeId }))),
+      400,
+      "name must not contain '/', '\\', or NUL",
+    );
+    expect(existsSync(join(tmpRoot, "a"))).toBe(false);
+    expect(await getAllTaskspaces({ db })).toHaveLength(0);
+  });
+
+  it("rejects a dot-prefixed name before creating a hidden directory", async () => {
+    await expectHttpRejection(
+      POST(event(db, namespaceId, jsonRequest({ name: ".hidden", scopeId }))),
+      400,
+      "name must not start with '.'",
+    );
+    expect(existsSync(join(tmpRoot, ".hidden"))).toBe(false);
+  });
+
+  it("accepts a name that merely contains two dots", async () => {
+    const res = await POST(event(db, namespaceId, jsonRequest({ name: "notes..v2", scopeId })));
+    expect(res.status).toBe(200);
+    expect((await res.json()).path).toBe("notes..v2");
+  });
+
+  it("still refuses a configured default directory outside the workspace", async () => {
+    writeFileSync(
+      join(tmpRoot, ".kozane", "config.json"),
+      JSON.stringify({ name: "test", taskspace: { defaultDir: "../elsewhere" } }),
+    );
+    _resetWorkspaceRootForTest();
+    await expectHttpRejection(
+      POST(event(db, namespaceId, jsonRequest({ name: "draft", scopeId }))),
       400,
       "Taskspace path must be inside the workspace root",
     );
@@ -159,14 +202,12 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
   });
 
   it("treats a file at the target path as a collision", async () => {
-    // Create a regular file at the would-be target so mkdirSync throws ENOTDIR.
+    // A regular file at the would-be target makes the directory claim fail with EEXIST. The
+    // handler must take back the taskspace row it inserted and leave the file alone.
     writeFileSync(join(tmpRoot, "blocked"), "not a dir");
 
-    // "blocked/sub" is inside the workspace root but mkdirSync fails because
-    // "blocked" is a file, not a directory. The handler should compensate by
-    // deleting the newly-inserted taskspace row and returning 500.
     await expectHttpRejection(
-      POST(event(db, namespaceId, jsonRequest({ name: "blocked/sub", scopeId }))),
+      POST(event(db, namespaceId, jsonRequest({ name: "blocked", scopeId }))),
       409,
       "Taskspace directory already exists",
     );

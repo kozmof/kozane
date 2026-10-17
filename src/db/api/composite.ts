@@ -268,12 +268,13 @@ async function remapCardsByName({
 }: RemapCardsByName): Promise<void> {
   // Resolved and grouped in one pass, so the id a card is filed under is the one just
   // looked up rather than a second lookup that has to be asserted non-empty.
-  const targetIdByName = new Map<string, string>();
+  // Seeded from the targets once, so each card is one map lookup rather than a scan of them.
+  const targetIdByName = new Map(targets.map(({ id, name }) => [name, id]));
   const groups = new Map<string, string[]>();
   for (const { cardId, name } of current) {
     let targetId = targetIdByName.get(name);
     if (targetId === undefined) {
-      targetId = targets.find((target) => target.name === name)?.id ?? (await create(name));
+      targetId = await create(name);
       targetIdByName.set(name, targetId);
     }
     const group = groups.get(targetId) ?? [];

@@ -399,11 +399,12 @@ type CardUpdate = Partial<
  * Compare against the existing content in the `SET` expression so the decision and write are
  * atomic. Unchanged text must not reset the gap reported by `card list --sort gap`.
  *
- * The content column is non-null, and `unixepoch()` returns the seconds expected by the
- * timestamp column.
+ * Take the new time from the same JS clock as {@link newCardStamps}, so creation and edit
+ * times never come from two sources. The timestamp column stores whole seconds.
  */
 function contentUpdatedAt(content: string): SQL {
-  return sql`CASE WHEN ${cardTable.content} <> ${content} THEN unixepoch() ELSE ${cardTable.updatedAt} END`;
+  const now = Math.floor(Date.now() / 1000);
+  return sql`CASE WHEN ${cardTable.content} <> ${content} THEN ${now} ELSE ${cardTable.updatedAt} END`;
 }
 
 /**
@@ -588,6 +589,29 @@ function buildZIndexCaseWhen(stacking: CardStacking[]): SQL {
   return sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} ELSE ${cardTable.zIndex} END`;
 }
 
+/**
+ * Write one batch of zIndex values. Assert the row count as the position update does, so a
+ * card missing from the batch fails the transaction instead of being skipped silently.
+ */
+async function writeStacking(
+  tx: Tx,
+  batch: CardStacking[],
+  extra: Partial<Pick<typeof cardTable.$inferInsert, "layerId">> = {},
+): Promise<void> {
+  const updated = await tx
+    .update(cardTable)
+    .set({ ...extra, zIndex: buildZIndexCaseWhen(batch) })
+    .where(
+      inArray(
+        cardTable.id,
+        batch.map(({ cardId }) => cardId),
+      ),
+    )
+    .returning({ id: cardTable.id });
+  if (updated.length !== batch.length)
+    throw new Error(`writeStacking: expected ${batch.length} updates, got ${updated.length}`);
+}
+
 /** The layer and stacking of each named card, read in batches like every id-list read. */
 function readStackRows(
   tx: Tx,
@@ -670,16 +694,7 @@ export async function reassignCardsToLayerInTx({
     .map((card, index) => ({ cardId: card.id, zIndex: top + 1 + index }));
 
   // Only zIndex uses a CASE expression. `layerId` binds once per statement.
-  for (const batch of caseUpdateBatches(stacking, 1))
-    await tx
-      .update(cardTable)
-      .set({ layerId, zIndex: buildZIndexCaseWhen(batch) })
-      .where(
-        inArray(
-          cardTable.id,
-          batch.map(({ cardId }) => cardId),
-        ),
-      );
+  for (const batch of caseUpdateBatches(stacking, 1)) await writeStacking(tx, batch, { layerId });
 
   return { ok: true, stacking };
 }
@@ -740,16 +755,7 @@ export async function reassignCardsStackOrder({
       }
     }
 
-    for (const batch of caseUpdateBatches(stacking, 1))
-      await tx
-        .update(cardTable)
-        .set({ zIndex: buildZIndexCaseWhen(batch) })
-        .where(
-          inArray(
-            cardTable.id,
-            batch.map(({ cardId }) => cardId),
-          ),
-        );
+    for (const batch of caseUpdateBatches(stacking, 1)) await writeStacking(tx, batch);
 
     return { ok: true, stacking };
   });

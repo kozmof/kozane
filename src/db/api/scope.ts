@@ -191,7 +191,11 @@ export async function deleteScope({ db, scopeId }: DeleteScope): Promise<void> {
   assertFound(deleted, `Scope scopeId=${scopeId}`);
 }
 
-/** Delete scopes only when no cards, taskspaces, or frames reference them. */
+/**
+ * Remove a scope from one namespace's board. Drop this namespace's card memberships and
+ * frames, then delete the scope itself only if no card, taskspace, or frame elsewhere still
+ * references it. Return false when the scope does not exist.
+ */
 export async function deleteScopeFromNamespace({
   db,
   namespaceId,

@@ -1329,6 +1329,9 @@ Options:
 
 Either `--scope` or `--no-scope` is required.
 
+Without `--dir`, the name becomes the directory, so it must be one plain path segment. It may not
+contain `/`, `\`, or NUL, and may not start with `.`. With `--dir`, the name is only a label.
+
 Behavior:
 
 1. Inserts a `taskspace` DB record → gets a stable UUID.

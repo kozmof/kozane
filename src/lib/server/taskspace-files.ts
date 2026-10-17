@@ -7,6 +7,7 @@ import {
   realpathSync,
   writeFileSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
@@ -271,12 +272,22 @@ function decodeText(bytes: Uint8Array): string {
   }
 }
 
+/**
+ * Identify one version of an editor file by its metadata and its bytes. The metadata alone
+ * misses a same-size write within one timestamp tick (see {@link fileSignature}), and a save
+ * checked against it would overwrite that write. The hash closes that gap.
+ */
+function editorSignature(real: string, bytes: Uint8Array): string | null {
+  const stat = fileSignature(real);
+  return stat ? `${stat}:${createHash("sha1").update(bytes).digest("base64url")}` : null;
+}
+
 export type TaskspaceFile = {
   /** The file read, relative to the taskspace root and always `/`-separated. */
   path: string;
   content: string;
   /**
-   * Identity of the bytes that were read, from {@link fileSignature}. Handed back on save
+   * Identity of the bytes that were read, from {@link editorSignature}. Handed back on save
    * so a file changed underneath is refused rather than overwritten.
    */
   signature: string | null;
@@ -307,7 +318,7 @@ export function readTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): Ta
   return {
     path: relative(base, real).split(sep).join("/"),
     content: decodeText(bytes),
-    signature: fileSignature(real),
+    signature: editorSignature(real, bytes),
   };
 }
 
@@ -345,7 +356,13 @@ export function writeTaskspaceFile({
   // Check the current on-disk version immediately before writing. This narrows but does not
   // close the race: another process can still write between this check and the rename below,
   // and that write is replaced. Node offers no compare-and-swap rename to close it fully.
-  if (fileSignature(real) !== signature)
+  let current: Uint8Array;
+  try {
+    current = readFileSync(real);
+  } catch (e) {
+    throw mapFsError(e, "File not found");
+  }
+  if (editorSignature(real, current) !== signature)
     throw new TaskspaceFilesError("stale", "File changed on disk since it was opened");
 
   try {
@@ -357,7 +374,7 @@ export function writeTaskspaceFile({
   return {
     path: relative(base, real).split(sep).join("/"),
     content,
-    signature: fileSignature(real),
+    signature: editorSignature(real, Buffer.from(content, "utf-8")),
   };
 }
 
@@ -394,7 +411,7 @@ export function createTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): 
   return {
     path: relative(base, real).split(sep).join("/"),
     content: "",
-    signature: fileSignature(real),
+    signature: editorSignature(real, new Uint8Array()),
   };
 }
 
