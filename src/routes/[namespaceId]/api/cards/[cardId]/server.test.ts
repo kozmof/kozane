@@ -57,6 +57,30 @@ describe("PATCH /[namespaceId]/api/cards/[cardId]", () => {
     });
   });
 
+  it("rounds a fractional position before storing it", async () => {
+    const { db, namespaceId, partitionId, cardId } = await setup();
+
+    await PATCH(event(db, namespaceId, cardId, jsonRequest({ posX: 48.6, posY: 72.2 })));
+
+    await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
+      posX: 49,
+      posY: 72,
+    });
+  });
+
+  it("leaves the card untouched when a later check in the request fails", async () => {
+    const { db, namespaceId, partitionId, cardId } = await setup();
+
+    await expectHttpRejection(
+      PATCH(event(db, namespaceId, cardId, jsonRequest({ content: "Changed", layerId: "nope" }))),
+      400,
+      "New layer not found in namespace",
+    );
+    await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
+      content: "Original",
+    });
+  });
+
   it("updates card stacking order", async () => {
     const { db, namespaceId, partitionId, cardId } = await setup();
     await PATCH(event(db, namespaceId, cardId, jsonRequest({ zIndex: 42 })));

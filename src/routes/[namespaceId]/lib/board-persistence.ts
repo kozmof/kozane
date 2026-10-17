@@ -68,7 +68,10 @@ export function createBoardPersistence(s: NamespaceState) {
         s.setError(await failureMessage(res, "Failed to save card"));
         return;
       }
-      s.cards = s.cards.map((c) => (c.id === id ? { ...c, content, partitionId } : c));
+      // The server stores the text trimmed, so hold the same value rather than waiting for
+      // the next snapshot poll to correct it.
+      const stored = content.trim();
+      s.cards = s.cards.map((c) => (c.id === id ? { ...c, content: stored, partitionId } : c));
       s.selection.composerCard = null;
       return;
     }

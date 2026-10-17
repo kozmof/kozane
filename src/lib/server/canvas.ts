@@ -22,13 +22,20 @@ export function canvasBoundsForRoot(root: string): CanvasBounds {
   return { canvasWidth, canvasHeight };
 }
 
-/** A position held inside an already-resolved set of bounds. */
+/**
+ * A position held inside an already-resolved set of bounds. Round to integers to match the
+ * database columns: SQLite keeps a fractional value in an INTEGER column as REAL, and a drag
+ * without grid snapping at any zoom other than 1 yields fractional world coordinates.
+ */
 export function clampToBounds(
   posX: number,
   posY: number,
   { canvasWidth, canvasHeight }: CanvasBounds,
 ): { posX: number; posY: number } {
-  return { posX: clamp(posX, 0, canvasWidth), posY: clamp(posY, 0, canvasHeight) };
+  return {
+    posX: Math.round(clamp(posX, 0, canvasWidth)),
+    posY: Math.round(clamp(posY, 0, canvasHeight)),
+  };
 }
 
 /** A position held inside {@link canvasBounds}. */

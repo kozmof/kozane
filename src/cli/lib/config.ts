@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileDbUrl } from "../../lib/db-url.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
@@ -59,7 +60,7 @@ export function dbPath(workspaceRoot: string): string {
 }
 
 export function dbUrl(workspaceRoot: string): string {
-  return `file:${dbPath(workspaceRoot)}`;
+  return fileDbUrl(dbPath(workspaceRoot));
 }
 
 /** Database used by interactive CLI commands for the active workspace session. */

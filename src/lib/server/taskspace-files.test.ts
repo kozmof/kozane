@@ -137,6 +137,16 @@ describe("listTaskspaceDirectory", () => {
     expect(names("link")).toEqual(["inside.txt"]);
   });
 
+  it("refuses to list a hidden directory through a visible symlink", () => {
+    mkdirSync(join(base, ".secrets"));
+    writeFileSync(join(base, ".secrets", "key.txt"), "s");
+    symlinkSync(join(base, ".secrets"), join(base, "docs"), "dir");
+
+    expect(() => listTaskspaceDirectory({ baseDir: base, subPath: "docs" })).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+  });
+
   it("caps a large directory and says it did", () => {
     for (let i = 0; i < TASKSPACE_DIR_ENTRIES_MAX + 1; i++) {
       writeFileSync(join(base, `f${String(i).padStart(4, "0")}.txt`), "");
@@ -227,6 +237,14 @@ describe("readTaskspaceFile / writeTaskspaceFile", () => {
     expect(() => read("elsewhere/secret.txt")).toThrow(
       expect.objectContaining({ reason: "invalid-path" }),
     );
+  });
+
+  it("refuses a file in a hidden directory reached through a visible symlink", () => {
+    mkdirSync(join(base, ".secrets"));
+    writeFileSync(join(base, ".secrets", "key.txt"), "s");
+    symlinkSync(join(base, ".secrets"), join(base, "docs"), "dir");
+
+    expect(() => read("docs/key.txt")).toThrow(expect.objectContaining({ reason: "invalid-path" }));
   });
 
   it("refuses dot-entries the listing hides", () => {

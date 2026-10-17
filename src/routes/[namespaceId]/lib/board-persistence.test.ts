@@ -116,6 +116,15 @@ describe("createBoardPersistence", () => {
       expect(placeNew).not.toHaveBeenCalled();
     });
 
+    it("holds the edited text trimmed, as the server stores it", async () => {
+      const s = state();
+      s.cards = [card("c1")];
+      vi.mocked(api.updateCard).mockResolvedValueOnce(succeeded);
+
+      await createBoardPersistence(s).submitComposer("c1", "  new text \n", "p1", vi.fn());
+      expect(s.cards[0].content).toBe("new text");
+    });
+
     it("reports the server's reason when an edit is refused", async () => {
       const s = state();
       s.cards = [card("c1")];

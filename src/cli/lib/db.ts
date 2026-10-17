@@ -12,6 +12,7 @@ import {
   rmSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileDbUrl } from "../../lib/db-url.js";
 import * as schema from "../../db/schema.js";
 import {
   getMigrationStatus,
@@ -45,7 +46,7 @@ export async function backupDb(workspaceRoot: string): Promise<string> {
   }
 
   // VACUUM INTO produces a consistent copy even under concurrent writes, unlike copyFileSync.
-  const client = createClient({ url: `file:${source}` });
+  const client = createClient({ url: fileDbUrl(source) });
   try {
     await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
@@ -144,7 +145,7 @@ export async function runMigrations(dbUrl: string): Promise<void> {
  * file can omit recent data or schema changes. An unreadable database fails during staging.
  */
 async function stageRestoreCandidate(backupPath: string, stagedPath: string): Promise<void> {
-  const client = createClient({ url: `file:${backupPath}` });
+  const client = createClient({ url: fileDbUrl(backupPath) });
   try {
     await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     await client.execute(`VACUUM INTO '${stagedPath.replace(/'/g, "''")}'`);
@@ -159,7 +160,7 @@ async function stageRestoreCandidate(backupPath: string, stagedPath: string): Pr
 }
 
 async function validateRestoreCandidate(path: string): Promise<void> {
-  const client = createClient({ url: `file:${path}` });
+  const client = createClient({ url: fileDbUrl(path) });
   try {
     await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     const result = await client.execute("PRAGMA integrity_check");
@@ -170,7 +171,7 @@ async function validateRestoreCandidate(path: string): Promise<void> {
     client.close();
   }
 
-  const status = await getMigrationStatus(`file:${path}`);
+  const status = await getMigrationStatus(fileDbUrl(path));
   if (
     status.state === "missing" ||
     status.state === "unknown" ||

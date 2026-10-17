@@ -35,6 +35,10 @@ describe("clampToBounds", () => {
     expect(clampToBounds(120, 340, bounds)).toEqual({ posX: 120, posY: 340 });
   });
 
+  it("rounds a fractional position to the integer the columns hold", () => {
+    expect(clampToBounds(12.5, 340.4, bounds)).toEqual({ posX: 13, posY: 340 });
+  });
+
   it("pulls a negative position back to the origin", () => {
     expect(clampToBounds(-40, -1, bounds)).toEqual({ posX: 0, posY: 0 });
   });

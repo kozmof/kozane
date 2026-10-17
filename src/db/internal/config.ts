@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
 
@@ -90,7 +91,7 @@ function readParsedConfig(root: string): Record<string, unknown> | null {
 
 function workspaceDbUrl(): string | null {
   const root = resolveWorkspaceRoot();
-  return root ? `file:${join(root, ".kozane", "kozane.db")}` : null;
+  return root ? fileDbUrl(join(root, ".kozane", "kozane.db")) : null;
 }
 
 export function getWorkspaceRoot(): string | null {

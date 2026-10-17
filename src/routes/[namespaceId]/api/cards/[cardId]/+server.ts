@@ -3,6 +3,7 @@ import { json, error } from "@sveltejs/kit";
 import { getPartition } from "$db/api/partition";
 import { getLayer } from "$db/api/layer";
 import { updateCard } from "$db/api/card";
+import { withTx } from "$db/tx";
 import { deleteNamespaceCards } from "$db/api/composite";
 import { requireCardInNamespace } from "../../../lib/guards.js";
 import { clamp, contentLimitIssue } from "$lib/constants";
@@ -22,72 +23,83 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { namespaceId, cardId } = params;
   const body = await readJsonObject(request);
 
-  const { partitionId } = await requireCardInNamespace(db, namespaceId, cardId);
+  // Every lookup runs inside the transaction that writes, as in the collection POST, so a
+  // card, partition, or layer removed by another writer in between is a 404 or 400 here
+  // rather than a foreign-key or not-found 500.
+  await withTx(db, async (tx) => {
+    const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
 
-  const rawContent = optionalString(body, "content");
-  if (rawContent !== undefined && !rawContent.trim()) throw error(400, "content must not be empty");
-  const contentIssue =
-    rawContent === undefined ? null : contentLimitIssue(rawContent, contentMax());
-  if (contentIssue) throw error(400, contentIssue);
-  const content = rawContent !== undefined ? rawContent.trim() : undefined;
+    const rawContent = optionalString(body, "content");
+    if (rawContent !== undefined && !rawContent.trim())
+      throw error(400, "content must not be empty");
+    const contentIssue =
+      rawContent === undefined ? null : contentLimitIssue(rawContent, contentMax());
+    if (contentIssue) throw error(400, contentIssue);
+    const content = rawContent !== undefined ? rawContent.trim() : undefined;
 
-  let newPartitionId: string | undefined;
-  if (body.partitionId !== undefined) {
-    const requestedPartitionId = requireString(body, "partitionId");
-    const newPartition = await getPartition({ db, namespaceId, partitionId: requestedPartitionId });
-    if (!newPartition) throw error(400, "New partition not found in namespace");
-    newPartitionId = requestedPartitionId;
-  }
+    let newPartitionId: string | undefined;
+    if (body.partitionId !== undefined) {
+      const requestedPartitionId = requireString(body, "partitionId");
+      const newPartition = await getPartition({
+        db: tx,
+        namespaceId,
+        partitionId: requestedPartitionId,
+      });
+      if (!newPartition) throw error(400, "New partition not found in namespace");
+      newPartitionId = requestedPartitionId;
+    }
 
-  let newLayerId: string | undefined;
-  if (body.layerId !== undefined) {
-    const requestedLayerId = requireString(body, "layerId");
-    const newLayer = await getLayer({ db, namespaceId, layerId: requestedLayerId });
-    if (!newLayer) throw error(400, "New layer not found in namespace");
-    newLayerId = requestedLayerId;
-  }
+    let newLayerId: string | undefined;
+    if (body.layerId !== undefined) {
+      const requestedLayerId = requireString(body, "layerId");
+      const newLayer = await getLayer({ db: tx, namespaceId, layerId: requestedLayerId });
+      if (!newLayer) throw error(400, "New layer not found in namespace");
+      newLayerId = requestedLayerId;
+    }
 
-  const rawPosX = optionalNumber(body, "posX");
-  const rawPosY = optionalNumber(body, "posY");
-  const { canvasWidth, canvasHeight } = canvasBounds();
-  const posX = rawPosX === undefined ? undefined : clamp(rawPosX, 0, canvasWidth);
-  const posY = rawPosY === undefined ? undefined : clamp(rawPosY, 0, canvasHeight);
-  const zIndex = optionalNumber(body, "zIndex");
-  if (zIndex !== undefined && !Number.isInteger(zIndex))
-    throw error(400, "zIndex must be an integer");
+    // Rounded as `clampToBounds` does, because the position columns are integers.
+    const rawPosX = optionalNumber(body, "posX");
+    const rawPosY = optionalNumber(body, "posY");
+    const { canvasWidth, canvasHeight } = canvasBounds();
+    const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
+    const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
+    const zIndex = optionalNumber(body, "zIndex");
+    if (zIndex !== undefined && !Number.isInteger(zIndex))
+      throw error(400, "zIndex must be an integer");
 
-  // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
-  // widths rather than clamping them.
-  const rawWidth = optionalNullableNumber(body, "width");
-  const [widthMin, widthMax] = CARD_WIDTH_RANGE;
-  if (typeof rawWidth === "number" && !Number.isInteger(rawWidth))
-    throw error(400, "width must be an integer");
-  if (typeof rawWidth === "number" && (rawWidth < widthMin || rawWidth > widthMax))
-    throw error(400, `width must be between ${widthMin} and ${widthMax}`);
-  const width = rawWidth;
+    // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
+    // widths rather than clamping them.
+    const rawWidth = optionalNullableNumber(body, "width");
+    const [widthMin, widthMax] = CARD_WIDTH_RANGE;
+    if (typeof rawWidth === "number" && !Number.isInteger(rawWidth))
+      throw error(400, "width must be an integer");
+    if (typeof rawWidth === "number" && (rawWidth < widthMin || rawWidth > widthMax))
+      throw error(400, `width must be between ${widthMin} and ${widthMax}`);
+    const width = rawWidth;
 
-  if (
-    content === undefined &&
-    newPartitionId === undefined &&
-    newLayerId === undefined &&
-    posX === undefined &&
-    posY === undefined &&
-    zIndex === undefined &&
-    width === undefined
-  )
-    throw error(400, "No fields to update");
+    if (
+      content === undefined &&
+      newPartitionId === undefined &&
+      newLayerId === undefined &&
+      posX === undefined &&
+      posY === undefined &&
+      zIndex === undefined &&
+      width === undefined
+    )
+      throw error(400, "No fields to update");
 
-  await updateCard({
-    db,
-    cardId,
-    partitionId,
-    newPartitionId,
-    layerId: newLayerId,
-    content,
-    posX,
-    posY,
-    zIndex,
-    width,
+    await updateCard({
+      db: tx,
+      cardId,
+      partitionId,
+      newPartitionId,
+      layerId: newLayerId,
+      content,
+      posX,
+      posY,
+      zIndex,
+      width,
+    });
   });
 
   return json({ ok: true });

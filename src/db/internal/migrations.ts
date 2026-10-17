@@ -2,6 +2,7 @@ import { createClient } from "@libsql/client";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
+import { dbPathFromUrl } from "../../lib/db-url.js";
 
 /** What a migrations folder must contain for this to have found the right one. */
 function isMigrationsFolder(candidate: string): boolean {
@@ -138,11 +139,6 @@ function toTimestamp(value: unknown): number | null {
   return parsed !== null && Number.isFinite(parsed) ? parsed : null;
 }
 
-function pathFromDbUrl(dbUrl: string): string | null {
-  if (!dbUrl.startsWith("file:")) return null;
-  return dbUrl.slice("file:".length);
-}
-
 export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus> {
   let entries: MigrationJournalEntry[];
   let latest: MigrationJournalEntry | null;
@@ -152,13 +148,13 @@ export async function getMigrationStatus(dbUrl: string): Promise<MigrationStatus
   } catch (e) {
     return {
       state: "unknown",
-      dbPath: pathFromDbUrl(dbUrl),
+      dbPath: dbPathFromUrl(dbUrl),
       latest: null,
       error: e instanceof Error ? e.message : String(e),
     };
   }
 
-  const filePath = pathFromDbUrl(dbUrl);
+  const filePath = dbPathFromUrl(dbUrl);
   if (filePath && !existsSync(filePath)) {
     return {
       state: "missing",

@@ -18,6 +18,7 @@ import {
 } from "../../lib/server/runtime-state.js";
 import { hyperlink } from "../lib/hyperlink.js";
 import { resolvePort } from "../lib/port.js";
+import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_LAYER_NAME, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
@@ -117,7 +118,7 @@ export async function open(options: OpenOptions): Promise<void> {
   let dbURL = dbUrl(resolve(root));
   if (options.memory) {
     memoryDir = mkdtempSync(join(tmpdir(), "kozane-memory-"));
-    dbURL = `file:${join(memoryDir, "kozane.db")}`;
+    dbURL = fileDbUrl(join(memoryDir, "kozane.db"));
     try {
       await runMigrations(dbURL);
       const db = await createDb(dbURL);

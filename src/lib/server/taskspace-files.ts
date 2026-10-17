@@ -60,6 +60,16 @@ function isWithin(parent: string, child: string): boolean {
   return !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`);
 }
 
+/**
+ * True when a resolved path inside `realBase` passes through a dot-entry. Checking only the
+ * requested segments would let a visible symlink such as `docs -> .secrets` reach a hidden
+ * directory, so callers check the resolved path as well.
+ */
+function resolvesThroughDotEntry(realBase: string, real: string): boolean {
+  const rel = relative(realBase, real);
+  return rel !== "" && rel.split(sep).some((segment) => segment.startsWith("."));
+}
+
 function mapFsError(e: unknown, whatIsMissing: string): TaskspaceFilesError {
   const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
   if (code === "EACCES" || code === "EPERM")
@@ -126,9 +136,11 @@ export function listTaskspaceDirectory({
   } catch (e) {
     throw mapFsError(e, "Directory not found");
   }
-  // Check containment again after resolving symlinks.
+  // Check containment and the dot-entry rule again after resolving symlinks.
   if (!isWithin(realBase, real))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+  if (resolvesThroughDotEntry(realBase, real))
+    throw new TaskspaceFilesError("invalid-path", "Dot-entries cannot be opened");
 
   let dirents: Dirent[];
   try {
@@ -208,6 +220,8 @@ function resolveTaskspaceEntry(baseDir: string, subPath: string): { real: string
   }
   if (!isWithin(realBase, realDir))
     throw new TaskspaceFilesError("invalid-path", "Path must stay inside the taskspace");
+  if (resolvesThroughDotEntry(realBase, realDir))
+    throw new TaskspaceFilesError("invalid-path", "Dot-entries cannot be opened");
 
   return { real: resolve(realDir, segments[segments.length - 1]), base: realBase };
 }
