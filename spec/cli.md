@@ -1,12 +1,15 @@
 # Kozane CLI Specification
 
 ## Structures
+
 ### Main
+
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
 - Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
 - Card: A unit of text.
 
 ### Others
+
 - Layer: A way to arrange cards in layers.
 - Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
 - Warp: A saved point to jump to. Warps are not related to cards.
@@ -176,11 +179,11 @@ kozane net ssg generate [--out <dir>] [--base <path>] [--include-scoped-files]
 
 Options:
 
-| Flag                     | Default   | Description                                                      |
-| ------------------------ | --------- | ---------------------------------------------------------------- |
-| `--out <dir>`            | `./site`  | Output directory, emptied and rewritten on each run              |
-| `--base <path>`          | site root | Base path when hosted under a subdirectory, e.g. `/kozane`       |
-| `--include-scoped-files` | false     | Also export scopes, taskspace names, and a copy of their files   |
+| Flag                     | Default   | Description                                                    |
+| ------------------------ | --------- | -------------------------------------------------------------- |
+| `--out <dir>`            | `./site`  | Output directory, emptied and rewritten on each run            |
+| `--base <path>`          | site root | Base path when hosted under a subdirectory, e.g. `/kozane`     |
+| `--include-scoped-files` | false     | Also export scopes, taskspace names, and a copy of their files |
 
 Without `--include-scoped-files`, the export carries no scopes, taskspaces, or files. With it,
 only taskspaces that belong to a scope are exported, and their real file contents become
