@@ -1,4 +1,4 @@
-import { createDb } from "../../db/client.js";
+import { openDb } from "../../db/client.js";
 import type { DB } from "../../db/tx.js";
 import { commandDbUrl, type WorkspaceConfig } from "./config.js";
 import { requireCurrentMigrations } from "./db.js";
@@ -45,8 +45,12 @@ export async function runWorkspaceCommand<T>(
     const { root, config } = requireWorkspace();
     const url = commandDbUrl(root);
     if (requireMigrations) await requireCurrentMigrations(url, "this command can run");
-    const db = await createDb(url);
-    return await run({ db, root, config, dbUrl: url });
+    const { db, close } = await openDb(url);
+    try {
+      return await run({ db, root, config, dbUrl: url });
+    } finally {
+      close();
+    }
   } catch (error) {
     fail(error);
   }

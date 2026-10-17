@@ -54,7 +54,8 @@ import {
 // Keep stateless argument parsers at module scope so repeated command-tree builds reuse them.
 
 function integer(value: string): number {
-  const parsed = Number(value);
+  // `Number("")` and `Number(" ")` are 0, so refuse blank input before converting it.
+  const parsed = value.trim() === "" ? NaN : Number(value);
   if (!Number.isInteger(parsed)) throw new InvalidArgumentError("Must be an integer.");
   return parsed;
 }

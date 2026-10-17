@@ -36,7 +36,7 @@ import {
   columnCount,
   type CardBatchResult,
 } from "./utils.js";
-import { and, eq, gt, inArray, isNotNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
 import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
@@ -181,10 +181,13 @@ export async function squashNamespaceCard({
     if (contents.length < 2) return { ok: false, reason: "indivisible" };
     if (contents.length > BATCH_MAX) return { ok: false, reason: "too-many" };
 
+    // Layout slots only extend right of and below the origin, so cards elsewhere can never
+    // block one. Skip reading them rather than scanning the whole board inside the write.
     const occupied = await tx
       .select({ id: cardTable.id, posX: cardTable.posX, posY: cardTable.posY })
       .from(cardTable)
-      .innerJoin(partitionTable, inNamespace);
+      .innerJoin(partitionTable, inNamespace)
+      .where(and(gte(cardTable.posX, source.posX), gte(cardTable.posY, source.posY)));
     const positions = squashCardPositions(
       // Reuse the original slot for the first piece.
       occupied.filter(({ id }) => id !== cardId),
