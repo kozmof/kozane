@@ -209,7 +209,7 @@
     try {
       replaceState(`${url.pathname}${url.search}`, {});
     } catch {
-      // Ignored: see above.
+      // Ignored for the reason given above.
     }
   }
 

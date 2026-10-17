@@ -157,8 +157,9 @@ net ssg generate` carries no scopes, no taskspace names, and no files.
 
 The map at `/map` is exported on the same terms. It publishes namespace names,
 partition names, card counts, and the tag tree, which is card and partition content
-the export carries by design. Its scope graph is not published. Like every other page, a plain export draws no
-scope circles and names no scope. The graph is gathered only when the export is built to carry scopes.
+the export carries by design. Its scope graph is not published. Like every other page, a
+plain export draws no scope circles and names no scope. The graph is gathered only when the
+export is built to carry scopes.
 
 `--include-scoped-files` is the exception, and it publishes real file contents.
 
@@ -169,8 +170,8 @@ kozane net ssg generate --out ./site --include-scoped-files
 The export then carries the scopes each namespace draws, the names of the
 taskspaces under those scopes, and a read-only copy of each of those taskspaces'
 files, contents inline. A taskspace that belongs to no scope is not drawn by the
-board, so it is left out of the export entirely, including its name. The rest of the file boundary matches the live
-server, because the same code reads it.
+board, so it is left out of the export entirely, including its name. The rest of the file
+boundary matches the live server, because the same code reads it.
 
 - Dot-entries are never included, so `.git`, `.env`, and `.taskspace.json` stay out.
 - Symlinks are listed but never followed.
@@ -184,9 +185,8 @@ export and says it is incomplete, but the entries beyond the cut are not in it
 at all, not even by name. Read an export as a floor on what went out, not a
 census. Only the working copy shows what a truncated directory held.
 
-The flag publishes your working
-directories in full to whoever opens the site, with no key in front of
-them. Use it only on a workspace whose taskspace files you would publish
+The flag publishes your working directories in full to whoever opens the site, with no
+key in front of them. Use it only on a workspace whose taskspace files you would publish
 deliberately.
 
 ## Taskspace files
@@ -223,8 +223,9 @@ taskspace and again across a whole gather, so many taskspaces
 cost no more to read than a few. It also has a ceiling on how many
 tags one taskspace may yield, since a file can hold far more tags per byte read
 than any byte budget implies. It reports when it stops at any of these limits. It also
-skips generated and vendored directories (`node_modules`, `build`, `dist`, `out`, `target`, `coverage`,
-`vendor`, `bower_components`, `__pycache__`, and `tmp`), which narrows what is read further.
+skips generated and vendored directories (`node_modules`, `build`, `dist`, `out`, `target`,
+`coverage`, `vendor`, `bower_components`, `__pycache__`, and `tmp`), which narrows what is
+read further.
 
 What that scan gathered is kept in `.kozane/tag-index.json` so the next page load
 does not repeat it, and the lines it quotes are kept with it. This file

@@ -61,8 +61,7 @@ API-key cache are each validated against the database and key files, so a second
 correct but pays the work again. Do not run Kozane behind a load balancer across replicas, and
 do not scale it to more than one instance or worker. Scale the machine instead.
 
-The rule is enforced by an exclusive runtime reservation.
-`kozane open` checks the reservation before it starts anything and refuses outright. A server
+An exclusive runtime reservation enforces this rule. `kozane open` checks the reservation before it starts anything and refuses outright. A server
 started directly (`node bin/server.js`) against a workspace another process already holds
 answers every request with HTTP 503 naming the process that holds it, and logs the conflict
 once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server, which stops accepting
@@ -111,8 +110,7 @@ pnpm test:e2e
 
 The smoke test packs and installs the tarball, then exercises its CLI, initializes a real
 workspace, starts the packaged server, checks authenticated readiness and security headers,
-rejects an unauthenticated request,
-and exports the database.
+rejects an unauthenticated request, and exports the database.
 
 The browser test starts the built server against a temporary real workspace, verifies the
 one-time API-key exchange, hydrates the namespace UI in Chromium, creates and reloads a card,

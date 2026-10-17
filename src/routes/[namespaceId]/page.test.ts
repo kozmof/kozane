@@ -844,7 +844,7 @@ describe("Layers", () => {
     expect(fetch).toHaveBeenCalledWith("/namespace-1/api/layers", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      // Bottom to top: Draft is now below Base.
+      // From bottom to top, Draft is now below Base.
       body: JSON.stringify({ layerIds: ["l2", "l1"] }),
     });
     // Keep active Base above Draft after reordering.

@@ -36,8 +36,8 @@ export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
  *
  * Apply the limit on writes too, so a gather cannot repeatedly serialize and save a cache that
  * the next read will reject. A workspace whose index remains over the limit requires a fresh
- * gather each time. Narrowing the namespace or disabling file scanning with `?files=0` can
- * reduce that work.
+ * gather each time. Narrowing the namespace, or skipping file scanning with the CLI's
+ * `--no-files`, can reduce that work.
  */
 export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 

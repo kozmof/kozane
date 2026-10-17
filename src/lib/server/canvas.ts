@@ -24,7 +24,7 @@ export function canvasBoundsForRoot(root: string): CanvasBounds {
 
 /**
  * A position held inside an already-resolved set of bounds. Round to integers to match the
- * database columns: SQLite keeps a fractional value in an INTEGER column as REAL, and a drag
+ * database columns. SQLite keeps a fractional value in an INTEGER column as REAL, and a drag
  * without grid snapping at any zoom other than 1 yields fractional world coordinates.
  */
 export function clampToBounds(

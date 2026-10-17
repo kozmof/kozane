@@ -720,8 +720,7 @@ kozane card edit 3f9a2c1 "Investigate caching, then measure"
 ```
 
 `<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit,
-the same rules `card add` applies.
-Text identical to what the card already holds leaves `updated_at` alone, so an edit that
+the same rules `card add` applies. Text identical to what the card already holds leaves `updated_at` alone, so an edit that
 changed nothing does not read as a card that was worked on.
 
 ### `kozane card delete <cardIds>`

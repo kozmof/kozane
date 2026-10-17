@@ -128,8 +128,8 @@ has to sit at the start of a line, after whitespace, or after an opening bracket
 ordinary punctuation like `3:45` or `key: value` is never mistaken for one.
 
 The browser tag index is available at `/tags`. Add `?namespaceId=<id>` to limit it to one
-namespace. Use `?files=0`, or select "Cards only," to exclude taskspace files. The CLI
-equivalent is `--no-files`.
+namespace. It always includes taskspace files. To list cards alone, run
+`kozane tag show <tag> --no-files`.
 
 ## Seeing across namespaces
 
@@ -189,7 +189,7 @@ kozane net ssg generate --out ./site --include-scoped-files
 
 This publishes real file contents from your local taskspace directories, so only use it on a workspace you're comfortable making public. Only taskspaces that belong to a scope are exported, because those are the ones a board draws. A taskspace outside every scope stays off the export entirely.
 
-Each exported taskspace is capped at 20MB of embedded content and 50,000 entries. Files beyond the content cap, files over 1MB, and non-text files are still listed by name, but they open with an explanation instead of their contents. A directory past the entry cap is marked as not included. Dotfiles are never included, and symlinks are listed but never followed, the same as in the live file panel. Only dotfiles are excluded, so a taskspace pointed at a large checkout with `node_modules` will hit these limits.
+Each exported taskspace is capped at 20MB of embedded content and 50,000 entries. Files beyond the content cap, files over 1MB, and non-text files are still listed by name, but they open with an explanation instead of their contents. A directory past the entry cap is marked as not included. Dotfiles are never included, and symlinks are listed but never followed, the same as in the live file panel. No other files are skipped, so a taskspace pointed at a large checkout with `node_modules` will hit these limits.
 
 Those caps are per taskspace per page, not per export. A taskspace you have not assigned to a namespace is drawn on every namespace's board, so its files are embedded in every namespace's page. Across five namespaces, a 20MB taskspace adds 100MB to the export. The directory is only walked once, but the bytes land once per page. Assign a taskspace to a namespace if you do not want it published board-wide.
 
@@ -199,8 +199,7 @@ Preview it over HTTP, not by opening the files directly.
 kozane net ssg preview      # serves ./site at http://127.0.0.1:17174
 ```
 
-`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches what you get once deployed. Use `--out <dir>` to serve a different
-directory, `--port` and `--host` (or `KOZANE_PREVIEW_PORT` and `KOZANE_PREVIEW_HOST`) to change the address, and `--no-open` to skip launching a browser. If the site was built with `--base`, preview it with the same base:
+`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches what you get once deployed. Use `--out <dir>` to serve a different directory, `--port` and `--host` (or `KOZANE_PREVIEW_PORT` and `KOZANE_PREVIEW_HOST`) to change the address, and `--no-open` to skip launching a browser. If the site was built with `--base`, preview it with the same base:
 
 ```sh
 kozane net ssg preview --base /kozane

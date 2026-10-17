@@ -226,7 +226,7 @@
     }
   }
 
-  // Mode: edit takes priority, then selection (≥1 card), then create
+  // Pick the mode. Editing takes priority, then a selection of one or more cards, then create.
   let mode = $derived(
     editingCard ? "edit" : selectedCards.length >= 1 ? "selection" : "create",
   );
@@ -236,7 +236,7 @@
     mode === "edit" ? (activePartitionColor?.dot ?? "var(--colors-neutral-border)") : "var(--colors-neutral-border)",
   );
 
-  // Selection mode: all selected cards share the same glue group
+  // In selection mode, check whether all selected cards share one glue group.
   let allGlued = $derived(
     selectedCards.length >= 2 &&
       selectedCards.every((c) => c.glueId !== null && c.glueId === selectedCards[0].glueId),
@@ -352,7 +352,7 @@
         </button>
       </div>
     {/if}
-    <!-- Glue/Unglue actions: only available when 2+ cards are selected -->
+    <!-- Glue and unglue actions, shown only when two or more cards are selected -->
     {#if selectedCards.length >= 2}
       <div class={css({ display: "contents" })}>
         {#if allGlued}
@@ -450,7 +450,7 @@
         Edit a file{@render shortcutHint(shortcuts.openFilePaletteShortcut)}
       </button>
     {/if}
-    <!-- Delete: always visible in selection mode -->
+    <!-- Delete action, always shown in selection mode -->
     <button
       class={css({ position: "relative", width: "100%", minWidth: "0", padding: "8px 12px", background: "ink.white", border: "1px solid token(colors.neutral.border)", borderRadius: "4px", cursor: "pointer", fontSize: "12px", color: "state.error", fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", "&:hover": { borderColor: "state.error" } })}
       title={`Delete ${selectedCards.length === 1 ? "card" : selectedCards.length + " cards"}`}

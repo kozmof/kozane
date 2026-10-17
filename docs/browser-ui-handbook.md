@@ -498,10 +498,10 @@ reload.
 
 Only text files can be opened, and only up to 1 MB. A file larger than that, or
 one that is not valid UTF-8, is refused rather than truncated or mangled. The
-panel writes back what it holds, so it must not save over anything it could not read exactly.
-Saving only ever replaces a file
-that is already there. A new file is made empty by the tree's own control, as
-above, and its first save follows the same rules as any other.
+panel writes back what it holds, so it must not save over anything it could not read
+exactly. Saving only ever replaces a file that is already there. A new file is made empty
+by the tree's own control, as above, and its first save follows the same rules as any
+other.
 
 The file is read when it is opened, and the save is checked against what is on
 disk at that moment. If the file changed underneath, for example from another editor, a build, or a
@@ -549,9 +549,9 @@ stops where the link starts, which makes `:todo:https://example.com` the tag `:t
 a tag at all. `:Perf` and `:perf` are the same tag.
 
 No rule closes a tag once it opens, because a colon does not pair up the way a quote
-mark does. That costs something in a
-taskspace of source code, because `:foo` is also how Ruby, Elixir, and Clojure write a symbol or a
-keyword argument, so a file in one of those languages can pick up tags nobody meant to write.
+mark does. That costs something in a taskspace of source code. `:foo` is also how Ruby,
+Elixir, and Clojure write a symbol or a keyword argument, so a file in one of those
+languages can pick up tags nobody meant to write.
 The tree over such a taskspace can carry that noise alongside the tags that were meant.
 
 Tags in a card's text are drawn as links. Click one to open the tag index.
@@ -560,9 +560,8 @@ Tags in a card's text are drawn as links. Click one to open the tag index.
 
 The tag index lives at `/tags`. Open it from the tree icon in the corner of the
 namespace list, which shows the whole workspace, or from any tag on a card, which opens it
-on that tag. The tree of
-every tag is on the left, with a count of the cards and files each one gathers, and the selected
-tag's hits on the right. `?tag=` says which tag is open, so any view of the page is a link
+on that tag. The tree of every tag is on the left, with a count of the cards and files
+each one gathers, and the selected tag's hits on the right. `?tag=` says which tag is open, so any view of the page is a link
 you can send.
 
 It reaches the whole workspace by default. Unlike a board, which draws one namespace, the
@@ -575,14 +574,12 @@ Picking the one already selected clears it again and goes back to the whole work
 narrowing sticks as you browse the tree. A tag link in a card opens the index already
 narrowed to that card's namespace.
 
-"Cards only", beside the namespace names, puts the taskspace files away and leaves the tags
-written on cards. It adds `?files=0` to the URL and skips the disk walk rather than hiding
-what it found, so it is also the quickest the page gets. Use it for a taskspace
-that is a source checkout. A tag is just text, so a symbol or keyword argument in a language
-that writes those with a leading colon opens a tag the same as a word someone wrote on
-purpose. For example, `{ id: :active }` gathers under `:active`, and the tree over such a taskspace can
-fill up with these. "Include files" puts them back.
-`kozane tag show --no-files` is the same switch in the terminal.
+The page always includes taskspace files. A tag is just text, so a symbol or keyword
+argument in a language that writes those with a leading colon opens a tag the same as a
+word someone wrote on purpose. For example, `{ id: :active }` gathers under `:active`, and
+the tree over a taskspace that is a source checkout can fill up with these. To see the tags
+written on cards alone, run `kozane tag show <tag> --no-files` in the terminal. It skips the
+disk walk entirely.
 
 - Cards show their text and partition, and their namespace when you are looking across the
   whole workspace. Click one to go to that card's board with the view centered on it.

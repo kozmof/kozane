@@ -42,7 +42,7 @@ export function storeActiveLayerId(namespaceId: string, layerId: string | null):
     if (layerId) globalThis.sessionStorage?.setItem(key, layerId);
     else globalThis.sessionStorage?.removeItem(key);
   } catch {
-    // Ignored: see readStoredLayerId.
+    // Ignored for the reason given in readStoredLayerId.
   }
 }
 

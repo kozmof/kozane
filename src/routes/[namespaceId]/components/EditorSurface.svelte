@@ -494,7 +494,7 @@
       ></div>
     {/each}
 
-    <!-- Text: only the window, absolutely positioned by line number. -->
+    <!-- Draw only the windowed lines, each absolutely positioned by line number. -->
     {#each lines as line (line.lineNumber)}
       <div
         use:lineEl={line.lineNumber}
@@ -513,7 +513,7 @@
           >{line.content.slice(caret.column)}{:else}{line.content}{/if}</div>
     {/each}
 
-    <!-- Cursor: a sibling of the text, never spliced into it, so drawing it cannot move
+    <!-- The cursor is a sibling of the text, never spliced into it, so drawing it cannot move
          a single character on the line. -->
     {#if focused && !composing}
       <div

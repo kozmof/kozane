@@ -61,7 +61,7 @@
      * content is available.
      */
     onOpenFile?: (taskspaceId: string, taskspaceName: string, path: string) => void;
-    // Read-only export: keep scope filtering, hide create/delete/membership controls.
+    // A read-only export keeps scope filtering but hides the create, delete, and membership controls.
     readonly?: boolean;
   } = $props();
 

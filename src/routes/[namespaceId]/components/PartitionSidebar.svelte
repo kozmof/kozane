@@ -22,7 +22,7 @@
     newPartitionName: string;
     onCreatePartition: () => void;
     onDeletePartition: (partitionId: string) => void;
-    // Read-only export: keep partition filtering, hide create/delete controls.
+    // A read-only export keeps partition filtering but hides the create and delete controls.
     readonly?: boolean;
   } = $props();
 

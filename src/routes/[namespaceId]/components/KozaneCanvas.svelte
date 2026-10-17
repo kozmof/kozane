@@ -180,7 +180,7 @@
     onError: (message: string) => void;
     /** Passed to each card, which draws a tag in its text as a link to it. See `KozaneCard`. */
     tagHref?: (tag: string) => string;
-    // Read-only export: keep pan/zoom, disable card drag, selection, and compose.
+    // A read-only export keeps pan and zoom but disables card drag, selection, and compose.
     readonly?: boolean;
   } = $props();
 

@@ -29,7 +29,7 @@
     onRenameLayer: (layerId: string, name: string) => void;
     /** Receives the namespace's full layer ordering, bottom to top. */
     onReorderLayers: (layerIds: string[]) => void;
-    // Read-only export: keep layer selection, hide create/delete/reorder controls.
+    // A read-only export keeps layer selection but hides the create, delete, and reorder controls.
     readonly?: boolean;
   } = $props();
 
