@@ -5,10 +5,10 @@ records and taskspace files intact. Relevant pages and commands rebuild them.
 
 ## Cache files
 
-| File | Contents | Used by |
-| --- | --- | --- |
-| `.kozane/treemap.json` | Namespace and partition counts, colors, daily card changes, scope relationships, and card tags | Workspace map |
-| `.kozane/tag-index.json` | Card tag hits by namespace and workspace, plus taskspace file tags and excerpts | Tag index and tag CLI commands |
+| File                     | Contents                                                                                       | Used by                        |
+| ------------------------ | ---------------------------------------------------------------------------------------------- | ------------------------------ |
+| `.kozane/treemap.json`   | Namespace and partition counts, colors, daily card changes, scope relationships, and card tags | Workspace map                  |
+| `.kozane/tag-index.json` | Card tag hits by namespace and workspace, plus taskspace file tags and excerpts                | Tag index and tag CLI commands |
 
 The map derives filters and layout from its snapshot. It does not cache pan,
 zoom, or rectangle coordinates. Static exports gather directly from the database.

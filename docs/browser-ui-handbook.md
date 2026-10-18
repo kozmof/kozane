@@ -51,20 +51,20 @@ card, used by actions such as "Unglue this".
 Selecting cards turns the composer into an action bar. Shortcuts work when you
 are not typing in a text field.
 
-| Action | Key | Availability |
-| --- | --- | --- |
-| Change partition | Partition dropdown | Any selection |
-| Copy card ID | `c` | One card |
-| Bring to front | `]` | One card |
-| Send to back | `[` | One card |
-| Glue or Unglue all | `g` | Two or more cards |
-| Unglue this | `u` | Primary card is glued |
-| Move to namespace | `m` | Another namespace exists |
-| Resize | `r` | One card |
-| Squash | `s` | One card whose text splits |
-| Edit a file | `e` | Any selection |
-| Delete | `Delete` | Any selection |
-| Clear selection | `Esc` | Any selection |
+| Action             | Key                | Availability               |
+| ------------------ | ------------------ | -------------------------- |
+| Change partition   | Partition dropdown | Any selection              |
+| Copy card ID       | `c`                | One card                   |
+| Bring to front     | `]`                | One card                   |
+| Send to back       | `[`                | One card                   |
+| Glue or Unglue all | `g`                | Two or more cards          |
+| Unglue this        | `u`                | Primary card is glued      |
+| Move to namespace  | `m`                | Another namespace exists   |
+| Resize             | `r`                | One card                   |
+| Squash             | `s`                | One card whose text splits |
+| Edit a file        | `e`                | Any selection              |
+| Delete             | `Delete`           | Any selection              |
+| Clear selection    | `Esc`              | Any selection              |
 
 "Move to namespace" opens a picker and moves all selected cards to your choice.
 
@@ -226,12 +226,12 @@ New files open in the editor immediately.
 
 Click a text file to open the editor. Files must be valid UTF-8 and at most 1 MB.
 
-| Action | Control |
-| --- | --- |
-| Save | `Ctrl+S`, `Cmd+S`, or Save |
-| Undo | `Ctrl+Z` or `Cmd+Z` |
-| Redo | `Ctrl+Shift+Z` or `Cmd+Shift+Z` |
-| Close | `Esc`, Close, or click outside |
+| Action       | Control                                                 |
+| ------------ | ------------------------------------------------------- |
+| Save         | `Ctrl+S`, `Cmd+S`, or Save                              |
+| Undo         | `Ctrl+Z` or `Cmd+Z`                                     |
+| Redo         | `Ctrl+Shift+Z` or `Cmd+Shift+Z`                         |
+| Close        | `Esc`, Close, or click outside                          |
 | Resize panel | Drag its left edge, or focus the edge and use `←` / `→` |
 
 A dot beside the path marks unsaved changes. Closing the editor or leaving the
@@ -250,14 +250,14 @@ The editor opens in normal mode. `Esc` leaves insert mode, and saving stays on
 Warps save places on a namespace's canvas and persist across reloads.
 Use these shortcuts with no cards selected and no text field focused.
 
-| Action | Control |
-| --- | --- |
-| Set a warp | `a`, at the pointer or view center |
-| Jump to the nearest warp in a direction | Arrow keys, wrapping at the edge |
-| Open the workspace-wide warp picker | `Shift` + any arrow key |
-| Move a warp | Drag its marker |
-| Remove the selected warp | `x` |
-| Show or hide markers | `Shift+A` |
+| Action                                  | Control                            |
+| --------------------------------------- | ---------------------------------- |
+| Set a warp                              | `a`, at the pointer or view center |
+| Jump to the nearest warp in a direction | Arrow keys, wrapping at the edge   |
+| Open the workspace-wide warp picker     | `Shift` + any arrow key            |
+| Move a warp                             | Drag its marker                    |
+| Remove the selected warp                | `x`                                |
+| Show or hide markers                    | `Shift+A`                          |
 
 In the picker, use `↑` / `↓` and `Enter`, or click a row, to jump.
 Press `Esc` to close. Each row also has a remove button.
@@ -319,11 +319,11 @@ The URL keeps the selected namespace, tag, and day for sharing.
 
 Use the header icons to switch pages. Hover an icon to see its name.
 
-| Icon | Destination |
-| --- | --- |
-| Four-square grid | Namespace list |
-| Unequal rectangles | Map |
-| Branching tree | Tag index |
+| Icon               | Destination    |
+| ------------------ | -------------- |
+| Four-square grid   | Namespace list |
+| Unequal rectangles | Map            |
+| Branching tree     | Tag index      |
 
 On the map and tag index, the grid returns to the selected namespace's board
 when narrowed to one, or to the namespace list otherwise.
@@ -332,16 +332,16 @@ when narrowed to one, or to the namespace list otherwise.
 
 UI settings live under `ui` in `.kozane/config.json`.
 
-| Setting | Purpose | Default |
-| --- | --- | --- |
-| `newCardPlacement` | `vertical-list` or four-column `grid` | `vertical-list` |
-| `defaultCardWidth` | Width of unresized cards in pixels | `210` |
-| `zoomStep` | Zoom increment | `0.05` (5%) |
-| `warpMarkerSize` | Marker size in pixels, from 8 to 64 | `20` |
-| `setWarpShortcut` | Set a warp | `a` |
-| `toggleWarpsShortcut` | Show or hide warps | `A` (Shift+A) |
-| `removeWarpShortcut` | Remove a warp | `x` |
-| `editorVimMode` | Enable Vim bindings in the file editor | `false` |
+| Setting               | Purpose                                | Default         |
+| --------------------- | -------------------------------------- | --------------- |
+| `newCardPlacement`    | `vertical-list` or four-column `grid`  | `vertical-list` |
+| `defaultCardWidth`    | Width of unresized cards in pixels     | `210`           |
+| `zoomStep`            | Zoom increment                         | `0.05` (5%)     |
+| `warpMarkerSize`      | Marker size in pixels, from 8 to 64    | `20`            |
+| `setWarpShortcut`     | Set a warp                             | `a`             |
+| `toggleWarpsShortcut` | Show or hide warps                     | `A` (Shift+A)   |
+| `removeWarpShortcut`  | Remove a warp                          | `x`             |
+| `editorVimMode`       | Enable Vim bindings in the file editor | `false`         |
 
 ## Live sync
 

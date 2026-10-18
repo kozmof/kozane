@@ -27,11 +27,11 @@ See the [security matrix](../docs/security-matrix.md).
 
 Send one JSON object with `Content-Type: application/json`.
 
-| Invalid input | Response |
-| --- | --- |
+| Invalid input                 | Response                                            |
+| ----------------------------- | --------------------------------------------------- |
 | Missing or other content type | `415 Request body must be sent as application/json` |
-| Invalid JSON | `400 Request body must be valid JSON` |
-| Array or scalar | `400 Request body must be a JSON object` |
+| Invalid JSON                  | `400 Request body must be valid JSON`               |
+| Array or scalar               | `400 Request body must be a JSON object`            |
 
 Names are trimmed, non-blank, and at most 255 characters. Card text is limited by
 `ui.contentMax`, defaulting to 200,000 UTF-16 code units. ID arrays contain unique,

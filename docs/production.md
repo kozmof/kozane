@@ -26,11 +26,11 @@ incorrect protocol forwarding causes HTTP 426 responses.
 Configure headers for the exact trusted proxy chain. For one proxy, typical
 settings are the following.
 
-| Setting | Value | Purpose |
-| --- | --- | --- |
-| `PROTOCOL_HEADER` | `x-forwarded-proto` | Recognize HTTPS terminated at the proxy |
-| `ADDRESS_HEADER` | `x-forwarded-for` | Identify clients for logs and authentication throttling |
-| `XFF_DEPTH` | `1` | Trust one proxy hop |
+| Setting           | Value               | Purpose                                                 |
+| ----------------- | ------------------- | ------------------------------------------------------- |
+| `PROTOCOL_HEADER` | `x-forwarded-proto` | Recognize HTTPS terminated at the proxy                 |
+| `ADDRESS_HEADER`  | `x-forwarded-for`   | Identify clients for logs and authentication throttling |
+| `XFF_DEPTH`       | `1`                 | Trust one proxy hop                                     |
 
 Accept these headers only from trusted proxies. Without client-address forwarding,
 all clients share the proxy's authentication-failure counter. Add proxy-level

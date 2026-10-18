@@ -6,12 +6,12 @@ exists. Use `bin/server.js` as the server entry. It binds `HOST` when set and
 
 ## At a glance
 
-| Mode | Network reach | API key | Transport | Host checked | Writes |
-| --- | --- | --- | --- | --- | --- |
-| Local | Loopback | Optional | HTTP | Without a key | Yes |
-| Local with `--allow-remote` | Loopback | Required | HTTP | No | Yes |
-| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | No | Yes |
-| Static export | Wherever hosted | None | Host-defined | No server | No |
+| Mode                                    | Network reach   | API key  | Transport       | Host checked  | Writes |
+| --------------------------------------- | --------------- | -------- | --------------- | ------------- | ------ |
+| Local                                   | Loopback        | Optional | HTTP            | Without a key | Yes    |
+| Local with `--allow-remote`             | Loopback        | Required | HTTP            | No            | Yes    |
+| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | No            | Yes    |
+| Static export                           | Wherever hosted | None     | Host-defined    | No server     | No     |
 
 When a key exists, every request requires authentication. Browsers use an
 `HttpOnly`, `SameSite=Strict` cookie. Unauthenticated browser navigations redirect
@@ -73,12 +73,12 @@ kozane api key generate
 kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
-| Requirement | Behavior |
-| --- | --- |
-| API key | CLI refuses to launch without one, server requests fail closed with 503 if unavailable |
-| HTTPS | Plain HTTP as seen by SvelteKit receives 426 |
-| `--no-open` | Required for remote binding, use the proxy URL in the browser |
-| Trusted proxy headers | Configure scheme and client-address forwarding for the actual proxy chain |
+| Requirement           | Behavior                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| API key               | CLI refuses to launch without one, server requests fail closed with 503 if unavailable |
+| HTTPS                 | Plain HTTP as seen by SvelteKit receives 426                                           |
+| `--no-open`           | Required for remote binding, use the proxy URL in the browser                          |
+| Trusted proxy headers | Configure scheme and client-address forwarding for the actual proxy chain              |
 
 Remote cookies are marked `Secure`. Restrict the HTTP listener to the proxy.
 See [Production operations](./production.md) for proxy settings and rate limiting.
@@ -95,23 +95,23 @@ Every namespace is exported. Anyone with access to the hosted files can read the
 embedded data. Kozane provides no authentication on static sites. Editing and live
 sync are disabled. Machine-specific workspace and taskspace paths are stripped.
 
-| Data | Default export | With `--include-scoped-files` |
-| --- | --- | --- |
-| Cards, partitions, layers, warps, glue | Included | Included |
-| Map and card tags | Included | Included |
-| Scopes and map scope graph | Excluded | Included |
-| Scoped taskspace names and file contents | Excluded | Included within limits |
-| File-tag results | Excluded | Included |
-| Unscoped taskspaces | Excluded | Excluded |
+| Data                                     | Default export | With `--include-scoped-files` |
+| ---------------------------------------- | -------------- | ----------------------------- |
+| Cards, partitions, layers, warps, glue   | Included       | Included                      |
+| Map and card tags                        | Included       | Included                      |
+| Scopes and map scope graph               | Excluded       | Included                      |
+| Scoped taskspace names and file contents | Excluded       | Included within limits        |
+| File-tag results                         | Excluded       | Included                      |
+| Unscoped taskspaces                      | Excluded       | Excluded                      |
 
 Use `--include-scoped-files` only for taskspace contents intended for publication.
 
-| File export boundary | Result |
-| --- | --- |
-| Dot-entries | Excluded |
-| Symbolic links | Listed, never followed |
-| Non-UTF-8 files, files over 1 MB, or content beyond 20 MB per taskspace | Names listed, contents withheld |
-| More than 50,000 entries per taskspace or 64 directory levels | Walk stops and marks the directory truncated, further entries are omitted |
+| File export boundary                                                    | Result                                                                    |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Dot-entries                                                             | Excluded                                                                  |
+| Symbolic links                                                          | Listed, never followed                                                    |
+| Non-UTF-8 files, files over 1 MB, or content beyond 20 MB per taskspace | Names listed, contents withheld                                           |
+| More than 50,000 entries per taskspace or 64 directory levels           | Walk stops and marks the directory truncated, further entries are omitted |
 
 Content caps apply per taskspace per page. Unassigned taskspaces can appear on
 every namespace board and duplicate their embedded contents across pages.
@@ -127,13 +127,13 @@ Paths are checked before and after resolution. Traversal outside the taskspace,
 dot-entries, and access through symlinks are refused. These rules cover directory
 listing, file reads, saves, and creation.
 
-| Operation | Boundary |
-| --- | --- |
-| List directory | Names, kinds, sizes, and modification times only, symlinks listed but not followed |
-| Read file | Regular UTF-8 files up to 1 MB |
-| Save file | Existing files only, atomic replacement, 409 if the read signature no longer matches |
+| Operation                | Boundary                                                                                                  |
+| ------------------------ | --------------------------------------------------------------------------------------------------------- |
+| List directory           | Names, kinds, sizes, and modification times only, symlinks listed but not followed                        |
+| Read file                | Regular UTF-8 files up to 1 MB                                                                            |
+| Save file                | Existing files only, atomic replacement, 409 if the read signature no longer matches                      |
 | Create file or directory | One empty entry, no replacement or parent creation, 409 for an existing name and 404 for a missing parent |
-| Scan tags | Same read boundaries, with byte, entry, depth, and hit limits and notices for incomplete scans |
+| Scan tags                | Same read boundaries, with byte, entry, depth, and hit limits and notices for incomplete scans            |
 
 Tag scans also skip generated and vendored directories, including `node_modules`,
 `build`, `dist`, `out`, `target`, `coverage`, `vendor`, `bower_components`,
@@ -149,13 +149,13 @@ the original taskspaces.
 
 ## Where each rule lives
 
-| Rule | Source |
-| --- | --- |
-| Startup host and key checks | `src/cli/commands/open.ts` |
-| TLS, host, and missing-key gating | `src/hooks.server.ts` |
-| Authentication, login redirect, throttling | `src/lib/server/request-auth.ts` |
-| Loopback, TLS, and rate-limit helpers | `src/lib/server/security.ts` |
-| Login and redirect validation | `src/routes/login/`, `src/lib/server/login.ts` |
-| Taskspace file boundaries | `src/lib/server/taskspace-files.ts` |
-| Taskspace tag scanning | `src/lib/server/taskspace-tags.ts` |
-| Atomic file replacement | `src/lib/server/atomic-write.ts` |
+| Rule                                       | Source                                         |
+| ------------------------------------------ | ---------------------------------------------- |
+| Startup host and key checks                | `src/cli/commands/open.ts`                     |
+| TLS, host, and missing-key gating          | `src/hooks.server.ts`                          |
+| Authentication, login redirect, throttling | `src/lib/server/request-auth.ts`               |
+| Loopback, TLS, and rate-limit helpers      | `src/lib/server/security.ts`                   |
+| Login and redirect validation              | `src/routes/login/`, `src/lib/server/login.ts` |
+| Taskspace file boundaries                  | `src/lib/server/taskspace-files.ts`            |
+| Taskspace tag scanning                     | `src/lib/server/taskspace-tags.ts`             |
+| Atomic file replacement                    | `src/lib/server/atomic-write.ts`               |

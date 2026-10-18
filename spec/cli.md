@@ -547,13 +547,13 @@ kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 
 Report migration status and exit 0 only when current.
 
-| Status | Meaning |
-| --- | --- |
-| `current` | All journal migrations applied |
-| `pending` | Run `kozane db migrate` |
-| `missing` | Database file absent |
-| `gapped` | An older migration is missing, restore a backup |
-| `unknown` | Migration metadata unreadable |
+| Status    | Meaning                                         |
+| --------- | ----------------------------------------------- |
+| `current` | All journal migrations applied                  |
+| `pending` | Run `kozane db migrate`                         |
+| `missing` | Database file absent                            |
+| `gapped`  | An older migration is missing, restore a backup |
+| `unknown` | Migration metadata unreadable                   |
 
 ```bash
 kozane db status
@@ -648,12 +648,12 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
                               [--namespace <namespaceId>] [--dir <path>]
 ```
 
-| Flag                | Description                                                             |
-| ------------------- | ----------------------------------------------------------------------- |
-| `--scope <scopeId>` | Attach taskspace to an existing scope                                   |
-| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)              |
-| `--namespace <id>`  | Owning namespace (defaults to the workspace default) |
-| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)                    |
+| Flag                | Description                                                |
+| ------------------- | ---------------------------------------------------------- |
+| `--scope <scopeId>` | Attach taskspace to an existing scope                      |
+| `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
+| `--namespace <id>`  | Owning namespace (defaults to the workspace default)       |
+| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)       |
 
 ## Config file
 
