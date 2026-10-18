@@ -5,11 +5,11 @@
 ### Main
 
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
-- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
 - Card: A unit of text.
 
 ### Others
 
+- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
 - Layer: A way to arrange cards in layers.
 - Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
 - Warp: A saved point to jump to. Warps are not related to cards.
