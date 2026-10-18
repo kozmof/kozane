@@ -1,307 +1,161 @@
 # Security matrix
 
-Kozane runs in a few modes with different network exposure and authentication.
-This page lists what each mode enforces so you can pick the right one and avoid
-exposing a workspace by accident.
-
-Every mode below is served by `bin/server.js`, which is what calls `listen`. It binds `HOST`
-when one is set and `127.0.0.1` otherwise, so the address a mode reaches is decided by Kozane
-rather than inherited from a framework default. The Node adapter's own entry, which defaults
-to every interface, is not shipped. `bin/server.js` is the only way the package starts a
-server, and `pnpm pack:check` enforces that. Point a process manager at it.
-
-When a workspace has an API key, two rules hold in every server mode.
-
-- The API-key cookie is `HttpOnly` and `SameSite=Strict`, so a cross-site page
-  cannot read it or send it.
-- Every mutating request needs the key, so an unauthenticated or cross-site
-  request cannot change data.
+Kozane's access rules depend on its bind address and whether a workspace API key
+exists. Use `bin/server.js` as the server entry. It binds `HOST` when set and
+`127.0.0.1` otherwise.
 
 ## At a glance
 
-| Mode                                    | Network reach   | API key  | Transport       | Auth enforced          | Host checked       | Writes |
-| --------------------------------------- | --------------- | -------- | --------------- | ---------------------- | ------------------ | ------ |
-| Local                                   | Loopback only   | Optional | HTTP            | Only when a key exists | Only without a key | Yes    |
-| Local with `--allow-remote`             | Loopback only   | Required | HTTP            | Yes                    | No                 | Yes    |
-| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | Yes                    | No                 | Yes    |
-| Static export (SSG)                     | Wherever hosted | None     | Host-defined    | No server              | No server          | No     |
+| Mode | Network reach | API key | Transport | Host checked | Writes |
+| --- | --- | --- | --- | --- | --- |
+| Local | Loopback | Optional | HTTP | Without a key | Yes |
+| Local with `--allow-remote` | Loopback | Required | HTTP | No | Yes |
+| Remote (`--allow-remote`, non-loopback) | Bound interface | Required | HTTPS via proxy | No | Yes |
+| Static export | Wherever hosted | None | Host-defined | No server | No |
+
+When a key exists, every request requires authentication. Browsers use an
+`HttpOnly`, `SameSite=Strict` cookie. Unauthenticated browser navigations redirect
+to login, API clients receive 401, and repeated failures receive 429.
 
 ## Local
+
+Start a loopback server with the following command.
 
 ```sh
 kozane open
 ```
 
-Binds to a loopback address (127.0.0.1 by default), so only the machine itself
-can reach it. Served over plain HTTP.
+Without a key, any local user or process that can reach the port can read and
+write the workspace, including taskspace files. Generate a key to require
+authentication.
 
-An API key is optional in this mode.
+```sh
+kozane api key generate
+```
 
-- Without a key — no authentication. Any local user or process on the machine
-  can read and write the workspace. This is the state after a plain
-  `kozane init`.
-- With a key (`kozane api key generate`) — every request needs the key.
-  `kozane open` opens the browser with the key in the URL once, then swaps it
-  for the cookie. A tab that arrives without the key is redirected to the login
-  page, and an API or fetch client gets 401.
+`kozane open` launches a URL containing the key, exchanges it for a cookie, and
+removes it from the URL. Other local users may see the launcher's command line.
+Use `--no-open` and paste the key into the login page to avoid that exposure.
+Loopback HTTP cookies are not marked `Secure`.
 
-The cookie is not marked `Secure`, which is correct for loopback HTTP because
-the traffic never leaves the host. `kozane open` sets the server `ORIGIN` to the
-loopback URL so the login form passes SvelteKit's cross-site check.
-
-`ORIGIN` names one spelling, but a loopback server answers to three.
-`http://localhost:5173`, `http://127.0.0.1:5173` and `http://[::1]:5173` are the
-same server, but the check compares origins as strings. So `bin/server.js`
-rewrites the `Origin` header of a request that arrived under another of those
-names before the check sees it, as long as both sides use HTTP and a loopback host.
-Same-port aliases are accepted. When local port forwarding exposes a different
-port (for example, localhost:5174 forwarding to 127.0.0.1:5173), the incoming
-`Origin` must match the request's `Host` header. Browsers set that header from
-the destination URL, so a form from an unrelated origin cannot choose it.
-Forwarded-host headers are not trusted. Missing origins and mismatched ports
-without a matching Host are still refused.
-Without the rewrite, a workspace opened at `localhost` while `ORIGIN` said
-`127.0.0.1` still drew every page and took every canvas edit, because those are `GET`s
-and JSON. It answered `403` only to the create-namespace form, which is the
-application's one HTML form.
-
-The URL `kozane open` opens becomes the browser launcher's command line, where
-other local users can read it. Use `--no-open` and the login page to avoid that.
+HTTP loopback origin aliases (`localhost`, `127.0.0.1`, and `[::1]`) are accepted
+on the same port. For local port forwarding, the incoming Origin must match Host.
+Forwarded-host headers are not trusted, and missing or mismatched origins remain
+subject to form-origin checks.
 
 ### Host checking without a key
 
-A keyless workspace checks the `Host` header and answers `403` to anything that
-is not a loopback name. Without a key there is no credential to check, and a
-hostname someone else controls can be pointed at `127.0.0.1`. After this DNS rebinding,
-the browser treats a page they serve as this server's own
-origin. `ORIGIN` does not settle that on its own, because SvelteKit's cross-site check
-covers form-shaped `POST`s, and reading the board is a `GET`.
-
-To reach a keyless workspace under another name, such as a hosts-file alias or a
-local proxy, list it in `KOZANE_ALLOWED_HOSTS` (comma-separated):
+Keyless workspaces reject non-loopback Host headers with 403 to prevent DNS
+rebinding. Allow a custom local name through comma-separated `KOZANE_ALLOWED_HOSTS`.
 
 ```sh
 KOZANE_ALLOWED_HOSTS=kozane.local kozane open
 ```
 
-Generating a key is the better answer. Once a workspace has one, the check does
-not apply, because the key is then the thing being verified. The API-key
-cookie also belongs to the loopback origin, so a rebound page never receives it.
+Generating a key replaces host checking with authentication.
 
 ## Local with `--allow-remote`
+
+The flag requires a generated key but does not change the bind address.
 
 ```sh
 kozane open --allow-remote
 ```
 
-Behaves like local with a key, with one addition. `--allow-remote` requires a
-generated key and refuses to start without one, so authentication is always on.
-
-The flag on its own does not expose the server. The host stays loopback unless
-you also pass `--host`. To serve other machines, set a non-loopback host, which
-moves you to the next mode.
+The server stays on loopback unless `--host` selects another interface.
 
 ## Remote
 
+Generate a key, then bind behind an HTTPS reverse proxy.
+
 ```sh
+kozane api key generate
 kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
-Binds to a non-loopback interface, so other machines can reach it. This is the
-strictest mode.
+| Requirement | Behavior |
+| --- | --- |
+| API key | CLI refuses to launch without one, server requests fail closed with 503 if unavailable |
+| HTTPS | Plain HTTP as seen by SvelteKit receives 426 |
+| `--no-open` | Required for remote binding, use the proxy URL in the browser |
+| Trusted proxy headers | Configure scheme and client-address forwarding for the actual proxy chain |
 
-- API key — required. The server refuses to start without one and answers 503
-  until a key exists.
-- HTTPS — required. Plain HTTP is rejected with 426. Terminate TLS at a reverse
-  proxy and forward the scheme with `PROTOCOL_HEADER=x-forwarded-proto` so the
-  server sees `https`.
-- `--no-open` — required, because the browser must reach the HTTPS proxy URL,
-  not the local HTTP listener.
-
-Unauthenticated browser navigations are redirected to the login page over
-HTTPS, API clients get 401, and repeated failures get 429. The cookie is marked
-`Secure`. The origin for the cross-site check comes from the proxy headers you
-configure, not from `kozane open`. See [Production operations](./production.md)
-for the full proxy, firewall, and process-user guidance.
+Remote cookies are marked `Secure`. Restrict the HTTP listener to the proxy.
+See [Production operations](./production.md) for proxy settings and rate limiting.
 
 ## Static export (SSG)
+
+Export a read-only site with the following command.
 
 ```sh
 kozane net ssg generate
 ```
 
-Builds plain HTML, CSS, and JS with no server, for hosting on GitHub Pages or
-any static host.
+Every namespace is exported. Anyone with access to the hosted files can read their
+embedded data. Kozane provides no authentication on static sites. Editing and live
+sync are disabled. Machine-specific workspace and taskspace paths are stripped.
 
-The export is public and read-only. It bakes out one page per namespace, each
-carrying that namespace's cards, partitions, layers, warps, and glue, along with the
-scopes that namespace draws. Anyone who can open the site reads all of it. There
-is no API key, no login page, and no way to authenticate, because there is no
-server. Composing, dragging, deleting, taskspaces, and live sync are all
-disabled.
+| Data | Default export | With `--include-scoped-files` |
+| --- | --- | --- |
+| Cards, partitions, layers, warps, glue | Included | Included |
+| Map and card tags | Included | Included |
+| Scopes and map scope graph | Excluded | Included |
+| Scoped taskspace names and file contents | Excluded | Included within limits |
+| File-tag results | Excluded | Included |
+| Unscoped taskspaces | Excluded | Excluded |
 
-Every namespace in the workspace is exported, so narrowing scopes to a namespace
-hides nothing here. A scope used by a namespace is on that namespace's page, and
-one used by none is on every page. Narrowing changes which page a scope
-appears on, not whether it is published.
+Use `--include-scoped-files` only for taskspace contents intended for publication.
 
-Do not export a workspace that holds anything you would not publish. Card text,
-partition names, scope names, layer names, and warp positions are all part of the
-export by design, because that is what is being published.
+| File export boundary | Result |
+| --- | --- |
+| Dot-entries | Excluded |
+| Symbolic links | Listed, never followed |
+| Non-UTF-8 files, files over 1 MB, or content beyond 20 MB per taskspace | Names listed, contents withheld |
+| More than 50,000 entries per taskspace or 64 directory levels | Walk stops and marks the directory truncated, further entries are omitted |
 
-Filesystem paths are not. The machine-specific workspace path is stripped, and
-taskspace paths are redacted from the page data the export bakes in, so the
-directories a workspace was worked in are not served to whoever opens the site.
-By default, taskspaces do not appear in a static export at all. A plain
-`kozane net ssg generate` carries no scopes, no taskspace names, and no files.
-
-The map at `/map` is exported on the same terms. It publishes namespace names,
-partition names, card counts, and the tag tree, which is card and partition content
-the export carries by design. Its scope graph is not published. Like every other page, a
-plain export draws no scope circles and names no scope. The graph is gathered only when the
-export is built to carry scopes.
-
-`--include-scoped-files` is the exception, and it publishes real file contents.
-
-```sh
-kozane net ssg generate --out ./site --include-scoped-files
-```
-
-The export then carries the scopes each namespace draws, the names of the
-taskspaces under those scopes, and a read-only copy of each of those taskspaces'
-files, contents inline. A taskspace that belongs to no scope is not drawn by the
-board, so it is left out of the export entirely, including its name. The rest of the file
-boundary matches the live server, because the same code reads it.
-
-- Dot-entries are never included, so `.git`, `.env`, and `.taskspace.json` stay out.
-- Symlinks are listed but never followed.
-- A file over 1 MB, a file that is not valid UTF-8, and a file past the 20 MB
-  content cap for each taskspace are listed by name with their contents withheld.
-
-The other two ceilings drop what they stop at rather than naming it. Past 50,000
-entries per taskspace, or more than 64 directories deep, the walk stops and marks
-the directory it stopped in as truncated. The enclosing directory is in the
-export and says it is incomplete, but the entries beyond the cut are not in it
-at all, not even by name. Read an export as a floor on what went out, not a
-census. Only the working copy shows what a truncated directory held.
-
-The flag publishes your working directories in full to whoever opens the site, with no
-key in front of them. Use it only on a workspace whose taskspace files you would publish
-deliberately.
+Content caps apply per taskspace per page. Unassigned taskspaces can appear on
+every namespace board and duplicate their embedded contents across pages.
 
 ## Taskspace files
 
-The browser UI lists a taskspace directory, opens and saves the text files in it,
-and creates new files and folders in it, so the server reads and writes the
-filesystem on behalf of whoever has the page open. What that reaches is bounded.
+Authenticated users can browse, create, and edit files in registered taskspaces.
+The boundary is the taskspace directory, including when it lies outside the
+workspace. Register only directories that those users may read and write.
+Without an API key, this access extends to local processes that can reach the port.
 
-Both the listing and the file endpoints are confined the same way. The directory
-comes from the taskspace record and the workspace root. The request chooses only
-where to look inside it. A path that walks out with `..` is refused, and so is
-one that resolves out through a symlink. The boundary is checked twice, once on
-the path as written and once on the resolved path with every link
-followed. Dot-entries are refused outright, which keeps `.git`,
-`.taskspace.json`, and a stray `.env` both out of the listing and beyond reach of
-anyone who types the name. Both are gated like everything else. When a workspace
-has an API key, a request without it gets 401.
+Paths are checked before and after resolution. Traversal outside the taskspace,
+dot-entries, and access through symlinks are refused. These rules cover directory
+listing, file reads, saves, and creation.
 
-The listing answers with entry names, kinds, sizes, and modification times, and
-nothing else. Symlinks are listed but never followed.
+| Operation | Boundary |
+| --- | --- |
+| List directory | Names, kinds, sizes, and modification times only, symlinks listed but not followed |
+| Read file | Regular UTF-8 files up to 1 MB |
+| Save file | Existing files only, atomic replacement, 409 if the read signature no longer matches |
+| Create file or directory | One empty entry, no replacement or parent creation, 409 for an existing name and 404 for a missing parent |
+| Scan tags | Same read boundaries, with byte, entry, depth, and hit limits and notices for incomplete scans |
 
-A read returns the text of one regular file. Symlinks, directories, and
-anything that is not a regular file are refused, as is a file over 1 MB or one
-that is not valid UTF-8.
+Tag scans also skip generated and vendored directories, including `node_modules`,
+`build`, `dist`, `out`, `target`, `coverage`, `vendor`, `bower_components`,
+`__pycache__`, and `tmp`.
 
-The tag scan walks a taskspace and reads the text files in it, to gather
-the tags written inside them for the tag index page and `kozane tag list|show`.
-It reaches nothing a read does not. The walk is built on the same listing and
-reading described here, so dot-entries are not scanned, symlinks are not
-followed, and a file that is not UTF-8 text or is over 1 MB is passed over. For each
-hit it returns a path, a line number, and that one line, not the
-file. The walk has its own byte, entry, and depth budgets, per
-taskspace and again across a whole gather, so many taskspaces
-cost no more to read than a few. It also has a ceiling on how many
-tags one taskspace may yield, since a file can hold far more tags per byte read
-than any byte budget implies. It reports when it stops at any of these limits. It also
-skips generated and vendored directories (`node_modules`, `build`, `dist`, `out`, `target`,
-`coverage`, `vendor`, `bower_components`, `__pycache__`, and `tmp`), which narrows what is
-read further.
+Tag caches can contain excerpts from external taskspaces. Protect `.kozane/` like
+its source data and keep it out of version control. `kozane init` creates an
+internal `.gitignore` for this purpose. See [Cache behavior](./cache.md) for cache
+validation, limits, and cleanup.
 
-What that scan gathered is kept in `.kozane/tag-index.json` so the next page load
-does not repeat it, and the lines it quotes are kept with it. This file
-inside the workspace holds excerpts of files that may sit outside it, because a
-taskspace created with `kozane taskspace create --dir <path>` can point anywhere
-the server user can read. It is a cache, not a record. Deleting it costs one
-slow load, and it is rebuilt from the files themselves. Past 16 MB it is ignored
-and rebuilt rather than read, since reading it happens while a page load waits.
-Treat it as you would the taskspaces it summarizes.
-See [Cache behavior](./cache.md) for the complete cache lifecycle and cleanup guidance.
-
-`kozane init` writes a `.gitignore` inside `.kozane/` that ignores the whole
-directory, so a workspace created inside a checkout does not commit this cache,
-the API key, or this machine's runtime state, which live beside it. It is one
-file inside the workspace directory rather than a line appended to the
-repository's own `.gitignore`, so removing the workspace removes it too. A
-workspace that predates this, or one whose directory was created by hand, does
-not have it. Add it if the repository is shared.
-
-A write replaces the contents of a file that is already there. It never
-creates one, never writes outside the taskspace, and never writes a path
-containing a dot-entry. The write is atomic (a temporary file, then a rename),
-so a failure leaves the original intact rather than truncated. A save also
-carries the file's identity as it was read, and is refused with 409 if the file
-changed on disk since, so a save cannot silently discard someone else's edit.
-
-Creating makes one empty file, or one directory, and nothing else. It never
-replaces what it finds. A name already taken by a file, a directory, or a
-symlink is refused with 409. The kernel, not the check before it,
-settles two requests racing for one name. It is confined exactly as reading
-and writing are, by the same resolution and the same two boundary checks, so a
-`..`, a symlinked directory along the way, and a dot-entry are refused here too.
-A dot-file the panel could neither list nor open cannot be created
-either. Neither form creates parent directories, so a path whose parent is missing
-returns 404 instead of creating a tree. Contents arrive only
-through a save, so everything stated above about writing governs what can end up
-in a file made this way.
-
-Two consequences are worth stating plainly.
-
-- A taskspace created outside the workspace root with
-  `kozane taskspace create --dir <path>` is both readable and writable, because
-  the boundary is the taskspace directory rather than the root. Point a taskspace
-  at a directory only if you would let anyone who can reach the server read and
-  rewrite the text files in it.
-- On a local server with no API key, which is the state after a plain
-  `kozane init`, any local user or process that can reach the port can rewrite
-  those files. That is the same trust boundary the database already sits behind, but
-  it now extends to the working directory a taskspace points at. Generate a key
-  with `kozane api key generate` if that is not what you want.
-
-A static export has neither risk. It has no server to ask, and taskspace paths are stripped
-from it. Nothing in an export can be written, and nothing can be read from it
-that was not baked in at build time. By default that is no taskspace at all, and with
-`--include-scoped-files` it is exactly the files described above.
-
-The tag index page follows the same rule, and has to. A file hit carries a path
-inside the workspace and a line of that file's content, and page data baked into
-an export is readable by view-source however the page draws it. So a plain export
-carries only the tags written on cards, and a tag written solely in a taskspace
-file does not appear in it at all. With `--include-scoped-files`, file hits are
-baked in alongside the files themselves.
-
-The taskspaces themselves are named under the same flag and not otherwise. A
-taskspace's name is the name of a directory on the machine the workspace was
-built on, so an export that mentions no taskspace must not carry a list of them
-either. The rule comes from the board, and the tag index follows it because it publishes
-the same kind of page.
+Static sites can read only the files embedded during export and cannot write to
+the original taskspaces.
 
 ## Where each rule lives
 
-- Host and key checks at startup — `src/cli/commands/open.ts`
-- Per-request TLS, host, and missing-key gating — `src/hooks.server.ts`
-- Per-request key check, login redirect, and rate-limit response — `src/lib/server/request-auth.ts`
-- Loopback, TLS, and rate-limit helpers — `src/lib/server/security.ts`
-- Login page and `next` guard — `src/routes/login/` and `src/lib/server/login.ts`
-- Taskspace listing, read, and write boundary — `src/lib/server/taskspace-files.ts`
-- Taskspace tag scan, on top of that boundary — `src/lib/server/taskspace-tags.ts`
-- Atomic file replacement — `src/lib/server/atomic-write.ts`
+| Rule | Source |
+| --- | --- |
+| Startup host and key checks | `src/cli/commands/open.ts` |
+| TLS, host, and missing-key gating | `src/hooks.server.ts` |
+| Authentication, login redirect, throttling | `src/lib/server/request-auth.ts` |
+| Loopback, TLS, and rate-limit helpers | `src/lib/server/security.ts` |
+| Login and redirect validation | `src/routes/login/`, `src/lib/server/login.ts` |
+| Taskspace file boundaries | `src/lib/server/taskspace-files.ts` |
+| Taskspace tag scanning | `src/lib/server/taskspace-tags.ts` |
+| Atomic file replacement | `src/lib/server/atomic-write.ts` |

@@ -8,6 +8,9 @@ The name "Kozane" comes from こざね法 (kozane method), developed by Japanese
 
 ## Structures
 
+Start by adding cards. This is the main way to use Kozane.
+Use other structures only when you need them.
+
 ### Main
 
 - Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
@@ -68,11 +71,49 @@ To start with an empty database that exists only for the lifetime of the server,
 
 The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key, a monitoring probe has to send it too. See [Production operations](./docs/production.md).
 
-For working in the browser UI, see the [Browser UI handbook](./docs/browser-ui-handbook.md).
+## UI
+
+After `kozane open` launches the browser, choose a namespace from the landing page
+to open its canvas.
+
+### Creating and arranging cards
+
+Type text in the composer at the bottom of the canvas and press `Enter` to create
+a card. Double-click a card to edit it, and drag cards to arrange them.
+
+See the [Browser UI handbook](./docs/browser-ui-handbook.md) for selection,
+keyboard shortcuts, layers, scopes, and taskspaces.
+
+### Browsing tags
+
+The browser tag index is available at `/tags`. Add `?namespaceId=<id>` to limit it
+to one namespace. It always includes taskspace files.
+
+### Seeing across namespaces
+
+The read-only map at `/map` shows namespaces, partitions, scopes, and tags across
+the workspace.
+
+A board shows the scopes and taskspaces associated with its namespace, along with
+any that have not been assigned to a namespace.
+
+### Remote login
+
+For a browser on another device, open `https://your-proxy/`. Any unauthenticated
+page load is redirected to a login page where you paste the key once. Kozane stores
+it as an HttpOnly cookie and sends you back to where you were headed.
+Opening `https://your-proxy/?api_key=<key>` skips the form. Kozane exchanges the
+query parameter for the same cookie and removes it from the URL.
+
+See [Security and remote access](#security-and-remote-access) for server setup and
+API key generation.
+
+## CLI
+
 The [CLI specification](./spec/cli.md) covers every command, and the
 [HTTP API specification](./spec/http.md) covers every endpoint the browser and API clients use.
 
-## Adding cards from text
+### Adding cards from text
 
 Create one card from a quoted argument:
 
@@ -111,7 +152,7 @@ kozane layer move Sketches down
 
 A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
-## Tagging
+### Tagging
 
 A tag is text that begins with a colon. A colon also separates subcategories, so
 a tag can nest without a second character:
@@ -132,17 +173,11 @@ A tag exists only while it appears in text, and only where a colon opens a word.
 has to sit at the start of a line, after whitespace, or after an opening bracket, so
 ordinary punctuation like `3:45` or `key: value` is never mistaken for one.
 
-The browser tag index is available at `/tags`. Add `?namespaceId=<id>` to limit it to one
-namespace. It always includes taskspace files. To list cards alone, run
-`kozane tag show <tag> --no-files`.
+To list cards alone, run `kozane tag show <tag> --no-files`.
 
-## Seeing across namespaces
+### Seeing across namespaces
 
-The read-only map at `/map` shows namespaces, partitions, scopes, and tags across the
-workspace.
-
-A board shows the scopes and taskspaces associated with its namespace, along with any that
-have not been assigned to a namespace. The CLI provides a workspace-wide view:
+List scopes and taskspaces across the workspace:
 
 ```sh
 kozane scope list                    # every scope, and the namespaces each one reaches
@@ -151,7 +186,7 @@ kozane taskspace list                # every taskspace, with its namespace and s
 
 Pass `--namespace <id>` to either to see exactly what that namespace's board draws.
 
-## Security and remote access
+### Security and remote access
 
 Generate a per-workspace API key before allowing remote access:
 
@@ -163,14 +198,13 @@ kozane open --host 0.0.0.0 --allow-remote --no-open
 The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients send it as `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`.
 `kozane api key refresh` immediately replaces the old key.
 
-For a browser on another device, open `https://your-proxy/`. Any unauthenticated page load is redirected to a login page where you paste the key once. Kozane stores it as an HttpOnly cookie and sends you back to where you were headed.
-Opening `https://your-proxy/?api_key=<key>` skips the form. Kozane exchanges the query parameter for the same cookie and removes it from the URL. API and `fetch` clients are unaffected. An unauthenticated request without a valid `Authorization: Bearer` or `X-API-Key` header still receives a `401`, not the login page.
+An unauthenticated API or `fetch` request without a valid `Authorization: Bearer` or `X-API-Key` header receives a `401`. For browser access, see [Remote login](#remote-login).
 
 `--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described in [Production operations](./docs/production.md), and use firewall restrictions and an unprivileged runtime user.
 
 For a full breakdown of what each run mode exposes, see the [Security matrix](./docs/security-matrix.md).
 
-## Publishing a read-only static site
+### Publishing a read-only static site
 
 Export the current workspace as a static site:
 
@@ -210,7 +244,7 @@ kozane net ssg preview      # serves ./site at http://127.0.0.1:17174
 kozane net ssg preview --base /kozane
 ```
 
-## Upgrades and recovery
+### Upgrades and recovery
 
 ```sh
 kozane db status

@@ -1,88 +1,56 @@
-# Kozane CLI Specification
+# Kozane CLI reference
 
-## Structures
+Start by adding cards. Use other structures only when you need them.
+See the [README](../README.md) for installation and the
+[browser UI handbook](../docs/browser-ui-handbook.md) for browser operations.
 
-### Main
+## Common behavior
 
-- Namespace: A top-level container. It contains partitions, which group text units called cards. Most operations take place within a namespace.
-- Card: A unit of text.
+Workspace commands find `.kozane/config.json` by walking up from the current
+directory. Without a workspace, they exit 1 and suggest `kozane init`.
 
-### Others
+`namespace`, `partition`, `card`, `layer`, `scope`, `warp`, `tag`, and
+`taskspace` require current migrations and use the active session database,
+including a running `--memory` server. `status` also uses the session database
+but permits pending migrations. Other commands open the on-disk database directly.
+Migrations are applied only by `db migrate`, which creates a backup first.
+For gapped history, use `db status` and `doctor` rather than migrating.
+Errors print to stderr and exit 1.
 
-- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
-- Layer: A way to arrange cards in layers.
-- Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem.
-- Warp: A saved point to jump to. Warps are not related to cards.
-
----
+Commands with `--namespace` normally use the workspace default when omitted.
+Check command-specific requirements below. IDs accept full or unambiguous short
+forms where documented. Layer arguments also accept names, with exact names preferred.
 
 ## Commands
 
-### What every workspace command does first
-
-`namespace`, `partition`, `card`, `layer`, `scope`, `warp`, `tag`, `taskspace` and `status`
-all open the workspace the same way, and it is the same three steps every time.
-
-1. Find the workspace, walking up from the current directory. Without one, the command
-   exits 1 with `No Kozane workspace found. Run "kozane init" first.`
-2. Require the database to be current. A database missing migrations stops the command
-   with the same report `kozane open` gives, and a pointer to `kozane db migrate`. When the history
-   has gaps, which `db migrate` cannot repair, it points to `kozane db status` and `kozane doctor`
-   instead. No command migrates on its way past, because migrations take a backup first, and
-   that only happens when `kozane db migrate` is asked for by name. `kozane status` is the
-   exception and reports on a workspace whatever state it is in.
-3. Open the session database. While a `kozane open --memory` server is running, that is
-   its temporary database rather than `.kozane/kozane.db`, so these commands act on the
-   board that is actually open.
-
-Anything thrown after that becomes `Error: <message>` on stderr and exit 1.
-
-`init`, `open`, `doctor`, `net ssg` and the `db` commands skip these steps. Each opens the
-on-disk database directly, because each has a reason to run when the steps above would
-refuse.
-
 ### `kozane init`
 
-Initializes Kozane in the current directory.
+Create `.kozane/config.json` , a migrated database, and the default `main` namespace with a
+`General` partition and `Base` layer. The workspace name defaults to the directory name.
+Refuses if `.kozane/` exists. The directory gets a `.gitignore` excluding its contents.
 
 ```bash
 kozane init
 ```
 
-Behavior:
-
-1. Refuses if `.kozane/` already exists.
-2. Creates `.kozane/` with a `.gitignore` that excludes the whole directory.
-3. Writes `.kozane/config.json` with defaults (workspace name = current directory name).
-4. Runs Drizzle migrations to create `.kozane/kozane.db`.
-5. Creates a namespace named `main`, marks it as the workspace default, and creates its default `General` partition and `Base` layer.
-
-Output:
-
-```
-Initializing Kozane workspace "my-namespace"...
-
-Kozane initialized.
-
-  Workspace: my-namespace
-  Config   : .kozane/config.json
-  Database : .kozane/kozane.db
-
-Default namespace: main
-```
-
----
-
 ### `kozane open`
 
-Starts the local Kozane web UI and (by default) opens the browser.
+Start the browser UI. Host and port use the first available value from flags, `KOZANE_HOST` /
+`KOZANE_PORT` , config, then `127.0.0.1` / `17173` . Empty environment values are ignored.
+Ports must be integers from 0 to 65535, with 0 requesting an available port. Invalid explicit
+values fail.
+
+Migrations must be current. `--memory` instead creates a temporary database with a `:memory:`
+namespace. Workspace commands use that database while the server runs, and changes disappear
+when it stops.
+
+`--allow-remote` requires a generated API key, `--no-open` , and HTTPS through a reverse proxy.
+See the [Security matrix](../docs/security-matrix.md) .
 
 ```bash
 kozane open [--host <host>] [--port <port>] [--memory] [--log-requests]
             [--allow-remote] [--no-open]
 ```
-
-Options:
 
 | Flag             | Default     | Description                                        |
 | ---------------- | ----------- | -------------------------------------------------- |
@@ -93,91 +61,38 @@ Options:
 | `--allow-remote` | false       | Serve through an HTTPS reverse proxy (see below)   |
 | `--no-open`      | false       | Start server without opening the browser           |
 
-`--allow-remote` requires a generated API key and `--no-open`, and it rejects plain HTTP.
-See the [Security matrix](../docs/security-matrix.md) for what each run mode exposes.
-
-Host and port are resolved in this order, first match wins:
-
-1. `--host` / `--port`
-2. `KOZANE_HOST` / `KOZANE_PORT` (empty values are ignored)
-3. `server.host` / `server.port` in `.kozane/config.json`
-4. The built-in defaults `127.0.0.1` and `17173`
-
-`17173` avoids the ports popular dev servers claim by default (Vite `5173`, Vite preview
-`4173`, `3000`, `8080`, …) and sits below the Linux ephemeral range, so it is not handed
-out to outgoing connections. An explicit port that is not an integer between 0 and 65535
-is an error, and the command does not fall through to the next source. Port `0` asks the
-OS for an ephemeral port.
-
-Behavior:
-
-1. Walks up from CWD to find `.kozane/config.json` → workspace root.
-2. Checks DB migration status and exits with an error if migrations are not current. With
-   `--memory`, creates and migrates a fresh temporary session database with one namespace named
-   `:memory:` instead. While the server is running, namespace-dependent CLI commands use this
-   database and select its sole namespace automatically, so `--namespace` can be omitted.
-3. Sets `DATABASE_URL`, `KOZANE_WORKSPACE_ROOT`, `HOST`, and `PORT` env vars.
-4. Spawns the server at `bin/server.js`. That entry, rather than adapter-node's
-   `build/index.js`, is what binds the socket. It calls `listen` with Kozane's own
-   `DEFAULT_SERVER_HOST` so the default is loopback rather than the adapter's `0.0.0.0`.
-5. Prints the local URL, then (unless `--no-open`) opens the browser after 1 s.
-
-Output:
-
-```
-Kozane workspace: my-namespace
-Database: .kozane/kozane.db
-
-Local UI:
-http://127.0.0.1:17173
-```
-
-If the database needs migration, the command exits before starting:
-
-```
-Kozane database needs attention before the UI can start.
-...
-Run: kozane db migrate
-```
-
----
-
 ### `kozane api key generate`
 
-Generates the workspace API key and prints it once. The key is written to
-`.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request
-needs the key.
+Generate and print a workspace API key. Store it in `.kozane/api.json` with owner-only
+permissions. Once present, every HTTP request requires authentication. Refuses if a key exists.
+Use `api key refresh` to replace it.
 
 ```bash
 kozane api key generate
 ```
 
-Exits with an error if a key already exists, pointing at `kozane api key refresh`.
-
 ### `kozane api key refresh`
 
-Replaces the existing key with a new one and prints it. The previous key stops working
-immediately.
+Replace and print the existing API key. The old key stops working immediately. Refuses if no
+key exists.
 
 ```bash
 kozane api key refresh
 ```
 
-Exits with an error if no key exists yet.
-
----
-
 ### `kozane net ssg generate`
 
-Builds a read-only static site from the current workspace, for hosting on GitHub Pages or
-any static host. The export carries a full snapshot of the database and has no server, so
-every write operation is disabled in it.
+Export a read-only workspace snapshot. The output directory is emptied and rewritten, including
+a `.nojekyll` file for GitHub Pages. Requires current migrations and the source build
+toolchain. Run from a cloned repository after `pnpm install` .
+
+Scopes, taskspaces, and files are excluded unless `--include-scoped-files` is given. That
+option publishes real contents of scoped taskspaces. See the
+[Security matrix](../docs/security-matrix.md#static-export-ssg) for limits and exclusions.
 
 ```bash
 kozane net ssg generate [--out <dir>] [--base <path>] [--include-scoped-files]
 ```
-
-Options:
 
 | Flag                     | Default   | Description                                                    |
 | ------------------------ | --------- | -------------------------------------------------------------- |
@@ -185,24 +100,14 @@ Options:
 | `--base <path>`          | site root | Base path when hosted under a subdirectory, e.g. `/kozane`     |
 | `--include-scoped-files` | false     | Also export scopes, taskspace names, and a copy of their files |
 
-Without `--include-scoped-files`, the export carries no scopes, taskspaces, or files. With it,
-only taskspaces that belong to a scope are exported, and their real file contents become
-public. See the [Security matrix](../docs/security-matrix.md#static-export-ssg) for the limits
-and what stays out.
-
-Requires migrations to be current, and requires the source build toolchain, so run it from
-a cloned repository after `pnpm install`. The output directory gets a `.nojekyll` file so
-GitHub Pages serves SvelteKit's `_app/` directory.
-
 ### `kozane net ssg preview`
 
-Serves a generated site over HTTP, resolving URLs the way GitHub Pages does.
+Serve an exported site over HTTP with GitHub Pages URL handling. Use the same `--base` as the
+export. Refuses if the directory has no `index.html` .
 
 ```bash
 kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <port>] [--no-open]
 ```
-
-Options:
 
 | Flag            | Default     | Description                                  |
 | --------------- | ----------- | -------------------------------------------- |
@@ -212,380 +117,178 @@ Options:
 | `--port`        | `17174`     | Port number (or `KOZANE_PREVIEW_PORT`)       |
 | `--no-open`     | false       | Start the server without opening the browser |
 
-Exits with an error if the directory holds no `index.html`.
-
----
-
 ### `kozane doctor`
 
-Checks the Kozane workspace and reports its health.
+Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
+integrity and references, workspace limits, and port availability. Exit 0 when all checks pass,
+otherwise 1.
+
+Database content checks require current migrations. Invalid timestamps, oversized text or
+names, and out-of-bounds cards are reported with example IDs. Limit checks use SQLite character
+counts, which can miss text that exceeds the UTF-16 limit through astral characters.
+
+For broken config, run `doctor config` . For database corruption, export readable data before
+restoring a backup.
 
 ```bash
 kozane doctor
 ```
 
-Checks (in order):
-
-| Check                         | Pass condition                                     |
-| ----------------------------- | -------------------------------------------------- |
-| Kozane workspace found        | `.kozane/config.json` found by walking up from CWD |
-| `.kozane/` directory exists   | directory present at workspace root                |
-| `config.json` valid           | parses as valid JSON with expected shape           |
-| `kozane.db` readable/writable | file exists and has `rw` permissions               |
-| DB migrations current         | migration status is `current`                      |
-| Card timestamps valid         | every card's timestamps name a moment              |
-| Database integrity            | SQLite reports no file or reference problems       |
-| Rows within workspace limits  | no row sits past a limit a write path enforces     |
-| Port available                | configured port not already in use                 |
-
-Exit code `0` if all checks pass, `1` otherwise.
-
-Output:
-
-```
-  ✓  Kozane workspace found — /path/to/namespace
-  ✓  .kozane/ directory exists
-  ✓  config.json valid
-  ✓  kozane.db readable/writable
-  ✓  DB migrations current
-  ✓  Card timestamps valid
-  ✓  Database integrity
-  ✓  Rows within workspace limits
-  ✓  Port 17173 available
-```
-
-A failed `config.json valid` check points at `kozane doctor config`, which reports what
-is actually wrong. `doctor` itself keeps running through a broken config.
-
-`Card timestamps valid` runs only when the migrations are current, since it reads columns
-that migration 0011 adds. It reports cards whose `created_at` or `updated_at` falls outside
-the range a timestamp this app wrote can hold, meaning at or before the epoch, or past the largest
-instant a date can represent. The epoch is what a hand-written `INSERT INTO card` naming
-neither column leaves behind, since the columns carry a `DEFAULT 0` that SQLite will not let
-the schema drop. Only hand-written SQL can put a value beyond the date range there.
-Every insert the app makes writes both columns, so any such card means the database was
-edited by hand and `kozane card list --sort` will report those cards as `1970` or
-`invalid`.
-
-The check names the cards it found by short ID, up to five, then `and N more`.
-
-```
-  ✗  Card timestamps valid — 2 cards stamped outside what this app writes, likely inserted by hand: 6fd3a2b, 41c0e9d; kozane card list --sort reports them as 1970 or invalid
-```
-
-`Database integrity` runs only when the migrations are current, and runs both
-`PRAGMA integrity_check` and `PRAGMA foreign_key_check`. They answer different questions.
-The first is about the file, such as page structure and index entries that do not match their table.
-The second is about the rows, which can find something the first calls sound. `PRAGMA
-foreign_keys` is a per-connection setting, so a row written over a connection that left it
-off is a dangling reference in a structurally perfect file. `sqlite3` on the command line
-starts in that state, and every connection Kozane opens sets the pragma. A failure points at
-`kozane db restore`, or at `kozane db export` first where anything is still readable.
-
-```
-  ✗  Database integrity — 3 rows referencing a row that does not exist, in card, scope_rel; written by a client that had PRAGMA foreign_keys off. Export what is readable with kozane db export, then kozane db restore
-```
-
-`Rows within workspace limits` reports rows past the limits every write path holds a new row
-to. These are card text longer than `ui.contentMax`, a card positioned outside the
-`ui.canvasWidth` × `ui.canvasHeight` board, and a name longer than 255 characters in any of
-`namespace`, `partition`, `layer`, `scope` or `taskspace`. Nothing in the schema enforces
-these, because they are settings, and a `CHECK` constraint could not follow one being changed.
-Such a row arrives in one of two ways. One is hand-written SQL. The other is
-[`kozane db import`](#kozane-db-import), which takes them on purpose and warns rather than
-refusing, because a dump exported from a workspace with different settings has to stay
-restorable.
-
-Cards are named by short ID, the way `Card timestamps valid` names them. An over-long name is
-located by its table and full ID instead, since a short ID would have to be unambiguous
-across five tables rather than within one. Up to five of each, then `and N more`.
-
-Measured with SQLite's `length()`, which counts characters, where the write paths measure
-UTF-16 code units. A card made of astral characters such as emoji may be past the limit
-the endpoints enforce without being named here. The difference errs on the safe side, so nothing is
-reported that a write path would accept.
-
-```
-  ✗  Rows within workspace limits — 1 card over ui.contentMax: 6fd3a2b; 1 name over 255 characters: scope 0199c3f1-7a2e-7b41-9c08-3d5e2f6a4b10; editing one will refuse it
-```
-
----
-
 ### `kozane doctor config`
 
-Checks `.kozane/config.json` and reports every problem at once, unlike the commands that
-read the config for real and stop at the first one.
+Report all config problems together. Errors include unreadable files, invalid JSON, missing
+required keys, and invalid values. Warnings include unknown keys and duplicate shortcuts. Notes
+list defaults for unset optional keys.
+
+Required keys are `name` , `taskspace.defaultDir` , and `taskspace.searchRoots` . Exit 1 for
+errors, otherwise 0. `--strict` also fails on warnings.
 
 ```bash
 kozane doctor config
 kozane doctor config --strict
 ```
 
-| Severity    | Reported for                                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `✗` error   | unreadable file, invalid JSON, missing required key, invalid value                                                             |
-| `⚠` warning | unknown key, with the nearest known key suggested when it looks like a typo, and two `ui.*Shortcut` keys bound to the same key |
-| `ℹ` note    | unset optional keys, each listed with the default standing in for it                                                           |
-
-The required keys are `name`, `taskspace.defaultDir`, and `taskspace.searchRoots`. Everything
-under `server` and `ui` is optional and falls back to its built-in default.
-
-Exit code `1` when there is at least one error, `0` otherwise. `--strict` makes warnings
-fail too, for setups where an unknown key should break the build.
-
-Output:
-
-```
-Config: /path/to/namespace/.kozane/config.json
-
-  ✗  name is missing
-  ✗  server.port must be between 0 and 65535 (found: 70000)
-  ⚠  server.protocol is not a known key
-  ⚠  ui.defaultFontSze is not a known key — did you mean "defaultFontSize"?
-  ℹ  server: 1 of 2 keys not set — using defaults
-       host: "127.0.0.1"
-  ℹ  ui: 27 of 28 keys not set — using defaults
-       defaultFontSize: 11.5
-       defaultFontFamily: "monospace"
-       …
-
-2 errors, 2 warnings
-```
-
-Each note names the keys behind the count, so the defaults a workspace is running on are
-visible without going to look them up.
-
----
-
 ### `kozane status`
 
-Shows whether the server is stopped or running in persistent/`:memory:` mode, plus the
-current namespace state. While a memory server is running, counts come from its temporary
-session database.
+Show server state (stopped, persistent, or `:memory:` ) and namespace, partition, card, scope,
+and taskspace counts. While a memory server runs, counts use its session database. Works even
+when migrations are not current.
 
 ```bash
 kozane status
 ```
 
-Output:
-
-```
-Workspace    : my-namespace
-Opening      : running (:memory:)
-Namespaces     : 1
-Partitions      : 6
-Cards        : 128
-Scopes       : 4
-Taskspaces   : 3
-```
-
----
-
 ### `kozane namespace list`
 
-Lists all namespaces in the current workspace.
+List namespace short IDs and names, marking the default with `(default)`.
 
 ```bash
 kozane namespace list
 ```
 
-Output (one line per namespace):
-
-```
-aa414b7  main  (default)
-```
-
-If no namespaces exist:
-
-```
-No namespaces found.
-```
-
----
-
 ### `kozane namespace create <name>`
 
-Creates a new namespace in the current workspace.
+Create a namespace with its default `General` partition and `Base` layer in one transaction.
+Print its short ID and name.
 
 ```bash
 kozane namespace create <name>
 ```
 
-Behavior:
-
-1. Requires a Kozane workspace (walks up from CWD).
-2. Requires the database to be current, as every workspace command does (see above).
-3. Inserts a `namespace` DB record → gets a stable UUID.
-4. Creates a default "General" partition and a default "Base" layer for the namespace.
-
-Steps 3 and 4 are one transaction, so a namespace never exists without the partition and layer
-a canvas needs. The browser namespace list creates namespaces through the same routine.
-
-Output:
-
-```
-Namespace created.
-  id  : aa414b7
-  name: my-namespace
-```
-
----
-
 ### `kozane namespace default <id>`
 
-Marks a namespace as the workspace default. The alias `namespace set-default <id>` is also
-accepted. Commands use this namespace whenever `--namespace` is omitted. Namespace IDs may
-be full or short.
+Set the workspace default used when `--namespace` is omitted. Accepts full or short IDs. Alias
+`namespace set-default <id>` .
 
 ```bash
 kozane namespace default <id>
 ```
 
----
-
 ### `kozane namespace delete <id>`
 
-Deletes a namespace by full or short ID. Its partitions, cards, layers, warps, scope frames, and taskspace records are deleted with it. Scopes and taskspace directories on disk are kept. If it was the default, another remaining namespace is promoted automatically.
+Delete a namespace and its partitions, cards, layers, warps, scope frames, and taskspace
+records. Keep scopes and taskspace directories. If needed, promote another namespace to
+default. Accepts full or short IDs.
 
 ```bash
 kozane namespace delete <id>
 ```
 
-Output:
-
-```
-Namespace deleted.
-  id: aa414b7
-```
-
----
-
 ### `kozane partition list`
 
-Lists a namespace's partitions, one per line, as short ID and name. The default partition is marked
-`(default)`.
+List partition short IDs and names, marking the default with `(default)`.
 
 ```bash
 kozane partition list [--namespace <namespaceId>]
 ```
 
-If the namespace has no partitions, the command prints `No partitions found.`
-
 ### `kozane partition add <name>`
 
-Adds a partition to a namespace. Output includes the new short partition ID and name.
+Create a partition and print its short ID and name. Names are trimmed, non-empty, and unique
+within the namespace.
 
 ```bash
 kozane partition add <name> [--namespace <namespaceId>]
 ```
 
-Partition names are trimmed, must be non-empty, and are unique within the namespace.
-
 ### `kozane partition delete <partitionId>`
 
-Deletes a partition and moves its cards to the namespace's default partition, so no card is lost
-with the label it carried. Deleting the default partition is refused.
+Delete a partition and move its cards to the default partition. Refuses to delete the default.
+Resolve full or short IDs within the selected namespace.
 
 ```bash
 kozane partition delete <partitionId> [--namespace <namespaceId>]
 ```
 
-`<partitionId>` is a full or short ID, resolved against the selected namespace's partitions.
-
----
-
 ### `kozane scope add <name>`
 
-Adds a cross-namespace card scope.
+Create a cross-namespace scope and print its short ID and name. Names must be non-empty and
+unique workspace-wide.
 
 ```bash
 kozane scope add <name>
 ```
 
-Output includes the new short scope ID and name. Scope names must be non-empty and
-unique within the workspace.
-
 ### `kozane scope list`
 
-Lists every scope in the workspace using collision-safe short IDs, followed by the namespaces
-that scope reaches through a card filed into it or a taskspace attached to it. A scope no
-namespace has reached yet is shown as `(unused)`, and those are visible from every board.
+List every scope and the namespaces it reaches through cards or taskspaces. Unused scopes
+appear as `(unused)` and are visible on every board. `--namespace` limits results to that
+board, including unused scopes. Short IDs remain consistent across filtered listings.
 
 ```bash
 kozane scope list
 kozane scope list --namespace <namespaceId>
 ```
 
-`--namespace` narrows the list to what that namespace's board draws. Short IDs are always
-computed against every scope in the workspace, so an ID printed here is the same one
-whether or not the list was narrowed.
-
-If no scopes exist, the command prints `No scopes found.`, or
-`No scopes found in this namespace.` when `--namespace` was given.
-
 ### `kozane scope add-cards <scopeId> <cardIds>`
 
-Adds one or more cards to a scope. `<cardIds>` takes any number of full or short card IDs,
-separated by spaces.
+Add cards to a scope. Cards must belong to the selected namespace. Existing membership is
+unchanged. Print the number added and scope short ID.
 
 ```bash
 kozane scope add-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
 kozane scope add-cards e3ee90b 3f9a2c1 72ac1f8
 ```
 
-Every card must belong to the selected namespace. A card from another namespace is refused
-rather than moved. A card already in the scope is left as it is, so the command can be run
-twice without doubling anything. Output is the number of cards added and the scope's short
-ID.
-
 ### `kozane scope remove-cards <scopeId> <cardIds>`
 
-Removes one or more cards from a scope. The cards themselves are not deleted. A scope
-gathers cards, and removing one from the gathering leaves it on its board.
+Remove scope membership without deleting cards. Cards must belong to the selected namespace.
+Non-members are unchanged.
 
 ```bash
 kozane scope remove-cards <scopeId> <cardIds...> [--namespace <namespaceId>]
 ```
 
-Refused, with the same wording as `add-cards`, when a named card does not belong to the
-selected namespace. A card that was not in the scope is not an error.
-
 ### `kozane scope delete <id>`
 
-Deletes a scope workspace-wide using its full or short ID. Scope membership rows are
-deleted, and attached taskspaces become unscoped. Cards themselves are retained.
+Delete a scope workspace-wide by full or short ID. Remove memberships and leave attached
+taskspaces unscoped. Keep cards.
 
 ```bash
 kozane scope delete <id>
 ```
 
----
-
 ### `kozane layer list`
 
-Lists a namespace's layers bottom to top, one per line, as short ID, position, card count,
-and name. The default layer is marked `(default)`.
+List layers bottom to top with short ID, position, card count, and name. Mark the default with
+`(default)` .
 
 ```bash
 kozane layer list [--namespace <namespaceId>]
 ```
 
-If the namespace has no layers, the command prints `No layers found.`
-
 ### `kozane layer add <name>`
 
-Adds a layer on top of the namespace's existing ones. Output includes the new short layer ID,
-name, and position.
+Create a layer on top and print its short ID, name, and position. Names must be non-empty and
+unique within the namespace.
 
 ```bash
 kozane layer add <name> [--namespace <namespaceId>]
 ```
 
-Layer names must be non-empty and unique within the namespace.
-
 ### `kozane layer rename <layer> <name>`
 
-Renames a layer, identified by name, full ID, or short ID.
+Rename a layer. Layer arguments accept an exact name, full ID, or short ID. An exact name wins.
 
 ```bash
 kozane layer rename <layer> <name> [--namespace <namespaceId>]
@@ -594,8 +297,7 @@ kozane layer rename Draft Sketches
 
 ### `kozane layer move <layer> <direction>`
 
-Moves a layer one step up or down the stack. `<direction>` must be `up` or `down`. Moving
-past either end is an error, as is any other direction.
+Move a layer one step `up` or `down`. Moving beyond either end fails.
 
 ```bash
 kozane layer move <layer> up|down [--namespace <namespaceId>]
@@ -604,18 +306,19 @@ kozane layer move Sketches down
 
 ### `kozane layer delete <layer>`
 
-Deletes a layer and moves its cards to the namespace's default layer. Deleting the default
-layer is refused.
+Delete a layer and move its cards to the default layer. Refuses to delete the default.
 
 ```bash
 kozane layer delete <layer> [--namespace <namespaceId>]
 ```
 
----
-
 ### `kozane card add <content>`
 
-Adds a card to a namespace and optionally associates it with a scope.
+Create a card. Omitted namespace, partition, and layer options use their defaults. IDs may be
+full or short, and layers also accept names. Optional scope membership is committed with the
+card.
+
+Text is trimmed, must be non-empty, and must fit `ui.contentMax`.
 
 ```bash
 kozane card add <content> [--namespace <namespaceId>] [--partition <partitionId>]
@@ -623,31 +326,15 @@ kozane card add <content> [--namespace <namespaceId>] [--partition <partitionId>
                           [--x <number>] [--y <number>]
 ```
 
-Namespace, partition, and scope options accept full or short IDs, and `--layer` also accepts a
-layer name. Without `--namespace`, the workspace default namespace is used. Without `--partition`, that
-namespace's default partition is used. Without `--layer`, that namespace's default layer is used.
-When `--scope` is provided, card creation and scope membership are committed in one
-transaction.
-
-`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit,
-the same rules the HTTP API applies.
-
-Example:
-
-```bash
-kozane card add "Investigate caching" --namespace eb155d6 --scope e3ee90b --x 48 --y 72
-```
-
----
-
 ### `kozane card squash [content]`
 
-Splits text using a configurable JavaScript regular expression, trims each segment,
-and adds every non-empty segment as a separate card. The default pattern splits on
-a period followed by whitespace (a space or a line break), on `。`, or on a blank
-line, preserving dots inside values such as `example.com`. Generated cards are placed
-on unoccupied grid positions instead of being stacked at the same coordinates. Pass
-the text as an argument or pipe it through standard input:
+Split argument or piped text into new cards, trimming segments and skipping empty ones. The
+default separator is a period followed by whitespace, `。` , or a blank line. Dots in
+`example.com` remain intact. Use `--pattern` for a JavaScript regular expression source.
+
+Accepts `--namespace` , `--partition` , `--scope` , and `--layer` with the same resolution as
+`card add` . Cards occupy free grid positions. Creation and scope membership are atomic. All
+pieces share new creation and update timestamps, and each must fit `ui.contentMax` .
 
 ```bash
 kozane card squash "First thought. 第二の考え。 Third thought."
@@ -655,25 +342,15 @@ cat foo.txt | kozane card squash
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-The command accepts `--pattern`, `--namespace`, `--partition`, `--scope`, and `--layer`, using
-full or short IDs. `--layer` also accepts a layer name. These options work with piped
-input as well:
-
 ```bash
 cat foo.txt | kozane card squash --namespace eb155d6 --scope e3ee90b
 ```
 
-All generated cards and their optional scope memberships are committed in one
-transaction, so an error does not leave a partially created set. Every generated card
-is new, and is created and last-updated at the moment the command runs. That is the same moment
-for all of them, so `kozane card list --sort created` never splits one command's cards
-across a second.
-
----
-
 ### `kozane card show <cardId>`
 
-Prints a card content by full or short ID. Line breaks are preserved.
+Print card text with line breaks preserved. Accepts full or short IDs. `--times` adds `created`
+, `updated` , and `gap` values above the text. Without it, output is suitable for redirecting
+to a text file. See [Sorting](#sorting) for timestamp rules.
 
 ```bash
 kozane card show <cardId>
@@ -681,592 +358,275 @@ kozane card show 17b86d2
 kozane card show 17b86d2 --times
 ```
 
-`--times` prints the card's history above its text, as the three values
-`kozane card list --sort` orders by, followed by a blank line:
-
-```
-created  2026-02-01T00:00:00Z
-updated  2026-03-01T00:00:00Z
-gap      28d
-
-A card reconsidered a month later
-```
-
-Without the flag the output is the card's text and nothing else, so
-`kozane card show <cardId> > card.txt` writes the card rather than the card and a header.
-The same rules apply as in the listing. Only a change to a card's text moves `updated`, and
-a timestamp that names no moment reads `invalid`.
-
----
-
 ### `kozane card layer <cardId> <layer>`
 
-Moves an existing card to another layer of its own namespace. The card is found by full or
-short ID, and the namespace is taken from the card rather than from `--namespace`, so the layer
-is always resolved against the namespace that owns it. `<layer>` accepts a layer name, full
-ID, or short ID.
+Move a card to a layer in its own namespace, stacking it above existing cards. Resolve the
+namespace from the card. Accept full or short card IDs and layer names or IDs. Cross-namespace
+layers are refused.
 
 ```bash
 kozane card layer <cardId> <layer>
 kozane card layer 3f9a2c1 Draft
 ```
 
-Moving a card to a layer of a different namespace is refused. A card arriving from another
-layer is stacked above the cards already there.
-
----
-
 ### `kozane card edit <cardId> <content>`
 
-Replaces a card's text outright. The card keeps its position, partition, layer, scope
-memberships, and glue group. Only the text changes.
+Replace card text, preserving position and memberships. Text follows `card add` validation.
+Identical text leaves the update timestamp unchanged.
 
 ```bash
 kozane card edit <cardId> <content>
 kozane card edit 3f9a2c1 "Investigate caching, then measure"
 ```
 
-`<content>` is trimmed, must not be blank, and is bounded by the workspace's content limit,
-the same rules `card add` applies. Text identical to what the card already holds leaves `updated_at` alone, so an edit that
-changed nothing does not read as a card that was worked on.
-
 ### `kozane card delete <cardIds>`
 
-Deletes one or more cards.
+Delete cards from one namespace, inferred from the first ID. Dissolve glue groups left with
+fewer than two cards. Print the count and short IDs.
 
 ```bash
 kozane card delete <cardIds...>
 kozane card delete 3f9a2c1 72ac1f8
 ```
 
-Every card must belong to the same namespace, which is taken from the first ID given. A glue
-group left holding one card by the deletion is dissolved, so no card is left offering to be
-unglued from a group of itself. Output is the number of cards deleted and their short IDs.
-
 ### `kozane card move <cardId>`
 
-Moves a card to a position on its namespace's canvas. At least one of `--x` and `--y` is
-required. The axis not given is left where it was.
+Move a card with at least one of `--x` or `--y` . Omitted axes stay unchanged. Positions accept
+integers or relative offsets such as `current+120` and `current-48` . Clamp to canvas bounds
+and print stored coordinates.
 
 ```bash
 kozane card move <cardId> [--x <position>] [--y <position>]
 kozane card move 3f9a2c1 --x 480 --y current+120
 ```
 
-Each position is either an integer or a relative offset written `current+<n>` or
-`current-<n>`, read against the card's present coordinate on that axis. Anything else is an
-error. The result is clamped to the workspace's canvas bounds, and the clamped position is
-what the command prints.
-
 ### `kozane card partition <partitionId> <cardIds>`
 
-Moves cards to another partition of their own namespace.
+Move cards to a partition in their namespace. All cards must share that namespace. Preserve
+positions, layers, and scopes.
 
 ```bash
 kozane card partition <partitionId> <cardIds...>
 kozane card partition 72ac1f8 3f9a2c1 e3ee90b
 ```
 
-The namespace is taken from the cards rather than from an option, and the partition is resolved
-within it, so a partition of another namespace is refused, as is a set of cards drawn from more
-than one namespace. Positions, layers, and scope memberships are untouched.
-
 ### `kozane card namespace <namespaceId> <cardIds>`
 
-Moves cards to another namespace, matching partition and layer by name rather than by ID.
+Move cards from one source namespace to another. Match partitions and layers by name, creating
+missing ones. Leave glue groups and drop direct taskspace links belonging to other namespaces.
+Stack moved cards above existing destination cards while preserving their relative order.
 
 ```bash
 kozane card namespace <namespaceId> <cardIds...>
 kozane card namespace eb155d6 3f9a2c1
 ```
 
-A card in a partition named `General` lands in the target namespace's `General`, and likewise for
-its layer. Where the target has no partition or layer of that name, one is created. The source
-namespace is taken from the cards, and they must all come from the same one.
-
-Moved cards leave their glue groups. A group spanning two namespaces is never drawn by the UI,
-so it would only ever be rows nothing could act on.
-
-Moved cards are restacked above the cards already on each destination layer, keeping their
-relative order. A card linked to a taskspace placed in another namespace loses that link,
-since a placed taskspace only originates cards in its own namespace.
-
----
-
 ### `kozane card list`
 
-Lists namespace cards or dynamically lists cards associated with a taskspace.
+List namespace cards or cards associated with a taskspace. `--taskspace` accepts a directory or
+its `.taskspace.json` and cannot combine with `--namespace` or `--partition` .
+
+Without namespace or partition options, a marker in the current directory is used
+automatically. Parent directories are not searched for taskspace markers. Scoped taskspaces
+list current scope members. Unscoped taskspaces print a notice and list directly associated
+cards.
 
 ```bash
 kozane card list [--namespace <namespaceId>] [--partition <partitionId>] [--sort <key>] [--reverse]
 kozane card list --taskspace <path> [--sort <key>] [--reverse]
 ```
 
-When the current directory contains `.taskspace.json`, running `kozane card list`
-without namespace or partition options automatically uses that marker. The marker must be
-in the current directory, and parent directories are not searched.
-
-`--taskspace <path>` accepts either a taskspace directory or the
-`.taskspace.json` file itself. Scoped taskspaces list the current scope members
-directly from the database. If the taskspace has no scope, including when its scope
-was deleted, the command prints a notice and lists cards associated directly with the
-taskspace.
-
-Examples:
-
-```bash
-cd my-taskspace
-kozane card list
-
-kozane card list --taskspace ./my-taskspace
-kozane card list --taskspace ./my-taskspace/.taskspace.json
-```
-
-The taskspace form cannot be combined with `--namespace` or `--partition`.
-
 #### Sorting
 
-Without `--sort`, cards are listed in the order the database returns them, which is not
-an order the command promises to keep. `--sort <key>` takes one of three keys and applies
-to every form of the command, the taskspace forms included:
+Use `--sort created` (oldest first), `--sort updated` (least recently edited
+first), or `--sort gap` (shortest interval between creation and edit first).
+Ties sort by ID. `--reverse` reverses the whole order and requires `--sort`.
+Without sorting, order is unspecified.
 
-| Key       | Order                                               |
-| --------- | --------------------------------------------------- |
-| `created` | Oldest card first.                                  |
-| `updated` | Least recently rewritten first.                     |
-| `gap`     | Shortest interval between the two timestamps first. |
+Sorting adds a column before the text. Creation and update values are ISO timestamps
+to the second. Gaps use the largest whole unit, such as `45s`, `12m`, or `5d`.
+Only text changes update timestamps. New cards have a zero gap, including squash
+results, which share the time of creation. Cards predating timestamp support use
+the migration time until edited.
 
-Cards with equal values are ordered by ID. `--reverse` flips the whole listing, ties
-included, and is refused without `--sort`, because there is no defined order to reverse.
-
-Only a change to a card's text counts as updating it. Moving a card across the board,
-resizing it, restacking it, or moving it to another partition or layer leaves both timestamps
-as they were. So `gap` measures how long a card stood before it was rewritten, not how
-recently it was rearranged. A card never edited since it was added has a gap of `0s`.
-
-`--sort` adds the value it ordered by as a column between the position and the text. This is an
-ISO timestamp to the second for `created` and `updated`, and the interval in its largest
-whole unit for `gap` (`0s`, `45s`, `12m`, `3h`, `5d`). Without `--sort` the line is
-unchanged.
-
-The column goes before the text rather than after it because card text may contain
-anything, trailing spaces included, so the end of the line is not a place another field
-can be told apart from. A script that reads the card text as everything past the
-coordinates must therefore account for the column when it passes `--sort`, or not pass it.
-
-```bash
-kozane card list --sort created
-kozane card list --sort updated --reverse
-kozane card list --sort gap
-```
-
-```
-d981fa1  General  (0, 0)  0s  A card added and left alone
-15a6537  General  (40, 0)  28d  A card reconsidered a month later
-```
-
-Cards created before this option existed carry the timestamp of the migration that added
-the columns, so they read as never since edited until their text is next changed.
-
-A card whose column holds a value no date can be read from prints `invalid` in place of the
-timestamp or interval, and sorts after every card that does name a moment. Under `--reverse` it sorts first
-instead. The rest of the listing prints as it would have. Only
-hand-written SQL can put such a value in the column, and `kozane doctor` reports it.
-
-Both timestamps are read by the CLI only. The board is not sent them and cannot order or
-display by them, and `kozane net ssg generate` output does not contain them.
-
-A card whose timestamps were never written, which only a hand-written `INSERT INTO card`
-naming neither column can produce, is reported by `kozane doctor` and lists as `1970`.
-
-Squashing a card replaces it with one new card per piece, on the board and through
-`kozane card squash` alike. The pieces are created when the squash ran, not when the text
-was first written, so a card thought about for a month and then squashed leaves pieces that
-read as created today with a gap of `0s`. All of them share the one moment, however many
-pieces there were.
-
----
+Invalid dates print `invalid` and sort last, or first with `--reverse`.
+Unwritten timestamps print as `1970`. Run `doctor` to locate them.
+Timestamps are available through the CLI, not the board or static export.
 
 ### `kozane card nearest <cardId>`
 
-Lists all cards in the specified card's namespace, sorted by Euclidean distance from
-that card's canvas position. The specified card appears first with distance `0.00`.
-Cards at the same distance are ordered by ID. Full and short card IDs are accepted.
+List cards in the given card's namespace by Euclidean distance. The given card appears first at
+`0.00` , with ties ordered by ID. Rows include short ID, partition, position, distance, and
+text.
 
 ```bash
 kozane card nearest <cardId>
 kozane card nearest 17b86d2
 ```
 
-Each row includes the card's short ID, partition, position, distance, and content.
-
----
-
 ### `kozane card glue <cardIds>`
 
-Glues two or more cards of one namespace into a group. A glued group moves as a unit on the
-board and is selected as one.
+Group cards from one namespace so they select and move together. By default, only named cards
+join, leaving previous groups. `--add` includes every member of the groups touched, allowing
+groups to merge.
+
+`--align-list` arranges the final group vertically from the first card, using argument order
+and estimated card heights. Coordinates are clamped to canvas bounds. Combines with `--add` .
+Print the group ID, card IDs, count, and active options.
 
 ```bash
 kozane card glue <cardIds...> [--add] [--align-list]
 kozane card glue 3f9a2c1 72ac1f8
 ```
 
-All the cards must belong to the same namespace, which is taken from the first ID given.
-
-By default the named cards become the group, and any group they were already in is left
-behind. `--add` instead expands the selection to whole groups first. Naming one member of an
-existing group brings its fellow members along, and the result is the merge of every group
-touched. That is what makes `card glue --add` able to join two groups by naming one card
-from each.
-
-`--align-list` also lays the group out as a vertical list, in the order the IDs were given,
-starting from the first card's position. Each card's height is estimated from its text and
-its drawn width, so the spacing follows what the board will actually show, and every
-position is clamped to the canvas bounds. Because `--add` decides the final set, the two
-options compose, and the list is laid out over the expanded group.
-
-Output is the number of cards glued, the group's short ID, the short ID of each card, and a
-line for each option in force.
-
 ### `kozane card unglue <cardIds>`
 
-Removes one or more cards from their glue groups. The cards themselves are untouched. They
-keep their text, position, partition, and layer, and simply stop moving with the group.
+Remove cards from glue groups without changing their content or placement. All cards must share
+a namespace. Dissolve groups left with fewer than two members. Unglued cards are unchanged.
 
 ```bash
 kozane card unglue <cardIds...>
 ```
 
-All the cards must belong to the same namespace. A group left holding fewer than two cards is
-dissolved rather than kept as a group of one. A card that was not glued is not an error.
-
----
-
 ### `kozane warp list`
 
-Lists a namespace's warps in creation order, one per line, as short ID, number, and position.
-A warp's number is its place in this list, which is what the browser UI labels it by.
+List warps in creation order with short ID, number, and position.
 
 ```bash
 kozane warp list [--namespace <namespaceId>]
 ```
 
-If the namespace has no warps, the command prints `No warps found.`
-
 ### `kozane warp add`
 
-Adds a warp, which is a saved place on the namespace's canvas, at a position.
+Create a saved canvas position. Clamp coordinates to canvas bounds and print the stored
+position and short ID. Warps have numbers in creation order, not names.
 
 ```bash
 kozane warp add [--namespace <namespaceId>] [--x <number>] [--y <number>]
 kozane warp add --x 1200 --y 800
 ```
 
-The position is clamped to the workspace's canvas bounds, and the clamped position is what
-the command prints alongside the new warp's short ID. Warps carry no name. They are numbered
-by creation order, which `warp list` prints.
-
 ### `kozane warp delete <warpId>`
 
-Deletes a warp by full or short ID, resolved against the selected namespace's warps.
+Delete a warp by full or short ID within the selected namespace. Later warps are renumbered.
 
 ```bash
 kozane warp delete <warpId> [--namespace <namespaceId>]
 ```
 
-Deleting a warp renumbers the ones after it, since a warp's number is its place in creation
-order rather than anything stored.
-
----
-
 ### `kozane tag list`
 
-Lists every tag in a namespace as a tree, with how many cards and files each one gathers.
+List namespace tags as a tree with distinct card and file counts. Parent counts include
+descendants. Taskspace files are included.
+
+Notices identify incomplete scans and unavailable directories. A path ending in `/` identifies
+a directory. Run `kozane taskspace scan --apply --cleanup` to reconcile moved or missing
+taskspaces.
+
+Results are cached in `.kozane/tag-index.json` and validated before reuse. See
+[Cache behavior](../docs/cache.md) for refresh and cleanup.
 
 ```bash
 kozane tag list [--namespace <namespaceId>]
 ```
 
-A count is of distinct cards and files, not of occurrences. A card written
-`:perf:cache and :perf` is one card under `:perf`. A parent's count includes everything
-under it, so `:perf` counts what `:perf:cache` holds as well.
-
-```bash
-kozane tag list
-:perf  1 card, 1 file
-  :cache  1 card, 1 file
-```
-
-Taskspace files are read as part of this. A taskspace that could not be read in full is
-named afterwards, in the same words the browser's tag index uses, so a tag missing from the
-list is not read as a tag nobody wrote:
-
-```
-Note: notes was not read in full — some files were larger than the scan had budget left for (for example media/talk.mp4, logs/).
-```
-
-A path ending in `/` is a directory that could not be listed rather than a file of that name.
-
-A taskspace whose directory is not there at all is reported apart from those, because it is
-not a taskspace that was read in part. The record points somewhere that has been deleted,
-moved, or made unreadable since it was written. The note names it and the command that
-settles it, once however many such records a gather meets:
-
-```
-Note: notes could not be read — its directory has been deleted, moved, or made unreadable since the record naming it was written, so no tag written in it is listed here.
-  Run `kozane taskspace scan --apply --cleanup` to drop the record.
-```
-
-That command is the whole repair rather than only the cleanup. A taskspace that was moved
-looks identical from here, and the same run re-points its record instead of dropping it.
-
-The gather is kept in `.kozane/tag-index.json`, so a second run does not re-query every card
-and re-read every file to reach the answer the first one reached. Nothing is trusted from it
-unchecked. Card hits are used only while the database is byte-for-byte the one they came
-from, and a file's tags only while that file's size and modification time are unchanged.
-Anything else is gathered again. Deleting the file costs one slow run.
-
----
-
 ### `kozane tag show <tag>`
 
-Lists the cards and taskspace files under a tag, subcategories included.
+List matching cards and taskspace files, including child tags. Accept tags with or without the
+leading colon. `--no-files` lists cards only and skips file scanning.
+
+Card rows include short ID, matched tags, and text. File rows are grouped by taskspace and
+include path, line number, matched tags, and line text. Multiple matching tags share one row.
+Results are capped at 200 card hits and 200 file hits, with notices when shortened.
 
 ```bash
 kozane tag show <tag> [--namespace <namespaceId>] [--no-files]
 ```
 
-The tag may be given with or without its sigil, so `kozane tag show perf` and
-`kozane tag show :perf` are the same request. Typing it the way it reads on a card is
-as natural as typing it bare. `--no-files` lists cards alone and skips the disk walk entirely.
-
-Each card row carries its short ID, the tags it matched by, and its text. Each file row
-carries the path and line, the tags matched, and the line the tag sits on. A card found
-under two tags is one row naming both.
-
-File rows are grouped under the taskspace they were found in, because a path is relative to
-one and says nothing on its own. A namespace draws its own taskspaces and every unplaced one,
-so two `README.md`s in one listing is an ordinary workspace rather than an unusual one. The
-browser's tag index heads its file rows the same way.
-
-```bash
-kozane tag show perf
-Cards:
-  4a6f1fb  :perf :perf:cache  caching work :perf:cache and :perf
-Files:
-  notes:
-    README.md:3  :perf:cache  See :perf:cache for the plan.
-```
-
----
-
 ### `kozane db status`
 
-Shows the current database migration status.
+Report migration status and exit 0 only when current.
+
+| Status | Meaning |
+| --- | --- |
+| `current` | All journal migrations applied |
+| `pending` | Run `kozane db migrate` |
+| `missing` | Database file absent |
+| `gapped` | An older migration is missing, restore a backup |
+| `unknown` | Migration metadata unreadable |
 
 ```bash
 kozane db status
 ```
 
-Output:
-
-```
-Database: /path/to/.kozane/kozane.db
-Status  : current
-Applied : 0001_init (1700000000000)
-Latest  : 0001_init (1700000000000)
-```
-
-Exit code `0` if current, `1` otherwise.
-
-States:
-
-| Status    | Meaning                                                                     |
-| --------- | --------------------------------------------------------------------------- |
-| `current` | Every migration in the journal has been applied                             |
-| `pending` | Newer migrations exist, so run `kozane db migrate`                          |
-| `missing` | The database file does not exist                                            |
-| `gapped`  | A migration older than the newest applied one was never applied or was lost |
-| `unknown` | The migration metadata could not be read                                    |
-
-A `gapped` database cannot be repaired by `kozane db migrate`, which only applies
-migrations newer than the newest recorded one. Restore a backup instead.
-
----
-
 ### `kozane db migrate`
 
-Backs up the database, then applies pending migrations.
+Back up to `.kozane/backups/` , apply pending migrations, and report status. No changes when
+already current. Refuses missing, unknown, or gapped databases and refuses while the workspace
+server runs.
 
 ```bash
 kozane db migrate
 ```
 
-Behavior:
-
-1. Checks migration status and exits early if already current.
-2. Exits with an error if the database file is missing, or status is unknown or gapped.
-3. Exits with an error while a Kozane server is serving the workspace. The server checks
-   migrations only until they are current, so it must be stopped before the schema changes.
-4. Creates a timestamped backup in `.kozane/backups/` before migrating.
-5. Runs Drizzle migrations.
-6. Reports the new status.
-
-Output:
-
-```
-Backup created: .kozane/backups/kozane.20240101T120000.db
-Database migrated.
-Database: /path/to/.kozane/kozane.db
-Status  : current
-...
-```
-
----
-
 ### `kozane db export [file]`
 
-Exports workspace database data as JSON.
+Export database data as JSON to a file or stdout. Requires current migrations. `--compact`
+removes formatting. Writes format version 8. Import also accepts version 7, which has no scope
+frames.
+
+Older formats use `project` and `bundle` tables and are refused. Import them with Kozane 0.10
+or earlier, then migrate.
 
 ```bash
 kozane db export [file] [--compact]
 ```
 
-Options:
-
-| Flag        | Description                             |
-| ----------- | --------------------------------------- |
-| `--compact` | Write compact JSON instead of formatted |
-
-Behavior:
-
-- Requires migrations to be current.
-- Writes to `file` if given, otherwise prints to stdout.
-- Writes export format version 8. `kozane db import` also accepts version 7, which
-  predates scope frames and comes back with none. Versions before 7 use the old
-  `project` and `bundle` table names and are refused. Import one with Kozane 0.10 or
-  earlier, then run `kozane db migrate`, which renames the tables in place.
-
-Output (to file):
-
-```
-Database exported: /path/to/export.json
-```
-
----
-
 ### `kozane db import <file>`
 
-Imports workspace database data from a JSON file previously exported with `kozane db export`.
+Import an exported JSON file. Requires current migrations and `--force` when the database is
+non-empty. Back up first, validate foreign keys before writing, and print per-table counts.
+
+Rows exceeding text, canvas, or name limits are imported with warnings so backups from
+different settings remain restorable. Shorten oversized text, move out-of-bounds cards, or
+adjust settings before editing. `kozane doctor` reports these rows afterward.
 
 ```bash
 kozane db import <file> [--force]
 ```
 
-Options:
-
-| Flag      | Description                                                   |
-| --------- | ------------------------------------------------------------- |
-| `--force` | Replace existing workspace data (required if DB is not empty) |
-
-Behavior:
-
-1. Requires migrations to be current.
-2. Refuses if the DB is not empty and `--force` is not given.
-3. Creates a backup before importing.
-4. Checks every foreign key in the dump and refuses, naming the row, before writing anything.
-5. Imports and prints per-table row counts.
-6. Warns on stderr about rows that are past this workspace's limits, without refusing them.
-
-Output:
-
-```
-Backup created: .kozane/backups/kozane.20240101T120000.db
-Database imported: /path/to/export.json
-namespace: 1
-partition: 2
-card: 42
-```
-
-A broken reference stops the import, but a row past a limit does not. The difference is that a
-dangling foreign key is a dump that cannot become a database, while `ui.contentMax` and the
-canvas size are settings. A dump exported from a workspace that set them differently has
-to remain restorable into one that did not, and refusing would mean a backup that cannot be
-restored because of a policy difference. So those rows are imported and reported:
-
-```
-Warning: card: 2 cards longer than this workspace's ui.contentMax of 200000 characters (c-1, c-2). Editing one through the board or 'kozane card edit' will refuse it until it is shortened.
-Warning: card: 1 card positioned outside this workspace's 5600×4000 canvas (c-3). Use 'kozane card move' to bring one back, or raise ui.canvasWidth / ui.canvasHeight.
-```
-
-[`kozane doctor`](#kozane-doctor) reports the same three conditions against the database
-afterwards, so the rows stay findable past the import that brought them in.
-
----
-
 ### `kozane db restore [file]`
 
-Restores the database from a backup.
+Restore a database backup. Without a file, list `.kozane/backups/` and use the latest. First
+attempt to back up the current database, skipping that backup if corruption prevents it.
 
 ```bash
 kozane db restore [file]
 ```
 
-Behavior:
-
-- If `file` is omitted, lists available backups in `.kozane/backups/` and uses the most recent.
-- Backs up the current database before overwriting it (best-effort, skipped if the file is corrupted).
-- Copies the chosen backup over the live database.
-
-Output:
-
-```
-Available backups:
-  kozane.20240101T120000.db ← most recent
-
-Current database backed up: .kozane/backups/kozane.20240101T130000.db
-Restored: .kozane/backups/kozane.20240101T120000.db
-```
-
----
-
 ### `kozane taskspace list`
 
-Lists every taskspace in the workspace as `<id>  <name>  <namespace>  <scope>  <path>`, using
-collision-safe short IDs. This is the workspace-wide view. A board draws only its own
-namespace's taskspaces plus the unassigned ones, so a taskspace created from another namespace
-is visible here and nowhere else.
+List database records as short ID, name, namespace, scope, and path. Does not inspect disk.
+`--namespace` limits results to that board, including unassigned taskspaces. Short IDs remain
+consistent across filtered listings. A dash means no namespace or scope.
 
 ```bash
 kozane taskspace list
 kozane taskspace list --namespace <namespaceId>
 ```
 
-`--namespace` narrows the list to what that namespace's board draws, which includes taskspaces
-with no namespace of their own. An em dash in the namespace or scope column is a real state
-rather than missing data. An unassigned taskspace appears on every board, and an unscoped
-one gathers no cards. Short IDs are always computed against every taskspace in the
-workspace, so an ID printed here is the same one whether or not the list was narrowed.
-
-If no taskspaces exist, the command prints `No taskspaces found.`, or
-`No taskspaces found in this namespace.` when `--namespace` was given.
-
-Unlike `kozane taskspace scan`, this reads only the database and never touches the
-filesystem, so it reports what Kozane believes rather than what is on disk.
-
----
-
 ### `kozane taskspace scan`
 
-Scans the filesystem for taskspaces and reports differences from the database. It is a
-dry run by default. Pass `--apply` to write changes.
+Scan `taskspace.searchRoots` for `.taskspace.json` markers and compare them with database
+records. Default is a dry run.
+
+With `--apply` , update moved paths and matched records' last-seen times. Add `--reattach` to
+insert orphan records and `--cleanup` to delete records whose markers are missing. Both require
+`--apply` . If duplicate markers share an ID, the last directory found wins.
 
 ```bash
 kozane taskspace scan [--apply] [--reattach] [--cleanup]
 ```
-
-Options:
 
 | Flag         | Description                                                                     |
 | ------------ | ------------------------------------------------------------------------------- |
@@ -1274,88 +634,32 @@ Options:
 | `--reattach` | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
 | `--cleanup`  | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
 
-Behavior:
-
-1. Walks directories listed in `config.taskspace.searchRoots`.
-2. For each `<dir>/.taskspace.json` found, reads the `taskspaceId`.
-3. Compares with DB records:
-   - Path changed → reported as `moved`. With `--apply`, updates `path` and `lastSeenAt`.
-   - DB record missing → reported as `orphan`. With `--apply --reattach`, inserts the record.
-   - Marker missing for DB record → reported as `missing`. With `--apply --cleanup`, deletes the DB record.
-4. Updates `lastSeenAt` for all matched records when `--apply` is given.
-
-Dry-run output (no `--apply`):
-
-```
-  ok      <id>  ./my-draft
-  moved   <id>
-    old: docs/readme
-    new: docs/readme-v2
-  orphan  <id>  /external/path/to/dir
-
-To apply changes, run:
-  taskspace scan --apply             update 1 moved path(s)
-  taskspace scan --apply --reattach  reattach 1 orphan(s)
-```
-
-Applied output:
-
-```
-Scan complete. 1 updated.
-```
-
-With `--cleanup`:
-
-```
-Scan complete. 1 updated, 1 deleted.
-```
-
----
-
 ### `kozane taskspace create <name>`
 
-Creates a new taskspace.
+Create a database record, target directory, and `.taskspace.json` identity marker. Require
+either `--scope` or `--no-scope` .
+
+Without `--dir` , use `<workspaceRoot>/<name>` . The name must then be one path segment,
+contain no `/` , `\` , or NUL, and not start with a dot. With `--dir` , the name is only a
+label. Store internal paths relative to the workspace and external paths as absolute.
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
                               [--namespace <namespaceId>] [--dir <path>]
 ```
 
-Options:
-
 | Flag                | Description                                                             |
 | ------------------- | ----------------------------------------------------------------------- |
 | `--scope <scopeId>` | Attach taskspace to an existing scope                                   |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`)              |
-| `--namespace <id>`  | Namespace to own it, required when the workspace has several namespaces |
+| `--namespace <id>`  | Owning namespace (defaults to the workspace default) |
 | `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)                    |
-
-Either `--scope` or `--no-scope` is required.
-
-Without `--dir`, the name becomes the directory, so it must be one plain path segment. It may not
-contain `/`, `\`, or NUL, and may not start with `.`. With `--dir`, the name is only a label.
-
-Behavior:
-
-1. Inserts a `taskspace` DB record → gets a stable UUID.
-2. Creates the target directory.
-3. Writes `<dir>/.taskspace.json` with the stable ID.
-4. Stores the path in the DB (`workspace_relative` if inside workspace root, `absolute` otherwise).
-
-Output:
-
-```
-Taskspace created.
-  id   : 0d5878b
-  name : my-draft
-  path : /path/to/my-draft
-```
-
----
 
 ## Config file
 
-`.kozane/config.json`:
+Edit `.kozane/config.json`, then run `kozane doctor config`.
+Only `name`, `taskspace.defaultDir`, and `taskspace.searchRoots` are required.
+Other keys fall back to built-in defaults individually.
 
 ```json
 {
@@ -1406,49 +710,24 @@ Taskspace created.
 }
 ```
 
-Only `name` and the `taskspace` keys are required. `server` and `ui` fall back to their
-built-in defaults key by key. Run [`kozane doctor config`](#kozane-doctor-config) after
-editing this file by hand.
-
-The default `"vertical-list"` stacks newly created cards downward in one non-overlapping
-column. Set `ui.newCardPlacement` to `"grid"` for a compact four-column wrapping layout
-with light overlap between cards.
-
-Every `ui.*Shortcut` is compared against one `event.key`, so `"A"` means Shift+A. The four
-arrow keys are reserved for moving between warps, and a shortcut bound to one is an
-invalid value like any other. `kozane doctor config` reports it as an error, and the field
-falls back to its default. Two shortcuts bound to the same key are kept, so both actions
-still happen, and the pair is reported as a warning.
-
-`ui.defaultCardWidth` is what a card is drawn at until it is resized on the board. A card
-resized there keeps a width of its own and stops following the setting. Every other card
-goes on tracking it. Both are held to the same 40–1200 range.
-
-`ui.canvasWidth` and `ui.canvasHeight` size the board, and every stored position is held
-inside them. A card or a warp written past the edge is clamped to it, and the response
-reports the position as stored rather than as sent.
-
-`ui.contentMax` is how much text one card may hold, within a 100–1000000 range. It counts
-UTF-16 code units, the way `String.length` does, so a CJK character is one and an emoji past the
-BMP is two. Both writers enforce it. The card endpoints answer `400`, and `kozane card add`
-and `kozane card squash` exit non-zero without writing anything. `card squash` holds each
-segment to it separately and names the one that was too long. Raising it has a cost, because
-the board's once-a-second poll carries every card's whole text.
-
-The HTTP body ceiling is sized from it at startup, so a card the endpoint would accept is
-never refused by the transport first. Set `BODY_SIZE_LIMIT` to override that, in the
-adapter's own notation (`512K`, `2M`). A workspace that sets neither gets room for one card
-of `ui.contentMax` at the worst byte cost an escaped character can reach.
-
----
+- `newCardPlacement` accepts `vertical-list` or a four-column `grid`.
+- Shortcuts match one `event.key`. `A` means Shift+A. Arrow keys are reserved
+  for warps. Invalid bindings fall back to defaults. Duplicate bindings run both
+  actions and produce a config warning.
+- `defaultCardWidth` applies to cards without individual widths. Both widths
+  range from 40 to 1200 pixels.
+- `canvasWidth` and `canvasHeight` bound stored card and warp coordinates.
+  Commands clamp positions and report the stored values.
+- `contentMax` ranges from 100 to 1000000 UTF-16 code units. Each squash segment
+  is checked separately. Raising it increases live-sync payload size.
+- The HTTP body limit follows `contentMax` at startup. Override with
+  `BODY_SIZE_LIMIT`, using values such as `512K` or `2M`.
 
 ## Taskspace marker
 
-Identity anchor written at the root of each taskspace directory at creation time:
-
-```
-<taskspace-dir>/.taskspace.json
-```
+Each taskspace directory has a `.taskspace.json` identity marker with full UUIDs.
+Moving the directory preserves identity. Run `kozane taskspace scan --apply`
+to update its recorded path.
 
 ```json
 {
@@ -1457,123 +736,4 @@ Identity anchor written at the root of each taskspace directory at creation time
   "taskspaceId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
   "namespaceId": "019dddef-87e3-7000-ac4d-aa414b7e75d7"
 }
-```
-
-The marker stores full UUIDs. Commands print the short form of the same IDs, `0d5878b`
-and `aa414b7` above, and accept either.
-
-The marker is the filesystem anchor. The database stores only the last-known path.
-Renaming or moving the directory does not change the taskspace's identity, and
-`kozane taskspace scan --apply` recovers the new path automatically.
-
----
-
-## Workspace detection
-
-Any command that needs a workspace (all except `init`) walks up from `process.cwd()`
-looking for `.kozane/config.json`. This allows running commands from any
-subdirectory of a workspace:
-
-```bash
-cd my-namespace/docs/chapter-1
-kozane status   # resolves to my-namespace/.kozane/
-```
-
-If no workspace is found, the command prints:
-
-```
-No Kozane workspace found. Run "kozane init" first.
-```
-
-and exits with code `1`.
-
----
-
-## Path storage policy
-
-| Location relative to workspace root | Stored `path_kind`   | Stored `path`            |
-| ----------------------------------- | -------------------- | ------------------------ |
-| Inside workspace root               | `workspace_relative` | relative path from root  |
-| Outside workspace root              | `absolute`           | absolute filesystem path |
-
-This keeps repo-local paths portable across machines while still supporting
-taskspaces placed anywhere on the filesystem.
-
----
-
-## Database schema (taskspace)
-
-| Column         | Type                | Notes                              |
-| -------------- | ------------------- | ---------------------------------- |
-| `id`           | text PK             | UUID v7, stable identity           |
-| `namespace_id` | text FK → namespace | nullable, cascade delete           |
-| `scope_id`     | text FK → scope     | nullable, set null on delete       |
-| `name`         | text                | display name                       |
-| `path`         | text                | current known filesystem path      |
-| `path_kind`    | text enum           | `workspace_relative` \| `absolute` |
-| `last_seen_at` | integer (timestamp) | set by `taskspace scan`            |
-| `created_at`   | integer (timestamp) | set on insert                      |
-| `updated_at`   | integer (timestamp) | set on every update                |
-
----
-
-## Collision handling (taskspace scan)
-
-| Situation                                  | Behavior                                                                     |
-| ------------------------------------------ | ---------------------------------------------------------------------------- |
-| Marker found, DB record missing            | Reported as orphan, `--apply --reattach` re-links                            |
-| DB record exists, marker missing           | Reported as missing, `--apply --cleanup` deletes                             |
-| Same `taskspaceId` in multiple directories | Not reported, the last directory found wins, `kozane taskspace fork` planned |
-
----
-
-## Implemented surface
-
-```
-CLI:
-  kozane init
-  kozane open
-  kozane net ssg generate
-  kozane net ssg preview
-  kozane doctor
-  kozane doctor config
-  kozane status
-  kozane api key generate
-  kozane api key refresh
-  kozane namespace list / create / delete / default
-  kozane partition list / add / delete
-  kozane scope list [--namespace] / add / delete / add-cards / remove-cards
-  kozane layer list / add / rename / move / delete
-  kozane warp list / add / delete
-  kozane card add / squash / show / list / layer / nearest
-  kozane card edit / delete / move / partition / namespace / glue / unglue
-  kozane tag list / show
-  kozane db status / migrate / export / import / restore
-  kozane taskspace list [--namespace] / scan / create
-
-UI (SvelteKit):
-  namespace dashboard
-  partition list and filtering
-  card creation, editing, gluing, and arranging
-  layers
-  warps, including the cross-namespace warp list
-  scope builder
-  taskspace creation, browsing, and file editing
-  tag index page
-  workspace map
-
-Filesystem:
-  .taskspace.json marker
-  taskspace directory creation
-  static site export
-```
-
-## Planned
-
-```
-kozane export <scope-id>                # export scope cards to markdown
-kozane taskspace repair <id> --path ... # rewrite missing marker after confirmation
-kozane taskspace fork <dir>             # assign new id to a duplicate
-kozane scope inspect
-kozane card search
 ```

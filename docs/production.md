@@ -1,104 +1,84 @@
 # Production operations
 
-Kozane is a single-user, single-workspace application. It is suitable for localhost use and
-for access on a trusted network behind an authenticated TLS reverse proxy. It is not a
-multi-tenant service and does not provide user accounts or role-based access control.
+Kozane supports one user and one server per workspace. Use it locally or on a
+trusted network behind a TLS reverse proxy. It has no user accounts or roles.
 
 ## Supported runtime
 
-- Pin Node.js 24 LTS for production. Do not deploy a moving `latest` image.
-- Install with `pnpm install --frozen-lockfile`, run `pnpm verify`, and build with
-  `pnpm build`.
-- Run the service as an unprivileged operating-system user with write access only to its
-  workspace.
+- Pin Node.js 24 LTS.
+- Install with `pnpm install --frozen-lockfile`, then run `pnpm verify`.
+- Run as an unprivileged operating-system user with write access limited to
+  the workspace and intended taskspace directories.
 
 ## Secure remote access
 
-Generate a workspace key before binding to a non-loopback address:
+Generate a key and start the server behind a TLS reverse proxy.
 
 ```sh
 kozane api key generate
 kozane open --host 0.0.0.0 --allow-remote --no-open
 ```
 
-The server independently fails closed when `HOST` is non-loopback and no key exists, even
-if it is launched without the CLI. It also rejects remotely bound requests unless SvelteKit sees
-an HTTPS URL. Put it behind a TLS reverse proxy, restrict ingress with a
-firewall, and do not log URLs containing the one-time `api_key` query parameter. Configure the
-Node adapter for the exact proxy chain (for a single trusted proxy, typically
-`ADDRESS_HEADER=x-forwarded-for`, `XFF_DEPTH=1`, and `PROTOCOL_HEADER=x-forwarded-proto`). Never
-accept these headers directly from untrusted clients.
+Restrict the HTTP listener to traffic from the proxy using firewall rules.
+Non-loopback bindings require a key and HTTPS as seen by SvelteKit. Missing or
+incorrect protocol forwarding causes HTTP 426 responses.
 
-The Node listener itself remains HTTP and should only be reachable by the proxy. A missing or
-incorrect `PROTOCOL_HEADER` configuration causes requests to fail closed with HTTP 426.
+Configure headers for the exact trusted proxy chain. For one proxy, typical
+settings are the following.
 
-The built-in authentication throttle is intentionally process-local. Configure rate limiting at
-the reverse proxy or ingress so limits survive restarts and cover every instance.
+| Setting | Value | Purpose |
+| --- | --- | --- |
+| `PROTOCOL_HEADER` | `x-forwarded-proto` | Recognize HTTPS terminated at the proxy |
+| `ADDRESS_HEADER` | `x-forwarded-for` | Identify clients for logs and authentication throttling |
+| `XFF_DEPTH` | `1` | Trust one proxy hop |
 
-`ADDRESS_HEADER` matters to that throttle as much as to your logs. The throttle counts
-failures per client address, and without the header every request behind the proxy arrives
-from the proxy's own address. All remote clients then share one counter, so a single client
-failing to authenticate can throttle everyone else. Configure the proxy chain before allowing remote
-access, not after.
+Accept these headers only from trusted proxies. Without client-address forwarding,
+all clients share the proxy's authentication-failure counter. Add proxy-level
+rate limiting because Kozane's throttle resets when the process restarts.
 
-Rotate the key with `kozane api key refresh`. Rotation immediately invalidates the previous
-key. Treat `.kozane/api.json` as a secret and never copy it into logs or source control.
+Rotate keys with `kozane api key refresh`, which invalidates the old key immediately.
+Keep `.kozane/api.json` out of source control and logs. Do not log URLs containing
+`api_key`.
 
 ## Process and health management
 
-Use a process supervisor such as systemd, Docker, or your platform's service manager. Configure
-automatic restart with a bounded backoff and graceful `SIGTERM` shutdown. Probe `/health`
-with the API key. It verifies that the database accepts queries, answering `200` with
-`{"status":"ok",...}` when it does and `503` with `{"status":"error",...}` when it does not.
-Alert on the `status` field rather than on the status code alone. The cause of a failure is
-written to the log, not to the response.
+Use a process supervisor with bounded restart backoff and graceful `SIGTERM`
+shutdown. Point it at `bin/server.js`, which binds `HOST` or defaults to
+`127.0.0.1`. The adapter's `build/index.js` is excluded from the package.
 
-Run only one Kozane server per workspace. Two servers would contend for
-one SQLite file, and several things the server keeps are process-local and quietly stop meaning
-what they say once there are two of them. The authentication throttle counts failures in
-memory, so two processes give an attacker twice the attempts. The snapshot ETag memo and the
-API-key cache are each validated against the database and key files, so a second process is
-correct but pays the work again. Do not run Kozane behind a load balancer across replicas, and
-do not scale it to more than one instance or worker. Scale the machine instead.
+Run one instance and one worker per workspace. An exclusive runtime reservation
+prevents concurrent servers. `kozane open` refuses a conflict, and a directly
+started server returns 503. Shutdown drains requests and releases the reservation.
 
-An exclusive runtime reservation enforces this rule. `kozane open` checks the reservation before it starts anything and refuses outright. A server
-started directly (`node bin/server.js`) against a workspace another process already holds
-answers every request with HTTP 503 naming the process that holds it, and logs the conflict
-once. `kozane open` forwards `SIGINT` and `SIGTERM` to the Node server, which stops accepting
-connections, drains the ones in flight, and exits, which releases the reservation.
+Probe `/health` with the API key when configured. A successful database query
+returns 200 with `status: "ok"`. Failure returns 503 with `status: "error"`.
+Check the status field and consult logs for the underlying error.
 
-`bin/server.js` is the server entry, and the one to point a process manager at. It binds
-`HOST` if set and `127.0.0.1` otherwise, which is why running it without a HOST cannot put a
-workspace on a public interface. Set `HOST` explicitly to bind beyond loopback.
-See the [Security matrix](./security-matrix.md).
+Responses include `X-Request-Id`, and request completion and errors use JSON logs.
+Capture stdout/stderr, set retention limits, and alert on repeated restarts,
+HTTP 5xx responses, failed readiness, disk exhaustion, and backup failures.
 
-It is also the only server entry the package contains. The Node adapter emits its own,
-`build/index.js`, which binds every interface by default. That file is excluded from the
-published package, and `pnpm pack:check` fails the release if it reappears.
-
-Each HTTP response includes `X-Request-Id`. Request completion and errors are emitted as JSON.
-
-Capture stdout/stderr in structured platform logs, set retention limits, and alert on repeated
-restarts, HTTP 5xx responses, failed health checks, disk exhaustion, and backup failures.
+See the [Security matrix](./security-matrix.md) for access rules.
 
 ## Backup and recovery
 
-Back up the complete `.kozane` directory on a regular schedule while the process is stopped,
-or use:
+Back up `.kozane/` while the server is stopped, or export the database to a file.
+Back up taskspace directories separately.
 
 ```sh
-kozane db export
+kozane db export backup.json
 kozane db status
 kozane doctor
 ```
 
-Migrations create a database backup automatically. Keep backups on a different device, define
-a retention policy, and rehearse `kozane db restore` at least once before relying on them.
-Restore refuses to run while a recorded Kozane server process is active. Stop the service before
-restoring. Restore validates SQLite integrity and migration metadata before atomically replacing
-the current database.
+Migrations create database backups automatically. Keep backups on another device,
+define retention, and test `kozane db restore` before relying on them.
+Stop the server before restoring. Restore validates SQLite integrity and migration
+metadata before atomically replacing the database.
 
 ## Release gate
+
+Run the full release gate with `pnpm verify:production`, or run its steps individually.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -108,11 +88,6 @@ pnpm smoke:package
 pnpm test:e2e
 ```
 
-The smoke test packs and installs the tarball, then exercises its CLI, initializes a real
-workspace, starts the packaged server, checks authenticated readiness and security headers,
-rejects an unauthenticated request, and exports the database.
-
-The browser test starts the built server against a temporary real workspace, verifies the
-one-time API-key exchange, hydrates the namespace UI in Chromium, creates and reloads a card,
-and confirms that an unauthenticated browser remains locked out. Run `pnpm verify:production`
-to execute the complete release gate locally.
+The package smoke test checks installation, CLI operations, authenticated readiness,
+security headers, access rejection, and export. Browser tests check login, card
+creation and persistence, and unauthenticated access rejection.
