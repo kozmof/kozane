@@ -41,6 +41,8 @@
     suspendShortcuts?: boolean;
     /** The card currently showing one, so the button can read as the toggle it is. */
     resizingCardId?: string | null;
+    /** Where a new card goes when it is not the canvas, shown as the input's placeholder. */
+    newCardTarget?: string | null;
     shortcuts?: UiConfig;
   }
 
@@ -69,6 +71,7 @@
     suspendShortcuts = false,
     onSquashCard,
     resizingCardId = null,
+    newCardTarget = null,
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
@@ -479,6 +482,7 @@
         oninput={(e) => autoResize(e.currentTarget)}
         onkeydown={handleKeyDown}
         aria-label={mode === "edit" ? "Edit card" : "Write a card"}
+        placeholder={mode !== "edit" && newCardTarget ? `Add to ${newCardTarget}` : undefined}
         rows={1}
       ></textarea>
 

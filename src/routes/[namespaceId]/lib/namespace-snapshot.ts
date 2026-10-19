@@ -5,6 +5,7 @@ import { getNamespace } from "$db/api/namespace";
 import { getAllPartitions } from "$db/api/partition";
 import { getAllLayers } from "$db/api/layer";
 import { getAllWarps } from "$db/api/warp";
+import { getAllInventories } from "$db/api/inventory";
 import { getScopesInNamespace } from "$db/api/scope";
 import { getScopeAreasInNamespace } from "$db/api/scope-area";
 import { getCardDataByPartitions } from "$db/api/card";
@@ -55,16 +56,18 @@ export async function loadNamespaceSnapshot({
   const namespace = await getNamespace({ db, namespaceId });
   if (!namespace) return null;
 
-  const [partitions, layers, warps, scopes, scopeAreas, taskspaces] = await Promise.all([
-    getAllPartitions({ db, namespaceId }),
-    getAllLayers({ db, namespaceId }),
-    getAllWarps({ db, namespaceId }),
-    includeScopes ? getScopesInNamespace({ db, namespaceId }) : Promise.resolve([]),
-    // Gate frames with `includeScopes` because their geometry also exposes scope organization
-    // in published exports.
-    includeScopes ? getScopeAreasInNamespace({ db, namespaceId }) : Promise.resolve([]),
-    includeScopes ? getTaskspacesInNamespace({ db, namespaceId }) : Promise.resolve([]),
-  ]);
+  const [partitions, layers, warps, inventories, scopes, scopeAreas, taskspaces] =
+    await Promise.all([
+      getAllPartitions({ db, namespaceId }),
+      getAllLayers({ db, namespaceId }),
+      getAllWarps({ db, namespaceId }),
+      getAllInventories({ db, namespaceId }),
+      includeScopes ? getScopesInNamespace({ db, namespaceId }) : Promise.resolve([]),
+      // Gate frames with `includeScopes` because their geometry also exposes scope organization
+      // in published exports.
+      includeScopes ? getScopeAreasInNamespace({ db, namespaceId }) : Promise.resolve([]),
+      includeScopes ? getTaskspacesInNamespace({ db, namespaceId }) : Promise.resolve([]),
+    ]);
 
   // Read cards before their relations. These sequential queries are not one database
   // transaction, so concurrent writes can make the result span different states. Polling
@@ -107,6 +110,7 @@ export async function loadNamespaceSnapshot({
     partitions,
     layers,
     warps,
+    inventories,
     scopes,
     scopeRels,
     scopeAreas,

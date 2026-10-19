@@ -34,6 +34,8 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      inventoryId: null,
+      inventorySlot: null,
       width: null,
     },
     {
@@ -46,6 +48,8 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      inventoryId: null,
+      inventorySlot: null,
       width: null,
     },
   ],
@@ -55,6 +59,7 @@ const data = {
     { id: "warp-2", namespaceId: "namespace-1", posX: 2400, posY: 1000 },
     { id: "warp-3", namespaceId: "namespace-1", posX: 1400, posY: 1600 },
   ],
+  inventories: [],
   scopes: [{ id: "scope-1", name: "Now" }],
   scopeRels: [],
   scopeAreas: [],
@@ -718,6 +723,8 @@ describe("Layers", () => {
         zIndex: 1,
         glueId: null,
         taskspaceId: null,
+        inventoryId: null,
+        inventorySlot: null,
       }),
     });
     vi.stubGlobal("fetch", fetch);
@@ -751,6 +758,8 @@ describe("Layers", () => {
         zIndex: 1,
         glueId: null,
         taskspaceId: null,
+        inventoryId: null,
+        inventorySlot: null,
       }),
     });
     vi.stubGlobal("fetch", fetch);
@@ -1872,6 +1881,8 @@ describe("Squash", () => {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      inventoryId: null,
+      inventorySlot: null,
       width: null,
     },
     {
@@ -1884,6 +1895,8 @@ describe("Squash", () => {
       zIndex: 1,
       glueId: null,
       taskspaceId: null,
+      inventoryId: null,
+      inventorySlot: null,
       width: null,
     },
   ];
@@ -2009,5 +2022,141 @@ describe("Scoped-file export", () => {
     await fireEvent.click(row);
     expect(await screen.findByText("b.md")).toBeInTheDocument();
     expect(screen.queryByText("a.md")).not.toBeInTheDocument();
+  });
+});
+
+describe("Namespace page inventories", () => {
+  const bag = { id: "inv-1", namespaceId: "namespace-1", name: "Bag", posX: 600, posY: 400 };
+  /** Card 2 stored in slot 3 of the bag, card 1 still on the canvas. */
+  const withStoredCard = {
+    ...data,
+    inventories: [bag],
+    cards: data.cards.map((c) =>
+      c.id === "card-2" ? { ...c, inventoryId: "inv-1", inventorySlot: 3 } : c,
+    ),
+  };
+
+  function renderPage(overrides: Partial<typeof data> = {}) {
+    return render(NamespacePage, {
+      props: {
+        data: { ...withStoredCard, ...overrides },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+      },
+    });
+  }
+
+  it("draws a stored card in its grid rather than on the canvas", async () => {
+    const { container } = renderPage();
+
+    expect(container.querySelector('[data-card-id="card-1"]')).not.toBeNull();
+    expect(container.querySelector('[data-card-id="card-2"]')).toBeNull();
+    const icon = screen.getByRole("button", { name: "Bag, 1 card" });
+    expect(icon).toHaveAttribute("aria-expanded", "false");
+
+    // A press that never moves is a click on the icon, which opens the grid.
+    await fireEvent.mouseDown(icon, { button: 0, clientX: 10, clientY: 10 });
+    await fireEvent.mouseUp(window, { clientX: 10, clientY: 10 });
+
+    const grid = await screen.findByRole("region", { name: "Inventory Bag" });
+    const slot = grid.querySelector('[data-inventory-slot="3"]')!;
+    expect(slot.querySelector('[data-stored-card-id="card-2"]')).toHaveTextContent("Beta");
+    expect(icon).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("selects a stored card for the composer when it is clicked in the grid", async () => {
+    const { container } = renderPage();
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseUp(window);
+
+    const stored = await waitFor(() => container.querySelector('[data-stored-card-id="card-2"]')!);
+    await fireEvent.click(stored);
+
+    expect(stored).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("adds an inventory with its shortcut and opens it", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "inv-new",
+        namespaceId: "namespace-1",
+        name: "",
+        posX: 1200,
+        posY: 850,
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    renderPage({ inventories: [] });
+
+    await fireEvent.keyDown(window, { key: "v" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("/namespace-1/api/inventories");
+    expect(init.method).toBe("POST");
+    expect(
+      await screen.findByRole("region", { name: "Inventory Inventory 1" }),
+    ).toBeInTheDocument();
+  });
+
+  it("puts the cards back on the canvas when an inventory is removed", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ releasedCardIds: ["card-2"] }) });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = renderPage();
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseUp(window);
+
+    await fireEvent.click(await screen.findByRole("button", { name: "Remove inventory Bag" }));
+
+    await waitFor(() => expect(container.querySelector('[data-card-id="card-2"]')).not.toBeNull());
+    expect(screen.queryByRole("button", { name: /^Bag/ })).toBeNull();
+    expect(fetch.mock.calls[0][1].method).toBe("DELETE");
+  });
+
+  it("puts a new card in the open inventory, and names it in the composer", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        id: "card-new",
+        partitionId: "b1",
+        layerId: "l1",
+        content: "Gamma",
+        posX: 0,
+        posY: 0,
+        zIndex: 1,
+        taskspaceId: null,
+        glueId: null,
+        width: null,
+        inventoryId: "inv-1",
+        inventorySlot: 0,
+      }),
+    });
+    vi.stubGlobal("fetch", fetch);
+    const { container } = renderPage();
+    const input = screen.getByRole("textbox", { name: "Write a card" });
+    expect(input).not.toHaveAttribute("placeholder");
+
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseUp(window);
+    await waitFor(() => expect(input).toHaveAttribute("placeholder", "Add to Bag"));
+
+    await fireEvent.input(input, { target: { value: "Gamma" } });
+    await fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
+      content: "Gamma",
+      inventoryId: "inv-1",
+    });
+    const grid = screen.getByRole("region", { name: "Inventory Bag" });
+    await waitFor(() =>
+      expect(
+        grid.querySelector('[data-inventory-slot="0"] [data-stored-card-id="card-new"]'),
+      ).not.toBeNull(),
+    );
+    expect(container.querySelector('[data-card-id="card-new"]')).toBeNull();
   });
 });

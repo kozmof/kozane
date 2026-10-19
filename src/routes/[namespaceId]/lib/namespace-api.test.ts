@@ -392,6 +392,8 @@ describe("parseCard", () => {
     taskspaceId: null,
     glueId: null,
     width: null,
+    inventoryId: null,
+    inventorySlot: null,
   };
 
   it("accepts the row a card POST answers with", () => {
@@ -407,7 +409,14 @@ describe("parseCard", () => {
   });
 
   it("accepts the nullable fields when they carry a value", () => {
-    const filled = { ...row, taskspaceId: "w-1", glueId: "g-1", width: 420 };
+    const filled = {
+      ...row,
+      taskspaceId: "w-1",
+      glueId: "g-1",
+      width: 420,
+      inventoryId: "i-1",
+      inventorySlot: 5,
+    };
     expect(parseCard(filled)).toEqual(filled);
   });
 
@@ -428,6 +437,8 @@ describe("parseCard", () => {
     expect(parseCard({ ...row, content: 5 })).toBeNull();
     expect(parseCard({ ...row, width: "420" })).toBeNull();
     expect(parseCard({ ...row, glueId: 7 })).toBeNull();
+    expect(parseCard({ ...row, inventoryId: undefined })).toBeNull();
+    expect(parseCard({ ...row, inventorySlot: "5" })).toBeNull();
   });
 });
 
@@ -443,6 +454,8 @@ describe("parseCards", () => {
     taskspaceId: null,
     glueId: null,
     width: null,
+    inventoryId: null,
+    inventorySlot: null,
   });
 
   it("accepts the list a squash answers with", () => {

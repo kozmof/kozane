@@ -9,6 +9,7 @@ import type {
   GlueRel,
   TaskspaceSummary,
   Warp,
+  Inventory,
 } from "$lib/types";
 import { TaskspaceTreeState } from "./lib/taskspace-tree.svelte.js";
 import { InFlight } from "./lib/in-flight.js";
@@ -125,6 +126,17 @@ export class NamespaceState {
   warps = $state<Warp[]>([]);
   /** The warp last jumped to or clicked, which the remove shortcut acts on. */
   focusedWarpId = $state<string | null>(null);
+  inventories = $state<Inventory[]>([]);
+  /** Inventories whose grid is showing. Closing one hides the grid and leaves its cards. */
+  openInventoryIds = $state(new Set<string>());
+
+  /**
+   * The inventory new cards go into while one is open. Opening adds to the end of
+   * `openInventoryIds`, so this is the one opened most recently. Null puts cards on the canvas.
+   */
+  get receivingInventoryId(): string | null {
+    return [...this.openInventoryIds].at(-1) ?? null;
+  }
   scopes = $state<Scope[]>([]);
   scopeRels = $state<ScopeRel[]>([]);
   scopeAreas = $state<ScopeArea[]>([]);
@@ -149,6 +161,8 @@ export class NamespaceState {
     this.activeLayerId = resolveActiveLayerId(data.layers, readStoredLayerId(data.namespace.id));
     this.warps = data.warps;
     this.focusedWarpId = null;
+    this.inventories = data.inventories;
+    this.openInventoryIds = new Set();
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.scopeAreas = data.scopeAreas;
@@ -168,6 +182,7 @@ export class NamespaceState {
     // `resolveActiveLayerId` selects a replacement.
     this.activeLayerId = resolveActiveLayerId(data.layers, this.activeLayerId);
     this.warps = data.warps;
+    this.inventories = data.inventories;
     this.scopes = data.scopes;
     this.scopeRels = data.scopeRels;
     this.scopeAreas = data.scopeAreas;
@@ -180,6 +195,8 @@ export class NamespaceState {
     // A warp deleted by another tab must not stay focused, or the remove shortcut would
     // aim at a row that is no longer there.
     this.focusedWarpId = prunedRef(this.focusedWarpId, idSet(data.warps));
+    // An inventory deleted elsewhere closes, rather than leaving an empty window behind.
+    this.openInventoryIds = prunedRefs(this.openInventoryIds, idSet(data.inventories));
 
     const cardIds = idSet(data.cards);
     this.selection.selectedCards = prunedRefs(this.selection.selectedCards, cardIds);

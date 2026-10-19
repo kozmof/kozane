@@ -1,5 +1,5 @@
 import { partitionTable, cardTable, layerTable } from "../schema.js";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type {
   NeedsDB,
@@ -101,6 +101,8 @@ const CARD_DATA_SELECTION = {
   taskspaceId: cardTable.taskspaceId,
   zIndex: cardTable.zIndex,
   width: cardTable.width,
+  inventoryId: cardTable.inventoryId,
+  inventorySlot: cardTable.inventorySlot,
 } satisfies Record<keyof CardData, AnyColumn>;
 
 /**
@@ -171,7 +173,12 @@ export async function getCardMarkersByNamespaces({
     .from(cardTable)
     .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
     .where(
-      and(inArray(partitionTable.namespaceId, namespaceIds), sql`trim(${cardTable.content}) <> ''`),
+      and(
+        inArray(partitionTable.namespaceId, namespaceIds),
+        sql`trim(${cardTable.content}) <> ''`,
+        // A stored card is not on the canvas, so it cannot be what a warp lands beside.
+        isNull(cardTable.inventoryId),
+      ),
     );
 }
 

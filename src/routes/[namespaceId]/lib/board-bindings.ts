@@ -11,6 +11,7 @@ export type BoardShortcuts = Pick<
   | "toggleWarpsShortcut"
   | "setWarpShortcut"
   | "removeWarpShortcut"
+  | "addInventoryShortcut"
 >;
 
 /** Page-owned actions and state used by the keyboard binding table. */
@@ -34,6 +35,8 @@ export type BoardCommands = {
   warpToward: (key: string) => boolean;
   setWarpHere: () => void;
   removeFocusedWarp: () => void;
+  /** Drops a new inventory icon where a warp would be set. */
+  addInventoryHere: () => void;
 };
 
 /**
@@ -109,6 +112,12 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       keys: [shortcuts.removeWarpShortcut],
       when: () => c.noSelection() && !c.readonly && c.hasFocusedWarp(),
       run: c.removeFocusedWarp,
+    },
+    {
+      name: "add an inventory here",
+      keys: [shortcuts.addInventoryShortcut],
+      when: () => c.noSelection() && !c.readonly,
+      run: c.addInventoryHere,
     },
   ];
 }

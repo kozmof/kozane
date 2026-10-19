@@ -84,6 +84,8 @@ const ROLLBACK_TO_0004 = [
   // applied. Left standing, the re-apply fails on `CREATE TABLE scope_area`. Its indexes go
   // with it, the same as `warp`'s do.
   "DROP TABLE IF EXISTS scope_area",
+  // Added by 0018. The card rebuild above already took its columns and index.
+  "DROP TABLE IF EXISTS inventory",
   // Drop later indexes on tables that remain in the rolled-back fixture. Indexes on rebuilt
   // or dropped tables disappear with those tables.
   "DROP INDEX IF EXISTS taskspace_scope",

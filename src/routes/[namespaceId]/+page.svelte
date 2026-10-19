@@ -35,6 +35,11 @@
   import FloatingComposer from "./components/FloatingComposer.svelte";
   import ScopeAreaPrompt from "./components/ScopeAreaPrompt.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
+  import InventoryWindow from "./components/InventoryWindow.svelte";
+  import { createInventoryActions } from "./lib/inventory-actions.js";
+  import type { DropTarget } from "./lib/inventory-drop.js";
+  import { STOWED_GRAB_INSET } from "./lib/board-gestures.svelte.js";
+  import type { Inventory } from "$lib/types";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
   import FilePalette from "./components/FilePalette.svelte";
@@ -96,14 +101,19 @@
     centerOn: (posX: number, posY: number) => void;
     recenter: () => void;
     cardIdsInWorldRect: (rect: { x: number; y: number; w: number; h: number }) => string[];
+    pressStowedCard: (e: MouseEvent, cardId: string) => void;
   } = $state()!;
   let composerComponent: { focusInput: () => void } = $state()!;
 
   // ── Derived values ────────────────────────────────────────────
   let partitionsWithColors = $derived(applyPalette(s.partitions));
   let partitionColorById = $derived(new Map(partitionsWithColors.map((b) => [b.id, b])));
+  // A stored card lives in its inventory's grid and is not drawn on the canvas.
+  let canvasCards = $derived(s.cards.filter((c) => c.inventoryId === null));
   let visibleCards = $derived(
-    s.sidebar.activePartition ? s.cards.filter((c) => c.partitionId === s.sidebar.activePartition) : s.cards,
+    s.sidebar.activePartition
+      ? canvasCards.filter((c) => c.partitionId === s.sidebar.activePartition)
+      : canvasCards,
   );
   let scopeCardIds = $derived(
     s.sidebar.activeScope
@@ -138,7 +148,7 @@
     ...warpEntriesForNamespace({
       namespace: { id: data.namespace.id, name: data.namespace.name },
       warps: s.warps,
-      cards: s.cards,
+      cards: canvasCards,
       metrics: cardMetrics(data.uiConfig),
       isCurrent: true,
     }),
@@ -294,6 +304,65 @@
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
   const persistence = createBoardPersistence(s);
+
+  const inventoryActions = createInventoryActions(s);
+
+  /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
+  let inventoryDrag = $state<{
+    target: DropTarget | null;
+    cardId: string | null;
+    pointer: { x: number; y: number } | null;
+  }>({ target: null, cardId: null, pointer: null });
+
+  /** An inventory's name, or its number in creation order when it has none. */
+  function inventoryLabel(inventory: Inventory): string {
+    if (inventory.name) return inventory.name;
+    return `Inventory ${s.inventories.findIndex(({ id }) => id === inventory.id) + 1}`;
+  }
+
+  /** The open inventories, in creation order, each with the cards it holds. */
+  let openInventories = $derived(
+    s.inventories
+      .filter(({ id }) => s.openInventoryIds.has(id))
+      .map((inventory) => ({
+        inventory,
+        cards: s.cards.filter((c) => c.inventoryId === inventory.id),
+      })),
+  );
+
+  /** The open inventory the composer's new cards go into. See `receivingInventoryId`. */
+  let receivingInventory = $derived(
+    s.inventories.find(({ id }) => id === s.receivingInventoryId) ?? null,
+  );
+
+  let draggedStoredCard = $derived(
+    inventoryDrag.cardId ? (cardById.get(inventoryDrag.cardId) ?? null) : null,
+  );
+
+  /**
+   * Select a stored card the way a click selects a canvas one, so the composer's actions
+   * reach it. A stored card has no glue group, so it is selected alone.
+   */
+  function handleStoredCardClick(e: MouseEvent, cardId: string) {
+    if (readonly) return;
+    const { selection } = s;
+    if (selection.composerCard && selection.composerCard.id !== cardId) selection.composerCard = null;
+    if (e.shiftKey) {
+      const next = new Set(selection.selectedCards);
+      if (!next.delete(cardId)) next.add(cardId);
+      selection.selectedCards = next;
+      return;
+    }
+    const onlyThis = selection.selectedCards.size === 1 && selection.selectedCards.has(cardId);
+    selection.selectedCards = onlyThis ? new Set() : new Set([cardId]);
+    selection.primarySelectedId = onlyThis ? null : cardId;
+  }
+
+  function handleStoredCardDblClick(cardId: string) {
+    if (readonly) return;
+    const card = cardById.get(cardId);
+    if (card) s.selection.composerCard = card;
+  }
 
   function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
     return persistence.submitComposer(id, content, partitionId, () =>
@@ -496,6 +565,8 @@
       removeFocusedWarp: () => {
         if (s.focusedWarpId) void actions.handleRemoveWarp(s.focusedWarpId);
       },
+      // Dropped where a warp would be: under the pointer, or in the middle of the view.
+      addInventoryHere: () => void inventoryActions.add(canvasComponent.getWarpPosition()),
     }),
   );
 
@@ -561,6 +632,14 @@
       initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
       onFocusWarp={focusWarp}
       onPersistWarpPosition={persistence.persistWarpPosition}
+      bind:inventories={s.inventories}
+      openInventoryIds={s.openInventoryIds}
+      {inventoryLabel}
+      onToggleInventory={inventoryActions.toggle}
+      onPersistInventoryPosition={inventoryActions.persistPosition}
+      onStow={inventoryActions.stow}
+      onTake={inventoryActions.take}
+      bind:inventoryDrag
       {showFooters}
       bind:zoom
       zoomStep={data.uiConfig.zoomStep}
@@ -579,6 +658,47 @@
         `${base}/tags?namespaceId=${data.namespace.id}&tag=${encodeURIComponent(tag)}`}
       {readonly}
     />
+
+    <!-- Open inventories, stacked down the left of the canvas. They stay put while the
+         canvas pans, so a card can be carried in from anywhere on the board. -->
+    {#if openInventories.length > 0}
+      <div
+        class={css({ position: "absolute", top: "12px", left: "12px", zIndex: "52", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "calc(100% - 96px)", overflowY: "auto", overflowX: "hidden" })}
+        data-inventory-dock
+      >
+        {#each openInventories as { inventory, cards } (inventory.id)}
+          <InventoryWindow
+            {inventory}
+            label={inventoryLabel(inventory)}
+            {cards}
+            selectedCards={s.selection.selectedCards}
+            draggingCardId={inventoryDrag.pointer ? inventoryDrag.cardId : null}
+            dropTarget={inventoryDrag.target}
+            fontFamily={data.uiConfig.defaultFontFamily}
+            {readonly}
+            onClose={() => inventoryActions.toggle(inventory.id)}
+            onRemove={() => void inventoryActions.remove(inventory.id)}
+            onRename={(name) => void inventoryActions.rename(inventory.id, name)}
+            onCardMouseDown={(e, cardId) => canvasComponent.pressStowedCard(e, cardId)}
+            onCardClick={handleStoredCardClick}
+            onCardDblClick={handleStoredCardDblClick}
+          />
+        {/each}
+      </div>
+    {/if}
+
+    <!-- The card being carried out of a grid, following the pointer. It lets the pointer
+         through so whatever is underneath can be found as the drop target. -->
+    {#if draggedStoredCard && inventoryDrag.pointer}
+      <div
+        aria-hidden="true"
+        data-stored-card-preview
+        class={css({ position: "fixed", zIndex: "1000", pointerEvents: "none", width: "160px", maxHeight: "72px", overflow: "hidden", padding: "6px 8px", background: "ink.white", border: "1px solid token(colors.select.accent)", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: "11px", lineHeight: "1.45", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "ink.content" })}
+        style:left="{inventoryDrag.pointer.x - STOWED_GRAB_INSET * zoom}px"
+        style:top="{inventoryDrag.pointer.y - STOWED_GRAB_INSET * zoom}px"
+        style:font-family={data.uiConfig.defaultFontFamily}
+      >{draggedStoredCard.content || "Empty card…"}</div>
+    {/if}
 
     {#if filePaletteOpen}
     <FilePalette
@@ -668,6 +788,7 @@
       onOpenFilePalette={() => (filePaletteOpen = true)}
       suspendShortcuts={filePaletteOpen}
       resizingCardId={s.selection.resizingCardId}
+      newCardTarget={receivingInventory ? inventoryLabel(receivingInventory) : null}
       shortcuts={data.uiConfig}
     />
     {/if}

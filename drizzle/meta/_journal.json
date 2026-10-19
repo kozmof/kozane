@@ -127,6 +127,13 @@
       "when": 1790510095506,
       "tag": "0017_wandering_hemingway",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1792414840844,
+      "tag": "0018_inventory",
+      "breakpoints": true
     }
   ]
 }

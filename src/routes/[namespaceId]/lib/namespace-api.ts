@@ -1,6 +1,8 @@
 import { base } from "$app/paths";
 import type { CardPositionPatch } from "./namespace-page.js";
-import type { CardWithGlue, ScopeArea, Warp } from "$lib/types.js";
+import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types.js";
+import type { InventoryPlacement } from "$lib/inventory.js";
+import type { BoardPoint } from "./canvas-viewport.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
 import type { BoardRect } from "$lib/constants";
 import {
@@ -10,7 +12,7 @@ import {
   readNullableString,
   readString,
 } from "./response.js";
-import { readCard } from "./snapshot-reader.js";
+import { readCard, readInventory } from "./snapshot-reader.js";
 
 /** Build a namespace endpoint URL with the configured base path. */
 function apiUrl(namespaceId: string, path: string): string {
@@ -51,6 +53,8 @@ export function createCard(
     zIndex?: number;
     scopeId?: string;
     layerId?: string;
+    /** Stores the new card in this inventory's first free slot instead of on the canvas. */
+    inventoryId?: string;
   },
 ): Promise<Response> {
   return jsonRequest(fetcher, apiUrl(namespaceId, "/cards"), "POST", card);
@@ -481,4 +485,73 @@ export function saveTaskspaceFile(
   file: { path: string; content: string; signature: string | null },
 ): Promise<Response> {
   return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file`), "PUT", file);
+}
+
+export function createInventory(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  position: BoardPoint,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, "/inventories"), "POST", position);
+}
+
+/** Moves an inventory's icon, renames it, or both. */
+export function updateInventory(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  inventoryId: string,
+  fields: { posX?: number; posY?: number; name?: string },
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/inventories/${inventoryId}`), "PATCH", fields);
+}
+
+export function deleteInventory(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  inventoryId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/inventories/${inventoryId}`), "DELETE");
+}
+
+/** Puts cards into an inventory, on `slot` or in the first free slots when it is null. */
+export function stowCards(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  inventoryId: string,
+  cardIds: string[],
+  slot: number | null,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/inventories/${inventoryId}/cards`), "POST", {
+    cardIds,
+    ...(slot !== null && { slot }),
+  });
+}
+
+/** Puts stored cards back on the canvas. A card without a position returns to its old one. */
+export function takeCards(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  cards: { cardId: string; posX?: number; posY?: number }[],
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, "/inventories/take"), "POST", { cards });
+}
+
+/** Validate a stored inventory row, returning null for an invalid response. */
+export function parseInventory(value: unknown): Inventory | null {
+  return readInventory(value) ?? null;
+}
+
+/** The slots a stow assigned, or null if any entry is malformed. */
+export function parsePlacements(value: unknown): InventoryPlacement[] | null {
+  const rows = readArray(value, "placements");
+  if (!rows) return null;
+  const placements: InventoryPlacement[] = [];
+  for (const row of rows) {
+    const cardId = readString(row, "cardId");
+    const inventoryId = readString(row, "inventoryId");
+    const slot = readFiniteNumber(row, "slot");
+    if (cardId === undefined || inventoryId === undefined || slot === undefined) return null;
+    placements.push({ cardId, inventoryId, slot });
+  }
+  return placements;
 }

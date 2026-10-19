@@ -29,6 +29,7 @@
     onOpenFilePalette?: () => void;
     suspendShortcuts?: boolean;
     resizingCardId?: string | null;
+    newCardTarget?: string | null;
     shortcuts: UiConfig;
   }
 
@@ -57,6 +58,7 @@
     onOpenFilePalette,
     suspendShortcuts = false,
     resizingCardId = null,
+    newCardTarget = null,
     shortcuts,
   }: Props = $props();
 
@@ -105,6 +107,7 @@
     {onOpenFilePalette}
     {suspendShortcuts}
     {resizingCardId}
+    {newCardTarget}
     {shortcuts}
   />
 </div>

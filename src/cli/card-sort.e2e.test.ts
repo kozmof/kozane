@@ -288,6 +288,12 @@ describe("kozane card list --sort", () => {
           // Drop `scope_area` so migration 0016 can recreate it after its journal entry is
           // removed. Its indexes disappear with it.
           "DROP TABLE IF EXISTS scope_area",
+          // Undo 0018, whose journal entry goes with the rest below. The index has to go before
+          // the column it covers.
+          "DROP INDEX IF EXISTS card_inventory_slot",
+          "ALTER TABLE card DROP COLUMN inventory_slot",
+          "ALTER TABLE card DROP COLUMN inventory_id",
+          "DROP TABLE IF EXISTS inventory",
 
           "ALTER TABLE `namespace` RENAME TO `project`",
           "ALTER TABLE `partition` RENAME TO `bundle`",

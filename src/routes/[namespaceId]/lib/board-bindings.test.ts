@@ -9,6 +9,7 @@ const shortcuts: BoardShortcuts = {
   toggleWarpsShortcut: "w",
   setWarpShortcut: "s",
   removeWarpShortcut: "x",
+  addInventoryShortcut: "v",
 };
 
 function commands(overrides: Partial<BoardCommands> = {}): BoardCommands {
@@ -26,6 +27,7 @@ function commands(overrides: Partial<BoardCommands> = {}): BoardCommands {
     warpToward: vi.fn(() => true),
     setWarpHere: vi.fn(),
     removeFocusedWarp: vi.fn(),
+    addInventoryHere: vi.fn(),
     ...overrides,
   };
 }

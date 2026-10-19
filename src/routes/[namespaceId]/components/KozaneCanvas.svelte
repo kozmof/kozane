@@ -7,10 +7,12 @@
   import ScopeAreaFiles from "./ScopeAreaFiles.svelte";
   import SelectionRect from "./SelectionRect.svelte";
   import WarpMarker from "./WarpMarker.svelte";
+  import InventoryIcon from "./InventoryIcon.svelte";
   import type {
     CardWithGlue,
     PartitionWithColor,
     GlueRel,
+    Inventory,
     Layer,
     ScopeArea as ScopeAreaRow,
     TaskspaceSummary,
@@ -24,6 +26,8 @@
   import { ScopeAreaBrowser } from "../lib/scope-area-browser.svelte.js";
   import { CanvasViewport, type BoardPoint } from "../lib/canvas-viewport.js";
   import { BoardGestures } from "../lib/board-gestures.svelte.js";
+  import { dropTargetAt, type DropTarget } from "../lib/inventory-drop.js";
+  import type { Point } from "../lib/namespace-page.js";
   import { PALETTE } from "$lib/palette";
   import {
     buildGlueGroupMap,
@@ -65,6 +69,14 @@
     initialCenter = null,
     onFocusWarp,
     onPersistWarpPosition,
+    inventories = $bindable(),
+    openInventoryIds,
+    inventoryLabel,
+    onToggleInventory,
+    onPersistInventoryPosition,
+    onStow,
+    onTake,
+    inventoryDrag = $bindable(),
     showFooters,
     zoom = $bindable(),
     zoomStep,
@@ -164,6 +176,31 @@
       warpId: string,
       position: { posX: number; posY: number },
     ) => Promise<boolean>;
+    /** Inventory icons on this board. Their cards are in `cards`, with an `inventoryId`. */
+    inventories: Inventory[];
+    /** Inventories whose grid is open, which draws their icon in the accent. */
+    openInventoryIds: ReadonlySet<string>;
+    /** What an icon is called: its name, or a numbered fallback. */
+    inventoryLabel: (inventory: Inventory) => string;
+    onToggleInventory: (inventoryId: string) => void;
+    /** Persist an optimistically moved icon. Return false to put it back. */
+    onPersistInventoryPosition: (
+      inventoryId: string,
+      position: { posX: number; posY: number },
+    ) => Promise<boolean>;
+    /** Puts cards into an inventory, on `slot` or in its first free slots when null. */
+    onStow: (cardIds: string[], inventoryId: string, slot: number | null) => Promise<void>;
+    /** Puts a stored card on the canvas, answering whether the server kept it there. */
+    onTake: (cardId: string, position: { posX: number; posY: number }) => Promise<boolean>;
+    /**
+     * Out: a drag that involves an inventory, for the grids drawn outside the canvas. Which
+     * slot it aims at, and which stored card is being dragged and where its preview goes.
+     */
+    inventoryDrag?: {
+      target: DropTarget | null;
+      cardId: string | null;
+      pointer: Point | null;
+    };
     showFooters: boolean;
     zoom: number;
     zoomStep: number;
@@ -221,6 +258,7 @@
     get cards() { return cards; },
     set cards(next) { cards = next; },
     get warps() { return warps; },
+    get inventories() { return inventories; },
     get scopeAreas() { return scopeAreas; },
     get selection() { return selection; },
     get glueGroupMap() { return glueGroupMap; },
@@ -229,6 +267,7 @@
     get pendingScopeAreaRect() { return pendingScopeAreaRect; },
     set pendingScopeAreaRect(rect) { pendingScopeAreaRect = rect; },
     cardIdsInRect,
+    dropTargetAt: (clientX, clientY) => dropTargetAt(document, clientX, clientY),
     get onPositionActivityStart() { return onPositionActivityStart; },
     get onPositionActivityEnd() { return onPositionActivityEnd; },
     get onError() { return onError; },
@@ -236,6 +275,10 @@
     get onPersistPositions() { return onPersistPositions; },
     get onPersistWidth() { return onPersistWidth; },
     get onPersistWarpPosition() { return onPersistWarpPosition; },
+    get onToggleInventory() { return onToggleInventory; },
+    get onPersistInventoryPosition() { return onPersistInventoryPosition; },
+    get onStow() { return onStow; },
+    get onTake() { return onTake; },
     get onPersistScopeArea() { return onPersistScopeArea; },
     get onScopeMembershipChange() { return onScopeMembershipChange; },
   });
@@ -296,6 +339,29 @@
     }
     recenter();
   });
+
+  // Hand the inventory side of a drag to the page, which draws the grids outside the canvas.
+  $effect(() => {
+    inventoryDrag = {
+      target: gestures.dropTarget,
+      cardId: gestures.draggingStowedCardId,
+      pointer: gestures.stowedPointer,
+    };
+  });
+
+  /** How many cards each inventory holds, for the badge on its icon. */
+  const storedCounts = $derived(
+    cards.reduce(
+      (counts, { inventoryId }) =>
+        inventoryId === null ? counts : counts.set(inventoryId, (counts.get(inventoryId) ?? 0) + 1),
+      new Map<string, number>(),
+    ),
+  );
+
+  /** Starts dragging a card out of an inventory grid, which the page draws. */
+  export function pressStowedCard(e: MouseEvent, cardId: string): void {
+    gestures.pressStowedCard(e, cardId);
+  }
 
   /** Center the viewport when a new namespace reuses this canvas component. */
   export function recenter(): void {
@@ -556,6 +622,23 @@
           />
         {/each}
       {/if}
+
+      <!-- Inventory icons sit with the warp markers, above every layer and outside its dimming. -->
+      {#each inventories as inventory (inventory.id)}
+        <InventoryIcon
+          {inventory}
+          label={inventoryLabel(inventory)}
+          count={storedCounts.get(inventory.id) ?? 0}
+          open={openInventoryIds.has(inventory.id)}
+          dropHover={gestures.dropTarget?.kind === "inventory" &&
+            gestures.dropTarget.inventoryId === inventory.id &&
+            gestures.dropTarget.slot === null}
+          draggable={!readonly}
+          dragging={gestures.draggingInventoryId === inventory.id}
+          onMouseDown={(e) => gestures.pressInventory(e, inventory.id)}
+          onToggle={() => onToggleInventory(inventory.id)}
+        />
+      {/each}
 
       {#if gestures.selectionRect}
         <SelectionRect rect={gestures.selectionRect} />

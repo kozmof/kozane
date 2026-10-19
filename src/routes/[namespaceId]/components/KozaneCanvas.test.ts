@@ -12,6 +12,7 @@ import type { NewCardPlacement } from "$lib/ui-config";
 import type {
   PartitionWithColor,
   CardWithGlue,
+  Inventory,
   Layer,
   ScopeArea as ScopeAreaRow,
   TaskspaceSummary,
@@ -56,6 +57,8 @@ const card = (
   zIndex: 0,
   glueId: null,
   taskspaceId: null,
+  inventoryId: null,
+  inventorySlot: null,
   width: null,
   ...overrides,
 });
@@ -110,6 +113,15 @@ function makeProps(overrides: Overrides = {}) {
     onPersistWarpPosition: vi.fn(
       async (_warpId: string, _position: { posX: number; posY: number }) => true,
     ),
+    inventories: [] as Inventory[],
+    openInventoryIds: new Set<string>(),
+    inventoryLabel: (inventory: Inventory) => inventory.name || "Inventory",
+    onToggleInventory: vi.fn(),
+    onPersistInventoryPosition: vi.fn(
+      async (_inventoryId: string, _position: { posX: number; posY: number }) => true,
+    ),
+    onStow: vi.fn(async (_cardIds: string[], _inventoryId: string, _slot: number | null) => {}),
+    onTake: vi.fn(async (_cardId: string, _position: { posX: number; posY: number }) => true),
     showFooters: true,
     zoom: 1,
     zoomStep: 0.1,

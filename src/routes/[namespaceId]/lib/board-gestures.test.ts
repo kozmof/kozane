@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import type { CardWithGlue, ScopeArea, Warp } from "$lib/types";
+import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
 import { SCOPE_AREA_MIN_SIZE } from "$lib/constants";
 import { SelectionState } from "../namespace-state.svelte.js";
 import { BoardGestures, type BoardGestureHost } from "./board-gestures.svelte.js";
 import { CanvasViewport } from "./canvas-viewport.js";
 import type { WorldRect } from "./namespace-page.js";
+import type { DropTarget } from "./inventory-drop.js";
 
 function card(id: string, posX: number, posY: number): CardWithGlue {
   return {
@@ -17,6 +18,8 @@ function card(id: string, posX: number, posY: number): CardWithGlue {
     zIndex: 0,
     glueId: null,
     taskspaceId: null,
+    inventoryId: null,
+    inventorySlot: null,
     width: null,
   };
 }
@@ -47,6 +50,10 @@ type Host = BoardGestureHost & {
   onPersistPositions: ReturnType<typeof vi.fn>;
   onPersistWidth: ReturnType<typeof vi.fn>;
   onPersistWarpPosition: ReturnType<typeof vi.fn>;
+  onToggleInventory: ReturnType<typeof vi.fn>;
+  onPersistInventoryPosition: ReturnType<typeof vi.fn>;
+  onStow: ReturnType<typeof vi.fn>;
+  onTake: ReturnType<typeof vi.fn>;
 };
 
 function hostWith(overrides: Partial<BoardGestureHost> = {}): Host {
@@ -65,6 +72,7 @@ function hostWith(overrides: Partial<BoardGestureHost> = {}): Host {
     cardWidth: 200,
     cards: [card("c1", 100, 100), card("c2", 400, 100)],
     warps: [] as Warp[],
+    inventories: [] as Inventory[],
     scopeAreas: [] as ScopeArea[],
     selection: new SelectionState(),
     glueGroupMap: new Map(),
@@ -72,6 +80,7 @@ function hostWith(overrides: Partial<BoardGestureHost> = {}): Host {
     sweepableCardIds: new Set(),
     pendingScopeAreaRect: null as WorldRect | null,
     cardIdsInRect: () => new Set<string>(),
+    dropTargetAt: () => null,
     onPositionActivityStart: vi.fn(),
     onPositionActivityEnd: vi.fn(),
     onError: vi.fn(),
@@ -79,6 +88,10 @@ function hostWith(overrides: Partial<BoardGestureHost> = {}): Host {
     onPersistPositions: vi.fn(async () => true),
     onPersistWidth: vi.fn(async () => true),
     onPersistWarpPosition: vi.fn(async () => true),
+    onToggleInventory: vi.fn(),
+    onPersistInventoryPosition: vi.fn(async () => true),
+    onStow: vi.fn(async () => {}),
+    onTake: vi.fn(async () => true),
     onPersistScopeArea: vi.fn(async () => true),
     onScopeMembershipChange: vi.fn(async () => {}),
     ...overrides,
@@ -239,5 +252,148 @@ describe("BoardGestures", () => {
     gestures.move(250, 320);
     expect(host.el.scrollLeft).toBe(550);
     expect(host.el.scrollTop).toBe(380);
+  });
+
+  describe("inventories", () => {
+    const inventory = (id: string, posX: number, posY: number): Inventory => ({
+      id,
+      namespaceId: "n1",
+      name: "",
+      posX,
+      posY,
+    });
+    const stored = (id: string, inventoryId: string, slot: number): CardWithGlue => ({
+      ...card(id, 40, 40),
+      inventoryId,
+      inventorySlot: slot,
+    });
+    const aim = (target: DropTarget | null) => () => target;
+
+    it("stores a dragged canvas card, putting it back where it started", async () => {
+      const host = hostWith({
+        dropTargetAt: aim({ kind: "inventory", inventoryId: "i1", slot: 4 }),
+      });
+      const gestures = new BoardGestures(host);
+      gestures.pressCard(press(110, 110), "c1");
+      gestures.move(300, 300);
+      expect(gestures.dropTarget).toEqual({ kind: "inventory", inventoryId: "i1", slot: 4 });
+      await gestures.release();
+      expect(host.onStow).toHaveBeenCalledWith(["c1"], "i1", 4);
+      expect(host.onPersistPositions).not.toHaveBeenCalled();
+      expect(host.cards[0]).toMatchObject({ posX: 100, posY: 100 });
+      expect(gestures.dropTarget).toBeNull();
+    });
+
+    it("stores the whole selection a dragged card belongs to", async () => {
+      const host = hostWith({
+        dropTargetAt: aim({ kind: "inventory", inventoryId: "i1", slot: null }),
+      });
+      host.selection.selectedCards = new Set(["c1", "c2"]);
+      const gestures = new BoardGestures(host);
+      gestures.pressCard(press(110, 110), "c1");
+      gestures.move(300, 300);
+      await gestures.release();
+      expect(host.onStow).toHaveBeenCalledWith(["c1", "c2"], "i1", null);
+    });
+
+    it("leaves a selected card that is already stored out of a canvas drag", async () => {
+      const host = hostWith();
+      host.cards = [...host.cards, stored("s1", "i1", 0)];
+      host.selection.selectedCards = new Set(["c1", "s1"]);
+      const gestures = new BoardGestures(host);
+      gestures.pressCard(press(110, 110), "c1");
+      gestures.move(205, 199);
+      await gestures.release();
+      expect(host.onPersistPositions).toHaveBeenCalledWith([
+        { cardId: "c1", posX: 192, posY: 192 },
+      ]);
+    });
+
+    it("ignores the canvas as a target while a canvas card is dragged", () => {
+      const host = hostWith({ dropTargetAt: aim({ kind: "canvas" }) });
+      const gestures = new BoardGestures(host);
+      gestures.pressCard(press(110, 110), "c1");
+      gestures.move(300, 300);
+      expect(gestures.dropTarget).toBeNull();
+    });
+
+    it("opens or closes an inventory on a press that never travels", async () => {
+      const host = hostWith({ inventories: [inventory("i1", 500, 500)] });
+      const gestures = new BoardGestures(host);
+      gestures.pressInventory(press(500, 500), "i1");
+      gestures.move(501, 501);
+      await gestures.release();
+      expect(host.onToggleInventory).toHaveBeenCalledWith("i1");
+      expect(host.onPersistInventoryPosition).not.toHaveBeenCalled();
+    });
+
+    it("moves an icon and saves where it was let go", async () => {
+      const host = hostWith({ inventories: [inventory("i1", 500, 500)] });
+      const gestures = new BoardGestures(host);
+      gestures.pressInventory(press(505, 505), "i1");
+      gestures.move(705, 605);
+      await gestures.release();
+      expect(host.onPersistInventoryPosition).toHaveBeenCalledWith("i1", { posX: 700, posY: 600 });
+      expect(host.onToggleInventory).not.toHaveBeenCalled();
+    });
+
+    it("puts an icon back when its move is refused", async () => {
+      const host = hostWith({ inventories: [inventory("i1", 500, 500)] });
+      host.onPersistInventoryPosition.mockResolvedValueOnce(false);
+      const gestures = new BoardGestures(host);
+      gestures.pressInventory(press(500, 500), "i1");
+      gestures.move(700, 600);
+      await gestures.release();
+      expect(host.inventories[0]).toMatchObject({ posX: 500, posY: 500 });
+      expect(host.onError).toHaveBeenCalledWith("Failed to save inventory position");
+    });
+
+    it("takes a stored card out onto the canvas, snapped under the pointer", async () => {
+      const host = hostWith({ dropTargetAt: aim({ kind: "canvas" }) });
+      host.cards = [...host.cards, stored("s1", "i1", 0)];
+      const gestures = new BoardGestures(host);
+      gestures.pressStowedCard(press(10, 10), "s1");
+      gestures.move(320, 250);
+      expect(gestures.stowedPointer).toEqual({ x: 320, y: 250 });
+      expect(gestures.draggingStowedCardId).toBe("s1");
+      await gestures.release();
+      // The pointer less the grab inset, rounded to the 24-pixel grid.
+      expect(host.onTake).toHaveBeenCalledWith("s1", { posX: 312, posY: 240 });
+      expect(gestures.stowedPointer).toBeNull();
+    });
+
+    it("moves a stored card to the slot it is dropped on", async () => {
+      const host = hostWith({
+        dropTargetAt: aim({ kind: "inventory", inventoryId: "i2", slot: 7 }),
+      });
+      host.cards = [...host.cards, stored("s1", "i1", 0)];
+      const gestures = new BoardGestures(host);
+      gestures.pressStowedCard(press(10, 10), "s1");
+      gestures.move(200, 200);
+      await gestures.release();
+      expect(host.onStow).toHaveBeenCalledWith(["s1"], "i2", 7);
+      expect(host.onTake).not.toHaveBeenCalled();
+    });
+
+    it("does nothing with a stored card let go over nothing, or never moved", async () => {
+      const host = hostWith();
+      host.cards = [...host.cards, stored("s1", "i1", 0)];
+      const gestures = new BoardGestures(host);
+      gestures.pressStowedCard(press(10, 10), "s1");
+      gestures.move(200, 200);
+      await gestures.release();
+      gestures.pressStowedCard(press(10, 10), "s1");
+      await gestures.release();
+      expect(host.onStow).not.toHaveBeenCalled();
+      expect(host.onTake).not.toHaveBeenCalled();
+      expect(host.onPositionActivityEnd).toHaveBeenCalledTimes(2);
+    });
+
+    it("will not drag a card out of an inventory it is not in", () => {
+      const host = hostWith();
+      const gestures = new BoardGestures(host);
+      gestures.pressStowedCard(press(10, 10), "c1");
+      expect(gestures.gesture).toBeNull();
+    });
   });
 });

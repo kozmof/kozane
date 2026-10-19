@@ -357,6 +357,14 @@ export async function moveCardsToNamespace({
     // Moving a card to another namespace removes it from its glue group.
     await unglueCardsInTx({ db: tx, cardIds });
 
+    // Inventories belong to one namespace, so a stored card arrives on the target canvas at
+    // the position it had before it was stored.
+    for (const batch of chunked(cardIds, { size: BATCH_MAX }))
+      await tx
+        .update(cardTable)
+        .set({ inventoryId: null, inventorySlot: null })
+        .where(inArray(cardTable.id, batch));
+
     return { ok: true };
   });
 }

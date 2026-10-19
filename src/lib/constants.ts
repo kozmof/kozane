@@ -10,3 +10,4 @@ export * from "./constants/taskspace.js";
 export * from "./constants/tag.js";
 export * from "./constants/cache.js";
 export * from "./constants/map.js";
+export * from "./constants/inventory.js";

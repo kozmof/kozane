@@ -60,6 +60,10 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["warp-1", "namespace-1", 240, 480],
         },
         {
+          sql: "INSERT INTO inventory (id, namespace_id, name, pos_x, pos_y) VALUES (?, ?, ?, ?, ?)",
+          args: ["inventory-1", "namespace-1", "Kept", 600, 720],
+        },
+        {
           sql: "INSERT INTO taskspace (id, namespace_id, scope_id, name, path, path_kind, last_seen_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
             "taskspace-1",
@@ -79,8 +83,10 @@ async function seedDb(dbUrl: string): Promise<void> {
           args: ["card-1", "partition-1", "layer-1", "taskspace-1", "First", 10, 20],
         },
         {
-          sql: "INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
-          args: ["card-2", "partition-1", "layer-1", null, "Second", 30, 40],
+          // Stored, so the dump carries both inventory columns filled in. The board would have
+          // taken it out of its glue group on the way in. A dump moves rows as they are.
+          sql: "INSERT INTO card (id, partition_id, layer_id, taskspace_id, content, pos_x, pos_y, inventory_id, inventory_slot, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, unixepoch(), unixepoch())",
+          args: ["card-2", "partition-1", "layer-1", null, "Second", 30, 40, "inventory-1", 4],
         },
         {
           sql: "INSERT INTO glue (id) VALUES (?)",
@@ -137,6 +143,7 @@ describe("db JSON export/import", () => {
       partition: 1,
       layer: 1,
       warp: 1,
+      inventory: 1,
       taskspace: 1,
       card: 2,
       glue: 1,
@@ -212,6 +219,67 @@ describe("db JSON export/import", () => {
     // Restore the other tables when an older dump omits a table.
     expect(counts.card).toBe(2);
     expect(counts.scope_rel).toBe(1);
+  });
+
+  it("reads a version 8 dump, which predates inventories, as having nothing stored", async () => {
+    const sourceUrl = await migratedDbUrl("v8-source.db");
+    const targetUrl = await migratedDbUrl("v8-target.db");
+    await seedDb(sourceUrl);
+
+    // Version 8 has neither the `inventory` table nor the two columns it added to `card`.
+    const dump = await exportDbJson(sourceUrl);
+    const tables: Record<string, unknown> = {
+      ...dump.tables,
+      card: dump.tables.card.map(({ inventory_id: _id, inventory_slot: _slot, ...row }) => row),
+    };
+    delete tables.inventory;
+    const legacy = { ...dump, version: 8, tables };
+
+    const counts = await importDbJson(targetUrl, legacy as never);
+
+    expect(counts.inventory).toBe(0);
+    expect(counts.card).toBe(2);
+    const imported = await exportDbJson(targetUrl);
+    expect(imported.tables.card.every((row) => row.inventory_id === null)).toBe(true);
+  });
+
+  it("still demands the inventory columns from a dump new enough to have them", async () => {
+    const sourceUrl = await migratedDbUrl("v9-missing-column.db");
+    const targetUrl = await migratedDbUrl("v9-missing-column-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const broken = {
+      ...dump,
+      tables: {
+        ...dump.tables,
+        card: dump.tables.card.map(({ inventory_slot: _slot, ...row }) => row),
+      },
+    };
+
+    await expect(importDbJson(targetUrl, broken as never)).rejects.toThrow(
+      "missing column inventory_slot",
+    );
+  });
+
+  it("refuses a card stored in an inventory the dump does not have", async () => {
+    const sourceUrl = await migratedDbUrl("v9-dangling.db");
+    const targetUrl = await migratedDbUrl("v9-dangling-target.db");
+    await seedDb(sourceUrl);
+
+    const dump = await exportDbJson(sourceUrl);
+    const [first, ...rest] = dump.tables.card;
+    const broken = {
+      ...dump,
+      tables: {
+        ...dump.tables,
+        card: [{ ...first, inventory_id: "gone", inventory_slot: 0 }, ...rest],
+      },
+    };
+
+    await expect(importDbJson(targetUrl, broken as never)).rejects.toThrow(
+      "references unknown inventory_id gone",
+    );
   });
 
   it("still demands scope_area from a dump old enough to have it", async () => {

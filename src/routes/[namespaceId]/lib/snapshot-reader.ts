@@ -9,6 +9,7 @@ import type {
   ScopeArea,
   TaskspaceSummary,
   Warp,
+  Inventory,
 } from "$lib/types.js";
 import { PATH_KINDS, type PathKind } from "$lib/constants.js";
 import {
@@ -72,9 +73,31 @@ export function readCard(row: unknown): CardWithGlue | undefined {
   const taskspaceId = readNullableString(row, "taskspaceId");
   const glueId = readNullableString(row, "glueId");
   const width = readNullableFiniteNumber(row, "width");
-  if (taskspaceId === undefined || glueId === undefined || width === undefined) return undefined;
+  const inventoryId = readNullableString(row, "inventoryId");
+  const inventorySlot = readNullableFiniteNumber(row, "inventorySlot");
+  if (
+    taskspaceId === undefined ||
+    glueId === undefined ||
+    width === undefined ||
+    inventoryId === undefined ||
+    inventorySlot === undefined
+  )
+    return undefined;
 
-  return { id, partitionId, layerId, content, posX, posY, zIndex, taskspaceId, glueId, width };
+  return {
+    id,
+    partitionId,
+    layerId,
+    content,
+    posX,
+    posY,
+    zIndex,
+    taskspaceId,
+    glueId,
+    width,
+    inventoryId,
+    inventorySlot,
+  };
 }
 
 function readPartition(row: unknown): Partition | undefined {
@@ -118,6 +141,23 @@ function readWarp(row: unknown): Warp | undefined {
   if (id === undefined || namespaceId === undefined || posX === undefined || posY === undefined)
     return undefined;
   return { id, namespaceId, posX, posY };
+}
+
+export function readInventory(row: unknown): Inventory | undefined {
+  const id = readString(row, "id");
+  const namespaceId = readString(row, "namespaceId");
+  const name = readText(row, "name");
+  const posX = readFiniteNumber(row, "posX");
+  const posY = readFiniteNumber(row, "posY");
+  if (
+    id === undefined ||
+    namespaceId === undefined ||
+    name === undefined ||
+    posX === undefined ||
+    posY === undefined
+  )
+    return undefined;
+  return { id, namespaceId, name, posX, posY };
 }
 
 function readScope(row: unknown): Scope | undefined {
@@ -202,6 +242,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
   const partitions = readRows(source, "partitions", readPartition);
   const layers = readRows(source, "layers", readLayer);
   const warps = readRows(source, "warps", readWarp);
+  const inventories = readRows(source, "inventories", readInventory);
   const scopes = readRows(source, "scopes", readScope);
   const scopeRels = readRows(source, "scopeRels", readScopeRel);
   const scopeAreas = readRows(source, "scopeAreas", readScopeArea);
@@ -213,6 +254,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
     !partitions ||
     !layers ||
     !warps ||
+    !inventories ||
     !scopes ||
     !scopeRels ||
     !scopeAreas ||
@@ -228,6 +270,7 @@ export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | 
     partitions,
     layers,
     warps,
+    inventories,
     scopes,
     scopeRels,
     scopeAreas,

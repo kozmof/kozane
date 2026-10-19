@@ -28,6 +28,8 @@ function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
     zIndex: 0,
     glueId: null,
     taskspaceId: null,
+    inventoryId: null,
+    inventorySlot: null,
     width: null,
     ...overrides,
   };

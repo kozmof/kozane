@@ -90,6 +90,27 @@ export const warpTable = sqliteTable(
   (t) => [index("warp_namespace").on(t.namespaceId)],
 );
 
+/**
+ * A grid of slots a namespace's cards can be stored in. The board draws it as an icon at
+ * `posX`/`posY` that opens to show the grid. Cards sit in the grid one per slot. See
+ * `card.inventory_slot`.
+ */
+export const inventoryTable = sqliteTable(
+  "inventory",
+  {
+    id: text("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
+    namespaceId: text("namespace_id")
+      .notNull()
+      .references(() => namespaceTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
+    name: text().notNull().default(""),
+    posX: integer("pos_x").notNull().default(0),
+    posY: integer("pos_y").notNull().default(0),
+  },
+  (t) => [index("inventory_namespace").on(t.namespaceId)],
+);
+
 export const scopeTable = sqliteTable(
   "scope",
   {
@@ -196,7 +217,26 @@ export const cardTable = sqliteTable(
       onDelete: "set null",
       onUpdate: "cascade",
     }),
+    /**
+     * The inventory the card is stored in, or null while it is on the canvas. Deleting an
+     * inventory goes through `deleteInventory`, which clears both columns itself. The
+     * `set null` here is the fallback for any other path.
+     */
+    inventoryId: text("inventory_id").references(() => inventoryTable.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
+    /**
+     * Slot index within the inventory, counted left to right and top to bottom. Readers treat
+     * a card as stored only when `inventoryId` is set. Writers clear both together, since
+     * SQLite cannot add a CHECK to an existing table without rebuilding it.
+     */
+    inventorySlot: integer("inventory_slot"),
     content: text().notNull(),
+    /**
+     * Canvas position. A stored card keeps the position it had on the canvas, and returns
+     * there when it leaves its inventory without being dropped somewhere else.
+     */
     posX: integer("pos_x").notNull().default(0),
     posY: integer("pos_y").notNull().default(0),
     zIndex: integer("z_index").notNull().default(0),
@@ -236,6 +276,9 @@ export const cardTable = sqliteTable(
     // Cover the partition and update-time columns read by `getCardChangeCounts` for map
     // activity bands. Keep the narrower partition index for frequent board reads.
     index("card_partition_updated").on(t.partitionId, t.updatedAt),
+    // One card per slot. SQLite treats NULLs as distinct, so cards on the canvas never
+    // collide. Leading with `inventory_id` also serves reads of one inventory's cards.
+    uniqueIndex("card_inventory_slot").on(t.inventoryId, t.inventorySlot),
   ],
 );
 
@@ -285,7 +328,16 @@ export const namespaceRelations = relations(namespaceTable, ({ many }) => ({
   partitions: many(partitionTable),
   layers: many(layerTable),
   warps: many(warpTable),
+  inventories: many(inventoryTable),
   scopeAreas: many(scopeAreaTable),
+}));
+
+export const inventoryRelations = relations(inventoryTable, ({ one, many }) => ({
+  namespace: one(namespaceTable, {
+    fields: [inventoryTable.namespaceId],
+    references: [namespaceTable.id],
+  }),
+  cards: many(cardTable),
 }));
 
 export const warpRelations = relations(warpTable, ({ one }) => ({
@@ -317,6 +369,10 @@ export const cardRelations = relations(cardTable, ({ one, many }) => ({
     references: [partitionTable.id],
   }),
   layer: one(layerTable, { fields: [cardTable.layerId], references: [layerTable.id] }),
+  inventory: one(inventoryTable, {
+    fields: [cardTable.inventoryId],
+    references: [inventoryTable.id],
+  }),
   // Deleting a taskspace sets the card's nullable taskspace reference to null.
   taskspace: one(taskspaceTable, {
     fields: [cardTable.taskspaceId],

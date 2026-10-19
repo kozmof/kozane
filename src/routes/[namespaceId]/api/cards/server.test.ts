@@ -8,6 +8,7 @@ import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../test-utils/db.js";
 import { DELETE, PATCH, POST } from "./+server.js";
 import { addLayer, getDefaultLayer } from "$db/api/layer.js";
+import { addInventory, stowCards } from "$db/api/inventory.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/namespace-1/api/cards", {
@@ -38,6 +39,49 @@ async function setup() {
 }
 
 describe("POST /[namespaceId]/api/cards", () => {
+  it("stores a new card in the first free slot of the inventory it names", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    const first = await addCard({ db, partitionId, content: "first" });
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [first], slot: null });
+
+    const response = await POST(
+      event(
+        db,
+        namespaceId,
+        jsonRequest({
+          partitionId,
+          content: "kept",
+          posX: 24,
+          posY: 48,
+          inventoryId: inventory.id,
+        }),
+      ),
+    );
+
+    const created = await response.json();
+    expect(created).toMatchObject({ inventoryId: inventory.id, inventorySlot: 1, posX: 24 });
+    await expect(getCard({ db, partitionId, cardId: created.id })).resolves.toMatchObject({
+      inventoryId: inventory.id,
+      inventorySlot: 1,
+    });
+  });
+
+  it("creates no card when the inventory is not this namespace's", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const otherId = await addNamespace({ db, name: "Other" });
+    const foreign = await addInventory({ db, namespaceId: otherId, posX: 0, posY: 0 });
+
+    await expectHttpRejection(
+      POST(
+        event(db, namespaceId, jsonRequest({ partitionId, content: "x", inventoryId: foreign.id })),
+      ),
+      400,
+      "Inventory not found in namespace",
+    );
+    await expect(getAllCards({ db, partitionId })).resolves.toEqual([]);
+  });
+
   it("creates a trimmed card in a namespace partition", async () => {
     const { db, namespaceId, partitionId } = await setup();
 

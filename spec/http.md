@@ -71,14 +71,18 @@ cannot act on is a bad request.
 Create a card.
 
 Body fields are `partitionId` and `content` (required, text trimmed and non-blank),
-plus optional `posX`, `posY`, `zIndex` (integer), `scopeId`, and `layerId`.
+plus optional `posX`, `posY`, `zIndex` (integer), `scopeId`, `layerId`, and `inventoryId`.
 Omitting the layer uses the namespace default. Scope membership is atomic with creation.
+With `inventoryId`, the card is stored in that inventory's first free slot in the same
+transaction.
 
 Return the stored card with `id`, `partitionId`, `layerId`, `content`, clamped
-`posX` / `posY`, `zIndex`, and null `taskspaceId`, `glueId`, and `width`.
+`posX` / `posY`, `zIndex`, null `taskspaceId`, `glueId`, and `width`, and the
+`inventoryId` and `inventorySlot` it was stored at, or null for both.
 
 Return 400 for missing or oversized fields, unknown partition or scope, a layer
-outside this namespace, or a missing default layer.
+outside this namespace, an inventory outside this namespace, or a missing default layer.
+A refused card is not created.
 
 ### `PATCH /[namespaceId]/api/cards`
 
@@ -298,6 +302,57 @@ Deletes a warp. `404` when it is not this namespace's.
 Return warps from every namespace, each with a hint naming the nearest card.
 Fetched when the warp picker opens. Return 404 for an unknown namespace.
 
+## Inventories
+
+An inventory is a grid that stores cards. Slots are numbered from 0, left to right and
+top to bottom. A stored card has `inventoryId` and `inventorySlot` set and keeps its canvas
+`posX` / `posY` for when it comes back out.
+
+### `POST /[namespaceId]/api/inventories`
+
+Create an inventory. Body requires `posX` and `posY`, clamped to the canvas and rounded
+to integers. Optional `name` is trimmed and may be empty.
+Return the stored inventory. Return 404 for an unknown namespace.
+
+### `PATCH /[namespaceId]/api/inventories/[inventoryId]`
+
+Move or rename an inventory. Body takes `posX` and `posY` together, `name`, or both.
+Return the stored inventory.
+Return 400 for an empty body or only one coordinate, and 404 for an inventory outside
+this namespace.
+
+### `DELETE /[namespaceId]/api/inventories/[inventoryId]`
+
+Delete an inventory. Its cards return to the canvas at the positions they had before
+they were stored. Return `{ releasedCardIds }`.
+Return 404 for an inventory outside this namespace.
+
+### `POST /[namespaceId]/api/inventories/[inventoryId]/cards`
+
+Store cards. Body requires `cardIds` and takes an optional integer `slot` from 0 to 9999.
+
+- One card with a `slot` takes that slot. A card already there swaps with it when both are
+  in this inventory, and otherwise moves to the first free slot.
+- Otherwise cards fill free slots in order, starting from `slot` or from 0. Cards already
+  in this inventory stay where they are.
+
+A card leaves its glue group when it is stored. A group left with one member is dissolved.
+Return `{ placements, clearedCardIds }`, where `placements` lists `{ cardId, inventoryId,
+slot }` for every card whose slot changed and `clearedCardIds` lists the cards left without
+a glue group.
+
+Return 400 for an inventory or card outside this namespace, or a placement past slot 9999.
+
+### `POST /[namespaceId]/api/inventories/take`
+
+Return stored cards to the canvas. Body requires `cards`, an array of
+`{ cardId, posX?, posY? }` with unique `cardId`s. A card given a position goes there,
+clamped to the canvas. A card without one returns to where it was before it was stored.
+Return `{ cards }` with the stored positions.
+
+Return 400 for one coordinate without the other, a repeated `cardId`, or a card that is
+not this namespace's.
+
 ## Taskspaces
 
 ### `POST /[namespaceId]/api/taskspaces`
@@ -359,8 +414,9 @@ Other file read limits and access rules apply.
 
 ### `GET /[namespaceId]/api/snapshot`
 
-Return board data, including cards, partitions, layers, warps, scopes, scope areas,
-scope and glue relations, and taskspaces.
+Return board data, including cards, partitions, layers, warps, inventories, scopes, scope
+areas, scope and glue relations, and taskspaces. Stored cards are included with their
+`inventoryId` and `inventorySlot`.
 
 Send the response `ETag` as `If-None-Match` on subsequent requests. Unchanged
 data returns 304 without a body. Responses use `Cache-Control: no-store`.

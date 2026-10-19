@@ -12,6 +12,7 @@ import type {
   glueRelTable,
   taskspaceTable,
   warpTable,
+  inventoryTable,
 } from "../schema.js";
 
 export type NeedsDB = { db: AnyDB };
@@ -28,6 +29,7 @@ export type NeedsNamespace = NeedsDB & { namespaceId: string };
 export type NeedsPartition = NeedsDB & { partitionId: string };
 export type NeedsLayer = NeedsDB & { layerId: string };
 export type NeedsWarp = NeedsDB & { warpId: string };
+export type NeedsInventory = NeedsDB & { inventoryId: string };
 export type NeedsScope = NeedsDB & { scopeId: string };
 export type NeedsTaskspace = NeedsDB & { taskspaceId: string };
 export type NeedsCards = NeedsDB & { cardIds: string[] };
@@ -40,6 +42,7 @@ export type NeedsNamespaceCards = NeedsNamespace & NeedsCards;
 export type NeedsNamespacePartition = NeedsNamespace & NeedsPartition;
 export type NeedsNamespaceLayer = NeedsNamespace & NeedsLayer;
 export type NeedsNamespaceWarp = NeedsNamespace & NeedsWarp;
+export type NeedsNamespaceInventory = NeedsNamespace & NeedsInventory;
 
 export type Namespace = InferSelectModel<typeof namespaceTable>;
 export type Partition = InferSelectModel<typeof partitionTable>;
@@ -52,3 +55,4 @@ export type Glue = InferSelectModel<typeof glueTable>;
 export type GlueRel = InferSelectModel<typeof glueRelTable>;
 export type Taskspace = InferSelectModel<typeof taskspaceTable>;
 export type Warp = InferSelectModel<typeof warpTable>;
+export type Inventory = InferSelectModel<typeof inventoryTable>;

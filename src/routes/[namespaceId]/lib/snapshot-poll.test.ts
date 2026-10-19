@@ -11,6 +11,7 @@ const SNAPSHOT: NamespaceDataSnapshot = {
   partitions: [],
   layers: [],
   warps: [],
+  inventories: [],
   scopes: [],
   scopeRels: [],
   scopeAreas: [],

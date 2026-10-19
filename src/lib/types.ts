@@ -8,10 +8,12 @@ import type {
   ScopeArea,
   Taskspace,
   Warp,
+  Inventory,
 } from "../db/api/types.js";
 
 // `zIndex` is required because its column is NOT NULL DEFAULT 0. `width` stays nullable so
-// cards can follow `ui.defaultCardWidth`.
+// cards can follow `ui.defaultCardWidth`. A card with an `inventoryId` is stored in that
+// inventory and is not drawn on the canvas.
 export type CardData = Pick<
   Card,
   | "id"
@@ -23,6 +25,8 @@ export type CardData = Pick<
   | "taskspaceId"
   | "zIndex"
   | "width"
+  | "inventoryId"
+  | "inventorySlot"
 >;
 
 export interface CardWithGlue extends CardData {
@@ -151,6 +155,8 @@ export interface NamespaceDataSnapshot {
   partitions: Partition[];
   layers: Layer[];
   warps: Warp[];
+  /** Inventories on this board, in creation order. Their cards are in `cards`. */
+  inventories: Inventory[];
   /**
    * Scopes visible to this namespace, not the complete workspace list. Use the workspace-wide
    * CLI listing for that view.
@@ -180,4 +186,5 @@ export type {
   ScopeArea,
   GlueRel,
   Warp,
+  Inventory,
 } from "../db/api/types.js";

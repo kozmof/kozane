@@ -22,6 +22,8 @@ const CARD_KEYS = [
   "content",
   "glueId",
   "id",
+  "inventoryId",
+  "inventorySlot",
   "layerId",
   "partitionId",
   "posX",

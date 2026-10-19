@@ -514,6 +514,69 @@ Delete a warp by full or short ID within the selected namespace. Later warps are
 kozane warp delete <warpId> [--namespace <namespaceId>]
 ```
 
+### `kozane inventory list`
+
+List inventories in creation order with short ID, name, icon position, and card count.
+
+```bash
+kozane inventory list [--namespace <namespaceId>]
+```
+
+### `kozane inventory add`
+
+Create an inventory icon at a canvas position. Clamp coordinates to canvas bounds and
+print the stored position and short ID. The name is optional.
+
+```bash
+kozane inventory add [--namespace <namespaceId>] [--name <name>] --x <number> --y <number>
+kozane inventory add --name Later --x 1200 --y 800
+```
+
+### `kozane inventory show <inventoryId>`
+
+List the cards in an inventory by slot, with row, column, short card ID, and the first
+line of text. Slots count from 0, six to a row.
+
+```bash
+kozane inventory show <inventoryId> [--namespace <namespaceId>]
+```
+
+### `kozane inventory rename <inventoryId> <name>`
+
+Rename an inventory. An empty name leaves it unnamed.
+
+```bash
+kozane inventory rename <inventoryId> <name> [--namespace <namespaceId>]
+```
+
+### `kozane inventory delete <inventoryId>`
+
+Delete an inventory. Its cards return to the canvas at the positions they had before they
+were stored.
+
+```bash
+kozane inventory delete <inventoryId> [--namespace <namespaceId>]
+```
+
+### `kozane inventory put <inventoryId> <cardIds>`
+
+Store cards in an inventory of their namespace. Cards fill free slots in order, from
+`--slot` or from 0. A single card with `--slot` takes that slot, and a card already there
+swaps with it or moves to the first free slot. Stored cards leave their glue groups.
+
+```bash
+kozane inventory put <inventoryId> <cardIds...> [--slot <number>]
+```
+
+### `kozane inventory take <cardIds>`
+
+Return stored cards to the canvas where they were before they were stored. `--x` and
+`--y` place a single card somewhere else instead.
+
+```bash
+kozane inventory take <cardIds...> [--x <number> --y <number>]
+```
+
 ### `kozane tag list`
 
 List namespace tags as a tree with distinct card and file counts. Parent counts include
@@ -703,6 +766,7 @@ Other keys fall back to built-in defaults individually.
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",
     "removeWarpShortcut": "x",
+    "addInventoryShortcut": "v",
     "canvasWidth": 5600,
     "canvasHeight": 4000,
     "contentMax": 200000

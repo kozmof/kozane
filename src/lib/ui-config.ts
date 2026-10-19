@@ -38,6 +38,7 @@ export type UiConfig = {
   setWarpShortcut: string;
   toggleWarpsShortcut: string;
   removeWarpShortcut: string;
+  addInventoryShortcut: string;
   canvasWidth: number;
   canvasHeight: number;
   /** Workspace card text limit in UTF-16 code units, enforced by HTTP and CLI writers. */
@@ -76,6 +77,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
   toggleWarpsShortcut: "A",
   removeWarpShortcut: "x",
+  addInventoryShortcut: "v",
   canvasWidth: CANVAS_W,
   canvasHeight: CANVAS_H,
   contentMax: CONTENT_MAX,
@@ -136,6 +138,7 @@ export const UI_SHORTCUT_FIELDS = [
   "setWarpShortcut",
   "toggleWarpsShortcut",
   "removeWarpShortcut",
+  "addInventoryShortcut",
 ] as const;
 
 /** Built on {@link UI_SHORTCUT_FIELDS}, so a new shortcut is key-checked by adding it there. */

@@ -79,6 +79,7 @@ export function createBoardPersistence(s: NamespaceState) {
     const { posX, posY } = placeNew();
     const scopeId = s.sidebar.activeScope;
     const layerId = s.activeLayerId;
+    const inventoryId = s.receivingInventoryId;
     // Only cards on the same layer compete for stacking, so the new card starts above them.
     const zIndex = maxZIndex(s.cards.filter((c) => c.layerId === layerId)) + 1;
     const res = await createCard(s.mutationFetcher, s.namespaceId, {
@@ -89,6 +90,7 @@ export function createBoardPersistence(s: NamespaceState) {
       zIndex,
       ...(scopeId && { scopeId }),
       ...(layerId && { layerId }),
+      ...(inventoryId && { inventoryId }),
     });
     if (!res.ok) {
       s.setError(await failureMessage(res, "Failed to create card"));

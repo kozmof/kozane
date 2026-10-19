@@ -22,6 +22,7 @@ Use other structures only when you need them.
 - Layer: A way to arrange cards in layers.
 - Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it. A scope belongs to the workspace rather than to one namespace, so its name is unique across the whole workspace. A scope named `docs` in one namespace is the same scope in every other namespace that uses that name.
 - Warp: A saved point to jump to. Warps are not related to cards.
+- Inventory: A grid that stores cards off the canvas. Drag cards in and out of it.
 
 ## Status
 

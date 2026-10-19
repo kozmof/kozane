@@ -1,5 +1,5 @@
 import { tick } from "svelte";
-import type { CardWithGlue, ScopeArea, Warp } from "$lib/types";
+import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { SCOPE_AREA_DRAW_MIN, SCOPE_AREA_MIN_SIZE, type BoardRect } from "$lib/constants";
 import type { SelectionState } from "../namespace-state.svelte.js";
@@ -8,6 +8,8 @@ import { gestureOrigin, markMoved, markMovedHorizontally } from "./gesture.js";
 import {
   draggedAreaId,
   draggedCardId,
+  draggedInventoryId,
+  draggedStowedCardId,
   draggedWarpId,
   holdsPositionActivity,
   resizedAreaId,
@@ -16,8 +18,11 @@ import {
   type BoardGesture,
   type CardDragGesture,
   type CardResizeGesture,
+  type InventoryDragGesture,
+  type StowedDragGesture,
   type WarpDragGesture,
 } from "./board-gesture.js";
+import { sameDropTarget, type DropTarget } from "./inventory-drop.js";
 import {
   GRID,
   buildGlueGroupMap,
@@ -66,6 +71,7 @@ export type BoardGestureHost = {
   readonly cardWidth: number;
   cards: CardWithGlue[];
   readonly warps: Warp[];
+  readonly inventories: Inventory[];
   readonly scopeAreas: ScopeArea[];
   readonly selection: SelectionState;
   readonly glueGroupMap: ReturnType<typeof buildGlueGroupMap>;
@@ -75,6 +81,8 @@ export type BoardGestureHost = {
   pendingScopeAreaRect: WorldRect | null;
   /** Which cards the drawn board shows overlapping a world rectangle. */
   cardIdsInRect(rect: WorldRect): Set<string>;
+  /** What a drag would land on at this screen point. See `inventory-drop.ts`. */
+  dropTargetAt(clientX: number, clientY: number): DropTarget | null;
 
   readonly onPositionActivityStart: () => void;
   readonly onPositionActivityEnd: () => void;
@@ -83,6 +91,15 @@ export type BoardGestureHost = {
   readonly onPersistPositions: (positions: CardPositionPatch[]) => Promise<boolean>;
   readonly onPersistWidth: (cardId: string, width: number) => Promise<boolean>;
   readonly onPersistWarpPosition: (warpId: string, position: BoardPoint) => Promise<boolean>;
+  readonly onToggleInventory: (inventoryId: string) => void;
+  readonly onPersistInventoryPosition: (
+    inventoryId: string,
+    position: BoardPoint,
+  ) => Promise<boolean>;
+  /** Puts cards into an inventory, on `slot` or in its first free slots when null. */
+  readonly onStow: (cardIds: string[], inventoryId: string, slot: number | null) => Promise<void>;
+  /** Puts a stored card on the canvas, answering whether the server kept it there. */
+  readonly onTake: (cardId: string, position: BoardPoint) => Promise<boolean>;
   readonly onPersistScopeArea: (
     scopeId: string,
     areaId: string,
@@ -95,7 +112,13 @@ export type BoardGestureHost = {
 };
 
 /** The drafts a release is about, read before the slot is emptied. */
-type Drafts = { swept: WorldRect | null; drawn: WorldRect | null };
+type Drafts = { swept: WorldRect | null; drawn: WorldRect | null; target: DropTarget | null };
+
+/**
+ * How far inside a card the pointer sits when the card is dropped out of an inventory, in
+ * world pixels. The preview is drawn at the same inset, so the card lands where it was shown.
+ */
+export const STOWED_GRAB_INSET = 12;
 
 /**
  * Handle board pointer gestures, including moving and resizing cards, warps, and frames,
@@ -120,6 +143,13 @@ export class BoardGestures {
   selectionRect = $state<WorldRect | null>(null);
   /** The frame being drawn right now, before it is handed over as pending. */
   scopeAreaDraft = $state<WorldRect | null>(null);
+  /**
+   * The inventory or slot a dragged card would drop into, for highlighting it. Null when the
+   * pointer is over neither, and while nothing that can be stored is being dragged.
+   */
+  dropTarget = $state<DropTarget | null>(null);
+  /** Screen point of a card dragged out of an inventory, where its preview is drawn. */
+  stowedPointer = $state<Point | null>(null);
 
   /**
    * Last known pointer position for placing warps. Null until the pointer moves. Keep it
@@ -130,6 +160,8 @@ export class BoardGestures {
   // Derive board-visible state from the active gesture. See `draggedCardId`.
   readonly draggingCardId = $derived(draggedCardId(this.gesture));
   readonly draggingWarpId = $derived(draggedWarpId(this.gesture));
+  readonly draggingInventoryId = $derived(draggedInventoryId(this.gesture));
+  readonly draggingStowedCardId = $derived(draggedStowedCardId(this.gesture));
   readonly draggingAreaId = $derived(draggedAreaId(this.gesture));
   readonly resizingAreaId = $derived(resizedAreaId(this.gesture));
   readonly isPanning = $derived(this.gesture?.kind === "pan");
@@ -149,6 +181,8 @@ export class BoardGestures {
     this.gesture = null;
     this.selectionRect = null;
     this.scopeAreaDraft = null;
+    this.dropTarget = null;
+    this.stowedPointer = null;
     return open;
   }
 
@@ -183,7 +217,12 @@ export class BoardGestures {
     const { cards, selection, glueGroupMap, cardToGlue, viewport } = this.#host;
     const card = cards.find((c) => c.id === cardId);
     if (!card) return;
-    const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId);
+    // A selection can reach into an inventory, and a stored card has no place on the canvas
+    // to be dragged from.
+    const stored = new Set(cards.filter((c) => c.inventoryId !== null).map(({ id }) => id));
+    const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId).filter(
+      (id) => !stored.has(id),
+    );
     const pressed = viewport.toWorld(e.clientX, e.clientY);
     this.#openHolding({
       kind: "card-drag",
@@ -275,6 +314,39 @@ export class BoardGestures {
       ...gestureOrigin(e),
       prevX: warp.posX,
       prevY: warp.posY,
+    });
+  }
+
+  /**
+   * Arm a drag of an inventory icon. Releasing without moving opens or closes the inventory,
+   * which is how a click on the icon works on a writable board.
+   */
+  pressInventory(e: MouseEvent, inventoryId: string): void {
+    if (!this.#mayOpen(e)) return;
+    const inventory = this.#host.inventories.find((i) => i.id === inventoryId);
+    if (!inventory) return;
+    const pressed = this.#host.viewport.toWorld(e.clientX, e.clientY);
+    this.#openHolding({
+      kind: "inventory-drag",
+      inventoryId,
+      offsetX: pressed.x - inventory.posX,
+      offsetY: pressed.y - inventory.posY,
+      ...gestureOrigin(e),
+      prevX: inventory.posX,
+      prevY: inventory.posY,
+    });
+  }
+
+  /** Arm a drag of a card out of its inventory grid. */
+  pressStowedCard(e: MouseEvent, cardId: string): void {
+    if (!this.#mayOpen(e)) return;
+    const card = this.#host.cards.find((c) => c.id === cardId);
+    if (!card?.inventoryId) return;
+    this.#openHolding({
+      kind: "stowed-drag",
+      cardId,
+      ...gestureOrigin(e),
+      pointer: { x: e.clientX, y: e.clientY },
     });
   }
 
@@ -404,10 +476,23 @@ export class BoardGestures {
         g.pointer = { x: clientX, y: clientY };
         markMoved(g, clientX, clientY);
         this.#moveCard(g, clientX, clientY);
+        // Only an inventory is a different place to drop a canvas card.
+        if (g.moved) this.#aimAt(clientX, clientY, "inventory");
         return;
       case "warp-drag":
         markMoved(g, clientX, clientY);
         this.#moveWarp(g, clientX, clientY);
+        return;
+      case "inventory-drag":
+        markMoved(g, clientX, clientY);
+        this.#moveInventory(g, clientX, clientY);
+        return;
+      case "stowed-drag":
+        g.pointer = { x: clientX, y: clientY };
+        markMoved(g, clientX, clientY);
+        if (!g.moved) return;
+        this.stowedPointer = g.pointer;
+        this.#aimAt(clientX, clientY, "any");
         return;
       case "area-drag":
         markMoved(g, clientX, clientY);
@@ -515,6 +600,32 @@ export class BoardGestures {
     }
   }
 
+  #moveInventory(g: InventoryDragGesture, clientX: number, clientY: number): void {
+    // Rounded and clamped like a warp, and likewise not snapped to the card grid.
+    const { viewport } = this.#host;
+    const pointer = viewport.toWorld(clientX, clientY);
+    const { posX, posY } = viewport.onCanvas({
+      x: pointer.x - g.offsetX,
+      y: pointer.y - g.offsetY,
+    });
+    for (const inventory of this.#host.inventories) {
+      if (inventory.id !== g.inventoryId) continue;
+      inventory.posX = posX;
+      inventory.posY = posY;
+      break;
+    }
+  }
+
+  /**
+   * Track what the pointer is over for highlighting. Assigned only when it changes, so a
+   * pointer moving within one slot does not redraw the grid.
+   */
+  #aimAt(clientX: number, clientY: number, accept: "inventory" | "any"): void {
+    const found = this.#host.dropTargetAt(clientX, clientY);
+    const next = accept === "inventory" && found?.kind !== "inventory" ? null : found;
+    if (!sameDropTarget(this.dropTarget, next)) this.dropTarget = next;
+  }
+
   #moveArea(g: AreaDragGesture, clientX: number, clientY: number, snapToGrid = false): void {
     const { areaId, startClientX, startClientY, prevRect, cardIdSet, cardPrevPositions } = g;
     const area = this.#host.scopeAreas.find((a) => a.id === areaId);
@@ -572,7 +683,11 @@ export class BoardGestures {
    */
   async release(): Promise<void> {
     // Read the draft rectangles before `#take` clears them with the gesture.
-    const drafts = { swept: this.selectionRect, drawn: this.scopeAreaDraft };
+    const drafts = {
+      swept: this.selectionRect,
+      drawn: this.scopeAreaDraft,
+      target: this.dropTarget,
+    };
     const g = this.#take();
     if (!g) return;
     try {
@@ -598,9 +713,13 @@ export class BoardGestures {
       case "pan":
         return;
       case "card-drag":
-        return this.#settleCardDrag(g);
+        return this.#settleCardDrag(g, drafts.target);
       case "warp-drag":
         return this.#settleWarpDrag(g);
+      case "inventory-drag":
+        return this.#settleInventoryDrag(g);
+      case "stowed-drag":
+        return this.#settleStowedDrag(g, drafts.target);
       case "area-drag":
         return this.#settleAreaDrag(g);
       case "area-resize":
@@ -610,8 +729,21 @@ export class BoardGestures {
     }
   }
 
-  async #settleCardDrag(g: CardDragGesture): Promise<void> {
+  async #settleCardDrag(g: CardDragGesture, target: DropTarget | null): Promise<void> {
     if (!g.moved) return;
+    if (target?.kind === "inventory") {
+      // Back to where the drag began, which is the position a stored card keeps for when it
+      // comes out again. Nothing about the drag reached the server, so nothing is undone there.
+      const prev = new Map(g.groupPrevPositions).set(g.cardId, { x: g.prevX, y: g.prevY });
+      for (const c of this.#host.cards) {
+        const at = prev.get(c.id);
+        if (!at) continue;
+        c.posX = at.x;
+        c.posY = at.y;
+      }
+      await this.#host.onStow([g.cardId, ...g.groupIds], target.inventoryId, target.slot);
+      return;
+    }
     this.#moveCard(g, g.pointer.x, g.pointer.y, true);
     const positions = cardPositionPatches(this.#host.cards, [g.cardId, ...g.groupIds]);
     // Flush the snapped card position before measuring frame coverage. A few pixels at a
@@ -646,6 +778,46 @@ export class BoardGestures {
       current.posY = g.prevY;
     }
     this.#host.onError("Failed to save warp position");
+  }
+
+  async #settleInventoryDrag(g: InventoryDragGesture): Promise<void> {
+    if (!g.moved) {
+      this.#host.onToggleInventory(g.inventoryId);
+      return;
+    }
+    const dropped = this.#host.inventories.find((i) => i.id === g.inventoryId);
+    if (!dropped) return;
+    const sent = { posX: dropped.posX, posY: dropped.posY };
+    if (await this.#host.onPersistInventoryPosition(g.inventoryId, sent)) return;
+    // Only if nothing has moved it since, as for a warp.
+    const current = this.#host.inventories.find((i) => i.id === g.inventoryId);
+    if (current && current.posX === sent.posX && current.posY === sent.posY) {
+      current.posX = g.prevX;
+      current.posY = g.prevY;
+    }
+    this.#host.onError("Failed to save inventory position");
+  }
+
+  /**
+   * Drop a card dragged out of a grid. Onto a slot or an icon it is stored there. Onto the
+   * canvas it comes out under the pointer, snapped to the grid, and joins any scope frame
+   * it lands in, as a card dragged into one would.
+   */
+  async #settleStowedDrag(g: StowedDragGesture, target: DropTarget | null): Promise<void> {
+    if (!g.moved || !target) return;
+    if (target.kind === "inventory") {
+      await this.#host.onStow([g.cardId], target.inventoryId, target.slot);
+      return;
+    }
+    const { viewport } = this.#host;
+    const pointer = viewport.toWorld(g.pointer.x, g.pointer.y);
+    const snap = (v: number) => Math.max(0, Math.round((v - STOWED_GRAB_INSET) / GRID) * GRID);
+    const position = viewport.onCanvas({ x: snap(pointer.x), y: snap(pointer.y) });
+    // Measured before the card is drawn, so it counts as having crossed into its frame.
+    const membersBefore = membersByScope(this.#host.scopeAreas, this.#cardIdsInRect);
+    if (!(await this.#host.onTake(g.cardId, position))) return;
+    await tick();
+    await this.#applyScopeAreaChanges(this.#scopeAreaChanges(membersBefore));
   }
 
   async #settleAreaDrag(g: AreaDragGesture): Promise<void> {

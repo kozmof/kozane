@@ -20,7 +20,9 @@ export type BatchRejection =
   | "foreign-cards"
   | "foreign-partition"
   | "foreign-layer"
-  | "foreign-scope";
+  | "foreign-scope"
+  | "foreign-inventory"
+  | "inventory-full";
 
 /**
  * Failure result restricted to the reasons an operation can return. Constrain the type

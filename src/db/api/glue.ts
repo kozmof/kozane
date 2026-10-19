@@ -145,14 +145,15 @@ export async function unglueCards({ db, cardIds }: UnglueCards): Promise<string[
 
 /**
  * Remove the given cards from their glue groups and dissolve groups left with fewer than two
- * cards. Runs inside an existing transaction.
+ * cards. Runs inside an existing transaction. Returns every card left without a group, as
+ * {@link unglueCards} does.
  */
 export async function unglueCardsInTx({
   db,
   cardIds,
-}: NeedsTx & { cardIds: string[] }): Promise<void> {
-  if (cardIds.length === 0) return;
-  await unglueCardsCore(db, cardIds);
+}: NeedsTx & { cardIds: string[] }): Promise<string[]> {
+  if (cardIds.length === 0) return [];
+  return unglueCardsCore(db, cardIds);
 }
 
 type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };

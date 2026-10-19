@@ -23,6 +23,8 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
+      inventoryId: null,
+      inventorySlot: null,
       width: null,
     },
     color,

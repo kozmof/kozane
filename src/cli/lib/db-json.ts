@@ -6,13 +6,17 @@ import { chunked, NAME_MAX } from "../../lib/constants.js";
 import { plural } from "./plural.js";
 
 const EXPORT_KIND = "kozane.db.export";
-const EXPORT_VERSION = 8;
+const EXPORT_VERSION = 9;
 /**
  * Oldest supported dump version. Version 7 uses the `namespace` and `partition` table names.
  *
  * Version 8 adds `scope_area`. `parseDump` treats that table as empty in older supported
  * dumps and requires it in versions that include it. {@link TABLE_ORDER} records each table's
  * first version.
+ *
+ * Version 9 adds `inventory` and the `card.inventory_id` and `card.inventory_slot` columns.
+ * Older dumps read as having no inventories and no stored cards. {@link COLUMNS_SINCE} records
+ * each added column's first version.
  *
  * Dumps before version 7 are rejected. Migrate an old workspace database in place before
  * exporting it. Migration 0014 renames the tables without discarding rows.
@@ -33,6 +37,8 @@ const TABLE_ORDER = [
   { name: "partition", orderBy: ["id"] },
   { name: "layer", orderBy: ["id"] },
   { name: "warp", orderBy: ["id"] },
+  // Before `card`, whose `inventory_id` points at it.
+  { name: "inventory", orderBy: ["id"], since: 9 },
   { name: "taskspace", orderBy: ["id"] },
   { name: "card", orderBy: ["id"] },
   { name: "glue", orderBy: ["id"] },
@@ -40,6 +46,15 @@ const TABLE_ORDER = [
   { name: "glue_rel", orderBy: ["glue_id", "card_id"] },
   { name: "scope_rel", orderBy: ["scope_id", "card_id"] },
 ] as const;
+
+/**
+ * Columns added to a table after its first version, with the version that added them. A dump
+ * older than that has no such key on its rows, and reads as null there, which is what the
+ * migration that added the column left in every existing row.
+ */
+const COLUMNS_SINCE: Partial<Record<string, Record<string, number>>> = {
+  card: { inventory_id: 9, inventory_slot: 9 },
+};
 
 /** Every table in the Drizzle schema, by its SQL name, with the columns it declares. */
 const schemaColumns = new Map(
@@ -189,6 +204,8 @@ function parseDump(input: unknown): DbJsonDump {
     throw new Error("Import file is missing tables");
   }
 
+  // Narrowed above. Held so the row callback below can still see it as a number.
+  const version = dump.version;
   for (const table of TABLES) {
     const tables = dump.tables as Partial<TableRows>;
     // Treat tables omitted by older dumps as empty.
@@ -204,7 +221,12 @@ function parseDump(input: unknown): DbJsonDump {
       if (typeof row !== "object" || row === null || Array.isArray(row)) {
         throw new Error(`Invalid row ${index} in table ${table.name}`);
       }
+      const added = COLUMNS_SINCE[table.name] ?? {};
       for (const column of table.columns) {
+        const addedIn = added[column];
+        if (!(column in row) && addedIn !== undefined && version < addedIn) {
+          (row as JsonObject)[column] = null;
+        }
         if (!(column in row)) {
           throw new Error(`Row ${index} in table ${table.name} is missing column ${column}`);
         }
@@ -287,6 +309,7 @@ function validateDumpRefs(tables: TableRows): void {
   const glueIds = new Set(tables.glue.map((r) => r.id as string));
   const scopeIds = new Set(tables.scope.map((r) => r.id as string));
   const taskspaceIds = new Set(tables.taskspace.map((r) => r.id as string));
+  const inventoryIds = new Set(tables.inventory.map((r) => r.id as string));
 
   if (tables.namespace.filter((row) => Number(row.is_default) === 1).length > 1)
     throw new Error("namespace: more than one namespace is marked as the default");
@@ -302,6 +325,10 @@ function validateDumpRefs(tables: TableRows): void {
     if (!namespaceIds.has(row.namespace_id as string))
       throw new Error(`warp ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
+  for (const row of tables.inventory) {
+    if (!namespaceIds.has(row.namespace_id as string))
+      throw new Error(`inventory ${row.id}: references unknown namespace_id ${row.namespace_id}`);
+  }
   for (const row of tables.card) {
     if (!partitionIds.has(row.partition_id as string))
       throw new Error(`card ${row.id}: references unknown partition_id ${row.partition_id}`);
@@ -311,6 +338,8 @@ function validateDumpRefs(tables: TableRows): void {
       throw new Error(`card ${row.id}: references unknown layer_id ${row.layer_id}`);
     if (row.taskspace_id !== null && !taskspaceIds.has(row.taskspace_id as string))
       throw new Error(`card ${row.id}: references unknown taskspace_id ${row.taskspace_id}`);
+    if (row.inventory_id !== null && !inventoryIds.has(row.inventory_id as string))
+      throw new Error(`card ${row.id}: references unknown inventory_id ${row.inventory_id}`);
   }
   for (const row of tables.taskspace) {
     if (row.namespace_id !== null && !namespaceIds.has(row.namespace_id as string))

@@ -131,3 +131,15 @@ export function requireStringArray(body: JsonRecord, key: string, minLength = 1)
 export function requireUniqueStrings(values: string[], key: string): void {
   if (new Set(values).size !== values.length) throw error(400, `${key} must be unique`);
 }
+
+/**
+ * Read an optional name that may be empty, trimmed and within {@link NAME_MAX}. Inventories
+ * work without a name, so a blank one is not an error the way it is for a partition.
+ */
+export function optionalBoundedName(body: JsonRecord, key = "name"): string | undefined {
+  const value = optionalString(body, key);
+  if (value === undefined) return undefined;
+  const name = value.trim();
+  if (name.length > NAME_MAX) throw error(400, `${key} must be ${NAME_MAX} characters or fewer`);
+  return name;
+}

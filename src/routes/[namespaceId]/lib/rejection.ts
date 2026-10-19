@@ -11,6 +11,8 @@ const BATCH_REJECTION_MESSAGE: Record<BatchRejection, string> = {
   "foreign-partition": "Partition not found in namespace",
   "foreign-layer": "Layer not found in namespace",
   "foreign-scope": "Scope not found",
+  "foreign-inventory": "Inventory not found in namespace",
+  "inventory-full": "Inventory has no free slot there",
 };
 
 /** Ends the request with the wording for `reason`. */

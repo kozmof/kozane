@@ -18,6 +18,8 @@ export type BoardGesture =
   | CardDragGesture
   | CardResizeGesture
   | WarpDragGesture
+  | InventoryDragGesture
+  | StowedDragGesture
   | AreaDragGesture
   | AreaResizeGesture
   | MarqueeGesture
@@ -80,6 +82,30 @@ export type WarpDragGesture = Gesture & {
   /** Where it sat before the drag, to put back if the save fails. */
   prevX: number;
   prevY: number;
+};
+
+/**
+ * Inventory-icon drag state. Like a warp, except that an unmoved press opens or closes the
+ * inventory instead of focusing it.
+ */
+export type InventoryDragGesture = Gesture & {
+  kind: "inventory-drag";
+  inventoryId: string;
+  offsetX: number;
+  offsetY: number;
+  prevX: number;
+  prevY: number;
+};
+
+/**
+ * Dragging a card out of an inventory grid. The card stays in its slot until the release
+ * decides where it goes: another slot, another inventory, or the canvas under the pointer.
+ */
+export type StowedDragGesture = Gesture & {
+  kind: "stowed-drag";
+  cardId: string;
+  /** Where the pointer was last seen, for the preview and the drop. */
+  pointer: Point;
 };
 
 /**
@@ -152,6 +178,8 @@ export function holdsPositionActivity(kind: BoardGesture["kind"]): boolean {
     case "card-drag":
     case "card-resize":
     case "warp-drag":
+    case "inventory-drag":
+    case "stowed-drag":
     case "area-drag":
     case "area-resize":
       return true;
@@ -180,4 +208,13 @@ export function draggedAreaId(gesture: BoardGesture | null): string | null {
 
 export function resizedAreaId(gesture: BoardGesture | null): string | null {
   return gesture?.kind === "area-resize" ? gesture.areaId : null;
+}
+
+export function draggedInventoryId(gesture: BoardGesture | null): string | null {
+  return gesture?.kind === "inventory-drag" ? gesture.inventoryId : null;
+}
+
+/** The stored card being dragged out of its grid, or null for other gestures. */
+export function draggedStowedCardId(gesture: BoardGesture | null): string | null {
+  return gesture?.kind === "stowed-drag" ? gesture.cardId : null;
 }

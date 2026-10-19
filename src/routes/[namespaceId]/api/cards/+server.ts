@@ -8,6 +8,7 @@ import { addScopeRel } from "$db/api/scope-rel";
 import { withTx } from "$db/tx";
 import { addCard, updateNamespaceCardPositions, type CardPositionUpdate } from "$db/api/card";
 import { deleteNamespaceCards } from "$db/api/composite";
+import { stowCardsInTx } from "$db/api/inventory";
 import { checkCardContent } from "$lib/constants";
 import { clampToCanvas } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
@@ -58,10 +59,13 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (!Number.isSafeInteger(zIndex)) throw error(400, "zIndex must be an integer");
   const scopeId = optionalString(body, "scopeId");
   const requestedLayerId = optionalString(body, "layerId");
+  // An open inventory on the board takes new cards. The card is still given a canvas position,
+  // which it goes to if it is ever taken out without being dropped somewhere.
+  const inventoryId = optionalString(body, "inventoryId");
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.
-  const { id, stored } = await withTx(db, async (tx) => {
+  const { id, stored, placement } = await withTx(db, async (tx) => {
     const partition = await getPartition({ db: tx, namespaceId, partitionId });
     if (!partition) throw error(400, "Partition not found in namespace");
     if (scopeId && !(await getScope({ db: tx, scopeId }))) throw error(400, "Scope not found");
@@ -86,7 +90,22 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     };
     const cardId = await addCard({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-    return { id: cardId, stored };
+    if (!inventoryId)
+      return { id: cardId, stored, placement: { inventoryId: null, inventorySlot: null } };
+    // Throwing rolls the card back with the transaction, so a refused store leaves no card.
+    const stowed = await stowCardsInTx({
+      db: tx,
+      namespaceId,
+      inventoryId,
+      cardIds: [cardId],
+      slot: null,
+    });
+    if (!stowed.ok) rejectBatch(stowed.reason);
+    return {
+      id: cardId,
+      stored,
+      placement: { inventoryId, inventorySlot: stowed.placements[0].slot },
+    };
   });
 
   // Return stored coordinates after clamping so the client renders the saved position
@@ -97,6 +116,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     taskspaceId: null,
     glueId: null,
     width: null,
+    ...placement,
   } satisfies CardWithGlue);
 };
 

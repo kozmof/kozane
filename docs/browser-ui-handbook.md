@@ -263,6 +263,43 @@ In the picker, use `↑` / `↓` and `Enter`, or click a row, to jump.
 Press `Esc` to close. Each row also has a remove button.
 Click a marker to select it. Jumping preserves zoom.
 
+## Inventories
+
+An inventory stores cards off the canvas in a grid, one card per slot. On the canvas it is
+a box icon with a badge counting its cards. Use the shortcut with no cards selected and no
+text field focused.
+
+| Action                          | Control                                 |
+| ------------------------------- | --------------------------------------- |
+| Add an inventory                | `v`, at the pointer or view center      |
+| Open or close it                | Click its icon                          |
+| Move the icon                   | Drag it                                 |
+| Store cards                     | Drag a card onto the icon or a slot     |
+| Rearrange cards                 | Drag a card to another slot             |
+| Take a card out                 | Drag it from the grid onto the canvas   |
+| Rename it                       | Double-click its name, or focus it and press `F2` |
+| Close or remove it              | The `×` or bin button on its window     |
+
+Open inventories appear on the left of the canvas and stay put while you pan, so cards can
+be carried in from anywhere on the board.
+
+While an inventory is open, new cards from the composer go into its first free slot, and
+the composer shows "Add to" and the inventory's name. With several open, the one opened
+last takes them. Close every inventory to add cards to the canvas again.
+
+The grid is six columns wide. Cards fill it left to right and top to bottom, and a new
+row opens below the last card. Dropping a card on an empty slot puts it there. Dropping it
+on a taken slot swaps the two cards, or moves the other card to the first free slot when
+the dragged card came from somewhere else. Dropping on the icon or the window header uses
+the first free slot. Dragging a selected or glued card stores the whole group.
+
+A stored card keeps its partition, layer, and scopes, but leaves its glue group. Click it
+in the grid to select it for the composer's actions, and double-click it to edit it.
+A card taken out lands under the pointer and joins any scope frame it lands in.
+
+Removing an inventory puts its cards back on the canvas where they were before they were
+stored. Moving a card to another namespace takes it out of its inventory the same way.
+
 ## Tags
 
 Write tags in card text, such as `:perf` or `:perf:cache`. Parent tags include
@@ -341,6 +378,7 @@ UI settings live under `ui` in `.kozane/config.json`.
 | `setWarpShortcut`     | Set a warp                             | `a`             |
 | `toggleWarpsShortcut` | Show or hide warps                     | `A` (Shift+A)   |
 | `removeWarpShortcut`  | Remove a warp                          | `x`             |
+| `addInventoryShortcut` | Add an inventory                     | `v`             |
 | `editorVimMode`       | Enable Vim bindings in the file editor | `false`         |
 
 ## Live sync
@@ -351,7 +389,8 @@ selection. Taskspace directory listings require manual refresh.
 
 ## Static exports
 
-Static exports support browsing, pan, zoom, filtering, and warp navigation.
+Static exports support browsing, pan, zoom, filtering, warp navigation, and opening
+inventories.
 Creating, editing, moving, and deleting are disabled, and there is no live sync.
 
 Scopes, taskspaces, and file-tag results are included only when exported with
