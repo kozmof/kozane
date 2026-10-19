@@ -16,6 +16,7 @@ import {
   getCardPartitionNames,
   getCardLayerNames,
   reassignCardsToLayerInTx,
+  onCanvas,
   type CardStacking,
 } from "./card.js";
 import {
@@ -36,7 +37,7 @@ import {
   columnCount,
   type CardBatchResult,
 } from "./utils.js";
-import { and, eq, gt, gte, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
 import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
@@ -192,7 +193,7 @@ export async function squashNamespaceCard({
           gte(cardTable.posX, source.posX),
           gte(cardTable.posY, source.posY),
           // A stored card's position is where it goes back to, not space it takes up now.
-          isNull(cardTable.inventoryId),
+          onCanvas,
         ),
       );
     const positions = squashCardPositions(

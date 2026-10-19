@@ -1,8 +1,8 @@
 import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
-import { and, count, eq, getTableColumns, inArray, isNotNull } from "drizzle-orm";
+import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
-import { cardsBelongToNamespace } from "./card.js";
+import { cardsBelongToNamespace, isStored } from "./card.js";
 import { BATCH_MAX, chunked } from "../../lib/constants.js";
 import { columnCount, readByIds, type BatchResult } from "./utils.js";
 
@@ -170,7 +170,7 @@ async function anyStored(tx: Tx, cardIds: string[]): Promise<boolean> {
     tx
       .select({ id: cardTable.id })
       .from(cardTable)
-      .where(and(inArray(cardTable.id, batch), isNotNull(cardTable.inventoryId)))
+      .where(and(inArray(cardTable.id, batch), isStored))
       .limit(1),
   );
   return rows.length > 0;

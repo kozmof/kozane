@@ -2,6 +2,7 @@ import { tick } from "svelte";
 import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
 import { SCOPE_AREA_DRAW_MIN, SCOPE_AREA_MIN_SIZE, type BoardRect } from "$lib/constants";
+import { storedCardIds } from "$lib/inventory";
 import type { SelectionState } from "../namespace-state.svelte.js";
 import type { CanvasViewport, BoardPoint } from "./canvas-viewport.js";
 import { gestureOrigin, markMoved, markMovedHorizontally } from "./gesture.js";
@@ -219,7 +220,7 @@ export class BoardGestures {
     if (!card) return;
     // A selection can reach into an inventory, and a stored card has no place on the canvas
     // to be dragged from.
-    const stored = new Set(cards.filter((c) => c.inventory !== null).map(({ id }) => id));
+    const stored = storedCardIds(cards);
     const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId).filter(
       (id) => !stored.has(id),
     );

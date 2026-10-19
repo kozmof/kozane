@@ -339,6 +339,18 @@ export function inventoryFootprints(
   );
 }
 
+/**
+ * The cards stored in some inventory. A selection can reach into an inventory, so actions that
+ * only make sense on the canvas, such as dragging or gluing, leave these out.
+ */
+export function storedCardIds(
+  cards: Iterable<{ id: string; inventory: { id: string } | null }>,
+): Set<string> {
+  const stored = new Set<string>();
+  for (const { id, inventory } of cards) if (inventory !== null) stored.add(id);
+  return stored;
+}
+
 // ── Layout ──────────────────────────────────────────────────────────────
 
 /** Row and column of a slot, both counted from zero. */

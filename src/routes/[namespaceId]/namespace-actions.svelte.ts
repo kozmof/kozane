@@ -2,6 +2,7 @@ import * as api from "./lib/namespace-api.js";
 import type { CardWithGlue, GlueRel } from "$lib/types";
 import type { NamespaceState } from "./namespace-state.svelte.js";
 import type { BoardRect } from "$lib/constants";
+import { storedCardIds } from "$lib/inventory";
 import { readArray, readFiniteNumber, readString, readStringArray } from "./lib/response.js";
 
 /**
@@ -98,7 +99,7 @@ export function createNamespaceActions(state: NamespaceState) {
   // no rollback.
   async function handleGlueSelected(selectedIds: string[]) {
     // A selection can reach into an inventory, and the server refuses to glue a stored card.
-    const stored = new Set(state.cards.filter((c) => c.inventory !== null).map(({ id }) => id));
+    const stored = storedCardIds(state.cards);
     const cardIds = selectedIds.filter((id) => !stored.has(id));
     if (cardIds.length < selectedIds.length && cardIds.length < 2) {
       state.setError("Stored cards cannot be glued");

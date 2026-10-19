@@ -2,7 +2,7 @@ import type { RequestHandler } from "./$types";
 import type { CardWithGlue } from "$lib/types";
 import { json, error } from "@sveltejs/kit";
 import { squashNamespaceCard, type SquashCardResult } from "$db/api/composite";
-import { cardInventory } from "$db/api/card";
+import { withCardInventory } from "$db/api/card";
 import { canvasBounds } from "$lib/server/canvas";
 import { BATCH_MAX } from "$lib/constants";
 import { readJsonObject, requireString } from "../../../lib/request.js";
@@ -33,12 +33,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   // pieces start unglued. `stacking` names the cards raised above them.
   return json({
     cards: result.cards.map(
-      ({ inventoryId, inventorySlot, ...card }) =>
-        ({
-          ...card,
-          inventory: cardInventory(inventoryId, inventorySlot),
-          glueId: null,
-        }) satisfies CardWithGlue,
+      (card) => ({ ...withCardInventory(card), glueId: null }) satisfies CardWithGlue,
     ),
     stacking: result.stacking,
   });

@@ -1,5 +1,5 @@
 import { cardTable, glueRelTable, inventoryTable } from "../schema.js";
-import { and, asc, count, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 import type {
   Inventory,
   NeedsDB,
@@ -21,12 +21,17 @@ import {
   type SlotPlacement,
   type TakenCard,
 } from "../../lib/inventory.js";
-import { cardsBelongToNamespace } from "./card.js";
+import {
+  caseUpdateBatches,
+  cardsBelongToNamespace,
+  isStored,
+  writeCardPositionsInTx,
+} from "./card.js";
 import { unglueCardsInTx } from "./glue.js";
 import { assertFound, assertNameWithinLimit, readByIds, type BatchResult } from "./utils.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 
-/** A namespace's inventories in creation order. */
+/** A namespace's inventories in creation order, which their UUIDv7 IDs sort in. */
 export async function getAllInventories({ db, namespaceId }: NeedsNamespace): Promise<Inventory[]> {
   return db
     .select()
@@ -131,7 +136,8 @@ async function heldFootprints(tx: Tx, inventoryId: string): Promise<Footprint[]>
 
 /**
  * Writes cards into slots of one inventory. Every slot the plan writes is freed before any is
- * filled, so cards trading places never meet the unique index halfway through.
+ * filled, so cards trading places never meet the unique index halfway through. Once freed,
+ * no two planned slots collide, so each batch is filled in one CASE update.
  */
 async function writePlacements(
   tx: Tx,
@@ -142,11 +148,23 @@ async function writePlacements(
     tx,
     plan.map(({ cardId }) => cardId),
   );
-  for (const { cardId, slot } of plan)
+  // One CASE-updated column. `inventoryId` binds once per statement.
+  for (const batch of caseUpdateBatches([...plan], 1)) {
+    const whens = batch.map(({ cardId, slot }) => sql`WHEN ${cardId} THEN ${slot}`);
     await tx
       .update(cardTable)
-      .set({ inventoryId, inventorySlot: slot })
-      .where(eq(cardTable.id, cardId));
+      .set({
+        inventoryId,
+        // `releaseCards` just cleared the slot, so ELSE keeps that null rather than a value.
+        inventorySlot: sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} ELSE ${cardTable.inventorySlot} END`,
+      })
+      .where(
+        inArray(
+          cardTable.id,
+          batch.map(({ cardId }) => cardId),
+        ),
+      );
+  }
 }
 
 /**
@@ -196,7 +214,7 @@ export async function repairInventories({ db }: { db: DB }): Promise<InventoryRe
       .select({ cardId: glueRelTable.cardId })
       .from(glueRelTable)
       .innerJoin(cardTable, eq(cardTable.id, glueRelTable.cardId))
-      .where(isNotNull(cardTable.inventoryId));
+      .where(isStored);
     const stored = glued.map(({ cardId }) => cardId);
     // Ungluing can dissolve a group, which also frees partners left on the canvas. Only the
     // stored cards are reported, since those are what was wrong.
@@ -225,7 +243,7 @@ export async function findInventoryConflicts({ db }: NeedsDB): Promise<Inventory
     })
     .from(cardTable)
     .leftJoin(glueRelTable, eq(glueRelTable.cardId, cardTable.id))
-    .where(isNotNull(cardTable.inventoryId));
+    .where(isStored);
   const byInventory = new Map<string, Footprint[]>();
   for (const { cardId, inventoryId, slot, text } of rows) {
     if (inventoryId === null || slot === null) continue;
@@ -424,17 +442,14 @@ export async function takeCards({
       tx
         .select({ id: cardTable.id })
         .from(cardTable)
-        .where(and(inArray(cardTable.id, batch), isNotNull(cardTable.inventoryId))),
+        .where(and(inArray(cardTable.id, batch), isStored)),
     );
     if (stored.length !== cardIds.length) return { ok: false, reason: "unstored-cards" };
     await releaseCards(tx, cardIds);
-    for (const card of unique) {
-      if (!("posX" in card)) continue;
-      await tx
-        .update(cardTable)
-        .set({ posX: card.posX, posY: card.posY })
-        .where(eq(cardTable.id, card.cardId));
-    }
+    await writeCardPositionsInTx(
+      tx,
+      unique.flatMap((card) => ("posX" in card ? [card] : [])),
+    );
     return { ok: true };
   });
 }

@@ -1,5 +1,5 @@
 import { partitionTable, cardTable, layerTable } from "../schema.js";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type {
   NeedsDB,
@@ -114,6 +114,26 @@ export function cardInventory(
   return inventoryId === null || slot === null ? null : { id: inventoryId, slot };
 }
 
+/** A card row with its two inventory columns folded into the `inventory` the board reads. */
+export function withCardInventory<
+  T extends { inventoryId: string | null; inventorySlot: number | null },
+>({
+  inventoryId,
+  inventorySlot,
+  ...card
+}: T): Omit<T, "inventoryId" | "inventorySlot"> & Pick<CardData, "inventory"> {
+  return { ...card, inventory: cardInventory(inventoryId, inventorySlot) };
+}
+
+/**
+ * Cards on the canvas, leaving out stored ones. A stored card keeps the position it goes back
+ * to, so any read that treats positions as space taken up on the board filters with this.
+ */
+export const onCanvas = isNull(cardTable.inventoryId);
+
+/** Cards stored in an inventory. The opposite of {@link onCanvas}. */
+export const isStored = isNotNull(cardTable.inventoryId);
+
 /**
  * Read the card fields used by the board. Page loads and snapshot polls share this selection
  * through `loadNamespaceSnapshot`.
@@ -131,10 +151,7 @@ export async function getCardDataByPartitions({
     })
     .from(cardTable)
     .where(inArray(cardTable.partitionId, partitionIds));
-  return rows.map(({ inventoryId, inventorySlot, ...card }) => ({
-    ...card,
-    inventory: cardInventory(inventoryId, inventorySlot),
-  }));
+  return rows.map(withCardInventory);
 }
 
 export type CardMarker = {
@@ -194,7 +211,7 @@ export async function getCardMarkersByNamespaces({
         inArray(partitionTable.namespaceId, namespaceIds),
         sql`trim(${cardTable.content}) <> ''`,
         // A stored card is not on the canvas, so it cannot be what a warp lands beside.
-        isNull(cardTable.inventoryId),
+        onCanvas,
       ),
     );
 }
@@ -528,7 +545,7 @@ function caseUpdateParamsPerRow(columns: number): number {
  * Chunk CASE statements within the parameter limit. A shared transaction keeps the update
  * atomic.
  */
-function caseUpdateBatches<T>(rows: T[], columns: number): T[][] {
+export function caseUpdateBatches<T>(rows: T[], columns: number): T[][] {
   return chunked(rows, { size: BATCH_MAX, columnsPerRow: caseUpdateParamsPerRow(columns) });
 }
 
@@ -568,26 +585,36 @@ export async function updateNamespaceCardPositions({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    // Size batches for two CASE-updated columns. Assert the row count in each disjoint batch.
-    for (const batch of caseUpdateBatches(unique, 2)) {
-      const updated = await tx
-        .update(cardTable)
-        .set(buildPositionCaseWhen(batch))
-        .where(
-          inArray(
-            cardTable.id,
-            batch.map(({ cardId }) => cardId),
-          ),
-        )
-        .returning({ id: cardTable.id });
-      if (updated.length !== batch.length)
-        throw new Error(
-          `updateNamespaceCardPositions: expected ${batch.length} updates, got ${updated.length}`,
-        );
-    }
-
+    await writeCardPositionsInTx(tx, unique);
     return { ok: true };
   });
+}
+
+/**
+ * Writes canvas positions inside a caller-owned transaction, without ownership checks. Each
+ * card must appear once. Throws if any card is missing, so the transaction rolls back.
+ */
+export async function writeCardPositionsInTx(
+  tx: Tx,
+  positions: CardPositionUpdate[],
+): Promise<void> {
+  // Size batches for two CASE-updated columns. Assert the row count in each disjoint batch.
+  for (const batch of caseUpdateBatches(positions, 2)) {
+    const updated = await tx
+      .update(cardTable)
+      .set(buildPositionCaseWhen(batch))
+      .where(
+        inArray(
+          cardTable.id,
+          batch.map(({ cardId }) => cardId),
+        ),
+      )
+      .returning({ id: cardTable.id });
+    if (updated.length !== batch.length)
+      throw new Error(
+        `writeCardPositionsInTx: expected ${batch.length} updates, got ${updated.length}`,
+      );
+  }
 }
 
 type ReassignCardsToLayer = {
