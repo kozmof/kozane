@@ -2,7 +2,7 @@ import { createClient, type InValue } from "@libsql/client";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../db/schema.js";
-import { chunked, NAME_MAX } from "../../lib/constants.js";
+import { chunked, INVENTORY_SLOT_MAX, NAME_MAX } from "../../lib/constants.js";
 import { plural } from "./plural.js";
 
 const EXPORT_KIND = "kozane.db.export";
@@ -357,8 +357,15 @@ function validateDumpRefs(tables: TableRows): void {
           `card ${row.id}: inventory_id ${row.inventory_id} belongs to another namespace`,
         );
       const slot = row.inventory_slot;
-      if (typeof slot !== "number" || !Number.isInteger(slot) || slot < 0)
-        throw new Error(`card ${row.id}: inventory_slot must be a non-negative integer`);
+      if (
+        typeof slot !== "number" ||
+        !Number.isInteger(slot) ||
+        slot < 0 ||
+        slot > INVENTORY_SLOT_MAX
+      )
+        throw new Error(
+          `card ${row.id}: inventory_slot must be an integer from 0 to ${INVENTORY_SLOT_MAX}`,
+        );
       const key = `${row.inventory_id as string}\0${slot}`;
       if (storedSlots.has(key))
         throw new Error(`card ${row.id}: inventory ${row.inventory_id} slot ${slot} is taken`);

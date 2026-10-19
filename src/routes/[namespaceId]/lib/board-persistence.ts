@@ -3,13 +3,13 @@ import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";
 import { maxZIndex } from "./namespace-page.js";
-import { readCardInventory } from "./snapshot-reader.js";
 import {
   createCard,
   failureMessage,
   moveScopeArea,
   moveWarp,
   parseCard,
+  parsePlacements,
   parseScopeArea,
   parseWarp,
   patchCardPositions,
@@ -72,14 +72,16 @@ export function createBoardPersistence(s: NamespaceState) {
       // The server stores the text trimmed, so hold the same value rather than waiting for
       // the next snapshot poll to correct it.
       const stored = content.trim();
-      // A stored card whose longer text now covers a neighbour's cells moved to the slot the
-      // server answers with.
-      const moved = readCardInventory(await res.json().catch(() => null));
-      s.cards = s.cards.map((c) =>
-        c.id === id
-          ? { ...c, content: stored, partitionId, ...(moved && { inventory: moved }) }
-          : c,
-      );
+      // A stored card whose longer text now covers a neighbour's cells moved, and so may have
+      // neighbours a repair of its inventory moved. The answer names every one of them.
+      const placements = parsePlacements(await res.json().catch(() => null)) ?? [];
+      const slotOf = new Map(placements.map((p) => [p.cardId, p]));
+      s.cards = s.cards.map((c) => {
+        const p = slotOf.get(c.id);
+        const moved = p && { inventory: { id: p.inventoryId, slot: p.slot } };
+        if (c.id === id) return { ...c, content: stored, partitionId, ...moved };
+        return moved ? { ...c, ...moved } : c;
+      });
       s.selection.composerCard = null;
       return;
     }

@@ -11,6 +11,9 @@ import { addScope } from "$db/api/scope.js";
 import { addScopeRel } from "$db/api/scope-rel.js";
 import { addTaskspace } from "$db/api/taskspace.js";
 import { glueCards } from "$db/api/glue.js";
+import { addInventory, stowCards } from "$db/api/inventory.js";
+import { cardTable } from "$db/schema.js";
+import { eq } from "drizzle-orm";
 import type { DB } from "$db/tx.js";
 import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
 import { createTestDB } from "../../../test-utils/db.js";
@@ -52,6 +55,27 @@ describe("loadNamespaceSnapshot", () => {
   it("answers null for a namespace that does not exist", async () => {
     const db = await createTestDB();
     expect(await load(db, "nope")).toBeNull();
+  });
+
+  it("draws a card on the canvas when its inventory is not among those it read", async () => {
+    // The race this covers is an inventory created and stowed into between the snapshot's
+    // two reads. Pointing a card at another board's inventory leaves it in the same state.
+    const db = await createTestDB();
+    const { namespaceId, partitionId } = await namespace(db);
+    const other = await namespace(db, "Other");
+    const here = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    const elsewhere = await addInventory({ db, namespaceId: other.namespaceId, posX: 0, posY: 0 });
+    const kept = await addCard({ db, partitionId, content: "kept" });
+    const orphan = await addCard({ db, partitionId, content: "orphan" });
+    await stowCards({ db, namespaceId, inventoryId: here.id, cardIds: [kept], slot: 0 });
+    await db
+      .update(cardTable)
+      .set({ inventoryId: elsewhere.id, inventorySlot: 0 })
+      .where(eq(cardTable.id, orphan));
+
+    const { cards } = (await load(db, namespaceId))!.snapshot;
+    expect(cards.find(({ id }) => id === kept)?.inventory).toEqual({ id: here.id, slot: 0 });
+    expect(cards.find(({ id }) => id === orphan)?.inventory).toBeNull();
   });
 
   it("carries the cards of the namespace's partitions, with their glue groups", async () => {

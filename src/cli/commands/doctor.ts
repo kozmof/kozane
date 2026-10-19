@@ -15,6 +15,7 @@ import {
 } from "../../db/schema.js";
 import { NAME_MAX } from "../../lib/constants.js";
 import { findInventoryConflicts } from "../../db/api/inventory.js";
+import { allCardIds } from "../lib/card-refs.js";
 import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { CARD_STAMP_EARLIEST, CARD_STAMP_LATEST } from "../lib/card-sort.js";
@@ -241,9 +242,7 @@ async function inventoryConflicts(
     if (overlapping.length === 0 && glued.length === 0)
       return { overlapping: { total: 0, named: [] }, glued: { total: 0, named: [] } };
     // Short IDs, because that is what `kozane inventory take` takes.
-    const shortIds = shortIdMap(
-      (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id),
-    );
+    const shortIds = shortIdMap(await allCardIds(db));
     const sample = (ids: string[]): BadStamps => ({
       total: ids.length,
       named: ids.slice(0, NAMED_BAD_STAMPS).map((id) => shortIds.get(id) ?? id),

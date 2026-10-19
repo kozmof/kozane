@@ -23,9 +23,9 @@ import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import { openDb } from "../../db/client.js";
-import { cardTable } from "../../db/schema.js";
 import { repairInventories } from "../../db/api/inventory.js";
 import { printInventoryRepair } from "./inventory.js";
+import { allCardIds } from "../lib/card-refs.js";
 
 // Use `dbUrl` for the persistent workspace database. Migrations, backups, and restores must
 // target that file even while a `kozane open --memory` session is running.
@@ -197,8 +197,7 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
       const repair = await repairInventories({ db });
       if (repair.moved.length > 0 || repair.unglued.length > 0) {
         console.log("Inventories repaired:");
-        const allIds = (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
-        printInventoryRepair(repair, allIds);
+        printInventoryRepair(repair, await allCardIds(db));
       }
     } finally {
       close();

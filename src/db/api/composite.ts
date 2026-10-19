@@ -30,6 +30,7 @@ import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
+import { releaseCardsInTx } from "./inventory.js";
 import {
   NotFoundError,
   DefaultPartitionError,
@@ -367,11 +368,7 @@ export async function moveCardsToNamespace({
 
     // Inventories belong to one namespace, so a stored card arrives on the target canvas at
     // the position it had before it was stored.
-    for (const batch of chunked(cardIds, { size: BATCH_MAX }))
-      await tx
-        .update(cardTable)
-        .set({ inventoryId: null, inventorySlot: null })
-        .where(inArray(cardTable.id, batch));
+    await releaseCardsInTx(tx, cardIds);
 
     return { ok: true };
   });

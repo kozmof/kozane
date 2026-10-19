@@ -3,7 +3,9 @@ import {
   INVENTORY_COLUMNS,
   INVENTORY_MIN_ROWS,
   INVENTORY_SPAN_MAX,
+  INVENTORY_TAB_SIZE,
 } from "./constants.js";
+import type { CardInventory } from "./types.js";
 
 /**
  * Slot planning and grid layout for inventories. The server plans with what it reads inside
@@ -27,23 +29,26 @@ export type Footprint = { cardId: string; slot: number; span: number };
 export type Sized = { cardId: string; span: number };
 
 /**
- * A card leaving its inventory, and where on the canvas it goes: both coordinates, or neither
- * to go back where it was before it was stored.
+ * A card leaving its inventory, and where on the canvas it goes. Without a `position` it goes
+ * back where it was before it was stored.
  */
-export type TakenCard = { cardId: string } | { cardId: string; posX: number; posY: number };
+export type TakenCard = { cardId: string; position?: { posX: number; posY: number } };
 
 // ── How many rows a card covers ─────────────────────────────────────────
 
 /*
  * Widths are counted in hundredths of the font size, so the model stays in integers.
  *
- * A narrow character is taken as 0.62em. Monospace fonts run about 0.6 and proportional ones
- * narrower, so this overestimates the lines a text needs rather than cutting it off. East
- * Asian wide characters take a full 1em. Text that still runs past its cells scrolls inside
- * the card.
+ * A narrow character is taken as 0.62em. Monospace fonts run about 0.6, and most text in a
+ * proportional font averages narrower, so ordinary text gets room to spare. It is an estimate,
+ * not a bound: a run of wide glyphs, such as capital W in a proportional font, can need more
+ * lines than counted. East Asian wide characters take a full 1em. Text that runs past its
+ * cells scrolls inside the card.
  */
 const NARROW = 62;
 const WIDE = 100;
+/** Distance between tab stops. The stored card sets `tab-size` to match. */
+const TAB = INVENTORY_TAB_SIZE * NARROW;
 /** The card's 1px border, on both sides. */
 const BORDER = 2;
 
@@ -68,7 +73,7 @@ const LINES_CAP = linesShown(INVENTORY_SPAN_MAX) + 1;
 
 /**
  * How much of a card's text decides its span, in code points, as SQLite's `substr` counts.
- * Every code point takes at least {@link NARROW} of a line, so a line holds at most
+ * Every code point, a tab included, takes at least {@link NARROW} of a line, so a line holds at most
  * {@link INVENTORY_LINE_CHARS} of them plus the line break that ends it. This many therefore
  * reach {@link LINES_CAP}, and since more text never wraps to fewer lines, the rest cannot
  * change the span. Readers that fetch text only to size cards fetch this much of it.
@@ -85,8 +90,9 @@ const WIDE_CHAR =
 /**
  * Lines `content` wraps to, the way the stored card's `break-spaces` with `break-word` lays it
  * out: whole words where they fit, long words broken, and every space taking its width and
- * wrapping like a character. A space and a wide character each end a word, since a line can
- * break after either. Stops counting at {@link LINES_CAP}.
+ * wrapping like a character. A tab runs to the next tab stop but never counts narrower than a
+ * space, which errs towards more lines. A space, a tab, and a wide character each end a word,
+ * since a line can break after any of them. Stops counting at {@link LINES_CAP}.
  */
 function wrappedLines(content: string): number {
   let lines = 0;
@@ -122,7 +128,17 @@ function wrappedLines(content: string): number {
     };
     for (const char of paragraph) {
       if (char === " ") place(NARROW);
-      else if (WIDE_CHAR.test(char)) place(WIDE);
+      else if (char === "\t") {
+        flush();
+        // A tab that cannot reach its stop on this line wraps, and runs to the first stop on
+        // the next, a full tab from the line's start.
+        const toStop = Math.max(NARROW, TAB - (used % TAB));
+        if (used + toStop > LINE_WIDTH) {
+          lines++;
+          used = 0;
+        }
+        place(used === 0 ? TAB : toStop);
+      } else if (WIDE_CHAR.test(char)) place(WIDE);
       else word += NARROW;
       if (lines >= LINES_CAP) return LINES_CAP;
     }
@@ -325,11 +341,7 @@ export function planRepair(held: readonly Footprint[]): SlotPlacement[] {
 
 /** One inventory's cards as footprints, sized by their text. */
 export function inventoryFootprints(
-  cards: readonly {
-    id: string;
-    content: string;
-    inventory: { id: string; slot: number } | null;
-  }[],
+  cards: readonly { id: string; content: string; inventory: CardInventory | null }[],
   inventoryId: string,
 ): Footprint[] {
   return cards.flatMap(({ id, content, inventory }) =>
@@ -344,7 +356,7 @@ export function inventoryFootprints(
  * only make sense on the canvas, such as dragging or gluing, leave these out.
  */
 export function storedCardIds(
-  cards: Iterable<{ id: string; inventory: { id: string } | null }>,
+  cards: Iterable<{ id: string; inventory: Pick<CardInventory, "id"> | null }>,
 ): Set<string> {
   const stored = new Set<string>();
   for (const { id, inventory } of cards) if (inventory !== null) stored.add(id);

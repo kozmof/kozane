@@ -2,7 +2,7 @@
   import { tick } from "svelte";
   import { css } from "styled-system/css";
   import type { CardWithGlue, Inventory } from "$lib/types";
-  import { INVENTORY_CELL, INVENTORY_COLUMNS, NAME_MAX } from "$lib/constants";
+  import { INVENTORY_CELL, INVENTORY_COLUMNS, INVENTORY_TAB_SIZE, NAME_MAX } from "$lib/constants";
   import { footprintCells, inventoryFootprints, inventoryRows, slotCell } from "$lib/inventory";
   import type { DropTarget } from "../lib/inventory-drop.js";
 
@@ -207,6 +207,7 @@
         style:font-size="{cell.fontSize}px"
         style:line-height={cell.lineHeight}
         style:font-family={fontFamily}
+        style:tab-size={INVENTORY_TAB_SIZE}
         style:cursor={readonly ? "default" : "grab"}
         style:background={selected ? "var(--colors-select-surface)" : "var(--colors-ink-white)"}
         style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}

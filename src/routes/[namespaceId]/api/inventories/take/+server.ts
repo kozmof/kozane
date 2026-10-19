@@ -25,7 +25,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       throw error(400, "posX and posY must be sent together");
     return posX === undefined || posY === undefined
       ? { cardId }
-      : { cardId, ...clampToCanvas(posX, posY) };
+      : { cardId, position: clampToCanvas(posX, posY) };
   });
   requireUniqueStrings(
     cards.map(({ cardId }) => cardId),
@@ -35,5 +35,5 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const result = await takeCards({ db, namespaceId, cards });
   if (!result.ok) rejectBatch(result.reason);
   // The stored positions, so a board that sent a fractional drop point can draw what was kept.
-  return json({ cards });
+  return json({ cards: cards.map(({ cardId, position }) => ({ cardId, ...position })) });
 };

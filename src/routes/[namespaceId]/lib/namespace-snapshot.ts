@@ -72,7 +72,15 @@ export async function loadNamespaceSnapshot({
   // Read cards before their relations. These sequential queries are not one database
   // transaction, so concurrent writes can make the result span different states. Polling
   // resolves temporary disagreement.
-  const cards = await getCardDataByPartitions({ db, partitionIds: partitions.map(({ id }) => id) });
+  // A card stowed into an inventory created after the inventories were read would otherwise
+  // be drawn nowhere: not on the canvas, and in no window. Until the next poll brings the
+  // inventory, it shows at the canvas position it keeps for coming out.
+  const inventoryIds = new Set(inventories.map(({ id }) => id));
+  const cards = (
+    await getCardDataByPartitions({ db, partitionIds: partitions.map(({ id }) => id) })
+  ).map((card) =>
+    card.inventory && !inventoryIds.has(card.inventory.id) ? { ...card, inventory: null } : card,
+  );
   const [glueRels, scopeRels] = await Promise.all([
     getGlueRelsByNamespace({ db, namespaceId }),
     includeScopes ? getScopeRelsByNamespace({ db, namespaceId }) : Promise.resolve([]),

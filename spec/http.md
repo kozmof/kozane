@@ -116,6 +116,8 @@ with empty `stacking` unless the layer changed.
 
 New text can make a stored card cover cells another card holds. It then moves to the
 first place it fits, and the response adds `inventory: { id, slot }` for where it went.
+When any card's slot changed, including a neighbour moved by the repair that comes first,
+the response also adds `placements`, listing `{ cardId, inventoryId, slot }` for each.
 
 Return 404 for a card outside this namespace, or 400 for an invalid destination,
 non-integer `zIndex`, or out-of-range width.
@@ -353,7 +355,7 @@ slot }` for every card whose slot changed and `clearedCardIds` lists the cards l
 a glue group.
 
 Return 400 for an inventory or card outside this namespace, or a card whose lowest cell
-would pass slot 9999.
+would pass slot 9999. A refused store writes nothing, not even the repair.
 
 ### `POST /[namespaceId]/api/inventories/take`
 

@@ -278,7 +278,7 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
     });
     console.log("Card updated.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
-    if (refit) console.log(`  moved to inventory slot ${refit.slot} to fit its text`);
+    if (refit.moved) console.log(`  moved to inventory slot ${refit.moved.slot} to fit its text`);
   });
 }
 

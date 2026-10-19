@@ -90,8 +90,7 @@ describe("updateInventory", () => {
       db,
       namespaceId,
       inventoryId: inventory.id,
-      posX: 300,
-      posY: 400,
+      position: { posX: 300, posY: 400 },
     });
     const renamed = await updateInventory({
       db,
@@ -290,7 +289,8 @@ describe("tall cards", () => {
       return refitStoredCardInTx({ db: tx, cardId: grows });
     });
 
-    expect(refit).toEqual({ cardId: grows, inventoryId: inventory.id, slot: 1 });
+    const moved = { cardId: grows, inventoryId: inventory.id, slot: 1 };
+    expect(refit).toEqual({ moved, placements: [moved] });
     expect((await placement(db, grows)).inventorySlot).toBe(1);
     expect((await placement(db, below)).inventorySlot).toBe(6);
   });
@@ -301,8 +301,13 @@ describe("tall cards", () => {
     const loose = await card("loose");
     await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [stored], slot: 0 });
 
-    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: stored }))).toBeNull();
-    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: loose }))).toBeNull();
+    const unmoved = { moved: null, placements: [] };
+    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: stored }))).toEqual(
+      unmoved,
+    );
+    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: loose }))).toEqual(
+      unmoved,
+    );
   });
 });
 
@@ -316,7 +321,7 @@ describe("takeCards", () => {
     const result = await takeCards({
       db,
       namespaceId,
-      cards: [{ cardId: a, posX: 500, posY: 600 }, { cardId: b }],
+      cards: [{ cardId: a, position: { posX: 500, posY: 600 } }, { cardId: b }],
     });
 
     expect(result).toEqual({ ok: true });
@@ -354,7 +359,7 @@ describe("takeCards", () => {
     const result = await takeCards({
       db,
       namespaceId,
-      cards: [{ cardId: stored }, { cardId: loose, posX: 500, posY: 600 }],
+      cards: [{ cardId: stored }, { cardId: loose, position: { posX: 500, posY: 600 } }],
     });
 
     expect(result).toEqual({ ok: false, reason: "unstored-cards" });
@@ -457,6 +462,23 @@ describe("a write to an overlapping inventory", () => {
     expect((await findInventoryConflicts({ db })).overlapping).toEqual([]);
   });
 
+  it("writes no repair when it refuses the stow", async () => {
+    const { db, namespaceId, inventory, card, below } = await brokenInventory();
+    const a = await card("a");
+    const b = await card("b");
+
+    expect(
+      await stowCards({
+        db,
+        namespaceId,
+        inventoryId: inventory.id,
+        cardIds: [a, b],
+        slot: INVENTORY_SLOT_MAX,
+      }),
+    ).toEqual({ ok: false, reason: "inventory-full" });
+    expect((await placement(db, below)).inventorySlot).toBe(INVENTORY_COLUMNS);
+  });
+
   it("refits an edited card when the repair moves a neighbour onto its slot", async () => {
     const { db, inventory, card, below } = await brokenInventory();
     // Where the repair moves `below`, so the edited card must make way rather than fail
@@ -478,8 +500,14 @@ describe("a write to an overlapping inventory", () => {
     });
 
     expect((await placement(db, below)).inventorySlot).toBe(INVENTORY_COLUMNS + 1);
-    expect(refit).not.toBeNull();
-    expect((await placement(db, edited)).inventorySlot).toBe(refit!.slot);
+    expect(refit.moved).not.toBeNull();
+    expect((await placement(db, edited)).inventorySlot).toBe(refit.moved!.slot);
+    // The neighbour the repair moved is reported too, so the board can draw it there.
+    expect(refit.placements).toContainEqual({
+      cardId: below,
+      inventoryId: inventory.id,
+      slot: INVENTORY_COLUMNS + 1,
+    });
     expect((await findInventoryConflicts({ db })).overlapping).toEqual([]);
   });
 });

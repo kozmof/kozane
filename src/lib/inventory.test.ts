@@ -46,6 +46,13 @@ describe("cardSpan", () => {
     );
   });
 
+  it("counts a tab as running to the next tab stop, as the card draws it", () => {
+    // A cell is narrower than two tab stops, so each tab after the first wraps to a line of
+    // its own.
+    expect(cardSpan("\t".repeat(15) + "x")).toBeGreaterThan(cardSpan(" ".repeat(15) + "x"));
+    expect(cardSpan("\t".repeat(15) + "x")).toBe(cardSpan(Array(15).fill("\t").join("\n") + "x"));
+  });
+
   it("stops at the cap, which only the text's opening can reach", () => {
     const huge = "word ".repeat(10_000);
     expect(cardSpan(huge)).toBe(INVENTORY_SPAN_MAX);
@@ -57,7 +64,17 @@ describe("cardSpan", () => {
     // whole text, so the two must never disagree. Runs of spaces, line breaks, wide
     // characters, and astral code points each change how much text a line holds.
     const opening = (text: string) => [...text].slice(0, INVENTORY_SPAN_SOURCE_CHARS).join("");
-    const pieces = ["x", "word", "x".repeat(INVENTORY_LINE_CHARS), " ", "  ", "\n", "あ", "😀"];
+    const pieces = [
+      "x",
+      "word",
+      "x".repeat(INVENTORY_LINE_CHARS),
+      " ",
+      "  ",
+      "\t",
+      "\n",
+      "あ",
+      "😀",
+    ];
     let seed = 1;
     const next = () => (seed = (seed * 48_271) % 2_147_483_647);
     for (let run = 0; run < 500; run++) {

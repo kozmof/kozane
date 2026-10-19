@@ -5,8 +5,7 @@ import { getLayer } from "$db/api/layer";
 import { reassignCardsToLayerInTx, updateCard, type CardStacking } from "$db/api/card";
 import { withTx } from "$db/tx";
 import { deleteNamespaceCards } from "$db/api/composite";
-import { refitStoredCardInTx } from "$db/api/inventory";
-import type { InventoryPlacement } from "$lib/inventory";
+import { refitStoredCardInTx, type Refit } from "$db/api/inventory";
 import { requireCardInNamespace } from "../../../lib/guards.js";
 import { checkCardContent, clamp } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
@@ -75,7 +74,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   // rather than a foreign-key or not-found 500.
   const { stacking, refit } = await withTx(
     db,
-    async (tx): Promise<{ stacking: CardStacking[]; refit: InventoryPlacement | null }> => {
+    async (tx): Promise<{ stacking: CardStacking[]; refit: Refit | null }> => {
       const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
 
       if (
@@ -112,7 +111,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
       if (Object.values(rest).some((value) => value !== undefined))
         await updateCard({ db: tx, cardId, partitionId, ...rest });
       // Longer text can make a stored card cover cells its neighbours hold. It moves to the
-      // first place it fits, and the answer says where so the board can draw it there.
+      // first place it fits, and the answer names every card that moved, any neighbour a
+      // repair moved included, so the board can draw them there without waiting for a poll.
       const refit = content === undefined ? null : await refitStoredCardInTx({ db: tx, cardId });
       return { stacking, refit };
     },
@@ -121,7 +121,8 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   return json({
     ok: true,
     stacking,
-    ...(refit && { inventory: { id: refit.inventoryId, slot: refit.slot } }),
+    ...(refit?.moved && { inventory: { id: refit.moved.inventoryId, slot: refit.moved.slot } }),
+    ...(refit && refit.placements.length > 0 && { placements: refit.placements }),
   });
 };
 

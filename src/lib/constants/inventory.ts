@@ -36,3 +36,9 @@ export const INVENTORY_CELL = {
  * cannot push the rest of the grid out of the window.
  */
 export const INVENTORY_SPAN_MAX = 8;
+
+/**
+ * Tab stops on a stored card, in spaces. The card's CSS `tab-size` and the span estimate both
+ * read this, so a tab is counted as wide as it is drawn.
+ */
+export const INVENTORY_TAB_SIZE = 8;

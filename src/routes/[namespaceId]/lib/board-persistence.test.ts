@@ -10,6 +10,7 @@ vi.mock("./namespace-api", () => ({
   moveWarp: vi.fn(),
   moveScopeArea: vi.fn(),
   parseCard: vi.fn(),
+  parsePlacements: vi.fn(),
   parseWarp: vi.fn(),
   parseScopeArea: vi.fn(),
   failureMessage: vi.fn(),
@@ -124,6 +125,23 @@ describe("createBoardPersistence", () => {
 
       await createBoardPersistence(s).submitComposer("c1", "  new text \n", "p1", vi.fn());
       expect(s.cards[0].content).toBe("new text");
+    });
+
+    it("draws every card a refit moved, a repaired neighbour included", async () => {
+      const s = state();
+      const stored = (slot: number) => ({ inventory: { id: "i1", slot } });
+      s.cards = [card("c1", stored(0)), card("c2", stored(6)), card("c3", stored(2))];
+      vi.mocked(api.updateCard).mockResolvedValueOnce(succeeded);
+      vi.mocked(api.parsePlacements).mockReturnValueOnce([
+        { cardId: "c2", inventoryId: "i1", slot: 1 },
+        { cardId: "c1", inventoryId: "i1", slot: 3 },
+      ]);
+      const untouched = s.cards[2];
+
+      await createBoardPersistence(s).submitComposer("c1", "longer text", "p1", vi.fn());
+      expect(s.cards.map((c) => c.inventory?.slot)).toEqual([3, 1, 2]);
+      expect(s.cards[0].content).toBe("longer text");
+      expect(s.cards[2]).toBe(untouched);
     });
 
     it("reports the server's reason when an edit is refused", async () => {

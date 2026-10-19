@@ -86,7 +86,10 @@ export async function addInventory({
   return row;
 }
 
-type UpdateInventory = NeedsNamespaceInventory & { name?: string; posX?: number; posY?: number };
+type UpdateInventory = NeedsNamespaceInventory & {
+  name?: string;
+  position?: { posX: number; posY: number };
+};
 
 /**
  * Moves or renames an inventory. The whole stored row comes back, so a caller that drew the
@@ -97,15 +100,10 @@ export async function updateInventory({
   namespaceId,
   inventoryId,
   name,
-  posX,
-  posY,
+  position,
 }: UpdateInventory): Promise<Inventory> {
   if (name !== undefined) assertNameWithinLimit(name, "Inventory name");
-  const fields = {
-    ...(name !== undefined && { name }),
-    ...(posX !== undefined && { posX }),
-    ...(posY !== undefined && { posY }),
-  };
+  const fields = { ...(name !== undefined && { name }), ...position };
   if (Object.keys(fields).length === 0) throw new Error("updateInventory: no fields to update");
   // Check namespace ownership even though the ID is unique.
   const updated = await db
@@ -144,7 +142,7 @@ async function writePlacements(
   inventoryId: string,
   plan: readonly SlotPlacement[],
 ): Promise<void> {
-  await releaseCards(
+  await releaseCardsInTx(
     tx,
     plan.map(({ cardId }) => cardId),
   );
@@ -155,7 +153,7 @@ async function writePlacements(
       .update(cardTable)
       .set({
         inventoryId,
-        // `releaseCards` just cleared the slot, so ELSE keeps that null rather than a value.
+        // `releaseCardsInTx` just cleared the slot, so ELSE keeps that null rather than a value.
         inventorySlot: sql`CASE ${cardTable.id} ${sql.join(whens, sql` `)} ELSE ${cardTable.inventorySlot} END`,
       })
       .where(
@@ -168,9 +166,11 @@ async function writePlacements(
 }
 
 /**
- * What one inventory holds, with any overlap repaired first. Spans come from text and the
- * layout constants, so an upgrade that changes the layout or an imported dump can leave cards
- * overlapping. Every writer plans from this, so the first write to an inventory repairs it.
+ * What one inventory holds, as it stands once any overlap is repaired, and the moves that
+ * repair takes. Nothing is written, so a writer can fold the repair into its own write, or
+ * leave it unwritten when it refuses. Spans come from text and the layout constants, so an
+ * upgrade that changes the layout or an imported dump can leave cards overlapping. Every
+ * writer plans from this, so the first write to an inventory repairs it.
  */
 async function settledFootprints(
   tx: Tx,
@@ -178,9 +178,19 @@ async function settledFootprints(
 ): Promise<{ held: Footprint[]; repaired: SlotPlacement[] }> {
   const held = await heldFootprints(tx, inventoryId);
   const repaired = planRepair(held);
-  if (repaired.length === 0) return { held, repaired };
-  await writePlacements(tx, inventoryId, repaired);
   return { held: withSlots(held, repaired), repaired };
+}
+
+/**
+ * `first` then `then`, with each card named once at the slot `then` gives it if it names it.
+ * One write of the result lands every card where the two plans in turn would.
+ */
+function mergedPlans(
+  first: readonly SlotPlacement[],
+  then: readonly SlotPlacement[],
+): SlotPlacement[] {
+  const final = new Map([...first, ...then].map(({ cardId, slot }) => [cardId, slot]));
+  return [...final].map(([cardId, slot]) => ({ cardId, slot }));
 }
 
 /** `held` with the slots `plan` gives the cards it names. */
@@ -208,6 +218,7 @@ export async function repairInventories({ db }: { db: DB }): Promise<InventoryRe
     const moved: InventoryPlacement[] = [];
     for (const { id: inventoryId } of inventories) {
       const { repaired } = await settledFootprints(tx, inventoryId);
+      if (repaired.length > 0) await writePlacements(tx, inventoryId, repaired);
       moved.push(...repaired.map((p) => ({ ...p, inventoryId })));
     }
     const glued = await tx
@@ -272,10 +283,17 @@ async function sizedCards(tx: Tx, cardIds: string[]): Promise<{ cardId: string; 
   });
 }
 
+/** What {@link refitStoredCardInTx} moved. */
+export type Refit = {
+  /** Where the edited card went, or null when it stayed put or is not stored. */
+  moved: InventoryPlacement | null;
+  /** Every card whose slot changed, the edited one and any neighbour a repair moved. */
+  placements: InventoryPlacement[];
+};
+
 /**
  * Moves a stored card whose text changed, if it now covers cells another card holds, to the
- * first place it fits. Call it in the transaction that changed the text. Returns where it
- * went, or null when it stayed put or is not stored.
+ * first place it fits. Call it in the transaction that changed the text.
  */
 export async function refitStoredCardInTx({
   db: tx,
@@ -283,16 +301,16 @@ export async function refitStoredCardInTx({
 }: {
   db: Tx;
   cardId: string;
-}): Promise<InventoryPlacement | null> {
+}): Promise<Refit> {
   const card = await tx
     .select({ inventoryId: cardTable.inventoryId })
     .from(cardTable)
     .where(eq(cardTable.id, cardId))
     .get();
-  if (!card?.inventoryId) return null;
+  if (!card?.inventoryId) return { moved: null, placements: [] };
   const { inventoryId } = card;
   // Repair the rest first, leaving this card to the refit, so its longer text moves it rather
-  // than the neighbour it now covers. A repaired neighbour reaches the board with the next poll.
+  // than the neighbour it now covers.
   const held = await heldFootprints(tx, inventoryId);
   const repaired = planRepair(held.filter((f) => f.cardId !== cardId));
   // A repaired neighbour can land on this card's cells, top slot included. The refit then
@@ -300,11 +318,17 @@ export async function refitStoredCardInTx({
   const [moved]: SlotPlacement[] = planRefit(withSlots(held, repaired), cardId);
   const plan = moved ? [...repaired, moved] : repaired;
   if (plan.length > 0) await writePlacements(tx, inventoryId, plan);
-  return moved ? { ...moved, inventoryId } : null;
+  return {
+    moved: moved ? { ...moved, inventoryId } : null,
+    placements: plan.map((p) => ({ ...p, inventoryId })),
+  };
 }
 
-/** Takes cards out of whatever inventory holds them. Their canvas positions are kept. */
-async function releaseCards(tx: Tx, cardIds: string[]): Promise<void> {
+/**
+ * Takes cards out of whatever inventory holds them, clearing both inventory columns together.
+ * Their canvas positions are kept, so they come back where they were before they were stored.
+ */
+export async function releaseCardsInTx(tx: Tx, cardIds: string[]): Promise<void> {
   for (const batch of chunked(cardIds, { size: BATCH_MAX }))
     await tx
       .update(cardTable)
@@ -334,7 +358,7 @@ export async function deleteInventory({
     // The foreign key has already nulled `inventory_id`. The slot is cleared here, since
     // the key knows nothing about it.
     const releasedCardIds = held.map(({ id }) => id);
-    await releaseCards(tx, releasedCardIds);
+    await releaseCardsInTx(tx, releasedCardIds);
     return { releasedCardIds };
   });
 }
@@ -393,23 +417,24 @@ export async function stowCardsInTx({
   const moving = await sizedCards(tx, unique);
   const plan = planStow(held, moving, slot);
   const spans = new Map([...held, ...moving].map(({ cardId, span }) => [cardId, span]));
-  // A refusal does not throw, so a transaction that commits anyway keeps the repair made
-  // above. That is fine, since the repair stands on its own.
+  // Checked before anything is written, so a refusal leaves the inventory as it was, overlap
+  // and all, rather than committing half the work.
   if (plan.some(({ cardId, slot: at }) => lastCell(at, spans.get(cardId)!) > INVENTORY_SLOT_MAX))
     return { ok: false, reason: "inventory-full" };
 
-  await writePlacements(tx, inventoryId, plan);
+  // The repair and the stow go in one write. A card the repair moved and the plan then moved
+  // again is named once, where it ended up.
+  const final = mergedPlans(repaired, plan);
+  await writePlacements(tx, inventoryId, final);
 
   const heldIds = new Set(held.map(({ cardId }) => cardId));
   const clearedCardIds = await unglueCardsInTx({
     db: tx,
     cardIds: plan.map(({ cardId }) => cardId).filter((id) => !heldIds.has(id)),
   });
-  // A card the repair moved and the plan then moved again is named once, where it ended up.
-  const final = new Map([...repaired, ...plan].map(({ cardId, slot: at }) => [cardId, at]));
   return {
     ok: true,
-    placements: [...final].map(([cardId, at]) => ({ cardId, slot: at, inventoryId })),
+    placements: final.map((p) => ({ ...p, inventoryId })),
     clearedCardIds,
   };
 }
@@ -445,10 +470,10 @@ export async function takeCards({
         .where(and(inArray(cardTable.id, batch), isStored)),
     );
     if (stored.length !== cardIds.length) return { ok: false, reason: "unstored-cards" };
-    await releaseCards(tx, cardIds);
+    await releaseCardsInTx(tx, cardIds);
     await writeCardPositionsInTx(
       tx,
-      unique.flatMap((card) => ("posX" in card ? [card] : [])),
+      unique.flatMap(({ cardId, position }) => (position ? [{ cardId, ...position }] : [])),
     );
     return { ok: true };
   });

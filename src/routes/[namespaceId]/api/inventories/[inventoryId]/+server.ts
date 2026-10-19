@@ -24,7 +24,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
         namespaceId,
         inventoryId,
         name,
-        ...(posX !== undefined && posY !== undefined && clampToCanvas(posX, posY)),
+        ...(posX !== undefined && posY !== undefined && { position: clampToCanvas(posX, posY) }),
       }),
     );
   } catch (e) {

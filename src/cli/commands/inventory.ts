@@ -9,14 +9,15 @@ import {
   takeCards,
   updateInventory,
   type InventoryRepair,
+  type StowResult,
+  type TakeResult,
 } from "../../db/api/inventory.js";
 import type { Inventory } from "../../db/api/types.js";
-import { cardTable } from "../../db/schema.js";
 import type { DB } from "../../db/tx.js";
 import { INVENTORY_COLUMNS, NAME_MAX } from "../../lib/constants.js";
 import { cardSpan, slotCell } from "../../lib/inventory.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
-import { resolveCardGroup } from "../lib/card-refs.js";
+import { allCardIds, resolveCardGroup } from "../lib/card-refs.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { plural } from "../lib/plural.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
@@ -29,6 +30,19 @@ type InventoryTakeOptions = { x?: number; y?: number };
 
 /** The longest card text `inventory show` prints on one line. */
 const PREVIEW_CHARS = 60;
+
+/** What `inventory put` says for each refusal. */
+const PUT_REFUSAL: Record<Extract<StowResult, { ok: false }>["reason"], string> = {
+  "foreign-cards": "Cards must belong to the same namespace as the inventory.",
+  "foreign-inventory": "Inventory does not belong to the cards' namespace.",
+  "inventory-full": "Those cards do not fit from that slot.",
+};
+
+/** What `inventory take` says for each refusal. */
+const TAKE_REFUSAL: Record<Extract<TakeResult, { ok: false }>["reason"], string> = {
+  "foreign-cards": "Cards must belong to the same namespace.",
+  "unstored-cards": "Only stored cards can be taken out. One of these is already on the canvas.",
+};
 
 /** A namespace's inventories and the requested one among them, by full or short ID. */
 async function resolveInventory(
@@ -176,14 +190,7 @@ export async function inventoryPut(
       cardIds,
       slot: slot ?? null,
     });
-    if (!result.ok)
-      throw new Error(
-        result.reason === "foreign-cards"
-          ? "Cards must belong to the same namespace as the inventory."
-          : result.reason === "inventory-full"
-            ? "Those cards do not fit from that slot."
-            : "Inventory does not belong to the cards' namespace.",
-      );
+    if (!result.ok) throw new Error(PUT_REFUSAL[result.reason]);
     console.log(`${plural(cardIds.length, "card")} stored.`);
     console.log(`  inventory: ${shortId(inventory.id, ids)}`);
     for (const { cardId, slot: at } of result.placements) {
@@ -237,21 +244,11 @@ export async function inventoryTake(
     const result = await takeCards({
       db,
       namespaceId,
-      cards: cardIds.map((cardId) => ({ cardId, ...position })),
+      cards: cardIds.map((cardId) => ({ cardId, position })),
     });
-    if (!result.ok)
-      throw new Error(
-        result.reason === "unstored-cards"
-          ? "Only stored cards can be taken out. One of these is already on the canvas."
-          : "Cards must belong to the same namespace.",
-      );
+    if (!result.ok) throw new Error(TAKE_REFUSAL[result.reason]);
     console.log(`${plural(cardIds.length, "card")} returned to the canvas.`);
     for (const cardId of cardIds) console.log(`  id: ${shortId(cardId, allIds)}`);
     if (position) console.log(`  position: (${position.posX}, ${position.posY})`);
   });
-}
-
-/** Every card ID in the workspace, which short IDs are chosen against. */
-async function allCardIds(db: DB): Promise<string[]> {
-  return (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
 }

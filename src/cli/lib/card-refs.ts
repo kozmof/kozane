@@ -14,6 +14,11 @@ import { resolveLayerRef } from "./layer-ref.js";
  * errors for `runWorkspaceCommand` to report. Do not print or exit here.
  */
 
+/** Every card ID in the workspace, which CLI short IDs are chosen against. */
+export async function allCardIds(db: DB): Promise<string[]> {
+  return (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
+}
+
 /** Parse an absolute position or an offset such as `current+100` for `kozane card move`. */
 export function movedCoordinate(value: number | string, current: number): number {
   if (typeof value === "number") return value;
