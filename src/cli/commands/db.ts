@@ -22,6 +22,10 @@ import {
 import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
+import { openDb } from "../../db/client.js";
+import { cardTable } from "../../db/schema.js";
+import { repairInventories } from "../../db/api/inventory.js";
+import { printInventoryRepair } from "./inventory.js";
 
 // Use `dbUrl` for the persistent workspace database. Migrations, backups, and restores must
 // target that file even while a `kozane open --memory` session is running.
@@ -186,6 +190,19 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
       ...canvasBoundsForRoot(workspaceRoot),
     });
     for (const warning of warnings) console.warn(`Warning: ${warning}`);
+    // A dump can hold stored cards that overlap, whether written by hand or sized by an older
+    // layout. Repair them now rather than on each inventory's next write.
+    const { db, close } = await openDb(url);
+    try {
+      const repair = await repairInventories({ db });
+      if (repair.moved.length > 0 || repair.unglued.length > 0) {
+        console.log("Inventories repaired:");
+        const allIds = (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
+        printInventoryRepair(repair, allIds);
+      }
+    } finally {
+      close();
+    }
   } catch (e) {
     console.error("Import failed.");
     console.error(e instanceof Error ? e.message : String(e));

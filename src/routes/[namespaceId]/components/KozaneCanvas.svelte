@@ -355,8 +355,8 @@
   /** How many cards each inventory holds, for the badge on its icon. */
   const storedCounts = $derived(
     cards.reduce(
-      (counts, { inventoryId }) =>
-        inventoryId === null ? counts : counts.set(inventoryId, (counts.get(inventoryId) ?? 0) + 1),
+      (counts, { inventory }) =>
+        inventory === null ? counts : counts.set(inventory.id, (counts.get(inventory.id) ?? 0) + 1),
       new Map<string, number>(),
     ),
   );

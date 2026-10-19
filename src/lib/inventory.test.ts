@@ -7,7 +7,9 @@ import {
   inventoryFootprints,
   inventoryRows,
   lastCell,
+  overlappingCards,
   planRefit,
+  planRepair,
   planStow,
   slotCell,
 } from "./inventory.js";
@@ -48,6 +50,40 @@ describe("cardSpan", () => {
     const huge = "word ".repeat(10_000);
     expect(cardSpan(huge)).toBe(INVENTORY_SPAN_MAX);
     expect(cardSpan(huge.slice(0, INVENTORY_SPAN_SOURCE_CHARS))).toBe(INVENTORY_SPAN_MAX);
+  });
+
+  it("gives the same span from the text's opening as from all of it", () => {
+    // The server sizes cards from `substr`, which counts code points, and the board from the
+    // whole text, so the two must never disagree. Runs of spaces, line breaks, wide
+    // characters, and astral code points each change how much text a line holds.
+    const opening = (text: string) => [...text].slice(0, INVENTORY_SPAN_SOURCE_CHARS).join("");
+    const pieces = ["x", "word", "x".repeat(INVENTORY_LINE_CHARS), " ", "  ", "\n", "あ", "😀"];
+    let seed = 1;
+    const next = () => (seed = (seed * 48_271) % 2_147_483_647);
+    for (let run = 0; run < 500; run++) {
+      const length = 1 + (next() % 400);
+      const text = Array.from({ length }, () => pieces[next() % pieces.length]).join("");
+      expect(cardSpan(opening(text)), JSON.stringify(text)).toBe(cardSpan(text));
+    }
+    for (const separator of [" ", "  ", "   "])
+      for (let width = 1; width <= INVENTORY_LINE_CHARS + 2; width++) {
+        const text = Array.from({ length: 400 }, () => "x".repeat(width)).join(separator);
+        expect(cardSpan(opening(text))).toBe(cardSpan(text));
+      }
+  });
+
+  it("counts every space, since stored cards wrap spaces like characters", () => {
+    const line = INVENTORY_LINE_CHARS;
+    expect(cardSpan(`x${" ".repeat(line * 6)}y`)).toBe(
+      cardSpan(Array.from({ length: 7 }, () => "x").join("\n")),
+    );
+  });
+
+  it("sizes wide characters at a full em, so Japanese text is not cut short", () => {
+    // 100 kana at 1em need more lines than 100 Latin letters at 0.62em.
+    expect(cardSpan("あ".repeat(100))).toBeGreaterThan(cardSpan("a".repeat(100)));
+    // A line breaks between wide characters, so they never break like one long word.
+    expect(cardSpan("あ".repeat(8))).toBe(1);
   });
 });
 
@@ -136,6 +172,44 @@ describe("planStow", () => {
   });
 });
 
+describe("overlappingCards", () => {
+  it("names each card whose cells another card covers, once", () => {
+    // `tall` covers slots 0, 6, and 12. `low` sits on 6 and `lower` on 12.
+    expect(
+      overlappingCards([at("tall", 0, 3), at("low", 6), at("lower", 12), at("free", 1)]),
+    ).toEqual(["tall", "low", "lower"]);
+  });
+
+  it("finds nothing in a grid a plan filled", () => {
+    const plan = planStow([], [sized("a", 3), sized("b", 2), sized("c")], null);
+    const spans = new Map([
+      ["a", 3],
+      ["b", 2],
+      ["c", 1],
+    ]);
+    expect(overlappingCards(plan.map((p) => at(p.cardId, p.slot, spans.get(p.cardId))))).toEqual(
+      [],
+    );
+  });
+});
+
+describe("planRepair", () => {
+  it("keeps what fits and moves the rest to the first free place after it", () => {
+    // `tall` covers 0, 6, and 12, so `low` at 6 moves on to 7 and `free` at 1 stays.
+    const held = [at("tall", 0, 3), at("low", 6), at("free", 1)];
+    const plan = planRepair(held);
+    expect(plan).toEqual([{ cardId: "low", slot: 7 }]);
+    const slotOf = new Map(plan.map((p) => [p.cardId, p.slot]));
+    expect(
+      overlappingCards(held.map((f) => ({ ...f, slot: slotOf.get(f.cardId) ?? f.slot }))),
+    ).toEqual([]);
+  });
+
+  it("moves nothing in a grid without overlaps", () => {
+    expect(planRepair([at("a", 0, 2), at("b", 1), at("c", 12)])).toEqual([]);
+  });
+});
+
 describe("planRefit", () => {
   it("leaves a card that still fits where it is", () => {
     expect(planRefit([at("a", 0, 2), at("b", 1)], "a")).toEqual([]);
@@ -154,9 +228,9 @@ describe("planRefit", () => {
 describe("inventoryFootprints", () => {
   it("sizes one inventory's cards by their text and ignores the rest", () => {
     const cards = [
-      { id: "a", content: "short", inventoryId: "i1", inventorySlot: 2 },
-      { id: "b", content: "x", inventoryId: "i2", inventorySlot: 0 },
-      { id: "c", content: "x", inventoryId: null, inventorySlot: null },
+      { id: "a", content: "short", inventory: { id: "i1", slot: 2 } },
+      { id: "b", content: "x", inventory: { id: "i2", slot: 0 } },
+      { id: "c", content: "x", inventory: null },
     ];
     expect(inventoryFootprints(cards, "i1")).toEqual([{ cardId: "a", slot: 2, span: 1 }]);
   });

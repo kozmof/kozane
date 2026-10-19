@@ -13,6 +13,8 @@ const BATCH_REJECTION_MESSAGE: Record<BatchRejection, string> = {
   "foreign-scope": "Scope not found",
   "foreign-inventory": "Inventory not found in namespace",
   "inventory-full": "Inventory has no free slot there",
+  "stored-cards": "Stored cards cannot be glued",
+  "unstored-cards": "Card is not stored in an inventory",
 };
 
 /** Ends the request with the wording for `reason`. */

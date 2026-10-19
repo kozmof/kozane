@@ -10,6 +10,7 @@ import type {
   TaskspaceSummary,
   Warp,
   Inventory,
+  CardInventory,
 } from "$lib/types.js";
 import { PATH_KINDS, type PathKind } from "$lib/constants.js";
 import {
@@ -73,14 +74,12 @@ export function readCard(row: unknown): CardWithGlue | undefined {
   const taskspaceId = readNullableString(row, "taskspaceId");
   const glueId = readNullableString(row, "glueId");
   const width = readNullableFiniteNumber(row, "width");
-  const inventoryId = readNullableString(row, "inventoryId");
-  const inventorySlot = readNullableFiniteNumber(row, "inventorySlot");
+  const inventory = readCardInventory(row);
   if (
     taskspaceId === undefined ||
     glueId === undefined ||
     width === undefined ||
-    inventoryId === undefined ||
-    inventorySlot === undefined
+    inventory === undefined
   )
     return undefined;
 
@@ -95,9 +94,18 @@ export function readCard(row: unknown): CardWithGlue | undefined {
     taskspaceId,
     glueId,
     width,
-    inventoryId,
-    inventorySlot,
+    inventory,
   };
+}
+
+/** A card's `inventory`: null on the canvas, or its inventory and slot. Undefined if malformed. */
+export function readCardInventory(row: unknown): CardInventory | null | undefined {
+  if (typeof row !== "object" || row === null || !("inventory" in row)) return undefined;
+  const { inventory } = row;
+  if (inventory === null) return null;
+  const id = readString(inventory, "id");
+  const slot = readFiniteNumber(inventory, "slot");
+  return id === undefined || slot === undefined ? undefined : { id, slot };
 }
 
 function readPartition(row: unknown): Partition | undefined {

@@ -110,7 +110,7 @@
   let partitionsWithColors = $derived(applyPalette(s.partitions));
   let partitionColorById = $derived(new Map(partitionsWithColors.map((b) => [b.id, b])));
   // A stored card lives in its inventory's grid and is not drawn on the canvas.
-  let canvasCards = $derived(s.cards.filter((c) => c.inventoryId === null));
+  let canvasCards = $derived(s.cards.filter((c) => c.inventory === null));
   let visibleCards = $derived(
     s.sidebar.activePartition
       ? canvasCards.filter((c) => c.partitionId === s.sidebar.activePartition)
@@ -328,7 +328,7 @@
       .filter(({ id }) => s.openInventoryIds.has(id))
       .map((inventory) => ({
         inventory,
-        cards: s.cards.filter((c) => c.inventoryId === inventory.id),
+        cards: s.cards.filter((c) => c.inventory?.id === inventory.id),
       })),
   );
 

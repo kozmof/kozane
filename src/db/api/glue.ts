@@ -1,5 +1,5 @@
 import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
-import { count, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, count, eq, getTableColumns, inArray, isNotNull } from "drizzle-orm";
 import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsBelongToNamespace } from "./card.js";
@@ -162,9 +162,24 @@ type GlueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
  * Return the new group ID or a specific refusal reason. Share the result vocabulary with
  * {@link CardBatchResult} so routes can use the same error helper.
  */
-export type GlueResult = BatchResult<"foreign-cards", GlueOutcome>;
+export type GlueResult = BatchResult<"foreign-cards" | "stored-cards", GlueOutcome>;
 
-/** Glues cards together after verifying all belong to namespaceId. */
+/** Whether any of the cards sits in an inventory. */
+async function anyStored(tx: Tx, cardIds: string[]): Promise<boolean> {
+  const rows = await readByIds(cardIds, (batch) =>
+    tx
+      .select({ id: cardTable.id })
+      .from(cardTable)
+      .where(and(inArray(cardTable.id, batch), isNotNull(cardTable.inventoryId)))
+      .limit(1),
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Glues cards together after verifying all belong to namespaceId. A stored card is refused,
+ * since storing a card takes it out of its group and the canvas cannot draw it in one.
+ */
 export async function glueNamespaceCards({
   db,
   namespaceId,
@@ -173,6 +188,7 @@ export async function glueNamespaceCards({
   return withTx(db, async (tx) => {
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
+    if (await anyStored(tx, cardIds)) return { ok: false, reason: "stored-cards" };
     return { ok: true, ...(await glueCardsCore(tx, cardIds)) };
   });
 }

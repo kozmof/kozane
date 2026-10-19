@@ -77,8 +77,8 @@ With `inventoryId`, the card is stored in that inventory's first free slot in th
 transaction.
 
 Return the stored card with `id`, `partitionId`, `layerId`, `content`, clamped
-`posX` / `posY`, `zIndex`, null `taskspaceId`, `glueId`, and `width`, and the
-`inventoryId` and `inventorySlot` it was stored at, or null for both.
+`posX` / `posY`, `zIndex`, null `taskspaceId`, `glueId`, and `width`, and
+`inventory`: `{ id, slot }` for where it was stored, or null.
 
 Return 400 for missing or oversized fields, unknown partition or scope, a layer
 outside this namespace, an inventory outside this namespace, or a missing default layer.
@@ -115,7 +115,7 @@ overrides that value. Return `{ ok: true, stacking: [{ cardId, zIndex }] }`,
 with empty `stacking` unless the layer changed.
 
 New text can make a stored card cover cells another card holds. It then moves to the
-first place it fits, and the response adds that `inventorySlot`.
+first place it fits, and the response adds `inventory: { id, slot }` for where it went.
 
 Return 404 for a card outside this namespace, or 400 for an invalid destination,
 non-integer `zIndex`, or out-of-range width.
@@ -177,7 +177,8 @@ two. Answers `{ glueId, clearedCardIds }`. Cards already in other groups are mov
 one. A group left with one member is dissolved, and `clearedCardIds` names those leftover
 cards so the board can clear them.
 
-`400` when fewer than two ids are named, or when any is not this namespace's.
+`400` when fewer than two ids are named, when any is not this namespace's, or when any is
+stored in an inventory.
 
 ### `DELETE /[namespaceId]/api/glues`
 
@@ -308,12 +309,14 @@ Fetched when the warp picker opens. Return 404 for an unknown namespace.
 ## Inventories
 
 An inventory is a grid that stores cards. Slots are numbered from 0, left to right and
-top to bottom, six to a row. A stored card has `inventoryId` and `inventorySlot` set and
-keeps its canvas `posX` / `posY` for when it comes back out.
+top to bottom, six to a row. A stored card has `inventory: { id, slot }`, where a card on
+the canvas has null, and keeps its canvas `posX` / `posY` for when it comes back out.
 
-`inventorySlot` is the card's top cell. The card also covers the cells below it in the same
+`slot` is the card's top cell. The card also covers the cells below it in the same
 column, as many as its text needs, from 1 to 8. The server and the board both work this out
-from the text, so it is not stored or sent.
+from the text, so it is not stored or sent. A write to an inventory first moves apart any
+cards that overlap, which an upgrade that changes the grid layout or an imported dump can
+leave. A stow names those cards in its `placements` too.
 
 ### `POST /[namespaceId]/api/inventories`
 
@@ -359,8 +362,8 @@ Return stored cards to the canvas. Body requires `cards`, an array of
 clamped to the canvas. A card without one returns to where it was before it was stored.
 Return `{ cards }` with the stored positions.
 
-Return 400 for one coordinate without the other, a repeated `cardId`, or a card that is
-not this namespace's.
+Return 400 for one coordinate without the other, a repeated `cardId`, a card that is
+not this namespace's, or a card that is not stored in an inventory.
 
 ## Taskspaces
 
@@ -425,7 +428,7 @@ Other file read limits and access rules apply.
 
 Return board data, including cards, partitions, layers, warps, inventories, scopes, scope
 areas, scope and glue relations, and taskspaces. Stored cards are included with their
-`inventoryId` and `inventorySlot`.
+`inventory`.
 
 Send the response `ETag` as `If-None-Match` on subsequent requests. Unchanged
 data returns 304 without a body. Responses use `Cache-Control: no-store`.

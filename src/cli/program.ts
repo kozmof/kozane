@@ -51,6 +51,7 @@ import {
   inventoryList,
   inventoryPut,
   inventoryRename,
+  inventoryRepair,
   inventoryShow,
   inventoryTake,
 } from "./commands/inventory.js";
@@ -554,6 +555,11 @@ Examples:
     .option("--x <number>", "Horizontal position for a single card", integer)
     .option("--y <number>", "Vertical position for a single card", integer)
     .action((cardIds, opts) => inventoryTake(cardIds, opts));
+
+  inventory
+    .command("repair")
+    .description("Move overlapping stored cards apart and unglue stored cards, workspace-wide")
+    .action(() => inventoryRepair());
 
   return program;
 }

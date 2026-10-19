@@ -120,11 +120,12 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 ### `kozane doctor`
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
-integrity and references, workspace limits, and port availability. Exit 0 when all checks pass,
-otherwise 1.
+integrity and references, workspace limits, inventory consistency, and port availability. Exit 0
+when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
-names, and out-of-bounds cards are reported with example IDs. Limit checks use SQLite character
+names, out-of-bounds cards, and stored cards that overlap or are glued are reported with
+example IDs. Run `inventory repair` for the last two. Limit checks use SQLite character
 counts, which can miss text that exceeds the UTF-16 limit through astral characters.
 
 For broken config, run `doctor config` . For database corruption, export readable data before
@@ -580,6 +581,19 @@ Return stored cards to the canvas where they were before they were stored. `--x`
 kozane inventory take <cardIds...> [--x <number> --y <number>]
 ```
 
+### `kozane inventory repair`
+
+Move stored cards that overlap apart, and take stored cards out of glue groups, in every
+inventory of the workspace. A card stays in its slot if it still fits, and otherwise moves to
+the first free place after it. A card's height in the grid comes from its text, so an upgrade
+that changes the grid layout, or an imported dump, can leave cards overlapping. Any write to
+an inventory repairs it first, and `kozane db import` repairs every inventory after it
+imports. Run this to clear what `kozane doctor` reports without waiting for either.
+
+```bash
+kozane inventory repair
+```
+
 ### `kozane tag list`
 
 List namespace tags as a tree with distinct card and file counts. Parent counts include
@@ -655,7 +669,8 @@ non-empty. Back up first, validate foreign keys before writing, and print per-ta
 
 Rows exceeding text, canvas, or name limits are imported with warnings so backups from
 different settings remain restorable. Shorten oversized text, move out-of-bounds cards, or
-adjust settings before editing. `kozane doctor` reports these rows afterward.
+adjust settings before editing. `kozane doctor` reports these rows afterward. Stored cards
+that overlap are moved apart after the import, as `kozane inventory repair` does.
 
 ```bash
 kozane db import <file> [--force]

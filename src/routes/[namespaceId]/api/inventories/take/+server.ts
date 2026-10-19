@@ -1,6 +1,7 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { takeCards, type TakenCard } from "$db/api/inventory";
+import { takeCards } from "$db/api/inventory";
+import type { TakenCard } from "$lib/inventory";
 import {
   optionalNumber,
   readJsonObject,

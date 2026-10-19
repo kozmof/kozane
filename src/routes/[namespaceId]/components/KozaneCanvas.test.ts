@@ -57,8 +57,7 @@ const card = (
   zIndex: 0,
   glueId: null,
   taskspaceId: null,
-  inventoryId: null,
-  inventorySlot: null,
+  inventory: null,
   width: null,
   ...overrides,
 });

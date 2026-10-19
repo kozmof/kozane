@@ -12,16 +12,16 @@ import {
   takeCards,
   updateInventory,
 } from "./namespace-api.js";
-import { readStringArray } from "./response.js";
+import { readArray, readFiniteNumber, readString, readStringArray } from "./response.js";
 
 /** The fields a stow or a take changes, held so a failed request can put them back. */
-type Whereabouts = Pick<CardWithGlue, "inventoryId" | "inventorySlot" | "posX" | "posY">;
+type Whereabouts = Pick<CardWithGlue, "inventory" | "posX" | "posY">;
 
 function whereaboutsOf(cards: CardWithGlue[], cardIds: Iterable<string>): Map<string, Whereabouts> {
   const wanted = new Set(cardIds);
   const held = new Map<string, Whereabouts>();
-  for (const { id, inventoryId, inventorySlot, posX, posY } of cards)
-    if (wanted.has(id)) held.set(id, { inventoryId, inventorySlot, posX, posY });
+  for (const { id, inventory, posX, posY } of cards)
+    if (wanted.has(id)) held.set(id, { inventory, posX, posY });
   return held;
 }
 
@@ -40,7 +40,7 @@ function placed(cards: CardWithGlue[], placements: InventoryPlacement[]): CardWi
   const byCard = new Map(placements.map((p) => [p.cardId, p]));
   return cards.map((card) => {
     const p = byCard.get(card.id);
-    return p ? { ...card, inventoryId: p.inventoryId, inventorySlot: p.slot } : card;
+    return p ? { ...card, inventory: { id: p.inventoryId, slot: p.slot } } : card;
   });
 }
 
@@ -109,7 +109,7 @@ export function createInventoryActions(state: NamespaceState) {
     if (index === -1) return;
     const removed = state.inventories[index];
     const wasOpen = state.openInventoryIds.has(inventoryId);
-    const held = state.cards.filter((c) => c.inventoryId === inventoryId).map(({ id }) => id);
+    const held = state.cards.filter((c) => c.inventory?.id === inventoryId).map(({ id }) => id);
     const previous = whereaboutsOf(state.cards, held);
 
     state.inventories = state.inventories.filter(({ id }) => id !== inventoryId);
@@ -117,7 +117,7 @@ export function createInventoryActions(state: NamespaceState) {
       [...state.openInventoryIds].filter((id) => id !== inventoryId),
     );
     state.cards = state.cards.map((c) =>
-      c.inventoryId === inventoryId ? { ...c, inventoryId: null, inventorySlot: null } : c,
+      c.inventory?.id === inventoryId ? { ...c, inventory: null } : c,
     );
 
     const res = await deleteInventory(state.mutationFetcher, state.namespaceId, inventoryId);
@@ -182,14 +182,28 @@ export function createInventoryActions(state: NamespaceState) {
   /** Puts a stored card on the canvas at `position`. Returns whether the server kept it. */
   async function take(cardId: string, position: BoardPoint): Promise<boolean> {
     const previous = whereaboutsOf(state.cards, [cardId]);
-    if (!previous.get(cardId)?.inventoryId) return false;
+    if (!previous.get(cardId)?.inventory) return false;
     state.cards = state.cards.map((c) =>
-      c.id === cardId ? { ...c, inventoryId: null, inventorySlot: null, ...position } : c,
+      c.id === cardId ? { ...c, inventory: null, ...position } : c,
     );
     const res = await takeCards(state.mutationFetcher, state.namespaceId, [
       { cardId, ...position },
     ]);
-    if (res.ok) return true;
+    if (res.ok) {
+      // The server clamps to the canvas. Draw what it kept, unless the card moved again since.
+      const kept = (readArray(await res.json().catch(() => null), "cards") ?? []).find(
+        (row) => readString(row, "cardId") === cardId,
+      );
+      const posX = readFiniteNumber(kept, "posX");
+      const posY = readFiniteNumber(kept, "posY");
+      if (posX !== undefined && posY !== undefined)
+        state.cards = state.cards.map((c) =>
+          c.id === cardId && c.posX === position.posX && c.posY === position.posY
+            ? { ...c, posX, posY }
+            : c,
+        );
+      return true;
+    }
     state.cards = restored(state.cards, previous);
     state.setError(await failureMessage(res, "Failed to take card out"));
     return false;

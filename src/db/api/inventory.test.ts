@@ -5,9 +5,11 @@ import { cardTable } from "../schema.js";
 import {
   addInventory,
   deleteInventory,
+  findInventoryConflicts,
   getAllInventories,
   getInventoryCards,
   refitStoredCardInTx,
+  repairInventories,
   stowCards,
   takeCards,
   updateInventory,
@@ -22,7 +24,7 @@ import { updateCard } from "./card.js";
 import { cardSpan } from "../../lib/inventory.js";
 import { withTx } from "../tx.js";
 import { NotFoundError } from "./utils.js";
-import { INVENTORY_SLOT_MAX } from "../../lib/constants.js";
+import { INVENTORY_COLUMNS, INVENTORY_SLOT_MAX } from "../../lib/constants.js";
 import type { DB } from "../tx.js";
 
 /** A namespace with the default layer and a partition, which is what a card needs. */
@@ -341,6 +343,118 @@ describe("takeCards", () => {
       ok: false,
       reason: "foreign-cards",
     });
+  });
+
+  it("refuses a card already on the canvas, and moves nothing", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const stored = await card("stored", 10, 20);
+    const loose = await card("loose", 30, 40);
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [stored], slot: 0 });
+
+    const result = await takeCards({
+      db,
+      namespaceId,
+      cards: [{ cardId: stored }, { cardId: loose, posX: 500, posY: 600 }],
+    });
+
+    expect(result).toEqual({ ok: false, reason: "unstored-cards" });
+    expect(await placement(db, stored)).toMatchObject({ inventoryId: inventory.id });
+    expect(await placement(db, loose)).toMatchObject({ posX: 30, posY: 40 });
+  });
+});
+
+describe("glueNamespaceCards", () => {
+  it("refuses a stored card, so a stored card is never in a group", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const a = await card("a");
+    const b = await card("b");
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [a], slot: 0 });
+
+    expect(await glueNamespaceCards({ db, namespaceId, cardIds: [a, b] })).toEqual({
+      ok: false,
+      reason: "stored-cards",
+    });
+    expect(await getGlueRelsByNamespace({ db, namespaceId })).toEqual([]);
+  });
+});
+
+describe("findInventoryConflicts", () => {
+  it("finds nothing in inventories writers filled", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const cardIds = [await card("a"), await card("word ".repeat(40)), await card("c")];
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds, slot: null });
+
+    expect(await findInventoryConflicts({ db })).toEqual({ overlapping: [], glued: [] });
+  });
+
+  it("names cards that overlap and stored cards left in a group", async () => {
+    const { db, tall, below, glued } = await brokenInventory();
+
+    const conflicts = await findInventoryConflicts({ db });
+    expect(conflicts.overlapping.toSorted()).toEqual([tall, below].toSorted());
+    expect(conflicts.glued).toEqual([glued]);
+  });
+});
+
+/**
+ * An inventory left the way a dump import or a layout change could leave it, past every
+ * writer's check: a tall card at slot 0 over `below` at the slot under it, and a stored card
+ * still glued to one on the canvas.
+ */
+async function brokenInventory() {
+  const board = await setup();
+  const { db, namespaceId, inventory, card } = board;
+  const tall = await card("word ".repeat(40));
+  const below = await card("below");
+  const glued = await card("glued");
+  const partner = await card("partner");
+  await glueNamespaceCards({ db, namespaceId, cardIds: [glued, partner] });
+  const storeAt = (cardId: string, slot: number) =>
+    db
+      .update(cardTable)
+      .set({ inventoryId: inventory.id, inventorySlot: slot })
+      .where(eq(cardTable.id, cardId));
+  await storeAt(tall, 0);
+  await storeAt(below, INVENTORY_COLUMNS);
+  await storeAt(glued, 1);
+  return { ...board, tall, below, glued, partner };
+}
+
+describe("repairInventories", () => {
+  it("moves overlapping cards apart and ungroups stored cards, leaving nothing to find", async () => {
+    const { db, inventory, tall, below, glued } = await brokenInventory();
+
+    const repair = await repairInventories({ db });
+
+    expect(repair.moved).toEqual([
+      { cardId: below, inventoryId: inventory.id, slot: INVENTORY_COLUMNS + 1 },
+    ]);
+    expect(repair.unglued).toEqual([glued]);
+    expect((await placement(db, tall)).inventorySlot).toBe(0);
+    expect(await findInventoryConflicts({ db })).toEqual({ overlapping: [], glued: [] });
+    expect(await repairInventories({ db })).toEqual({ moved: [], unglued: [] });
+  });
+});
+
+describe("a write to an overlapping inventory", () => {
+  it("repairs it first, and the stow answers with the repaired card too", async () => {
+    const { db, namespaceId, inventory, card, below } = await brokenInventory();
+    const added = await card("added");
+
+    const result = await stowCards({
+      db,
+      namespaceId,
+      inventoryId: inventory.id,
+      cardIds: [added],
+      slot: null,
+    });
+
+    expect(result.ok && result.placements).toContainEqual({
+      cardId: below,
+      inventoryId: inventory.id,
+      slot: INVENTORY_COLUMNS + 1,
+    });
+    expect((await findInventoryConflicts({ db })).overlapping).toEqual([]);
   });
 });
 

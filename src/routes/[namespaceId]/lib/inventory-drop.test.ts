@@ -46,6 +46,16 @@ describe("dropTargetAt", () => {
     expect(dropTargetAt(docWith([el("card")]), 0, 0)).toEqual({ kind: "canvas" });
     expect(dropTargetAt(docWith([]), 0, 0)).toBeNull();
   });
+
+  it("treats a cell with a malformed slot as its window, never as slot NaN", () => {
+    const broken = build(`
+      <section data-inventory-drop="i3"><div id="bad" data-inventory-drop="i3" data-inventory-slot="x"></div></section>`);
+    expect(dropTargetAt(docWith([broken.querySelector("#bad")!]), 0, 0)).toEqual({
+      kind: "inventory",
+      inventoryId: "i3",
+      slot: null,
+    });
+  });
 });
 
 describe("sameDropTarget", () => {

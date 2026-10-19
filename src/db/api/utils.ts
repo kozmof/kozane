@@ -22,7 +22,9 @@ export type BatchRejection =
   | "foreign-layer"
   | "foreign-scope"
   | "foreign-inventory"
-  | "inventory-full";
+  | "inventory-full"
+  | "stored-cards"
+  | "unstored-cards";
 
 /**
  * Failure result restricted to the reasons an operation can return. Constrain the type

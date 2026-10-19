@@ -391,7 +391,12 @@ export async function cardGlue(
     }
 
     const result = await glueNamespaceCards({ db, namespaceId, cardIds });
-    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
+    if (!result.ok)
+      throw new Error(
+        result.reason === "stored-cards"
+          ? "Stored cards cannot be glued. Take them out of their inventory first."
+          : "Cards must belong to the same namespace.",
+      );
 
     if (options.alignList) {
       const ui = getUiConfigForRoot(root);

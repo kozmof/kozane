@@ -26,22 +26,34 @@ export type Footprint = { cardId: string; slot: number; span: number };
 /** A card about to be placed, with the rows its text needs. */
 export type Sized = { cardId: string; span: number };
 
+/**
+ * A card leaving its inventory, and where on the canvas it goes: both coordinates, or neither
+ * to go back where it was before it was stored.
+ */
+export type TakenCard = { cardId: string } | { cardId: string; posX: number; posY: number };
+
 // ── How many rows a card covers ─────────────────────────────────────────
 
-/**
- * Average character width as a share of the font size. Monospace fonts run about 0.6 and
- * proportional ones narrower, so this overestimates the lines a text needs rather than
- * cutting it off. Text that still runs past its cells scrolls inside the card.
+/*
+ * Widths are counted in hundredths of the font size, so the model stays in integers.
+ *
+ * A narrow character is taken as 0.62em. Monospace fonts run about 0.6 and proportional ones
+ * narrower, so this overestimates the lines a text needs rather than cutting it off. East
+ * Asian wide characters take a full 1em. Text that still runs past its cells scrolls inside
+ * the card.
  */
-const CHAR_WIDTH_EM = 0.62;
+const NARROW = 62;
+const WIDE = 100;
 /** The card's 1px border, on both sides. */
 const BORDER = 2;
 
-/** Characters that fit across one cell. */
-export const INVENTORY_LINE_CHARS = Math.floor(
-  (INVENTORY_CELL.width - 2 * INVENTORY_CELL.paddingX - BORDER) /
-    (INVENTORY_CELL.fontSize * CHAR_WIDTH_EM),
+/** Width across one cell's text, in hundredths of the font size. */
+const LINE_WIDTH = Math.floor(
+  ((INVENTORY_CELL.width - 2 * INVENTORY_CELL.paddingX - BORDER) * 100) / INVENTORY_CELL.fontSize,
 );
+
+/** Narrow characters that fit across one cell. */
+export const INVENTORY_LINE_CHARS = Math.floor(LINE_WIDTH / NARROW);
 
 const LINE_PX = INVENTORY_CELL.fontSize * INVENTORY_CELL.lineHeight;
 
@@ -51,50 +63,81 @@ function linesShown(span: number): number {
   return Math.floor((span * height + (span - 1) * gap - 2 * paddingY - BORDER) / LINE_PX);
 }
 
-/**
- * How much of a card's text decides its span. Each line holds at most
- * {@link INVENTORY_LINE_CHARS} characters, so this many already reach the cap whatever
- * follows them. Readers that fetch text only to size cards fetch this much of it.
- */
-export const INVENTORY_SPAN_SOURCE_CHARS =
-  linesShown(INVENTORY_SPAN_MAX) * INVENTORY_LINE_CHARS + 1;
+/** Lines {@link wrappedLines} stops counting at, one more than the tallest card shows. */
+const LINES_CAP = linesShown(INVENTORY_SPAN_MAX) + 1;
 
 /**
- * Lines `content` wraps to at {@link INVENTORY_LINE_CHARS}, the way `pre-wrap` with
- * `break-word` lays it out: whole words where they fit, long words broken. Stops counting
- * at `cap`.
+ * How much of a card's text decides its span, in code points, as SQLite's `substr` counts.
+ * Every code point takes at least {@link NARROW} of a line, so a line holds at most
+ * {@link INVENTORY_LINE_CHARS} of them plus the line break that ends it. This many therefore
+ * reach {@link LINES_CAP}, and since more text never wraps to fewer lines, the rest cannot
+ * change the span. Readers that fetch text only to size cards fetch this much of it.
  */
-function wrappedLines(content: string, cap: number): number {
-  const width = INVENTORY_LINE_CHARS;
+export const INVENTORY_SPAN_SOURCE_CHARS = LINES_CAP * (INVENTORY_LINE_CHARS + 1);
+
+/**
+ * Hangul, CJK, kana, fullwidth forms, and the emoji blocks. Close enough to Unicode's East
+ * Asian Wide and Fullwidth classes for sizing a card.
+ */
+const WIDE_CHAR =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u;
+
+/**
+ * Lines `content` wraps to, the way the stored card's `break-spaces` with `break-word` lays it
+ * out: whole words where they fit, long words broken, and every space taking its width and
+ * wrapping like a character. A space and a wide character each end a word, since a line can
+ * break after either. Stops counting at {@link LINES_CAP}.
+ */
+function wrappedLines(content: string): number {
   let lines = 0;
   for (const paragraph of content.split("\n")) {
-    let used = 0;
     lines++;
-    for (const word of paragraph.split(" ")) {
-      // A space before the word, unless it opens the line.
-      const needed = used === 0 ? word.length : used + 1 + word.length;
-      if (needed <= width) {
-        used = needed;
-        continue;
+    let used = 0;
+    let word = 0;
+    /** Places the pending word, breaking it across lines when it is wider than one. */
+    const flush = () => {
+      if (word === 0) return;
+      if (used > 0 && used + word > LINE_WIDTH) {
+        lines++;
+        used = 0;
       }
-      // It starts a line of its own, and a word longer than a line breaks across as many as
-      // it fills, leaving the last one partly used.
-      if (used > 0) lines++;
-      const filled = Math.ceil(word.length / width);
-      lines += filled - 1;
-      used = word.length - (filled - 1) * width;
+      while (used + word > LINE_WIDTH) {
+        // Only a word wider than a whole line gets here. It fills the line it is on.
+        const fits = Math.floor((LINE_WIDTH - used) / NARROW) * NARROW;
+        word -= fits;
+        lines++;
+        used = 0;
+      }
+      used += word;
+      word = 0;
+    };
+    /** Places one unbreakable piece, a space or a wide character, after the pending word. */
+    const place = (width: number) => {
+      flush();
+      if (used + width > LINE_WIDTH) {
+        lines++;
+        used = 0;
+      }
+      used += width;
+    };
+    for (const char of paragraph) {
+      if (char === " ") place(NARROW);
+      else if (WIDE_CHAR.test(char)) place(WIDE);
+      else word += NARROW;
+      if (lines >= LINES_CAP) return LINES_CAP;
     }
-    if (lines >= cap) return cap;
+    flush();
+    if (lines >= LINES_CAP) return LINES_CAP;
   }
   return lines;
 }
 
 /**
  * How many rows a stored card covers, from 1 to {@link INVENTORY_SPAN_MAX}, so its whole text
- * shows. Only the first {@link INVENTORY_SPAN_SOURCE_CHARS} characters matter.
+ * shows. Only the first {@link INVENTORY_SPAN_SOURCE_CHARS} code points matter.
  */
 export function cardSpan(content: string): number {
-  const needed = wrappedLines(content, linesShown(INVENTORY_SPAN_MAX) + 1);
+  const needed = wrappedLines(content);
   for (let span = 1; span < INVENTORY_SPAN_MAX; span++) if (linesShown(span) >= needed) return span;
   return INVENTORY_SPAN_MAX;
 }
@@ -245,19 +288,53 @@ export function planRefit(held: readonly Footprint[], cardId: string): SlotPlace
   return [{ cardId, slot: grid.firstFit(card.span) }];
 }
 
+/**
+ * Cards that cover a cell another card of the same inventory covers. Writers never leave this,
+ * but spans come from text and from the layout constants, so a release that changes the
+ * layout, or an imported dump, can. Each conflicting card is named once.
+ */
+export function overlappingCards(held: readonly Footprint[]): string[] {
+  const byCell = new Map<number, string>();
+  const found = new Set<string>();
+  for (const { cardId, slot, span } of held)
+    for (const cell of footprintCells(slot, span)) {
+      const other = byCell.get(cell);
+      if (other === undefined) byCell.set(cell, cardId);
+      else found.add(other).add(cardId);
+    }
+  return [...found];
+}
+
+/**
+ * Where cards go so that none overlaps another, for an inventory left overlapping (see
+ * {@link overlappingCards}). Cards are taken in reading order of their top cells. Each stays
+ * put if it still fits, and otherwise moves to the first place it fits at or after its slot,
+ * so the grid keeps its order. Returns only the cards that move.
+ */
+export function planRepair(held: readonly Footprint[]): SlotPlacement[] {
+  const ordered = held.toSorted((a, b) => a.slot - b.slot || (a.cardId < b.cardId ? -1 : 1));
+  const grid = new Grid([]);
+  const plan: SlotPlacement[] = [];
+  for (const { cardId, slot, span } of ordered) {
+    const at = grid.firstFit(span, slot);
+    grid.place(cardId, at, span);
+    if (at !== slot) plan.push({ cardId, slot: at });
+  }
+  return plan;
+}
+
 /** One inventory's cards as footprints, sized by their text. */
 export function inventoryFootprints(
   cards: readonly {
     id: string;
     content: string;
-    inventoryId: string | null;
-    inventorySlot: number | null;
+    inventory: { id: string; slot: number } | null;
   }[],
   inventoryId: string,
 ): Footprint[] {
-  return cards.flatMap((card) =>
-    card.inventoryId === inventoryId && card.inventorySlot !== null
-      ? [{ cardId: card.id, slot: card.inventorySlot, span: cardSpan(card.content) }]
+  return cards.flatMap(({ id, content, inventory }) =>
+    inventory?.id === inventoryId
+      ? [{ cardId: id, slot: inventory.slot, span: cardSpan(content) }]
       : [],
   );
 }

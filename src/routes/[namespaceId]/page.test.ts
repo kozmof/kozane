@@ -34,8 +34,7 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
-      inventoryId: null,
-      inventorySlot: null,
+      inventory: null,
       width: null,
     },
     {
@@ -48,8 +47,7 @@ const data = {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
-      inventoryId: null,
-      inventorySlot: null,
+      inventory: null,
       width: null,
     },
   ],
@@ -723,8 +721,7 @@ describe("Layers", () => {
         zIndex: 1,
         glueId: null,
         taskspaceId: null,
-        inventoryId: null,
-        inventorySlot: null,
+        inventory: null,
       }),
     });
     vi.stubGlobal("fetch", fetch);
@@ -758,8 +755,7 @@ describe("Layers", () => {
         zIndex: 1,
         glueId: null,
         taskspaceId: null,
-        inventoryId: null,
-        inventorySlot: null,
+        inventory: null,
       }),
     });
     vi.stubGlobal("fetch", fetch);
@@ -1881,8 +1877,7 @@ describe("Squash", () => {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
-      inventoryId: null,
-      inventorySlot: null,
+      inventory: null,
       width: null,
     },
     {
@@ -1895,8 +1890,7 @@ describe("Squash", () => {
       zIndex: 1,
       glueId: null,
       taskspaceId: null,
-      inventoryId: null,
-      inventorySlot: null,
+      inventory: null,
       width: null,
     },
   ];
@@ -2032,7 +2026,7 @@ describe("Namespace page inventories", () => {
     ...data,
     inventories: [bag],
     cards: data.cards.map((c) =>
-      c.id === "card-2" ? { ...c, inventoryId: "inv-1", inventorySlot: 3 } : c,
+      c.id === "card-2" ? { ...c, inventory: { id: "inv-1", slot: 3 } } : c,
     ),
   };
 
@@ -2133,8 +2127,7 @@ describe("Namespace page inventories", () => {
         taskspaceId: null,
         glueId: null,
         width: null,
-        inventoryId: "inv-1",
-        inventorySlot: 0,
+        inventory: { id: "inv-1", slot: 0 },
       }),
     });
     vi.stubGlobal("fetch", fetch);

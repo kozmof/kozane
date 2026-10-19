@@ -60,7 +60,7 @@ describe("POST /[namespaceId]/api/cards", () => {
     );
 
     const created = await response.json();
-    expect(created).toMatchObject({ inventoryId: inventory.id, inventorySlot: 1, posX: 24 });
+    expect(created).toMatchObject({ inventory: { id: inventory.id, slot: 1 }, posX: 24 });
     await expect(getCard({ db, partitionId, cardId: created.id })).resolves.toMatchObject({
       inventoryId: inventory.id,
       inventorySlot: 1,

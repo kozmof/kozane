@@ -96,7 +96,14 @@ export function createNamespaceActions(state: NamespaceState) {
 
   // Glue and scope membership actions update local state only after success, so failures need
   // no rollback.
-  async function handleGlueSelected(cardIds: string[]) {
+  async function handleGlueSelected(selectedIds: string[]) {
+    // A selection can reach into an inventory, and the server refuses to glue a stored card.
+    const stored = new Set(state.cards.filter((c) => c.inventory !== null).map(({ id }) => id));
+    const cardIds = selectedIds.filter((id) => !stored.has(id));
+    if (cardIds.length < selectedIds.length && cardIds.length < 2) {
+      state.setError("Stored cards cannot be glued");
+      return;
+    }
     const res = await api.glueCards(state.mutationFetcher, state.namespaceId, cardIds);
     if (!res.ok) {
       state.setError("Failed to glue cards");

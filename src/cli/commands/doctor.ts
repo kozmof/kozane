@@ -14,6 +14,7 @@ import {
   taskspaceTable,
 } from "../../db/schema.js";
 import { NAME_MAX } from "../../lib/constants.js";
+import { findInventoryConflicts } from "../../db/api/inventory.js";
 import { canvasBoundsForRoot } from "../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { CARD_STAMP_EARLIEST, CARD_STAMP_LATEST } from "../lib/card-sort.js";
@@ -227,6 +228,32 @@ async function rowsOverLimits(
   }
 }
 
+/**
+ * Stored cards that overlap or are still glued, each counted with a sample of short IDs. See
+ * {@link findInventoryConflicts}.
+ */
+async function inventoryConflicts(
+  url: string,
+): Promise<{ overlapping: BadStamps; glued: BadStamps }> {
+  const { db, close } = await openDb(url);
+  try {
+    const { overlapping, glued } = await findInventoryConflicts({ db });
+    if (overlapping.length === 0 && glued.length === 0)
+      return { overlapping: { total: 0, named: [] }, glued: { total: 0, named: [] } };
+    // Short IDs, because that is what `kozane inventory take` takes.
+    const shortIds = shortIdMap(
+      (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id),
+    );
+    const sample = (ids: string[]): BadStamps => ({
+      total: ids.length,
+      named: ids.slice(0, NAMED_BAD_STAMPS).map((id) => shortIds.get(id) ?? id),
+    });
+    return { overlapping: sample(overlapping), glued: sample(glued) };
+  } finally {
+    close();
+  }
+}
+
 function check(label: string, ok: boolean, detail?: string): Check {
   return { label, ok, detail };
 }
@@ -395,7 +422,29 @@ export async function doctor(): Promise<void> {
     checks.push(check("Rows within workspace limits", withinLimits, detail));
   }
 
-  // 10. Port available
+  // 10. Report stored cards that overlap or are glued, without moving them. Spans come from
+  // text and layout constants, so an upgrade or an imported dump can leave either behind.
+  if (dbOk && migrationOk) {
+    let consistent = false;
+    let detail: string | undefined;
+    try {
+      const { overlapping, glued } = await inventoryConflicts(workspaceDbUrl);
+      consistent = overlapping.total === 0 && glued.total === 0;
+      const parts: string[] = [];
+      if (overlapping.total > 0)
+        parts.push(
+          `${plural(overlapping.total, "stored card")} overlapping another: ${nameSome(overlapping)}`,
+        );
+      if (glued.total > 0)
+        parts.push(`${plural(glued.total, "stored card")} still glued: ${nameSome(glued)}`);
+      if (parts.length > 0) detail = `${parts.join("; ")}; run kozane inventory repair`;
+    } catch (e) {
+      detail = e instanceof Error ? e.message : String(e);
+    }
+    checks.push(check("Inventories consistent", consistent, detail));
+  }
+
+  // 11. Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);

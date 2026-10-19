@@ -219,7 +219,7 @@ export class BoardGestures {
     if (!card) return;
     // A selection can reach into an inventory, and a stored card has no place on the canvas
     // to be dragged from.
-    const stored = new Set(cards.filter((c) => c.inventoryId !== null).map(({ id }) => id));
+    const stored = new Set(cards.filter((c) => c.inventory !== null).map(({ id }) => id));
     const groupIds = dragGroupIds(glueGroupMap, cardToGlue, selection.selectedCards, cardId).filter(
       (id) => !stored.has(id),
     );
@@ -341,7 +341,7 @@ export class BoardGestures {
   pressStowedCard(e: MouseEvent, cardId: string): void {
     if (!this.#mayOpen(e)) return;
     const card = this.#host.cards.find((c) => c.id === cardId);
-    if (!card?.inventoryId) return;
+    if (!card?.inventory) return;
     this.#openHolding({
       kind: "stowed-drag",
       cardId,

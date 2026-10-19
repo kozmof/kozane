@@ -18,12 +18,9 @@ export function dropTargetAt(doc: Document, clientX: number, clientY: number): D
   // rather than on its window as a whole.
   for (const el of stack) {
     const cell = el.closest<HTMLElement>("[data-inventory-slot]");
-    if (cell?.dataset.inventoryDrop)
-      return {
-        kind: "inventory",
-        inventoryId: cell.dataset.inventoryDrop,
-        slot: Number(cell.dataset.inventorySlot),
-      };
+    const slot = Number(cell?.dataset.inventorySlot);
+    if (cell?.dataset.inventoryDrop && Number.isInteger(slot) && slot >= 0)
+      return { kind: "inventory", inventoryId: cell.dataset.inventoryDrop, slot };
   }
   let overCanvas = false;
   for (const el of stack) {

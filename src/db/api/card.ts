@@ -101,9 +101,18 @@ const CARD_DATA_SELECTION = {
   taskspaceId: cardTable.taskspaceId,
   zIndex: cardTable.zIndex,
   width: cardTable.width,
-  inventoryId: cardTable.inventoryId,
-  inventorySlot: cardTable.inventorySlot,
-} satisfies Record<keyof CardData, AnyColumn>;
+} satisfies Record<Exclude<keyof CardData, "inventory">, AnyColumn>;
+
+/**
+ * A stored card's inventory and slot. Writers set and clear the two columns together, and a
+ * row with only one of them reads as a card on the canvas.
+ */
+export function cardInventory(
+  inventoryId: string | null,
+  slot: number | null,
+): CardData["inventory"] {
+  return inventoryId === null || slot === null ? null : { id: inventoryId, slot };
+}
 
 /**
  * Read the card fields used by the board. Page loads and snapshot polls share this selection
@@ -114,10 +123,18 @@ export async function getCardDataByPartitions({
   partitionIds,
 }: GetCardsByPartitions): Promise<CardData[]> {
   if (partitionIds.length === 0) return [];
-  return db
-    .select(CARD_DATA_SELECTION)
+  const rows = await db
+    .select({
+      ...CARD_DATA_SELECTION,
+      inventoryId: cardTable.inventoryId,
+      inventorySlot: cardTable.inventorySlot,
+    })
     .from(cardTable)
     .where(inArray(cardTable.partitionId, partitionIds));
+  return rows.map(({ inventoryId, inventorySlot, ...card }) => ({
+    ...card,
+    inventory: cardInventory(inventoryId, inventorySlot),
+  }));
 }
 
 export type CardMarker = {

@@ -118,7 +118,11 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     },
   );
 
-  return json({ ok: true, stacking, ...(refit && { inventorySlot: refit.slot }) });
+  return json({
+    ok: true,
+    stacking,
+    ...(refit && { inventory: { id: refit.inventoryId, slot: refit.slot } }),
+  });
 };
 
 export const DELETE: RequestHandler = async ({ locals, params }) => {

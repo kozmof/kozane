@@ -2,12 +2,16 @@ import {
   addInventory,
   deleteInventory,
   getAllInventories,
+  getInventoryCardCounts,
   getInventoryCards,
+  repairInventories,
   stowCards,
   takeCards,
   updateInventory,
+  type InventoryRepair,
 } from "../../db/api/inventory.js";
 import type { Inventory } from "../../db/api/types.js";
+import { cardTable } from "../../db/schema.js";
 import type { DB } from "../../db/tx.js";
 import { INVENTORY_COLUMNS, NAME_MAX } from "../../lib/constants.js";
 import { cardSpan, slotCell } from "../../lib/inventory.js";
@@ -64,8 +68,9 @@ export async function inventoryList(options: InventoryOptions = {}): Promise<voi
       return;
     }
     const ids = inventories.map(({ id }) => id);
+    const counts = await getInventoryCardCounts({ db, namespaceId });
     for (const inventory of inventories) {
-      const count = (await getInventoryCards({ db, inventoryId: inventory.id })).length;
+      const count = counts.get(inventory.id) ?? 0;
       console.log(
         `${shortId(inventory.id, ids)}  ${nameOf(inventory)}  (${inventory.posX}, ${inventory.posY})  ${plural(count, "card")}`,
       );
@@ -188,6 +193,33 @@ export async function inventoryPut(
   });
 }
 
+/**
+ * Prints what a repair changed, one card per line, or nothing when it changed nothing.
+ * `allIds` is every card ID in the workspace, for short IDs.
+ */
+export function printInventoryRepair(repair: InventoryRepair, allIds: string[]): void {
+  for (const { cardId, slot } of repair.moved)
+    console.log(`  ${shortId(cardId, allIds)}  moved to slot ${slot}`);
+  for (const cardId of repair.unglued) console.log(`  ${shortId(cardId, allIds)}  unglued`);
+}
+
+/**
+ * Moves overlapping stored cards apart and takes stored cards out of glue groups, in every
+ * inventory of the workspace. Writers repair an inventory on its next write anyway, so this
+ * is for clearing what `kozane doctor` reports without waiting for one.
+ */
+export async function inventoryRepair(): Promise<void> {
+  await runWorkspaceCommand(async ({ db }) => {
+    const repair = await repairInventories({ db });
+    if (repair.moved.length === 0 && repair.unglued.length === 0) {
+      console.log("Inventories already consistent.");
+      return;
+    }
+    console.log("Inventories repaired.");
+    printInventoryRepair(repair, await allCardIds(db));
+  });
+}
+
 export async function inventoryTake(
   requestedCardIds: string[],
   { x, y }: InventoryTakeOptions = {},
@@ -207,9 +239,19 @@ export async function inventoryTake(
       namespaceId,
       cards: cardIds.map((cardId) => ({ cardId, ...position })),
     });
-    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
+    if (!result.ok)
+      throw new Error(
+        result.reason === "unstored-cards"
+          ? "Only stored cards can be taken out. One of these is already on the canvas."
+          : "Cards must belong to the same namespace.",
+      );
     console.log(`${plural(cardIds.length, "card")} returned to the canvas.`);
     for (const cardId of cardIds) console.log(`  id: ${shortId(cardId, allIds)}`);
     if (position) console.log(`  position: (${position.posX}, ${position.posY})`);
   });
+}
+
+/** Every card ID in the workspace, which short IDs are chosen against. */
+async function allCardIds(db: DB): Promise<string[]> {
+  return (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
 }

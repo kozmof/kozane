@@ -11,9 +11,13 @@ import type {
   Inventory,
 } from "../db/api/types.js";
 
+/** Where a stored card sits: its inventory and the slot of its top cell. */
+export type CardInventory = { id: string; slot: number };
+
 // `zIndex` is required because its column is NOT NULL DEFAULT 0. `width` stays nullable so
-// cards can follow `ui.defaultCardWidth`. A card with an `inventoryId` is stored in that
-// inventory and is not drawn on the canvas.
+// cards can follow `ui.defaultCardWidth`. A card with an `inventory` is stored there and is
+// not drawn on the canvas. The two columns behind it are read as one value, so no reader
+// meets an inventory without a slot or a slot without an inventory.
 export type CardData = Pick<
   Card,
   | "id"
@@ -25,9 +29,7 @@ export type CardData = Pick<
   | "taskspaceId"
   | "zIndex"
   | "width"
-  | "inventoryId"
-  | "inventorySlot"
->;
+> & { inventory: CardInventory | null };
 
 export interface CardWithGlue extends CardData {
   glueId: string | null;

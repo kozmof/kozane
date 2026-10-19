@@ -37,7 +37,8 @@ import {
   worldRectToScreenRect,
 } from "./namespace-page.js";
 import { ARROW_KEYS } from "../../../lib/constants.js";
-import type { Card, GlueRel } from "$db/api/types.js";
+import type { GlueRel } from "$db/api/types.js";
+import type { CardData } from "$lib/types.js";
 
 /**
  * Use one timestamp for these geometry fixtures. Position and stacking do not depend on
@@ -48,14 +49,14 @@ const stamped = {
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 };
 
-const cards: Card[] = [
+// Board cards as a snapshot sends them, stamped the way stored rows are.
+const cards: (CardData & typeof stamped)[] = [
   {
     id: "card-1",
     partitionId: "partition-1",
     layerId: "layer-1",
     taskspaceId: null,
-    inventoryId: null,
-    inventorySlot: null,
+    inventory: null,
     content: "One",
     posX: 24,
     posY: 48,
@@ -68,8 +69,7 @@ const cards: Card[] = [
     partitionId: "partition-1",
     layerId: "layer-1",
     taskspaceId: null,
-    inventoryId: null,
-    inventorySlot: null,
+    inventory: null,
     content: "Two",
     posX: 72,
     posY: 96,
@@ -82,8 +82,7 @@ const cards: Card[] = [
     partitionId: "partition-2",
     layerId: "layer-1",
     taskspaceId: null,
-    inventoryId: null,
-    inventorySlot: null,
+    inventory: null,
     content: "Three",
     posX: 120,
     posY: 144,

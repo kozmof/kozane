@@ -1,7 +1,7 @@
 import { base } from "$app/paths";
 import type { CardPositionPatch } from "./namespace-page.js";
 import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types.js";
-import type { InventoryPlacement } from "$lib/inventory.js";
+import type { InventoryPlacement, TakenCard } from "$lib/inventory.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { WarpListEntry } from "$lib/warp-list.js";
 import type { BoardRect } from "$lib/constants";
@@ -531,7 +531,7 @@ export function stowCards(
 export function takeCards(
   fetcher: typeof fetch,
   namespaceId: string,
-  cards: { cardId: string; posX?: number; posY?: number }[],
+  cards: TakenCard[],
 ): Promise<Response> {
   return jsonRequest(fetcher, apiUrl(namespaceId, "/inventories/take"), "POST", { cards });
 }

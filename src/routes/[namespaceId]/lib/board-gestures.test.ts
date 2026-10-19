@@ -18,8 +18,7 @@ function card(id: string, posX: number, posY: number): CardWithGlue {
     zIndex: 0,
     glueId: null,
     taskspaceId: null,
-    inventoryId: null,
-    inventorySlot: null,
+    inventory: null,
     width: null,
   };
 }
@@ -264,8 +263,7 @@ describe("BoardGestures", () => {
     });
     const stored = (id: string, inventoryId: string, slot: number): CardWithGlue => ({
       ...card(id, 40, 40),
-      inventoryId,
-      inventorySlot: slot,
+      inventory: { id: inventoryId, slot },
     });
     const aim = (target: DropTarget | null) => () => target;
 

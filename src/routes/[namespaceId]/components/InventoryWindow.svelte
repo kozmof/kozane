@@ -200,7 +200,7 @@
         aria-pressed={selected}
         data-stored-card-id={card.id}
         data-span={span}
-        class={css({ position: "relative", zIndex: "1", borderRadius: "2px", overflowY: "auto", overflowX: "hidden", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+        class={css({ position: "relative", zIndex: "1", borderRadius: "2px", overflowY: "auto", overflowX: "hidden", wordBreak: "break-word", whiteSpace: "break-spaces" })}
         style:grid-row="{row + 1} / span {span}"
         style:grid-column={column + 1}
         style:padding="{cell.paddingY}px {cell.paddingX}px"

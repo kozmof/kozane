@@ -65,7 +65,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.
-  const { id, stored, placement } = await withTx(db, async (tx) => {
+  const { id, stored, inventory } = await withTx(db, async (tx) => {
     const partition = await getPartition({ db: tx, namespaceId, partitionId });
     if (!partition) throw error(400, "Partition not found in namespace");
     if (scopeId && !(await getScope({ db: tx, scopeId }))) throw error(400, "Scope not found");
@@ -90,8 +90,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     };
     const cardId = await addCard({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-    if (!inventoryId)
-      return { id: cardId, stored, placement: { inventoryId: null, inventorySlot: null } };
+    if (!inventoryId) return { id: cardId, stored, inventory: null };
     // Throwing rolls the card back with the transaction, so a refused store leaves no card.
     const stowed = await stowCardsInTx({
       db: tx,
@@ -101,11 +100,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       slot: null,
     });
     if (!stowed.ok) rejectBatch(stowed.reason);
-    return {
-      id: cardId,
-      stored,
-      placement: { inventoryId, inventorySlot: stowed.placements[0].slot },
-    };
+    // The placements can also name cards a repair of the inventory moved, so find this one.
+    const placed = stowed.placements.find((p) => p.cardId === cardId);
+    if (!placed) throw new Error("stowCardsInTx placed no slot for the new card");
+    return { id: cardId, stored, inventory: { id: inventoryId, slot: placed.slot } };
   });
 
   // Return stored coordinates after clamping so the client renders the saved position
@@ -116,7 +114,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     taskspaceId: null,
     glueId: null,
     width: null,
-    ...placement,
+    inventory,
   } satisfies CardWithGlue);
 };
 
