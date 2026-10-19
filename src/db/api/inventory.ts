@@ -157,18 +157,18 @@ async function writePlacements(
 async function settledFootprints(
   tx: Tx,
   inventoryId: string,
-  /** A card the caller places itself, such as one whose text just changed. Never moved here. */
-  except?: string,
 ): Promise<{ held: Footprint[]; repaired: SlotPlacement[] }> {
   const held = await heldFootprints(tx, inventoryId);
-  const repaired = planRepair(held.filter(({ cardId }) => cardId !== except));
+  const repaired = planRepair(held);
   if (repaired.length === 0) return { held, repaired };
   await writePlacements(tx, inventoryId, repaired);
-  const slotOf = new Map(repaired.map(({ cardId, slot }) => [cardId, slot]));
-  return {
-    held: held.map((f) => ({ ...f, slot: slotOf.get(f.cardId) ?? f.slot })),
-    repaired,
-  };
+  return { held: withSlots(held, repaired), repaired };
+}
+
+/** `held` with the slots `plan` gives the cards it names. */
+function withSlots(held: readonly Footprint[], plan: readonly SlotPlacement[]): Footprint[] {
+  const slotOf = new Map(plan.map(({ cardId, slot }) => [cardId, slot]));
+  return held.map((f) => ({ ...f, slot: slotOf.get(f.cardId) ?? f.slot }));
 }
 
 /** What {@link repairInventories} changed. */
@@ -275,12 +275,14 @@ export async function refitStoredCardInTx({
   const { inventoryId } = card;
   // Repair the rest first, leaving this card to the refit, so its longer text moves it rather
   // than the neighbour it now covers. A repaired neighbour reaches the board with the next poll.
-  const { held } = await settledFootprints(tx, inventoryId, cardId);
-  const [moved]: SlotPlacement[] = planRefit(held, cardId);
-  if (!moved) return null;
-  // The new slot is free, so moving there in one write never meets the unique index.
-  await tx.update(cardTable).set({ inventorySlot: moved.slot }).where(eq(cardTable.id, cardId));
-  return { ...moved, inventoryId };
+  const held = await heldFootprints(tx, inventoryId);
+  const repaired = planRepair(held.filter((f) => f.cardId !== cardId));
+  // A repaired neighbour can land on this card's cells, top slot included. The refit then
+  // moves this card, and both go in one write, which frees every slot before filling any.
+  const [moved]: SlotPlacement[] = planRefit(withSlots(held, repaired), cardId);
+  const plan = moved ? [...repaired, moved] : repaired;
+  if (plan.length > 0) await writePlacements(tx, inventoryId, plan);
+  return moved ? { ...moved, inventoryId } : null;
 }
 
 /** Takes cards out of whatever inventory holds them. Their canvas positions are kept. */

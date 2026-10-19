@@ -407,6 +407,27 @@ describe("import reference validation", () => {
     }, "card card-1: references unknown layer_id layer-missing");
   });
 
+  it("rejects a card stored in another namespace's inventory", async () => {
+    await expectRejectedImport((tables) => {
+      tables.namespace.push({ ...tables.namespace[0], id: "namespace-2", is_default: 0 });
+      tables.inventory[0].namespace_id = "namespace-2";
+      Object.assign(tables.card[0], { inventory_id: "inventory-1", inventory_slot: 0 });
+    }, "card card-1: inventory_id inventory-1 belongs to another namespace");
+  });
+
+  it("rejects a card with an inventory but no slot", async () => {
+    await expectRejectedImport((tables) => {
+      Object.assign(tables.card[0], { inventory_id: "inventory-1", inventory_slot: null });
+    }, "card card-1: inventory_id and inventory_slot must be set together");
+  });
+
+  it("rejects two cards in one inventory slot", async () => {
+    await expectRejectedImport((tables) => {
+      for (const card of tables.card)
+        Object.assign(card, { inventory_id: "inventory-1", inventory_slot: 3 });
+    }, "inventory inventory-1 slot 3 is taken");
+  });
+
   it("rejects a layer in an unknown namespace", async () => {
     await expectRejectedImport((tables) => {
       tables.layer[0].namespace_id = "namespace-missing";

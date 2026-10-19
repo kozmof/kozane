@@ -309,7 +309,14 @@ function validateDumpRefs(tables: TableRows): void {
   const glueIds = new Set(tables.glue.map((r) => r.id as string));
   const scopeIds = new Set(tables.scope.map((r) => r.id as string));
   const taskspaceIds = new Set(tables.taskspace.map((r) => r.id as string));
-  const inventoryIds = new Set(tables.inventory.map((r) => r.id as string));
+  const inventoryNamespace = new Map(
+    tables.inventory.map((r) => [r.id as string, r.namespace_id as string]),
+  );
+  const partitionNamespace = new Map(
+    tables.partition.map((r) => [r.id as string, r.namespace_id as string]),
+  );
+  /** Each stored card's inventory and slot, so two cards in one slot are caught here. */
+  const storedSlots = new Set<string>();
 
   if (tables.namespace.filter((row) => Number(row.is_default) === 1).length > 1)
     throw new Error("namespace: more than one namespace is marked as the default");
@@ -338,8 +345,25 @@ function validateDumpRefs(tables: TableRows): void {
       throw new Error(`card ${row.id}: references unknown layer_id ${row.layer_id}`);
     if (row.taskspace_id !== null && !taskspaceIds.has(row.taskspace_id as string))
       throw new Error(`card ${row.id}: references unknown taskspace_id ${row.taskspace_id}`);
-    if (row.inventory_id !== null && !inventoryIds.has(row.inventory_id as string))
-      throw new Error(`card ${row.id}: references unknown inventory_id ${row.inventory_id}`);
+    if ((row.inventory_id === null) !== (row.inventory_slot === null))
+      throw new Error(`card ${row.id}: inventory_id and inventory_slot must be set together`);
+    if (row.inventory_id !== null) {
+      const namespaceId = inventoryNamespace.get(row.inventory_id as string);
+      if (namespaceId === undefined)
+        throw new Error(`card ${row.id}: references unknown inventory_id ${row.inventory_id}`);
+      // A card stored in another namespace's inventory would show on neither board.
+      if (namespaceId !== partitionNamespace.get(row.partition_id as string))
+        throw new Error(
+          `card ${row.id}: inventory_id ${row.inventory_id} belongs to another namespace`,
+        );
+      const slot = row.inventory_slot;
+      if (typeof slot !== "number" || !Number.isInteger(slot) || slot < 0)
+        throw new Error(`card ${row.id}: inventory_slot must be a non-negative integer`);
+      const key = `${row.inventory_id as string}\0${slot}`;
+      if (storedSlots.has(key))
+        throw new Error(`card ${row.id}: inventory ${row.inventory_id} slot ${slot} is taken`);
+      storedSlots.add(key);
+    }
   }
   for (const row of tables.taskspace) {
     if (row.namespace_id !== null && !namespaceIds.has(row.namespace_id as string))

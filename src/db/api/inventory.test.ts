@@ -456,6 +456,32 @@ describe("a write to an overlapping inventory", () => {
     });
     expect((await findInventoryConflicts({ db })).overlapping).toEqual([]);
   });
+
+  it("refits an edited card when the repair moves a neighbour onto its slot", async () => {
+    const { db, inventory, card, below } = await brokenInventory();
+    // Where the repair moves `below`, so the edited card must make way rather than fail
+    // the edit on the unique index.
+    const edited = await card("c");
+    await db
+      .update(cardTable)
+      .set({ inventoryId: inventory.id, inventorySlot: INVENTORY_COLUMNS + 1 })
+      .where(eq(cardTable.id, edited));
+    const { partitionId } = (await db
+      .select({ partitionId: cardTable.partitionId })
+      .from(cardTable)
+      .where(eq(cardTable.id, edited))
+      .get())!;
+
+    const refit = await withTx(db, async (tx) => {
+      await updateCard({ db: tx, cardId: edited, partitionId, content: "cc" });
+      return refitStoredCardInTx({ db: tx, cardId: edited });
+    });
+
+    expect((await placement(db, below)).inventorySlot).toBe(INVENTORY_COLUMNS + 1);
+    expect(refit).not.toBeNull();
+    expect((await placement(db, edited)).inventorySlot).toBe(refit!.slot);
+    expect((await findInventoryConflicts({ db })).overlapping).toEqual([]);
+  });
 });
 
 describe("deleteInventory", () => {
