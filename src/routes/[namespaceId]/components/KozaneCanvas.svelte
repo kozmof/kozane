@@ -199,6 +199,8 @@
     inventoryDrag?: {
       target: DropTarget | null;
       cardId: string | null;
+      /** The card a drag carries, from the canvas or a grid, whose size the highlight shows. */
+      carriedCardId: string | null;
       pointer: Point | null;
     };
     showFooters: boolean;
@@ -345,6 +347,7 @@
     inventoryDrag = {
       target: gestures.dropTarget,
       cardId: gestures.draggingStowedCardId,
+      carriedCardId: gestures.draggingStowedCardId ?? gestures.draggingCardId,
       pointer: gestures.stowedPointer,
     };
   });

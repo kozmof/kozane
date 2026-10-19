@@ -2,8 +2,8 @@
   import { tick } from "svelte";
   import { css } from "styled-system/css";
   import type { CardWithGlue, Inventory } from "$lib/types";
-  import { INVENTORY_COLUMNS, NAME_MAX } from "$lib/constants";
-  import { inventoryRows } from "$lib/inventory";
+  import { INVENTORY_CELL, INVENTORY_COLUMNS, NAME_MAX } from "$lib/constants";
+  import { footprintCells, inventoryFootprints, inventoryRows, slotCell } from "$lib/inventory";
   import type { DropTarget } from "../lib/inventory-drop.js";
 
   let {
@@ -13,6 +13,7 @@
     selectedCards,
     draggingCardId,
     dropTarget,
+    aimSpan = 1,
     fontFamily,
     readonly = false,
     onClose,
@@ -32,6 +33,8 @@
     draggingCardId: string | null;
     /** Where a dragged card would land, for highlighting the slot. */
     dropTarget: DropTarget | null;
+    /** How many rows the dragged card covers, so the highlight shows all of its cells. */
+    aimSpan?: number;
     fontFamily: string;
     readonly?: boolean;
     onClose: () => void;
@@ -42,19 +45,29 @@
     onCardDblClick: (cardId: string) => void;
   } = $props();
 
-  const CELL_W = 104;
-  const CELL_H = 64;
-  const GAP = 4;
+  const cell = INVENTORY_CELL;
 
-  const cardBySlot = $derived(
-    new Map(cards.flatMap((c) => (c.inventorySlot === null ? [] : [[c.inventorySlot, c] as const]))),
+  /** Each card with the cells it covers, sized by its text so all of it shows. */
+  const placed = $derived.by(() => {
+    const byId = new Map(cards.map((card) => [card.id, card]));
+    return inventoryFootprints(cards, inventory.id).map(({ cardId, slot, span }) => ({
+      card: byId.get(cardId)!,
+      span,
+      ...slotCell(slot),
+    }));
+  });
+  const rows = $derived(
+    inventoryRows(placed.map(({ row, column, span }) => ({ slot: row * INVENTORY_COLUMNS + column, span }))),
   );
-  const rows = $derived(inventoryRows(cardBySlot.keys()));
   const slots = $derived(Array.from({ length: rows * INVENTORY_COLUMNS }, (_, slot) => slot));
   const aimedHere = $derived(
     dropTarget?.kind === "inventory" && dropTarget.inventoryId === inventory.id,
   );
   const aimedSlot = $derived(aimedHere && dropTarget?.kind === "inventory" ? dropTarget.slot : null);
+  /** The cells the dragged card would cover if let go now. */
+  const aimedCells = $derived(
+    new Set(aimedSlot === null ? [] : footprintCells(aimedSlot, aimSpan)),
+  );
 
   let renaming = $state(false);
   let draft = $state("");
@@ -158,49 +171,56 @@
     aria-rowcount={rows}
     aria-colcount={INVENTORY_COLUMNS}
     class={css({ display: "grid" })}
-    style:grid-template-columns="repeat({INVENTORY_COLUMNS}, {CELL_W}px)"
-    style:grid-auto-rows="{CELL_H}px"
-    style:gap="{GAP}px"
+    style:grid-template-columns="repeat({INVENTORY_COLUMNS}, {cell.width}px)"
+    style:grid-auto-rows="{cell.height}px"
+    style:gap="{cell.gap}px"
   >
+    <!-- Every cell is a drop target, drawn underneath. A card covering several cells is laid
+         over them, and a drop on it still finds the cell under the pointer. -->
     {#each slots as slot (slot)}
-      {@const card = cardBySlot.get(slot)}
-      {@const aimed = aimedSlot === slot}
+      {@const at = slotCell(slot)}
+      {@const aimed = aimedCells.has(slot)}
       <div
         role="gridcell"
         data-inventory-drop={inventory.id}
         data-inventory-slot={slot}
-        class={css({ position: "relative", borderRadius: "2px", transition: "background 0.08s, border-color 0.08s" })}
+        class={css({ borderRadius: "2px", transition: "background 0.08s, border-color 0.08s" })}
+        style:grid-row={at.row + 1}
+        style:grid-column={at.column + 1}
         style:background={aimed ? "var(--colors-select-bg)" : "var(--colors-ink-lighter)"}
-        style:border="1px {card ? 'solid' : 'dashed'} {aimed ? 'var(--colors-select-accent)' : 'var(--colors-neutral-border)'}"
-      >
-        {#if card}
-          {@const selected = selectedCards.has(card.id)}
-          <div
-            role="button"
-            tabindex="0"
-            aria-label={card.content ? `Card: ${card.content}` : "Empty card"}
-            aria-pressed={selected}
-            data-stored-card-id={card.id}
-            class={css({ position: "absolute", inset: "0", padding: "5px 6px", overflow: "hidden", fontSize: "10.5px", lineHeight: "1.4", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
-            style:font-family={fontFamily}
-            style:cursor={readonly ? "default" : "grab"}
-            style:background={selected ? "var(--colors-select-surface)" : "var(--colors-ink-white)"}
-            style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
-            style:box-shadow={selected ? "inset 0 0 0 1px var(--colors-select-accent)" : "none"}
-            style:opacity={draggingCardId === card.id ? 0.35 : 1}
-            onmousedown={(e) => onCardMouseDown(e, card.id)}
-            onclick={(e) => onCardClick(e, card.id)}
-            ondblclick={() => onCardDblClick(card.id)}
-            onkeydown={(e) => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault();
-              onCardDblClick(card.id);
-            }}
-          >
-            {card.content || "Empty card…"}
-          </div>
-        {/if}
-      </div>
+        style:border="1px dashed {aimed ? 'var(--colors-select-accent)' : 'var(--colors-neutral-border)'}"
+      ></div>
+    {/each}
+    {#each placed as { card, span, row, column } (card.id)}
+      {@const selected = selectedCards.has(card.id)}
+      <div
+        role="button"
+        tabindex="0"
+        aria-label={card.content ? `Card: ${card.content}` : "Empty card"}
+        aria-pressed={selected}
+        data-stored-card-id={card.id}
+        data-span={span}
+        class={css({ position: "relative", zIndex: "1", borderRadius: "2px", overflowY: "auto", overflowX: "hidden", wordBreak: "break-word", whiteSpace: "pre-wrap" })}
+        style:grid-row="{row + 1} / span {span}"
+        style:grid-column={column + 1}
+        style:padding="{cell.paddingY}px {cell.paddingX}px"
+        style:font-size="{cell.fontSize}px"
+        style:line-height={cell.lineHeight}
+        style:font-family={fontFamily}
+        style:cursor={readonly ? "default" : "grab"}
+        style:background={selected ? "var(--colors-select-surface)" : "var(--colors-ink-white)"}
+        style:color={card.content ? "var(--colors-ink-content)" : "var(--colors-neutral-placeholder)"}
+        style:border="1px solid {selected ? 'var(--colors-select-accent)' : 'var(--colors-neutral-border)'}"
+        style:opacity={draggingCardId === card.id ? 0.35 : 1}
+        onmousedown={(e) => onCardMouseDown(e, card.id)}
+        onclick={(e) => onCardClick(e, card.id)}
+        ondblclick={() => onCardDblClick(card.id)}
+        onkeydown={(e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          onCardDblClick(card.id);
+        }}
+      >{card.content || "Empty card…"}</div>
     {/each}
   </div>
 </section>

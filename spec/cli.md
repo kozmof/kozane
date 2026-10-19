@@ -373,6 +373,8 @@ kozane card layer 3f9a2c1 Draft
 
 Replace card text, preserving position and memberships. Text follows `card add` validation.
 Identical text leaves the update timestamp unchanged.
+A stored card whose new text reaches cells another card holds moves to the first place it
+fits, and the command prints its new slot.
 
 ```bash
 kozane card edit <cardId> <content>
@@ -534,8 +536,9 @@ kozane inventory add --name Later --x 1200 --y 800
 
 ### `kozane inventory show <inventoryId>`
 
-List the cards in an inventory by slot, with row, column, short card ID, and the first
-line of text. Slots count from 0, six to a row.
+List the cards in an inventory by slot, with the rows each covers, its column, short card
+ID, and the first line of text. Slots count from 0, six to a row. A card covers as many
+rows as its text needs.
 
 ```bash
 kozane inventory show <inventoryId> [--namespace <namespaceId>]
@@ -560,9 +563,9 @@ kozane inventory delete <inventoryId> [--namespace <namespaceId>]
 
 ### `kozane inventory put <inventoryId> <cardIds>`
 
-Store cards in an inventory of their namespace. Cards fill free slots in order, from
-`--slot` or from 0. A single card with `--slot` takes that slot, and a card already there
-swaps with it or moves to the first free slot. Stored cards leave their glue groups.
+Store cards in an inventory of their namespace. Each card goes to the first place it fits,
+from `--slot` or from 0. A single card with `--slot` takes that slot, and the cards in the
+way swap with it or move to the first place they fit. Stored cards leave their glue groups.
 
 ```bash
 kozane inventory put <inventoryId> <cardIds...> [--slot <number>]

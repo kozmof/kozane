@@ -7,6 +7,7 @@ import {
   deleteInventory,
   getAllInventories,
   getInventoryCards,
+  refitStoredCardInTx,
   stowCards,
   takeCards,
   updateInventory,
@@ -17,6 +18,9 @@ import { addPartition } from "./partition.js";
 import { addLayer } from "./layer.js";
 import { getGlueRelsByNamespace, glueNamespaceCards } from "./glue.js";
 import { moveCardsToNamespace } from "./composite.js";
+import { updateCard } from "./card.js";
+import { cardSpan } from "../../lib/inventory.js";
+import { withTx } from "../tx.js";
 import { NotFoundError } from "./utils.js";
 import { INVENTORY_SLOT_MAX } from "../../lib/constants.js";
 import type { DB } from "../tx.js";
@@ -232,6 +236,71 @@ describe("stowCards", () => {
         slot: INVENTORY_SLOT_MAX,
       }),
     ).toEqual({ ok: false, reason: "inventory-full" });
+  });
+});
+
+describe("tall cards", () => {
+  const long = "word ".repeat(40).trim();
+
+  it("places the next card beside a tall one rather than in the cells it covers", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    expect(cardSpan(long)).toBeGreaterThan(1);
+    const tall = await card(long);
+    const short = await card("short");
+
+    const result = await stowCards({
+      db,
+      namespaceId,
+      inventoryId: inventory.id,
+      cardIds: [tall, short],
+      slot: null,
+    });
+
+    expect(result.ok && result.placements.map(({ slot }) => slot)).toEqual([0, 1]);
+  });
+
+  it("refuses a tall card whose lowest cell would pass the last slot", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const tall = await card(long);
+
+    expect(
+      await stowCards({
+        db,
+        namespaceId,
+        inventoryId: inventory.id,
+        cardIds: [tall],
+        slot: INVENTORY_SLOT_MAX,
+      }),
+    ).toEqual({ ok: false, reason: "inventory-full" });
+  });
+
+  it("moves a stored card whose longer text now covers its neighbour", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const grows = await card("short");
+    const below = await card("below");
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [grows], slot: 0 });
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [below], slot: 6 });
+    const partitionId = (await db.select().from(cardTable).where(eq(cardTable.id, grows)).get())!
+      .partitionId;
+
+    const refit = await withTx(db, async (tx) => {
+      await updateCard({ db: tx, cardId: grows, partitionId, content: long });
+      return refitStoredCardInTx({ db: tx, cardId: grows });
+    });
+
+    expect(refit).toEqual({ cardId: grows, inventoryId: inventory.id, slot: 1 });
+    expect((await placement(db, grows)).inventorySlot).toBe(1);
+    expect((await placement(db, below)).inventorySlot).toBe(6);
+  });
+
+  it("leaves a stored card that still fits, and a card on the canvas, alone", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const stored = await card("short");
+    const loose = await card("loose");
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [stored], slot: 0 });
+
+    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: stored }))).toBeNull();
+    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: loose }))).toBeNull();
   });
 });
 

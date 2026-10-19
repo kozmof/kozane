@@ -114,6 +114,9 @@ Changing layers stacks the card above destination cards. An explicit `zIndex`
 overrides that value. Return `{ ok: true, stacking: [{ cardId, zIndex }] }`,
 with empty `stacking` unless the layer changed.
 
+New text can make a stored card cover cells another card holds. It then moves to the
+first place it fits, and the response adds that `inventorySlot`.
+
 Return 404 for a card outside this namespace, or 400 for an invalid destination,
 non-integer `zIndex`, or out-of-range width.
 
@@ -305,8 +308,12 @@ Fetched when the warp picker opens. Return 404 for an unknown namespace.
 ## Inventories
 
 An inventory is a grid that stores cards. Slots are numbered from 0, left to right and
-top to bottom. A stored card has `inventoryId` and `inventorySlot` set and keeps its canvas
-`posX` / `posY` for when it comes back out.
+top to bottom, six to a row. A stored card has `inventoryId` and `inventorySlot` set and
+keeps its canvas `posX` / `posY` for when it comes back out.
+
+`inventorySlot` is the card's top cell. The card also covers the cells below it in the same
+column, as many as its text needs, from 1 to 8. The server and the board both work this out
+from the text, so it is not stored or sent.
 
 ### `POST /[namespaceId]/api/inventories`
 
@@ -331,17 +338,19 @@ Return 404 for an inventory outside this namespace.
 
 Store cards. Body requires `cardIds` and takes an optional integer `slot` from 0 to 9999.
 
-- One card with a `slot` takes that slot. A card already there swaps with it when both are
-  in this inventory, and otherwise moves to the first free slot.
-- Otherwise cards fill free slots in order, starting from `slot` or from 0. Cards already
-  in this inventory stay where they are.
+- One card with a `slot` takes that slot. If one card is in the way and both are in this
+  inventory, the two swap when each fits where the other was. Otherwise the cards in the way
+  move to the first place they fit.
+- Otherwise each card goes to the first place it fits, starting from `slot` or from 0.
+  Cards already in this inventory stay where they are.
 
 A card leaves its glue group when it is stored. A group left with one member is dissolved.
 Return `{ placements, clearedCardIds }`, where `placements` lists `{ cardId, inventoryId,
 slot }` for every card whose slot changed and `clearedCardIds` lists the cards left without
 a glue group.
 
-Return 400 for an inventory or card outside this namespace, or a placement past slot 9999.
+Return 400 for an inventory or card outside this namespace, or a card whose lowest cell
+would pass slot 9999.
 
 ### `POST /[namespaceId]/api/inventories/take`
 

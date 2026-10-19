@@ -1,5 +1,5 @@
 import { cardTable, inventoryTable } from "../schema.js";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type {
   Inventory,
   NeedsInventory,
@@ -7,12 +7,22 @@ import type {
   NeedsNamespaceInventory,
 } from "./types.js";
 import { BATCH_MAX, INVENTORY_SLOT_MAX, chunked } from "../../lib/constants.js";
-import { planStow, type InventoryPlacement } from "../../lib/inventory.js";
+import {
+  INVENTORY_SPAN_SOURCE_CHARS,
+  cardSpan,
+  lastCell,
+  planRefit,
+  planStow,
+  type Footprint,
+  type InventoryPlacement,
+  type SlotPlacement,
+} from "../../lib/inventory.js";
 import { cardsBelongToNamespace } from "./card.js";
 import { unglueCardsInTx } from "./glue.js";
 import {
   assertFound,
   assertNameWithinLimit,
+  readByIds,
   type BatchResult,
   type CardBatchResult,
 } from "./utils.js";
@@ -88,6 +98,67 @@ export async function updateInventory({
     .returning();
   assertFound(updated, `Inventory namespaceId=${namespaceId} inventoryId=${inventoryId}`);
   return updated[0];
+}
+
+/**
+ * The opening of a card's text, which is all {@link cardSpan} reads. Bounded so sizing a full
+ * inventory does not pull every card's whole text.
+ */
+const SPAN_TEXT = sql<string>`substr(${cardTable.content}, 1, ${INVENTORY_SPAN_SOURCE_CHARS})`;
+
+/** What one inventory holds, each card sized by its text. */
+async function heldFootprints(tx: Tx, inventoryId: string): Promise<Footprint[]> {
+  const rows = await tx
+    .select({ cardId: cardTable.id, slot: cardTable.inventorySlot, text: SPAN_TEXT })
+    .from(cardTable)
+    .where(eq(cardTable.inventoryId, inventoryId));
+  return rows.flatMap(({ cardId, slot, text }) =>
+    slot === null ? [] : [{ cardId, slot, span: cardSpan(text) }],
+  );
+}
+
+/** The named cards sized by their text, in the order named. */
+async function sizedCards(tx: Tx, cardIds: string[]): Promise<{ cardId: string; span: number }[]> {
+  const rows = await readByIds(cardIds, (batch) =>
+    tx
+      .select({ cardId: cardTable.id, text: SPAN_TEXT })
+      .from(cardTable)
+      .where(inArray(cardTable.id, batch)),
+  );
+  const spanOf = new Map(rows.map(({ cardId, text }) => [cardId, cardSpan(text)]));
+  return cardIds.flatMap((cardId) => {
+    const span = spanOf.get(cardId);
+    return span === undefined ? [] : [{ cardId, span }];
+  });
+}
+
+/**
+ * Moves a stored card whose text changed, if it now covers cells another card holds, to the
+ * first place it fits. Call it in the transaction that changed the text. Returns where it
+ * went, or null when it stayed put or is not stored.
+ */
+export async function refitStoredCardInTx({
+  db: tx,
+  cardId,
+}: {
+  db: Tx;
+  cardId: string;
+}): Promise<InventoryPlacement | null> {
+  const card = await tx
+    .select({ inventoryId: cardTable.inventoryId })
+    .from(cardTable)
+    .where(eq(cardTable.id, cardId))
+    .get();
+  if (!card?.inventoryId) return null;
+  const { inventoryId } = card;
+  const [moved]: SlotPlacement[] = planRefit(await heldFootprints(tx, inventoryId), cardId);
+  if (!moved) return null;
+  await releaseCards(tx, [cardId]);
+  await tx
+    .update(cardTable)
+    .set({ inventoryId, inventorySlot: moved.slot })
+    .where(eq(cardTable.id, cardId));
+  return { ...moved, inventoryId };
 }
 
 /** Takes cards out of whatever inventory holds them. Their canvas positions are kept. */
@@ -176,15 +247,11 @@ export async function stowCardsInTx({
   const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds: unique });
   if (!owned.ok) return owned;
 
-  const held = await tx
-    .select({ id: cardTable.id, slot: cardTable.inventorySlot })
-    .from(cardTable)
-    .where(eq(cardTable.inventoryId, inventoryId));
-  const occupants = new Map(
-    held.flatMap(({ id, slot: at }) => (at === null ? [] : [[at, id] as const])),
-  );
-  const plan = planStow(occupants, unique, slot);
-  if (plan.some(({ slot: at }) => at > INVENTORY_SLOT_MAX))
+  const held = await heldFootprints(tx, inventoryId);
+  const moving = await sizedCards(tx, unique);
+  const plan = planStow(held, moving, slot);
+  const spans = new Map([...held, ...moving].map(({ cardId, span }) => [cardId, span]));
+  if (plan.some(({ cardId, slot: at }) => lastCell(at, spans.get(cardId)!) > INVENTORY_SLOT_MAX))
     return { ok: false, reason: "inventory-full" };
 
   // Free every slot the plan writes before filling any, so a swap never meets the unique
@@ -199,7 +266,7 @@ export async function stowCardsInTx({
       .set({ inventoryId, inventorySlot: placement.slot })
       .where(eq(cardTable.id, placement.cardId));
 
-  const heldIds = new Set(held.map(({ id }) => id));
+  const heldIds = new Set(held.map(({ cardId }) => cardId));
   const clearedCardIds = await unglueCardsInTx({
     db: tx,
     cardIds: plan.map(({ cardId }) => cardId).filter((id) => !heldIds.has(id)),

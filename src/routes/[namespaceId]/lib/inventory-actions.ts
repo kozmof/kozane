@@ -1,5 +1,5 @@
 import type { CardWithGlue } from "$lib/types";
-import { inventoryOccupants, planStow, type InventoryPlacement } from "$lib/inventory";
+import { cardSpan, inventoryFootprints, planStow, type InventoryPlacement } from "$lib/inventory";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import {
@@ -138,7 +138,12 @@ export function createInventoryActions(state: NamespaceState) {
    * its glue group, which the server reports once it has happened.
    */
   async function stow(cardIds: string[], inventoryId: string, slot: number | null): Promise<void> {
-    const plan = planStow(inventoryOccupants(state.cards, inventoryId), cardIds, slot);
+    const contentOf = new Map(state.cards.map(({ id, content }) => [id, content]));
+    const moving = cardIds.flatMap((cardId) => {
+      const content = contentOf.get(cardId);
+      return content === undefined ? [] : [{ cardId, span: cardSpan(content) }];
+    });
+    const plan = planStow(inventoryFootprints(state.cards, inventoryId), moving, slot);
     if (plan.length === 0) return;
     const previous = whereaboutsOf(
       state.cards,

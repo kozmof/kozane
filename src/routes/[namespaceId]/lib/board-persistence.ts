@@ -3,6 +3,7 @@ import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";
 import { maxZIndex } from "./namespace-page.js";
+import { readFiniteNumber } from "./response.js";
 import {
   createCard,
   failureMessage,
@@ -71,7 +72,19 @@ export function createBoardPersistence(s: NamespaceState) {
       // The server stores the text trimmed, so hold the same value rather than waiting for
       // the next snapshot poll to correct it.
       const stored = content.trim();
-      s.cards = s.cards.map((c) => (c.id === id ? { ...c, content: stored, partitionId } : c));
+      // A stored card whose longer text now covers a neighbour's cells moved to the slot the
+      // server answers with.
+      const moved = readFiniteNumber(await res.json().catch(() => null), "inventorySlot");
+      s.cards = s.cards.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              content: stored,
+              partitionId,
+              ...(moved !== undefined && { inventorySlot: moved }),
+            }
+          : c,
+      );
       s.selection.composerCard = null;
       return;
     }

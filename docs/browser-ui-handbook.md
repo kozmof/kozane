@@ -265,7 +265,7 @@ Click a marker to select it. Jumping preserves zoom.
 
 ## Inventories
 
-An inventory stores cards off the canvas in a grid, one card per slot. On the canvas it is
+An inventory stores cards off the canvas in a grid. On the canvas it is
 a box icon with a badge counting its cards. Use the shortcut with no cards selected and no
 text field focused.
 
@@ -287,11 +287,18 @@ While an inventory is open, new cards from the composer go into its first free s
 the composer shows "Add to" and the inventory's name. With several open, the one opened
 last takes them. Close every inventory to add cards to the canvas again.
 
-The grid is six columns wide. Cards fill it left to right and top to bottom, and a new
-row opens below the last card. Dropping a card on an empty slot puts it there. Dropping it
-on a taken slot swaps the two cards, or moves the other card to the first free slot when
-the dragged card came from somewhere else. Dropping on the icon or the window header uses
-the first free slot. Dragging a selected or glued card stores the whole group.
+The grid is six columns wide. A card takes one column and as many rows as its text needs
+to show in full, up to eight. Longer text scrolls inside the card. Cards fill the grid left
+to right and top to bottom at the first place they fit, and a new row opens below the
+lowest card.
+
+Dropping a card on free cells puts it there. Dropping it on cells another card holds swaps
+the two when each fits where the other was. Otherwise the cards in the way move to the
+first place they fit. Dropping on the icon or the window header uses the first place the
+card fits. Dragging a selected or glued card stores the whole group.
+
+Editing a stored card can make it taller. If it then reaches cells another card holds, it
+moves to the first place it fits.
 
 A stored card keeps its partition, layer, and scopes, but leaves its glue group. Click it
 in the grid to select it for the composer's actions, and double-click it to edit it.

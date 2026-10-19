@@ -2036,7 +2036,7 @@ describe("Namespace page inventories", () => {
     ),
   };
 
-  function renderPage(overrides: Partial<typeof data> = {}) {
+  function renderPage(overrides: Partial<typeof withStoredCard> = {}) {
     return render(NamespacePage, {
       props: {
         data: { ...withStoredCard, ...overrides },
@@ -2059,8 +2059,11 @@ describe("Namespace page inventories", () => {
     await fireEvent.mouseUp(window, { clientX: 10, clientY: 10 });
 
     const grid = await screen.findByRole("region", { name: "Inventory Bag" });
-    const slot = grid.querySelector('[data-inventory-slot="3"]')!;
-    expect(slot.querySelector('[data-stored-card-id="card-2"]')).toHaveTextContent("Beta");
+    // Slot 3 is the first row's fourth column.
+    const stored = grid.querySelector<HTMLElement>('[data-stored-card-id="card-2"]')!;
+    expect(stored).toHaveTextContent("Beta");
+    expect(stored.style.gridRow).toBe("1 / span 1");
+    expect(stored.style.gridColumn).toBe("4");
     expect(icon).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -2152,11 +2155,31 @@ describe("Namespace page inventories", () => {
       inventoryId: "inv-1",
     });
     const grid = screen.getByRole("region", { name: "Inventory Bag" });
-    await waitFor(() =>
-      expect(
-        grid.querySelector('[data-inventory-slot="0"] [data-stored-card-id="card-new"]'),
-      ).not.toBeNull(),
-    );
+    const stored = await waitFor(() => {
+      const found = grid.querySelector<HTMLElement>('[data-stored-card-id="card-new"]');
+      expect(found).not.toBeNull();
+      return found!;
+    });
+    expect(stored.style.gridColumn).toBe("1");
     expect(container.querySelector('[data-card-id="card-new"]')).toBeNull();
+  });
+
+  it("draws a long stored card down as many rows as its text needs", async () => {
+    const long = "word ".repeat(40).trim();
+    const { container } = renderPage({
+      cards: withStoredCard.cards.map((c) => (c.id === "card-2" ? { ...c, content: long } : c)),
+    });
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseUp(window);
+
+    const stored = await waitFor(
+      () => container.querySelector<HTMLElement>('[data-stored-card-id="card-2"]')!,
+    );
+    const span = Number(stored.dataset.span);
+    expect(span).toBeGreaterThan(1);
+    // Slot 3 is the first row's fourth column.
+    expect(stored.style.gridRow).toBe(`1 / span ${span}`);
+    expect(stored.style.gridColumn).toBe("4");
+    expect(stored).toHaveTextContent(long);
   });
 });

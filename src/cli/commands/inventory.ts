@@ -10,7 +10,7 @@ import {
 import type { Inventory } from "../../db/api/types.js";
 import type { DB } from "../../db/tx.js";
 import { INVENTORY_COLUMNS, NAME_MAX } from "../../lib/constants.js";
-import { slotCell } from "../../lib/inventory.js";
+import { cardSpan, slotCell } from "../../lib/inventory.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
 import { resolveCardGroup } from "../lib/card-refs.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
@@ -146,8 +146,11 @@ export async function inventoryShow(
     const { allIds } = await resolveCardGroup(db, [cards[0].id]);
     for (const card of cards) {
       const { row, column } = slotCell(card.slot);
+      // A card covers as many rows as its text needs, shown as the range it spans.
+      const span = cardSpan(card.content);
+      const rows = span === 1 ? `r${row + 1}` : `r${row + 1}-${row + span}`;
       console.log(
-        `  ${String(card.slot).padStart(3)}  r${row + 1} c${column + 1}  ${shortId(card.id, allIds)}  ${preview(card.content)}`,
+        `  ${String(card.slot).padStart(3)}  ${rows.padEnd(7)} c${column + 1}  ${shortId(card.id, allIds)}  ${preview(card.content)}`,
       );
     }
   });

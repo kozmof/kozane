@@ -44,6 +44,7 @@ import { compareIds } from "../../lib/order.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx } from "../../db/tx.js";
+import { refitStoredCardInTx } from "../../db/api/inventory.js";
 import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { checkCardContent, contentLimitIssue } from "../../lib/constants.js";
@@ -269,9 +270,15 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
       .where(eq(cardTable.id, cardId))
       .get();
     if (!row) throw new Error(`Card not found: ${requestedCardId}`);
-    await updateCard({ db, cardId, partitionId: row.partitionId, content });
+    // Longer text can make a stored card cover a neighbour's cells, which moves it, so the
+    // two writes share one transaction.
+    const refit = await withTx(db, async (tx) => {
+      await updateCard({ db: tx, cardId, partitionId: row.partitionId, content });
+      return refitStoredCardInTx({ db: tx, cardId });
+    });
     console.log("Card updated.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
+    if (refit) console.log(`  moved to inventory slot ${refit.slot} to fit its text`);
   });
 }
 

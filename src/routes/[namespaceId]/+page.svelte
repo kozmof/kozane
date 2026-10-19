@@ -37,6 +37,7 @@
   import WarpPalette from "./components/WarpPalette.svelte";
   import InventoryWindow from "./components/InventoryWindow.svelte";
   import { createInventoryActions } from "./lib/inventory-actions.js";
+  import { cardSpan } from "$lib/inventory";
   import type { DropTarget } from "./lib/inventory-drop.js";
   import { STOWED_GRAB_INSET } from "./lib/board-gestures.svelte.js";
   import type { Inventory } from "$lib/types";
@@ -311,8 +312,9 @@
   let inventoryDrag = $state<{
     target: DropTarget | null;
     cardId: string | null;
+    carriedCardId: string | null;
     pointer: { x: number; y: number } | null;
-  }>({ target: null, cardId: null, pointer: null });
+  }>({ target: null, cardId: null, carriedCardId: null, pointer: null });
 
   /** An inventory's name, or its number in creation order when it has none. */
   function inventoryLabel(inventory: Inventory): string {
@@ -334,6 +336,12 @@
   let receivingInventory = $derived(
     s.inventories.find(({ id }) => id === s.receivingInventoryId) ?? null,
   );
+
+  /** Rows the carried card covers, for the drop highlight. */
+  let carriedSpan = $derived.by(() => {
+    const carried = inventoryDrag.carriedCardId ? cardById.get(inventoryDrag.carriedCardId) : null;
+    return carried ? cardSpan(carried.content) : 1;
+  });
 
   let draggedStoredCard = $derived(
     inventoryDrag.cardId ? (cardById.get(inventoryDrag.cardId) ?? null) : null,
@@ -674,6 +682,7 @@
             selectedCards={s.selection.selectedCards}
             draggingCardId={inventoryDrag.pointer ? inventoryDrag.cardId : null}
             dropTarget={inventoryDrag.target}
+            aimSpan={carriedSpan}
             fontFamily={data.uiConfig.defaultFontFamily}
             {readonly}
             onClose={() => inventoryActions.toggle(inventory.id)}
