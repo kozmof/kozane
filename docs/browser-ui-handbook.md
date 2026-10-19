@@ -269,16 +269,16 @@ An inventory stores cards off the canvas in a grid. On the canvas it is
 a box icon with a badge counting its cards. Use the shortcut with no cards selected and no
 text field focused.
 
-| Action                          | Control                                 |
-| ------------------------------- | --------------------------------------- |
-| Add an inventory                | `v`, at the pointer or view center      |
-| Open or close it                | Click its icon                          |
-| Move the icon                   | Drag it                                 |
-| Store cards                     | Drag a card onto the icon or a slot     |
-| Rearrange cards                 | Drag a card to another slot             |
-| Take a card out                 | Drag it from the grid onto the canvas   |
-| Rename it                       | Double-click its name, or focus it and press `F2` |
-| Close or remove it              | The `×` or bin button on its window     |
+| Action             | Control                                           |
+| ------------------ | ------------------------------------------------- |
+| Add an inventory   | `v`, at the pointer or view center                |
+| Open or close it   | Click its icon                                    |
+| Move the icon      | Drag it                                           |
+| Store cards        | Drag a card onto the icon or a slot               |
+| Rearrange cards    | Drag a card to another slot                       |
+| Take a card out    | Drag it from the grid onto the canvas             |
+| Rename it          | Double-click its name, or focus it and press `F2` |
+| Close or remove it | The `×` or bin button on its window               |
 
 Open inventories appear on the left of the canvas and stay put while you pan, so cards can
 be carried in from anywhere on the board.
@@ -376,17 +376,17 @@ when narrowed to one, or to the namespace list otherwise.
 
 UI settings live under `ui` in `.kozane/config.json`.
 
-| Setting               | Purpose                                | Default         |
-| --------------------- | -------------------------------------- | --------------- |
-| `newCardPlacement`    | `vertical-list` or four-column `grid`  | `vertical-list` |
-| `defaultCardWidth`    | Width of unresized cards in pixels     | `210`           |
-| `zoomStep`            | Zoom increment                         | `0.05` (5%)     |
-| `warpMarkerSize`      | Marker size in pixels, from 8 to 64    | `20`            |
-| `setWarpShortcut`     | Set a warp                             | `a`             |
-| `toggleWarpsShortcut` | Show or hide warps                     | `A` (Shift+A)   |
-| `removeWarpShortcut`  | Remove a warp                          | `x`             |
-| `addInventoryShortcut` | Add an inventory                     | `v`             |
-| `editorVimMode`       | Enable Vim bindings in the file editor | `false`         |
+| Setting                | Purpose                                | Default         |
+| ---------------------- | -------------------------------------- | --------------- |
+| `newCardPlacement`     | `vertical-list` or four-column `grid`  | `vertical-list` |
+| `defaultCardWidth`     | Width of unresized cards in pixels     | `210`           |
+| `zoomStep`             | Zoom increment                         | `0.05` (5%)     |
+| `warpMarkerSize`       | Marker size in pixels, from 8 to 64    | `20`            |
+| `setWarpShortcut`      | Set a warp                             | `a`             |
+| `toggleWarpsShortcut`  | Show or hide warps                     | `A` (Shift+A)   |
+| `removeWarpShortcut`   | Remove a warp                          | `x`             |
+| `addInventoryShortcut` | Add an inventory                       | `v`             |
+| `editorVimMode`        | Enable Vim bindings in the file editor | `false`         |
 
 ## Live sync
 
