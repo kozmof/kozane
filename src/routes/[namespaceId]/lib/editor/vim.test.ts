@@ -15,8 +15,8 @@ function keyEvent(key: Key): KeyboardEvent {
 }
 
 /**
- * Presses `keys` in order against a fresh document, and hands back where things ended up.
- * `null` in the results means the key was not vim's and the surface would have handled it.
+ * Press `keys` in order against a fresh document and return the resulting state.
+ * A null result means Vim left the key for the editor surface to handle.
  */
 function press(content: string, keys: Key[], start = { line: 0, column: 0 }, readonly = false) {
   const doc = new EditorDocument(content);

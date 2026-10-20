@@ -5,7 +5,7 @@ import { compareIds } from "$lib/order";
 export type Rect = { x: number; y: number; width: number; height: number };
 export type Point = { x: number; y: number };
 
-/** Something to be given area in proportion to `value`. */
+/** Item assigned area in proportion to `value`. */
 export type TreemapItem = { id: string; value: number };
 
 export type TreemapCell<T extends TreemapItem = TreemapItem> = {
@@ -46,8 +46,8 @@ const EMPTY_STRIP_MAX_FRACTION = 0.25;
 
 /** Layout options for {@link squarify}. */
 export type SquarifyOptions = {
-  /** The empty strip's height in pixels, before the quarter-of-the-area cap. Defaults to 18,
-   *  which is room for a dashed outline and nothing else. */
+  /** Empty-strip height in pixels before the height-fraction cap. Defaults to 18 pixels,
+   *  enough for a dashed outline. */
   emptyStripHeight?: number;
 };
 

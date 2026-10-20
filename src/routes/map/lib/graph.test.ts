@@ -91,8 +91,7 @@ describe("placeHubs", () => {
     }
   });
 
-  /** Past the rail's own ceiling there are more hubs than rows to give them the gap they
-   *  ask for. They are drawn tighter, and still on the map. */
+  /** Reduce hub spacing when the rail reaches its height limit so every hub stays on the map. */
   it("stays on the map when there are more scopes than the rail has room for", () => {
     const narrow = { x: 0, y: 0, width: 300, height: 800 };
     const hubs = placeHubs(

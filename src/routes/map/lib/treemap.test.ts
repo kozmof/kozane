@@ -28,7 +28,7 @@ describe("squarify", () => {
     expect(cells.map((c) => c.item.id).sort()).toEqual(["a", "b", "c"]);
   });
 
-  /** The one thing a treemap promises. */
+  /** Verify that rectangles fill the available area without overlapping. */
   it("gives area in proportion to value", () => {
     const cells = byId(squarify([item("a", 6), item("b", 3), item("c", 1)], AREA));
     const total = AREA.width * AREA.height;

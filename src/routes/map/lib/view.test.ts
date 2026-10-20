@@ -222,8 +222,7 @@ describe("defaultView", () => {
     expect(wide.y).toBeCloseTo(600 - (wide.y + wide.height), 6);
   });
 
-  /** The pan it opens at is one the clamp already allows, so the map does not jump on the
-   *  first thing that touches it. */
+  /** Keep the opening pan within bounds so the first interaction does not shift the map. */
   it("opens at a view the clamp leaves alone", () => {
     expect(clampView(defaultView(SIZE), SIZE)).toEqual(defaultView(SIZE));
   });

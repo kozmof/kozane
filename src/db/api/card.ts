@@ -114,7 +114,7 @@ export function cardInventory(
   return inventoryId === null || slot === null ? null : { id: inventoryId, slot };
 }
 
-/** A card row with its two inventory columns folded into the `inventory` the board reads. */
+/** Card row with both inventory columns combined into the board's `inventory` field. */
 export function withCardInventory<
   T extends { inventoryId: string | null; inventorySlot: number | null },
 >({
@@ -561,7 +561,7 @@ function buildPositionCaseWhen(positions: CardPositionUpdate[]): { posX: SQL; po
   };
 }
 
-/** Last write wins, so a repeated cardId resolves the same way it would in sequence. */
+/** Use the last update for each repeated card ID, matching sequential writes. */
 function dedupePositions(positions: CardPositionUpdate[]): CardPositionUpdate[] {
   return [...new Map(positions.map((p) => [p.cardId, p])).values()];
 }

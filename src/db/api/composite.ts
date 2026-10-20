@@ -255,9 +255,9 @@ type MoveCardsToNamespace = {
 };
 
 type RemapCardsByName = {
-  /** Each card paired with the name of the thing it currently belongs to. */
+  /** Each card paired with its current partition or layer name. */
   current: { cardId: string; name: string }[];
-  /** Candidates in the target namespace, matched against `current` by name. */
+  /** Target partitions or layers matched against `current` by name. */
   targets: { id: string; name: string }[];
   create: (name: string) => Promise<string>;
   assign: (targetId: string, cardIds: string[]) => Promise<void>;
@@ -273,9 +273,8 @@ async function remapCardsByName({
   create,
   assign,
 }: RemapCardsByName): Promise<void> {
-  // Resolved and grouped in one pass, so the id a card is filed under is the one just
-  // looked up rather than a second lookup that has to be asserted non-empty.
-  // Seeded from the targets once, so each card is one map lookup rather than a scan of them.
+  // Group cards by the resolved target ID in one pass to avoid a second lookup.
+  // Index targets once so each card needs one map lookup.
   const targetIdByName = new Map(targets.map(({ id, name }) => [name, id]));
   const groups = new Map<string, string[]>();
   for (const { cardId, name } of current) {

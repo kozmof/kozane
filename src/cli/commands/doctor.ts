@@ -138,7 +138,7 @@ async function databaseIntegrity(url: string): Promise<{ ok: boolean; detail?: s
   }
 }
 
-/** How many rows of one kind sit past a limit, and the first few of them by name. */
+/** Count of rows exceeding one limit, with sample IDs. */
 type OverLimit = { total: number; named: string[] };
 
 const noneOverLimit: OverLimit = { total: 0, named: [] };
@@ -241,7 +241,7 @@ async function inventoryConflicts(
     const { overlapping, glued } = await findInventoryConflicts({ db });
     if (overlapping.length === 0 && glued.length === 0)
       return { overlapping: { total: 0, named: [] }, glued: { total: 0, named: [] } };
-    // Short IDs, because that is what `kozane inventory take` takes.
+    // Use short IDs accepted by `kozane inventory take`.
     const shortIds = shortIdMap(await allCardIds(db));
     const sample = (ids: string[]): BadStamps => ({
       total: ids.length,

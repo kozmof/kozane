@@ -394,8 +394,7 @@ describe("import reference validation", () => {
 
     await expect(importDbJson(targetUrl, dump)).rejects.toThrow(message);
 
-    // The refusal lands before the delete loop, so the workspace being imported into is
-    // still whole. A dump rejected halfway would be the worst of both.
+    // Reject invalid references before deleting existing rows to preserve the target workspace.
     const after = await exportDbJson(targetUrl);
     expect(after.tables.card).toHaveLength(2);
     expect(after.tables.namespace).toHaveLength(1);

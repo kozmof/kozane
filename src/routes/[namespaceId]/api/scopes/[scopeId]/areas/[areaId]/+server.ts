@@ -6,7 +6,7 @@ import { readJsonObject } from "../../../../../lib/request.js";
 import { readAreaRect } from "../../../../../lib/scope-area-request.js";
 import { clampRectToCanvas } from "$lib/server/canvas";
 
-/** Moves or resizes one frame. The whole rectangle, never a delta. */
+/** Move or resize one frame using a complete rectangle. */
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId, scopeId, areaId } = params;
@@ -22,7 +22,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   }
 };
 
-/** Takes one frame off the board. Memberships, and the scope's other frames, are untouched. */
+/** Remove one frame while preserving scope memberships and other frames. */
 export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId, scopeId, areaId } = params;

@@ -297,9 +297,8 @@ export async function hasDbJsonRows(dbUrl: string): Promise<boolean> {
 }
 
 /**
- * Reports broken references before the insert loop starts. SQLite enforces the same
- * constraints during the import transaction, but names the offending row far less
- * clearly, so every foreign key in the export is checked here.
+ * Validate every foreign key before inserting rows. SQLite also enforces these constraints
+ * during import, but this check identifies the offending row.
  */
 function validateDumpRefs(tables: TableRows): void {
   const namespaceIds = new Set(tables.namespace.map((r) => r.id as string));
@@ -407,7 +406,7 @@ export type DumpLimits = { contentMax: number; canvasWidth: number; canvasHeight
 /** Limit warning samples as doctor does to keep output bounded. */
 const LIMIT_WARNING_NAMED_MAX = 5;
 
-/** The first few ids, and a count of the rest. */
+/** Sample IDs and the count of remaining matches. */
 function nameSome(ids: string[]): string {
   const named = ids.slice(0, LIMIT_WARNING_NAMED_MAX);
   const rest = ids.length - named.length;

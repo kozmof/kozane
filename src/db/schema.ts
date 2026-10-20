@@ -192,9 +192,8 @@ export const taskspaceTable = sqliteTable(
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  // Read once per scope by `getScopesInNamespace`, which asks whether a scope has a
-  // taskspace at all and whether it has one of this namespace. Without this the board's
-  // once-a-second poll scans the whole table twice for every scope in the workspace.
+  // Support `getScopesInNamespace` lookups for any linked taskspace and for one in this
+  // namespace. Without this index, each board poll scans the taskspace table twice per scope.
   (t) => [index("taskspace_scope").on(t.scopeId)],
 );
 
@@ -228,7 +227,7 @@ export const cardTable = sqliteTable(
     }),
     /**
      * Slot index within the inventory, counted left to right and top to bottom. Readers treat
-     * a card as stored only when `inventoryId` is set. Writers clear both together, since
+     * a card as stored only when both inventory fields are set. Writers clear both together, since
      * SQLite cannot add a CHECK to an existing table without rebuilding it.
      */
     inventorySlot: integer("inventory_slot"),

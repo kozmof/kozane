@@ -39,7 +39,7 @@
      * outside the overlay's input.
      */
     suspendShortcuts?: boolean;
-    /** The card currently showing one, so the button can read as the toggle it is. */
+    /** Card ID whose resize handle is visible, used to show the button's toggle state. */
     resizingCardId?: string | null;
     /** Where a new card goes when it is not the canvas, shown as the input's placeholder. */
     newCardTarget?: string | null;

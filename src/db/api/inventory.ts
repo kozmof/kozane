@@ -92,8 +92,8 @@ type UpdateInventory = NeedsNamespaceInventory & {
 };
 
 /**
- * Moves or renames an inventory. The whole stored row comes back, so a caller that drew the
- * icon where the pointer let go can correct it to what was kept.
+ * Move or rename an inventory and return the saved row. Use its clamped coordinates
+ * to update the icon after dragging.
  */
 export async function updateInventory({
   db,
@@ -192,7 +192,7 @@ function mergedPlans(
   return [...final].map(([cardId, slot]) => ({ cardId, slot }));
 }
 
-/** `held` with the slots `plan` gives the cards it names. */
+/** `held` with planned slots applied to the cards named in `plan`. */
 function withSlots(held: readonly Footprint[], plan: readonly SlotPlacement[]): Footprint[] {
   const slotOf = new Map(plan.map(({ cardId, slot }) => [cardId, slot]));
   return held.map((f) => ({ ...f, slot: slotOf.get(f.cardId) ?? f.slot }));

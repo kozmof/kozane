@@ -63,8 +63,7 @@ export function viewedArea(size: Size, view: MapView): Rect {
   };
 }
 
-/** The view with its pan brought back to where {@link PAN_MARGIN} of the map is still on
- *  screen. */
+/** Clamp pan to keep at least {@link PAN_MARGIN} of the map visible. */
 export function clampView(view: MapView, size: Size): MapView {
   const area = viewedArea(size, view);
   // The margin cannot exceed either the content or the viewport, or the interval it

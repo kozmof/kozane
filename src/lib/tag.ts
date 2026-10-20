@@ -84,7 +84,7 @@ export function tagMatcher(query: string): (tag: string) => boolean {
   return (tag) => tag === q || tag.startsWith(prefix);
 }
 
-/** One tag found in a text, and exactly where it sits in it. */
+/** Tag match with its position in the source text. */
 export interface TagPosition {
   /** Normalized, and without the sigil. */
   tag: string;
@@ -135,7 +135,7 @@ function scanTagMatches(text: string, urls: UrlSpan[]): TagPosition[] {
   return positions;
 }
 
-/** One tag found in a text, and where in that text it was found. */
+/** Tag hit with its source line number and excerpt. */
 export interface TagLineHit {
   /** Normalized tag without its sigil, such as `foo:bar:baz`. */
   tag: string;

@@ -19,7 +19,7 @@ export function brandDb(db: UnbrandedDb): DB {
   return db as DB;
 }
 
-/** The transaction value drizzle hands its callback, named so the cast below can be narrow. */
+/** Drizzle transaction callback value used to keep the cast below narrowly typed. */
 type DrizzleTx = Parameters<Parameters<UnbrandedDb["transaction"]>[0]>[0];
 
 export async function withTx<T>(db: DB, fn: (tx: Tx) => Promise<T>): Promise<T> {

@@ -356,7 +356,7 @@ describe("EditorDocument", () => {
       vi.useRealTimers();
     });
 
-    /** Grouping keys off the wall clock, so the clock is what a test has to drive. */
+    /** Control the clock to test the undo-grouping window. */
     function atTime(ms: number): void {
       vi.setSystemTime(new Date(ms));
     }

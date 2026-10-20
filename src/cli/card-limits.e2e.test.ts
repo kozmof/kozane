@@ -112,7 +112,7 @@ describe("card add", () => {
 
     cli(root, "card", "edit", id, "  Edited  ");
     expect(cli(root, "card", "show", id)).toMatch(/^Edited$/m);
-    // Seven CLI processes, each paying its own startup, exceed the default timeout on CI.
+    // Allow extra time on CI for seven separate CLI process startups.
   }, 20_000);
 
   // The same text must fail under the lower configured limit and succeed under the higher one.

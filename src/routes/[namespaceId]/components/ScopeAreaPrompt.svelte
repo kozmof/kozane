@@ -11,7 +11,7 @@
   }: {
     /** Already narrowed to this namespace by the snapshot, the same list the panel gets. */
     scopes: Scope[];
-    /** How many cards the drawn rectangle covers, so the choice is made knowing the cost. */
+    /** Number of cards the drawn rectangle would add to the chosen scope. */
     cardCount: number;
     onChoose: (scopeId: string) => void;
     onCreate: (name: string) => void;

@@ -475,7 +475,7 @@ describe("updateNamespaceCardPositions", () => {
   it("applies a drag too wide for one statement, in batches, atomically", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const layerId = await defaultLayerIdForPartition({ db, partitionId });
-    // Comfortably past what one statement affords at five parameters per row.
+    // Exceed one statement's parameter limit at five parameters per row.
     const count = STATEMENT_PARAMS_MAX;
     const cardIds = await seedCards(db, { partitionId, layerId, count, prefix: "drag" });
 

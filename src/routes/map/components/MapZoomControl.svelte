@@ -15,7 +15,7 @@
   }: {
     zoom: number;
     zoomStep: number;
-    /** Whether the map is at the view it opens at, where the reset has nothing to do. */
+    /** Whether the map already matches its opening view. */
     atDefault: boolean;
     onZoomBy: (delta: number) => void;
     onReset: () => void;

@@ -56,7 +56,7 @@ export function cardIdsInScope(
   return hit;
 }
 
-/** Who is in each scope on the board right now, by scope id. */
+/** Cards overlapping each scope's frames, keyed by scope ID. */
 export function membersByScope(
   areas: readonly ScopeArea[],
   cardIdsInRect: CardIdsInRect,

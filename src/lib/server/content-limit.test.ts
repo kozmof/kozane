@@ -62,7 +62,7 @@ describe("contentMaxForRoot", () => {
 });
 
 describe("bodySizeLimitFor", () => {
-  /** adapter-node's own default, which is the ceiling this exists to get out from under. */
+  /** Default adapter-node body limit that configured card text may exceed. */
   const ADAPTER_DEFAULT = 512 * 1024;
 
   it("leaves room for a card of the limit at its worst byte cost", () => {

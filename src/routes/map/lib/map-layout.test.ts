@@ -123,7 +123,7 @@ describe("buildMapLayout", () => {
     }
   });
 
-  /** The strip is taller than a partition's, and the cap is what stops that mattering. */
+  /** Cap the taller namespace strip so it leaves room for populated regions. */
   it("still holds the empty strip to a quarter of the map", () => {
     const layout = buildMapLayout(
       input({

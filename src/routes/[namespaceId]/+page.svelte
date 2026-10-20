@@ -420,7 +420,7 @@
     s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
   }
 
-  /** Fills the palette in with warps another tab or the CLI has set since the page loaded. */
+  /** Refresh the palette with warps added by another tab or the CLI. */
   async function refreshWarpDirectory() {
     // A static export has no endpoint to ask, and nothing can have changed under it.
     if (readonly) return;
@@ -466,7 +466,7 @@
     editor.open(editorContext, { taskspaceId, taskspaceName: taskspace.name, path });
   }
 
-  /** Creates the scope, taskspace and file, then opens the file that came of it. */
+  /** Create a scope, taskspace, and file, then open the new file. */
   async function handlePaletteCreate(names: {
     scope: string;
     taskspace: string;
@@ -521,7 +521,7 @@
       : s.warps;
   }
 
-  /** Centres on the nearest warp toward an arrow key, answering whether there was one. */
+  /** Center on a warp in the arrow key's direction and return whether one was found. */
   function warpToward(key: string): boolean {
     // Measured from where the view is now, so warping works the same whether you arrived
     // by arrow key or by dragging the canvas.

@@ -16,7 +16,7 @@ export type ConfigNote = {
 };
 
 export type ConfigReport = {
-  /** Path the config was read from, whether or not it could be read. */
+  /** Configuration file path, including when the read fails. */
   path: string;
   /** Errors first, then warnings. Preserve declaration order within each group. */
   issues: ConfigIssue[];

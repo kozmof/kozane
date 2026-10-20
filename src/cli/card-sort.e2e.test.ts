@@ -338,8 +338,7 @@ describe("kozane card list --sort", () => {
 
     expect(cli(root, "db", "migrate")).toContain("Database migrated.");
 
-    // Backfilled to the moment the migration ran, so the card reads as never since edited
-    // rather than as created at the epoch.
+    // Backfill both timestamps with the migration time so the card appears unedited.
     expect(listed(root, "--sort", "gap")).toEqual(["0s  written before the columns existed"]);
     const [line] = listed(root, "--sort", "created");
     const createdAt = new Date(line.split("  ")[0]);

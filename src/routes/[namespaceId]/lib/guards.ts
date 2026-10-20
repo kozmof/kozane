@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { AnyDB } from "$db/client";
 import type { Card } from "$db/api/types";
 
-/** Verifies a card belongs to the given namespace (via its partition). Throws 404 if not found. */
+/** Verify card ownership through its partition. Throw 404 for a missing or foreign card. */
 export async function requireCardInNamespace(
   db: AnyDB,
   namespaceId: string,

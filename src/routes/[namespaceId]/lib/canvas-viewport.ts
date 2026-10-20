@@ -12,7 +12,7 @@ import {
   type WorldRect,
 } from "./namespace-page.js";
 
-/** A point on the board, in the column names the rows use. */
+/** Board point using the stored `posX` and `posY` field names. */
 export type BoardPoint = { posX: number; posY: number };
 
 /**
@@ -81,7 +81,7 @@ export class CanvasViewport {
     });
   }
 
-  /** Back to the middle of the board. */
+  /** Center the viewport on the board. */
   recenter(): void {
     const el = this.#el();
     el.scrollLeft = centeredScrollOffset(el.scrollWidth, el.clientWidth);

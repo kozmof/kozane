@@ -176,8 +176,7 @@ export function writeTagCache(root: string, cache: TagCache): void {
   }
 }
 
-/** How a scope is named in the cache file. `*` is the gather across the whole workspace,
- *  which is a different set from any one namespace's and so a different entry. */
+/** Cache key for a namespace gather. Use `*` for the separate workspace-wide result. */
 export const scopeKey = (namespaceId?: string) => namespaceId ?? "*";
 
 export type SaveCache = {

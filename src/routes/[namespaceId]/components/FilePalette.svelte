@@ -99,7 +99,7 @@
     else submitCreate();
   }
 
-  /** The taskspaces of one scope that there is anything to browse in. */
+  /** Browsable taskspaces belonging to one scope. */
   function taskspacesOf(scopeId: string): TaskspaceSummary[] {
     return taskspaces.filter(
       (taskspace) =>

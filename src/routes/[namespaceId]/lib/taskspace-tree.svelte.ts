@@ -115,7 +115,7 @@ export class TaskspaceTreeState {
     );
   }
 
-  /** Forgets everything about taskspaces that are no longer there. */
+  /** Remove cached state for taskspaces that no longer exist. */
   prune(taskspaceIds: Iterable<string>): void {
     const alive = new Set(taskspaceIds);
     const expanded = new Set([...this.expanded].filter((key) => alive.has(taskspaceOf(key))));

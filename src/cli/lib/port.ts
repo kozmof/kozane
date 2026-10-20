@@ -1,4 +1,4 @@
-/** Parses a port from user input (flag or env var). Returns null when it is not a valid port. */
+/** Parse a port from a flag or environment variable. Return null for invalid input. */
 export function parsePort(value: string): number | null {
   const trimmed = value.trim();
   if (trimmed === "" || !/^\d+$/.test(trimmed)) return null;
@@ -10,9 +10,9 @@ export function parsePort(value: string): number | null {
 export type PortSources = {
   /** `--port` flag. */
   flag?: string;
-  /** Value of the env var, already read by the caller. */
+  /** Environment variable value read by the caller. */
   env?: string;
-  /** Env var name, used in the error message. */
+  /** Environment variable name used in error messages. */
   envName?: string;
   /** `server.port` from `.kozane/config.json`. */
   config?: number;

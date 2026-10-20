@@ -13,7 +13,6 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   // Let the transaction validate the destination layer, as in the partition handler.
   const result = await reassignCardsToLayer({ db, namespaceId, cardIds, layerId });
   if (!result.ok) rejectBatch(result.reason);
-  // Arriving cards are restacked above the target layer's own, so the client is told what
-  // they ended up with rather than left holding a zIndex from the layer they came from.
+  // Return the new stacking values assigned above the destination layer's existing cards.
   return json({ ok: true, stacking: result.stacking });
 };

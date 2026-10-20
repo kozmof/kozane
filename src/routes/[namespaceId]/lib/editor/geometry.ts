@@ -7,7 +7,7 @@ import type { Caret } from "./document-store.svelte.js";
 export type LineMeasurer = {
   /** Pixels from the start of the line to the left edge of `column`. */
   columnToX(line: number, column: number): number;
-  /** The column whose cell contains `x`, clamped to the ends of the line. */
+  /** Column boundary nearest to `x`, clamped to the ends of the line. */
   xToColumn(line: number, x: number): number;
 };
 

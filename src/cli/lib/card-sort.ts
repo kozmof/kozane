@@ -72,7 +72,7 @@ function gapMilliseconds(card: CardStamps): number {
 type CardOrder = {
   /** Ascending sort value, or `NaN` for invalid timestamps. */
   value: (card: CardStamps) => number;
-  /** What `--sort` prints in the column it adds, and `card show --times` on its own line. */
+  /** Display text for the added `--sort` column and each `card show --times` line. */
   column: (card: CardStamps) => string;
 };
 

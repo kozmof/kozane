@@ -134,8 +134,8 @@ describe("EditorSurface", () => {
   });
 
   it("walks the arrow keys over an emoji rather than into the middle of it", async () => {
-    // Two columns, one character. A caret between them is a byte offset inside a code
-    // point, which Reed refuses an edit at.
+    // The character occupies two UTF-16 columns. A caret between them would map inside
+    // a UTF-8 code point, where Reed rejects edits.
     const { doc, sink } = mount("a😀b\n", { caret: { line: 0, column: 0 } });
     sink.focus();
     await userEvent.keyboard("{ArrowRight}{ArrowRight}X");

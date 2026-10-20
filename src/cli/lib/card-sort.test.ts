@@ -14,7 +14,7 @@ import {
 
 const at = (iso: string): Date => new Date(iso);
 
-/** A card named by its id, so an assertion reads as the order the ids come back in. */
+/** Use the card ID as its name to make sort-order assertions readable. */
 function card(id: string, created: string, updated: string): CardTimes {
   return { id, createdAt: at(created), updatedAt: at(updated) };
 }

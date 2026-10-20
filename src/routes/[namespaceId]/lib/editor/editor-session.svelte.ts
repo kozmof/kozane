@@ -10,7 +10,7 @@ export type EditorSessionContext = {
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
-/** Why a static export has no content to show for a file that is otherwise there. */
+/** Reason an exported file is listed without readable content. */
 const SKIP_REASON_MESSAGE: Record<"too-large" | "not-text" | "budget" | "unreadable", string> = {
   "too-large": "This file is too large to open.",
   "not-text": "This file is not text and cannot be opened.",

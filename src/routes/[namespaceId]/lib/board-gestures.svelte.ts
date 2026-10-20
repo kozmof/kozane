@@ -68,7 +68,7 @@ export type BoardGestureHost = {
   readonly viewport: CanvasViewport;
   readonly zoom: number;
   readonly bounds: RectBounds;
-  /** The width a card without one of its own is drawn at. */
+  /** Configured width for cards without a pinned width. */
   readonly cardWidth: number;
   cards: CardWithGlue[];
   readonly warps: Warp[];
@@ -112,7 +112,7 @@ export type BoardGestureHost = {
   ) => Promise<void>;
 };
 
-/** The drafts a release is about, read before the slot is emptied. */
+/** Draft rectangles captured before clearing the active gesture on release. */
 type Drafts = { swept: WorldRect | null; drawn: WorldRect | null; target: DropTarget | null };
 
 /**
@@ -927,7 +927,7 @@ export class BoardGestures {
     return scopeAreaChanges(this.#host.scopeAreas, membersBefore, this.#cardIdsInRect);
   }
 
-  /** Who is in a frame's scope, across every frame the scope has on this board. */
+  /** Cards overlapping any frame of this scope on the board. */
   #scopeMembersOf(area: ScopeArea): Set<string> {
     const scopeAreas = areasByScope(this.#host.scopeAreas).get(area.scopeId) ?? [area];
     return cardIdsInScope(scopeAreas, this.#cardIdsInRect);

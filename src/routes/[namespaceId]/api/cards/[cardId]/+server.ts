@@ -110,9 +110,9 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
       const rest = { newPartitionId, content, posX, posY, zIndex, width };
       if (Object.values(rest).some((value) => value !== undefined))
         await updateCard({ db: tx, cardId, partitionId, ...rest });
-      // Longer text can make a stored card cover cells its neighbours hold. It moves to the
-      // first place it fits, and the answer names every card that moved, any neighbour a
-      // repair moved included, so the board can draw them there without waiting for a poll.
+      // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
+      // the first free slot and return every changed position, including repaired neighbours,
+      // so the board can update immediately.
       const refit = content === undefined ? null : await refitStoredCardInTx({ db: tx, cardId });
       return { stacking, refit };
     },

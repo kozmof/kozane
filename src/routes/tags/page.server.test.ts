@@ -151,7 +151,7 @@ describe("GET /tags", () => {
 
 /** Reimport the route under the export environment to exercise its module-scope flag. */
 describe("as a static export", () => {
-  /** Workspace roots written to disk by the tests below, removed whichever way one ends. */
+  /** Temporary workspace roots removed after each test, including failures. */
   const roots: string[] = [];
 
   afterEach(async () => {

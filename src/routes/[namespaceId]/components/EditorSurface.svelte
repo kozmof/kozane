@@ -21,7 +21,7 @@
     onKeydown,
   }: {
     doc: EditorDocument;
-    /** Where the caret is, in (line, column) characters. */
+    /** Caret position as a zero-based line and UTF-16 column. */
     caret: Caret;
     /** The other end of the selection, or null when there is none. */
     anchor: Caret | null;

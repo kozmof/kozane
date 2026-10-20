@@ -55,7 +55,7 @@ type SeedCards = {
   partitionId: string;
   layerId: string;
   count: number;
-  /** Distinguishes one seeded partition's ids from another's within a test. */
+  /** Prefix used to keep seeded card IDs distinct across partitions. */
   prefix?: string;
 };
 

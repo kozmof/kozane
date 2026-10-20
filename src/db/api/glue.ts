@@ -177,8 +177,8 @@ async function anyStored(tx: Tx, cardIds: string[]): Promise<boolean> {
 }
 
 /**
- * Glues cards together after verifying all belong to namespaceId. A stored card is refused,
- * since storing a card takes it out of its group and the canvas cannot draw it in one.
+ * Glue cards after verifying that all belong to `namespaceId` and none is stored.
+ * Storing a card removes it from its glue group.
  */
 export async function glueNamespaceCards({
   db,
@@ -198,7 +198,7 @@ type UnglueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 /** The cards left ungrouped, or the refusal. See {@link GlueResult}. */
 export type UnglueResult = BatchResult<"foreign-cards", { clearedCardIds: string[] }>;
 
-/** Unglues cards after verifying all belong to namespaceId. */
+/** Unglue cards after verifying that all belong to `namespaceId`. */
 export async function unglueNamespaceCards({
   db,
   namespaceId,

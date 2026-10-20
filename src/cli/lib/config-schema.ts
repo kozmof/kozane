@@ -36,7 +36,7 @@ type FieldRule = {
 };
 
 type FieldGroup = {
-  /** `null` for fields living at the top level of the config. */
+  /** `null` for top-level configuration fields. */
   section: SectionName | null;
   /** Optional sections fall back to their defaults instead of being reported missing. */
   required: boolean;
@@ -108,7 +108,7 @@ export const SECTION_KEYS: Record<SectionName, string[]> = {
   taskspace: ["defaultDir", "searchRoots"],
 };
 
-/** Keys a valid config may carry, by the dotted path of their parent. */
+/** Allowed configuration keys grouped by their parent's dotted path. */
 export function knownKeys(): { parent: string; keys: string[] }[] {
   return [
     { parent: "", keys: TOP_LEVEL_KEYS },

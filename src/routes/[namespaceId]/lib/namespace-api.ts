@@ -76,7 +76,7 @@ export function updateCard(
     partitionId?: string;
     layerId?: string;
     zIndex?: number;
-    /** Null drops the card's own width, putting it back under `ui.defaultCardWidth`. */
+    /** Null clears the pinned width and restores `ui.defaultCardWidth`. */
     width?: number | null;
   },
 ): Promise<Response> {
@@ -322,7 +322,7 @@ export function createScopeArea(
   return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}/areas`), "POST", rect);
 }
 
-/** Moves or resizes one frame. `rect` is the whole rectangle, never a delta. */
+/** Move or resize one frame using the complete `rect`. */
 export function moveScopeArea(
   fetcher: typeof fetch,
   namespaceId: string,

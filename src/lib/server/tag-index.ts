@@ -26,8 +26,8 @@ function yieldToEventLoop(): Promise<void> {
 export type TagIndexTruncation = {
   taskspaceId: string;
   reasons: TagScanTruncation[];
-  /** A few of the paths the reasons are about, relative to the taskspace, or empty where
-   *  none of them names a file. See `TaskspaceTagScan.paths`. */
+  /** Sample taskspace-relative paths for scan failures. Empty when no path applies.
+   *  See `TaskspaceTagScan.paths`. */
   paths: string[];
 };
 

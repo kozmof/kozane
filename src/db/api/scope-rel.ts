@@ -70,7 +70,7 @@ type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: 
  */
 export type ScopeMemberResult = BatchResult<"foreign-cards" | "foreign-scope">;
 
-/** Bulk-adds cards to a scope, after verifying the scope and every card belong here. */
+/** Add cards to an existing scope after verifying that every card belongs to the namespace. */
 export async function addScopeMembers({
   db,
   scopeId,
@@ -118,7 +118,7 @@ type RemoveScopeMembersFromNamespace = {
   cardIds: string[];
   namespaceId: string;
 };
-/** Bulk-removes cards from a scope, after verifying the scope and every card belong here. */
+/** Remove cards from an existing scope after verifying card ownership in the namespace. */
 export async function removeScopeMembersFromNamespace({
   db,
   scopeId,

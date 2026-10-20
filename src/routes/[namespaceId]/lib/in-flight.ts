@@ -21,7 +21,7 @@ export class InFlight {
     this.#version += 1;
   }
 
-  /** Runs `work` with the activity held open, however it finishes. */
+  /** Keep activity reserved until `work` succeeds or fails. */
   async track<T>(work: () => Promise<T>): Promise<T> {
     this.begin();
     try {

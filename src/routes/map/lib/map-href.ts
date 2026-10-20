@@ -1,4 +1,4 @@
-/** The three things a map URL can narrow to. Null leaves that one off. */
+/** Namespace, tag, and day filters. Null omits a filter from the URL. */
 export type MapQuery = {
   namespaceId: string | null;
   tag: string | null;

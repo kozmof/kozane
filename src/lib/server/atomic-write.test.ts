@@ -62,8 +62,8 @@ describe("writeFileAtomic", () => {
     expect(statSync(target).mode & 0o777).toBe(statSync(reference).mode & 0o777);
   });
 
-  // The rename gives the target a new inode, so without carrying the mode over the new file
-  // arrives with whatever the umask says and the old permissions are simply gone.
+  // Preserve the original permissions when replacing the inode. Otherwise the replacement
+  // would use permissions determined by the umask.
   it("keeps the permissions of the file it replaces", () => {
     writeFileSync(target, "old", { mode: 0o640 });
     chmodSync(target, 0o640);

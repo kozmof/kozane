@@ -24,7 +24,7 @@
     tree: TagNode[];
     selectedTag: string | null;
     cardsTruncated: boolean;
-    /** The map with `tag` drawn, or with none for null. */
+    /** Show links for `tag`, or clear tag links for null. */
     tagHref: (tag: string | null) => string;
     onScroll: (scrollTop: number) => void;
   } = $props();

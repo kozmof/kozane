@@ -31,7 +31,7 @@ export type BoardCommands = {
   togglePanels: () => void;
   toggleWarps: () => void;
   openWarpPalette: () => void;
-  /** Warps toward an arrow key's direction, answering whether there was a warp to go to. */
+  /** Navigate in the arrow key's direction and return whether a warp was found. */
   warpToward: (key: string) => boolean;
   setWarpHere: () => void;
   removeFocusedWarp: () => void;

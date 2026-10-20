@@ -42,7 +42,7 @@ export type TaskspaceScanLimits = {
   files?: number;
 };
 
-/** What a whole gather may spend, across every taskspace in it. See {@link ScanPool}. */
+/** Workspace-wide scan limits shared by all taskspaces. See {@link ScanPool}. */
 export type GatherScanLimits = { workspaceBytes?: number; workspaceNodes?: number };
 
 /**
@@ -236,8 +236,7 @@ type Scan = {
    * the root.
    */
   completed: Set<string>;
-  /** The first few paths behind {@link Scan.truncated}, for a reader who has to go and find
-   *  the file the scan is complaining about. See {@link TaskspaceTagScan.paths}. */
+  /** Sample paths for locating truncation causes. See {@link TaskspaceTagScan.paths}. */
   paths: string[];
   /** Whether the scan read new file data that should be persisted. */
   parsed: boolean;

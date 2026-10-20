@@ -57,7 +57,7 @@ export default defineConfig({
         "src/cli/commands/**",
         // `spec.test.ts` checks the command tree. Action handlers run in CLI subprocess tests.
         "src/cli/program.ts",
-        // Filesystem discovery/configuration require isolated CLI integration coverage.
+        // Filesystem discovery and configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
         "src/cli/lib/workspace.ts",
         "src/cli/lib/taskspace-scan.ts",

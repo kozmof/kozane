@@ -72,8 +72,8 @@ export function createBoardPersistence(s: NamespaceState) {
       // The server stores the text trimmed, so hold the same value rather than waiting for
       // the next snapshot poll to correct it.
       const stored = content.trim();
-      // A stored card whose longer text now covers a neighbour's cells moved, and so may have
-      // neighbours a repair of its inventory moved. The answer names every one of them.
+      // Apply every returned slot change, including moves caused by longer text or repairs
+      // to neighbouring cards.
       const placements = parsePlacements(await res.json().catch(() => null)) ?? [];
       const slotOf = new Map(placements.map((p) => [p.cardId, p]));
       s.cards = s.cards.map((c) => {

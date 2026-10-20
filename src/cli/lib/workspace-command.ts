@@ -10,7 +10,7 @@ export function fail(error: unknown): never {
   process.exit(1);
 }
 
-/** What a workspace command is handed once the workspace and its database are open. */
+/** Resolved workspace and database passed to a command. */
 export type WorkspaceCommandContext = {
   db: DB;
   /** Absolute workspace root returned by `findWorkspaceRoot`. */

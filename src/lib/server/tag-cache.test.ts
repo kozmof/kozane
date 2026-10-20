@@ -152,9 +152,8 @@ describe("readTagCache / writeTagCache", () => {
     expect(readTagCache(root)?.db).toBe("small");
   });
 
-  /** Measured in bytes, not in UTF-16 code units. An excerpt of Japanese is one unit and
-   *  three bytes a character, so a cache of it sits under the ceiling by `length` and over it
-   *  by what `readTagCache` will `stat`. */
+  /** Measure cache size in UTF-8 bytes. These Japanese characters occupy one UTF-16 code
+   *  unit and three bytes each, so string length underestimates the file size. */
   it("measures the ceiling in bytes, so a multibyte cache under it by length is refused", () => {
     // Two thirds of the ceiling in characters is twice the ceiling in UTF-8 bytes.
     const japanese = "あ".repeat(Math.floor((TAG_CACHE_BYTES_MAX * 2) / 3));

@@ -16,7 +16,7 @@
     selectedDay: string | null;
     /** What the strip covers, shown while no day is picked. */
     rangeLabel: string;
-    /** The map narrowed to `day`, or widened back out of it for null. */
+    /** Filter the map to `day`, or clear the day filter for null. */
     dayHref: (day: string | null) => string;
   } = $props();
 

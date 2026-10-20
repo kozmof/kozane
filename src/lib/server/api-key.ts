@@ -67,7 +67,7 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
 }
 
 export type ApiKeyResult =
-  /** `key` is null when the workspace simply has no key file, which is the ordinary case. */
+  /** `key` is null when the workspace has no key file. */
   { ok: true; key: ApiKeyFile | null } | { ok: false; message: string };
 
 /**

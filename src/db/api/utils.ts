@@ -41,7 +41,7 @@ export type BatchResult<R extends BatchRejection, Ok extends object = Record<nev
   | ({ ok: true } & Ok)
   | BatchRefusal<R>;
 
-/** The refusal every batch operation whose only precondition is card ownership can give. */
+/** Failure result for batch operations that check only card ownership. */
 export type CardBatchResult = BatchResult<"foreign-cards">;
 
 /**

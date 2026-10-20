@@ -128,7 +128,7 @@ describe("chunked", () => {
 
   it("keeps the row count as the ceiling for a narrow row", () => {
     const rows = Array.from({ length: INSERT_CHUNK_MAX + 1 }, (_, i) => i);
-    // Two columns affords far more than INSERT_CHUNK_MAX rows, so the row count still wins.
+    // Two columns allow more than `INSERT_CHUNK_MAX` rows, so the row limit applies first.
     expect(chunked(rows, { columnsPerRow: 2 })[0]).toHaveLength(INSERT_CHUNK_MAX);
   });
 

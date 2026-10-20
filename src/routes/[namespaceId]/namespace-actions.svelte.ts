@@ -153,9 +153,8 @@ export function createNamespaceActions(state: NamespaceState) {
   }
 
   /**
-   * Takes cards off the board before the server has confirmed they are gone, and hands
-   * back the undo for it. Delete and move-to-namespace do exactly the same thing here and
-   * differ only in the request they make and in what they say when it fails.
+   * Remove cards optimistically and return a rollback function. Deletion and namespace
+   * moves share this local update but use different requests and error messages.
    */
   function removeCardsOptimistically(cardIds: string[]): () => void {
     const cardIdSet = new Set(cardIds);

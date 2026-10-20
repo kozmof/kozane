@@ -54,7 +54,7 @@ export type TaskspaceEntryKind = "directory" | "file" | "symlink" | "other";
 export interface TaskspaceEntry {
   name: string;
   kind: TaskspaceEntryKind;
-  /** Bytes, for regular files. Null for everything else, where a size means nothing. */
+  /** Size in bytes for regular files, or null for other entry kinds. */
   size: number | null;
   modifiedAt: string | null;
 }
@@ -125,7 +125,7 @@ export interface TagHit {
   /** Full normalized tag without its sigil, such as `foo:bar:baz`. See `normalizeTag`. */
   tag: string;
   source: TagSource;
-  /** The line the tag sits on, trimmed and capped. Enough to recognize the hit by. */
+  /** Trimmed, length-limited source line used to identify the tag hit. */
   excerpt: string;
 }
 
