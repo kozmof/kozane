@@ -124,8 +124,7 @@ export type SectionDefaults = {
 };
 
 /**
- * Sections whose keys each fall back to a default when unset, with the values that stand
- * in for them, for reporting what a config is actually running with.
+ * List optional sections and their field defaults for configuration diagnostics.
  */
 export function optionalSectionDefaults(): SectionDefaults[] {
   return FIELD_GROUPS.filter((group) => !group.required && group.section !== null).map((group) => ({
@@ -142,7 +141,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Edit distance, capped at `limit` so far-apart keys bail out early. */
+/** Compute edit distance up to `limit`, stopping early for distant keys. */
 function editDistance(a: string, b: string, limit: number): number {
   if (Math.abs(a.length - b.length) > limit) return limit + 1;
   let previous = Array.from({ length: b.length + 1 }, (_, i) => i);

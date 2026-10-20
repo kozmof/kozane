@@ -28,12 +28,12 @@ export const MIN_STRIP_WIDTH = 260;
 /**
  * How far below the frame's bottom edge the strip starts, in canvas pixels.
  *
- * Clear of the resize handle, which is anchored at `bottom: -1px` with a height of 14 and so
- * hangs 13px below the edge. An icon under it would be a cell you cannot click.
+ * Leave room for the resize handle, which extends 13px below the frame's edge.
+ * Icons beneath the handle would not receive clicks.
  */
 export const STRIP_GAP = 18;
 
-/** One thing drawn in the strip. */
+/** One entry displayed in the file strip. */
 export type FileCell =
   /** The way back out of a directory drilled into. Always first, and only when inside one. */
   | { kind: "up"; label: string; path: string }
@@ -86,12 +86,12 @@ export function sortEntries(entries: TaskspaceEntry[]): TaskspaceEntry[] {
   });
 }
 
-/** The key one frame's view of one taskspace is remembered under. */
+/** Cache key for one frame and taskspace pair. */
 export function cwdKey(areaId: string, taskspaceId: string): string {
   return `${areaId}:${taskspaceId}`;
 }
 
-/** Which directory a frame is showing of one taskspace. The root, until it is drilled into. */
+/** Current directory for a frame and taskspace pair, defaulting to the taskspace root. */
 export function cwdFor(
   cwdByKey: Record<string, string>,
   areaId: string,
@@ -113,7 +113,7 @@ export function baseName(path: string): string {
 }
 
 type FileGroupsForArea = {
-  /** The frame these are drawn under, which is what its view of each taskspace is keyed by. */
+  /** Frame ID used to look up each taskspace's current directory. */
   areaId: string;
   /** Already narrowed to the area's scope by {@link taskspacesForScope}. */
   taskspaces: TaskspaceSummary[];

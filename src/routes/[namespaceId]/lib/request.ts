@@ -4,9 +4,7 @@ import { BATCH_MAX, NAME_MAX } from "$lib/constants";
 type JsonRecord = Record<string, unknown>;
 
 /**
- * Guards a request array against {@link BATCH_MAX} before anything is done with it, so an
- * oversized body is refused while it is still just a list rather than partway into a
- * statement SQLite will not accept.
+ * Reject arrays larger than {@link BATCH_MAX} before building database statements.
  */
 export function requireWithinBatchLimit(length: number, key: string): void {
   if (length > BATCH_MAX) throw error(400, `${key} must have at most ${BATCH_MAX} items`);

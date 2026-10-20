@@ -37,7 +37,7 @@
     return requested ? normalizeTag(requested) : null;
   });
 
-  /** Null gathers the whole workspace, which is what this page does with no `?namespaceId=`. */
+  /** Use null to gather the whole workspace when `?namespaceId=` is absent. */
   const selectedNamespaceId = $derived(
     data.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
   );
@@ -162,8 +162,7 @@
       : null;
   };
 
-  /** A node is open while the selected tag is inside it, so arriving on `:foo:bar:baz` by
-   *  link opens the tree down to it rather than showing a collapsed root. */
+  /** Expand ancestors of the selected tag so direct links reveal it in the tree. */
   const isOpen = (node: TagNode) => !!selectedTag && tagMatches(node.tag, selectedTag);
 
   /** Display the combined card and file count for each tag. */
@@ -269,9 +268,8 @@
           class="{rowClass} {selectedTag === node.tag ? activeRowClass : ''}"
         >
           <span class={css({ fontFamily: "mono" })}>{node.name}</span>
-          <!-- The number is drawn bare, which reads as "perf 12" with nothing to say what
-               12 is. The unit is given to a reader that cannot see the column it sits in,
-               and hidden from one that can. -->
+          <!-- Add a screen-reader label identifying the count while keeping the visible
+               number compact. -->
           <span class={countClass} aria-hidden="true">{countLabel(node.total)}</span>
           <span class={css({ srOnly: true })}>{countDescription(node.total)}</span>
         </a>
@@ -331,9 +329,7 @@
       {/if}
     </a>
 
-    <!-- Which namespace the index is narrowed to, and the way to change it. Picking the
-         namespace already selected clears the narrowing, which is the way back to the whole
-         workspace now that it has no row of its own. -->
+    <!-- Select a namespace to filter the index. Select it again to show the whole workspace. -->
     <nav
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
@@ -426,8 +422,7 @@
                         ></span>
                         {partition.name}
                       {/if}
-                      <!-- Only when gathering across the workspace, where which board a card
-                           is on is the thing a row cannot otherwise say. -->
+                      <!-- Identify each card's board in workspace-wide results. -->
                       {#if !selectedNamespaceId}
                         <span>{namespaceName(data.cardNamespaces[cardId])}</span>
                       {/if}

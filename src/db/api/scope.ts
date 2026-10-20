@@ -32,11 +32,11 @@ export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
 }
 
 /**
- * Return scopes visible on a namespace's board. A scope is visible when it has a card or
- * taskspace in that namespace, or when no card or taskspace anywhere refers to it.
+ * Return scopes with cards, taskspaces, or frames on this board. Scopes attached to unplaced
+ * taskspaces also appear on every board, as do scopes with no cards, taskspaces, or frames.
  *
- * Unused scopes appear on every board so a newly created scope remains visible before anything
- * is assigned to it. `deleteScopeFromNamespace` uses the same condition to allow removal.
+ * Keep newly created scopes visible before they are assigned. `deleteScopeFromNamespace`
+ * preserves scopes while any card, taskspace, or frame still references them.
  *
  * Use one statement for a consistent read with fewer database round trips. Correlated `EXISTS`
  * queries use the existing scope relation, taskspace, and primary-key indexes. `NOT IN` would
@@ -53,8 +53,7 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
       and(eq(scopeRelTable.scopeId, scopeTable.id), eq(partitionTable.namespaceId, namespaceId)),
     );
 
-  // A taskspace with no namespace is unplaced rather than another namespace's (see the note on
-  // `taskspaceTable`), so it counts here on every board rather than none.
+  // Unplaced taskspaces make their scopes visible on every board. See `taskspaceTable`.
   const taskspaceOfThisNamespace = db
     .select({ present: sql`1` })
     .from(taskspaceTable)
@@ -65,9 +64,7 @@ export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace):
       ),
     );
 
-  // A scope framed on this board is drawn here whether or not anything is in the frame yet.
-  // Without this branch a scope given an area and no cards would vanish from the board that
-  // has its frame on it, which is the one board that must keep it.
+  // A frame keeps its scope visible on this board even when the frame is empty.
   const areaOfThisNamespace = db
     .select({ present: sql`1` })
     .from(scopeAreaTable)
@@ -135,8 +132,7 @@ export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeName
   return union(fromCards, fromTaskspaces);
 }
 
-/** One scope's reach into one partition, and how many cards make it. See
- *  {@link getScopePartitionUsage}. */
+/** Card count for one scope and partition pair. See {@link getScopePartitionUsage}. */
 export type ScopePartitionUsage = { scopeId: string; partitionId: string; cards: number };
 
 /**

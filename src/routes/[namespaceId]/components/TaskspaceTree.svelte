@@ -112,8 +112,8 @@
   });
 </script>
 
-<!-- The glyph draws in `currentColor`, and these rows are `ink.secondary`, so the sheet is
-     wrapped in the dim it has always been drawn in rather than taking the row's colour. -->
+<!-- Set the file glyph color explicitly because it inherits `currentColor`.
+     Keep icons dimmer than the row text. -->
 {#snippet fileIcon(isLink: boolean)}
   <span class={css({ display: "flex", flexShrink: "0", color: "neutral.iconDim" })}>
     <FileGlyph kind={isLink ? "symlink" : "file"} />

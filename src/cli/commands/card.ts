@@ -197,9 +197,8 @@ export async function cardSquash(
 }
 
 /**
- * Moves an existing card to another layer of its own namespace. The namespace is taken from
- * the card rather than from `--namespace`, so the layer is always resolved against the
- * namespace that actually owns the card.
+ * Move a card to another layer in its namespace. Resolve the layer using the card's
+ * namespace, regardless of `--namespace`.
  */
 export async function cardSetLayer(requestedCardId: string, requestedLayer: string): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
@@ -511,7 +510,7 @@ export async function cardNearest(requestedId: string): Promise<void> {
     );
     const origin = findById(placed, cardId, "Card");
 
-    // Now the text, for the one namespace that is about to be printed.
+    // Fetch text only for the namespace being printed.
     const cards = await db
       .select({
         id: cardTable.id,

@@ -96,8 +96,7 @@ export async function deleteNamespace({ db, namespaceId }: DeleteNamespace): Pro
     // Collect glue IDs before namespace deletion cascades to their members.
     const glueIds = await namespaceGlueIds(tx, namespaceId);
     await tx.delete(namespaceTable).where(eq(namespaceTable.id, namespaceId));
-    // Groups the namespace did not empty entirely are left alone by the sweep, so a group
-    // that somehow spans two namespaces keeps the members it still has.
+    // Preserve surviving members of groups that span namespaces.
     await dissolveOrphanGlueGroupsInTx({ db: tx, glueIds });
 
     if (namespace?.isDefault) {

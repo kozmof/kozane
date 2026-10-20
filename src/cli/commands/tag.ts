@@ -44,8 +44,7 @@ const countLabel = ({ cards, files }: TagCounts): string =>
     .filter(Boolean)
     .join(", ");
 
-/** The tree, indented by depth. A tag prints with its sigil, so what is on screen is what
- *  would be typed into a card to write it. */
+/** Print the tag tree by depth, including the sigil used to write each tag in a card. */
 function printTree(nodes: TagNode[], depth = 0): void {
   for (const node of nodes) {
     console.log(`${"  ".repeat(depth)}${TAG_SIGIL}${node.name}  ${countLabel(node.total)}`);
@@ -57,9 +56,7 @@ function printTree(nodes: TagNode[], depth = 0): void {
 export async function tagList(options: TagOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root, dbUrl }) => {
     const namespaceId = await resolveNamespaceId(db, options.namespace);
-    // The cache matters most here. A command runs in a process that exits, so without one
-    // every invocation re-queries every card and re-reads every taskspace file to learn what
-    // the last invocation already worked out.
+    // Persist the index so separate CLI invocations can reuse unchanged card and file scans.
     const { hits, truncated, missing, taskspaces, cardsTruncated } = await loadTagIndex({
       db,
       namespaceId,
@@ -78,9 +75,7 @@ export async function tagList(options: TagOptions = {}): Promise<void> {
   });
 }
 
-/** What to call a taskspace the gather walked, falling back to its id. Every id printed came
- *  out of that same gather, so the fallback is for a row the walk somehow did not record
- *  rather than for one it never saw. */
+/** Return the gathered taskspace name, falling back to its ID when the name is unavailable. */
 const nameOf = (taskspaces: TagIndexTaskspaces, id: string): string => taskspaces[id]?.name || id;
 
 type WarnIncomplete = {
@@ -113,15 +108,14 @@ function warnIncomplete({ truncated, missing, taskspaces, cardsTruncated }: Warn
 }
 
 /**
- * Says which of a list is being printed, when it is not all of it. The page's wording for
- * the same cut, in a sentence rather than a paragraph.
+ * Report the displayed count and total when a result list is truncated.
  */
 function cappedNote(shown: number, total: number, noun: string): void {
   if (shown < total) console.log(`  … showing the first ${shown} of ${total} ${noun}.`);
 }
 
 /**
- * List cards and file lines matching a tag or its descendants through `tagMatches`. Apply
+ * List cards and file lines matching a tag or its descendants through `tagMatcher`. Apply
  * {@link TAG_HITS_SHOWN_MAX} separately to each kind so card hits cannot hide all file hits.
  */
 export async function tagShow(tag: string, options: TagShowOptions = {}): Promise<void> {

@@ -102,7 +102,7 @@ describe("loadCards", () => {
     for (let i = 0; i < 40; i += 1) {
       ids.push(await addCard({ db, partitionId, content: `Card ${i}` }));
     }
-    // Padded with ids that match nothing, so the list is long without the fixture being.
+    // Pad with nonexistent IDs to exceed the parameter budget without adding fixture rows.
     const padded = [...ids, ...Array.from({ length: 4_000 }, (_, i) => `absent-${i}`)];
 
     const rows = await loadCards(db, padded);

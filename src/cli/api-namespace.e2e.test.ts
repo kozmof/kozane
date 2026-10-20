@@ -137,8 +137,7 @@ describe("namespace, status, and doctor CLI flow", () => {
       expect(result.stdout + result.stderr).toContain("Kozane workspace");
     }
 
-    // An unreadable config is the case doctor exists for, so it reports the failed check
-    // and points at `doctor config` rather than dying on the parse error.
+    // Report unreadable configuration as a failed check with guidance to run `doctor config`.
     const root = tempWorkspace();
     cli(root, "init");
     writeFileSync(join(root, ".kozane", "config.json"), "{ invalid json");

@@ -26,8 +26,8 @@ export type HintCard = {
   posY: number;
   content: string;
   /**
-   * How many characters the whole card holds, when `content` is only its opening. Omitted
-   * when `content` is the whole of it, which is the case on the board being viewed.
+   * Full text length when `content` is a prefix. Omit when the full text is available,
+   * as it is for cards on the current board.
    */
   contentChars?: number;
   zIndex?: number;
@@ -104,8 +104,8 @@ function charCells(codePoint: number): number {
 }
 
 /**
- * How many cells a line of text takes up. Counted by code point, so a character outside
- * the basic plane counts once rather than once per surrogate half.
+ * Count the narrow cells occupied by a line. Iterate by code point to keep surrogate
+ * pairs together.
  */
 export function textCells(text: string): number {
   let cells = 0;

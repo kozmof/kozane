@@ -33,8 +33,7 @@ export type ScopeListOptions = { namespace?: string };
  */
 export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    // Short IDs are always drawn against every scope in the workspace, so the ID printed
-    // for a scope is the same one whether or not --namespace narrowed the list.
+    // Resolve short IDs against all workspace scopes so `--namespace` does not change them.
     const allScopes = await getAllScopes({ db });
     const scopeIds = allScopes.map((scope) => scope.id);
 

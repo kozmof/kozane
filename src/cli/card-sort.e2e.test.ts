@@ -258,9 +258,7 @@ describe("kozane card list --sort", () => {
   }, 60_000);
 
   it("names the malformed argument outside a workspace, rather than the missing workspace", () => {
-    // Nothing about `--reverse` alone depends on there being a workspace to list, so the
-    // command is refused where it is typed rather than after a workspace lookup that was
-    // never going to make it valid.
+    // Reject `--reverse` without a sort key before looking up a workspace.
     const root = tempWorkspace();
 
     expect(refusal(root, "card", "list", "--reverse")).toBe("Error: --reverse requires --sort.");
@@ -447,8 +445,7 @@ describe("kozane card show --times", () => {
     cli(root, "init");
     await seedThreeCards(root);
 
-    // What `kozane card show x > f.txt` writes. A history printed by default would land in
-    // the file too, so the flag is the whole of the difference.
+    // Keep default `card show` output suitable for redirecting card text to a file.
     expect(cli(root, "card", "show", "reconsidered")).toBe("reconsidered\n");
   }, 90_000);
 

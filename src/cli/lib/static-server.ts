@@ -72,7 +72,7 @@ export async function resolveRequest(root: string, rawUrl: string): Promise<Reso
   return { kind: "file", path: target, contentType: contentTypeFor(target) };
 }
 
-// A leading base path (e.g. "/kozane") lets the server preview a site that was
+// A leading base path such as "/kozane" lets the server preview a site that was
 // built with `--base`, whose client router expects to live under that prefix.
 function normalizeBase(base: string): string {
   if (!base || base === "/") return "";

@@ -19,13 +19,11 @@ export function createVimState(): VimState {
 }
 
 /**
- * Normal mode sits the caret on a character rather than between two, so the last column
- * of a line is its last character and not the position after it. An empty line has the one
- * position, which is why the floor is zero rather than a negative.
+ * Keep the normal-mode caret on a character. Clamp empty lines to column zero.
  *
- * The last character is asked for rather than counted back one column, because a column is
- * a UTF-16 code unit and a line ending in an emoji has two of them for its last character.
- * `doc.clamp` then holds the caret on the character it names, for the same reason.
+ * Columns count UTF-16 code units. Use `columnBefore` to find the last character's start,
+ * including characters represented by surrogate pairs. `doc.clamp` also keeps intermediate
+ * positions on character boundaries.
  */
 function clampNormal(doc: EditorDocument, { line, column }: Caret): Caret {
   const safeLine = Math.min(Math.max(0, line), Math.max(0, doc.lineCount - 1));
@@ -51,8 +49,7 @@ function wordForward(doc: EditorDocument, from: Caret): Caret {
   let { line, column } = from;
   let text = doc.lineText(line);
 
-  // Off the current word, then over the whitespace after it, wrapping to the next line
-  // when either runs off the end.
+  // Skip the current word and following whitespace, continuing across line endings.
   while (column < text.length && WORD.test(text[column])) column++;
   while (true) {
     if (column >= text.length) {
@@ -60,8 +57,7 @@ function wordForward(doc: EditorDocument, from: Caret): Caret {
       line++;
       text = doc.lineText(line);
       column = 0;
-      // A blank line is a word for `w`, which makes it a way through a paragraph
-      // break rather than something that skips over one.
+      // Stop on blank lines so `w` pauses at paragraph breaks.
       if (text.length === 0) return { line, column: 0 };
       continue;
     }
@@ -139,7 +135,7 @@ export function handleVimKey(
 
   if (vim.mode === "insert") {
     if (event.key === "Escape") {
-      // Leaving insert mode steps the caret back onto the last character typed, as vim does.
+      // Leaving insert mode steps the caret back onto the last character typed, as Vim does.
       return {
         vim: { mode: "normal", pending: null },
         caret: clampNormal(doc, {
@@ -258,7 +254,7 @@ export function handleVimKey(
     }
     case "u":
       // `normal` clamps, so an undone edit at the end of a line lands on its last
-      // character rather than after it, as vim does.
+      // character rather than after it, as Vim does.
       return normal(doc.undo() ?? at);
   }
 

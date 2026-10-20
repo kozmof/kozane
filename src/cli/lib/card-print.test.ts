@@ -61,8 +61,7 @@ describe("printCards", () => {
   });
 
   it("keeps a multi-line card on one line", async () => {
-    // A listing is one row per card, so a card holding newlines must not become three rows
-    // that read as three cards.
+    // Keep multiline card text on one output row so it cannot appear to be several cards.
     const { db, partitionId } = await setup();
     const id = await addCard({ db, partitionId, content: "one\ntwo" });
 
@@ -73,8 +72,7 @@ describe("printCards", () => {
   });
 
   it("abbreviates against every card in the workspace, not the ones being printed", async () => {
-    // The id printed for a card is the one `kozane card show` takes whichever command
-    // printed it, which is only true if the abbreviation is drawn against the whole set.
+    // Choose prefixes from all card IDs so every listing produces IDs `kozane card show` accepts.
     const { db, partitionId } = await setup();
     const shown = await addCard({ db, partitionId, content: "Shown" });
     const hidden = await addCard({ db, partitionId, content: "Hidden" });

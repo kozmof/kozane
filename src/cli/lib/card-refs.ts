@@ -46,7 +46,7 @@ export async function resolveCardGroup(db: DB, requestedIds: string[]) {
   return { index, allIds, cardIds, namespaceId };
 }
 
-/** What a command that positions or re-lays-out cards needs of each one. */
+/** Card fields required by positioning and layout commands. */
 export type LoadedCard = {
   id: string;
   content: string;
@@ -98,7 +98,7 @@ export async function resolvePartitionId(
   return partition.id;
 }
 
-/** The requested layer, or the namespace's default one when nothing was asked for. */
+/** Resolve the requested layer, falling back to the namespace's default. */
 export async function resolveLayerId(
   db: DB,
   namespaceId: string,

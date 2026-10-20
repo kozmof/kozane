@@ -44,15 +44,14 @@
     justifyContent: "center",
     boxShadow: "0 0.5px 1.5px rgba(0,0,0,0.018)",
   });
-  // Split rather than overridden so neither state depends on which atom Panda emits last.
+  // Keep state styles separate so Panda's rule order cannot change their precedence.
   const triggerRestClass = css({
     backgroundColor: "ink.light",
     borderColor: "neutral.border",
     // Use a darker color for sparse corner strokes so they remain visible.
     color: "neutral.iconDim",
   });
-  // The same filled treatment the focused row in the side panel carries, so the two places
-  // that report this one state look like the same state.
+  // Match the sidebar's filled style for the active scope.
   const triggerFocusedClass = css({
     backgroundColor: "ink.charcoal",
     borderColor: "ink.charcoal",

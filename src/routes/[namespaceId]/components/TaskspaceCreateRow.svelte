@@ -22,14 +22,13 @@
   let value = $state("");
   let input: HTMLInputElement | undefined = $state();
 
-  // The field appears because someone asked for it, so it takes the keyboard without a
-  // second click. `$effect` rather than `autofocus`, which only applies on page load.
+  // Focus the input when it mounts so creation can begin without another click.
   $effect(() => {
     input?.focus();
   });
 
   function onKeydown(event: KeyboardEvent): void {
-    // Kept off the board behind the panel, which otherwise reads single keys as shortcuts.
+    // Prevent typed characters from triggering board shortcuts.
     event.stopPropagation();
     if (event.key === "Enter") {
       event.preventDefault();
@@ -62,9 +61,8 @@
   const errorClass = css({ padding: "1px 6px 3px", fontSize: "11px", color: "state.error" });
 </script>
 
-<!-- A press elsewhere in the tree puts the name away. Left to the input's own `blur` rather
-     than a document listener, so that the button that opened it can take the click that
-     closes the one before it. -->
+<!-- Cancel on input blur so clicking another creation button can close this field
+     and open the next one with the same click. -->
 <div class={rowClass} style:padding-left={`${indent}px`}>
   <input
     bind:this={input}

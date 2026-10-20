@@ -271,8 +271,7 @@ export type TaskspaceListOptions = { namespace?: string };
  */
 export async function taskspaceList(options: TaskspaceListOptions = {}): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    // Short IDs are drawn against every taskspace in the workspace, so the ID printed for a
-    // row is the same one whether or not --namespace narrowed the list.
+    // Resolve short IDs against all workspace taskspaces so `--namespace` does not change them.
     const all = await getAllTaskspaces({ db });
     const taskspaceIds = all.map(({ id }) => id);
 

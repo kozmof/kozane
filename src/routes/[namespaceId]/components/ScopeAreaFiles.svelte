@@ -86,8 +86,7 @@
   });
 
   /**
-   * The canvas underneath starts a pan on mousedown and a marquee on shift-mousedown, and a
-   * press on a cell means neither. The same guard the tab and the resize handle carry.
+   * Stop file-cell presses from starting canvas panning or Shift-drag selection.
    */
   function swallow(event: MouseEvent) {
     event.stopPropagation();
@@ -130,8 +129,7 @@
           {group.error}
         </div>
       {:else if !group.read}
-        <!-- Nothing has come back yet. Said rather than left blank, because the listing is
-             fetched the moment a frame appears and silence would read as an empty taskspace. -->
+        <!-- Show loading feedback so a pending listing does not appear empty. -->
         {#if group.loading}
           <div class={noteClass}>Loading…</div>
         {/if}

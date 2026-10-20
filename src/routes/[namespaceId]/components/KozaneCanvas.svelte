@@ -647,9 +647,8 @@
         <SelectionRect rect={gestures.selectionRect} />
       {/if}
 
-      <!-- The frame being drawn, and then the one waiting for a scope. Drawn in the scope
-           accent rather than the selection one, because this rectangle is about to become a
-           thing that stays rather than a sweep that ends at mouseup. -->
+      <!-- Use the scope accent for frames being drawn or awaiting scope assignment.
+           This distinguishes a pending frame from a selection rectangle. -->
       {#if gestures.scopeAreaDraft ?? pendingScopeAreaRect}
         <SelectionRect
           rect={(gestures.scopeAreaDraft ?? pendingScopeAreaRect)!}

@@ -161,10 +161,8 @@
     </span>
   </div>
 
-  <!-- Resize handle. Drawn only while the card is armed, so an ordinary board carries no
-       grab targets along its card edges for a drag or a rectangle selection to catch on.
-       It straddles the right edge rather than sitting inside it, which is where the
-       pointer goes looking for one. -->
+  <!-- Show the resize handle only while armed so it cannot intercept ordinary drags
+       or rectangle selections. Center it over the card's right edge. -->
   {#if isResizing}
     <button
       class={css({ position: "absolute", top: "0", bottom: "0", width: "9px", padding: "0", border: "none", borderRadius: "1px", cursor: "ew-resize" })}
@@ -174,8 +172,7 @@
       style:background="var(--colors-select-accent)"
       style:opacity="0.55"
       onmousedown={(e) => {
-        // Without this the card underneath starts a drag and the card moves instead of
-        // growing. The canvas takes the resize from here.
+        // Prevent a card drag while the canvas handles resizing.
         e.stopPropagation();
         e.preventDefault();
         onResizeMouseDown?.(e);

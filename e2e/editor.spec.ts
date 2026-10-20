@@ -326,7 +326,7 @@ test("draws only the lines in view and scrolls the rest of a long file", async (
   expect(drawn).toBeGreaterThan(0);
   expect(drawn).toBeLessThan(120);
 
-  // The sizer gives the scrollbar the whole document's height to move through.
+  // Size the scroll area to the full document height.
   const scrollable = await surface.evaluate((el) => el.scrollHeight - el.clientHeight);
   expect(scrollable).toBeGreaterThan(1000);
 
@@ -424,7 +424,7 @@ test("commits an IME composition as one word rather than one character at a time
   await expect(page.locator("[data-preedit]")).toHaveCount(0);
   await expect(page.getByText("日本")).toBeVisible();
 
-  // One undo takes the whole word back, not the last candidate.
+  // One undo removes the entire committed word.
   await page.keyboard.press("Control+z");
   await expect(page.getByText("日本")).toBeHidden();
 });
@@ -461,7 +461,7 @@ test("asks before either route throws unsaved changes away", async ({ page }) =>
   await expect(page.getByText("This file has unsaved changes.")).toBeHidden();
   await expect(page.getByTitle("Unsaved changes")).toBeVisible();
 
-  // A click on the board asks the same question rather than closing.
+  // Clicking the board also prompts for unsaved changes.
   await page.mouse.click(80, 300);
   await expect(page.getByText("This file has unsaved changes.")).toBeVisible();
   await expect(panel).toBeVisible();
