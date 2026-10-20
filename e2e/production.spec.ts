@@ -54,7 +54,7 @@ test.beforeAll(async () => {
       HOST: "127.0.0.1",
       PORT: port,
       // Matches what `kozane open` sets for a loopback binding so SvelteKit's
-      // CSRF origin check accepts the login form POST over http.
+      // CSRF origin check accepts the login form POST over HTTP.
       ORIGIN: baseUrl,
     },
     stdio: "pipe",

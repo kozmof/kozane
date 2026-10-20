@@ -53,7 +53,7 @@ export function startSnapshotPoll({
         cache: "no-store",
         ...(known && { headers: { "if-none-match": known } }),
       });
-      // 304: the board already matches the database, and there is nothing to apply.
+      // A 304 response means the board is current.
       if (response.status === 304) return;
       if (!response.ok) return;
       // Validate the response before applying it. Preserve the current board and leave the

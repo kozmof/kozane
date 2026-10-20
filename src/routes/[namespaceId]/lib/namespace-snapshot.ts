@@ -72,9 +72,8 @@ export async function loadNamespaceSnapshot({
   // Read cards before their relations. These sequential queries are not one database
   // transaction, so concurrent writes can make the result span different states. Polling
   // resolves temporary disagreement.
-  // A card stowed into an inventory created after the inventories were read would otherwise
-  // be drawn nowhere: not on the canvas, and in no window. Until the next poll brings the
-  // inventory, it shows at the canvas position it keeps for coming out.
+  // Show cards whose inventory is absent at their saved canvas positions. An inventory
+  // created between these reads becomes available on the next poll.
   const inventoryIds = new Set(inventories.map(({ id }) => id));
   const cards = (
     await getCardDataByPartitions({ db, partitionIds: partitions.map(({ id }) => id) })

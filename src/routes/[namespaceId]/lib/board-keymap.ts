@@ -61,12 +61,8 @@ export function runKeyBindings(event: BoardKeyEvent, bindings: readonly KeyBindi
 }
 
 /**
- * Whether a keystroke aimed at this element is someone typing rather than someone reaching
- * for a shortcut.
- *
- * `isContentEditable` is checked as well as the two tag names because the editor panel and
- * the composer are not the only places text goes, and an element that takes text without
- * being an `<input>` would otherwise have every letter of it read as a command.
+ * Whether the target accepts text input. Check inputs, textareas, and editable elements
+ * so typing does not trigger board shortcuts.
  */
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;

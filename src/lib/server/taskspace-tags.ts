@@ -65,9 +65,8 @@ export const createScanPool = (limits: GatherScanLimits = {}): ScanPool => ({
 export type TaskspaceTagScan = {
   hits: TagHit[];
   /**
-   * The limits this scan stopped at, empty when it read the whole taskspace. A tag index
-   * that says nothing about a taskspace it only half-read is telling the user their tag is
-   * not there when it may well be.
+   * Limits that stopped this scan, or an empty list for a complete scan. Report truncation
+   * so missing hits are not mistaken for evidence that a tag is absent.
    */
   truncated: TagScanTruncation[];
   /**

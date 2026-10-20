@@ -190,11 +190,8 @@ export async function open(options: OpenOptions): Promise<void> {
       HOST: host,
       PORT: port,
       KOZANE_LOG_REQUESTS: options.logRequests ? "1" : "0",
-      // A local (loopback) server is served over plain http, but the Node adapter
-      // assumes https, so SvelteKit's CSRF origin check rejects the login form (a
-      // POST) with 403. Give the adapter the exact loopback origin so the check
-      // matches the browser. Remote bindings configure ORIGIN / PROTOCOL_HEADER
-      // through the reverse proxy instead (see docs), so this only fires locally.
+      // Set the loopback HTTP origin so SvelteKit's CSRF check accepts login form POSTs.
+      // Remote bindings configure ORIGIN or PROTOCOL_HEADER through the reverse proxy.
       ...(localBinding ? { ORIGIN: url } : {}),
     },
     stdio: "inherit",

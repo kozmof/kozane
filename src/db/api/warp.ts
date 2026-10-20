@@ -13,9 +13,8 @@ export async function getAllWarps({ db, namespaceId }: NeedsNamespace): Promise<
 }
 
 /**
- * Every warp in the workspace, for the cross-namespace warp palette. Ordered by namespace and
- * then by id, so the warps of one namespace arrive in the same creation order
- * {@link getAllWarps} gives them and keep the numbers their markers show.
+ * List workspace warps for the cross-namespace palette, ordered by namespace and ID.
+ * Preserve the creation order used by {@link getAllWarps} so marker numbers stay consistent.
  */
 export async function getAllWorkspaceWarps({ db }: NeedsDB): Promise<Warp[]> {
   return db.select().from(warpTable).orderBy(asc(warpTable.namespaceId), asc(warpTable.id));

@@ -19,8 +19,7 @@ export { databaseSignature };
  * gather.
  */
 
-/** Bumped when the shape below changes. A file carrying any other value is ignored, which is
- *  what lets the shape change without a migration or a stale-format bug. */
+/** Increment when the cache shape changes. Ignore files with other versions. */
 export const TAG_CACHE_VERSION = 3;
 export const TAG_CACHE_FILE = "tag-index.json";
 
@@ -51,8 +50,7 @@ export type TagCache = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** Whether every value of a record satisfies `each`. An empty record passes, which is what a
- *  workspace with nothing cached yet writes. */
+/** Check every record value with `each`. Accept empty records for empty caches. */
 function everyValue(value: unknown, each: (entry: unknown) => boolean): boolean {
   return isRecord(value) && Object.values(value).every(each);
 }
@@ -173,9 +171,8 @@ export function writeTagCache(root: string, cache: TagCache): void {
     }
     writeFileAtomic(tagCachePath(root), serialized);
   } catch {
-    // Ignored for the reason given above. `JSON.stringify` is inside the try for the same reason the write
-    // is. A gather large enough to exceed the engine's maximum string length throws here,
-    // and that is a cache that cannot be written, not a page that cannot be served.
+    // Ignore serialization and write failures so caching cannot prevent serving the page.
+    // Serialization can fail when gathered data exceeds the engine's string-length limit.
   }
 }
 
@@ -291,8 +288,7 @@ function unchangedFrom(
   return sameOrder(existing.scopes, scopes) && sameOrder(existing.files, files);
 }
 
-/** Same keys, in the same order, each holding the very same value. Order counts because it is
- *  what both evictions above read as least-recently-used. */
+/** Compare key order and value identity. Key order determines cache eviction order. */
 function sameOrder(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
   const keys = Object.keys(a);
   const next = Object.keys(b);

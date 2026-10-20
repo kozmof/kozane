@@ -62,8 +62,7 @@ const ROLLBACK_TO_0004 = [
   "CREATE UNIQUE INDEX `bundle_one_default_per_project` ON `bundle` (`project_id`) WHERE is_default = 1",
   "DROP INDEX IF EXISTS `partition_name_per_namespace`",
   "CREATE UNIQUE INDEX `bundle_name_per_project` ON `bundle` (`project_id`,`name`)",
-  // Rebuild `card` without `layer_id`, which is the column 0005 adds and rebuilds the table
-  // for.
+  // Rebuild `card` without `layer_id` so migration 0005 can add it again.
   `CREATE TABLE __old_card (
      id text PRIMARY KEY NOT NULL,
      bundle_id text NOT NULL,
@@ -80,9 +79,8 @@ const ROLLBACK_TO_0004 = [
   "ALTER TABLE __old_card RENAME TO card",
   "DROP TABLE layer",
   "DROP TABLE warp",
-  // Added by 0016, which is one of the migrations the journal delete below marks as never
-  // applied. Left standing, the re-apply fails on `CREATE TABLE scope_area`. Its indexes go
-  // with it, the same as `warp`'s do.
+  // Drop `scope_area` and its indexes so migration 0016 can recreate them after its
+  // journal entry is removed.
   "DROP TABLE IF EXISTS scope_area",
   // Added by 0018. The card rebuild above already took its columns and index.
   "DROP TABLE IF EXISTS inventory",

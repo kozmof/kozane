@@ -148,8 +148,7 @@ export function buildProgram(): Command {
     .option("--no-open", "Start the server without opening the browser")
     .action((opts) => ssgPreview(opts));
 
-  // `doctor` runs the workspace health check on its own, and hosts the deeper per-area
-  // checks as subcommands.
+  // Run workspace health checks with `doctor` and detailed checks with its subcommands.
   const doctorCommand = program
     .command("doctor")
     .description("Check Kozane workspace health")

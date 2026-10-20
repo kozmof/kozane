@@ -87,9 +87,7 @@
   // PATCH begins.
   const positionActivity = new InFlight();
   /**
-   * Whether the composer’s action bar has the keyboard. Every board-level shortcut below
-   * the composer in `keyBindings` asks this, which is what the bare `return` it replaces
-   * used to do for all of them at once.
+   * Whether board shortcuts may handle keys shared with the composer's selection actions.
    */
   const noSelection = () => s.selection.selectedCards.size === 0;
 
@@ -573,7 +571,7 @@
       removeFocusedWarp: () => {
         if (s.focusedWarpId) void actions.handleRemoveWarp(s.focusedWarpId);
       },
-      // Dropped where a warp would be: under the pointer, or in the middle of the view.
+      // Place under the pointer or at the view center, using the warp placement rule.
       addInventoryHere: () => void inventoryActions.add(canvasComponent.getWarpPosition()),
     }),
   );

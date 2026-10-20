@@ -35,7 +35,7 @@ describe("applyConnectionPragmas", () => {
     const client = createClient({ url });
     try {
       await applyConnectionPragmas(client, url);
-      // Create something, so the mode is written to a database with a header to hold it.
+      // Create a table so the database header persists the journal mode.
       await client.execute("CREATE TABLE t (id INTEGER PRIMARY KEY)");
     } finally {
       client.close();
@@ -63,7 +63,7 @@ describe("applyConnectionPragmas", () => {
     try {
       await applyConnectionPragmas(client, url);
       expect((await client.execute("PRAGMA journal_mode")).rows[0]?.journal_mode).not.toBe("wal");
-      // The two that are about the connection still apply.
+      // Foreign-key enforcement still applies to the in-memory connection.
       expect((await client.execute("PRAGMA foreign_keys")).rows[0]?.foreign_keys).toBe(1);
     } finally {
       client.close();

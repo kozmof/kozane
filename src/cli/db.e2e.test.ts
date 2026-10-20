@@ -171,7 +171,7 @@ describe("kozane db import — limits", () => {
     expect(result.stderr).toContain("Warning: card: 1 card positioned outside this workspace's");
     expect(result.stderr).toContain("Warning: 1 name longer than the 255-character limit");
 
-    // And findable afterwards, which is the other half of not refusing.
+    // Verify that the imported card remains readable.
     const doctor = runCli(root, "doctor");
     expect(doctor.stdout).toContain("✗  Rows within workspace limits");
   }, 30_000);

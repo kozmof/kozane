@@ -87,8 +87,7 @@ const every: BoardGesture[] = [
 
 describe("holdsPositionActivity", () => {
   it("is true for the gestures that move or resize something", () => {
-    // These five reserve position activity at the press, which is what stands the snapshot
-    // poll down so it cannot overwrite the board mid-drag.
+    // Moving and resizing reserve position activity on press to pause polling during the gesture.
     expect(holdsPositionActivity("card-drag")).toBe(true);
     expect(holdsPositionActivity("card-resize")).toBe(true);
     expect(holdsPositionActivity("warp-drag")).toBe(true);

@@ -99,8 +99,7 @@ describe("production request hook", () => {
 
   it("answers 503 naming the file when the API key cannot be read", async () => {
     const root = workspace();
-    // What a hand-edit leaves behind. Unguarded this threw out of the hook, and every
-    // page load and every poll became a 500 that said nothing about the file behind it.
+    // Report malformed hand-edited key files as workspace errors.
     writeFileSync(join(root, ".kozane", "api.json"), "{not json");
     state.root = root;
 

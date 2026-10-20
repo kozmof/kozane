@@ -176,11 +176,11 @@
       warpId: string,
       position: { posX: number; posY: number },
     ) => Promise<boolean>;
-    /** Inventory icons on this board. Their cards are in `cards`, with an `inventoryId`. */
+    /** Inventory icons on this board. Their cards appear in `cards` with inventory data. */
     inventories: Inventory[];
     /** Inventories whose grid is open, which draws their icon in the accent. */
     openInventoryIds: ReadonlySet<string>;
-    /** What an icon is called: its name, or a numbered fallback. */
+    /** Icon label using the inventory name or a numbered fallback. */
     inventoryLabel: (inventory: Inventory) => string;
     onToggleInventory: (inventoryId: string) => void;
     /** Persist an optimistically moved icon. Return false to put it back. */
@@ -193,8 +193,8 @@
     /** Puts a stored card on the canvas, answering whether the server kept it there. */
     onTake: (cardId: string, position: { posX: number; posY: number }) => Promise<boolean>;
     /**
-     * Out: a drag that involves an inventory, for the grids drawn outside the canvas. Which
-     * slot it aims at, and which stored card is being dragged and where its preview goes.
+     * Report inventory drag state to the grids outside the canvas. Include the target slot,
+     * dragged card, and preview position.
      */
     inventoryDrag?: {
       target: DropTarget | null;

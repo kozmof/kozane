@@ -207,9 +207,9 @@ export type InventoryRepair = {
 };
 
 /**
- * Repairs every inventory in the workspace: moves overlapping cards apart, as
- * {@link planRepair} plans it, and takes stored cards out of their glue groups. Reports the
- * same cards {@link findInventoryConflicts} finds, and leaves nothing for it to find.
+ * Repair every inventory using {@link planRepair} and remove stored cards from glue groups.
+ * Return moved cards and stored cards removed from glue groups.
+ * After repair, {@link findInventoryConflicts} should find no conflicts.
  */
 export async function repairInventories({ db }: { db: DB }): Promise<InventoryRepair> {
   return withTx(db, async (tx) => {
@@ -241,7 +241,7 @@ export type InventoryConflicts = {
   glued: string[];
 };
 
-/** Finds stored cards that overlap or are glued, across the whole workspace. */
+/** Find stored cards that overlap or belong to glue groups across the workspace. */
 export async function findInventoryConflicts({ db }: NeedsDB): Promise<InventoryConflicts> {
   const rows = await db
     .select({
@@ -291,8 +291,8 @@ export type Refit = {
 };
 
 /**
- * Moves a stored card whose text changed, if it now covers cells another card holds, to the
- * first place it fits. Call it in the transaction that changed the text.
+ * Move an edited stored card to the first available slot if its new size overlaps another
+ * card. Call this inside the transaction that changed the text.
  */
 export async function refitStoredCardInTx({
   db: tx,
@@ -324,8 +324,8 @@ export async function refitStoredCardInTx({
 }
 
 /**
- * Takes cards out of whatever inventory holds them, clearing both inventory columns together.
- * Their canvas positions are kept, so they come back where they were before they were stored.
+ * Remove cards from their inventories and clear both inventory columns together.
+ * Preserve their previous canvas positions for when they leave storage.
  */
 export async function releaseCardsInTx(tx: Tx, cardIds: string[]): Promise<void> {
   for (const batch of chunked(cardIds, { size: BATCH_MAX }))
@@ -336,8 +336,8 @@ export async function releaseCardsInTx(tx: Tx, cardIds: string[]): Promise<void>
 }
 
 /**
- * Deletes an inventory. Its cards go back on the canvas where they were before they were
- * stored, and their IDs come back so a caller can draw them there.
+ * Delete an inventory and return its cards to their previous canvas positions.
+ * Return the card IDs so callers can update the board.
  */
 export async function deleteInventory({
   db,
@@ -382,8 +382,8 @@ type StowCards = NeedsNamespaceInventory & {
 };
 
 /**
- * Puts cards into an inventory, from the canvas or from another inventory, as
- * {@link planStow} plans it. A card leaves its glue group when it is stored.
+ * Store cards from the canvas or another inventory using {@link planStow}.
+ * Remove each stored card from its glue group.
  */
 export async function stowCards({ db, ...stow }: StowCards & { db: DB }): Promise<StowResult> {
   return withTx(db, (tx) => stowCardsInTx({ db: tx, ...stow }));
@@ -442,9 +442,9 @@ export async function stowCardsInTx({
 export type TakeResult = BatchResult<"foreign-cards" | "unstored-cards">;
 
 /**
- * Puts stored cards back on the canvas. A card given a position goes there. One without
- * goes back to where it was before it was stored. A card already on the canvas is refused,
- * since moving it here would skip the grid snap and leave its glue group behind.
+ * Return stored cards to the supplied positions or their previous canvas positions.
+ * Reject cards already on the canvas because this path bypasses grid snapping and glue-group
+ * movement.
  */
 export async function takeCards({
   db,

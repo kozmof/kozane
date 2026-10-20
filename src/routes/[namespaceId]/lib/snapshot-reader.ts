@@ -98,7 +98,7 @@ export function readCard(row: unknown): CardWithGlue | undefined {
   };
 }
 
-/** A card's `inventory`: null on the canvas, or its inventory and slot. Undefined if malformed. */
+/** Read inventory and slot data, null for a canvas card, or undefined for malformed data. */
 export function readCardInventory(row: unknown): CardInventory | null | undefined {
   if (typeof row !== "object" || row === null || !("inventory" in row)) return undefined;
   const { inventory } = row;

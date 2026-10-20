@@ -1,6 +1,5 @@
-// Wraps a URL in an OSC 8 terminal hyperlink escape sequence so supporting
-// terminals render clickable text. Falls back to the plain label when output
-// isn't a TTY or NO_COLOR is set, keeping piped and redirected output clean.
+// Render a clickable label with an OSC 8 hyperlink in supporting terminals.
+// Use the plain label when output is not a TTY or NO_COLOR is enabled.
 const OSC_8 = "]8;;";
 const ST = "\\";
 

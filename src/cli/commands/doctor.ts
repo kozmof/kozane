@@ -194,7 +194,7 @@ async function rowsOverLimits(
         .from(cardTable)
         .where(where)
         .limit(NAMED_BAD_STAMPS);
-      // Short ids, because that is what `kozane card show` and `card edit` take.
+      // Use short IDs accepted by `kozane card show` and `card edit`.
       const named: string[] = [];
       for (const { id } of worst) named.push(await shortIdOf(id));
       return { total, named };

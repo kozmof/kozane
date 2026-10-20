@@ -75,7 +75,7 @@
     if (!draggable) onToggle();
   }}
 >
-  <!-- A box with a lid: a container, not a bag or a brand. -->
+  <!-- Draw the inventory as a box with a lid. -->
   <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
     <rect x="2.5" y="6.5" width="13" height="9" rx="1" stroke="currentColor" stroke-width="1.2" />
     <path d="M1.5 4.5h15v2h-15z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />

@@ -369,9 +369,8 @@ describe("loadTagIndex", () => {
     });
 
     /**
-     * The gather that answers entirely from the file it would be rewriting has nothing to
-     * write, and writing anyway meant serializing the whole cache and replacing the file with
-     * itself on every page load and every `kozane tag` run.
+     * Reuse an unchanged cache without serializing and replacing it on each page load or
+     * `kozane tag` run.
      */
     it("leaves the file alone when the gather learned nothing", async () => {
       const { db, namespaceId, partitionId, cache } = await cachedSetup();
@@ -403,10 +402,8 @@ describe("loadTagIndex", () => {
     });
 
     /**
-     * `files` only ever gained keys, so a taskspace deleted or re-pathed left every file it
-     * had parsed in the cache for good. A gather across the whole workspace has seen every
-     * taskspace there is, which is what lets it tell one that is gone from one it did not
-     * happen to look at.
+     * A workspace-wide gather can identify deleted or moved taskspaces and remove their
+     * cached files. A namespace-filtered gather cannot establish that other taskspaces are gone.
      */
     it("drops the stored files of a taskspace that is no longer one", async () => {
       const { db, namespaceId, cache } = await cachedSetup();

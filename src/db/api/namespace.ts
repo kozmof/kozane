@@ -101,8 +101,7 @@ export async function deleteNamespace({ db, namespaceId }: DeleteNamespace): Pro
     await dissolveOrphanGlueGroupsInTx({ db: tx, glueIds });
 
     if (namespace?.isDefault) {
-      // Ordered so the workspace promotes the same namespace twice running. uuidv7 ids sort
-      // by creation, which makes this the oldest surviving namespace.
+      // Choose the oldest surviving namespace consistently using UUIDv7 creation order.
       const replacement = await tx
         .select({ id: namespaceTable.id })
         .from(namespaceTable)

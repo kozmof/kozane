@@ -11,7 +11,7 @@ import type {
   Inventory,
 } from "../db/api/types.js";
 
-/** Where a stored card sits: its inventory and the slot of its top cell. */
+/** A stored card's inventory and top-cell slot. */
 export type CardInventory = { id: string; slot: number };
 
 // `zIndex` is required because its column is NOT NULL DEFAULT 0. `width` stays nullable so

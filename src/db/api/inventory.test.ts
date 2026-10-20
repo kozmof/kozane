@@ -402,9 +402,8 @@ describe("findInventoryConflicts", () => {
 });
 
 /**
- * An inventory left the way a dump import or a layout change could leave it, past every
- * writer's check: a tall card at slot 0 over `below` at the slot under it, and a stored card
- * still glued to one on the canvas.
+ * Create conflicts that an import or layout change can leave behind. A tall card at slot 0
+ * overlaps `below`, and a stored card remains glued to a card on the canvas.
  */
 async function brokenInventory() {
   const board = await setup();

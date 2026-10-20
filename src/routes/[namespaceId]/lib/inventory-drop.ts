@@ -1,11 +1,10 @@
 /**
- * Where a drag would land if it let go here. Inventory icons and windows mark themselves with
- * `data-inventory-drop`, grid cells also with `data-inventory-slot`, and the board with
+ * Identify the drop target under the pointer. Inventory icons and windows use
+ * `data-inventory-drop`. Grid cells add `data-inventory-slot`, and the board uses
  * `data-canvas-surface`.
  *
- * Read from every element stacked under the pointer rather than the topmost one. The card
- * being dragged on the canvas is usually what sits directly under the pointer, and a stored
- * card covering several cells lies over the cells it covers.
+ * Inspect the element stack to find targets beneath dragged cards and stored cards that
+ * cover grid cells.
  */
 export type DropTarget =
   | { kind: "inventory"; inventoryId: string; slot: number | null }

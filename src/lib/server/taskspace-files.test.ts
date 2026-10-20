@@ -669,8 +669,8 @@ describe("taskspace files on an awkward filesystem", () => {
 
   describe("an entry that is neither a file nor a directory", () => {
     it("lists a unix socket as `other`, with no size", async () => {
-      // The one `entryKind` branch nothing else reaches. A socket is what a running program
-      // leaves in a working directory, so a taskspace can genuinely contain one.
+      // Exercise the socket entry kind using a socket file a running program could leave
+      // in a taskspace.
       const server = createServer();
       await new Promise<void>((resolve) => server.listen(join(base, "app.sock"), resolve));
       try {

@@ -11,9 +11,8 @@ export type LeaveIntent = {
 };
 
 /**
- * Asked before an in-app navigation. The wording for a tab being closed is the browser's
- * own and cannot be set from here, so the two questions do not read alike however this is
- * phrased.
+ * Confirmation text for in-app navigation. The browser supplies its own text for tab
+ * closing and reloading.
  */
 export const UNSAVED_LEAVE_PROMPT = "This file has unsaved changes. Leave and discard them?";
 

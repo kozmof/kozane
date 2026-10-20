@@ -58,8 +58,7 @@ export function readApiKey(workspaceRoot: string): ApiKeyFile | null {
   if (typeof value.createdAt !== "string" || Number.isNaN(Date.parse(value.createdAt))) {
     throw new Error(`Invalid Kozane API key at ${path}: createdAt must be an ISO date string`);
   }
-  // Frozen because every caller from here on is handed the same object rather than a fresh
-  // parse of the file, and a shared value that can be written through is a trap.
+  // Freeze the shared cached value so callers cannot change it for later requests.
   const result: ApiKeyFile = Object.freeze({ apiKey: value.apiKey, createdAt: value.createdAt });
   // Cache only successfully parsed files so repairing a malformed file takes effect without a
   // restart.

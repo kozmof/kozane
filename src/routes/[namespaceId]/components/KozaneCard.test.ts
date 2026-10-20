@@ -254,8 +254,7 @@ describe("KozaneCard", () => {
         }),
       });
 
-      // The grammar cuts a URL out before looking for tags, so the address is a link and
-      // nothing inside it is one. This is the case where the card and the index disagreed.
+      // Exclude URLs from tag scanning so rendering and indexing agree on tag boundaries.
       const links = screen.getAllByRole("link");
       expect(links).toHaveLength(1);
       // Exclude the closing parenthesis from the URL and ignore tag-like text inside the URL

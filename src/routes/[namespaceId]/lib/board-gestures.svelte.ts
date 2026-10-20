@@ -676,7 +676,7 @@ export class BoardGestures {
   // ── Letting go ───────────────────────────────────────────────────────────
 
   /**
-   * Puts the open gesture down and does whatever its release means.
+   * Finish the active gesture and apply its release action.
    *
    * The slot is read and cleared before anything is awaited. Each arm then works from `g`,
    * the gesture it narrowed, and not from state a later press may have replaced while a save
@@ -752,8 +752,7 @@ export class BoardGestures {
     await tick();
     const areaChanges = this.#scopeAreaChanges(g.areaMembersBefore);
     if (await this.#host.onPersistPositions(positions)) {
-      // Only once the positions are stored. A card filed into a scope at a position the
-      // server refused would be a member of it while sitting somewhere else entirely.
+      // Update scope membership only after the server accepts the card positions.
       await this.#applyScopeAreaChanges(areaChanges);
       return;
     }

@@ -35,7 +35,7 @@ function* walkDirectories(root: string, depth = 0): Generator<string> {
     return;
   }
 
-  // Yield the root itself first so we check it too
+  // Yield the root first so its marker is checked too.
   yield root;
 
   for (const entry of entries) {

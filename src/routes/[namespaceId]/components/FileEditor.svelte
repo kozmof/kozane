@@ -30,7 +30,7 @@
     onClose: () => void;
   } = $props();
 
-  /** Narrow enough to still be a file, and never so wide the board behind it is gone. */
+  /** Panel width limits that leave room for readable text and the board. */
   const MIN_WIDTH = 320;
   const EDGE_MARGIN = 120;
   const KEY_STEP = 16;
@@ -129,11 +129,8 @@
   }
 
   /**
-   * The width the panel is drawn at.
-   *
-   * `clamp` rather than a stored number held inside bounds, so a window resized narrower
-   * than the width someone dragged to does not leave the panel hanging off the edge. The
-   * value survives the resize, and comes back when there is room for it again.
+   * Clamp the rendered panel width to the viewport while preserving the requested width.
+   * Restore that width when the viewport has room again.
    */
   const panelWidth = $derived(
     width === null

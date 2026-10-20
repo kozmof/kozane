@@ -677,8 +677,8 @@ function readStackRows(
 }
 
 /**
- * The highest and lowest zIndex on a layer, each clamped to 0 so an empty layer starts where
- * a first card would. Asked of SQLite rather than folded over every card's row in JS.
+ * Read a layer's highest and lowest zIndex with SQL aggregates. Include 0 in the range so
+ * an empty layer has a starting value.
  */
 async function layerStackBounds(tx: Tx, layerId: string): Promise<{ top: number; bottom: number }> {
   const row = await tx
@@ -797,8 +797,7 @@ export async function reassignCardsStackOrder({
           stacking.push({ cardId: card.id, zIndex: top + 1 + index }),
         );
       } else {
-        // Handed out from the bottom up in the same order, so the card that was already
-        // lowest in the group stays lowest rather than landing on top of its own group.
+        // Assign values from bottom to top to preserve the group's relative order.
         const n = ordered.length;
         ordered.forEach((card, index) =>
           stacking.push({ cardId: card.id, zIndex: bottom - (n - index) }),

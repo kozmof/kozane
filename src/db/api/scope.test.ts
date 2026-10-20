@@ -148,7 +148,7 @@ describe("deleteScopeFromNamespace", () => {
 
     await deleteScopeFromNamespace({ db: d, namespaceId: p1, scopeId });
 
-    // Scope still exists because p2's card remains
+    // Preserve the scope because p2's card still references it.
     expect(await getScope({ db: d, scopeId })).toBeDefined();
     // Remove p1's card and preserve p2's card.
     expect(await getScopeRelsByCards({ db: d, cardIds: [card1] })).toHaveLength(0);
@@ -387,9 +387,7 @@ describe("getScopeNamespaceUsage", () => {
     expect(await getScopeNamespaceUsage({ db: d })).toEqual([{ scopeId, namespaceId }]);
   });
 
-  // The overlap between the two halves, which used to be collapsed in JS after running
-  // them as separate queries and is now the UNION's job. A namespace that reaches one scope
-  // both ways is still one row.
+  // UNION returns one row when both card and taskspace links connect a scope to a namespace.
   it("reports a namespace reached by both a card and a taskspace once", async () => {
     const d = await createTestDB();
     const namespaceId = await addNamespace({ db: d, name: "P" });

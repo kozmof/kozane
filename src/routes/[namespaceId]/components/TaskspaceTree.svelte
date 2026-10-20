@@ -28,13 +28,12 @@
     path: string;
     depth?: number;
     /**
-     * Opens a file in the editor. Absent in a static export, where there is no endpoint to
-     * read one with, and the rows stay inert as they always were.
+     * Open a file in the editor. Omit this callback when file content is unavailable.
      */
     onOpenFile?: (taskspacePath: string) => void;
     /**
-     * Whether this tree offers new files and folders. False in a static export, which has
-     * no server to make one with, and false wherever the panel itself is read-only.
+     * Whether the tree offers file and folder creation. Disable it for static exports and
+     * read-only panels.
      */
     canCreate?: boolean;
   } = $props();

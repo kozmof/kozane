@@ -9,7 +9,7 @@ type ReedStore = ReturnType<typeof store.createDocumentStoreWithEvents>;
 export type Caret = {
   /** 0-indexed line. */
   line: number;
-  /** 0-indexed column, counted in characters rather than bytes. */
+  /** Zero-based column counted in UTF-16 code units. */
   column: number;
 };
 
@@ -89,9 +89,8 @@ export class EditorDocument {
   }
 
   /**
-   * Drops the subscription. The store holds a reconciliation scheduler that keeps running
-   * otherwise, so an editor closed without this leaves work behind for a file nobody has
-   * open.
+   * Dispose the subscription when closing the editor to stop the store's reconciliation
+   * scheduler.
    */
   dispose(): void {
     this.#unsubscribe?.();

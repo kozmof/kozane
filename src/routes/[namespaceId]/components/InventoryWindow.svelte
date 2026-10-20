@@ -47,7 +47,7 @@
 
   const cell = INVENTORY_CELL;
 
-  /** Each card with the cells it covers, sized by its text so all of it shows. */
+  /** Each card and its occupied cells, sized from text up to the maximum span. */
   const placed = $derived.by(() => {
     const byId = new Map(cards.map((card) => [card.id, card]));
     return inventoryFootprints(cards, inventory.id).map(({ cardId, slot, span }) => ({
@@ -103,7 +103,7 @@
   });
 </script>
 
-<!-- The whole window takes drops: off a cell, a card goes to the first free slot. -->
+<!-- Accept drops across the window. Drops outside cells use the first free slot. -->
 <section
   class={css({
     background: "ink.white",

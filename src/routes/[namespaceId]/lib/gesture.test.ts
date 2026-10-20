@@ -34,8 +34,7 @@ describe("travelled", () => {
   });
 
   it("is false exactly at the threshold, and true one pixel past it", () => {
-    // The original six copies were all `> threshold`, so the boundary belongs to "not moved".
-    // A test on each side because this is the one place an accidental `>=` would hide.
+    // Movement must exceed the threshold. Test both sides to distinguish `>` from `>=`.
     expect(travelled(atOrigin(), DRAG_THRESHOLD, 0)).toBe(false);
     expect(travelled(atOrigin(), DRAG_THRESHOLD + 1, 0)).toBe(true);
   });

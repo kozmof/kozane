@@ -201,7 +201,7 @@ export async function inventoryPut(
 }
 
 /**
- * Prints what a repair changed, one card per line, or nothing when it changed nothing.
+ * Print each repaired card on its own line. Print nothing when no cards changed.
  * `allIds` is every card ID in the workspace, for short IDs.
  */
 export function printInventoryRepair(repair: InventoryRepair, allIds: string[]): void {
@@ -211,9 +211,8 @@ export function printInventoryRepair(repair: InventoryRepair, allIds: string[]):
 }
 
 /**
- * Moves overlapping stored cards apart and takes stored cards out of glue groups, in every
- * inventory of the workspace. Writers repair an inventory on its next write anyway, so this
- * is for clearing what `kozane doctor` reports without waiting for one.
+ * Repair overlaps and remove stored cards from glue groups across the workspace.
+ * Use this to resolve `kozane doctor` findings before the next inventory write.
  */
 export async function inventoryRepair(): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {

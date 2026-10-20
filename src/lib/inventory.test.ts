@@ -15,9 +15,9 @@ import {
 } from "./inventory.js";
 import { INVENTORY_SPAN_MAX } from "./constants.js";
 
-/** A held card: id, top slot, rows covered. */
+/** Build a held card from its ID, top slot, and row span. */
 const at = (cardId: string, slot: number, span = 1) => ({ cardId, slot, span });
-/** A card to place: id, rows it needs. */
+/** Build a card to place from its ID and required row span. */
 const sized = (cardId: string, span = 1) => ({ cardId, span });
 
 describe("cardSpan", () => {

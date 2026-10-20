@@ -77,7 +77,7 @@ describe("getPartition", () => {
     const p1 = await addNamespace({ db, name: "P1" });
     const p2 = await addNamespace({ db, name: "P2" });
     const partitionId = await addPartition({ db, namespaceId: p1, name: "Mine" });
-    // Asking for that partition under p2 must not return it
+    // Do not return the partition when queried through p2.
     expect(await getPartition({ db, namespaceId: p2, partitionId })).toBeUndefined();
   });
 });

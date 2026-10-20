@@ -99,7 +99,7 @@ export type InventoryDragGesture = Gesture & {
 
 /**
  * Dragging a card out of an inventory grid. The card stays in its slot until the release
- * decides where it goes: another slot, another inventory, or the canvas under the pointer.
+ * chooses another slot, another inventory, or a canvas position under the pointer.
  */
 export type StowedDragGesture = Gesture & {
   kind: "stowed-drag";

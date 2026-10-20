@@ -30,11 +30,8 @@
     /** The press on the corner handle, which the canvas turns into a resize. */
     onResizeMouseDown: (event: MouseEvent) => void;
     /**
-     * Takes this frame off the board.
-     *
-     * On the frame rather than in the side panel, because a scope may be framed in several
-     * places and the panel has no way to say which one you mean. Here the answer is the one
-     * you clicked.
+     * Remove this frame from the board. Keep the control on the frame so scopes with
+     * multiple frames have an unambiguous removal target.
      */
     onRemove: () => void;
   } = $props();

@@ -208,7 +208,7 @@ describe("kozane card list --sort", () => {
     expect(listed(taskspaceDir, "--sort", "created", "--reverse")).toEqual(
       [...BY_CREATED].reverse(),
     );
-    // And the column is still absent when nothing asked for it.
+    // Omit the time column when no sort key is requested.
     expect(listed(taskspaceDir).toSorted()).toEqual(["oldest", "reconsidered", "untouched"]);
   }, 120_000);
 
@@ -378,7 +378,7 @@ describe("kozane card list --sort", () => {
     // Include the invalid card's short ID alongside the count so the report identifies the
     // row.
     expect(result.stdout).toContain("inserted by hand: epoch;");
-    // And the listing it warns about does read 1970, which makes it worth reporting.
+    // Verify that the listing displays the epoch timestamp reported by doctor.
     expect(listed(root, "--sort", "created")).toContain("1970-01-01T00:00:00Z  inserted by hand");
   }, 90_000);
 

@@ -144,7 +144,7 @@ describe("kozane doctor — integrity and limits", () => {
     expect(result.stdout).toContain("editing one will refuse it");
     expect(result.status).toBe(1);
 
-    // The rows are sound references even so, which is what separates the two checks.
+    // Valid references distinguish limit violations from foreign-key failures.
     expect(result.stdout).toContain("✓  Database integrity");
   });
 });

@@ -160,7 +160,7 @@ describe("addScopeMembers", () => {
     const scopeId = await addScope({ db, name: "S" });
     const cardInP1 = await addCard({ db, partitionId: b1, content: "C1" });
     const cardInP2 = await addCard({ db, partitionId: b2, content: "C2" });
-    // Trying to add a card from p2 while claiming namespace p1
+    // Reject a card from p2 when the request names namespace p1.
     const ok = await addScopeMembers({
       db,
       scopeId,

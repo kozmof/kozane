@@ -321,10 +321,9 @@ export function overlappingCards(held: readonly Footprint[]): string[] {
 }
 
 /**
- * Where cards go so that none overlaps another, for an inventory left overlapping (see
- * {@link overlappingCards}). Cards are taken in reading order of their top cells. Each stays
- * put if it still fits, and otherwise moves to the first place it fits at or after its slot,
- * so the grid keeps its order. Returns only the cards that move.
+ * Plan repairs for conflicts found by {@link overlappingCards}. Process cards in top-cell
+ * reading order. Keep each card in place if it fits, or move it to the first available slot
+ * at or after its current slot. Return only moved cards.
  */
 export function planRepair(held: readonly Footprint[]): SlotPlacement[] {
   const ordered = held.toSorted((a, b) => a.slot - b.slot || (a.cardId < b.cardId ? -1 : 1));
@@ -373,8 +372,7 @@ export function slotCell(
 }
 
 /**
- * How many rows to draw. Always one empty row below the lowest card, so a full grid still
- * has somewhere to drop into, and never fewer than {@link INVENTORY_MIN_ROWS}.
+ * Draw at least {@link INVENTORY_MIN_ROWS}, with an empty row below the lowest card for drops.
  */
 export function inventoryRows(
   footprints: Iterable<{ slot: number; span: number }>,

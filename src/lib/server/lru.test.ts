@@ -18,8 +18,7 @@ describe("touch", () => {
     expect(keysOf(map)).toEqual(["b", "c", "a"]);
   });
 
-  /** An entry nobody has had to touch is exactly the one worth keeping, but creating one on
-   *  the way past leaves a record for something that was never read. */
+  /** Touching a missing key must not create an unused cache entry. */
   it("leaves a key it does not hold absent", () => {
     const map = new Map([["a", 1]]);
 

@@ -121,7 +121,7 @@ describe("updateTaskspace", () => {
   it("updates lastSeenAt", async () => {
     const { db, namespaceId, scopeId } = await setup();
     const id = await addTaskspace({ db, namespaceId, scopeId });
-    // SQLite stores timestamps as integer seconds, so floor to the nearest second
+    // Round down to whole seconds to match SQLite timestamp storage.
     const now = new Date(Math.floor(Date.now() / 1000) * 1000);
     await updateTaskspace({ db, taskspaceId: id, lastSeenAt: now });
     const taskspace = await getTaskspace({ db, taskspaceId: id });

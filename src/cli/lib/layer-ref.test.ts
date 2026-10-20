@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { resolveLayerRef } from "./layer-ref.js";
 
-// Short IDs are the last 12 characters of the compacted UUID, so these two are told apart
-// well before the seven characters a displayed short ID starts at.
+// Short IDs use prefixes of the compacted UUID's last 12 characters. These fixtures differ
+// within the minimum displayed prefix.
 const BASE = { id: "00000000-0000-0000-0000-1111aaaa0001", name: "Base" };
 const DRAFT = { id: "00000000-0000-0000-0000-2222bbbb0002", name: "Draft" };
 

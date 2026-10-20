@@ -160,8 +160,7 @@ describe("getCardTagHits", () => {
     });
   });
 
-  /** The read is paged so that a workspace larger than the hit ceiling is not held in memory
-   *  on the way to it. What the pages produce has to be what one statement would have. */
+  /** Verify that paged reads bound memory use while returning the same hits as a single query. */
   describe("reading in pages", () => {
     it("gathers across page boundaries", async () => {
       const { db, namespaceId, partitionId } = await setup();
@@ -181,8 +180,7 @@ describe("getCardTagHits", () => {
       expect(truncated).toBe(false);
     });
 
-    /** A page that comes back exactly full is not evidence that it was the last one, and a
-     *  gather that stopped there would silently drop everything after it. */
+    /** Continue after a full page because more cards may remain. */
     it("reads on past a page that came back exactly full", async () => {
       const { db, namespaceId, partitionId } = await setup();
       for (let i = 0; i < 4; i++) await addCard({ db, partitionId, content: `:tag${i}` });
@@ -192,8 +190,7 @@ describe("getCardTagHits", () => {
       expect(hits).toHaveLength(4);
     });
 
-    /** The prefilter is deliberately generous, so a page may hold rows that yield nothing.
-     *  Paging must not read that as the end of the cards. */
+    /** Continue after pages with no tag hits because the prefilter also matches non-tag text. */
     it("reads on past a whole page of cards that hold no tag", async () => {
       const { db, namespaceId, partitionId } = await setup();
       // Use UUIDv7 order to place these fixtures on earlier pages.
