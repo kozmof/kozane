@@ -92,8 +92,8 @@ export function deleteCard(
 }
 
 /**
- * Replaces one card with a card per segment of its text. The split pattern is the
- * server's, so nothing about it travels in the request.
+ * Replace one card with a card per text segment. The server chooses the split pattern.
+ * The request sends no split options.
  */
 export function squashCard(
   fetcher: typeof fetch,

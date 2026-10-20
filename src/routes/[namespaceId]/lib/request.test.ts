@@ -273,7 +273,7 @@ describe("requireFiniteNumber", () => {
 });
 
 describe("requireObjectArray", () => {
-  /** The shape `PATCH /cards` reads, which is what this guard exists for. */
+  /** Validate the request shape accepted by `PATCH /cards`. */
   const readPosition = (row: Record<string, unknown>) => ({
     cardId: requireString(row, "cardId"),
     posX: requireFiniteNumber(row, "posX"),

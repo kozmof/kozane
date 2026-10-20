@@ -27,7 +27,7 @@ import { NotFoundError } from "./utils.js";
 import { INVENTORY_COLUMNS, INVENTORY_SLOT_MAX } from "../../lib/constants.js";
 import type { DB } from "../tx.js";
 
-/** A namespace with the default layer and a partition, which is what a card needs. */
+/** A namespace with the default layer and a partition for creating cards. */
 async function addBoard(db: DB, name: string) {
   const namespaceId = await addNamespace({ db, name });
   await addLayer({ db, namespaceId, name: "Base", isDefault: true });

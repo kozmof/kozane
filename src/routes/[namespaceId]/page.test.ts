@@ -403,7 +403,7 @@ describe("Namespace page", () => {
     );
   });
 
-  /** Selects one card, which is what puts the selection bar and its shortcuts in play. */
+  /** Select one card to enable the selection bar and its shortcuts. */
   async function selectAlpha() {
     render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
@@ -630,7 +630,7 @@ describe("Layers", () => {
     return screen.getByRole("button", { name: new RegExp(`^${name}`) });
   }
 
-  /** The row itself, which is what carries the drag-and-drop reordering. */
+  /** The row that handles drag-and-drop reordering. */
   function layerRow(container: HTMLElement, layerId: string): HTMLElement {
     return container.querySelector<HTMLElement>(`[data-layer-row="${layerId}"]`)!;
   }

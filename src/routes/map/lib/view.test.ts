@@ -211,8 +211,7 @@ describe("defaultView", () => {
     expect(area.y).toBeCloseTo(SIZE.height - (area.y + area.height), 6);
   });
 
-  /** Centring is a function of the box, which is what lets the server centre in one size and
-   *  the browser re-centre in the size it measured. */
+  /** Centre using the supplied box size so the browser can recalculate after measuring it. */
   it("centres in whatever box it is given", () => {
     const wide = viewedArea(
       { width: 2400, height: 600 },

@@ -43,7 +43,7 @@ export function storeActiveLayerId(namespaceId: string, layerId: string | null):
     if (layerId) globalThis.sessionStorage?.setItem(key, layerId);
     else globalThis.sessionStorage?.removeItem(key);
   } catch {
-    // Ignored for the reason given in readStoredLayerId.
+    // Ignore storage failures so saving a preference cannot block the board.
   }
 }
 
@@ -188,8 +188,7 @@ export class NamespaceState {
     this.scopeAreas = data.scopeAreas;
     this.glueRels = data.glueRels;
     this.taskspaces = data.taskspaces;
-    // A taskspace deleted by the CLI or another tab must not leave its directory rows
-    // cached behind the row that is gone.
+    // Remove cached directory rows for taskspaces deleted by the CLI or another tab.
     this.taskspaceTree.prune(data.taskspaces.map(({ id }) => id));
 
     // A warp deleted by another tab must not stay focused, or the remove shortcut would

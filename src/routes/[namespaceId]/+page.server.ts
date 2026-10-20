@@ -40,9 +40,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       includeScopedFiles: prerender && includeScopedFiles,
     }),
     getAllNamespaces({ db }),
-    // The other namespaces' warps, for the Shift+arrow palette. Baked into a static export
-    // too, which is why the palette works there without an endpoint to call. Independent
-    // of the board itself, so it is read alongside rather than after it.
+    // Load other namespaces' warps alongside the board for the Shift+arrow palette.
+    // Include them in static exports so the palette works without a server endpoint.
     loadWarpDirectory({ db, namespaceId }),
   ]);
   if (!loaded) throw error(404, "Namespace not found");

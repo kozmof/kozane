@@ -200,7 +200,7 @@ function withSlots(held: readonly Footprint[], plan: readonly SlotPlacement[]): 
 
 /** What {@link repairInventories} changed. */
 export type InventoryRepair = {
-  /** Cards moved so that none overlaps another. */
+  /** Cards moved to resolve overlaps. */
   moved: InventoryPlacement[];
   /** Stored cards taken out of the glue groups they were still in. */
   unglued: string[];

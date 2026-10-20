@@ -150,8 +150,8 @@ describe("workspace database behind this version", () => {
     const resolve = vi.fn(async () => new Response("ok"));
     const response = await handle({ event: event() as never, resolve: resolve as never });
 
-    // `kozane net ssg generate` runs `requireCurrentMigrations` before it prerenders a page,
-    // so the gate here would only re-answer a question already settled.
+    // `kozane net ssg generate` checks migrations before prerendering. Skip the duplicate
+    // check in the request hook.
     expect(response.status).toBe(200);
     delete process.env.KOZANE_SSG;
   });

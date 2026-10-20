@@ -11,9 +11,8 @@ import {
 import { v7 as uuidv7 } from "uuid";
 import { PATH_KINDS } from "../lib/constants.js";
 
-// Re-exported so `PathKind` still reads as a property of the column it types, for the
-// callers that reach for it through the schema. Defined in `lib/constants` because
-// `resolveTaskspacePath` needs it too and must not import the schema to get it.
+// Preserve schema imports of `PATH_KINDS` and `PathKind`. Define them in `lib/constants`
+// so `resolveTaskspacePath` can use them without importing the database schema.
 export { PATH_KINDS, type PathKind } from "../lib/constants.js";
 
 export const namespaceTable = sqliteTable(

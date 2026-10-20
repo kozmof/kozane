@@ -17,9 +17,8 @@ export function findWorkspaceRoot(startDir: string | undefined): string | null {
   }
 }
 
-// Resolved lazily on first call so tests can set KOZANE_WORKSPACE_ROOT in
-// beforeEach. After the first resolution the value is cached for the lifetime
-// of the process (production never changes the workspace mid-run).
+// Resolve on first access so tests can set `KOZANE_WORKSPACE_ROOT` in `beforeEach`.
+// Cache the result for the process lifetime. Production uses one workspace per process.
 let _workspaceRoot: string | null | undefined = undefined;
 /**
  * Parsed configuration keyed by file path. Keep roots separate so alternating reads do not

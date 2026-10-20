@@ -233,8 +233,8 @@ describe("EditorDocument", () => {
     expect(d.textBetween({ line: 0, column: 1 }, { line: 1, column: 2 })).toBe("ne\r\ntw");
   });
 
-  // A column counts UTF-16 code units, so an astral character takes two of them and the
-  // span has to be cut in the same units the column is quoted in.
+  // Columns and selection offsets use UTF-16 code units. An astral character occupies
+  // two units, so slicing must use the same offsets.
   it("reads a span measured past a multi-byte character", () => {
     const d = doc("🗂 files\nplain\n");
     expect(d.lineText(0).length).toBe(8);

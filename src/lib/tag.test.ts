@@ -17,7 +17,7 @@ import {
 import { TAG_EXCERPT_CHARS_MAX, TAG_LEVELS_MAX, TAG_SEGMENT_CHARS_MAX } from "./constants";
 import type { TagHit } from "./types";
 
-/** The tags of a text, in order, which is what most of the grammar cases are about. */
+/** Tags in text order for parser assertions. */
 const tags = (text: string) => scanTagLines(text).map(({ tag }) => tag);
 
 describe("scanTagLines", () => {

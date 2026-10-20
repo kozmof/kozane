@@ -48,9 +48,8 @@ const TABLE_ORDER = [
 ] as const;
 
 /**
- * Columns added to a table after its first version, with the version that added them. A dump
- * older than that has no such key on its rows, and reads as null there, which is what the
- * migration that added the column left in every existing row.
+ * Columns added after a table's first dump version, keyed by their first version. Older
+ * dumps omit these fields. Read them as null to match the migration's value for existing rows.
  */
 const COLUMNS_SINCE: Partial<Record<string, Record<string, number>>> = {
   card: { inventory_id: 9, inventory_slot: 9 },
@@ -178,8 +177,7 @@ function parseDump(input: unknown): DbJsonDump {
   if (typeof dump.version !== "number" || dump.version > EXPORT_VERSION) {
     throw new Error(`Unsupported Kozane database export version: ${String(dump.version)}`);
   }
-  // Said in full rather than as "unsupported version". A dump below the floor is a backup
-  // someone is holding, and the bare version number gives them nothing to do about it.
+  // Explain how to recover an older backup when its dump version cannot be imported.
   if (dump.version < OLDEST_SUPPORTED_IMPORT_VERSION) {
     throw new Error(
       `Kozane database export version ${String(dump.version)} predates the rename of ` +
@@ -204,7 +202,7 @@ function parseDump(input: unknown): DbJsonDump {
     throw new Error("Import file is missing tables");
   }
 
-  // Narrowed above. Held so the row callback below can still see it as a number.
+  // Keep the narrowed version number available inside the row callback.
   const version = dump.version;
   for (const table of TABLES) {
     const tables = dump.tables as Partial<TableRows>;

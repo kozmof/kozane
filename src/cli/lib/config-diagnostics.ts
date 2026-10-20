@@ -20,7 +20,7 @@ export type ConfigReport = {
   path: string;
   /** Errors first, then warnings. Preserve declaration order within each group. */
   issues: ConfigIssue[];
-  /** Unset optional keys and the defaults standing in for them, by section. */
+  /** Unset optional keys and their default values, grouped by section. */
   notes: ConfigNote[];
 };
 

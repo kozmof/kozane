@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NamespaceDataSnapshot } from "$lib/types.js";
 import { readNamespaceSnapshot } from "./snapshot-reader.js";
 
-/** A board with one of everything, which is what the endpoint actually answers with. */
+/** A board fixture containing one of each entity returned by the endpoint. */
 function fullSnapshot(): NamespaceDataSnapshot {
   return {
     namespace: { id: "p1" },

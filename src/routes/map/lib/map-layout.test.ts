@@ -103,8 +103,7 @@ describe("buildMapLayout", () => {
     expect(fresh?.rect.height).toBeGreaterThan(0);
   });
 
-  /** The strip is sized off the label thresholds, so what lands in it can say what it is. An
-   *  unlabelled box at the foot of the map reads as belonging to no namespace at all. */
+  /** Size the empty strip to fit namespace labels so each box can be identified. */
   it("leaves a namespace in the empty strip room for its own name", () => {
     const layout = buildMapLayout(
       input({

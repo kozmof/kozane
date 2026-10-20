@@ -13,7 +13,7 @@ import { clearTaskspaceTagCache } from "./taskspace-tags.js";
 import { readTagCache, tagCachePath, writeTagCache } from "./tag-cache.js";
 import { loadTagIndex } from "./tag-index.js";
 
-/** The tags found, sorted, so a test says what was gathered rather than in what order. */
+/** Sort gathered tags so assertions do not depend on result order. */
 const tags = (hits: { tag: string }[]) => hits.map(({ tag }) => tag).sort();
 
 describe("loadTagIndex", () => {

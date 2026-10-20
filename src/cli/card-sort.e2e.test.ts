@@ -56,7 +56,7 @@ function cli(cwd: string, ...args: string[]): string {
   return result.stdout;
 }
 
-/** The card text of each printed line, which is what names a card in these fixtures. */
+/** Card text from each printed line, used as the fixture's card name. */
 function listed(root: string, ...args: string[]): string[] {
   return cli(root, "card", "list", ...args)
     .split("\n")
@@ -138,7 +138,7 @@ async function seedThreeCards(root: string, taskspaceId: string | null = null): 
   });
 }
 
-/** Puts every card of the workspace in one scope, which is what a scoped taskspace lists. */
+/** Put every workspace card in one scope for the scoped taskspace listing. */
 async function addEveryCardToScope(root: string, scopeId: string): Promise<void> {
   await withDb(root, async (client) => {
     await client.execute({
