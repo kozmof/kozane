@@ -5,6 +5,7 @@ import { partitionTable, cardTable, namespaceTable, scopeTable } from "../../db/
 import {
   addCard,
   addCards,
+  onCanvas,
   reassignCardsToPartition,
   reassignCardsToLayer,
   updateCard,
@@ -168,7 +169,8 @@ export async function cardSquash(
       .select({ posX: cardTable.posX, posY: cardTable.posY })
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
-      .where(eq(partitionTable.namespaceId, namespaceId));
+      // A stored card's position is where it goes back to, not space it takes up now.
+      .where(and(eq(partitionTable.namespaceId, namespaceId), onCanvas));
     // Lay out columns using the workspace's `ui.canvasWidth`, then clamp overflowing rows to
     // the board. `squashNamespaceCard` uses the same steps.
     const bounds = canvasBoundsForRoot(root);

@@ -76,8 +76,11 @@
   }: Props = $props();
 
   // Preview the server's split result so the button can explain when a card cannot be split.
+  // The server also refuses a stored card.
   const squashableCard = $derived(
-    selectedCards.length === 1 && splitCardContent(selectedCards[0].content).length > 1
+    selectedCards.length === 1 &&
+      selectedCards[0].inventory === null &&
+      splitCardContent(selectedCards[0].content).length > 1
       ? selectedCards[0]
       : null,
   );

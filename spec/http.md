@@ -165,8 +165,8 @@ Pieces are complete rows with laid-out, clamped positions and null `glueId`.
 They take consecutive stacking values from the original. Cards above them are
 raised and included in `stacking`.
 
-Return 400 for a card outside this namespace, fewer than two pieces, or more
-than 2,000 pieces.
+Return 400 for a card outside this namespace, a card stored in an inventory,
+fewer than two pieces, or more than 2,000 pieces.
 
 ## Glue
 

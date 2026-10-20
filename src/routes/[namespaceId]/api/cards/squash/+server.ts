@@ -12,6 +12,7 @@ type SquashFailure = Extract<SquashCardResult, { ok: false }>["reason"];
 // Return actionable messages for problems with the selected card.
 const FAILURE_MESSAGE: Record<SquashFailure, string> = {
   "not-found": "Card not found in namespace",
+  stored: "Stored cards cannot be squashed. Take the card out of its inventory first",
   indivisible: "Card text does not split into more than one card",
   "too-many": `Card text splits into more than ${BATCH_MAX} cards`,
 };

@@ -127,7 +127,7 @@ type SquashNamespaceCard = {
 };
 
 export type SquashCardResult =
-  | { ok: false; reason: "not-found" | "indivisible" | "too-many" }
+  | { ok: false; reason: "not-found" | "stored" | "indivisible" | "too-many" }
   | {
       ok: true;
       cards: Card[];
@@ -140,8 +140,9 @@ export type SquashCardResult =
  * partition, layer, taskspace, width, and scope memberships and are laid out from the
  * original position.
  *
- * Reject a single segment to avoid replacing a card without changing its text. Remove the
- * source from its glue group and leave the new pieces unglued.
+ * Reject a single segment to avoid replacing a card without changing its text. Reject a stored
+ * card, since the pieces are laid out on the canvas around a position the card does not
+ * occupy. Remove the source from its glue group and leave the new pieces unglued.
  *
  * The pieces take consecutive zIndex values from the source's. Cards above the source on its
  * layer are raised by the extra count so no piece ties with, or rises past, a card that sat
@@ -170,12 +171,14 @@ export async function squashNamespaceCard({
         posY: cardTable.posY,
         zIndex: cardTable.zIndex,
         width: cardTable.width,
+        inventoryId: cardTable.inventoryId,
       })
       .from(cardTable)
       .innerJoin(partitionTable, inNamespace)
       .where(eq(cardTable.id, cardId))
       .get();
     if (!source) return { ok: false, reason: "not-found" };
+    if (source.inventoryId !== null) return { ok: false, reason: "stored" };
 
     const contents = splitCardContent(source.content);
     if (contents.length < 2) return { ok: false, reason: "indivisible" };
@@ -295,7 +298,9 @@ async function remapCardsByName({
  * Moves cards from one namespace to another, preserving partition and layer names.
  * For each unique source name, a matching partition/layer is found in the target
  * namespace or created if absent. All updates are atomic.
- * Refuses if any card does not belong to sourceNamespaceId.
+ * Refuses if any card does not belong to sourceNamespaceId. Throws when the two namespaces
+ * are the same, since the move would otherwise unglue and unstore the cards and change nothing
+ * else.
  *
  * Arriving cards are restacked above each destination layer's cards, as a layer move is.
  * A card whose taskspace is placed in another namespace loses that link, because a placed
@@ -308,6 +313,8 @@ export async function moveCardsToNamespace({
   targetNamespaceId,
   cardIds: requestedIds,
 }: MoveCardsToNamespace): Promise<CardBatchResult> {
+  if (sourceNamespaceId === targetNamespaceId)
+    throw new Error("Target namespace must differ from source");
   if (requestedIds.length === 0) return { ok: true };
   const cardIds = [...new Set(requestedIds)];
   return withTx(db, async (tx) => {

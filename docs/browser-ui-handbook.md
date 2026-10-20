@@ -90,7 +90,8 @@ Resizing a glued card changes only that card.
 
 Select a card and press `s` to split it on periods followed by whitespace,
 `。`, or blank lines. Dots inside URLs such as `example.com` stay intact.
-"Squash" is disabled when there is nothing to split.
+"Squash" is disabled when there is nothing to split, or when the card is
+stored in an inventory. Take it out first.
 
 The pieces replace the original and remain selected. They inherit its partition,
 layer, width, and scopes, but start with new histories and no glue group.

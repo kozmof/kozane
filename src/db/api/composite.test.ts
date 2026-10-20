@@ -19,6 +19,7 @@ import { getGlueRelsByCards, glueCards } from "./glue.js";
 import { cardTable, glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer, getAllLayers, getDefaultLayer, getLayer } from "./layer.js";
+import { addInventory, stowCards } from "./inventory.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -345,6 +346,24 @@ describe("moveCardsToNamespace", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  it("refuses a move into the cards' own namespace and leaves their glue group alone", async () => {
+    const { db, srcId, srcPartition } = await setupMove();
+    const first = await addCard({ db, partitionId: srcPartition, content: "First" });
+    const second = await addCard({ db, partitionId: srcPartition, content: "Second" });
+    const glueId = await glueCards({ db, cardIds: [first, second] });
+
+    await expect(
+      moveCardsToNamespace({
+        db,
+        sourceNamespaceId: srcId,
+        targetNamespaceId: srcId,
+        cardIds: [first],
+      }),
+    ).rejects.toThrow("Target namespace must differ from source");
+    expect(await getGlueRelsByCards({ db, cardIds: [first, second] })).toHaveLength(2);
+    expect((await getGlueRelsByCards({ db, cardIds: [first] }))[0].glueId).toBe(glueId);
+  });
+
   async function readCard(db: Awaited<ReturnType<typeof createTestDB>>, cardId: string) {
     return db.select().from(cardTable).where(eq(cardTable.id, cardId)).get();
   }
@@ -588,6 +607,27 @@ describe("squashNamespaceCard", () => {
     ]);
     expect(await getCard({ db, partitionId, cardId })).toBeUndefined();
     expect(await getAllCards({ db, partitionId })).toHaveLength(3);
+  });
+
+  it("refuses a stored card and leaves it in its inventory", async () => {
+    const { db, namespaceId, partitionId, cardId } = await squashSetup();
+    const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    const stowed = await stowCards({
+      db,
+      namespaceId,
+      inventoryId: inventory.id,
+      cardIds: [cardId],
+      slot: null,
+    });
+    expect(stowed.ok).toBe(true);
+
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
+
+    expect(result).toEqual({ ok: false, reason: "stored" });
+    expect(await getCard({ db, partitionId, cardId })).toMatchObject({
+      inventoryId: inventory.id,
+    });
+    expect(await getAllCards({ db, partitionId })).toHaveLength(1);
   });
 
   it("lays the pieces out from where the card sat, the first one in its place", async () => {
