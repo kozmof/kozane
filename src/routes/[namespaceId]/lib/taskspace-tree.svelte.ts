@@ -47,6 +47,21 @@ export type TaskspaceTreeContext = {
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
+/**
+ * Why `name` cannot become a new entry, or null when it can. Require a single
+ * non-dot-prefixed name rather than a path.
+ */
+function invalidName(kind: TaskspaceCreateKind, name: string): string | null {
+  const trimmed = name.trim();
+  const what = kind === "file" ? "File" : "Folder";
+  if (!trimmed) return `${what} name is required`;
+  if (trimmed.includes("/") || trimmed.includes("\\")) {
+    return `${what} name cannot contain a path separator`;
+  }
+  if (trimmed.startsWith(".")) return `${what} name cannot start with a dot`;
+  return null;
+}
+
 export function nodeKey(taskspaceId: string, path: string): string {
   return `${taskspaceId}:${path}`;
 }
@@ -148,50 +163,67 @@ export class TaskspaceTreeState {
   /**
    * Create the entered file or directory and return it, or leave the field open with
    * `createError` on failure.
-   *
-   * Require a single non-dot-prefixed name rather than a path. Refresh the parent listing
-   * afterward to include current metadata and concurrent filesystem changes.
    */
   async submitCreate(ctx: TaskspaceTreeContext, name: string): Promise<TaskspaceCreated | null> {
     const target = this.creating;
     if (!target || this.createBusy) return null;
 
-    const trimmed = name.trim();
-    const what = target.kind === "file" ? "File" : "Folder";
-    if (!trimmed) {
-      this.createError = `${what} name is required`;
-      return null;
-    }
-    if (trimmed.includes("/") || trimmed.includes("\\")) {
-      this.createError = `${what} name cannot contain a path separator`;
-      return null;
-    }
-    if (trimmed.startsWith(".")) {
-      this.createError = `${what} name cannot start with a dot`;
+    const invalid = invalidName(target.kind, name);
+    if (invalid) {
+      this.createError = invalid;
       return null;
     }
 
-    const path = target.path ? `${target.path}/${trimmed}` : trimmed;
     this.createBusy = true;
     this.createError = null;
-
-    try {
-      const create = target.kind === "file" ? createTaskspaceFile : createTaskspaceFolder;
-      const res = await create(ctx.fetcher, ctx.namespaceId, target.taskspaceId, path);
-      if (!res.ok) {
-        this.createError = await failureMessage(res, `Failed to create ${what.toLowerCase()}`);
-        return null;
-      }
-    } catch {
-      this.createError = `Failed to create ${what.toLowerCase()}`;
+    const made = await this.#request(ctx, target, name);
+    this.createBusy = false;
+    if ("error" in made) {
+      this.createError = made.error;
       return null;
-    } finally {
-      this.createBusy = false;
     }
 
     this.creating = null;
     this.createError = null;
     await this.load(ctx, target.taskspaceId, target.path, true);
+    return made;
+  }
+
+  /**
+   * Create one entry without using the panel's name field, so views such as scope frames can
+   * keep their own. Return the created entry, or the reason it was refused.
+   */
+  async create(
+    ctx: TaskspaceTreeContext,
+    target: TaskspaceCreateTarget,
+    name: string,
+  ): Promise<TaskspaceCreated | { error: string }> {
+    const invalid = invalidName(target.kind, name);
+    if (invalid) return { error: invalid };
+    const made = await this.#request(ctx, target, name);
+    if (!("error" in made)) await this.load(ctx, target.taskspaceId, target.path, true);
+    return made;
+  }
+
+  /**
+   * Send the create request for an already validated name. Callers refresh the parent listing
+   * afterward to include current metadata and concurrent filesystem changes.
+   */
+  async #request(
+    ctx: TaskspaceTreeContext,
+    target: TaskspaceCreateTarget,
+    name: string,
+  ): Promise<TaskspaceCreated | { error: string }> {
+    const trimmed = name.trim();
+    const what = target.kind === "file" ? "file" : "folder";
+    const path = target.path ? `${target.path}/${trimmed}` : trimmed;
+    try {
+      const create = target.kind === "file" ? createTaskspaceFile : createTaskspaceFolder;
+      const res = await create(ctx.fetcher, ctx.namespaceId, target.taskspaceId, path);
+      if (!res.ok) return { error: await failureMessage(res, `Failed to create ${what}`) };
+    } catch {
+      return { error: `Failed to create ${what}` };
+    }
     return { taskspaceId: target.taskspaceId, kind: target.kind, path };
   }
 

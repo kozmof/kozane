@@ -1,5 +1,9 @@
 import type { ScopeArea, TaskspaceSummary } from "$lib/types";
-import type { TaskspaceTreeContext, TaskspaceTreeState } from "./taskspace-tree.svelte.js";
+import type {
+  TaskspaceCreated,
+  TaskspaceTreeContext,
+  TaskspaceTreeState,
+} from "./taskspace-tree.svelte.js";
 import {
   cwdFor,
   cwdKey,
@@ -96,6 +100,20 @@ export class ScopeAreaBrowser {
       this.#source.taskspaces().map((t) => t.id),
     );
     if (Object.keys(next).length !== Object.keys(this.#cwd).length) this.#cwd = next;
+  }
+
+  /**
+   * Create a file in a directory a frame is showing. Use the shared tree cache so the new file
+   * appears in every frame and panel listing that directory.
+   */
+  createFile(
+    taskspaceId: string,
+    path: string,
+    name: string,
+  ): Promise<TaskspaceCreated | { error: string }> {
+    return this.#source
+      .tree()
+      .create(this.#source.context(), { taskspaceId, path, kind: "file" }, name);
   }
 
   navigate(areaId: string, taskspaceId: string, path: string): void {

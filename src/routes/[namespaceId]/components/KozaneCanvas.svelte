@@ -560,6 +560,9 @@
             {groups}
             {onOpenFile}
             onNavigate={(taskspaceId, path) => areaFiles.navigate(area.id, taskspaceId, path)}
+            onCreateFile={readonly || treeContext.staticFiles
+              ? undefined
+              : (taskspaceId, path, name) => areaFiles.createFile(taskspaceId, path, name)}
           />
         {/if}
       {/each}

@@ -431,3 +431,52 @@ describe("TaskspaceTreeState creation", () => {
     expect(tree.creating).toEqual({ taskspaceId: TS, path: "src", kind: "file" });
   });
 });
+
+describe("TaskspaceTreeState.create", () => {
+  it("creates a file and re-reads its directory without opening the panel's field", async () => {
+    let call = 0;
+    const fetcher = vi.fn(async () =>
+      call++ === 0
+        ? jsonResponse({ path: "src/new.ts", content: "" }, 201)
+        : jsonResponse(listing(["new.ts"])),
+    );
+    const tree = new TaskspaceTreeState();
+
+    const made = await tree.create(
+      context(fetcher as never),
+      { taskspaceId: TS, path: "src", kind: "file" },
+      "new.ts",
+    );
+
+    expect(made).toEqual({ taskspaceId: TS, kind: "file", path: "src/new.ts" });
+    expect(tree.node(TS, "src").entries?.map(({ name }) => name)).toEqual(["new.ts"]);
+    expect(tree.creating).toBeNull();
+  });
+
+  it("returns the reason instead of creating an invalid name", async () => {
+    const fetcher = vi.fn();
+    const tree = new TaskspaceTreeState();
+
+    const made = await tree.create(
+      context(fetcher as never),
+      { taskspaceId: TS, path: "", kind: "file" },
+      "a/b.ts",
+    );
+
+    expect(made).toEqual({ error: "File name cannot contain a path separator" });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it("returns the server's reason when it refuses", async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ message: "File already exists" }, 409));
+    const tree = new TaskspaceTreeState();
+
+    const made = await tree.create(
+      context(fetcher as never),
+      { taskspaceId: TS, path: "", kind: "file" },
+      "README.md",
+    );
+
+    expect(made).toEqual({ error: "File already exists" });
+  });
+});

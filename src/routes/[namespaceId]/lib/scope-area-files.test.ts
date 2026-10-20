@@ -292,6 +292,16 @@ describe("visibleCells", () => {
     expect(window.cells.length + window.overflow).toBe(20);
   });
 
+  it("keeps reserved slots free for controls drawn after the cells", () => {
+    const window = visibleCells(cells(20), { width: CELL_WIDTH * 4, maxRows: 2, reserved: 1 });
+    // Eight slots: one reserved, one for the chip, six names.
+    expect(window.cells).toHaveLength(6);
+    expect(window.overflow).toBe(14);
+    expect(
+      visibleCells(cells(7), { width: CELL_WIDTH * 4, maxRows: 2, reserved: 1 }).overflow,
+    ).toBe(0);
+  });
+
   it("holds to the row limit it is given", () => {
     expect(visibleCells(cells(20), { width: CELL_WIDTH * 4, maxRows: 1 }).cells).toHaveLength(3);
   });

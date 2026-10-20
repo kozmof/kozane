@@ -177,13 +177,18 @@ export type CellWindow = {
 
 /**
  * Return cells that fit and count those omitted. Reserve one cell for the overflow chip when
- * needed so the strip stays within {@link MAX_ROWS} rows.
+ * needed so the strip stays within {@link MAX_ROWS} rows. `reserved` slots are kept free for
+ * controls drawn after the cells, such as the new-file button.
  */
 export function visibleCells(
   cells: FileCell[],
-  { width, maxRows = MAX_ROWS }: { width: number; maxRows?: number },
+  {
+    width,
+    maxRows = MAX_ROWS,
+    reserved = 0,
+  }: { width: number; maxRows?: number; reserved?: number },
 ): CellWindow {
-  const capacity = columnsIn(width) * maxRows;
+  const capacity = columnsIn(width) * maxRows - reserved;
   if (cells.length <= capacity) return { cells, overflow: 0 };
   // One slot goes to the chip. `max(0, …)` for the degenerate single-slot strip, where the
   // honest thing to draw is the chip alone rather than one arbitrary name beside nothing.

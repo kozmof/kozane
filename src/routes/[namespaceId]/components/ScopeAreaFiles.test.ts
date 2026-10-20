@@ -253,4 +253,60 @@ describe("ScopeAreaFiles", () => {
     expect(first.textContent).toContain("a.ts");
     expect(first.textContent).not.toContain("b.ts");
   });
+
+  describe("new file", () => {
+    it("offers no new-file control without a create callback", () => {
+      mount();
+      expect(screen.queryByRole("button", { name: /^New file/ })).toBeNull();
+    });
+
+    it("creates a file in the directory the frame is showing and opens it", async () => {
+      const onCreateFile = vi.fn(async () => ({
+        taskspaceId: "t1",
+        kind: "file" as const,
+        path: "src/new.ts",
+      }));
+      const { onOpenFile } = mount({
+        onCreateFile,
+        groups: [group({ path: "src", cells: [] })],
+      });
+
+      await fireEvent.click(screen.getByRole("button", { name: "New file in src" }));
+      const field = screen.getByRole("textbox", { name: "New file name" });
+      expect(field).toHaveFocus();
+      await fireEvent.input(field, { target: { value: "new.ts" } });
+      await fireEvent.keyDown(field, { key: "Enter" });
+
+      expect(onCreateFile).toHaveBeenCalledWith("t1", "src", "new.ts");
+      await vi.waitFor(() => expect(onOpenFile).toHaveBeenCalledWith("t1", "src/new.ts"));
+      expect(screen.queryByRole("textbox", { name: "New file name" })).toBeNull();
+    });
+
+    it("keeps the field open with the reason when creation fails", async () => {
+      const onCreateFile = vi.fn(async () => ({ error: "File already exists" }));
+      const { onOpenFile } = mount({ onCreateFile });
+
+      await fireEvent.click(screen.getByRole("button", { name: "New file in work" }));
+      const field = screen.getByRole("textbox", { name: "New file name" });
+      await fireEvent.input(field, { target: { value: "app.ts" } });
+      await fireEvent.keyDown(field, { key: "Enter" });
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("File already exists");
+      expect(screen.getByRole("textbox", { name: "New file name" })).toBeInTheDocument();
+      expect(onOpenFile).not.toHaveBeenCalled();
+    });
+
+    it("closes the field on Escape without creating anything", async () => {
+      const onCreateFile = vi.fn();
+      mount({ onCreateFile });
+
+      await fireEvent.click(screen.getByRole("button", { name: "New file in work" }));
+      await fireEvent.keyDown(screen.getByRole("textbox", { name: "New file name" }), {
+        key: "Escape",
+      });
+
+      expect(screen.queryByRole("textbox", { name: "New file name" })).toBeNull();
+      expect(onCreateFile).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -9,6 +9,7 @@
     visibleCells,
     type FileGroup,
   } from "../lib/scope-area-files.js";
+  import type { TaskspaceCreated } from "../lib/taskspace-tree.svelte.js";
   import { truncationNote } from "../lib/taskspace-truncation.js";
   import FileGlyph from "./FileGlyph.svelte";
 
@@ -17,6 +18,7 @@
     groups,
     onOpenFile,
     onNavigate,
+    onCreateFile,
   }: {
     area: ScopeArea;
     /** One per taskspace of this frame's scope, in the order the panel lists them. */
@@ -28,7 +30,72 @@
     onOpenFile?: (taskspaceId: string, path: string) => void;
     /** Points this frame's view of one taskspace at another of its directories. */
     onNavigate: (taskspaceId: string, path: string) => void;
+    /**
+     * Create a file named `name` in `path` of one taskspace. Without it, the strip offers no
+     * new-file control, as in read-only boards and static exports.
+     */
+    onCreateFile?: (
+      taskspaceId: string,
+      path: string,
+      name: string,
+    ) => Promise<TaskspaceCreated | { error: string }>;
   } = $props();
+
+  /**
+   * The taskspace directory whose name field is open, or null. Keep this per strip rather than
+   * in the shared tree so the panel does not draw a second field for the same directory.
+   */
+  let creating = $state<{ taskspaceId: string; path: string } | null>(null);
+  let createName = $state("");
+  let createBusy = $state(false);
+  let createError = $state<string | null>(null);
+
+  /** The name field spans two cells so a typical file name fits without scrolling. */
+  const FIELD_CELLS = 2;
+
+  function beginCreate(taskspaceId: string, path: string) {
+    creating = { taskspaceId, path };
+    createName = "";
+    createError = null;
+  }
+
+  function cancelCreate() {
+    creating = null;
+    createError = null;
+  }
+
+  async function submitCreate() {
+    const target = creating;
+    if (!target || createBusy || !onCreateFile) return;
+    createBusy = true;
+    createError = null;
+    const made = await onCreateFile(target.taskspaceId, target.path, createName);
+    createBusy = false;
+    if ("error" in made) {
+      createError = made.error;
+      return;
+    }
+    creating = null;
+    // Open newly created files in the editor, as the panel does.
+    onOpenFile?.(made.taskspaceId, made.path);
+  }
+
+  function onCreateKeydown(event: KeyboardEvent) {
+    // Prevent typed characters from triggering board shortcuts.
+    event.stopPropagation();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitCreate();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      cancelCreate();
+    }
+  }
+
+  /** Focus the name field when it mounts so creation can begin without another click. */
+  function focusOnMount(node: HTMLInputElement) {
+    node.focus();
+  }
 
   /**
    * Place the file strip below and right-aligned with the frame to preserve interactions
@@ -106,7 +173,9 @@
   style:pointer-events="none"
 >
   {#each groups as group (group.taskspaceId)}
-    {@const shown = visibleCells(group.cells, { width })}
+    {@const editing = creating?.taskspaceId === group.taskspaceId}
+    {@const reserved = onCreateFile ? (editing ? FIELD_CELLS : 1) : 0}
+    {@const shown = visibleCells(group.cells, { width, reserved })}
     <div data-taskspace-id={group.taskspaceId}>
       {#if named}
         <div
@@ -210,7 +279,75 @@
               +{shown.overflow} more
             </span>
           {/if}
+
+          {#if onCreateFile && editing}
+            <!-- Stop presses from reaching the canvas without preventing default, which would
+                 keep the caret out of the field. Cancel on blur, as the panel's field does. -->
+            <div
+              class={cx(cellClass, css({ justifyContent: "center" }))}
+              style:width="{CELL_WIDTH * FIELD_CELLS}px"
+              style:min-height="{CELL_HEIGHT}px"
+              style:pointer-events="auto"
+            >
+              <input
+                use:focusOnMount
+                bind:value={createName}
+                class={css({
+                  width: "100%",
+                  padding: "2px 4px",
+                  border: "1px solid token(colors.neutral.dim)",
+                  borderRadius: "2px",
+                  background: "ink.white",
+                  color: "ink.black",
+                  fontSize: "10px",
+                  fontFamily: "inherit",
+                  "&:read-only": { color: "neutral.subtle" },
+                })}
+                type="text"
+                readonly={createBusy}
+                placeholder="New file name"
+                aria-label="New file name"
+                onmousedown={(e) => e.stopPropagation()}
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={onCreateKeydown}
+                onblur={() => !createBusy && cancelCreate()}
+              />
+            </div>
+          {:else if onCreateFile}
+            <button
+              class={cx(cellClass, clickableClass)}
+              style:width="{CELL_WIDTH}px"
+              style:min-height="{CELL_HEIGHT}px"
+              style:pointer-events="auto"
+              aria-label="New file in {group.path || group.name}"
+              title="New file in {group.path || group.name}"
+              onmousedown={swallow}
+              onclick={(e) => {
+                e.stopPropagation();
+                beginCreate(group.taskspaceId, group.path);
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                <path
+                  d="M5 2v6M2 5h6"
+                  stroke="currentColor"
+                  stroke-width="0.9"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span class={labelClass}>New file</span>
+            </button>
+          {/if}
         </div>
+
+        {#if editing && createError}
+          <div
+            class={css({ fontSize: "10px", color: "state.error", textAlign: "right" })}
+            role="alert"
+          >
+            {createError}
+          </div>
+        {/if}
 
         {#if group.cells.length === 0}
           <div class={noteClass}>Empty</div>
