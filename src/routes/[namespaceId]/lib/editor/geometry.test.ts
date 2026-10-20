@@ -210,10 +210,8 @@ describe("domMeasurer", () => {
   const CELL = 8;
 
   /**
-   * `PAD` stands in for the line's own `padding-left`, which is why the element's left edge
-   * and the text's first character are at different places here. Measuring against the
-   * element rather than the text is what put every column one padding too far right, so
-   * the two are kept deliberately apart in the stub.
+   * Model `padding-left` with `PAD` so the element edge differs from the first character's
+   * position. Column measurements must use the text origin to avoid a padding-sized offset.
    */
   const PAD = 12;
 
@@ -258,9 +256,8 @@ describe("domMeasurer", () => {
   });
 
   it("keeps column 0 continuous with every other column", () => {
-    // Column 0 used to be special-cased to 0 while every other column carried the padding,
-    // so the step from 0 to 1 was a padding wider than a character. That discontinuity is
-    // what made a click at the start of a line land on column 1.
+    // Use the same text origin for every column so the first character has the same measured
+    // width as the others and clicks at the line start reach column 0.
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
     expect(measure.columnToX(0, 1) - measure.columnToX(0, 0)).toBe(CELL);

@@ -109,9 +109,8 @@ const fileCache = new Map<string, Map<string, CachedFile>>();
  * limit is exceeded.
  */
 function dirEntries(baseDir: string): Map<string, CachedFile> {
-  // Only where the map can have grown. Eviction walks every key, and this is called once per
-  // file parsed, so running it for a directory already held was a pass over the whole cache
-  // per file for a map whose size had not changed.
+  // Evict only when adding a directory. Rechecking existing directories would scan the whole
+  // cache for every parsed file without changing its size.
   const known = fileCache.has(baseDir);
   const entries = touchOrCreate(fileCache, baseDir, () => new Map<string, CachedFile>());
   if (!known) evict(fileCache, TAG_CACHE_DIRS_MAX);
@@ -181,9 +180,8 @@ function fileTagHits(
   budget: Budget,
 ): FileTags {
   const size = entry.size ?? 0;
-  // Null when the listing could not say when the file was last written, which leaves nothing
-  // to tell one version of it from another. Such a file is read every time rather than
-  // sharing a made-up key with every other file in the same position.
+  // Read files without a modification time on every scan because their cache signatures
+  // cannot distinguish changed content.
   const signature = entry.modifiedAt === null ? null : `${entry.modifiedAt}:${size}`;
   const entries = fileCache.get(baseDir);
   const cached = entries?.get(subPath);
@@ -282,9 +280,8 @@ function walk(scan: Scan, subPath: string, depth: number): void {
     noteTruncatedPath(scan, `${subPath}/`);
     return;
   }
-  // Cut short, so its entries are not all here and nothing below may conclude that a file it
-  // did not see is gone. That is why this returns short of the `completed` mark at the foot
-  // rather than merely recording a reason.
+  // Return before marking a truncated directory complete. Missing entries in a partial
+  // listing do not establish that cached files were deleted.
   if (listing.truncated) {
     scan.truncated.add("entries");
     noteTruncatedPath(scan, `${subPath || "."}/`);
@@ -409,9 +406,7 @@ export function scanTaskspaceTags(
 
   walk(scan, "", 0);
 
-  // What this taskspace actually spent, not what it was allowed. A cache hit is charged for
-  // nothing, so a warm gather leaves the pool untouched and a workspace being read again and
-  // again never runs into this ceiling at all.
+  // Charge the shared pool for bytes actually read. Cache hits consume no byte budget.
   if (pool) {
     pool.bytes -= bytes - scan.budget.remaining;
     pool.nodes -= nodes - scan.budget.nodes;

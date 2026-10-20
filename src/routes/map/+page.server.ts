@@ -121,8 +121,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     tag,
     day: requestedDay,
     activity: snapshot.activity.filter(({ partitionId }) => onMap.has(partitionId)),
-    /** Whether the card gather stopped at `TAG_CARD_HITS_MAX`, so the tree counts are a floor
-     *  rather than the whole. The same flag the tag index draws, for the same reason. */
+    /** Whether card gathering reached `TAG_CARD_HITS_MAX`. Counts are lower bounds when true,
+     *  as in the tag index. */
     cardsTruncated: snapshot.tags.truncated,
   };
 };

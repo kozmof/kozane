@@ -552,7 +552,7 @@ describe("moveCardsToNamespace", () => {
     });
 
     expect(ok).toEqual({ ok: false, reason: "foreign-cards" });
-    // own card must remain in source (transaction rolled back)
+    // Roll back the transaction so the source card stays in its namespace.
     const rows = await getCardPartitionNames({ db, cardIds: [ownCard] });
     expect(rows[0].partitionId).toBe(srcPartition);
   });

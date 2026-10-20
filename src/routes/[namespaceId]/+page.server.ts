@@ -28,8 +28,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId } = params;
 
-  // The same read `/api/snapshot` makes, so the board this page opens on and the board the
-  // poll keeps it at are assembled by one piece of code rather than two.
+  // Use the snapshot endpoint's shared reader so initial loads and polls assemble the same data.
   const [loaded, allNamespaces, warpDirectory] = await Promise.all([
     loadNamespaceSnapshot({
       db,

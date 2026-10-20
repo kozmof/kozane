@@ -15,10 +15,10 @@ CREATE UNIQUE INDEX `layer_name_per_project` ON `layer` (`project_id`,`name`);--
 INSERT INTO `layer` (`id`, `project_id`, `name`, `position`, `is_default`) SELECT lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)), 2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)), 2) || '-' || hex(randomblob(6))), `id`, 'Base', 0, 1 FROM `project`;--> statement-breakpoint
 ALTER TABLE `card` ADD `layer_id` text;--> statement-breakpoint
 UPDATE `card` SET `layer_id` = (SELECT `layer`.`id` FROM `layer` INNER JOIN `bundle` ON `bundle`.`project_id` = `layer`.`project_id` WHERE `bundle`.`id` = `card`.`bundle_id` AND `layer`.`is_default` = 1);--> statement-breakpoint
-/* Rebuild `card` to enforce NOT NULL on the column backfilled above: SQLite cannot add a
-   NOT NULL column with a REFERENCES clause in place. Migrations run under
-   PRAGMA foreign_keys=off, so dropping the old table does not cascade glue_rel and
-   scope_rel rows away. */
+/* Rebuild `card` to make the backfilled layer_id column NOT NULL. SQLite cannot add
+   this NOT NULL column with its REFERENCES clause in place. Foreign-key enforcement
+   is disabled during migration, so dropping the old table preserves glue_rel and
+   scope_rel rows. */
 CREATE TABLE `__new_card` (
 	`id` text PRIMARY KEY NOT NULL,
 	`bundle_id` text NOT NULL,

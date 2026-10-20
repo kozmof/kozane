@@ -41,9 +41,8 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
   // refresh but cannot hide a data change.
   const body = JSON.stringify(loaded.snapshot);
   const etag = snapshotEtag(body);
-  // Remembered only if the signature taken before the read still stands after it. A write
-  // that landed while the queries ran leaves this tag unremembered, so the next poll reads
-  // again rather than being answered 304 with a snapshot that write had overtaken.
+  // Cache the ETag only if the database signature stayed unchanged during the read. A
+  // concurrent write forces the next poll to assemble a fresh snapshot.
   rememberSnapshotEtag(dbUrl, namespaceId, etag, readFrom);
 
   if (matchesEtag(ifNoneMatch, etag)) {
@@ -54,9 +53,8 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
     headers: {
       "content-type": "application/json",
       etag,
-      // The client does its own revalidation with the tag above. Letting the browser cache
-      // as well would have it answer a 304 out of its own store, turning the exchange back
-      // into the full-body 200 this exists to avoid.
+      // Let the client revalidate with the ETag. Browser caching could replace a 304 with a
+      // cached 200 response and make the client process the full body again.
       "cache-control": "no-store",
     },
   });

@@ -142,8 +142,7 @@ export async function open(options: OpenOptions): Promise<void> {
     rmSync(memoryDir, { recursive: true, force: true });
     memoryDir = undefined;
   };
-  // A memory server builds and migrates its own database a few lines above, so there is
-  // nothing here that could be behind.
+  // Skip the persistent migration check for memory sessions, whose database was just migrated.
   if (!options.memory) await requireCurrentMigrations(dbURL, "the UI can start");
 
   // Start `bin/server.js`, which explicitly controls the bind address. See its entrypoint

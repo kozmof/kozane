@@ -38,7 +38,7 @@ export type HintCard = {
   width?: number | null;
 };
 
-/** What every card on a board is drawn at, which is what turns a position into a box. */
+/** Board card dimensions used to estimate bounding boxes. */
 export type CardMetrics = { cardWidth: number; fontSize: number };
 
 /** Convert workspace UI settings to the metric names used by hint calculations. */

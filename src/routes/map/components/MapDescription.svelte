@@ -3,9 +3,8 @@
   import type { MapLayout } from "../lib/map-layout.js";
 
   /**
-   * The same map in words, for a reader who cannot see it. An `<svg>` with one label says what
-   * the picture is about and nothing about what is in it, and every number on the page is in
-   * the picture.
+   * Describe the map's contents and counts in text for readers who cannot see it. The SVG's
+   * label alone does not expose those details.
    */
   let { layout }: { layout: MapLayout } = $props();
 

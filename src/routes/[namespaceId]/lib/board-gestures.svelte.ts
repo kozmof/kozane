@@ -733,8 +733,8 @@ export class BoardGestures {
   async #settleCardDrag(g: CardDragGesture, target: DropTarget | null): Promise<void> {
     if (!g.moved) return;
     if (target?.kind === "inventory") {
-      // Back to where the drag began, which is the position a stored card keeps for when it
-      // comes out again. Nothing about the drag reached the server, so nothing is undone there.
+      // Restore the pre-drag canvas position before storing the card so taking it out returns
+      // it there. The drag has not been saved, so no server rollback is needed.
       const prev = new Map(g.groupPrevPositions).set(g.cardId, { x: g.prevX, y: g.prevY });
       for (const c of this.#host.cards) {
         const at = prev.get(c.id);

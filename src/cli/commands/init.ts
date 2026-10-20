@@ -25,7 +25,7 @@ function writeIgnoreFile(kozaneDir: string): void {
       "# Kozane's workspace directory. Holds a credential, this machine's state, and caches.\n*\n",
     );
   } catch {
-    // See above.
+    // Continue initialization if the optional ignore file cannot be written.
   }
 }
 

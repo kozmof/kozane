@@ -157,8 +157,7 @@
     if (target.hasPointerCapture(event.pointerId)) target.releasePointerCapture(event.pointerId);
   }
 
-  /** Swallows the click that ends a drag, so panning off a partition does not open its board.
-   *  In the capture phase, which is the only place it is still ahead of the link. */
+  /** Suppress the click after a drag during capture so a partition link cannot open its board. */
   function onClickCapture(event: MouseEvent) {
     if (!travelled) return;
     event.preventDefault();

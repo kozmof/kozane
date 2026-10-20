@@ -41,9 +41,8 @@
   const rowStyle = `height: ${TAG_ROW_HEIGHT}px`;
 
   /**
-   * Pinned to `TAG_ROW_HEIGHT` rather than left to come out of the font, because
-   * `tagRowCenter` multiplies by it to decide where a tag's lines leave from. A row an odd
-   * pixel taller than the constant would put every line below it out by a growing amount.
+   * Match `TAG_ROW_HEIGHT` so `tagRowCenter` can calculate link origins. A height mismatch
+   * would shift links farther from their rows as the row index increases.
    */
   const rowClass = css({
     display: "flex",

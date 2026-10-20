@@ -52,8 +52,7 @@ export async function getPartition({
   namespaceId,
   partitionId,
 }: GetPartition): Promise<Partition | undefined> {
-  // partitionId alone would uniquely identify the row (UUID), but namespaceId is checked too as a
-  // defence-in-depth access boundary so callers cannot reach across namespace lines via a bare ID.
+  // Check namespace ownership even though the partition ID is unique.
   return db
     .select()
     .from(partitionTable)

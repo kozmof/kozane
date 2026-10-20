@@ -75,8 +75,7 @@ function configEntry(root: string): ConfigCacheEntry {
   const signature = fileSignature(path);
   const cached = configCache.get(path);
   if (cached && cached.signature === signature) return cached;
-  // A fresh entry rather than a mutated one, which is what drops the derived `ui` with the
-  // bytes it came from instead of leaving it to be cleared by hand.
+  // Replace the entry to invalidate derived `ui` settings along with the parsed configuration.
   const entry: ConfigCacheEntry = {
     signature,
     parsed: signature === null ? null : parseConfigFile(path),

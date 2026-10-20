@@ -144,12 +144,9 @@ export interface TagHit {
 export type TagScanTruncation = WalkTruncation | "budget" | "hits" | "too-large";
 
 /**
- * Everything a namespace board is drawn from. The snapshot endpoint answers with this and
- * the client reloads into it, so the two cannot drift into different shapes.
- *
- * It lives here rather than beside the client state that consumes it because a server
- * route also has to name it, and a `+server.ts` reaching into a `.svelte.ts` module points
- * the dependency the wrong way round.
+ * Shared board data returned by the snapshot endpoint and loaded into client state. Keep
+ * this type outside client state modules so server routes can import it without depending
+ * on `.svelte.ts` code.
  */
 export interface NamespaceDataSnapshot {
   namespace: { id: string };

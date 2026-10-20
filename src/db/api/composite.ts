@@ -77,11 +77,9 @@ async function createCardInTaskspaceContext({
 }
 
 /**
- * Creates a card in the given partition within a taskspace context.
- * If the taskspace is still attached to a scope, the new card is
- * simultaneously registered in scope_rel (auto-add, 7-1), making the
- * "originated" and "gathered" relationships consistent from creation time.
- * Throws NotFoundError when taskspaceId does not exist.
+ * Create a card linked to a taskspace in the given partition. Add it to the taskspace's scope
+ * in the same transaction when a scope is assigned. Throw `NotFoundError` if the taskspace
+ * is missing or its assigned namespace does not contain the partition.
  */
 export async function createCardFromTaskspace({
   db,

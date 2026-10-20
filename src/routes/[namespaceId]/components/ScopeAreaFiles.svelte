@@ -186,10 +186,8 @@
                 <span class={labelClass}>{cell.entry.name}</span>
               </button>
             {:else if cell.kind === "entry"}
-              <!-- A symlink is drawn as what it is and stays shut, because following one is
-                   not something a read confined to the taskspace can do. Anything that is
-                   neither a regular file nor a directory is inert for the same reason, and so
-                   is every cell on a board with no endpoint to read a file with. -->
+              <!-- Label symlinks and keep them closed to preserve taskspace containment. Keep other
+                   special entries and files without a read endpoint inactive. -->
               <div
                 class={cellClass}
                 style:width="{CELL_WIDTH}px"

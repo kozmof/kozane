@@ -181,9 +181,8 @@ describe("addScopeMembers", () => {
 });
 
 describe("scope membership refusals", () => {
-  // Both of these answered a bare `false` for a missing scope and for foreign cards alike,
-  // so the DELETE route told a caller its cards were foreign when the scope was what did not
-  // exist. The reason is now carried out of the transaction that decided it.
+  // Return distinct reasons for a missing scope and cards outside the namespace so the DELETE
+  // route can report the correct error.
   it("names the scope rather than the cards when the scope does not exist", async () => {
     const { db, namespaceId, cardId } = await setup();
 

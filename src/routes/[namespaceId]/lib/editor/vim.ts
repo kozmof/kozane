@@ -33,7 +33,7 @@ function clampNormal(doc: EditorDocument, { line, column }: Caret): Caret {
   return doc.clamp({ line: safeLine, column: Math.min(Math.max(0, column), lastCharacter) });
 }
 
-/** The column after the last character, which is where insert mode may sit. */
+/** The position after the last character, available in insert mode. */
 function endOfLine(doc: EditorDocument, line: number): Caret {
   return { line, column: doc.lineText(line).length };
 }
@@ -113,7 +113,7 @@ function wordEnd(doc: EditorDocument, from: Caret): Caret {
   return { line, column };
 }
 
-/** `caretBefore` is where the caret sat when `dd` was pressed, which is where undo returns it. */
+/** Restore `caretBefore` on undo after deleting a line with `dd`. */
 function deleteLine(doc: EditorDocument, line: number, caretBefore: Caret): Caret {
   const lastLine = doc.lineCount - 1;
   if (line < lastLine) doc.delete({ line, column: 0 }, { line: line + 1, column: 0 }, caretBefore);

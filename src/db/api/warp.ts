@@ -47,8 +47,7 @@ export async function moveWarp({ db, namespaceId, warpId, posX, posY }: MoveWarp
 type DeleteWarp = NeedsNamespaceWarp;
 
 export async function deleteWarp({ db, namespaceId, warpId }: DeleteWarp): Promise<void> {
-  // namespaceId is redundant for the lookup (warpId is a UUID) but is checked as a
-  // defence-in-depth access boundary, the same way deleteLayer does it.
+  // Check namespace ownership even though the warp ID is unique.
   const deleted = await db
     .delete(warpTable)
     .where(and(eq(warpTable.namespaceId, namespaceId), eq(warpTable.id, warpId)))

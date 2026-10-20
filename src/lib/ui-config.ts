@@ -84,9 +84,8 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
 };
 
 /**
- * The widths a card may be drawn at. Shared by `ui.defaultCardWidth` and by a card's own
- * `width` column, so resizing a card on the board cannot reach a size the setting behind
- * it would have been refused for.
+ * Allowed card widths. Apply the same bounds to `ui.defaultCardWidth` and each card's
+ * `width` so configuration and board resizing accept the same sizes.
  */
 export const CARD_WIDTH_RANGE: [number, number] = [40, 1200];
 

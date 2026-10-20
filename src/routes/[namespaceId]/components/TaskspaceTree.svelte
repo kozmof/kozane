@@ -187,10 +187,8 @@
         <span class={nameClass}>{entry.name}</span>
       </button>
     {:else}
-      <!-- A symlink is drawn as what it is and stays closed, because following one is not
-           something a read confined to the taskspace can do. Anything that is neither a
-           regular file nor a directory is inert for the same reason, and so is every row
-           in a static export, which has no endpoint to read a file with. -->
+      <!-- Label symlinks and keep them closed to preserve taskspace containment. Keep other
+           special entries and files without a read endpoint inactive. -->
       <div class={rowBase} style:padding-left={`${indent}px`} title={entry.kind === "symlink" ? "Symbolic link" : undefined}>
         {@render fileIcon(entry.kind === "symlink")}
         <span class={nameClass}>{entry.name}</span>

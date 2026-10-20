@@ -8,18 +8,18 @@ import {
 import type { CardInventory } from "./types.js";
 
 /**
- * Slot planning and grid layout for inventories. The server plans with what it reads inside
- * its transaction and the board plans with what it holds, so the same functions decide both.
- * The board's guess is then the server's answer unless another writer got there first.
+ * Plan inventory slots and grid layout for the server and board. The server uses data read
+ * inside its transaction. The board uses local state to predict the same placement unless
+ * another writer changes the inventory first.
  *
- * A stored card sits in one column and covers {@link cardSpan} rows downward from its slot,
- * enough to show its whole text. The slot is the index of its top cell.
+ * A stored card occupies one column and {@link cardSpan} rows downward from its slot. The
+ * slot identifies its top cell. Text beyond the maximum span scrolls inside the card.
  */
 
 /** Where one card goes. */
 export type SlotPlacement = { cardId: string; slot: number };
 
-/** Where one card goes, with the inventory it goes into, as a stow answers. */
+/** A card's destination inventory and slot after storage. */
 export type InventoryPlacement = SlotPlacement & { inventoryId: string };
 
 /** A stored card's top cell and how many rows it covers. */
@@ -39,11 +39,10 @@ export type TakenCard = { cardId: string; position?: { posX: number; posY: numbe
 /*
  * Widths are counted in hundredths of the font size, so the model stays in integers.
  *
- * A narrow character is taken as 0.62em. Monospace fonts run about 0.6, and most text in a
- * proportional font averages narrower, so ordinary text gets room to spare. It is an estimate,
- * not a bound: a run of wide glyphs, such as capital W in a proportional font, can need more
- * lines than counted. East Asian wide characters take a full 1em. Text that runs past its
- * cells scrolls inside the card.
+ * Estimate narrow characters at 0.62em and East Asian wide characters at 1em. The narrow
+ * estimate leaves room for typical monospace and proportional text. Wide proportional
+ * glyphs such as capital W can still require more lines than estimated. Text beyond the
+ * allocated cells scrolls inside the card.
  */
 const NARROW = 62;
 const WIDE = 100;
@@ -88,11 +87,11 @@ const WIDE_CHAR =
   /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-鿿ꀀ-꓏가-힣豈-﫿︰-﹏＀-｠￠-￦\u{1F300}-\u{1F64F}\u{1F900}-\u{1F9FF}\u{20000}-\u{3FFFD}]/u;
 
 /**
- * Lines `content` wraps to, the way the stored card's `break-spaces` with `break-word` lays it
- * out: whole words where they fit, long words broken, and every space taking its width and
- * wrapping like a character. A tab runs to the next tab stop but never counts narrower than a
- * space, which errs towards more lines. A space, a tab, and a wide character each end a word,
- * since a line can break after any of them. Stops counting at {@link LINES_CAP}.
+ * Estimate wrapped lines for the stored card's `break-spaces` and `break-word` styles. Keep
+ * words together when they fit and split words wider than a line. Preserve each space's
+ * width. Tabs advance to the next stop and count as at least one space to avoid
+ * underestimating lines. Allow breaks after spaces, tabs, and wide characters. Stop at
+ * {@link LINES_CAP}.
  */
 function wrappedLines(content: string): number {
   let lines = 0;
@@ -149,8 +148,9 @@ function wrappedLines(content: string): number {
 }
 
 /**
- * How many rows a stored card covers, from 1 to {@link INVENTORY_SPAN_MAX}, so its whole text
- * shows. Only the first {@link INVENTORY_SPAN_SOURCE_CHARS} code points matter.
+ * Estimate the rows a stored card needs, capped at {@link INVENTORY_SPAN_MAX}. Text beyond
+ * that span scrolls inside the card. Only the first {@link INVENTORY_SPAN_SOURCE_CHARS}
+ * code points affect the estimate.
  */
 export function cardSpan(content: string): number {
   const needed = wrappedLines(content);
@@ -292,9 +292,9 @@ export function planStow(
 }
 
 /**
- * Where a stored card goes after its text changed, which can make it cover more rows than
- * it did. It stays put if it still fits, and otherwise moves to the first place it fits.
- * `held` gives every card of the inventory, this one with its new span.
+ * Plan a stored card's placement after a text change. Keep its slot if the new span fits or
+ * move it to the first available slot. Pass all inventory cards in `held`, including the
+ * edited card with its updated span.
  */
 export function planRefit(held: readonly Footprint[], cardId: string): SlotPlacement[] {
   const card = held.find((f) => f.cardId === cardId);
@@ -305,9 +305,8 @@ export function planRefit(held: readonly Footprint[], cardId: string): SlotPlace
 }
 
 /**
- * Cards that cover a cell another card of the same inventory covers. Writers never leave this,
- * but spans come from text and from the layout constants, so a release that changes the
- * layout, or an imported dump, can. Each conflicting card is named once.
+ * Find cards that share cells in one inventory. Imports or layout changes can create overlaps
+ * because spans depend on text and layout constants. Return each conflicting card once.
  */
 export function overlappingCards(held: readonly Footprint[]): string[] {
   const byCell = new Map<number, string>();

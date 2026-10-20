@@ -47,8 +47,7 @@ describe("resolveMigrationsFolder", () => {
   });
 
   it("reports an override that holds no journal rather than silently searching past it", async () => {
-    // An override is someone saying where the migrations are. If they are not there, that is
-    // worth being told, not worth quietly using a different folder that happens to work.
+    // Report a missing override directory instead of falling back to another migrations directory.
     process.env.KOZANE_MIGRATIONS_DIR = tempDir();
 
     const status = await getMigrationStatus("file:/nonexistent/kozane.db");

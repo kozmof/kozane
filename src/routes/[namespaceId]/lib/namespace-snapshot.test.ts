@@ -20,7 +20,7 @@ import { createTestDB } from "../../../test-utils/db.js";
 import { loadNamespaceSnapshot } from "./namespace-snapshot.js";
 import { readNamespaceSnapshot } from "./snapshot-reader.js";
 
-/** The card fields a board is sent, which is what `CardData` names and nothing more. */
+/** Card fields returned in a board snapshot, matching `CardData`. */
 const CARD_KEYS = [
   "content",
   "glueId",

@@ -119,8 +119,7 @@ export function requireStringArray(body: JsonRecord, key: string, minLength = 1)
   if (!Array.isArray(value)) throw error(400, `${key} must be an array`);
   if (value.length < minLength)
     throw error(400, `${key} must have at least ${minLength} item${minLength === 1 ? "" : "s"}`);
-  // Checked before the per-item work below, which is what an oversized body would otherwise
-  // pay for twice over.
+  // Reject oversized batches before checking item types and duplicates.
   requireWithinBatchLimit(value.length, key);
   if (value.some((item) => typeof item !== "string" || item.length === 0))
     throw error(400, `${key} must contain non-empty strings`);

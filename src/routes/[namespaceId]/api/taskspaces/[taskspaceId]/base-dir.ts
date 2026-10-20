@@ -32,8 +32,8 @@ export async function taskspaceBaseDir(
 }
 
 /**
- * Turns a refusal from `taskspace-files.ts` into the status it means, and anything else
- * into a 500 with the reason logged rather than sent.
+ * Map taskspace file errors to their HTTP status. Log unexpected errors and return 500
+ * without exposing the cause in the response.
  */
 export function rethrowFilesError(e: unknown, whatFailed: string): never {
   if (e instanceof TaskspaceFilesError) throw error(TASKSPACE_FILES_STATUS[e.reason], e.message);

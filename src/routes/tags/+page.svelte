@@ -313,9 +313,8 @@
         gap: "6px",
         padding: "6px",
         borderRadius: "2px",
-        // An icon's weight, and a label's for the name beside it. The two are not the same
-        // kind of mark, and a name drawn as light as the picture is hard to read at the size
-        // a header sets. Both darken together on hover, or half the link would light up.
+        // Use a darker color for the small text label to keep it readable beside the icon.
+        // Darken both on hover.
         color: "neutral.iconDim",
         textDecoration: "none",
         "& span": { color: "neutral.muted" },

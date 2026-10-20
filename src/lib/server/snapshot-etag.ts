@@ -78,9 +78,8 @@ export function rememberSnapshotEtag(
   if (!dbUrl || !readFrom) return;
   const signature = databaseSignature(dbUrl);
   if (signature !== readFrom) return;
-  // Deleted first so a revisit moves to the end, which makes the eviction below
-  // least-recently-used rather than first-seen. Same shape as `touchOrCreate` in `lru.ts`,
-  // which cannot be used here because the value depends on a signature read at write time.
+  // Delete before reinserting to refresh recency. Unlike `touchOrCreate` in `lru.ts`, this
+  // update needs a fresh database signature before storing the value.
   remembered.delete(namespaceId);
   remembered.set(namespaceId, { signature, etag });
   evict(remembered, SNAPSHOT_ETAG_NAMESPACES_MAX);

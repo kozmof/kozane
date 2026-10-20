@@ -133,9 +133,9 @@ async function heldFootprints(tx: Tx, inventoryId: string): Promise<Footprint[]>
 }
 
 /**
- * Writes cards into slots of one inventory. Every slot the plan writes is freed before any is
- * filled, so cards trading places never meet the unique index halfway through. Once freed,
- * no two planned slots collide, so each batch is filled in one CASE update.
+ * Write planned slots for one inventory. Clear all affected slots before filling any to
+ * avoid unique-index conflicts when cards exchange slots. Apply each batch in one CASE
+ * update using the plan's distinct destination slots.
  */
 async function writePlacements(
   tx: Tx,
@@ -166,11 +166,10 @@ async function writePlacements(
 }
 
 /**
- * What one inventory holds, as it stands once any overlap is repaired, and the moves that
- * repair takes. Nothing is written, so a writer can fold the repair into its own write, or
- * leave it unwritten when it refuses. Spans come from text and the layout constants, so an
- * upgrade that changes the layout or an imported dump can leave cards overlapping. Every
- * writer plans from this, so the first write to an inventory repairs it.
+ * Read inventory footprints and plan repairs for overlapping cards without writing changes.
+ * Imports and layout changes can create overlaps because card spans depend on text and
+ * layout constants. Writers use the repaired footprints and commit the repairs with their
+ * own changes. A refused operation leaves the inventory unchanged.
  */
 async function settledFootprints(
   tx: Tx,
@@ -182,8 +181,8 @@ async function settledFootprints(
 }
 
 /**
- * `first` then `then`, with each card named once at the slot `then` gives it if it names it.
- * One write of the result lands every card where the two plans in turn would.
+ * Merge sequential placement plans into one write. Include each card once and use its slot
+ * from `then` when both plans move it.
  */
 function mergedPlans(
   first: readonly SlotPlacement[],

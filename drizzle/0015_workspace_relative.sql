@@ -1,17 +1,14 @@
--- `project_relative` never meant the entity renamed in 0014. It means "relative to the
--- workspace root" — the directory holding `.kozane/`, one per workspace and shared by every
--- namespace in it. `resolveTaskspacePath` takes a `workspaceRoot` and joins the stored path
--- onto it; no namespace is passed in or consulted. And `taskspace.namespace_id` is nullable,
--- so a row can carry this value while belonging to no namespace at all — which is what a
--- `taskspace scan --apply --reattach` from a marker naming no namespace produces.
+-- Rename project_relative to workspace_relative to describe the path's actual base.
+-- The workspace root holds .kozane/ and is shared by all its namespaces.
+-- resolveTaskspacePath joins the stored path to workspaceRoot without consulting a
+-- namespace. A nullable taskspace.namespace_id also lets unplaced taskspaces use this
+-- path kind, including records reattached from markers with no namespace.
 --
--- A rebuild rather than an UPDATE, because the value is also the column's DEFAULT and SQLite
--- cannot alter one in place. Dropping `taskspace` is safe here for the reason migration 0005
--- already relies on when it rebuilds `card`: the migrator does not enforce foreign keys, so
--- the `ON DELETE set null` on `card.taskspace_id` does not fire and no card loses its
--- taskspace. Checked against the driver through the migrator itself rather than assumed —
--- the same rebuild run through `client.batch` *does* cascade, which is what makes this worth
--- writing down.
+-- Rebuild taskspace to change the column default as well as existing values. SQLite
+-- cannot alter the default in place. The migrator does not enforce foreign keys during
+-- this rebuild, so dropping the old table preserves card.taskspace_id references.
+-- This behavior was checked through the migrator. Running the rebuild through
+-- client.batch instead triggers the ON DELETE set null action and clears those links.
 CREATE TABLE `__new_taskspace` (
 	`id` text PRIMARY KEY NOT NULL,
 	`namespace_id` text,

@@ -42,9 +42,10 @@ const SIGIL_PATTERN: NotLikeWildcard<typeof TAG_SIGIL> = TAG_SIGIL;
 type GetCardTagHits = NeedsDB & {
   /** Optional namespace filter. Omit it to read cards across the workspace. */
   namespaceId?: string;
-  /** How many hits to take before stopping, defaulting to {@link TAG_CARD_HITS_MAX}.
-   *  Overridable so a test can reach the ceiling without putting a hundred thousand tags in
-   *  the database, the same way `TaskspaceScanLimits` opens the file walk's. */
+  /**
+   * Maximum hits, defaulting to {@link TAG_CARD_HITS_MAX}. Tests can lower the limit to
+   * verify truncation with small fixtures.
+   */
   hitsMax?: number;
   /** Override page size for the test. Production uses the default constant. */
   rowsPage?: number;

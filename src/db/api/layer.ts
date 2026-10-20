@@ -15,8 +15,7 @@ export async function getAllLayers({ db, namespaceId }: NeedsNamespace): Promise
 
 type GetLayer = NeedsNamespaceLayer;
 export async function getLayer({ db, namespaceId, layerId }: GetLayer): Promise<Layer | undefined> {
-  // namespaceId is redundant for the lookup (layerId is a UUID) but is checked as a
-  // defence-in-depth access boundary, the same way getPartition does it.
+  // Check namespace ownership even though the layer ID is unique.
   return db
     .select()
     .from(layerTable)

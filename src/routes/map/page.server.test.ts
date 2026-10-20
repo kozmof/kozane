@@ -109,8 +109,7 @@ describe("GET /map", () => {
       expect(partition(data, quiet)?.cards).toBe(1);
     });
 
-    /** The reason the count query is a left join. An empty partition is drawn empty, not
-     *  dropped. */
+    /** Keep empty partitions in the map data with a zero card count. */
     it("keeps a partition holding nothing", async () => {
       const { db, partitionId } = await setup();
       const data = await run(db);

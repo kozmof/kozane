@@ -1,20 +1,15 @@
--- Hand-written rather than taken from `drizzle-kit generate`.
+-- Use explicit renames to preserve rows and their references.
 --
--- drizzle-kit renders a SQLite rename as a table rebuild: create `__new_card`, copy, `DROP
--- TABLE card`, rename into place. Migration 0005 could afford that because the table it
--- rebuilt was reachable from nothing; `card` is not. `glue_rel` and `scope_rel` both point at
--- it with `ON DELETE cascade`, and the `PRAGMA foreign_keys=off` that 0005 relies on is set
--- outside the migrator's transaction and does not hold inside it — so the rebuild would take
--- every group and every scope membership in the workspace with it.
+-- drizzle-kit generates a table rebuild for this rename. Dropping card during a rebuild
+-- could cascade to glue_rel and scope_rel and remove their memberships. The foreign-key
+-- pragma used by migration 0005 does not protect this rebuild inside the migrator's
+-- transaction.
 --
--- `ALTER TABLE ... RENAME` needs none of that. SQLite rewrites the `REFERENCES` clauses of
--- every other table, and the column lists of every index, as part of the rename itself, and
--- it does so whether or not the `foreign_keys` pragma is on. The rows are never copied.
+-- ALTER TABLE ... RENAME updates other tables' REFERENCES clauses and index column lists
+-- without copying rows. This works with foreign-key enforcement enabled or disabled.
 --
--- What SQLite will not do is rename an index. An index keeps its own name across a table or
--- column rename even as its definition is rewritten, and SQLite has no `ALTER INDEX`, so the
--- eight indexes that carry `project` or `bundle` in their names are dropped and recreated at
--- the end. That is a rebuild of the index, not of the table.
+-- Index names survive table and column renames. SQLite has no ALTER INDEX, so recreate
+-- the eight indexes whose names contain project or bundle after renaming the tables.
 ALTER TABLE `project` RENAME TO `namespace`;--> statement-breakpoint
 ALTER TABLE `bundle` RENAME TO `partition`;--> statement-breakpoint
 ALTER TABLE `partition` RENAME COLUMN `project_id` TO `namespace_id`;--> statement-breakpoint

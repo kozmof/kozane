@@ -445,9 +445,8 @@ export function createTaskspaceFile(
 }
 
 /**
- * Creates one directory in a taskspace, and answers with the (empty) listing of it. On the
- * `files` route because a folder is a name and nothing more, which is what that route deals
- * in. `404` when its parent is not there, `409` when the name is taken.
+ * Create a taskspace directory through the `files` route and return its empty listing.
+ * Return `404` if the parent is missing or `409` if the name is already taken.
  */
 export function createTaskspaceFolder(
   fetcher: typeof fetch,

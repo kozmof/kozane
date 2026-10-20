@@ -105,8 +105,7 @@ describe("getAllPartitions", () => {
     expect(await getAllPartitions({ db, namespaceId: p2 })).toEqual([]);
   });
 
-  // The order colours a partition (`applyPalette`), so a new one must not move the others.
-  // Names that sort differently from creation are the case the name index used to decide.
+  // Keep palette assignments stable when adding a partition whose name sorts before older ones.
   it("returns partitions in the order they were created, whatever their names", async () => {
     const { db, namespaceId } = await setup();
     const created = [];
@@ -167,7 +166,7 @@ describe("getPartitionCardCounts", () => {
     expect(await getPartitionCardCounts({ db })).toEqual([]);
   });
 
-  /** The whole reason this is a left join. An empty partition is a partition. */
+  /** Include empty partitions in the counts. */
   it("reports a partition holding no cards, at zero", async () => {
     const { db, namespaceId } = await setup();
     const partitionId = await addPartition({ db, namespaceId, name: "Empty" });

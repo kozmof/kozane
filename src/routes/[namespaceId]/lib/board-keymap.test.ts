@@ -20,7 +20,7 @@ function keyEvent(key: string, shiftKey = false): BoardKeyEvent & { prevented: b
   return event;
 }
 
-/** A binding that records being run, which is all most of these cases need to observe. */
+/** A binding that records invocations for assertions. */
 function spyBinding(name: string, overrides: Partial<KeyBinding> = {}): KeyBinding {
   return { name, keys: [name], run: vi.fn(), ...overrides };
 }
