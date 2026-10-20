@@ -118,8 +118,7 @@
     return cx("scope-delete", scopeDeleteBase, focused ? scopeDeleteFocusedClass : scopeDeleteClass);
   }
 
-  // One slot to the left of the delete button. A frame is a thing a scope either has or has
-  // not got, so this reports rather than offers, and does not take up a row of its own.
+  // Place the frame-status indicator beside the delete button without adding another row.
   const scopeFrameBase = css({
     position: "absolute",
     right: "26px",

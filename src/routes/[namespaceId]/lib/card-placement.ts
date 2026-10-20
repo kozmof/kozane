@@ -11,7 +11,7 @@ const PLACEMENT_SCROLL_EPSILON = 1;
 /** How many cards a grid run puts in a row before starting the next. */
 const GRID_COLUMNS = 4;
 
-/** What the board looks like right now, as much of it as placement depends on. */
+/** Current viewport and card geometry needed for placement. */
 export type PlacementViewport = {
   scrollLeft: number;
   scrollTop: number;

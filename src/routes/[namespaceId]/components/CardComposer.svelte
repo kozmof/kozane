@@ -75,8 +75,7 @@
     shortcuts = DEFAULT_UI_CONFIG,
   }: Props = $props();
 
-  // The same split the server would make, asked here so the button can say up front that a
-  // card has nothing to split on, rather than by way of an error banner after the request.
+  // Preview the server's split result so the button can explain when a card cannot be split.
   const squashableCard = $derived(
     selectedCards.length === 1 && splitCardContent(selectedCards[0].content).length > 1
       ? selectedCards[0]

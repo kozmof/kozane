@@ -8,7 +8,7 @@ export type DB = LibSQLDatabase<typeof schema> & { readonly [__db]: true };
 export type Tx = LibSQLDatabase<typeof schema> & { readonly [__tx]: true };
 export type AnyDB = DB | Tx;
 
-/** Drizzle own handle, before either brand is attached. The input to {@link brandDb}. */
+/** Unbranded Drizzle handle accepted by {@link brandDb}. */
 type UnbrandedDb = LibSQLDatabase<typeof schema>;
 
 /**

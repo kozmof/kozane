@@ -46,8 +46,7 @@
     if (session.isOpen && panelEl && !panelEl.contains(document.activeElement)) surface?.focus();
   });
 
-  // A file that arrives fresh starts in normal mode when vim is on, whatever the last one
-  // was left in, and with no question hanging over it from the file before.
+  // Reset Vim to normal mode and clear the close prompt when opening a different file.
   $effect(() => {
     void session.file;
     vim = createVimState();
@@ -78,7 +77,7 @@
    */
   let confirmingClose = $state(false);
 
-  /** Closes, or asks first. What every route out of the panel goes through. */
+  /** Request closing, prompting first when the file has unsaved changes. */
   function requestClose(): void {
     if (session.dirty) {
       confirmingClose = true;
@@ -162,7 +161,7 @@
 
   function onHandleMousedown(event: MouseEvent): void {
     if (event.button !== 0) return;
-    // Keeps the drag from selecting the text it passes over, and from moving focus.
+    // Prevent resizing from selecting text or moving focus.
     event.preventDefault();
 
     const startX = event.clientX;

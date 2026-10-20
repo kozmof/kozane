@@ -1,8 +1,6 @@
 /**
- * What a workspace is created with, and where its server answers.
- *
- * The defaults a `kozane init` writes into a new workspace, plus the ports and host `kozane
- * open` and `kozane net ssg preview` bind unless told otherwise.
+ * Workspace defaults written by `kozane init`, plus the default host and ports for
+ * `kozane open` and `kozane net ssg preview`.
  */
 /**
  * Supported interpretations of stored taskspace paths. Relative paths use the workspace root

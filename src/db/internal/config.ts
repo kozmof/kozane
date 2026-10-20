@@ -28,11 +28,11 @@ let _workspaceRoot: string | null | undefined = undefined;
 type ConfigCacheEntry = {
   signature: string | null;
   parsed: Record<string, unknown> | null;
-  /** Derived from `parsed`, so it lives and dies with the entry rather than beside it. */
+  /** UI configuration derived from `parsed` and cached with this entry. */
   ui?: UiConfig;
 };
 const configCache = new Map<string, ConfigCacheEntry>();
-/** The UI defaults handed out when there is no workspace at all, and so no file to key by. */
+/** UI defaults used when no workspace configuration file is available. */
 let _rootlessUiConfig: UiConfig | undefined = undefined;
 
 function resolveWorkspaceRoot(): string | null {

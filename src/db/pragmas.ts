@@ -2,9 +2,8 @@ import type { Client } from "@libsql/client";
 import { isMemoryDbUrl } from "../lib/db-url.js";
 
 /**
- * How long a connection waits for a lock before giving up. Long enough to cover a `kozane
- * card add` landing while the board polls, short enough that a genuinely stuck writer
- * surfaces as an error rather than as a request that never answers.
+ * Connection lock timeout. Allow brief contention between CLI writes and board polling
+ * while reporting prolonged locks as errors.
  */
 export const BUSY_TIMEOUT_MS = 5_000;
 

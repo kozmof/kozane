@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { dbPathFromUrl } from "../../lib/db-url.js";
 
-/** What a migrations folder must contain for this to have found the right one. */
+/** Required journal file used to identify a migrations directory. */
 function isMigrationsFolder(candidate: string): boolean {
   return existsSync(join(candidate, "meta", "_journal.json"));
 }

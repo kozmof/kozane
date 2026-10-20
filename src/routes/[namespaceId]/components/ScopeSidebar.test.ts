@@ -184,8 +184,7 @@ describe("ScopeSidebar scope areas", () => {
   it("marks a scope framed once without a number", () => {
     const { container } = mount({ frameCountByScopeId: new Map([[SCOPE.id, 1]]) });
 
-    // The glyph alone is the whole story at one, and a "1" beside it would only invite the
-    // question of what else it could have been.
+    // A single frame needs only the glyph. Show a count for multiple frames.
     expect(frameMark(container)?.textContent?.trim()).toBe("▣");
     expect(frameMark(container)).toHaveAttribute("title", "Framed once on this board");
   });

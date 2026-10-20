@@ -89,7 +89,7 @@ async function lineY(page: Page, lineText: string): Promise<number> {
   return box.y + box.height / 2;
 }
 
-/** The middle of the cell `column` occupies, which is where a click on it belongs. */
+/** Horizontal center of the cell at `column`, used as a click target. */
 async function cellCentre(page: Page, lineText: string, column: number): Promise<number> {
   const [left, right] = await Promise.all([
     columnX(page, lineText, column),
@@ -241,7 +241,7 @@ test("puts the caret back at the edit an undo takes back", async ({ page }) => {
   await page.keyboard.press("Control+Home");
   await expect(page.getByText("Ln 1, Col 1")).toBeVisible();
 
-  // Undo belongs at the text it restored, not at the caret it was pressed from.
+  // Undo restores the caret beside the restored text.
   await page.keyboard.press("Control+z");
   await expect(page.getByText("charlie")).toBeVisible();
   await expect(page.getByText("Ln 3, Col 8")).toBeVisible();
@@ -305,7 +305,7 @@ test("groups a run of typing into one undo, and breaks the group after a pause",
   await expect(page.getByText("start")).toBeVisible();
   await expect(page.getByText("start hello")).toBeHidden();
 
-  // Past the window, so what follows is a new entry rather than more of the last one.
+  // Typing after the grouping window creates a separate undo entry.
   await page.keyboard.type("one");
   await page.waitForTimeout(600);
   await page.keyboard.type("two");
@@ -361,7 +361,7 @@ test("resizes by dragging the left edge, and keeps the width across a close", as
   const panel = page.getByRole("dialog", { name: /Editing/ });
   const before = (await panel.boundingBox())!.width;
 
-  // Drag the edge 150px to the left, which widens the panel by the same.
+  // Drag the edge 150px left to widen the panel by 150px.
   const handle = page.getByRole("separator", { name: "Resize editor" });
   const grip = (await handle.boundingBox())!;
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);

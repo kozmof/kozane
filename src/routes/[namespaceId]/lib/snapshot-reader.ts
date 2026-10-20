@@ -239,8 +239,7 @@ function readTaskspace(row: unknown): TaskspaceSummary | undefined {
 /**
  * A snapshot response as {@link NamespaceDataSnapshot}, or `undefined` if it is not one.
  *
- * The narrowing is real, so what comes out needs no casts and `refreshFromData` becomes
- * total over its input rather than trusting its caller.
+ * Validate all fields so `refreshFromData` can consume the result without casts.
  */
 export function readNamespaceSnapshot(source: unknown): NamespaceDataSnapshot | undefined {
   const namespaceId = readString((source as { namespace?: unknown } | null)?.namespace, "id");

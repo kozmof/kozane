@@ -6,7 +6,7 @@ export const TASKSPACE_MARKER_KIND = "kozane.taskspace";
  * guidance.
  */
 export const TASKSPACE_MARKER_VERSION = 2;
-/** The version this file carried before the rename, recognised only to say so. */
+/** Legacy marker version, recognized to provide upgrade guidance. */
 export const TASKSPACE_MARKER_VERSION_1 = 1;
 
 export type TaskspaceMarker = {

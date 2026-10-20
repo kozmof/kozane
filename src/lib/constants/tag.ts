@@ -1,5 +1,5 @@
 /**
- * The tag grammar's own dimensions, and the ceilings a gather of tags runs under.
+ * Tag grammar limits and scan budgets.
  *
  * `lib/tag.ts` builds its pattern out of the first few of these, so a change to a segment
  * length or a nesting depth is a change to what the grammar matches, not merely to what it
@@ -20,8 +20,8 @@ export const TAG_SEGMENT_CHARS_MAX = 64;
 export const TAG_LEVELS_MAX = 8;
 
 /**
- * How much of the line a tag sits on is kept as its excerpt. Enough to recognize the hit in
- * a list, not enough to make a tag index a second copy of every card and file it points at.
+ * Maximum excerpt length for a tag hit. Keep enough text to identify the match without
+ * copying the full source into the index.
  */
 export const TAG_EXCERPT_CHARS_MAX = 200;
 
@@ -49,8 +49,7 @@ export const TAG_SCAN_NODES_MAX = 20_000;
  */
 export const TAG_SCAN_WORKSPACE_BYTES_MAX = 4 * TAG_SCAN_TOTAL_BYTES_MAX;
 
-/** How many entries one gather will walk, across every taskspace in it. The counterpart to
- *  {@link TAG_SCAN_WORKSPACE_BYTES_MAX} for the other budget, and set the same way. */
+/** Maximum entries visited across all taskspaces, alongside the workspace byte budget. */
 export const TAG_SCAN_WORKSPACE_NODES_MAX = 4 * TAG_SCAN_NODES_MAX;
 
 /**

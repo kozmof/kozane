@@ -139,10 +139,8 @@
     if (!origin) return;
     const dx = event.clientX - origin.x;
     const dy = event.clientY - origin.y;
-    // Captured only once the gesture is a drag, not on the way down. A captured pointer's
-    // `click` is dispatched to the capturing element rather than to what is under it, so
-    // capturing on `pointerdown` left every partition link showing a pointer and opening
-    // nothing.
+    // Capture only after dragging starts so ordinary clicks still reach partition links.
+    // Pointer capture redirects the click to the capturing element.
     if (!travelled && Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) {
       travelled = true;
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);

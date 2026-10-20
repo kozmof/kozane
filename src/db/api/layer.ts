@@ -62,9 +62,8 @@ export async function addLayer({
 type DeleteLayer = NeedsNamespaceLayer;
 
 /**
- * Deletes the layer row itself, which cascades every card on it away with it. Callers
- * that mean "remove this layer from the namespace" want `deleteLayerWithReassign` in
- * composite.ts, which rehomes the cards on the default layer first.
+ * Delete a layer and all its cards through cascading deletion. Use
+ * `deleteLayerWithReassign` in `composite.ts` to preserve cards on the default layer.
  */
 export async function deleteLayer({ db, namespaceId, layerId }: DeleteLayer): Promise<void> {
   const deleted = await db
@@ -84,9 +83,8 @@ export type ReorderRejection = "duplicate" | "stale" | "foreign";
 export type ReorderResult = { ok: true } | { ok: false; reason: ReorderRejection };
 
 /**
- * Renumbers a namespace's layers from `layerIds`, which must list every layer of the
- * namespace exactly once, bottom to top. A list that does not match the namespace's layers
- * renumbers nothing rather than half of it, and says which way it failed to match.
+ * Reorder layers from bottom to top. Require every namespace layer exactly once in
+ * `layerIds`. Reject mismatched lists with a reason and leave the order unchanged.
  */
 export async function reorderLayers({
   db,

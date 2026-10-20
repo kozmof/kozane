@@ -72,8 +72,7 @@ function registerRuntimeState(root: string | null): string | null {
     return runtimeStateConflict;
   }
   runtimeStateConflict = null;
-  // A workspace this process has stopped serving is no longer its to hold, and the hook
-  // below only ever releases the current root, so the outgoing one is released here.
+  // Release the previous workspace now. The shutdown hook releases only the current root.
   if (registeredRoot) removeServerState(registeredRoot);
   registeredRoot = root;
   if (!exitHookInstalled) {
@@ -107,7 +106,7 @@ async function checkMigrations(): Promise<string | null> {
   try {
     url = getDBURL();
   } catch {
-    // No workspace at all. Left to the database open below, which already words that case.
+    // Let the database open below report the missing workspace.
     return null;
   }
 

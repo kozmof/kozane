@@ -33,7 +33,7 @@ if (process.env.BODY_SIZE_LIMIT === undefined) {
   try {
     process.env.BODY_SIZE_LIMIT = String(bodySizeLimitFor(contentMax()));
   } catch {
-    // No workspace to read, or an unreadable one. `hooks.server.ts` is what says so.
+    // Let `hooks.server.ts` report a missing or unreadable workspace.
   }
 }
 

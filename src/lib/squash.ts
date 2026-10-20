@@ -21,7 +21,7 @@ export type CardPosition = { posX: number; posY: number };
 type SquashLayout = {
   /** Where the first slot sits. The CLI squashes onto the board itself and starts at 0,0. */
   origin?: CardPosition;
-  /** The board the columns have to fit inside, defaulting to the built-in canvas width. */
+  /** Available board width. Defaults to the built-in canvas width. */
   canvasWidth?: number;
 };
 

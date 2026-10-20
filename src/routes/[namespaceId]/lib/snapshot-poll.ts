@@ -17,7 +17,7 @@ export type SnapshotPollOptions = {
   activities: readonly InFlight[];
   /** Applied only once every guard above still holds. */
   apply: (snapshot: NamespaceDataSnapshot) => void;
-  /** Hidden tabs are not drawn, so polling one spends a request on nothing. */
+  /** Skip polling while the tab is hidden. */
   isHidden: () => boolean;
 };
 

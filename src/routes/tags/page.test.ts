@@ -41,8 +41,7 @@ function pageData(hits: TagHit[], over: Record<string, unknown> = {}) {
   };
 }
 
-/** Renders the page as the loader would hand it over. `params` and `form` are the other
- *  halves of a page's props and are nothing to this one. */
+/** Render loader data with the remaining page props set to empty values. */
 const draw = (hits: TagHit[], over: Record<string, unknown> = {}) =>
   render(TagsPage, { props: { data: pageData(hits, over) as never, params: {}, form: null } });
 
@@ -126,9 +125,7 @@ describe("tag index page", () => {
   });
 
   /**
-   * The two ceilings are separate, so the notice has to be too. One number over a list
-   * holding both kinds cannot say which of them was cut, and the reader is looking for one
-   * of them in particular.
+   * Report card and file truncation separately so readers can tell which results are missing.
    */
   it("says what was cut from each kind, not one number over both", () => {
     const hits = [cardHit("c1", "perf", "one"), fileHit("t1", "notes/todo.md", 3, "perf")];
@@ -177,9 +174,8 @@ describe("tag index page", () => {
   });
 
   /**
-   * A reason on its own says something is wrong and not where, which is the half a reader can
-   * act on. A directory carries its trailing slash through, so "the taskspace itself" does not
-   * read as a file called `.`.
+   * Include affected paths so readers can locate scan problems. Preserve trailing slashes
+   * to distinguish directories from files.
    */
   it("names a few of the files behind a truncation", () => {
     draw([cardHit("c1", "perf", "one")], {
@@ -209,8 +205,7 @@ describe("tag index page", () => {
     expect(screen.queryByText(/was not read in full/)).toBeNull();
   });
 
-  /** The half a reader can act on. One command settles every such record, so it is printed
-   *  once however many of them there are. */
+  /** Show the cleanup command once for all unavailable taskspace records. */
   it("gives the command that drops such records, once for all of them", () => {
     draw([cardHit("c1", "perf", "one")], { missing: ["t1", "t2"] });
 

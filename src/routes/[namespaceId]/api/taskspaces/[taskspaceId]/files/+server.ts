@@ -5,15 +5,12 @@ import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { readJsonObject, requireString } from "../../../../lib/request.js";
 
 /**
- * One directory of a taskspace, for the tree the scope panel draws. The panel asks per
- * directory as folders are opened rather than for a whole tree at once, so a taskspace
- * that happens to contain a checkout costs one small answer per folder actually looked at.
- *
- * Names and metadata only. There is no endpoint that returns the contents of a file.
+ * List names and metadata for one taskspace directory. Load directories as folders open to
+ * avoid reading the full tree. The sibling `file/` endpoint returns file content.
  */
 export const GET: RequestHandler = async ({ locals, params, url }) => {
-  // The base comes from the record and the workspace root alone. The request chooses only
-  // where to look within it, and `listTaskspaceDirectory` is what holds it to that.
+  // Resolve the trusted root from workspace data. `listTaskspaceDirectory` keeps the
+  // requested path inside that root.
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
 
   try {

@@ -5,9 +5,7 @@ import type { BoardRect } from "../../lib/constants.js";
 import { assertFound } from "./utils.js";
 
 type NeedsNamespaceArea = NeedsNamespace & { scopeId: string; areaId: string };
-// The board's rectangle, named in `lib/constants/canvas.ts`. Aliased locally because `Rect` is
-// what the signatures below read best as, and because this module's callers name the type
-// through them rather than by importing it.
+// Use a local alias for the shared canvas rectangle type.
 type Rect = BoardRect;
 
 /**

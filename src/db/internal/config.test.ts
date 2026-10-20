@@ -49,9 +49,7 @@ describe("getWorkspaceUiConfig", () => {
     writeConfig({ name: "w", ui: { defaultZoom: 1.5 } });
     expect(getWorkspaceUiConfig().defaultZoom).toBe(1.5);
 
-    // The config is a file the user is invited to hand-edit (`kozane doctor config` reads
-    // it back to them), so a setting that appeared to do nothing until the server was
-    // restarted would look like a setting that does not work.
+    // Hand-edited configuration changes must take effect without restarting the server.
     writeConfig({ name: "w", ui: { defaultZoom: 0.75 } });
 
     expect(getWorkspaceUiConfig().defaultZoom).toBe(0.75);

@@ -184,10 +184,9 @@ async function validateRestoreCandidate(path: string): Promise<void> {
 }
 
 /**
- * The files SQLite keeps beside a database file, which anything replacing one has to
- * account for. A write-ahead log holds committed transactions that are not yet in the main
- * file, so a `-wal` left beside a database that has been swapped underneath it describes a
- * history that database never had.
+ * SQLite sidecar files to remove when replacing a database. A stale `-wal` can contain
+ * committed transactions from the previous database and must not be replayed over its
+ * replacement.
  */
 function sidecarPaths(dbFile: string): string[] {
   return [`${dbFile}-wal`, `${dbFile}-shm`];

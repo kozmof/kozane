@@ -173,8 +173,7 @@ export function scanTagLines(text: string): TagLineHit[] {
 
     let excerpt: string | null = null;
     const seen = new Set<string>();
-    // Through the same scanner the card draws from, over one line rather than a whole text.
-    // A line is a text like any other, which is what keeps the two readings one reading.
+    // Scan each line with the same grammar used to render card tags.
     for (const { tag } of scanTagPositions(line)) {
       if (seen.has(tag)) continue;
       seen.add(tag);
@@ -220,13 +219,11 @@ export const isCardHit = <T extends { source: TagSource }>(hit: T): hit is TagHi
 export const isFileHit = <T extends { source: TagSource }>(hit: T): hit is TagHitOf<T, "file"> =>
   hit.source.kind === "file";
 
-/** One tag's hits, split by the two things they can have been written in and each side cut
- *  to a ceiling, with what each side was cut down from. */
+/** Card and file hits with separate display limits and totals before truncation. */
 export interface CappedHits<T extends { source: TagSource }> {
   cards: TagHitOf<T, "card">[];
   files: TagHitOf<T, "file">[];
-  /** How many there were before the cut. The tree beside the list counts every hit, so a
-   *  list that shows fewer has to be able to say what it is a part of. */
+  /** Totals before display limits, used to explain omitted hits. */
   cardTotal: number;
   fileTotal: number;
 }
@@ -305,8 +302,7 @@ const countKeys = ({ cards, files }: Tally): TagCounts => ({
   files: files.size,
 });
 
-// Names differing only in case would otherwise order arbitrarily between runs, the same
-// concern `compareEntries` in `lib/server/taskspace-files.ts` settles the same way.
+// Break case-insensitive ties consistently, as `compareEntries` does for taskspace files.
 function compareNodes(a: TagNode, b: TagNode): number {
   const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
   return byName !== 0 ? byName : a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
@@ -432,7 +428,7 @@ export function truncationReasons(reasons: TagScanTruncation[]): string {
   return reasons.map((reason) => labels[reason] ?? UNKNOWN_TRUNCATION_LABEL).join("; ");
 }
 
-/** What is said about a reason this build has no wording for. See {@link truncationReasons}. */
+/** Fallback label for unknown reasons. See {@link truncationReasons}. */
 const UNKNOWN_TRUNCATION_LABEL = "some of it was not read, for a reason this page cannot name";
 
 /** Shared message for card-hit truncation, separate from taskspace scan limits. */
@@ -452,8 +448,7 @@ export const missingTaskspaceLabel = (name: string): string =>
  */
 export const TASKSPACE_CLEANUP_COMMAND = "kozane taskspace scan --apply --cleanup";
 
-/** What follows {@link TASKSPACE_CLEANUP_COMMAND} in that instruction. Plural because one
- *  gather can meet several such records, and one run of the command settles all of them. */
+/** Text after {@link TASKSPACE_CLEANUP_COMMAND}, covering all unavailable taskspaces. */
 export const cleanupCommandTail = (count: number): string =>
   count === 1 ? "to drop the record." : "to drop the records.";
 

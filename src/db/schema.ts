@@ -177,7 +177,7 @@ export const taskspaceTable = sqliteTable(
       onUpdate: "cascade",
     }),
     scopeId: text("scope_id").references(() => scopeTable.id, {
-      // When scopeId is deleted, taskspace is retained but set to null.
+      // Deleting a scope preserves the taskspace and clears its scope reference.
       onDelete: "set null",
       onUpdate: "cascade",
     }),
@@ -213,7 +213,7 @@ export const cardTable = sqliteTable(
       .notNull()
       .references(() => layerTable.id, { onDelete: "cascade", onUpdate: "cascade" }),
     taskspaceId: text("taskspace_id").references(() => taskspaceTable.id, {
-      // When taskspaceId is deleted, card is retained but set to null.
+      // Deleting a taskspace preserves the card and clears its taskspace reference.
       onDelete: "set null",
       onUpdate: "cascade",
     }),

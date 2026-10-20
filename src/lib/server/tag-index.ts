@@ -111,9 +111,8 @@ export async function loadTagIndex({
   limits,
   cache,
 }: LoadTagIndex): Promise<TagIndex> {
-  // No root, nowhere to keep it. That is the same condition the file walk below stops at,
-  // and reading it off one value is what keeps the cache and the walk talking about one
-  // workspace.
+  // Use the same workspace root for persistent caching and taskspace scanning.
+  // Without a root, skip both.
   const store =
     cache && root
       ? openTagCache({ root, dbUrl: cache.dbUrl, ...(namespaceId && { namespaceId }) })

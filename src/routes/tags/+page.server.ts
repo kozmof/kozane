@@ -114,9 +114,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       db,
       ...(requestedNamespace ? { namespaceId: requestedNamespace } : {}),
       includeFiles,
-      // Kept between requests, so clicking from one tag to the next does not re-run the card
-      // query and re-read every taskspace file to produce the set it just produced. Skipped
-      // where there is no workspace to keep it in, which is a prerender building an export.
+      // Reuse the cached index across tag selections to avoid repeating unchanged scans.
+      // Static prerendering skips persistent caching.
       ...cacheLocation(),
     }),
     getAllNamespaces({ db }),

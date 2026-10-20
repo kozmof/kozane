@@ -1,8 +1,7 @@
 /**
- * Characters a displayed short ID starts at, before being lengthened to break a
- * collision. Exported so callers and tests read the current width instead of
- * hardcoding it. Shorter input is still accepted by `resolveShortId`, which
- * matches any unambiguous prefix regardless of this value.
+ * Minimum displayed short-ID length. Extend it to resolve collisions. Share the value
+ * with callers and tests. `resolveShortId` accepts any unambiguous prefix, including
+ * shorter input.
  */
 export const MIN_SHORT_ID_LENGTH = 7;
 const SHORT_ID_KEY_LENGTH = 12;

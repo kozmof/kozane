@@ -44,7 +44,7 @@ export const rectCenter = ({ x, y, width, height }: Rect): Point => ({
 const EMPTY_STRIP_HEIGHT = 18;
 const EMPTY_STRIP_MAX_FRACTION = 0.25;
 
-/** What {@link squarify} leaves to its caller. */
+/** Layout options for {@link squarify}. */
 export type SquarifyOptions = {
   /** The empty strip's height in pixels, before the quarter-of-the-area cap. Defaults to 18,
    *  which is room for a dashed outline and nothing else. */

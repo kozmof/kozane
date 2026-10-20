@@ -2,9 +2,7 @@ import { error } from "@sveltejs/kit";
 import { optionalNumber } from "./request.js";
 import type { BoardRect } from "$lib/constants";
 
-// The board's rectangle, named in `lib/constants/canvas.ts`. Kept exported under this name
-// because the two endpoints and their tests already import `AreaRect` from here, and at a
-// request boundary "the area's rectangle" is what it is.
+// Re-export the shared canvas rectangle as `AreaRect` for existing route callers.
 export type AreaRect = BoardRect;
 
 /**

@@ -45,7 +45,7 @@ export class EditorSession {
    */
   conflict = $state(false);
 
-  /** What was read from disk, to be handed back on save so the server can check it. */
+  /** File-version signature returned on save to detect changes on disk. */
   #signature: string | null = null;
 
   get isOpen(): boolean {
@@ -57,9 +57,7 @@ export class EditorSession {
   }
 
   /**
-   * Opens `ref`, replacing whatever was open. The previous document is disposed rather
-   * than dropped, so a session of opening one file after another does not accumulate a
-   * scheduler per file.
+   * Open `ref` and dispose the previous document to release its scheduler.
    */
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
     this.#reset();
@@ -93,8 +91,7 @@ export class EditorSession {
   }
 
   /**
-   * Re-reads the file, discarding whatever is in the editor. What the conflict banner
-   * offers, and the only way out of one short of closing the file.
+   * Reload the file and discard unsaved edits. The conflict banner offers this action.
    */
   async reload(ctx: EditorSessionContext): Promise<void> {
     const ref = this.file;

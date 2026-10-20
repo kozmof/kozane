@@ -21,8 +21,7 @@ export function snapshotEtag(body: string): string {
 }
 
 /**
- * Whether `header` names `etag`. A weak validator is accepted because the tag only ever has
- * to answer that question, and `*` matches anything the server would send.
+ * Check whether an ETag header matches `etag`. Accept weak validators and the wildcard `*`.
  */
 export function matchesEtag(header: string | null, etag: string): boolean {
   if (!header) return false;
@@ -56,9 +55,8 @@ export function unchangedSnapshotEtag(dbUrl: string | null, namespaceId: string)
 }
 
 /**
- * The database's signature as a full read is about to start, for {@link rememberSnapshotEtag}
- * to compare against once it has finished. Null wherever {@link unchangedSnapshotEtag} would
- * have no gate to offer.
+ * Capture the database signature before a snapshot read. {@link rememberSnapshotEtag}
+ * compares it after the read. Return null when no signature is available.
  */
 export function snapshotReadSignature(dbUrl: string | null): string | null {
   return dbUrl ? databaseSignature(dbUrl) : null;

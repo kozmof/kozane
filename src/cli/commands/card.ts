@@ -458,7 +458,7 @@ const KEY_LABEL_WIDTH = Math.max(...CARD_SORT_KEYS.map((key) => key.length));
 function printCardTimes(card: CardStamps): void {
   for (const key of CARD_SORT_KEYS)
     console.log(`${key.padEnd(KEY_LABEL_WIDTH)}  ${sortColumn(card, key)}`);
-  // The text is what this command exists to print, so it is kept a block of its own.
+  // Print card text in a separate block from its metadata.
   console.log("");
 }
 

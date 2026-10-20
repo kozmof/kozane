@@ -11,7 +11,7 @@ import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
 export type TaskspaceNode = {
   /** Null until the directory has been read once. */
   entries: TaskspaceEntry[] | null;
-  /** Why the listing is not all there, or null when it is. */
+  /** Truncation reason, or null for a complete listing. */
   truncated: TaskspaceTruncation | null;
   loading: boolean;
   error: string | null;
@@ -231,7 +231,7 @@ export class TaskspaceTreeState {
       const body = await res.json();
       this.nodes[key] = {
         entries: Array.isArray(body?.entries) ? body.entries : [],
-        // A live listing has only ever the one reason to be cut off.
+        // Live listings are truncated only by the entry limit.
         truncated: body?.truncated === true ? "entries" : null,
         loading: false,
         error: null,

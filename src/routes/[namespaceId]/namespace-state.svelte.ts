@@ -53,17 +53,17 @@ export function storeActiveLayerId(namespaceId: string, layerId: string | null):
  * its call site.
  */
 
-/** The ids a snapshot carries, as the set every prune below is asked against. */
+/** Snapshot IDs used to remove stale references. */
 export function idSet(rows: readonly { id: string }[]): Set<string> {
   return new Set(rows.map(({ id }) => id));
 }
 
-/** One held id, dropped when the snapshot no longer carries the row it names. */
+/** Retain an ID only while its row remains in the snapshot. */
 export function prunedRef(ref: string | null, present: ReadonlySet<string>): string | null {
   return ref !== null && present.has(ref) ? ref : null;
 }
 
-/** A set of held ids, narrowed to the ones the snapshot still carries. */
+/** Retain only IDs present in the snapshot. */
 export function prunedRefs(refs: ReadonlySet<string>, present: ReadonlySet<string>): Set<string> {
   return new Set([...refs].filter((id) => present.has(id)));
 }

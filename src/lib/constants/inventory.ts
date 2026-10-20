@@ -1,13 +1,13 @@
 /**
  * Inventory grid geometry. Slots are numbered left to right and top to bottom, so a slot
  * index and the column count are enough to place a card. The database stores only the index
- * of the card's top cell. How many cells it covers downward comes from its text.
+ * of the card's top cell. Its text determines how many rows it covers.
  */
 
 /** Columns in every inventory grid. Rows grow as cards fill them. */
 export const INVENTORY_COLUMNS = 6;
 
-/** Rows an inventory shows even when it holds fewer cards, so there is room to drop into. */
+/** Minimum visible rows, leaving room to drop cards into the inventory. */
 export const INVENTORY_MIN_ROWS = 3;
 
 /**
@@ -17,8 +17,8 @@ export const INVENTORY_MIN_ROWS = 3;
 export const INVENTORY_SLOT_MAX = 9_999;
 
 /**
- * How a grid cell is drawn, in CSS pixels. The server reads these too, because how many
- * cells a card covers is worked out from how much of its text fits in them.
+ * Grid cell dimensions in CSS pixels. The server uses the same values to estimate how many
+ * rows a card's text needs.
  */
 export const INVENTORY_CELL = {
   width: 104,

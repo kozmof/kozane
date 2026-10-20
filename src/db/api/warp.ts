@@ -31,8 +31,7 @@ export async function addWarp({ db, namespaceId, posX, posY }: AddWarp): Promise
 type MoveWarp = NeedsNamespaceWarp & { posX: number; posY: number };
 
 /**
- * Puts a warp somewhere else on the board. The whole stored row comes back, so a caller
- * that drew the marker where the pointer let go can correct it to what was kept.
+ * Move a warp and return the stored row so the caller can display its saved position.
  */
 export async function moveWarp({ db, namespaceId, warpId, posX, posY }: MoveWarp): Promise<Warp> {
   // Check namespace ownership even though the ID is unique.

@@ -417,7 +417,7 @@ type UpdateCard = NeedsDB & {
   zIndex?: number;
   /**
    * `null` clears the card's own width, putting it back under `ui.defaultCardWidth`.
-   * Undefined leaves whichever of the two it is on now alone.
+   * Undefined preserves the current width setting.
    */
   width?: number | null;
 };
@@ -663,7 +663,7 @@ async function writeStacking(
     throw new Error(`writeStacking: expected ${batch.length} updates, got ${updated.length}`);
 }
 
-/** The layer and stacking of each named card, read in batches like every id-list read. */
+/** Read each requested card's layer and stacking value in batches. */
 function readStackRows(
   tx: Tx,
   cardIds: string[],
@@ -819,7 +819,7 @@ type ReassignCardsToPartition = {
   partitionId: string;
 };
 
-/** Refused the two ways {@link ReassignLayerResult} is, for the same reason. */
+/** Shared ownership and destination failures from {@link ReassignLayerResult}. */
 export type ReassignPartitionResult = BatchResult<"foreign-cards" | "foreign-partition">;
 
 export async function reassignCardsToPartition({

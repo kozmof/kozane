@@ -353,9 +353,7 @@ describe("map page", () => {
     });
 
     /**
-     * The panel scrolls when the tree is taller than the window, which it has to now that
-     * the canvas is the window and there is no page scroll left to reach the bottom of a
-     * long tree with. A row that has moved is a line that has to move with it.
+     * Scroll long tag trees within the panel and move link origins with their rows.
      */
     it("moves a line with its row when the panel is scrolled", async () => {
       const { container } = draw({ tag: "docs" });
@@ -380,9 +378,8 @@ describe("map page", () => {
     });
 
     /**
-     * A click and only a click. Hovering used to draw a tag's lines too, so a pointer
-     * crossing the panel on its way somewhere else redrew the map under a reader who had
-     * asked for none of it.
+     * Draw tag links only on click so moving the pointer across the panel leaves the
+     * selected graph unchanged.
      */
     it("draws nothing for a tag merely pointed at", async () => {
       const { container } = draw();

@@ -91,7 +91,7 @@
   });
 
   function leaveControl(e: MouseEvent) {
-    // Nothing to aim at with the popover shut, and a pinned one is not ours to close.
+    // Track the approach corridor only for an open, unpinned popover.
     if (!open || pinned || !panelEl) {
       close();
       return;

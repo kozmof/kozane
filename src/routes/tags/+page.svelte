@@ -101,9 +101,8 @@
   );
 
   /**
-   * One row per card, not per hit. A card written `:perf:cache and :perf` matches a search
-   * for `:perf` twice, and two rows would read as two cards. What counts as a row is
-   * `groupHitRows` in `$lib/tag`, which the terminal groups by too.
+   * Group hits into one row per card with the shared CLI helper `groupHitRows`.
+   * A card containing both `:perf:cache` and `:perf` still appears once for `:perf`.
    */
   const cardRows = $derived(groupHitRows(shown.cards));
 
@@ -120,8 +119,7 @@
   const namespaceName = (id: string | null | undefined) =>
     (id !== null && id !== undefined ? namespaceNames.get(id) : undefined) ?? "";
 
-  /** The taskspaces the gather could not open, or none from an export built before the page
-   *  said anything about them. See where they are drawn, at the foot of the hits. */
+  /** Unavailable taskspaces. Older exports may omit this list. */
   const missing = $derived(data.missing ?? []);
 
   /** Open unplaced taskspace files on the workspace's default board. */

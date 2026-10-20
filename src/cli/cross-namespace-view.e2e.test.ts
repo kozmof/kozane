@@ -70,7 +70,7 @@ describe("cross-namespace scope and taskspace views", () => {
     const betaView = cli(root, "scope", "list", "--namespace", beta);
     expect(betaView).toContain("Shared");
     expect(betaView).toContain("Untouched");
-    // Beta's board has no reason to draw a scope only Alpha's cards are in.
+    // Omit scopes used only by Alpha's cards from Beta's board.
     expect(betaView).not.toContain("AlphaOnly");
   }, 60_000);
 
@@ -87,7 +87,7 @@ describe("cross-namespace scope and taskspace views", () => {
     const all = cli(root, "taskspace", "list");
     expect(all).toContain("alpha-ws");
     expect(all).toContain("beta-ws");
-    // The namespace and scope each row sits under are what make the list worth reading.
+    // Include namespace and scope names to identify each row's context.
     expect(all).toMatch(/alpha-ws\s+Alpha\s+Work/);
     expect(all).toMatch(/beta-ws\s+Beta\s+Work/);
 

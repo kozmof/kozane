@@ -46,7 +46,7 @@ function processStartToken(pid: number): string | null {
   }
 }
 
-/** The `startToken` field for a reservation, or nothing at all where none can be read. */
+/** Reservation start token, omitted when unavailable. */
 function startTokenOf(pid: number): { startToken?: string } {
   const startToken = processStartToken(pid);
   return startToken === null ? {} : { startToken };

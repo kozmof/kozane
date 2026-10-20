@@ -17,10 +17,8 @@ export const prerender = false;
 /**
  * The configured key, or a 503 naming what is wrong with the file.
  *
- * `hooks.server.ts` reads the key before this page is reached and answers the same 503, so
- * in a served workspace the check here never fires. It is here anyway because the
- * alternative is a bare `throw` from the load function of the one page whose whole job is
- * to be reachable when authentication is not working.
+ * The request hooks normally catch key-file errors first. Keep this check so direct calls
+ * also report an unreadable key file as a 503 response.
  */
 function configuredKey(root: string | null): ApiKeyFile | null {
   if (!root) return null;

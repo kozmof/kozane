@@ -20,8 +20,8 @@ export type BoardCommands = {
   /** Whether a scope frame drawn with Alt is waiting for a scope. */
   hasPendingFrame: () => boolean;
   /**
-   * Whether no card is selected. While cards are selected the composer's action bar has the
-   * keyboard, so every board shortcut below the composer's own asks this.
+   * Whether no card is selected. Require this for board shortcuts whose keys belong to the
+   * composer's action bar during selection.
    */
   noSelection: () => boolean;
   hasFocusedWarp: () => boolean;

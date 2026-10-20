@@ -14,7 +14,7 @@ export interface TextSegment {
   tag?: string;
 }
 
-/** One thing to be drawn as itself rather than as plain text, and where it sits. */
+/** A URL or tag span and its position in the source text. */
 type Span = { index: number; length: number; text: string; href?: string; tag?: string };
 
 /**

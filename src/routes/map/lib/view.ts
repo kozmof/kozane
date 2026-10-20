@@ -48,11 +48,8 @@ export function zoomPercent(zoom: number): number {
 }
 
 /**
- * How much of the map must stay on screen, in pixels.
- *
- * Panning is otherwise unbounded, and a map dragged off the edge is a blank page with no
- * indication that anything is wrong or which way to drag back. This keeps a strip of it
- * always in view, so the way back is always visible.
+ * Minimum visible map margin in pixels. Keep part of the map on screen so users can
+ * find it again after panning.
  */
 const PAN_MARGIN = 96;
 

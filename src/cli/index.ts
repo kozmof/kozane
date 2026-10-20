@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// The entry, and nothing else. Every command lives in `program.ts`, which builds the tree
-// without running it so `spec.test.ts` can walk it.
+// Run the command tree defined in `program.ts`. Keeping its construction separate lets
+// `spec.test.ts` inspect the tree without executing commands.
 import { buildProgram } from "./program.js";
 
 buildProgram().parse();

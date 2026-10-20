@@ -23,8 +23,7 @@ export async function loadWarpDirectory({
     ...new Set(warps.map((warp) => warp.namespaceId).filter((id) => id !== namespaceId)),
   ];
   const cards = await getCardMarkersByNamespaces({ db, namespaceIds });
-  // The same numbers the boards are drawn with, so "the card under this warp" means here
-  // what it means on screen.
+  // Use the board's geometry settings to identify nearby cards consistently.
   return buildWarpDirectory({
     namespaces,
     warps,

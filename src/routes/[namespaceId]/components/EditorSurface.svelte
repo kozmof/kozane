@@ -64,9 +64,8 @@
   }
 
   /**
-   * Text the IME is still composing. Held here and drawn into the line rather than
-   * dispatched, so an abandoned composition leaves no edit and no undo entry behind. The
-   * document only hears about it once `compositionend` says what it settled on.
+   * Display uncommitted IME text without editing the document. Commit at `compositionend`
+   * so canceled compositions leave no edit or undo entry.
    */
   let preedit = $state("");
   let composing = $state(false);
@@ -307,8 +306,7 @@
       }
     }
 
-    // A printable character. Anything longer than one code point is a named key we have
-    // not claimed, and belongs to nobody.
+    // Handle a single printable code point. Leave unrecognized named keys unhandled.
     if ([...event.key].length === 1 && !event.altKey) {
       event.preventDefault();
       insertText(event.key);
@@ -332,8 +330,7 @@
     const composed = event.data ?? "";
     preedit = "";
     if (sinkEl) sinkEl.value = "";
-    // One insert for the whole session, so one undo takes back the word rather than
-    // walking backwards through every candidate that was cycled past on the way to it.
+    // Insert the committed composition once so one undo removes it in full.
     if (composed && !readonly) insertText(composed);
   }
 

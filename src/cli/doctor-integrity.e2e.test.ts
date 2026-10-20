@@ -40,7 +40,7 @@ function dbUrlOf(root: string): string {
   return `file:${join(root, ".kozane", "kozane.db")}`;
 }
 
-/** Writes rows the way nothing in Kozane would, which is the only way these conditions arise. */
+/** Insert invalid fixture rows directly, bypassing application validation. */
 async function withRawDb(
   root: string,
   write: (client: ReturnType<typeof createClient>) => Promise<void>,
@@ -53,7 +53,7 @@ async function withRawDb(
   }
 }
 
-/** The ids a freshly initialised workspace already has, for rows written by hand below. */
+/** Default workspace IDs used to insert fixture rows directly. */
 async function defaults(root: string): Promise<{ partitionId: string; layerId: string }> {
   let ids = { partitionId: "", layerId: "" };
   await withRawDb(root, async (client) => {

@@ -41,13 +41,10 @@ export const TAG_CACHE_FILES_MAX = TAG_SCAN_NODES_MAX;
  */
 export const TAG_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 
-/** Maximum persisted semantic snapshot for the treemap. Like the tag cache, this is read
- * synchronously on a page load, so an oversized result is better rebuilt than stored as a
- * permanent navigation stall. */
-
-/** Maximum persisted semantic snapshot for the treemap. Like the tag cache, this is read
- * synchronously on a page load, so an oversized result is better rebuilt than stored as a
- * permanent navigation stall. */
+/**
+ * Maximum treemap snapshot size in bytes. Rebuild oversized snapshots to bound synchronous
+ * cache reads during page loads.
+ */
 export const TREEMAP_CACHE_BYTES_MAX = 16 * 1024 * 1024;
 
 /**

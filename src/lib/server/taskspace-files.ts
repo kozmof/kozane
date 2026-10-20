@@ -163,9 +163,8 @@ export function listTaskspaceDirectory({
 
   const visible = dirents.filter((dirent) => !dirent.name.startsWith("."));
   const truncated = visible.length > TASKSPACE_DIR_ENTRIES_MAX;
-  // Sorted before the cap so which entries survive it is the same on every read, and
-  // stat'ed after it so a directory of a hundred thousand files costs a hundred thousand
-  // syscalls fewer than it would the other way round.
+  // Sort before limiting to return a consistent subset. Read metadata only for that subset
+  // to avoid unnecessary filesystem calls in large directories.
   const kept = visible.sort(compareEntries).slice(0, TASKSPACE_DIR_ENTRIES_MAX);
 
   const entries: TaskspaceEntry[] = [];
@@ -249,8 +248,7 @@ function statRegularFile(real: string): number {
   if (stat.isSymbolicLink())
     throw new TaskspaceFilesError("invalid-path", "Symbolic links cannot be opened");
   if (!stat.isFile()) throw new TaskspaceFilesError("invalid-path", "Not a regular file");
-  // Checked from the stat rather than from what came back, so an oversized file costs one
-  // syscall instead of a read of however many megabytes it happens to be.
+  // Check metadata before reading to avoid loading an oversized file into memory.
   if (stat.size > TASKSPACE_FILE_BYTES_MAX)
     throw new TaskspaceFilesError(
       "too-large",
@@ -353,9 +351,9 @@ export function writeTaskspaceFile({
       `Content is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
     );
 
-  // Check the current on-disk version immediately before writing. This narrows but does not
-  // close the race: another process can still write between this check and the rename below,
-  // and that write is replaced. Node offers no compare-and-swap rename to close it fully.
+  // Check the on-disk version immediately before writing to narrow the race window.
+  // Another process can still write before the rename and have its change overwritten.
+  // Node offers no compare-and-swap rename to prevent this.
   let current: Uint8Array;
   try {
     current = readFileSync(real);
