@@ -2,14 +2,14 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { getPartition } from "$db/api/partition";
 import { getLayer } from "$db/api/layer";
-import { reassignCardsToLayerInTx, updateCard, type CardStacking } from "$db/api/card";
+import { reassignCardsToLayerInTx, updateCardInTx, type CardStacking } from "$db/api/card";
 import { withTx } from "$db/tx";
 import { deleteNamespaceCards } from "$db/api/composite";
 import { refitStoredCardInTx, type Refit } from "$db/api/inventory";
 import { requireCardInNamespace } from "../../../lib/guards.js";
-import { checkCardContent, clamp } from "$lib/constants";
+import { checkCardContent } from "$lib/constants";
 import { CARD_WIDTH_RANGE } from "$lib/ui-config";
-import { canvasBounds } from "$lib/server/canvas";
+import { canvasBounds, clampCoordinate } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
 import {
   optionalNullableNumber,
@@ -39,12 +39,11 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     body.partitionId === undefined ? undefined : requireString(body, "partitionId");
   const requestedLayerId = body.layerId === undefined ? undefined : requireString(body, "layerId");
 
-  // Rounded as `clampToBounds` does, because the position columns are integers.
   const rawPosX = optionalNumber(body, "posX");
   const rawPosY = optionalNumber(body, "posY");
   const { canvasWidth, canvasHeight } = canvasBounds();
-  const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
-  const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
+  const posX = rawPosX === undefined ? undefined : clampCoordinate(rawPosX, canvasWidth);
+  const posY = rawPosY === undefined ? undefined : clampCoordinate(rawPosY, canvasHeight);
   const zIndex = optionalNumber(body, "zIndex");
   if (zIndex !== undefined && !Number.isSafeInteger(zIndex))
     throw error(400, "zIndex must be an integer");
@@ -109,7 +108,7 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 
       const rest = { newPartitionId, content, posX, posY, zIndex, width };
       if (Object.values(rest).some((value) => value !== undefined))
-        await updateCard({ db: tx, cardId, partitionId, ...rest });
+        await updateCardInTx({ db: tx, cardId, partitionId, ...rest });
       // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
       // the first free slot and return every changed position, including repaired neighbours,
       // so the board can update immediately.

@@ -13,7 +13,7 @@
     failureMessage,
   } from "./lib/namespace-api.js";
   import { applyPalette } from "$lib/palette";
-  import { ARROW_DIRECTIONS, clampZoom, warpInDirection } from "./lib/namespace-page.js";
+  import { ARROW_DIRECTIONS, warpInDirection } from "./lib/namespace-page.js";
   import {
     cardMetrics,
     warpEntriesForNamespace,
@@ -40,7 +40,7 @@
   import { cardSpan } from "$lib/inventory";
   import type { DropTarget } from "./lib/inventory-drop.js";
   import { STOWED_GRAB_INSET } from "./lib/board-gestures.svelte.js";
-  import { INVENTORY_CELL } from "$lib/constants";
+  import { INVENTORY_CELL, clampZoom } from "$lib/constants";
   import type { Inventory } from "$lib/types";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";

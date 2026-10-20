@@ -20,7 +20,7 @@ import { addPartition } from "./partition.js";
 import { addLayer } from "./layer.js";
 import { getGlueRelsByNamespace, glueNamespaceCards } from "./glue.js";
 import { moveCardsToNamespace } from "./composite.js";
-import { updateCard } from "./card.js";
+import { updateCardInTx } from "./card.js";
 import { cardSpan } from "../../lib/inventory.js";
 import { withTx } from "../tx.js";
 import { NotFoundError } from "./utils.js";
@@ -285,7 +285,7 @@ describe("tall cards", () => {
       .partitionId;
 
     const refit = await withTx(db, async (tx) => {
-      await updateCard({ db: tx, cardId: grows, partitionId, content: long });
+      await updateCardInTx({ db: tx, cardId: grows, partitionId, content: long });
       return refitStoredCardInTx({ db: tx, cardId: grows });
     });
 
@@ -494,7 +494,7 @@ describe("a write to an overlapping inventory", () => {
       .get())!;
 
     const refit = await withTx(db, async (tx) => {
-      await updateCard({ db: tx, cardId: edited, partitionId, content: "cc" });
+      await updateCardInTx({ db: tx, cardId: edited, partitionId, content: "cc" });
       return refitStoredCardInTx({ db: tx, cardId: edited });
     });
 

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   clamp,
+  clampZoom,
   chunked,
   checkCardContent,
   contentLimitIssue,
@@ -167,5 +168,14 @@ describe("checkCardContent", () => {
   it("measures the limit after trimming", () => {
     expect(checkCardContent(` ${"x".repeat(5)} `, 5)).toEqual({ ok: true, content: "xxxxx" });
     expect(checkCardContent("x".repeat(6), 5)).toMatchObject({ ok: false });
+  });
+});
+
+describe("clampZoom", () => {
+  it("rounds to two decimals and keeps zoom in range", () => {
+    expect(clampZoom(1.024)).toBe(1.02);
+    expect(clampZoom(1.026)).toBe(1.03);
+    expect(clampZoom(0)).toBe(0.25);
+    expect(clampZoom(3)).toBe(2);
   });
 });

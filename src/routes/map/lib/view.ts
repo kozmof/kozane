@@ -1,4 +1,4 @@
-import { clampZoom } from "../../[namespaceId]/lib/namespace-page.js";
+import { clampZoom } from "$lib/constants.js";
 import type { Point, Rect } from "./treemap.js";
 
 /**

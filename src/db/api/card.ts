@@ -3,6 +3,7 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type {
   NeedsDB,
+  NeedsTx,
   NeedsPartition,
   NeedsNamespace,
   NeedsNamespaceCards,
@@ -406,7 +407,7 @@ export async function reassignLayerCards({
   await db.update(cardTable).set({ layerId: toLayerId }).where(eq(cardTable.layerId, fromLayerId));
 }
 
-type UpdateCard = NeedsDB & {
+type UpdateCardFields = {
   cardId: string;
   partitionId: string;
   newPartitionId?: string;
@@ -421,6 +422,8 @@ type UpdateCard = NeedsDB & {
    */
   width?: number | null;
 };
+type UpdateCard = { db: DB } & UpdateCardFields;
+type UpdateCardInTx = NeedsTx & UpdateCardFields;
 type CardUpdate = Partial<
   Pick<
     typeof cardTable.$inferInsert,
@@ -490,7 +493,19 @@ async function assertSameNamespace({
   }
 }
 
-export async function updateCard({
+/**
+ * Update one card in its own transaction. Routes and commands that combine the update with
+ * other writes call {@link updateCardInTx}.
+ */
+export async function updateCard({ db, ...fields }: UpdateCard): Promise<void> {
+  return withTx(db, (tx) => updateCardInTx({ db: tx, ...fields }));
+}
+
+/**
+ * {@link updateCard} inside a caller-owned transaction. Requiring one keeps the namespace check
+ * and the write atomic, so a partition or layer cannot leave the namespace in between.
+ */
+export async function updateCardInTx({
   db,
   cardId,
   partitionId,
@@ -501,7 +516,7 @@ export async function updateCard({
   posY,
   zIndex,
   width,
-}: UpdateCard): Promise<void> {
+}: UpdateCardInTx): Promise<void> {
   const fields: CardUpdate = {};
   // Only text changes update `updatedAt`. Position, width, partition, layer, and stacking
   // changes preserve it.
@@ -585,7 +600,7 @@ export async function updateNamespaceCardPositions({
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
     if (!owned.ok) return owned;
 
-    await writeCardPositionsInTx(tx, unique);
+    await writeCardPositionsInTx({ db: tx, positions: unique });
     return { ok: true };
   });
 }
@@ -594,10 +609,10 @@ export async function updateNamespaceCardPositions({
  * Writes canvas positions inside a caller-owned transaction, without ownership checks. Each
  * card must appear once. Throws if any card is missing, so the transaction rolls back.
  */
-export async function writeCardPositionsInTx(
-  tx: Tx,
-  positions: CardPositionUpdate[],
-): Promise<void> {
+export async function writeCardPositionsInTx({
+  db: tx,
+  positions,
+}: NeedsTx & { positions: CardPositionUpdate[] }): Promise<void> {
   // Size batches for two CASE-updated columns. Assert the row count in each disjoint batch.
   for (const batch of caseUpdateBatches(positions, 2)) {
     const updated = await tx

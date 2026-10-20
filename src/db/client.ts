@@ -50,16 +50,23 @@ let _openedDbUrl: string | null = null;
 export async function getDb(): Promise<DB> {
   if (!_dbPromise) {
     const url = getDBURL();
-    _dbPromise = openDb(url)
+    const opening: Promise<DB> = openDb(url)
       .then(({ db, close }) => {
+        // `resetDb` ran while this connection was opening. Close it rather than reinstall
+        // state the reset already cleared.
+        if (_dbPromise !== opening) {
+          close();
+          throw new Error("Database connection was reset while opening");
+        }
         _openedDbUrl = url;
         _dbClose = close;
         return db;
       })
       .catch((e) => {
-        _dbPromise = null;
+        if (_dbPromise === opening) _dbPromise = null;
         throw e;
       });
+    _dbPromise = opening;
   }
   return _dbPromise;
 }

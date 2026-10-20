@@ -6,6 +6,7 @@ import type {
   NeedsInventory,
   NeedsNamespace,
   NeedsNamespaceInventory,
+  NeedsTx,
 } from "./types.js";
 import { BATCH_MAX, INVENTORY_SLOT_MAX, chunked } from "../../lib/constants.js";
 import {
@@ -142,10 +143,7 @@ async function writePlacements(
   inventoryId: string,
   plan: readonly SlotPlacement[],
 ): Promise<void> {
-  await releaseCardsInTx(
-    tx,
-    plan.map(({ cardId }) => cardId),
-  );
+  await releaseCardsInTx({ db: tx, cardIds: plan.map(({ cardId }) => cardId) });
   // One CASE-updated column. `inventoryId` binds once per statement.
   for (const batch of caseUpdateBatches([...plan], 1)) {
     const whens = batch.map(({ cardId, slot }) => sql`WHEN ${cardId} THEN ${slot}`);
@@ -327,7 +325,10 @@ export async function refitStoredCardInTx({
  * Remove cards from their inventories and clear both inventory columns together.
  * Preserve their previous canvas positions for when they leave storage.
  */
-export async function releaseCardsInTx(tx: Tx, cardIds: string[]): Promise<void> {
+export async function releaseCardsInTx({
+  db: tx,
+  cardIds,
+}: NeedsTx & { cardIds: string[] }): Promise<void> {
   for (const batch of chunked(cardIds, { size: BATCH_MAX }))
     await tx
       .update(cardTable)
@@ -357,7 +358,7 @@ export async function deleteInventory({
     // The foreign key has already nulled `inventory_id`. The slot is cleared here, since
     // the key knows nothing about it.
     const releasedCardIds = held.map(({ id }) => id);
-    await releaseCardsInTx(tx, releasedCardIds);
+    await releaseCardsInTx({ db: tx, cardIds: releasedCardIds });
     return { releasedCardIds };
   });
 }
@@ -469,11 +470,13 @@ export async function takeCards({
         .where(and(inArray(cardTable.id, batch), isStored)),
     );
     if (stored.length !== cardIds.length) return { ok: false, reason: "unstored-cards" };
-    await releaseCardsInTx(tx, cardIds);
-    await writeCardPositionsInTx(
-      tx,
-      unique.flatMap(({ cardId, position }) => (position ? [{ cardId, ...position }] : [])),
-    );
+    await releaseCardsInTx({ db: tx, cardIds });
+    await writeCardPositionsInTx({
+      db: tx,
+      positions: unique.flatMap(({ cardId, position }) =>
+        position ? [{ cardId, ...position }] : [],
+      ),
+    });
     return { ok: true };
   });
 }

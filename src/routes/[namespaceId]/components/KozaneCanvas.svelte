@@ -29,10 +29,10 @@
   import { dropTargetAt, type DropTarget } from "../lib/inventory-drop.js";
   import type { Point } from "../lib/namespace-page.js";
   import { PALETTE } from "$lib/palette";
+  import { clampZoom } from "$lib/constants";
   import {
     buildGlueGroupMap,
     cardIdsOverlapping,
-    clampZoom,
     glueIdByCardId,
     INACTIVE_LAYER_OPACITY,
     layerStack,

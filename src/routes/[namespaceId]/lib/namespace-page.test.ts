@@ -5,7 +5,6 @@ import {
   cardPositionPatches,
   cardsWithGlueIds,
   centeredScrollOffset,
-  clampZoom,
   clientToWorld,
   dragGroupIds,
   edgeScrollVelocity,
@@ -583,15 +582,6 @@ describe("resizedRect", () => {
         bounds,
       }),
     ).toMatchObject({ w: 408, h: 312 });
-  });
-});
-
-describe("clampZoom", () => {
-  it("rounds to two decimals and keeps zoom in range", () => {
-    expect(clampZoom(1.024)).toBe(1.02);
-    expect(clampZoom(1.026)).toBe(1.03);
-    expect(clampZoom(0)).toBe(0.25);
-    expect(clampZoom(3)).toBe(2);
   });
 });
 

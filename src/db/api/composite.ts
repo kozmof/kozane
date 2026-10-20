@@ -372,7 +372,7 @@ export async function moveCardsToNamespace({
 
     // Inventories belong to one namespace, so a stored card arrives on the target canvas at
     // the position it had before it was stored.
-    await releaseCardsInTx(tx, cardIds);
+    await releaseCardsInTx({ db: tx, cardIds });
 
     return { ok: true };
   });

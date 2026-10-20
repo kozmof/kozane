@@ -6,13 +6,28 @@ import {
   requestApiKey,
   type ApiKeyFile,
 } from "./api-key.js";
-import { clearAuthFailures, isBrowserNavigation, recordAuthFailure } from "./security.js";
+import {
+  authFailureRetryAfter,
+  clearAuthFailures,
+  isBrowserNavigation,
+  recordAuthFailure,
+} from "./security.js";
 import { LOGIN_PATH } from "./login.js";
 
 /** Authentication decision to continue processing or return a response immediately. */
 export type AuthOutcome = { kind: "pass" } | { kind: "respond"; response: Response };
 
 const PASS: AuthOutcome = { kind: "pass" };
+
+function tooManyRequests(retryAfter: number): AuthOutcome {
+  return {
+    kind: "respond",
+    response: new Response("Too Many Requests", {
+      status: 429,
+      headers: { "retry-after": String(retryAfter) },
+    }),
+  };
+}
 
 /**
  * Authenticate a request after workspace configuration checks. Reject throttled clients with
@@ -22,6 +37,11 @@ const PASS: AuthOutcome = { kind: "pass" };
  * The caller applies security headers to the resulting response.
  */
 export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFile): AuthOutcome {
+  // Refuse a throttled client before comparing anything, so guesses made while throttled are
+  // not checked. Otherwise a correct guess would stand out from the 429s around it.
+  const throttled = authFailureRetryAfter(event.getClientAddress());
+  if (throttled) return tooManyRequests(throttled);
+
   const queryKey = event.url.searchParams.get("api_key") ?? undefined;
   const queryKeyValid = queryKey !== undefined && apiKeysEqual(queryKey, configuredKey.apiKey);
   // Accept a valid cookie or header even when the query key is wrong. A bookmarked, expired
@@ -35,15 +55,7 @@ export function authenticateRequest(event: RequestEvent, configuredKey: ApiKeyFi
 
   if (!authenticated) {
     const retryAfter = recordAuthFailure(event.getClientAddress());
-    if (retryAfter) {
-      return {
-        kind: "respond",
-        response: new Response("Too Many Requests", {
-          status: 429,
-          headers: { "retry-after": String(retryAfter) },
-        }),
-      };
-    }
+    if (retryAfter) return tooManyRequests(retryAfter);
     if (isBrowserNavigation(event.request)) {
       const next = event.url.pathname + event.url.search;
       return {

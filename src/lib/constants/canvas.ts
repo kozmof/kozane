@@ -55,3 +55,12 @@ export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.mi
  * use this limit to bound the source text they fetch.
  */
 export const WARP_HINT_MAX_CHARS = 48;
+
+/** Board zoom limits, shared by the board and the map view. */
+export const ZOOM_MIN = 0.25;
+export const ZOOM_MAX = 2;
+
+/** Round a zoom level to whole percent and hold it within {@link ZOOM_MIN} and {@link ZOOM_MAX}. */
+export function clampZoom(value: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
+}

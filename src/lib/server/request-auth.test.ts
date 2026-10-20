@@ -88,6 +88,20 @@ describe("authenticateRequest", () => {
     expect(Number(outcome.response.headers.get("retry-after"))).toBeGreaterThan(0);
   });
 
+  it("refuses a throttled client without checking its key, even a correct one", () => {
+    for (let attempt = 0; attempt <= AUTH_FAILURE_LIMIT; attempt++) {
+      authenticateRequest(event({ headers: { authorization: "Bearer wrong" } }), KEY);
+    }
+    const outcome = authenticateRequest(
+      event({ headers: { authorization: `Bearer ${KEY.apiKey}` } }),
+      KEY,
+    );
+    expect(outcome.kind === "respond" && outcome.response.status).toBe(429);
+    // Another client is not affected.
+    const other = authenticateRequest(event({ cookie: KEY.apiKey, client: "10.0.0.2" }), KEY);
+    expect(other).toEqual({ kind: "pass" });
+  });
+
   it("clears a client's failures once it gets the key right", () => {
     for (let attempt = 0; attempt < AUTH_FAILURE_LIMIT; attempt++) {
       authenticateRequest(event({ headers: { authorization: "Bearer wrong" } }), KEY);

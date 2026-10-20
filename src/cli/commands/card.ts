@@ -8,7 +8,7 @@ import {
   onCanvas,
   reassignCardsToPartition,
   reassignCardsToLayer,
-  updateCard,
+  updateCardInTx,
   updateNamespaceCardPositions,
 } from "../../db/api/card.js";
 import {
@@ -274,7 +274,7 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
     // Longer text can make a stored card cover a neighbour's cells, which moves it, so the
     // two writes share one transaction.
     const refit = await withTx(db, async (tx) => {
-      await updateCard({ db: tx, cardId, partitionId: row.partitionId, content });
+      await updateCardInTx({ db: tx, cardId, partitionId: row.partitionId, content });
       return refitStoredCardInTx({ db: tx, cardId });
     });
     console.log("Card updated.");

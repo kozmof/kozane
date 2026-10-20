@@ -6,8 +6,6 @@ import type { CardPositionUpdate } from "$db/api/card.js";
 export type { CardPositionUpdate as CardPositionPatch } from "$db/api/card.js";
 
 export const GRID = 24;
-export const ZOOM_MIN = 0.25;
-export const ZOOM_MAX = 2;
 /** Opacity for layers other than the selected layer. */
 export const INACTIVE_LAYER_OPACITY = 0.3;
 
@@ -477,10 +475,6 @@ export function nearestWarpInDirection<T extends { id: string; posX: number; pos
     }
   }
   return best;
-}
-
-export function clampZoom(value: number): number {
-  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(value * 100) / 100));
 }
 
 type ResizedCardWidth = {

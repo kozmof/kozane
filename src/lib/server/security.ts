@@ -143,6 +143,17 @@ export function recordAuthFailure(client: string, now = Date.now()): number | nu
     : null;
 }
 
+/**
+ * Seconds until a throttled client may try again, or null when it is not throttled. Read-only,
+ * so callers can refuse a throttled client before comparing its key. Comparing first would
+ * keep checking guesses and tell a correct one apart from the 429.
+ */
+export function authFailureRetryAfter(client: string, now = Date.now()): number | null {
+  const window = authFailures.get(client);
+  if (!window || window.resetAt <= now || window.count <= AUTH_FAILURE_LIMIT) return null;
+  return Math.max(1, Math.ceil((window.resetAt - now) / 1000));
+}
+
 export function clearAuthFailures(client: string): void {
   authFailures.delete(client);
 }

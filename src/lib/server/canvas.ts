@@ -32,10 +32,15 @@ export function clampToBounds(
   posY: number,
   { canvasWidth, canvasHeight }: CanvasBounds,
 ): { posX: number; posY: number } {
-  return {
-    posX: Math.round(clamp(posX, 0, canvasWidth)),
-    posY: Math.round(clamp(posY, 0, canvasHeight)),
-  };
+  return { posX: clampCoordinate(posX, canvasWidth), posY: clampCoordinate(posY, canvasHeight) };
+}
+
+/**
+ * One axis of {@link clampToBounds}, for updates that may move a card along only one axis.
+ * Rounded for the same reason.
+ */
+export function clampCoordinate(value: number, max: number): number {
+  return Math.round(clamp(value, 0, max));
 }
 
 /** A position held inside {@link canvasBounds}. */

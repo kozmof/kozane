@@ -9,7 +9,11 @@ import {
   type ApiKeyFile,
 } from "../../lib/server/api-key.js";
 import { safeNext } from "../../lib/server/login.js";
-import { clearAuthFailures, recordAuthFailure } from "../../lib/server/security.js";
+import {
+  authFailureRetryAfter,
+  clearAuthFailures,
+  recordAuthFailure,
+} from "../../lib/server/security.js";
 
 // Keep authentication dynamic and exclude it from static prerendering.
 export const prerender = false;
@@ -41,12 +45,20 @@ export const load: PageServerLoad = async ({ url, cookies }) => {
   return { next };
 };
 
+function tooManyAttempts(retryAfter: number): string {
+  return `Too many attempts. Try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`;
+}
+
 export const actions: Actions = {
   default: async ({ request, url, cookies, getClientAddress }) => {
     const root = getWorkspaceRoot();
     const key = configuredKey(root);
     const next = safeNext(url.searchParams.get("next"));
     if (!key) redirect(303, next);
+
+    // Refuse a throttled client before comparing its key. See `authenticateRequest`.
+    const throttled = authFailureRetryAfter(getClientAddress());
+    if (throttled) return fail(429, { error: tooManyAttempts(throttled) });
 
     const form = await request.formData();
     const submitted = form.get("apiKey");
@@ -55,9 +67,7 @@ export const actions: Actions = {
     if (!apiKeysEqual(suppliedKey, key.apiKey)) {
       const retryAfter = recordAuthFailure(getClientAddress());
       if (retryAfter) {
-        return fail(429, {
-          error: `Too many attempts. Try again in ${retryAfter} second${retryAfter === 1 ? "" : "s"}.`,
-        });
+        return fail(429, { error: tooManyAttempts(retryAfter) });
       }
       return fail(401, { error: "Invalid API key." });
     }
