@@ -40,6 +40,7 @@
   import { cardSpan } from "$lib/inventory";
   import type { DropTarget } from "./lib/inventory-drop.js";
   import { STOWED_GRAB_INSET } from "./lib/board-gestures.svelte.js";
+  import { INVENTORY_CELL } from "$lib/constants";
   import type { Inventory } from "$lib/types";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
@@ -697,12 +698,18 @@
     <!-- The card being carried out of a grid, following the pointer. It lets the pointer
          through so whatever is underneath can be found as the drop target. -->
     {#if draggedStoredCard && inventoryDrag.pointer}
+      {@const draggedStoredSpan = cardSpan(draggedStoredCard.content)}
       <div
         aria-hidden="true"
         data-stored-card-preview
-        class={css({ position: "fixed", zIndex: "1000", pointerEvents: "none", width: "160px", maxHeight: "72px", overflow: "hidden", padding: "6px 8px", background: "ink.white", border: "1px solid token(colors.select.accent)", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", fontSize: "11px", lineHeight: "1.45", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "ink.content" })}
+        class={css({ position: "fixed", zIndex: "1000", pointerEvents: "none", overflow: "hidden", background: "ink.white", border: "1px solid token(colors.select.accent)", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "ink.content" })}
         style:left="{inventoryDrag.pointer.x - STOWED_GRAB_INSET * zoom}px"
         style:top="{inventoryDrag.pointer.y - STOWED_GRAB_INSET * zoom}px"
+        style:width="{INVENTORY_CELL.width}px"
+        style:height="{draggedStoredSpan * INVENTORY_CELL.height + (draggedStoredSpan - 1) * INVENTORY_CELL.gap}px"
+        style:padding="{INVENTORY_CELL.paddingY}px {INVENTORY_CELL.paddingX}px"
+        style:font-size="{INVENTORY_CELL.fontSize}px"
+        style:line-height={INVENTORY_CELL.lineHeight}
         style:font-family={data.uiConfig.defaultFontFamily}
       >{draggedStoredCard.content || "Empty card…"}</div>
     {/if}
