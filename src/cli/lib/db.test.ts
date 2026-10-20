@@ -158,6 +158,22 @@ describe("backupDb", () => {
     expect(existsSync(first)).toBe(true);
     expect(existsSync(second)).toBe(true);
   });
+
+  it("gives backups started together their own files", async () => {
+    const root = tempRoot();
+    const kozaneDir = join(root, ".kozane");
+    mkdirSync(kozaneDir, { recursive: true });
+
+    const dbPath = join(kozaneDir, "kozane.db");
+    const client = createClient({ url: `file:${dbPath}` });
+    await client.execute("CREATE TABLE test (id INTEGER PRIMARY KEY)");
+    client.close();
+
+    const backups = await Promise.all([backupDb(root), backupDb(root), backupDb(root)]);
+
+    expect(new Set(backups).size).toBe(3);
+    expect(listBackups(root)).toEqual([...backups].sort());
+  });
 });
 
 describe("restoreDb", () => {

@@ -32,24 +32,38 @@ function timestamp(date = new Date()): string {
   return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
+/**
+ * Claim a free backup name by creating it empty with exclusive `wx` access. Checking for the
+ * name first would let two backups started in the same second pick the same one.
+ */
+function reserveBackupPath(base: string): string {
+  for (let suffix = 1; ; suffix += 1) {
+    const target = suffix === 1 ? `${base}.db` : `${base}-${suffix}.db`;
+    try {
+      closeSync(openSync(target, "wx"));
+      return target;
+    } catch (e) {
+      if (!(e && typeof e === "object" && "code" in e && e.code === "EEXIST")) throw e;
+    }
+  }
+}
+
 export async function backupDb(workspaceRoot: string): Promise<string> {
   const source = dbPath(workspaceRoot);
   const backupDir = join(workspaceRoot, ".kozane", "backups");
   mkdirSync(backupDir, { recursive: true });
 
-  const base = join(backupDir, `kozane-${timestamp()}`);
-  let target = `${base}.db`;
-  let suffix = 2;
-  while (existsSync(target)) {
-    target = `${base}-${suffix}.db`;
-    suffix += 1;
-  }
+  const target = reserveBackupPath(join(backupDir, `kozane-${timestamp()}`));
 
   // VACUUM INTO produces a consistent copy even under concurrent writes, unlike copyFileSync.
+  // It accepts the empty file reserved above and refuses one with contents.
   const client = createClient({ url: fileDbUrl(source) });
   try {
     await client.execute(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
     await client.execute(`VACUUM INTO '${target.replace(/'/g, "''")}'`);
+  } catch (e) {
+    rmSync(target, { force: true });
+    throw e;
   } finally {
     client.close();
   }
