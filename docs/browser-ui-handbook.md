@@ -204,8 +204,8 @@ Select cards and press `e` to open "Edit a file". The panel lists the board's
 scopes, taskspaces, and files. Click a file to edit it. Click scope or taskspace
 names to fold their trees.
 
-A scope shows "Linked" when it contains every selected card. Otherwise, use its
-link button to add the remaining cards while keeping the selection.
+A scope shows "Linked" when it contains every selected card. Use its link
+button to add any remaining cards without clearing the selection.
 
 To create a scope, taskspace, and file together, fill in the three fields at the
 bottom. `Enter` advances through them and creates everything from the File field.
@@ -280,15 +280,15 @@ text field focused.
 | Rename it          | Double-click its name, or focus it and press `F2` |
 | Close or remove it | The `×` or bin button on its window               |
 
-Open inventories appear on the left of the canvas and stay put while you pan, so cards can
-be carried in from anywhere on the board.
+Open inventories appear on the left of the canvas and stay put while you pan.
+Drag cards into them from anywhere on the board.
 
 While an inventory is open, new cards from the composer go into its first free slot, and
 the composer shows "Add to" and the inventory's name. With several open, the one opened
 last takes them. Close every inventory to add cards to the canvas again.
 
-The grid is six columns wide. A card takes one column and as many rows as its text needs
-to show in full, up to eight. Longer text scrolls inside the card. Cards fill the grid left
+The grid is six columns wide. A card occupies one column and up to eight rows,
+depending on its text length. Longer text scrolls inside the card. Cards fill the grid left
 to right and top to bottom at the first place they fit, and a new row opens below the
 lowest card.
 

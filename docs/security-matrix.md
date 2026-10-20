@@ -1,7 +1,7 @@
 # Security matrix
 
 Kozane's access rules depend on its bind address and whether a workspace API key
-exists. Use `bin/server.js` as the server entry. It binds `HOST` when set and
+exists. Start the server through `bin/server.js`. It binds `HOST` when set and
 `127.0.0.1` otherwise.
 
 ## At a glance
@@ -113,8 +113,8 @@ Use `--include-scoped-files` only for taskspace contents intended for publicatio
 | Non-UTF-8 files, files over 1 MB, or content beyond 20 MB per taskspace | Names listed, contents withheld                                           |
 | More than 50,000 entries per taskspace or 64 directory levels           | Walk stops and marks the directory truncated, further entries are omitted |
 
-Content caps apply per taskspace per page. Unassigned taskspaces can appear on
-every namespace board and duplicate their embedded contents across pages.
+Content caps apply per taskspace per page. Scoped taskspaces with no assigned
+namespace can appear on every board, duplicating their embedded contents across pages.
 
 ## Taskspace files
 

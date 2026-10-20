@@ -9,8 +9,8 @@ See the [README](../README.md) for installation and the
 Workspace commands find `.kozane/config.json` by walking up from the current
 directory. Without a workspace, they exit 1 and suggest `kozane init`.
 
-`namespace`, `partition`, `card`, `layer`, `scope`, `warp`, `tag`, and
-`taskspace` require current migrations and use the active session database,
+`namespace`, `partition`, `card`, `layer`, `scope`, `warp`, `tag`,
+`inventory`, and `taskspace` require current migrations and use the active session database,
 including a running `--memory` server. `status` also uses the session database
 but permits pending migrations. Other commands open the on-disk database directly.
 Migrations are applied only by `db migrate`, which creates a backup first.
@@ -25,7 +25,7 @@ forms where documented. Layer arguments also accept names, with exact names pref
 
 ### `kozane init`
 
-Create `.kozane/config.json` , a migrated database, and the default `main` namespace with a
+Create `.kozane/config.json`, a migrated database, and the default `main` namespace with a
 `General` partition and `Base` layer. The workspace name defaults to the directory name.
 Refuses if `.kozane/` exists. The directory gets a `.gitignore` excluding its contents.
 
@@ -36,7 +36,7 @@ kozane init
 ### `kozane open`
 
 Start the browser UI. Host and port use the first available value from flags, `KOZANE_HOST` /
-`KOZANE_PORT` , config, then `127.0.0.1` / `17173` . Empty environment values are ignored.
+`KOZANE_PORT`, config, then `127.0.0.1` / `17173`. Empty environment values are ignored.
 Ports must be integers from 0 to 65535, with 0 requesting an available port. Invalid explicit
 values fail.
 
@@ -44,8 +44,9 @@ Migrations must be current. `--memory` instead creates a temporary database with
 namespace. Workspace commands use that database while the server runs, and changes disappear
 when it stops.
 
-`--allow-remote` requires a generated API key, `--no-open` , and HTTPS through a reverse proxy.
-See the [Security matrix](../docs/security-matrix.md) .
+`--allow-remote` requires a generated API key. Non-loopback bindings also require
+`--no-open` and HTTPS through a reverse proxy.
+See the [Security matrix](../docs/security-matrix.md).
 
 ```bash
 kozane open [--host <host>] [--port <port>] [--memory] [--log-requests]
@@ -84,7 +85,7 @@ kozane api key refresh
 
 Export a read-only workspace snapshot. The output directory is emptied and rewritten, including
 a `.nojekyll` file for GitHub Pages. Requires current migrations and the source build
-toolchain. Run from a cloned repository after `pnpm install` .
+toolchain. Run from a cloned repository after `pnpm install`.
 
 Scopes, taskspaces, and files are excluded unless `--include-scoped-files` is given. That
 option publishes real contents of scoped taskspaces. See the
@@ -103,7 +104,7 @@ kozane net ssg generate [--out <dir>] [--base <path>] [--include-scoped-files]
 ### `kozane net ssg preview`
 
 Serve an exported site over HTTP with GitHub Pages URL handling. Use the same `--base` as the
-export. Refuses if the directory has no `index.html` .
+export. Refuses if the directory has no `index.html`.
 
 ```bash
 kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <port>] [--no-open]
@@ -128,7 +129,7 @@ names, out-of-bounds cards, and stored cards that overlap or are glued are repor
 example IDs. Run `inventory repair` for the last two. Limit checks use SQLite character
 counts, which can miss text that exceeds the UTF-16 limit through astral characters.
 
-For broken config, run `doctor config` . For database corruption, export readable data before
+For broken config, run `doctor config`. For database corruption, export readable data before
 restoring a backup.
 
 ```bash
@@ -141,7 +142,7 @@ Report all config problems together. Errors include unreadable files, invalid JS
 required keys, and invalid values. Warnings include unknown keys and duplicate shortcuts. Notes
 list defaults for unset optional keys.
 
-Required keys are `name` , `taskspace.defaultDir` , and `taskspace.searchRoots` . Exit 1 for
+Required keys are `name`, `taskspace.defaultDir`, and `taskspace.searchRoots`. Exit 1 for
 errors, otherwise 0. `--strict` also fails on warnings.
 
 ```bash
@@ -151,7 +152,7 @@ kozane doctor config --strict
 
 ### `kozane status`
 
-Show server state (stopped, persistent, or `:memory:` ) and namespace, partition, card, scope,
+Show server state (stopped, persistent, or `:memory:`) and namespace, partition, card, scope,
 and taskspace counts. While a memory server runs, counts use its session database. Works even
 when migrations are not current.
 
@@ -179,7 +180,7 @@ kozane namespace create <name>
 ### `kozane namespace default <id>`
 
 Set the workspace default used when `--namespace` is omitted. Accepts full or short IDs. Alias
-`namespace set-default <id>` .
+`namespace set-default <id>`.
 
 ```bash
 kozane namespace default <id>
@@ -272,7 +273,7 @@ kozane scope delete <id>
 ### `kozane layer list`
 
 List layers bottom to top with short ID, position, card count, and name. Mark the default with
-`(default)` .
+`(default)`.
 
 ```bash
 kozane layer list [--namespace <namespaceId>]
@@ -330,12 +331,12 @@ kozane card add <content> [--namespace <namespaceId>] [--partition <partitionId>
 ### `kozane card squash [content]`
 
 Split argument or piped text into new cards, trimming segments and skipping empty ones. The
-default separator is a period followed by whitespace, `。` , or a blank line. Dots in
+default separator is a period followed by whitespace, `。`, or a blank line. Dots in
 `example.com` remain intact. Use `--pattern` for a JavaScript regular expression source.
 
-Accepts `--namespace` , `--partition` , `--scope` , and `--layer` with the same resolution as
-`card add` . Cards occupy free grid positions. Creation and scope membership are atomic. All
-pieces share new creation and update timestamps, and each must fit `ui.contentMax` .
+Accepts `--namespace`, `--partition`, `--scope`, and `--layer` with the same resolution as
+`card add`. Cards occupy free grid positions. Creation and scope membership are atomic. All
+pieces share new creation and update timestamps, and each must fit `ui.contentMax`.
 
 ```bash
 kozane card squash "First thought. 第二の考え。 Third thought."
@@ -343,14 +344,16 @@ cat foo.txt | kozane card squash
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
+Apply the same options to piped text:
+
 ```bash
 cat foo.txt | kozane card squash --namespace eb155d6 --scope e3ee90b
 ```
 
 ### `kozane card show <cardId>`
 
-Print card text with line breaks preserved. Accepts full or short IDs. `--times` adds `created`
-, `updated` , and `gap` values above the text. Without it, output is suitable for redirecting
+Print card text with line breaks preserved. Accepts full or short IDs. `--times` adds `created`,
+`updated`, and `gap` values above the text. Without it, output is suitable for redirecting
 to a text file. See [Sorting](#sorting) for timestamp rules.
 
 ```bash
@@ -394,8 +397,8 @@ kozane card delete 3f9a2c1 72ac1f8
 
 ### `kozane card move <cardId>`
 
-Move a card with at least one of `--x` or `--y` . Omitted axes stay unchanged. Positions accept
-integers or relative offsets such as `current+120` and `current-48` . Clamp to canvas bounds
+Move a card with at least one of `--x` or `--y`. Omitted axes stay unchanged. Positions accept
+integers or relative offsets such as `current+120` and `current-48`. Clamp to canvas bounds
 and print stored coordinates.
 
 ```bash
@@ -427,7 +430,7 @@ kozane card namespace eb155d6 3f9a2c1
 ### `kozane card list`
 
 List namespace cards or cards associated with a taskspace. `--taskspace` accepts a directory or
-its `.taskspace.json` and cannot combine with `--namespace` or `--partition` .
+its `.taskspace.json` and cannot combine with `--namespace` or `--partition`.
 
 Without namespace or partition options, a marker in the current directory is used
 automatically. Parent directories are not searched for taskspace markers. Scoped taskspaces
@@ -459,7 +462,7 @@ Timestamps are available through the CLI, not the board or static export.
 ### `kozane card nearest <cardId>`
 
 List cards in the given card's namespace by Euclidean distance. The given card appears first at
-`0.00` , with ties ordered by ID. Rows include short ID, partition, position, distance, and
+`0.00`, with ties ordered by ID. Rows include short ID, partition, position, distance, and
 text.
 
 ```bash
@@ -474,7 +477,7 @@ join, leaving previous groups. `--add` includes every member of the groups touch
 groups to merge.
 
 `--align-list` arranges the final group vertically from the first card, using argument order
-and estimated card heights. Coordinates are clamped to canvas bounds. Combines with `--add` .
+and estimated card heights. Coordinates are clamped to canvas bounds. Combines with `--add`.
 Print the group ID, card IDs, count, and active options.
 
 ```bash
@@ -641,7 +644,7 @@ kozane db status
 
 ### `kozane db migrate`
 
-Back up to `.kozane/backups/` , apply pending migrations, and report status. No changes when
+Back up to `.kozane/backups/`, apply pending migrations, and report status. No changes when
 already current. Refuses missing, unknown, or gapped databases and refuses while the workspace
 server runs.
 
@@ -701,9 +704,9 @@ kozane taskspace list --namespace <namespaceId>
 Scan `taskspace.searchRoots` for `.taskspace.json` markers and compare them with database
 records. Default is a dry run.
 
-With `--apply` , update moved paths and matched records' last-seen times. Add `--reattach` to
+With `--apply`, update moved paths and matched records' last-seen times. Add `--reattach` to
 insert orphan records and `--cleanup` to delete records whose markers are missing. Both require
-`--apply` . If duplicate markers share an ID, the last directory found wins.
+`--apply`. If duplicate markers share an ID, the last directory found wins.
 
 ```bash
 kozane taskspace scan [--apply] [--reattach] [--cleanup]
@@ -718,10 +721,10 @@ kozane taskspace scan [--apply] [--reattach] [--cleanup]
 ### `kozane taskspace create <name>`
 
 Create a database record, target directory, and `.taskspace.json` identity marker. Require
-either `--scope` or `--no-scope` .
+either `--scope` or `--no-scope`.
 
-Without `--dir` , use `<workspaceRoot>/<name>` . The name must then be one path segment,
-contain no `/` , `\` , or NUL, and not start with a dot. With `--dir` , the name is only a
+Without `--dir`, use `<workspaceRoot>/<name>`. The name must then be one path segment,
+contain no `/`, `\`, or NUL, and not start with a dot. With `--dir`, the name is only a
 label. Store internal paths relative to the workspace and external paths as absolute.
 
 ```bash

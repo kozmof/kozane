@@ -1,7 +1,7 @@
 # Cache behavior
 
 Kozane stores disposable caches in `.kozane/`. Deleting them leaves database
-records and taskspace files intact. Relevant pages and commands rebuild them.
+records and taskspace files intact. Pages and commands rebuild the caches when needed.
 
 ## Cache files
 
@@ -17,7 +17,7 @@ Only workspace-wide tag scans remove cached taskspace directories that disappear
 ## How freshness is checked
 
 Database caches match the database file's inode, nanosecond modification time,
-and size, including the SQLite `-wal` file when present. File-tag entries match
+and size, including the SQLite `-wal` file when present. File-tag cache entries are checked against
 individual file identities.
 
 Each request validates the cache's schema and signature. A mismatch triggers a
@@ -53,5 +53,5 @@ rm .kozane/treemap.json
 rm .kozane/tag-index.json
 ```
 
-If caches are not recreated, check that `.kozane/` is writable. Features still
-work without cache writes, but gather data on every access.
+If caches are not recreated, check that `.kozane/` is writable. Without cache
+writes, pages and commands still work but gather data on every access.

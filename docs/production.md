@@ -23,8 +23,7 @@ Restrict the HTTP listener to traffic from the proxy using firewall rules.
 Non-loopback bindings require a key and HTTPS as seen by SvelteKit. Missing or
 incorrect protocol forwarding causes HTTP 426 responses.
 
-Configure headers for the exact trusted proxy chain. For one proxy, typical
-settings are the following.
+Configure headers for the exact trusted proxy chain. For a single trusted proxy, use these settings.
 
 | Setting           | Value               | Purpose                                                 |
 | ----------------- | ------------------- | ------------------------------------------------------- |
@@ -55,15 +54,15 @@ returns 200 with `status: "ok"`. Failure returns 503 with `status: "error"`.
 Check the status field and consult logs for the underlying error.
 
 Responses include `X-Request-Id`, and request completion and errors use JSON logs.
-Capture stdout/stderr, set retention limits, and alert on repeated restarts,
+Capture standard output and standard error. Set log retention limits and alert on repeated restarts,
 HTTP 5xx responses, failed readiness, disk exhaustion, and backup failures.
 
 See the [Security matrix](./security-matrix.md) for access rules.
 
 ## Backup and recovery
 
-Back up `.kozane/` while the server is stopped, or export the database to a file.
-Back up taskspace directories separately.
+Back up `.kozane/` while the server is stopped. To back up database data alone,
+export it to a JSON file. Back up taskspace directories separately.
 
 ```sh
 kozane db export backup.json

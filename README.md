@@ -19,8 +19,8 @@ Use other structures only when you need them.
 ### Others
 
 - Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
-- Layer: A way to arrange cards in layers.
-- Scope: A link between cards and taskspaces. Taskspaces correspond to directories and files on the filesystem. A scope can also be given a frame on a canvas, in which case the cards overlapping the frame belong to it. A scope belongs to the workspace rather than to one namespace, so its name is unique across the whole workspace. A scope named `docs` in one namespace is the same scope in every other namespace that uses that name.
+- Layer: A group of cards with its own stacking order.
+- Scope: A group of cards that can span namespaces and connect to taskspace directories. Add canvas frames to include overlapping cards. Scope names are unique across the workspace. A scope named `docs` is the same scope in every namespace.
 - Warp: A saved point to jump to. Warps are not related to cards.
 - Inventory: A grid that stores cards off the canvas. Drag cards in and out of it.
 
@@ -70,7 +70,7 @@ kozane open
 
 To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a namespace named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default namespace named `main`. Run `kozane namespace default <id>` to change which namespace commands use when `--namespace` is omitted.
 
-The `/health` endpoint checks server and database readiness. It sits behind the same authentication as everything else, so once the workspace has an API key, a monitoring probe has to send it too. See [Production operations](./docs/production.md).
+The `/health` endpoint checks server and database readiness. If the workspace has an API key, send it with monitoring probes. See [Production operations](./docs/production.md).
 
 ## UI
 
@@ -140,7 +140,7 @@ Namespace, partition, layer, and scope options also work with piped files:
 cat foo.txt | kozane card squash --namespace eb155d6 --partition 72ac1f8 --scope e3ee90b
 ```
 
-Every namespace starts with a `Base` layer. For example:
+Every namespace starts with a `Base` layer. Use layer commands to organize cards:
 
 ```sh
 kozane layer list
@@ -162,8 +162,8 @@ a tag can nest without a second character:
 kozane card add "caching work :perf:cache"
 ```
 
-`:perf` gathers everything under it, so it finds that card and anything written
-`:perf:cache` or `:perf:cache:invalidation`:
+Find cards and files tagged `:perf` or any child tag, including
+`:perf:cache` and `:perf:cache:invalidation`:
 
 ```sh
 kozane tag list          # every tag in the namespace, as a tree, with counts
@@ -199,9 +199,9 @@ kozane open --host 0.0.0.0 --allow-remote --no-open
 The key is stored separately in `.kozane/api.json` with owner-only permissions. Once that file exists, every HTTP request requires the key. API clients send it as `Authorization: Bearer <key>` (preferred) or `X-API-Key: <key>`.
 `kozane api key refresh` immediately replaces the old key.
 
-An unauthenticated API or `fetch` request without a valid `Authorization: Bearer` or `X-API-Key` header receives a `401`. For browser access, see [Remote login](#remote-login).
+API and `fetch` requests without valid credentials receive `401`. Browser requests can authenticate with the login cookie. For browser access, see [Remote login](#remote-login).
 
-`--allow-remote` always requires a generated key, `--no-open`, and HTTPS. Plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described in [Production operations](./docs/production.md), and use firewall restrictions and an unprivileged runtime user.
+`--allow-remote` requires a generated key. Binding to a non-loopback address also requires `--no-open` and HTTPS. Remote plain HTTP requests are rejected. Terminate TLS at a reverse proxy, configure the trusted protocol header as described in [Production operations](./docs/production.md), and use firewall restrictions and an unprivileged runtime user.
 
 For a full breakdown of what each run mode exposes, see the [Security matrix](./docs/security-matrix.md).
 
@@ -246,6 +246,8 @@ kozane net ssg preview --base /kozane
 ```
 
 ### Upgrades and recovery
+
+Check database status, apply migrations, and inspect workspace problems:
 
 ```sh
 kozane db status

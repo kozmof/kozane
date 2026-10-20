@@ -40,9 +40,9 @@ Positions are clamped to canvas bounds. Out-of-range widths are refused.
 
 ### Responses
 
-A write that has nothing to report answers `{"ok": true}`. Endpoints that clamp or
-compute what they stored answer with the stored row instead, so a client cannot draw
-something the server did not save.
+Writes return `{"ok": true}` unless a different response is documented below.
+Endpoints that clamp or compute values return those stored values for the client
+to display.
 
 Errors are SvelteKit errors with a status code and a message a client may show. These endpoints
 use the following statuses.
@@ -59,10 +59,8 @@ use the following statuses.
 | `500`         | An unexpected failure, with the cause logged rather than returned                                                                             |
 | `503`         | The workspace is unavailable because it is missing, its key file is unreadable, its database is behind the schema, or another server holds it |
 
-The distinction between `400` and `404` is deliberate and consistent. A route naming a
-single resource in its path answers `404` when that resource is absent, because the resource
-is the URL. A batch route names no resource but the namespace, which exists, so an id it
-cannot act on is a bad request.
+Single-resource routes return `404` when the resource named in the path is absent.
+Batch routes return `400` when a submitted ID is invalid for the namespace.
 
 ## Cards
 
@@ -96,7 +94,7 @@ not this namespace's.
 
 ### `DELETE /[namespaceId]/api/cards`
 
-Deletes many cards. Body: `cardIds`. A glue group left with one member is dissolved in the
+Delete many cards. Body: `cardIds`. A glue group left with one member is dissolved in the
 same transaction.
 
 `400` when any id is not this namespace's.
@@ -124,12 +122,12 @@ non-integer `zIndex`, or out-of-range width.
 
 ### `DELETE /[namespaceId]/api/cards/[cardId]`
 
-Deletes one card, dissolving a glue group it would leave with a single member. `404` when
+Delete one card, dissolving a glue group it would leave with a single member. `404` when
 the card is not this namespace's.
 
 ### `PATCH /[namespaceId]/api/cards/partition`
 
-Moves many cards to one partition. Body: `partitionId`, `cardIds`.
+Move many cards to one partition. Body: `partitionId`, `cardIds`.
 
 `400` naming which of the two was wrong, the partition or the cards.
 
@@ -148,8 +146,8 @@ Return 400 for invalid cards or direction.
 
 ### `POST /[namespaceId]/api/cards/move`
 
-Moves many cards to another namespace, with their partition and layer resolved on the far
-side. Body: `targetNamespaceId`, `cardIds`.
+Move cards to another namespace, resolving their partitions and layers in the
+destination namespace. Body: `targetNamespaceId`, `cardIds`.
 
 Moved cards are restacked above the cards already on each destination layer and leave their
 glue groups. A card linked to a taskspace placed in another namespace loses that link.
@@ -174,8 +172,8 @@ than 2,000 pieces.
 
 ### `POST /[namespaceId]/api/glues`
 
-Glues cards into one group, so a drag of any of them moves all. Body: `cardIds`, at least
-two. Answers `{ glueId, clearedCardIds }`. Cards already in other groups are moved into this
+Glue cards into one group, so a drag of any of them moves all. Body: `cardIds`, at least
+two. Return `{ glueId, clearedCardIds }`. Cards already in other groups are moved into this
 one. A group left with one member is dissolved, and `clearedCardIds` names those leftover
 cards so the board can clear them.
 
@@ -184,7 +182,7 @@ stored in an inventory.
 
 ### `DELETE /[namespaceId]/api/glues`
 
-Ungroups cards. Body: `cardIds`. Answers `{ ok: true, clearedCardIds }`, the cards that
+Ungroup cards. Body: `cardIds`. Return `{ ok: true, clearedCardIds }`, the cards that
 actually left a group, so the board can update only those. A group left with one
 member is dissolved.
 
@@ -192,19 +190,19 @@ member is dissolved.
 
 ### `POST /[namespaceId]/api/partitions`
 
-Creates a partition. Body: `name`. Answers `{ id }`.
+Create a partition. Body: `name`. Return `{ id }`.
 
 `400` for a duplicate name within the namespace. `404` when the namespace does not exist.
 
 ### `PATCH /[namespaceId]/api/partitions/[partitionId]`
 
-Renames a partition. Body: `name`. `404` when it is not this namespace's, `400` for a
+Rename a partition. Body: `name`. `404` when it is not this namespace's, `400` for a
 duplicate name.
 
 ### `DELETE /[namespaceId]/api/partitions/[partitionId]`
 
-Deletes a partition, moving its cards to the namespace's default partition first. The
-cards are not deleted with it. Answers `{ ok: true, defaultPartitionId }`.
+Delete a partition, moving its cards to the namespace's default partition first. The
+cards are not deleted with it. Return `{ ok: true, defaultPartitionId }`.
 
 `400` for the default partition, which cannot be deleted. `404` when it is not this
 namespace's.
@@ -213,14 +211,14 @@ namespace's.
 
 ### `POST /[namespaceId]/api/layers`
 
-Creates a layer at the top of the stack. Body: `name`. Answers `{ id, name, position,
+Create a layer at the top of the stack. Body: `name`. Return `{ id, name, position,
 isDefault: false }`.
 
 `400` for a duplicate name within the namespace. `404` when the namespace does not exist.
 
 ### `PATCH /[namespaceId]/api/layers`
 
-Renumbers the namespace's layers from a full bottom-to-top ordering. Body: `layerIds`,
+Renumber the namespace's layers from a full bottom-to-top ordering. Body: `layerIds`,
 naming every layer of the namespace exactly once.
 
 `400` for a repeated id, an id belonging to another namespace, or a list that no longer
@@ -228,12 +226,12 @@ matches the namespace's layers. A reload fixes that last case, and the error say
 
 ### `PATCH /[namespaceId]/api/layers/[layerId]`
 
-Renames a layer. Body: `name`. `404` when it is not this namespace's, `400` for a duplicate
+Rename a layer. Body: `name`. `404` when it is not this namespace's, `400` for a duplicate
 name.
 
 ### `DELETE /[namespaceId]/api/layers/[layerId]`
 
-Deletes a layer, moving its cards to the namespace's default layer first. Answers
+Delete a layer, moving its cards to the namespace's default layer first. Return
 `{ ok: true, defaultLayerId }`.
 
 `400` for the default layer, which cannot be deleted. `404` when it is not this namespace's.
@@ -248,18 +246,18 @@ Return 400 for a name already used in the workspace.
 
 ### `DELETE /[namespaceId]/api/scopes/[scopeId]`
 
-Deletes a scope. Taskspaces that were in it are kept and become unattached.
+Delete a scope. Taskspaces that were in it are kept and become unattached.
 
 `404` when the scope is not one this namespace draws.
 
 ### `POST /[namespaceId]/api/scopes/[scopeId]/members`
 
-Adds cards to a scope. Body: `cardIds`. `400` naming which was wrong, the scope or the
+Add cards to a scope. Body: `cardIds`. `400` naming which was wrong, the scope or the
 cards.
 
 ### `DELETE /[namespaceId]/api/scopes/[scopeId]/members`
 
-Removes cards from a scope, the ones belonging to this namespace. Body: `cardIds`.
+Remove cards from a scope, the ones belonging to this namespace. Body: `cardIds`.
 
 ### `POST /[namespaceId]/api/scopes/[scopeId]/areas`
 
@@ -301,7 +299,7 @@ Return 404 for a warp outside this namespace.
 
 ### `DELETE /[namespaceId]/api/warps/[warpId]`
 
-Deletes a warp. `404` when it is not this namespace's.
+Delete a warp. `404` when it is not this namespace's.
 
 ### `GET /[namespaceId]/api/warp-directory`
 
@@ -355,7 +353,7 @@ slot }` for every card whose slot changed and `clearedCardIds` lists the cards l
 a glue group.
 
 Return 400 for an inventory or card outside this namespace, or a card whose lowest cell
-would pass slot 9999. A refused store writes nothing, not even the repair.
+would pass slot 9999. If storage fails, the entire transaction is rolled back, including overlap repairs.
 
 ### `POST /[namespaceId]/api/inventories/take`
 
