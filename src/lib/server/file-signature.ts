@@ -1,4 +1,4 @@
-import { statSync } from "node:fs";
+import { closeSync, openSync, readSync, statSync } from "node:fs";
 import { dbPathFromUrl, isMemoryDbUrl } from "../db-url.js";
 
 /**
@@ -15,9 +15,38 @@ export function fileSignature(path: string): string | null {
 }
 
 /**
- * Combine signatures for a database file and its WAL sidecar. WAL commits can change the
- * sidecar while leaving the main file untouched. Return null for databases without a local
- * file signature.
+ * Bytes in the first copy of the wal-index header at the start of the `-shm` file. See
+ * https://www.sqlite.org/walformat.html.
+ */
+const WAL_INDEX_HEADER_BYTES = 48;
+
+/**
+ * The wal-index header as hex, or an empty string when there is no `-shm` file. Its change
+ * counter, frame count, and salts move on every WAL commit. File metadata cannot be relied on
+ * for that: after a checkpoint, SQLite rewrites the WAL from its start, so its size often stays
+ * the same, and its mtime only moves once per kernel timestamp tick.
+ */
+function walIndexHeader(shmPath: string): string {
+  let fd: number;
+  try {
+    fd = openSync(shmPath, "r");
+  } catch {
+    return "";
+  }
+  try {
+    const header = Buffer.alloc(WAL_INDEX_HEADER_BYTES);
+    const read = readSync(fd, header, 0, WAL_INDEX_HEADER_BYTES, 0);
+    return header.subarray(0, read).toString("hex");
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
+ * Combine signatures for a database file, its WAL sidecar, and the wal-index header. WAL
+ * commits can change the sidecar while leaving the main file untouched, and can leave the
+ * sidecar's metadata unchanged too, which the wal-index header catches. Return null for
+ * databases without a local file signature.
  */
 export function databaseSignature(dbUrl: string): string | null {
   if (isMemoryDbUrl(dbUrl)) return null;
@@ -25,5 +54,5 @@ export function databaseSignature(dbUrl: string): string | null {
   const path = dbPathFromUrl(dbUrl) ?? dbUrl;
   const main = fileSignature(path);
   if (!main) return null;
-  return `${main}|${fileSignature(`${path}-wal`) ?? ""}`;
+  return `${main}|${fileSignature(`${path}-wal`) ?? ""}|${walIndexHeader(`${path}-shm`)}`;
 }

@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { databaseSignature, fileSignature } from "./file-signature";
 
@@ -50,6 +51,28 @@ describe("databaseSignature", () => {
     // has to move on the sidecar or an actively-written database reads as unchanged.
     writeFileSync(`${path}-wal`, "log");
     expect(databaseSignature(`file:${path}`)).not.toBe(withoutWal);
+  });
+
+  it("changes on every WAL commit, even when the -wal file's size and mtime do not", async () => {
+    const path = join(tempRoot(), "kozane.db");
+    const client = createClient({ url: `file:${path}` });
+    try {
+      await client.execute("PRAGMA journal_mode = WAL");
+      await client.execute("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
+      await client.execute("INSERT INTO t VALUES (1, 'a')");
+      // Grow the log, then checkpoint so later commits rewrite it from the start at a steady
+      // size. Back-to-back commits then often land in one mtime tick as well.
+      for (let i = 0; i < 20; i++) await client.execute("UPDATE t SET v = 'b' WHERE id = 1");
+      await client.execute("PRAGMA wal_checkpoint(PASSIVE)");
+
+      for (let i = 0; i < 200; i++) {
+        const before = databaseSignature(`file:${path}`);
+        await client.execute({ sql: "UPDATE t SET v = ? WHERE id = 1", args: [String(i % 2)] });
+        expect(databaseSignature(`file:${path}`)).not.toBe(before);
+      }
+    } finally {
+      client.close();
+    }
   });
 
   it("ignores the query parameters libsql allows after the path", () => {

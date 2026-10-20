@@ -8,8 +8,8 @@ import { evict, touch } from "./lru.js";
  * cached values. The ETag remains a hash of the response bytes.
  *
  * With `includeScopedFiles: false`, the live snapshot reads only the database.
- * `databaseSignature` tracks the main file and WAL file so changes from CLI commands and other
- * processes can invalidate the cached result.
+ * `databaseSignature` tracks the main file, the WAL file, and the wal-index header so changes
+ * from CLI commands and other processes can invalidate the cached result.
  *
  * A missing or changed signature, or a client ETag that does not match, falls back to
  * assembling the full snapshot.
