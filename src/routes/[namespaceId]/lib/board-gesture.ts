@@ -95,6 +95,8 @@ export type InventoryDragGesture = Gesture & {
   offsetY: number;
   prevX: number;
   prevY: number;
+  /** Current pointer position for edge scrolling. Initialize it at press. */
+  pointer: Point;
 };
 
 /**

@@ -335,6 +335,7 @@ export class BoardGestures {
       ...gestureOrigin(e),
       prevX: inventory.posX,
       prevY: inventory.posY,
+      pointer: { x: e.clientX, y: e.clientY },
     });
   }
 
@@ -485,6 +486,7 @@ export class BoardGestures {
         this.#moveWarp(g, clientX, clientY);
         return;
       case "inventory-drag":
+        g.pointer = { x: clientX, y: clientY };
         markMoved(g, clientX, clientY);
         this.#moveInventory(g, clientX, clientY);
         return;
@@ -521,12 +523,12 @@ export class BoardGestures {
   }
 
   /**
-   * Scroll at the board edge during a card drag, moving the card with the viewport. Called
-   * once per animation frame.
+   * Scroll at the board edge during a card or inventory icon drag, moving what is dragged
+   * with the viewport. Called once per animation frame.
    */
   autoScroll(): void {
     const g = this.gesture;
-    if (g?.kind !== "card-drag") return;
+    if (g?.kind !== "card-drag" && g?.kind !== "inventory-drag") return;
     const { el } = this.#host;
     const rect = el.getBoundingClientRect();
     const dx = edgeScrollVelocity(g.pointer.x, rect.left, rect.right);
@@ -537,7 +539,8 @@ export class BoardGestures {
     el.scrollBy(dx, dy);
     if (el.scrollLeft !== beforeX || el.scrollTop !== beforeY) {
       g.moved = true;
-      this.#moveCard(g, g.pointer.x, g.pointer.y);
+      if (g.kind === "card-drag") this.#moveCard(g, g.pointer.x, g.pointer.y);
+      else this.#moveInventory(g, g.pointer.x, g.pointer.y);
     }
   }
 

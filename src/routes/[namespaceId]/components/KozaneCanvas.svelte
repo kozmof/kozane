@@ -469,7 +469,7 @@
     };
   });
 
-  // Edge scrolling while a card is dragged against the side of the board.
+  // Edge scrolling while a card or inventory icon is dragged against the side of the board.
   $effect(() => {
     let frame: number;
     function autoScroll() {

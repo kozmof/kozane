@@ -335,6 +335,26 @@ describe("BoardGestures", () => {
       expect(host.onToggleInventory).not.toHaveBeenCalled();
     });
 
+    it("scrolls the board when an icon is held at its edge, carrying the icon along", async () => {
+      const host = hostWith({ inventories: [inventory("i1", 500, 500)] });
+      host.el.scrollBy = ((dx: number, dy: number) => {
+        host.el.scrollLeft += dx;
+        host.el.scrollTop += dy;
+      }) as HTMLElement["scrollBy"];
+      const gestures = new BoardGestures(host);
+      gestures.pressInventory(press(500, 500), "i1");
+      gestures.move(790, 300);
+      gestures.autoScroll();
+      // Ten pixels inside the right edge is 70 into the 80-pixel band, so 18 × 70/80.
+      expect(host.el.scrollLeft).toBeCloseTo(15.75);
+      expect(host.inventories[0].posX).toBe(Math.round(790 + host.el.scrollLeft));
+      await gestures.release();
+      expect(host.onPersistInventoryPosition).toHaveBeenCalledWith("i1", {
+        posX: host.inventories[0].posX,
+        posY: 300,
+      });
+    });
+
     it("puts an icon back when its move is refused", async () => {
       const host = hostWith({ inventories: [inventory("i1", 500, 500)] });
       host.onPersistInventoryPosition.mockResolvedValueOnce(false);
