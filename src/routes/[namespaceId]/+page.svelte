@@ -636,6 +636,7 @@
       taskspaceTree={s.taskspaceTree}
       treeContext={editorContext}
       onOpenFile={!readonly || staticFiles ? handleFrameOpenFile : undefined}
+      onCreateTaskspace={readonly ? undefined : actions.createTaskspace}
       bind:pendingScopeAreaRect
       onPersistScopeArea={persistence.persistScopeArea}
       onRemoveScopeArea={actions.handleDeleteScopeArea}

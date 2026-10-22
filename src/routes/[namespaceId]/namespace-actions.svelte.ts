@@ -463,25 +463,38 @@ export function createNamespaceActions(state: NamespaceState) {
       return;
     }
     if (!name) return;
-    const scopeId = state.sidebar.activeScope;
+    const made = await createTaskspace(state.sidebar.activeScope, name);
+    if ("error" in made) {
+      state.setError("Failed to create taskspace");
+      return;
+    }
+    state.sidebar.newWcName = "";
+  }
+
+  /**
+   * Create a taskspace directory in a scope and add it to the board. Return the server's
+   * reason on failure so callers with their own name field, such as scope frames, can show it
+   * there instead of in the banner.
+   */
+  async function createTaskspace(
+    scopeId: string,
+    rawName: string,
+  ): Promise<{ id: string } | { error: string }> {
+    const name = rawName.trim();
+    if (!name) return { error: "Taskspace name is required" };
     const res = await api.createTaskspace(state.mutationFetcher, state.namespaceId, {
       name,
       scopeId,
     });
-    if (!res.ok) {
-      state.setError("Failed to create taskspace");
-      return;
-    }
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to create taskspace") };
     const parsed = await res.json().catch(() => null);
-    if (!parsed) {
-      state.setError("Failed to create taskspace");
-      return;
-    }
+    const id = readString(parsed, "id");
+    if (id === undefined) return { error: "Failed to create taskspace" };
     state.taskspaces = [
       ...state.taskspaces,
-      { id: parsed.id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind },
+      { id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind },
     ];
-    state.sidebar.newWcName = "";
+    return { id };
   }
 
   async function handleDeleteScope(scopeId: string) {
@@ -787,6 +800,7 @@ export function createNamespaceActions(state: NamespaceState) {
     handleAddToScope,
     handleRemoveFromScope,
     handleCreateTaskspace,
+    createTaskspace,
     handleLinkScope,
     handleCreateScopeWithFile,
     handleScopeMembershipChange,

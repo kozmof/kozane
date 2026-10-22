@@ -9,7 +9,7 @@
     visibleCells,
     type FileGroup,
   } from "../lib/scope-area-files.js";
-  import type { TaskspaceCreated } from "../lib/taskspace-tree.svelte.js";
+  import type { TaskspaceCreated, TaskspaceCreateKind } from "../lib/taskspace-tree.svelte.js";
   import { truncationNote } from "../lib/taskspace-truncation.js";
   import FileGlyph from "./FileGlyph.svelte";
 
@@ -18,7 +18,8 @@
     groups,
     onOpenFile,
     onNavigate,
-    onCreateFile,
+    onCreate,
+    onCreateTaskspace,
   }: {
     area: ScopeArea;
     /** One per taskspace of this frame's scope, in the order the panel lists them. */
@@ -31,33 +32,53 @@
     /** Points this frame's view of one taskspace at another of its directories. */
     onNavigate: (taskspaceId: string, path: string) => void;
     /**
-     * Create a file named `name` in `path` of one taskspace. Without it, the strip offers no
-     * new-file control, as in read-only boards and static exports.
+     * Create a file or folder named `name` in `path` of one taskspace. Without it, the strip
+     * offers no create controls, as in read-only boards and static exports.
      */
-    onCreateFile?: (
+    onCreate?: (
       taskspaceId: string,
       path: string,
+      kind: TaskspaceCreateKind,
       name: string,
     ) => Promise<TaskspaceCreated | { error: string }>;
+    /**
+     * Create a taskspace directory named `name` in this frame's scope. Offered only while the
+     * scope has none, since the strip has nowhere else to start from then.
+     */
+    onCreateTaskspace?: (name: string) => Promise<{ id: string } | { error: string }>;
   } = $props();
 
+  type CreateTarget =
+    | { kind: TaskspaceCreateKind; taskspaceId: string; path: string }
+    | { kind: "taskspace" };
+
   /**
-   * The taskspace directory whose name field is open, or null. Keep this per strip rather than
-   * in the shared tree so the panel does not draw a second field for the same directory.
+   * What the open name field will create, or null. Keep this per strip rather than in the
+   * shared tree so the panel does not draw a second field for the same directory.
    */
-  let creating = $state<{ taskspaceId: string; path: string } | null>(null);
+  let creating = $state<CreateTarget | null>(null);
   let createName = $state("");
   let createBusy = $state(false);
   let createError = $state<string | null>(null);
 
-  /** The name field spans two cells so a typical file name fits without scrolling. */
+  /**
+   * The name field spans two cells so a typical file name fits without scrolling. That is also
+   * the room the new-file and new-folder buttons take, which the field replaces while open.
+   */
   const FIELD_CELLS = 2;
 
-  function beginCreate(taskspaceId: string, path: string) {
-    creating = { taskspaceId, path };
+  function beginCreate(target: CreateTarget) {
+    creating = target;
     createName = "";
     createError = null;
   }
+
+  /** The field's label, which also names what Enter will create. */
+  const FIELD_LABEL: Record<CreateTarget["kind"], string> = {
+    file: "New file name",
+    directory: "New folder name",
+    taskspace: "New taskspace name",
+  };
 
   function cancelCreate() {
     creating = null;
@@ -66,18 +87,24 @@
 
   async function submitCreate() {
     const target = creating;
-    if (!target || createBusy || !onCreateFile) return;
+    if (!target || createBusy) return;
+    const request =
+      target.kind === "taskspace"
+        ? onCreateTaskspace?.(createName)
+        : onCreate?.(target.taskspaceId, target.path, target.kind, createName);
+    if (!request) return;
     createBusy = true;
     createError = null;
-    const made = await onCreateFile(target.taskspaceId, target.path, createName);
+    const made = await request;
     createBusy = false;
     if ("error" in made) {
       createError = made.error;
       return;
     }
     creating = null;
-    // Open newly created files in the editor, as the panel does.
-    onOpenFile?.(made.taskspaceId, made.path);
+    // Open newly created files in the editor, as the panel does. Folders and taskspaces need
+    // no editor; the refreshed listing shows them in the strip.
+    if ("kind" in made && made.kind === "file") onOpenFile?.(made.taskspaceId, made.path);
   }
 
   function onCreateKeydown(event: KeyboardEvent) {
@@ -173,8 +200,11 @@
   style:pointer-events="none"
 >
   {#each groups as group (group.taskspaceId)}
-    {@const editing = creating?.taskspaceId === group.taskspaceId}
-    {@const reserved = onCreateFile ? (editing ? FIELD_CELLS : 1) : 0}
+    {@const editing =
+      creating !== null &&
+      creating.kind !== "taskspace" &&
+      creating.taskspaceId === group.taskspaceId}
+    {@const reserved = onCreate ? FIELD_CELLS : 0}
     {@const shown = visibleCells(group.cells, { width, reserved })}
     <div data-taskspace-id={group.taskspaceId}>
       {#if named}
@@ -280,51 +310,21 @@
             </span>
           {/if}
 
-          {#if onCreateFile && editing}
-            <!-- Stop presses from reaching the canvas without preventing default, which would
-                 keep the caret out of the field. Cancel on blur, as the panel's field does. -->
-            <div
-              class={cx(cellClass, css({ justifyContent: "center" }))}
-              style:width="{CELL_WIDTH * FIELD_CELLS}px"
-              style:min-height="{CELL_HEIGHT}px"
-              style:pointer-events="auto"
-            >
-              <input
-                use:focusOnMount
-                bind:value={createName}
-                class={css({
-                  width: "100%",
-                  padding: "2px 4px",
-                  border: "1px solid token(colors.neutral.dim)",
-                  borderRadius: "2px",
-                  background: "ink.white",
-                  color: "ink.black",
-                  fontSize: "10px",
-                  fontFamily: "inherit",
-                  "&:read-only": { color: "neutral.subtle" },
-                })}
-                type="text"
-                readonly={createBusy}
-                placeholder="New file name"
-                aria-label="New file name"
-                onmousedown={(e) => e.stopPropagation()}
-                onclick={(e) => e.stopPropagation()}
-                onkeydown={onCreateKeydown}
-                onblur={() => !createBusy && cancelCreate()}
-              />
-            </div>
-          {:else if onCreateFile}
+          {#if onCreate && editing && creating}
+            {@render nameField(FIELD_LABEL[creating.kind])}
+          {:else if onCreate}
+            {@const where = group.path || group.name}
             <button
               class={cx(cellClass, clickableClass)}
               style:width="{CELL_WIDTH}px"
               style:min-height="{CELL_HEIGHT}px"
               style:pointer-events="auto"
-              aria-label="New file in {group.path || group.name}"
-              title="New file in {group.path || group.name}"
+              aria-label="New file in {where}"
+              title="New file in {where}"
               onmousedown={swallow}
               onclick={(e) => {
                 e.stopPropagation();
-                beginCreate(group.taskspaceId, group.path);
+                beginCreate({ kind: "file", taskspaceId: group.taskspaceId, path: group.path });
               }}
             >
               <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
@@ -337,16 +337,43 @@
               </svg>
               <span class={labelClass}>New file</span>
             </button>
+            <button
+              class={cx(cellClass, clickableClass)}
+              style:width="{CELL_WIDTH}px"
+              style:min-height="{CELL_HEIGHT}px"
+              style:pointer-events="auto"
+              aria-label="New folder in {where}"
+              title="New folder in {where}"
+              onmousedown={swallow}
+              onclick={(e) => {
+                e.stopPropagation();
+                beginCreate({ kind: "directory", taskspaceId: group.taskspaceId, path: group.path });
+              }}
+            >
+              <!-- The panel's new-folder glyph, so the two buttons read apart at a glance. -->
+              <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                <path
+                  d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
+                  stroke="currentColor"
+                  stroke-width="0.9"
+                  stroke-linejoin="round"
+                  stroke-linecap="round"
+                />
+                <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" />
+                <path
+                  d="M7.2 6v3.2M5.6 7.6h3.2"
+                  stroke="currentColor"
+                  stroke-width="0.9"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <span class={labelClass}>New folder</span>
+            </button>
           {/if}
         </div>
 
-        {#if editing && createError}
-          <div
-            class={css({ fontSize: "10px", color: "state.error", textAlign: "right" })}
-            role="alert"
-          >
-            {createError}
-          </div>
+        {#if editing}
+          {@render errorNote()}
         {/if}
 
         {#if group.cells.length === 0}
@@ -358,4 +385,92 @@
       {/if}
     </div>
   {/each}
+
+  {#if groups.length === 0 && onCreateTaskspace}
+    <!-- A scope with no taskspace yet has no listing to hang file controls from, so offer the
+         taskspace itself. Once created, its own group takes this row's place. -->
+    <div class={css({ display: "flex", justifyContent: "flex-end" })}>
+      {#if creating?.kind === "taskspace"}
+        {@render nameField(FIELD_LABEL.taskspace)}
+      {:else}
+        <button
+          class={cx(cellClass, clickableClass)}
+          style:width="{CELL_WIDTH}px"
+          style:min-height="{CELL_HEIGHT}px"
+          style:pointer-events="auto"
+          aria-label="New taskspace in this scope"
+          title="New taskspace in this scope"
+          onmousedown={swallow}
+          onclick={(e) => {
+            e.stopPropagation();
+            beginCreate({ kind: "taskspace" });
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path
+              d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
+              stroke="currentColor"
+              stroke-width="0.9"
+              stroke-linejoin="round"
+              stroke-linecap="round"
+            />
+            <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" />
+            <path
+              d="M7.2 6v3.2M5.6 7.6h3.2"
+              stroke="currentColor"
+              stroke-width="0.9"
+              stroke-linecap="round"
+            />
+          </svg>
+          <span class={labelClass}>New taskspace</span>
+        </button>
+      {/if}
+    </div>
+    {#if creating?.kind === "taskspace"}
+      {@render errorNote()}
+    {/if}
+  {/if}
 </div>
+
+{#snippet nameField(label: string)}
+  <!-- Stop presses from reaching the canvas without preventing default, which would keep the
+       caret out of the field. Cancel on blur, as the panel's field does. -->
+  <div
+    class={cx(cellClass, css({ justifyContent: "center" }))}
+    style:width="{CELL_WIDTH * FIELD_CELLS}px"
+    style:min-height="{CELL_HEIGHT}px"
+    style:pointer-events="auto"
+  >
+    <input
+      use:focusOnMount
+      bind:value={createName}
+      class={css({
+        width: "100%",
+        padding: "2px 4px",
+        border: "1px solid token(colors.neutral.dim)",
+        borderRadius: "2px",
+        background: "ink.white",
+        color: "ink.black",
+        fontSize: "10px",
+        fontFamily: "inherit",
+        "&:read-only": { color: "neutral.subtle" },
+      })}
+      type="text"
+      readonly={createBusy}
+      placeholder={label}
+      aria-label={label}
+      onmousedown={(e) => e.stopPropagation()}
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={onCreateKeydown}
+      onblur={() => !createBusy && cancelCreate()}
+    />
+  </div>
+{/snippet}
+
+{#snippet errorNote()}
+  {#if createError}
+    <div class={css({ fontSize: "10px", color: "state.error", textAlign: "right" })} role="alert">
+      {createError}
+    </div>
+  {/if}
+{/snippet}

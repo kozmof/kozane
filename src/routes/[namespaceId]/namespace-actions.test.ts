@@ -214,6 +214,46 @@ describe("handleLinkScope", () => {
   });
 });
 
+describe("createTaskspace", () => {
+  it("adds the new taskspace to the scope it was made in", async () => {
+    const state = stateWith([]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.createTaskspace).mockResolvedValue(
+      answered({ id: "t1", path: "notes", pathKind: "workspace_relative" }),
+    );
+
+    expect(await actions.createTaskspace("s1", "  notes ")).toEqual({ id: "t1" });
+    expect(api.createTaskspace).toHaveBeenCalledWith(expect.anything(), "namespace-1", {
+      name: "notes",
+      scopeId: "s1",
+    });
+    expect(state.taskspaces).toEqual([
+      { id: "t1", name: "notes", scopeId: "s1", path: "notes", pathKind: "workspace_relative" },
+    ]);
+  });
+
+  it("returns the server's reason instead of raising the banner", async () => {
+    const state = stateWith([]);
+    const actions = createNamespaceActions(state);
+    vi.mocked(api.createTaskspace).mockResolvedValue(failed);
+    vi.mocked(api.failureMessage).mockResolvedValue("Taskspace directory already exists");
+
+    expect(await actions.createTaskspace("s1", "notes")).toEqual({
+      error: "Taskspace directory already exists",
+    });
+    expect(state.lastError).toBeNull();
+    expect(state.taskspaces).toEqual([]);
+  });
+
+  it("refuses a blank name without asking the server", async () => {
+    const actions = createNamespaceActions(stateWith([]));
+    expect(await actions.createTaskspace("s1", "  ")).toEqual({
+      error: "Taskspace name is required",
+    });
+    expect(api.createTaskspace).not.toHaveBeenCalled();
+  });
+});
+
 describe("handleCreateScopeWithFile", () => {
   const names = { scope: "work", taskspace: "notes", file: "plan.md" };
 

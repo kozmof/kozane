@@ -58,6 +58,7 @@
     taskspaceTree,
     treeContext,
     onOpenFile,
+    onCreateTaskspace,
     pendingScopeAreaRect = $bindable(),
     onPersistScopeArea,
     onRemoveScopeArea,
@@ -131,6 +132,11 @@
      * read a file with, where a frame's icons are drawn and inert.
      */
     onOpenFile?: (taskspaceId: string, path: string) => void;
+    /**
+     * Creates a taskspace directory in a scope. Absent on read-only boards, where a frame of a
+     * scope with no taskspaces draws nothing beside it.
+     */
+    onCreateTaskspace?: (scopeId: string, name: string) => Promise<{ id: string } | { error: string }>;
     /**
      * Rectangle drawn with Alt while awaiting scope selection. Keep it visible until the page
      * accepts or cancels the prompt.
@@ -545,15 +551,21 @@
         />
         <!-- Render the file strip beside the frame so `ScopeArea` stays independent of taskspaces. Both follow the same position row during dragging. -->
         {@const groups = areaFiles.fileGroupsByArea.get(area.id) ?? []}
-        {#if groups.length > 0}
+        {@const live = !readonly && !treeContext.staticFiles}
+        <!-- A scope with no taskspaces still gets a strip on a live board, holding only the
+             control that gives it its first one. -->
+        {#if groups.length > 0 || (live && onCreateTaskspace)}
           <ScopeAreaFiles
             {area}
             {groups}
             {onOpenFile}
             onNavigate={(taskspaceId, path) => areaFiles.navigate(area.id, taskspaceId, path)}
-            onCreateFile={readonly || treeContext.staticFiles
-              ? undefined
-              : (taskspaceId, path, name) => areaFiles.createFile(taskspaceId, path, name)}
+            onCreate={live
+              ? (taskspaceId, path, kind, name) => areaFiles.create(taskspaceId, path, kind, name)
+              : undefined}
+            onCreateTaskspace={live && onCreateTaskspace
+              ? (name) => onCreateTaskspace(area.scopeId, name)
+              : undefined}
           />
         {/if}
       {/each}

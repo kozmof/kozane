@@ -1,6 +1,7 @@
 import type { ScopeArea, TaskspaceSummary } from "$lib/types";
 import type {
   TaskspaceCreated,
+  TaskspaceCreateKind,
   TaskspaceTreeContext,
   TaskspaceTreeState,
 } from "./taskspace-tree.svelte.js";
@@ -103,17 +104,16 @@ export class ScopeAreaBrowser {
   }
 
   /**
-   * Create a file in a directory a frame is showing. Use the shared tree cache so the new file
-   * appears in every frame and panel listing that directory.
+   * Create a file or folder in a directory a frame is showing. Use the shared tree cache so the
+   * new entry appears in every frame and panel listing that directory.
    */
-  createFile(
+  create(
     taskspaceId: string,
     path: string,
+    kind: TaskspaceCreateKind,
     name: string,
   ): Promise<TaskspaceCreated | { error: string }> {
-    return this.#source
-      .tree()
-      .create(this.#source.context(), { taskspaceId, path, kind: "file" }, name);
+    return this.#source.tree().create(this.#source.context(), { taskspaceId, path, kind }, name);
   }
 
   navigate(areaId: string, taskspaceId: string, path: string): void {
