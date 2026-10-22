@@ -42,8 +42,8 @@
       name: string,
     ) => Promise<TaskspaceCreated | { error: string }>;
     /**
-     * Create a taskspace directory named `name` in this frame's scope. Offered only while the
-     * scope has none, since the strip has nowhere else to start from then.
+     * Create a taskspace directory named `name` in this frame's scope. Without it, the strip
+     * offers no new-taskspace control.
      */
     onCreateTaskspace?: (name: string) => Promise<{ id: string } | { error: string }>;
   } = $props();
@@ -133,8 +133,9 @@
   const top = $derived(area.posY + area.height + STRIP_GAP);
 
   /**
-   * Show taskspace names only when a scope has more than one taskspace. Otherwise the frame's
-   * scope label provides enough context.
+   * Head each listing with its taskspace's name only when a scope has more than one, and only
+   * where there are no create controls; otherwise the frame's scope label is enough. With the
+   * controls, the name is written under them instead, on the line the file names use.
    */
   const named = $derived(groups.length > 1);
 
@@ -163,6 +164,28 @@
   const clickableClass = css({
     cursor: "pointer",
     "&:hover": { backgroundColor: "neutral.bg", color: "ink.secondary" },
+  });
+
+  /** The create buttons side by side in the icon line of their cell. */
+  const createIconsClass = css({ display: "flex", justifyContent: "center", gap: "2px" });
+
+  /**
+   * A square around one glyph. The negative margin lets it overhang the cell's padding so the
+   * glyph itself lands exactly where a file cell draws its icon.
+   */
+  const createButtonClass = css({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "22px",
+    height: "22px",
+    margin: "-2px 0",
+    flexShrink: "0",
+    padding: "0",
+    border: "none",
+    borderRadius: "3px",
+    background: "transparent",
+    color: "neutral.iconDim",
   });
 
   /**
@@ -204,10 +227,10 @@
       creating !== null &&
       creating.kind !== "taskspace" &&
       creating.taskspaceId === group.taskspaceId}
-    {@const reserved = onCreate ? FIELD_CELLS : 0}
+    {@const reserved = onCreate ? (editing ? FIELD_CELLS : 1) : 0}
     {@const shown = visibleCells(group.cells, { width, reserved })}
     <div data-taskspace-id={group.taskspaceId}>
-      {#if named}
+      {#if named && !onCreate}
         <div
           class={css({
             fontSize: "10px",
@@ -314,61 +337,67 @@
             {@render nameField(FIELD_LABEL[creating.kind])}
           {:else if onCreate}
             {@const where = group.path || group.name}
-            <button
-              class={cx(cellClass, clickableClass)}
+            <!-- Shaped like a file cell so the pair of buttons sits where a file's icon does
+                 and the taskspace's name sits on the same line as the file names. -->
+            <div
+              class={cellClass}
               style:width="{CELL_WIDTH}px"
               style:min-height="{CELL_HEIGHT}px"
-              style:pointer-events="auto"
-              aria-label="New file in {where}"
-              title="New file in {where}"
-              onmousedown={swallow}
-              onclick={(e) => {
-                e.stopPropagation();
-                beginCreate({ kind: "file", taskspaceId: group.taskspaceId, path: group.path });
-              }}
+              title={group.path ? `${group.name}/${group.path}` : group.name}
             >
-              <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                <path
-                  d="M5 2v6M2 5h6"
-                  stroke="currentColor"
-                  stroke-width="0.9"
-                  stroke-linecap="round"
-                />
-              </svg>
-              <span class={labelClass}>New file</span>
-            </button>
-            <button
-              class={cx(cellClass, clickableClass)}
-              style:width="{CELL_WIDTH}px"
-              style:min-height="{CELL_HEIGHT}px"
-              style:pointer-events="auto"
-              aria-label="New folder in {where}"
-              title="New folder in {where}"
-              onmousedown={swallow}
-              onclick={(e) => {
-                e.stopPropagation();
-                beginCreate({ kind: "directory", taskspaceId: group.taskspaceId, path: group.path });
-              }}
-            >
-              <!-- The panel's new-folder glyph, so the two buttons read apart at a glance. -->
-              <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                <path
-                  d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
-                  stroke="currentColor"
-                  stroke-width="0.9"
-                  stroke-linejoin="round"
-                  stroke-linecap="round"
-                />
-                <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" />
-                <path
-                  d="M7.2 6v3.2M5.6 7.6h3.2"
-                  stroke="currentColor"
-                  stroke-width="0.9"
-                  stroke-linecap="round"
-                />
-              </svg>
-              <span class={labelClass}>New folder</span>
-            </button>
+              <div class={createIconsClass}>
+                <button
+                  class={cx(clickableClass, createButtonClass)}
+                  style:pointer-events="auto"
+                  aria-label="New file in {where}"
+                  title="New file in {where}"
+                  onmousedown={swallow}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    beginCreate({ kind: "file", taskspaceId: group.taskspaceId, path: group.path });
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                    <path
+                      d="M5 2v6M2 5h6"
+                      stroke="currentColor"
+                      stroke-width="0.6"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+                <button
+                  class={cx(clickableClass, createButtonClass)}
+                  style:pointer-events="auto"
+                  aria-label="New folder in {where}"
+                  title="New folder in {where}"
+                  onmousedown={swallow}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    beginCreate({ kind: "directory", taskspaceId: group.taskspaceId, path: group.path });
+                  }}
+                >
+                  <!-- The panel's new-folder glyph, so the two buttons read apart at a glance. -->
+                  <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                    <path
+                      d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
+                      stroke="currentColor"
+                      stroke-width="0.6"
+                      stroke-linejoin="round"
+                      stroke-linecap="round"
+                    />
+                    <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.6" stroke-linecap="round" />
+                    <path
+                      d="M7.2 6v3.2M5.6 7.6h3.2"
+                      stroke="currentColor"
+                      stroke-width="0.6"
+                      stroke-linecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <span class={labelClass}>{group.name}</span>
+            </div>
           {/if}
         </div>
 
@@ -376,9 +405,6 @@
           {@render errorNote()}
         {/if}
 
-        {#if group.cells.length === 0}
-          <div class={noteClass}>Empty</div>
-        {/if}
         {#if group.truncated}
           <div class={noteClass}>{truncationNote(group.truncated)}</div>
         {/if}
@@ -386,44 +412,53 @@
     </div>
   {/each}
 
-  {#if groups.length === 0 && onCreateTaskspace}
-    <!-- A scope with no taskspace yet has no listing to hang file controls from, so offer the
-         taskspace itself. Once created, its own group takes this row's place. -->
+  {#if onCreateTaskspace}
+    <!-- The scope's own control sits under every taskspace's listing, so a scope with none
+         still has somewhere to start and one with several can keep adding. -->
     <div class={css({ display: "flex", justifyContent: "flex-end" })}>
       {#if creating?.kind === "taskspace"}
         {@render nameField(FIELD_LABEL.taskspace)}
       {:else}
-        <button
-          class={cx(cellClass, clickableClass)}
-          style:width="{CELL_WIDTH}px"
-          style:min-height="{CELL_HEIGHT}px"
-          style:pointer-events="auto"
-          aria-label="New taskspace in this scope"
-          title="New taskspace in this scope"
-          onmousedown={swallow}
-          onclick={(e) => {
-            e.stopPropagation();
-            beginCreate({ kind: "taskspace" });
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-            <path
-              d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
-              stroke="currentColor"
-              stroke-width="0.9"
-              stroke-linejoin="round"
-              stroke-linecap="round"
-            />
-            <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" />
-            <path
-              d="M7.2 6v3.2M5.6 7.6h3.2"
-              stroke="currentColor"
-              stroke-width="0.9"
-              stroke-linecap="round"
-            />
-          </svg>
-          <span class={labelClass}>New taskspace</span>
-        </button>
+        <!-- One column wide, like a file cell, so the button lines up under the file icons. -->
+        <div class={cellClass} style:width="{CELL_WIDTH}px">
+          <button
+            class={cx(clickableClass, createButtonClass)}
+            style:pointer-events="auto"
+            aria-label="New taskspace in this scope"
+            title="New taskspace in this scope"
+            onmousedown={swallow}
+            onclick={(e) => {
+              e.stopPropagation();
+              beginCreate({ kind: "taskspace" });
+            }}
+          >
+            <!-- The scope panel's briefcase for a taskspace, not a box, which is the inventory's
+                 icon on the same board. The plus sits in the same corner as New folder's so the
+                 pair still reads as one set, with the case left open there to make room. -->
+            <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path
+                d="M4.6 8.5H2a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1.9"
+                stroke="currentColor"
+                stroke-width="0.6"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+              />
+              <path d="M1 4.6h8" stroke="currentColor" stroke-width="0.6" />
+              <path
+                d="M3.6 2.5V1.5h2.8v1"
+                stroke="currentColor"
+                stroke-width="0.6"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M7.2 6v3.2M5.6 7.6h3.2"
+                stroke="currentColor"
+                stroke-width="0.6"
+                stroke-linecap="round"
+              />
+            </svg>
+          </button>
+        </div>
       {/if}
     </div>
     {#if creating?.kind === "taskspace"}
@@ -436,9 +471,8 @@
   <!-- Stop presses from reaching the canvas without preventing default, which would keep the
        caret out of the field. Cancel on blur, as the panel's field does. -->
   <div
-    class={cx(cellClass, css({ justifyContent: "center" }))}
+    class={cx(cellClass, css({ justifyContent: "center", alignSelf: "center" }))}
     style:width="{CELL_WIDTH * FIELD_CELLS}px"
-    style:min-height="{CELL_HEIGHT}px"
     style:pointer-events="auto"
   >
     <input

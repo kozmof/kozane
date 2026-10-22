@@ -552,8 +552,8 @@
         <!-- Render the file strip beside the frame so `ScopeArea` stays independent of taskspaces. Both follow the same position row during dragging. -->
         {@const groups = areaFiles.fileGroupsByArea.get(area.id) ?? []}
         {@const live = !readonly && !treeContext.staticFiles}
-        <!-- A scope with no taskspaces still gets a strip on a live board, holding only the
-             control that gives it its first one. -->
+        <!-- A scope with no taskspaces still gets a strip on a live board, holding the
+             new-taskspace control that gives it its first one. -->
         {#if groups.length > 0 || (live && onCreateTaskspace)}
           <ScopeAreaFiles
             {area}

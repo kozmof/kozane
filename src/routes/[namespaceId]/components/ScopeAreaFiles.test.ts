@@ -161,17 +161,16 @@ describe("ScopeAreaFiles", () => {
     expect(screen.getByTitle("Symbolic link")).toBeInTheDocument();
   });
 
-  it("says a directory is being read rather than showing it as empty", () => {
+  it("says a directory is being read", () => {
     mount({ groups: [group({ cells: [], read: false, loading: true })] });
 
     expect(screen.getByText("Loading…")).toBeInTheDocument();
-    expect(screen.queryByText("Empty")).not.toBeInTheDocument();
   });
 
-  it("says a directory that really is empty is empty", () => {
+  it("draws no note for a directory that really is empty", () => {
     mount({ groups: [group({ cells: [] })] });
 
-    expect(screen.getByText("Empty")).toBeInTheDocument();
+    expect(screen.queryByText("Empty")).not.toBeInTheDocument();
   });
 
   it("shows nothing at all for a directory not read and not being read", () => {
@@ -283,6 +282,29 @@ describe("ScopeAreaFiles", () => {
       expect(screen.queryByRole("textbox", { name: "New file name" })).toBeNull();
     });
 
+    it("writes the taskspace's name under its create buttons, not over its listing", () => {
+      mount({
+        onCreate: vi.fn(),
+        groups: [
+          group({ taskspaceId: "t1", name: "work", path: "src" }),
+          group({ taskspaceId: "t2", name: "notes" }),
+        ],
+      });
+
+      const newFile = screen.getByRole("button", { name: "New file in src" });
+      const cell = newFile.parentElement!.parentElement!;
+      expect(cell).toHaveTextContent("work");
+      expect(cell).toHaveAttribute("title", "work/src");
+      // The header that names a listing on a read-only board is left out.
+      expect(screen.queryByText("work/src")).toBeNull();
+      expect(screen.getAllByText("notes")).toHaveLength(1);
+    });
+
+    it("names the taskspace under its create buttons even when it is the scope's only one", () => {
+      mount({ onCreate: vi.fn() });
+      expect(screen.getByText("work")).toBeInTheDocument();
+    });
+
     it("creates a folder in the directory the frame is showing without opening it", async () => {
       const onCreate = vi.fn(async () => ({
         taskspaceId: "t1",
@@ -364,8 +386,25 @@ describe("ScopeAreaFiles", () => {
       expect(screen.getByRole("textbox", { name: "New taskspace name" })).toBeInTheDocument();
     });
 
-    it("leaves the new-taskspace control to scopes without a taskspace", () => {
-      mount({ onCreate: vi.fn(), onCreateTaskspace: vi.fn() });
+    it("keeps offering a new taskspace once the scope has one", async () => {
+      const onCreateTaskspace = vi.fn(async () => ({ id: "t2" }));
+      mount({ onCreate: vi.fn(), onCreateTaskspace });
+
+      await fireEvent.click(screen.getByRole("button", { name: "New taskspace in this scope" }));
+      const field = screen.getByRole("textbox", { name: "New taskspace name" });
+      await fireEvent.input(field, { target: { value: "second" } });
+      await fireEvent.keyDown(field, { key: "Enter" });
+
+      expect(onCreateTaskspace).toHaveBeenCalledWith("second");
+      expect(
+        await screen.findByRole("button", { name: "New taskspace in this scope" }),
+      ).toBeInTheDocument();
+      // The taskspace's own file controls stay alongside it.
+      expect(screen.getByRole("button", { name: "New file in work" })).toBeInTheDocument();
+    });
+
+    it("offers no new-taskspace control without its callback", () => {
+      mount({ onCreate: vi.fn() });
       expect(screen.queryByRole("button", { name: "New taskspace in this scope" })).toBeNull();
     });
 
