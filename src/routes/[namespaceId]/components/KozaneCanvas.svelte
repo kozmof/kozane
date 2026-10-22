@@ -352,15 +352,6 @@
     };
   });
 
-  /** How many cards each inventory holds, for the badge on its icon. */
-  const storedCounts = $derived(
-    cards.reduce(
-      (counts, { inventory }) =>
-        inventory === null ? counts : counts.set(inventory.id, (counts.get(inventory.id) ?? 0) + 1),
-      new Map<string, number>(),
-    ),
-  );
-
   /** Starts dragging a card out of an inventory grid, which the page draws. */
   export function pressStowedCard(e: MouseEvent, cardId: string): void {
     gestures.pressStowedCard(e, cardId);
@@ -634,7 +625,6 @@
         <InventoryIcon
           {inventory}
           label={inventoryLabel(inventory)}
-          count={storedCounts.get(inventory.id) ?? 0}
           open={openInventoryIds.has(inventory.id)}
           dropHover={gestures.dropTarget?.kind === "inventory" &&
             gestures.dropTarget.inventoryId === inventory.id &&

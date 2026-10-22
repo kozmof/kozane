@@ -5,7 +5,6 @@
   let {
     inventory,
     label,
-    count,
     open,
     dropHover = false,
     draggable = false,
@@ -16,8 +15,6 @@
     inventory: Inventory;
     /** The inventory's name, or a numbered fallback for an unnamed one. */
     label: string;
-    /** How many cards it holds. */
-    count: number;
     /** Whether its grid is showing. */
     open: boolean;
     /** Whether a dragged card would be stored here if let go now. */
@@ -46,7 +43,7 @@
     borderRadius: "4px",
     transition: "background 0.1s, box-shadow 0.1s, transform 0.1s",
   })}
-  aria-label="{label}, {count} card{count === 1 ? '' : 's'}"
+  aria-label={label}
   aria-expanded={open}
   data-inventory-id={inventory.id}
   data-inventory-drop={inventory.id}
@@ -81,26 +78,6 @@
     <path d="M1.5 4.5h15v2h-15z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
     <path d="M7 9.5h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
   </svg>
-  {#if count > 0}
-    <span
-      class={css({
-        position: "absolute",
-        top: "-7px",
-        right: "-7px",
-        minWidth: "16px",
-        height: "16px",
-        padding: "0 4px",
-        borderRadius: "8px",
-        fontSize: "9.5px",
-        lineHeight: "16px",
-        fontVariantNumeric: "tabular-nums",
-        textAlign: "center",
-        color: "ink.white",
-        backgroundColor: "select.accent",
-      })}
-      aria-hidden="true">{count}</span
-    >
-  {/if}
   <span
     class={css({
       position: "absolute",

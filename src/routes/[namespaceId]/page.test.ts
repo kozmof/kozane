@@ -2045,7 +2045,7 @@ describe("Namespace page inventories", () => {
 
     expect(container.querySelector('[data-card-id="card-1"]')).not.toBeNull();
     expect(container.querySelector('[data-card-id="card-2"]')).toBeNull();
-    const icon = screen.getByRole("button", { name: "Bag, 1 card" });
+    const icon = screen.getByRole("button", { name: "Bag" });
     expect(icon).toHaveAttribute("aria-expanded", "false");
 
     // A press that never moves is a click on the icon, which opens the grid.
@@ -2063,7 +2063,7 @@ describe("Namespace page inventories", () => {
 
   it("selects a stored card for the composer when it is clicked in the grid", async () => {
     const { container } = renderPage();
-    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag" }), { button: 0 });
     await fireEvent.mouseUp(window);
 
     const stored = await waitFor(() => container.querySelector('[data-stored-card-id="card-2"]')!);
@@ -2103,7 +2103,7 @@ describe("Namespace page inventories", () => {
       .mockResolvedValue({ ok: true, json: async () => ({ releasedCardIds: ["card-2"] }) });
     vi.stubGlobal("fetch", fetch);
     const { container } = renderPage();
-    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag" }), { button: 0 });
     await fireEvent.mouseUp(window);
 
     await fireEvent.click(await screen.findByRole("button", { name: "Remove inventory Bag" }));
@@ -2135,7 +2135,7 @@ describe("Namespace page inventories", () => {
     const input = screen.getByRole("textbox", { name: "Write a card" });
     expect(input).not.toHaveAttribute("placeholder");
 
-    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag" }), { button: 0 });
     await fireEvent.mouseUp(window);
     await waitFor(() => expect(input).toHaveAttribute("placeholder", "Add to Bag"));
 
@@ -2162,7 +2162,7 @@ describe("Namespace page inventories", () => {
     const { container } = renderPage({
       cards: withStoredCard.cards.map((c) => (c.id === "card-2" ? { ...c, content: long } : c)),
     });
-    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag, 1 card" }), { button: 0 });
+    await fireEvent.mouseDown(screen.getByRole("button", { name: "Bag" }), { button: 0 });
     await fireEvent.mouseUp(window);
 
     const stored = await waitFor(
