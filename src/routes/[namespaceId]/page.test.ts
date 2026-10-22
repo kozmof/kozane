@@ -1772,6 +1772,33 @@ describe("Warps", () => {
       );
     });
 
+    it("centres on the inventory holding a stored card and opens its grid", async () => {
+      visit("http://localhost/namespace-1?card=card-far");
+      vi.stubGlobal("fetch", vi.fn());
+
+      // The card's own position is where it last sat on the canvas, far from the bag.
+      const bag = { id: "inv-1", namespaceId: "namespace-1", name: "Bag", posX: 1200, posY: 800 };
+      const { container } = render(NamespacePage, {
+        props: {
+          data: {
+            ...data,
+            inventories: [bag],
+            cards: [...data.cards, { ...target, inventory: { id: "inv-1", slot: 0 } }],
+          },
+          params: { namespaceId: "namespace-1" },
+          form: null,
+        },
+      });
+
+      await waitFor(() => expect(canvasOf(container).scrollLeft).toBe(800));
+      expect(canvasOf(container).scrollTop).toBe(500);
+      const grid = await screen.findByRole("region", { name: "Inventory Bag" });
+      expect(grid.querySelector('[data-stored-card-id="card-far"]')).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
+
     it("opens in the middle of the board when the card is gone", async () => {
       // A tag page left open while the card it listed was deleted from another tab.
       visit("http://localhost/namespace-1?card=deleted-elsewhere");

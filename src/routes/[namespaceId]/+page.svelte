@@ -265,9 +265,17 @@
     }
     if (acted.length > 0) clearQuery(...acted);
 
+    // A stored card's own position is where it last sat on the canvas, so land on the icon of
+    // the inventory holding it instead, and open its grid to show the card there.
+    const inventory = card?.inventory
+      ? (s.inventories.find(({ id }) => id === card.inventory?.id) ?? null)
+      : null;
+    if (inventory) s.openInventoryIds = new Set([...s.openInventoryIds, inventory.id]);
+    const landing = inventory ?? card;
+
     // The pan is the one part that has to wait for the canvas to exist. It changes nothing on
     // the URL, so it is free to happen after the clear above.
-    if (card) tick().then(() => canvasComponent.centerOn(card.posX, card.posY));
+    if (landing) tick().then(() => canvasComponent.centerOn(landing.posX, landing.posY));
   }
 
   // Remember the layer being worked on, so a reload comes back to it instead of to Base.
