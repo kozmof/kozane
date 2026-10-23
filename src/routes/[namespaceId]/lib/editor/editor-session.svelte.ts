@@ -132,19 +132,24 @@ export class EditorSession {
         signature: this.#signature,
       });
       if (!res.ok) {
+        const message = await failureMessage(res, "Failed to save file");
+        if (this.doc !== doc) return false;
         this.conflict = res.status === 409;
-        this.error = await failureMessage(res, "Failed to save file");
+        this.error = message;
         return false;
       }
       const body = await res.json();
+      // The file was closed or another opened while this save ran. Its state is no longer
+      // the session's, so leave the new file's signature, errors, and saving flag alone.
+      if (this.doc !== doc) return false;
       this.#signature = body?.signature ?? null;
       doc.markSaved(content);
       return true;
     } catch {
-      this.error = "Failed to save file";
+      if (this.doc === doc) this.error = "Failed to save file";
       return false;
     } finally {
-      this.saving = false;
+      if (this.doc === doc) this.saving = false;
     }
   }
 

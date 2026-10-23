@@ -32,6 +32,32 @@ function fetcherFor({ read, write }: { read?: Response[]; write?: Response[] } =
   return { fetcher: fetcher as unknown as typeof fetch, calls };
 }
 
+/**
+ * Answers each GET with "a\n" and a fresh signature, sig-1, sig-2, and so on, and holds each
+ * PUT until the test answers it. Records the body of each PUT.
+ */
+function heldSaves() {
+  const held: ((res: Response) => void)[] = [];
+  const bodies: unknown[] = [];
+  let reads = 0;
+  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "GET") {
+      reads++;
+      return ok({ path: REF.path, content: "a\n", signature: `sig-${reads}` });
+    }
+    bodies.push(JSON.parse(String(init?.body)));
+    return new Promise<Response>((resolve) => held.push(resolve));
+  }) as unknown as typeof fetch;
+
+  /** Answer the `n`th save, counting from 0, once it has been sent. */
+  async function answer(n: number, res: Response): Promise<void> {
+    await vi.waitFor(() => expect(held.length).toBeGreaterThan(n));
+    held[n](res);
+  }
+
+  return { ctx: { fetcher, namespaceId: "p-1" }, bodies, answer };
+}
+
 function session() {
   const { fetcher, calls } = fetcherFor();
   return { s: new EditorSession(), ctx: { fetcher, namespaceId: "p-1" }, calls };
@@ -146,25 +172,15 @@ describe("EditorSession", () => {
   });
 
   it("leaves an edit made while a save was in flight reported as unsaved", async () => {
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    let call = 0;
-    const fetcher = vi.fn(async () => {
-      call++;
-      if (call === 1) return ok({ path: REF.path, content: "a\n", signature: "sig-1" });
-      await gate;
-      return ok({ signature: "sig-2" });
-    }) as unknown as typeof fetch;
-
+    const { ctx, answer } = heldSaves();
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 1 }, "b");
 
     const saving = s.save(ctx);
     // Edits made during the request must remain dirty after the save succeeds.
     s.doc!.insert({ line: 0, column: 2 }, "c");
-    release!();
+    await answer(0, ok({ signature: "sig-2" }));
     await saving;
 
     expect(s.dirty).toBe(true);
@@ -180,29 +196,64 @@ describe("EditorSession", () => {
   });
 
   it("lets a caller wait for the save in flight", async () => {
-    let release: (() => void) | undefined;
-    const gate = new Promise<void>((resolve) => (release = resolve));
-    let call = 0;
-    const fetcher = vi.fn(async () => {
-      call++;
-      if (call === 1) return ok({ path: REF.path, content: "a\n", signature: "sig-1" });
-      await gate;
-      return ok({ signature: "sig-2" });
-    }) as unknown as typeof fetch;
-
+    const { ctx, answer } = heldSaves();
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 1 }, "b");
 
     void s.save(ctx);
     const settled = s.settled();
     expect(s.saving).toBe(true);
-    release!();
+    await answer(0, ok({ signature: "sig-2" }));
     await settled;
 
     expect(s.saving).toBe(false);
     expect(s.dirty).toBe(false);
+  });
+
+  describe("when another file is opened while a save runs", () => {
+    /** Start saving an edit to `REF`, then open and edit `other.md` before it answers. */
+    async function saveThenSwitch() {
+      const held = heldSaves();
+      const s = new EditorSession();
+      await s.open(held.ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      const stale = s.save(held.ctx);
+      await s.open(held.ctx, { ...REF, path: "other.md" });
+      s.doc!.insert({ line: 0, column: 0 }, "y");
+      return { s, stale, ...held };
+    }
+
+    it.each([
+      ["succeeds", ok({ signature: "sig-stale" })],
+      ["conflicts", fail(409, "File changed on disk")],
+    ])("keeps the old save off the new file when it %s", async (_, response) => {
+      const { s, stale, ctx, answer, bodies } = await saveThenSwitch();
+      await answer(0, response);
+      expect(await stale).toBe(false);
+
+      expect(s.conflict).toBe(false);
+      expect(s.error).toBeNull();
+      expect(s.saving).toBe(false);
+
+      const next = s.save(ctx);
+      await answer(1, ok({ signature: "sig-3" }));
+      expect(await next).toBe(true);
+      expect(bodies[1]).toMatchObject({ path: "other.md", signature: "sig-2" });
+    });
+
+    it("leaves the new file's own save marked as running", async () => {
+      const { s, stale, ctx, answer } = await saveThenSwitch();
+      const current = s.save(ctx);
+
+      await answer(0, ok({ signature: "sig-stale" }));
+      await stale;
+      expect(s.saving).toBe(true);
+
+      await answer(1, ok({ signature: "sig-3" }));
+      expect(await current).toBe(true);
+      expect(s.saving).toBe(false);
+    });
   });
 
   it("settles at once when no save is in flight", async () => {
