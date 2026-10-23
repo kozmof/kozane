@@ -565,6 +565,15 @@ describe("EditorSurface wrapping", () => {
     });
   });
 
+  it("keeps its column through a shorter line between two longer ones", async () => {
+    const { doc, sink } = mount("aaaa bbbb cccc\nab\naaaa bbbb cccc", {
+      caret: { line: 0, column: 8 },
+    });
+    sink.focus();
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}X");
+    expect(doc.lineText(2)).toBe("aaaa bbbXb cccc");
+  });
+
   it("rewraps as typing lengthens a line", async () => {
     const { sink } = mount("aaaa bbbb cccc", { caret: { line: 0, column: 14 } });
     sink.focus();

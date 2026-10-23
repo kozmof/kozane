@@ -9,7 +9,7 @@
     selectionRects,
     visibleRange,
   } from "../lib/editor/geometry.js";
-  import { LineWrapper, TAB_SIZE, WrapLayout } from "../lib/editor/wrap.js";
+  import { columnAtCell, LineWrapper, TAB_SIZE, WrapLayout } from "../lib/editor/wrap.js";
 
   export type EditorMode = "insert" | "normal";
 
@@ -245,19 +245,41 @@
   }
 
   /**
-   * The caret `by` rows above or below the caret, as near its current x as the target row
-   * allows. A row out of view cannot be measured, so keep the caret's offset into its row.
+   * The x that vertical moves aim for, and the caret they left. Kept while the caret stays
+   * where the last vertical move put it, so passing through a short row does not pull later
+   * rows toward its end. Any other move drops it.
    */
-  function caretRowsAway(by: number): Caret {
+  let goal: { caret: Caret; x: number } | null = null;
+
+  /**
+   * The caret `by` rows above or below the caret, as near `x` as the target row allows. A row
+   * out of view cannot be measured, so count cells to `x` instead, or, before the font is
+   * measured, keep the caret's offset into its row.
+   */
+  function caretRowsAway(by: number, x: number): Caret {
     const here = layout.rowOf(caret.line, caret.column);
     const { line, index } = layout.rowAt(here + by);
     if (wrapper.wraps && rowElement(line, index))
-      return { line, column: measure.xToColumn(line, caretXY.x, index) };
-    const from = layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
-    const offset = caret.column - from;
+      return { line, column: measure.xToColumn(line, x, index) };
+    const start = layout.rowStarts(line)[index];
     const end = layout.rowEnd(line, index);
-    const column = layout.rowStarts(line)[index] + offset;
+    let column: number;
+    if (wrapper.wraps) {
+      const lineText = doc.lineText(line);
+      column = columnAtCell(lineText, start, end ?? lineText.length, x / cellWidth, TAB_SIZE);
+    } else {
+      const from = layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
+      column = start + caret.column - from;
+    }
+    // A wrapped row's last column is drawn on the next row, so stop before it. Clamping snaps
+    // back to the start of the character.
     return { line, column: end === null ? column : Math.min(column, end - 1) };
+  }
+
+  function moveByRows(by: number, extend: boolean): void {
+    const x = goal && sameCaret(goal.caret, caret) ? goal.x : caretXY.x;
+    moveTo(caretRowsAway(by, x), extend);
+    goal = { caret, x };
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -334,19 +356,19 @@
       }
       case "ArrowUp":
         event.preventDefault();
-        moveTo(caretRowsAway(-1), extend);
+        moveByRows(-1, extend);
         return;
       case "ArrowDown":
         event.preventDefault();
-        moveTo(caretRowsAway(1), extend);
+        moveByRows(1, extend);
         return;
       case "PageUp":
         event.preventDefault();
-        moveTo(caretRowsAway(-Math.floor(viewportHeight / LINE_HEIGHT)), extend);
+        moveByRows(-Math.floor(viewportHeight / LINE_HEIGHT), extend);
         return;
       case "PageDown":
         event.preventDefault();
-        moveTo(caretRowsAway(Math.floor(viewportHeight / LINE_HEIGHT)), extend);
+        moveByRows(Math.floor(viewportHeight / LINE_HEIGHT), extend);
         return;
       case "Home":
         event.preventDefault();
@@ -567,7 +589,6 @@
     // its presses wherever there is text.
     isolation: "isolate",
   })}
-  style:overflow-x={wrapper.wraps ? "hidden" : null}
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   onmousedown={handleMousedown}
   bind:clientHeight={viewportHeight}
@@ -598,12 +619,17 @@
       ></div>
     {/each}
 
-    <!-- Measures the font's cell width for wrapping. Never visible. -->
-    <span
-      bind:this={probeEl}
-      class={css({ position: "absolute", visibility: "hidden", whiteSpace: "pre" })}
-      aria-hidden="true">{PROBE}</span
+    <!-- Measures the font's cell width for wrapping. Never visible. The empty clipping box
+         keeps the probe from widening the scroll area, so a row the font draws wider than its
+         cells count scrolls into view rather than overflowing unseen. -->
+    <div
+      class={css({ position: "absolute", width: "0", height: "0", overflow: "hidden" })}
+      aria-hidden="true"
     >
+      <span bind:this={probeEl} class={css({ visibility: "hidden", whiteSpace: "pre" })}
+        >{PROBE}</span
+      >
+    </div>
 
     <!-- Draw only the windowed rows, each absolutely positioned by row number. A wrapped line
          draws one element per row, all carrying its line number. -->

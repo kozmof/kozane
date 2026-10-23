@@ -91,6 +91,27 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
 }
 
 /**
+ * The column of `text` between `from` and `to` whose left edge is nearest `cells` cells into
+ * that row, counted as `wrapLine` counts them. For placing the caret on a row that is not
+ * drawn and so cannot be measured.
+ */
+export function columnAtCell(
+  text: string,
+  from: number,
+  to: number,
+  cells: number,
+  tabSize = TAB_SIZE,
+): number {
+  let width = 0;
+  for (const [index, segment] of segments(text.slice(from, to))) {
+    const w = segment === "\t" ? tabSize - (width % tabSize) : cellWidth(segment);
+    if (width + w / 2 > cells) return from + index;
+    width += w;
+  }
+  return to;
+}
+
+/**
  * Visual rows for a whole document. Lines map to a contiguous run of rows, so a row number
  * and a line position convert both ways with a prefix sum and a binary search.
  */

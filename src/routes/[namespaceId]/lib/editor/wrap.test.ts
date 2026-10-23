@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cellWidth, LineWrapper, wrapLine, WrapLayout } from "./wrap.js";
+import { cellWidth, columnAtCell, LineWrapper, wrapLine, WrapLayout } from "./wrap.js";
 
 /** Rows of `text` as strings, which reads more plainly than row starts. */
 function rows(text: string, cols: number, tabSize?: number): string[] {
@@ -63,6 +63,26 @@ describe("wrapLine", () => {
 
   it("puts at least one character on every row", () => {
     expect(rows("あい", 1)).toEqual(["あ", "い"]);
+  });
+});
+
+describe("columnAtCell", () => {
+  it("finds the column nearest a cell count within a row", () => {
+    expect(columnAtCell("aaaa bbbb cccc", 5, 14, 2)).toBe(7);
+  });
+
+  it("counts wide characters as two cells", () => {
+    expect(columnAtCell("あいうえ", 0, 4, 4)).toBe(2);
+    expect(columnAtCell("あいうえ", 0, 4, 3.4)).toBe(2);
+    expect(columnAtCell("あいうえ", 0, 4, 2.6)).toBe(1);
+  });
+
+  it("advances tabs to the next stop", () => {
+    expect(columnAtCell("\tab", 0, 3, 9, 8)).toBe(2);
+  });
+
+  it("stops at the row's end when the count runs past it", () => {
+    expect(columnAtCell("aaaa bbbb", 0, 5, 40)).toBe(5);
   });
 });
 
