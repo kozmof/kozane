@@ -9,7 +9,8 @@
     selectionRects,
     visibleRange,
   } from "../lib/editor/geometry.js";
-  import { columnAtCell, LineWrapper, TAB_SIZE, WrapLayout } from "../lib/editor/wrap.js";
+  import { columnAtCell, TAB_SIZE } from "../lib/editor/wrap.js";
+  import { WrapView } from "../lib/editor/wrap-view.svelte.js";
 
   export type EditorMode = "insert" | "normal";
 
@@ -51,57 +52,58 @@
   let sinkEl: HTMLTextAreaElement | undefined = $state();
   let scrollTop = $state(0);
   let viewportHeight = $state(400);
-  let viewportWidth = $state(0);
   let probeEl: HTMLSpanElement | undefined = $state();
-  let cellWidth = $state(0);
   let focused = $state(false);
 
+  const wrap = new WrapView(() => doc, { padding: PAD_X * 2, minCols: MIN_COLS });
+  const layout = $derived(wrap.layout);
+
   /**
-   * The drawn element of a line's row, for measurement. Read from the DOM rather than kept by
+   * Row elements already found, by row key. A keyed row keeps its element while it stays
+   * drawn, so a hit that is still in the DOM is current.
+   */
+  const rowEls = new Map<string, HTMLElement>();
+
+  /**
+   * The drawn element of a line's row, for measurement. Found in the DOM rather than kept by
    * an action, because a row that wrapping just created is in the DOM before its action runs,
    * and the measuring effect can run in between.
    */
   function rowElement(line: number, index: number): HTMLElement | null {
-    return (
+    const key = `${line}:${index}`;
+    const cached = rowEls.get(key);
+    if (cached?.isConnected) return cached;
+    const found =
       scrollEl?.querySelector<HTMLElement>(`[data-line="${line}"][data-row-index="${index}"]`) ??
-      null
-    );
+      null;
+    if (!found) {
+      rowEls.delete(key);
+      return null;
+    }
+    // Rows scrolled away leave stale entries behind. Start over rather than track them.
+    if (rowEls.size >= 512) rowEls.clear();
+    rowEls.set(key, found);
+    return found;
   }
 
-  // Measure the font's cell width, again once web fonts finish loading. Without layout, as in
+  // Measure the font's cell width, again once web fonts finish loading and whenever a font
+  // loads later, such as a fallback for characters first typed now. Without layout, as in
   // tests, the width stays 0 and lines do not wrap.
   $effect(() => {
     const probe = probeEl;
     if (!probe) return;
     let live = true;
     const read = () => {
-      if (live) cellWidth = probe.getBoundingClientRect().width / PROBE.length;
+      if (live) wrap.cellWidth = probe.getBoundingClientRect().width / PROBE.length;
     };
     read();
-    void document.fonts?.ready.then(read);
+    const fonts = document.fonts;
+    void fonts?.ready.then(read);
+    fonts?.addEventListener?.("loadingdone", read);
     return () => {
       live = false;
+      fonts?.removeEventListener?.("loadingdone", read);
     };
-  });
-
-  /** Cells that fit on a row, or Infinity before the panel can be measured. */
-  const cols = $derived(
-    cellWidth > 0 && viewportWidth > 0
-      ? Math.max(MIN_COLS, Math.floor((viewportWidth - PAD_X * 2) / cellWidth))
-      : Infinity,
-  );
-  const wrapper = $derived(new LineWrapper(cols, TAB_SIZE));
-  // A string, so Reed's background reconciliation, which replaces the state without an
-  // edit, does not lay the document out again.
-  const text = $derived(wrapper.wraps ? doc.text() : "");
-  const layout = $derived.by(() => {
-    if (!wrapper.wraps) return WrapLayout.unwrapped(doc.lineCount);
-    const wrapped = wrapper.layout(text);
-    // Lines are split the way Reed splits them. Should they ever disagree, draw unwrapped
-    // rather than put the caret on the wrong line.
-    return wrapped.lineCount === Math.max(1, doc.lineCount)
-      ? wrapped
-      : WrapLayout.unwrapped(doc.lineCount);
   });
 
   /**
@@ -115,14 +117,14 @@
 
   const window_ = $derived(
     visibleRange(
-      { scrollTop, height: viewportHeight, lineHeight: LINE_HEIGHT, lineCount: layout.rowCount },
+      { scrollTop, height: viewportHeight, lineHeight: LINE_HEIGHT, rowCount: layout.rowCount },
       OVERSCAN,
     ),
   );
   /** Rows drawn, as `[first, end)`. */
   const shownRows = $derived<[number, number]>([
-    window_.startLine,
-    window_.startLine + window_.visibleLineCount,
+    window_.startRow,
+    window_.startRow + window_.visibleRowCount,
   ]);
   const lines = $derived.by(() => {
     const first = layout.rowAt(shownRows[0]).line;
@@ -178,13 +180,14 @@
     void composing;
     void preedit;
     rects = selection
-      ? selectionRects(
-          selection.start, selection.end, LINE_HEIGHT, measure,
-          (line) => doc.lineText(line).length,
-          lines.map((line) => line.lineNumber),
+      ? selectionRects(selection.start, selection.end, {
+          lineHeight: LINE_HEIGHT,
+          measure,
+          lineLength: (line) => doc.lineText(line).length,
+          mountedLines: lines.map((line) => line.lineNumber),
           layout,
           shownRows,
-        )
+        })
       : [];
     caretXY = caretPoint(caret, LINE_HEIGHT, measure, layout);
     const lineText = doc.lineText(caret.line);
@@ -259,14 +262,14 @@
   function caretRowsAway(by: number, x: number): Caret {
     const here = layout.rowOf(caret.line, caret.column);
     const { line, index } = layout.rowAt(here + by);
-    if (wrapper.wraps && rowElement(line, index))
+    if (wrap.wraps && rowElement(line, index))
       return { line, column: measure.xToColumn(line, x, index) };
     const start = layout.rowStarts(line)[index];
     const end = layout.rowEnd(line, index);
     let column: number;
-    if (wrapper.wraps) {
+    if (wrap.wraps) {
       const lineText = doc.lineText(line);
-      column = columnAtCell(lineText, start, end ?? lineText.length, x / cellWidth, TAB_SIZE);
+      column = columnAtCell(lineText, start, end ?? lineText.length, wrap.cellsAt(x), TAB_SIZE);
     } else {
       const from = layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
       column = start + caret.column - from;
@@ -592,7 +595,7 @@
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   onmousedown={handleMousedown}
   bind:clientHeight={viewportHeight}
-  bind:clientWidth={viewportWidth}
+  bind:clientWidth={wrap.viewportWidth}
   data-testid="editor-surface"
 >
   <!-- Size the scroll area for the whole document, including virtualized lines. Keep this element unpadded because its children are absolutely positioned. Apply text padding to lines and caret or selection coordinates instead. -->

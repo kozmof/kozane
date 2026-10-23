@@ -37,25 +37,25 @@ function fixedMeasurer(lines: string[], cell = 10): LineMeasurer {
 
 describe("visibleRange", () => {
   it("covers the viewport plus the overscan at both ends", () => {
-    const range = visibleRange({ scrollTop: 200, height: 100, lineHeight: 20, lineCount: 1000 }, 4);
-    expect(range.startLine).toBe(6); // line 10, less 4 of overscan
-    expect(range.visibleLineCount).toBe(13); // 5 rows, plus 4 above and 4 below
+    const range = visibleRange({ scrollTop: 200, height: 100, lineHeight: 20, rowCount: 1000 }, 4);
+    expect(range.startRow).toBe(6); // row 10, less 4 of overscan
+    expect(range.visibleRowCount).toBe(13); // 5 rows, plus 4 above and 4 below
   });
 
-  it("does not start above the first line", () => {
-    const range = visibleRange({ scrollTop: 0, height: 100, lineHeight: 20, lineCount: 1000 }, 4);
-    expect(range.startLine).toBe(0);
+  it("does not start above the first row", () => {
+    const range = visibleRange({ scrollTop: 0, height: 100, lineHeight: 20, rowCount: 1000 }, 4);
+    expect(range.startRow).toBe(0);
   });
 
-  it("does not run past the last line", () => {
-    const range = visibleRange({ scrollTop: 0, height: 1000, lineHeight: 20, lineCount: 7 }, 0);
-    expect(range.startLine).toBe(0);
-    expect(range.visibleLineCount).toBe(7);
+  it("does not run past the last row", () => {
+    const range = visibleRange({ scrollTop: 0, height: 1000, lineHeight: 20, rowCount: 7 }, 0);
+    expect(range.startRow).toBe(0);
+    expect(range.visibleRowCount).toBe(7);
   });
 
-  it("asks for at least one line in an empty document", () => {
-    const range = visibleRange({ scrollTop: 0, height: 100, lineHeight: 20, lineCount: 0 }, 0);
-    expect(range.visibleLineCount).toBe(1);
+  it("asks for at least one row in an empty document", () => {
+    const range = visibleRange({ scrollTop: 0, height: 100, lineHeight: 20, rowCount: 0 }, 0);
+    expect(range.visibleRowCount).toBe(1);
   });
 });
 
@@ -109,15 +109,13 @@ describe("selectionRects", () => {
   const lines = ["hello", "world", "again", "here"];
   const measure = fixedMeasurer(lines);
   const lineLength = (line: number) => (lines[line] ?? "").length;
+  const geometry = { lineHeight: 20, measure, lineLength };
 
   it("clips a million-line selection to the mounted viewport", () => {
     const rects = selectionRects(
       { line: 0, column: 2 },
       { line: 999999, column: 3 },
-      20,
-      measure,
-      lineLength,
-      [500000, 500001, 500002],
+      { ...geometry, mountedLines: [500000, 500001, 500002] },
     );
     expect(rects).toEqual(
       [500000, 500001, 500002].map((line) => ({
@@ -134,45 +132,32 @@ describe("selectionRects", () => {
       selectionRects(
         { line: 1, column: 2 },
         { line: 2, column: 3 },
-        20,
-        measure,
-        lineLength,
-        [0, 1, 2, 3],
+        { ...geometry, mountedLines: [0, 1, 2, 3] },
       ),
     ).toEqual([
       { top: 20, left: 20, width: null, height: 20 },
       { top: 40, left: 0, width: 30, height: 20 },
     ]);
     expect(
-      selectionRects({ line: 0, column: 0 }, { line: 3, column: 0 }, 20, measure, lineLength, []),
+      selectionRects(
+        { line: 0, column: 0 },
+        { line: 3, column: 0 },
+        { ...geometry, mountedLines: [] },
+      ),
     ).toEqual([]);
   });
 
   it("draws nothing for an empty selection", () => {
-    expect(
-      selectionRects({ line: 1, column: 2 }, { line: 1, column: 2 }, 20, measure, lineLength),
-    ).toEqual([]);
+    expect(selectionRects({ line: 1, column: 2 }, { line: 1, column: 2 }, geometry)).toEqual([]);
   });
 
   it("draws one rectangle for a selection inside a single line", () => {
-    const rects = selectionRects(
-      { line: 1, column: 1 },
-      { line: 1, column: 4 },
-      20,
-      measure,
-      lineLength,
-    );
+    const rects = selectionRects({ line: 1, column: 1 }, { line: 1, column: 4 }, geometry);
     expect(rects).toEqual([{ top: 20, left: 10, width: 30, height: 20 }]);
   });
 
   it("draws first, middle, and last rectangles across lines", () => {
-    const rects = selectionRects(
-      { line: 0, column: 2 },
-      { line: 2, column: 3 },
-      20,
-      measure,
-      lineLength,
-    );
+    const rects = selectionRects({ line: 0, column: 2 }, { line: 2, column: 3 }, geometry);
     expect(rects).toEqual([
       { top: 0, left: 20, width: null, height: 20 },
       { top: 20, left: 0, width: null, height: 20 },
@@ -181,24 +166,12 @@ describe("selectionRects", () => {
   });
 
   it("runs a line selected through its newline to the edge rather than to its last character", () => {
-    const rects = selectionRects(
-      { line: 0, column: 0 },
-      { line: 1, column: 0 },
-      20,
-      measure,
-      lineLength,
-    );
+    const rects = selectionRects({ line: 0, column: 0 }, { line: 1, column: 0 }, geometry);
     expect(rects[0].width).toBeNull();
   });
 
   it("orders the rectangles down the document regardless of the columns", () => {
-    const rects = selectionRects(
-      { line: 0, column: 4 },
-      { line: 1, column: 1 },
-      20,
-      measure,
-      lineLength,
-    );
+    const rects = selectionRects({ line: 0, column: 4 }, { line: 1, column: 1 }, geometry);
     expect(rects.map(({ top }) => top)).toEqual([0, 20]);
   });
 });
@@ -221,12 +194,7 @@ describe("wrapped rows", () => {
     selectionRects(
       { line: start[0], column: start[1] },
       { line: end[0], column: end[1] },
-      20,
-      measure,
-      lineLength,
-      [0, 1],
-      layout,
-      shown,
+      { lineHeight: 20, measure, lineLength, mountedLines: [0, 1], layout, shownRows: shown },
     );
 
   it("puts the caret on the row drawing its column", () => {

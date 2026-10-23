@@ -21,19 +21,19 @@ export type Viewport = {
   height: number;
   lineHeight: number;
   /** Rows to scroll through, which are lines when nothing wraps. */
-  lineCount: number;
+  rowCount: number;
 };
 
 /** The band of rows a viewport covers, widened by `overscan` at both ends. */
 export function visibleRange(
-  { scrollTop, height, lineHeight, lineCount }: Viewport,
+  { scrollTop, height, lineHeight, rowCount }: Viewport,
   overscan = 4,
-): { startLine: number; visibleLineCount: number } {
+): { startRow: number; visibleRowCount: number } {
   const first = Math.max(0, Math.floor(scrollTop / lineHeight) - overscan);
   const rows = Math.ceil(height / lineHeight) + overscan * 2;
   return {
-    startLine: first,
-    visibleLineCount: Math.max(1, Math.min(rows, Math.max(1, lineCount) - first)),
+    startRow: first,
+    visibleRowCount: Math.max(1, Math.min(rows, Math.max(1, rowCount) - first)),
   };
 }
 
@@ -72,22 +72,27 @@ export type SelectionRect = {
   height: number;
 };
 
+/** What {@link selectionRects} needs to know about how the document is drawn. */
+export type SelectionGeometry = {
+  lineHeight: number;
+  measure: LineMeasurer;
+  lineLength: (line: number) => number;
+  /** Lines in the DOM. When given, rectangles are drawn for these lines only. */
+  mountedLines?: readonly number[];
+  /** Visual rows. Needs `mountedLines`, and draws one rectangle per selected row. */
+  layout?: WrapLayout;
+  /** Rows drawn, as `[first, end)`, so one very long line cannot draw rows off screen. */
+  shownRows?: readonly [number, number];
+};
+
 /**
  * Compute selection rectangles for the first-line tail, full middle lines, and last-line
  * head. Keep drawing independent of browser Selection state.
- *
- * With a `layout`, draw one rectangle per selected row of each mounted line, limited to
- * `shownRows` (`[first, end)`) so one very long line cannot draw rows far off screen.
  */
 export function selectionRects(
   start: Caret,
   end: Caret,
-  lineHeight: number,
-  measure: LineMeasurer,
-  lineLength: (line: number) => number,
-  mountedLines?: readonly number[],
-  layout?: WrapLayout,
-  shownRows?: readonly [number, number],
+  { lineHeight, measure, lineLength, mountedLines, layout, shownRows }: SelectionGeometry,
 ): SelectionRect[] {
   if (start.line === end.line && start.column === end.column) return [];
 
