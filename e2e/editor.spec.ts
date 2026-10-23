@@ -100,6 +100,14 @@ async function cellCentre(page: Page, lineText: string, column: number): Promise
 
 test.beforeAll(async () => {
   cli("init");
+  // These tests drive saving and the unsaved-changes prompts by hand, which auto save would
+  // otherwise do for them, and a pause in typing would write the fixtures they compare against.
+  const configPath = join(workspace, ".kozane", "config.json");
+  const config = JSON.parse(readFileSync(configPath, "utf8"));
+  writeFileSync(
+    configPath,
+    JSON.stringify({ ...config, ui: { ...config.ui, editorAutoSave: false } }),
+  );
   const scopeOut = cli("scope", "add", "Work");
   const scopeId = scopeOut.match(/id\s*:\s*(\S+)/)?.[1];
   if (!scopeId) throw new Error(`No scope id in:\n${scopeOut}`);
