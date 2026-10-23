@@ -80,6 +80,8 @@
   // Keep the dragged panel width on the page so it survives closing a file. Null uses the
   // responsive default. Reloading resets it.
   let editorWidth = $state<number | null>(null);
+  // Whether the editor stays open on a click outside it. Kept here for the same reason.
+  let editorPinned = $state(false);
   // Load other namespaces' warps with the page, then refresh when the palette opens. Older
   // static exports may omit this directory.
   let warpDirectory = $state.raw<WarpListEntry[]>(untrack(() => data.warpDirectory ?? []));
@@ -591,8 +593,9 @@
     if (warpPaletteOpen) return;
     if (filePaletteOpen) return;
     // An open editor owns the keyboard even when focus is on panel controls that do not stop
-    // propagation.
-    if (editor.isOpen) return;
+    // propagation. A pinned one is left open while the board is used, so the board keeps its
+    // shortcuts. Keys typed in the panel never reach here, because the panel stops them.
+    if (editor.isOpen && !editorPinned) return;
     // Ignore repeated keydown events because shortcuts perform discrete actions, including
     // creating warp markers.
     if (e.repeat) return;
@@ -849,6 +852,7 @@
     autoSave={data.uiConfig.editorAutoSave}
     {readonly}
     bind:width={editorWidth}
+    bind:pinned={editorPinned}
     onClose={() => undefined}
   />
 </div>

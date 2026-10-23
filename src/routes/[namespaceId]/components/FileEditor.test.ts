@@ -439,6 +439,55 @@ describe("FileEditor closing", () => {
   });
 });
 
+describe("FileEditor pinning", () => {
+  it("stays open on a press outside while pinned", async () => {
+    const { session, onClose } = await mount(undefined, { pinned: true });
+    await screen.findByRole("dialog");
+
+    await fireEvent.mouseDown(document.body);
+    expect(session.isOpen).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("pins and unpins from the header", async () => {
+    const { session } = await mount();
+    const pin = await screen.findByRole("button", { name: "Pin editor" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(pin);
+    expect(pin).toHaveAttribute("aria-pressed", "true");
+    await fireEvent.mouseDown(document.body);
+    expect(session.isOpen).toBe(true);
+
+    await userEvent.click(pin);
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+    await fireEvent.mouseDown(document.body);
+    await waitFor(() => expect(session.isOpen).toBe(false));
+  });
+
+  it("still closes on Escape and on Close while pinned", async () => {
+    const { session, ctx } = await mount(
+      [
+        ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
+        ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
+      ],
+      { pinned: true },
+    );
+    await screen.findByRole("dialog");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(session.isOpen).toBe(false));
+
+    await session.open(ctx, REF);
+    await userEvent.click(await screen.findByRole("button", { name: "Close" }));
+    expect(session.isOpen).toBe(false);
+  });
+
+  it("offers the pin in a read-only export too", async () => {
+    await mount(undefined, { readonly: true });
+    expect(await screen.findByRole("button", { name: "Pin editor" })).toBeInTheDocument();
+  });
+});
+
 describe("FileEditor leaving the page", () => {
   /** The guard the last render handed to `beforeNavigate`. */
   function guard() {

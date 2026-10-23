@@ -233,7 +233,13 @@ Click a text file to open the editor. Files must be valid UTF-8 and at most 1 MB
 | Undo         | `Ctrl+Z` or `Cmd+Z`                                     |
 | Redo         | `Ctrl+Shift+Z` or `Cmd+Shift+Z`                         |
 | Close        | `Esc`, Close, or click outside                          |
+| Pin open     | The pin button, beside Save                             |
 | Resize panel | Drag its left edge, or focus the edge and use `←` / `→` |
+
+Pinning keeps the editor open when you click outside it, so you can work on
+the board with a file beside you. Board shortcuts work while focus is outside
+the editor. `Esc` and Close still close a pinned editor. The pin stays set
+across files until the tab reloads.
 
 Long lines wrap to the panel width, breaking after a space where one fits, and
 rewrap when the panel is resized. `↑` and `↓` move by wrapped row, not by line.

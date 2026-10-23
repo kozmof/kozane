@@ -1853,6 +1853,31 @@ describe("Warps", () => {
       expect(replaceState).toHaveBeenCalledWith("/namespace-1", {});
     });
 
+    it("gives the board its shortcuts back while the editor is pinned", async () => {
+      visit("http://localhost/namespace-1?taskspace=taskspace-1&path=notes%2Ftodo.md");
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ content: "notes", signature: "sig-1" }),
+        }),
+      );
+      const { container } = render(NamespacePage, {
+        props: { data: withTaskspace(), params: { namespaceId: "namespace-1" }, form: null },
+      });
+      await screen.findByLabelText("Editing notes/todo.md");
+      const footer = container.querySelector<HTMLElement>("[style*='visibility']");
+
+      // An open editor owns the keyboard, so the footer shortcut does nothing.
+      await fireEvent.keyDown(window, { key: "x" });
+      expect(footer).toHaveStyle({ visibility: "visible" });
+
+      await fireEvent.click(screen.getByRole("button", { name: "Pin editor" }));
+      await fireEvent.keyDown(window, { key: "x" });
+      expect(footer).toHaveStyle({ visibility: "hidden" });
+      expect(screen.getByLabelText("Editing notes/todo.md")).toBeInTheDocument();
+    });
+
     it("leaves a file link inert in an export that carries no files", async () => {
       visit("http://localhost/namespace-1?taskspace=taskspace-1&path=notes%2Ftodo.md");
       const fetch = vi.fn();

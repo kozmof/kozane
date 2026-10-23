@@ -16,6 +16,7 @@
     autoSave = false,
     readonly = false,
     width = $bindable(null),
+    pinned = $bindable(false),
     onClose,
   }: {
     session: EditorSession;
@@ -30,6 +31,11 @@
      * it survives closing or remounting the editor.
      */
     width?: number | null;
+    /**
+     * Whether the panel stays open when the user presses outside it. Escape and Close still
+     * close it. The page owns this value, like `width`, so it survives closing a file.
+     */
+    pinned?: boolean;
     onClose: () => void;
   } = $props();
 
@@ -59,11 +65,11 @@
   });
 
   /**
-   * Close on a press outside the panel. Use `mousedown` so dragging a text selection beyond
-   * the panel does not close the file.
+   * Close on a press outside the panel, unless pinned. Use `mousedown` so dragging a text
+   * selection beyond the panel does not close the file.
    */
   $effect(() => {
-    if (!session.isOpen) return;
+    if (!session.isOpen || pinned) return;
     const onDown = (event: MouseEvent) => {
       if (!panelEl || panelEl.contains(event.target as Node)) return;
       requestClose();
@@ -236,6 +242,13 @@
     "&:hover:not(:disabled)": { backgroundColor: "neutral.bg" },
     "&:disabled": { color: "neutral.disabled", cursor: "default" },
   });
+
+  /**
+   * The pin holds only an icon, shorter than the text buttons' line box. Stretch it to the
+   * header row, whose height those buttons set, and center the icon.
+   */
+  const iconButton = css({ alignSelf: "stretch", display: "inline-flex", alignItems: "center" });
+  const pinnedButton = css({ color: "select.accent", borderColor: "select.accent" });
 </script>
 
 {#if session.isOpen}
@@ -325,6 +338,30 @@
           </svg>
         </span>
       {/if}
+      <button
+        class={cx(barButton, iconButton, pinned && pinnedButton)}
+        onclick={() => (pinned = !pinned)}
+        aria-pressed={pinned}
+        aria-label="Pin editor"
+        title={pinned ? "Unpin: close on a click outside" : "Pin: stay open on a click outside"}
+        data-testid="editor-pin"
+      >
+        <!-- A pushpin, upright when pinned and tilted when not. -->
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 16 16"
+          fill={pinned ? "currentColor" : "none"}
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          style:display="block"
+          style:transform={pinned ? null : "rotate(45deg)"}
+        >
+          <path d="M5 1.5h6M6 1.5v5L3.5 9.5h9L10 6.5v-5M8 9.5v5" />
+        </svg>
+      </button>
       {#if !readonly}
         <button
           class={barButton}
