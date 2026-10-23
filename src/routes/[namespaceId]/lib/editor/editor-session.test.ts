@@ -179,6 +179,37 @@ describe("EditorSession", () => {
     expect(await s.save(ctx)).toBe(false);
   });
 
+  it("lets a caller wait for the save in flight", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let call = 0;
+    const fetcher = vi.fn(async () => {
+      call++;
+      if (call === 1) return ok({ path: REF.path, content: "a\n", signature: "sig-1" });
+      await gate;
+      return ok({ signature: "sig-2" });
+    }) as unknown as typeof fetch;
+
+    const s = new EditorSession();
+    const ctx = { fetcher, namespaceId: "p-1" };
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 1 }, "b");
+
+    void s.save(ctx);
+    const settled = s.settled();
+    expect(s.saving).toBe(true);
+    release!();
+    await settled;
+
+    expect(s.saving).toBe(false);
+    expect(s.dirty).toBe(false);
+  });
+
+  it("settles at once when no save is in flight", async () => {
+    const { s } = session();
+    await expect(s.settled()).resolves.toBeUndefined();
+  });
+
   it("saves nothing when nothing is open", async () => {
     const { s, ctx } = session();
     expect(await s.save(ctx)).toBe(false);

@@ -19,6 +19,11 @@ export type UiConfig = {
    * so typing inserts text immediately.
    */
   editorVimMode: boolean;
+  /**
+   * Whether the file editor saves shortly after typing stops, and saves pending edits on
+   * close instead of asking. Enabled by default; set it to false to save only by hand.
+   */
+  editorAutoSave: boolean;
   /** Diameter of a warp marker, in canvas pixels. */
   warpMarkerSize: number;
   toggleFootersShortcut: string;
@@ -58,6 +63,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowSidePanel: false,
   defaultShowWarps: true,
   editorVimMode: false,
+  editorAutoSave: true,
   warpMarkerSize: 20,
   toggleFootersShortcut: "f",
   togglePanelsShortcut: "b",
@@ -111,6 +117,7 @@ export const UI_BOOL_FIELDS = [
   "defaultShowSidePanel",
   "defaultShowWarps",
   "editorVimMode",
+  "editorAutoSave",
 ] as const;
 
 export const NEW_CARD_PLACEMENTS = ["grid", "vertical-list"] as const;

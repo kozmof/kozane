@@ -846,6 +846,7 @@
     session={editor}
     ctx={editorContext}
     vimMode={data.uiConfig.editorVimMode}
+    autoSave={data.uiConfig.editorAutoSave}
     {readonly}
     bind:width={editorWidth}
     onClose={() => undefined}

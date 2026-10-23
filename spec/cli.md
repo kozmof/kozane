@@ -769,6 +769,7 @@ Other keys fall back to built-in defaults individually.
     "defaultShowSidePanel": false,
     "defaultShowWarps": true,
     "editorVimMode": false,
+    "editorAutoSave": true,
     "warpMarkerSize": 20,
     "toggleFootersShortcut": "f",
     "togglePanelsShortcut": "b",

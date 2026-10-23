@@ -13,6 +13,7 @@
     session,
     ctx,
     vimMode = false,
+    autoSave = false,
     readonly = false,
     width = $bindable(null),
     onClose,
@@ -21,6 +22,8 @@
     ctx: EditorSessionContext;
     /** `ui.editorVimMode`. Off means the surface's own key handling is all there is. */
     vimMode?: boolean;
+    /** `ui.editorAutoSave`. Saves once typing pauses, and on close. Ignored when read-only. */
+    autoSave?: boolean;
     readonly?: boolean;
     /**
      * Panel width in pixels, or null for the responsive default. The page owns this value so
@@ -34,6 +37,8 @@
   const MIN_WIDTH = 320;
   const EDGE_MARGIN = 120;
   const KEY_STEP = 16;
+  /** Pause after the last edit before auto save writes the file. */
+  const AUTO_SAVE_DELAY_MS = 1000;
 
   let panelEl: HTMLDivElement | undefined = $state();
   let surface: { focus: () => void } | undefined = $state();
@@ -71,6 +76,32 @@
     await session.save(ctx);
   }
 
+  const autoSaving = $derived(autoSave && !readonly);
+
+  /**
+   * Text auto save watches. Keyed on the text rather than `doc.state`, because Reed's
+   * background reconciliation replaces the state without an edit.
+   */
+  const draft = $derived(autoSaving ? (session.doc?.text() ?? null) : null);
+
+  /**
+   * Text whose auto save failed. Retry only after another edit so a failing server is not
+   * asked again every second. A conflict waits for a reload instead.
+   */
+  let failedDraft = $state<string | null>(null);
+
+  // Save once edits pause. Each edit changes `draft`, which restarts the timer. A save in
+  // flight blocks scheduling, and edits made during it reschedule when it finishes.
+  $effect(() => {
+    const text = draft;
+    if (text === null || text === failedDraft) return;
+    if (!session.dirty || session.saving || session.conflict) return;
+    const timer = setTimeout(async () => {
+      if (!(await session.save(ctx))) failedDraft = text;
+    }, AUTO_SAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  });
+
   /**
    * Whether closing is awaiting confirmation for unsaved changes. Keep the document open
    * until the user saves or discards those changes.
@@ -79,11 +110,21 @@
 
   /** Request closing, prompting first when the file has unsaved changes. */
   function requestClose(): void {
-    if (session.dirty) {
-      confirmingClose = true;
-      return;
-    }
-    close();
+    if (!session.dirty) close();
+    else if (autoSaving) void saveAndClose();
+    else confirmingClose = true;
+  }
+
+  /** Save pending edits before closing. Ask as usual when the save fails. */
+  async function saveAndClose(): Promise<void> {
+    const file = session.file;
+    // An auto save may already be writing. Wait for it, then save whatever it did not cover.
+    await session.settled();
+    const saved = session.file === file && (!session.dirty || (await session.save(ctx)));
+    // Leave a file that was replaced or closed while saving alone.
+    if (session.file !== file) return;
+    if (saved && !session.dirty) close();
+    else confirmingClose = true;
   }
 
   function close(): void {

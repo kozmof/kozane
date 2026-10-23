@@ -494,3 +494,106 @@ describe("FileEditor leaving the page", () => {
     expect(asked).not.toHaveBeenCalled();
   });
 });
+
+describe("FileEditor auto save", () => {
+  afterEach(() => vi.useRealTimers());
+
+  const loaded = () => ok({ path: REF.path, content: "hello\n", signature: "sig-1" });
+
+  it("saves once edits pause", async () => {
+    const { session, calls } = await mount([loaded(), ok({ signature: "sig-2" })], {
+      autoSave: true,
+    });
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(600);
+    session.doc!.insert({ line: 0, column: 1 }, "y");
+    await vi.advanceTimersByTimeAsync(600);
+    expect(calls).toHaveLength(1);
+
+    await vi.advanceTimersByTimeAsync(600);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ method: "PUT", body: { content: "xyhello\n" } });
+    expect(session.dirty).toBe(false);
+  });
+
+  it("does not save on its own when auto save is off", async () => {
+    const { session, calls } = await mount();
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("does not save a read-only export", async () => {
+    const { session, calls } = await mount([loaded()], { autoSave: true, readonly: true });
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(1);
+  });
+
+  it("retries a failed save only after another edit", async () => {
+    const { session, calls } = await mount(
+      [loaded(), new Response("{}", { status: 500 }), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(2);
+
+    session.doc!.insert({ line: 0, column: 1 }, "y");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(3);
+    expect(session.dirty).toBe(false);
+  });
+
+  it("stops after a conflict until the file is reloaded", async () => {
+    const { session, calls } = await mount([loaded(), new Response("{}", { status: 409 })], {
+      autoSave: true,
+    });
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(1000);
+    session.doc!.insert({ line: 0, column: 1 }, "y");
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toHaveLength(2);
+    expect(session.conflict).toBe(true);
+  });
+
+  it("saves pending edits on close instead of asking", async () => {
+    const { session, calls, onClose } = await mount([loaded(), ok({ signature: "sig-2" })], {
+      autoSave: true,
+    });
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(session.isOpen).toBe(false));
+    expect(calls[1]).toMatchObject({ method: "PUT", body: { content: "xhello\n" } });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("asks before closing when the save on close fails", async () => {
+    const { session } = await mount([loaded(), new Response("{}", { status: 500 })], {
+      autoSave: true,
+    });
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+
+    await userEvent.keyboard("{Escape}");
+    expect(await screen.findByText("This file has unsaved changes.")).toBeInTheDocument();
+    expect(session.isOpen).toBe(true);
+  });
+});

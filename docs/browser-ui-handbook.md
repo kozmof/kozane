@@ -235,8 +235,9 @@ Click a text file to open the editor. Files must be valid UTF-8 and at most 1 MB
 | Close        | `Esc`, Close, or click outside                          |
 | Resize panel | Drag its left edge, or focus the edge and use `←` / `→` |
 
-A dot beside the path marks unsaved changes. Closing the editor or leaving the
-page asks before discarding them. Closing the editor ends its undo history.
+A dot beside the path marks unsaved changes. Leaving the page, or closing the
+editor with auto save off, asks before discarding them. Closing the editor
+ends its undo history.
 The panel width is remembered until the tab reloads.
 
 If the file changes on disk while you edit, saving is refused. Reloading from
@@ -245,6 +246,11 @@ disk discards your unsaved edits.
 Set `ui.editorVimMode` to `true` in `.kozane/config.json` for Vim bindings.
 The editor opens in normal mode. `Esc` leaves insert mode, and saving stays on
 `Ctrl+S` or `Cmd+S`.
+
+The editor saves about a second after you stop typing, and closing it saves
+pending edits instead of asking. A conflict or a failed save stops and shows
+its notice, and auto save retries after your next edit. Set
+`ui.editorAutoSave` to `false` to save only with `Ctrl+S`, `Cmd+S`, or Save.
 
 ## Warps
 
@@ -388,6 +394,7 @@ UI settings live under `ui` in `.kozane/config.json`.
 | `removeWarpShortcut`   | Remove a warp                          | `x`             |
 | `addInventoryShortcut` | Add an inventory                       | `v`             |
 | `editorVimMode`        | Enable Vim bindings in the file editor | `false`         |
+| `editorAutoSave`       | Save the open file once typing pauses  | `true`          |
 
 ## Live sync
 

@@ -48,6 +48,9 @@ export class EditorSession {
   /** File-version signature returned on save to detect changes on disk. */
   #signature: string | null = null;
 
+  /** The save in flight, so callers can wait for it instead of being refused. */
+  #inFlight: Promise<boolean> | null = null;
+
   get isOpen(): boolean {
     return this.file !== null;
   }
@@ -99,15 +102,26 @@ export class EditorSession {
     await this.open(ctx, ref);
   }
 
-  async save(ctx: EditorSessionContext): Promise<boolean> {
+  save(ctx: EditorSessionContext): Promise<boolean> {
     const ref = this.file;
     const doc = this.doc;
-    if (!ref || !doc || this.saving) return false;
+    if (!ref || !doc || this.saving) return Promise.resolve(false);
 
     this.saving = true;
     this.error = null;
     this.conflict = false;
 
+    const saving = this.#write(ctx, ref, doc);
+    this.#inFlight = saving;
+    return saving;
+  }
+
+  /** Wait for any save in flight to finish. Resolves at once when none is. */
+  async settled(): Promise<void> {
+    await this.#inFlight;
+  }
+
+  async #write(ctx: EditorSessionContext, ref: OpenFileRef, doc: EditorDocument): Promise<boolean> {
     // Capture exactly the content sent so edits made during the request remain dirty.
     const content = doc.text();
 
@@ -156,5 +170,6 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
     this.#signature = null;
+    this.#inFlight = null;
   }
 }
