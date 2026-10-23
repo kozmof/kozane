@@ -634,6 +634,41 @@ describe("FileEditor auto save", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("asks on close after a conflict without trying the save again", async () => {
+    const { session, calls } = await mount([loaded(), new Response("{}", { status: 409 })], {
+      autoSave: true,
+    });
+    const dialog = await screen.findByRole("dialog");
+    vi.useFakeTimers();
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(session.conflict).toBe(true);
+    vi.useRealTimers();
+
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(await screen.findByText("This file has unsaved changes.")).toBeInTheDocument();
+    expect(calls).toHaveLength(2);
+  });
+
+  it("forgets a failed draft once the file is reopened", async () => {
+    const { session, ctx, calls } = await mount(
+      [loaded(), new Response("{}", { status: 500 }), loaded(), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(2);
+
+    session.close();
+    await session.open(ctx, REF);
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(4);
+    expect(calls[3]).toMatchObject({ method: "PUT", body: { content: "xhello\n" } });
+  });
+
   it("asks before closing when the save on close fails", async () => {
     const { session } = await mount([loaded(), new Response("{}", { status: 500 })], {
       autoSave: true,

@@ -6,6 +6,7 @@
     EditorSession,
     EditorSessionContext,
   } from "../lib/editor/editor-session.svelte.js";
+  import type { EditorDocument } from "../lib/editor/document-store.svelte.js";
   import { createVimState, handleVimKey, type VimState } from "../lib/editor/vim.js";
   import { guardUnsavedLeave, UNSAVED_LEAVE_PROMPT } from "../lib/editor/leave-guard.js";
 
@@ -91,19 +92,22 @@
   const draft = $derived(autoSaving ? (session.doc?.text() ?? null) : null);
 
   /**
-   * Text whose auto save failed. Retry only after another edit so a failing server is not
-   * asked again every second. A conflict waits for a reload instead.
+   * Text whose auto save failed, and the document it belongs to. Retry only after another
+   * edit so a failing server is not asked again every second. A conflict waits for a reload
+   * instead. Another file, or the same file reopened, starts afresh.
    */
-  let failedDraft = $state<string | null>(null);
+  let failedDraft = $state.raw<{ doc: EditorDocument; text: string } | null>(null);
 
   // Save once edits pause. Each edit changes `draft`, which restarts the timer. A save in
   // flight blocks scheduling, and edits made during it reschedule when it finishes.
   $effect(() => {
     const text = draft;
-    if (text === null || text === failedDraft) return;
+    const doc = session.doc;
+    if (text === null || !doc) return;
+    if (failedDraft?.doc === doc && failedDraft.text === text) return;
     if (!session.dirty || session.saving || session.conflict) return;
     const timer = setTimeout(async () => {
-      if (!(await session.save(ctx))) failedDraft = text;
+      if (!(await session.save(ctx))) failedDraft = { doc, text };
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   });
@@ -125,8 +129,11 @@
   async function saveAndClose(): Promise<void> {
     const file = session.file;
     // An auto save may already be writing. Wait for it, then save whatever it did not cover.
+    // After a conflict, saving again is refused too, so ask straight away.
     await session.settled();
-    const saved = session.file === file && (!session.dirty || (await session.save(ctx)));
+    const saved =
+      session.file === file &&
+      (!session.dirty || (!session.conflict && (await session.save(ctx))));
     // Leave a file that was replaced or closed while saving alone.
     if (session.file !== file) return;
     if (saved && !session.dirty) close();
