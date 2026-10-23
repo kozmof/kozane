@@ -285,16 +285,16 @@ An inventory stores cards off the canvas in a grid. On the canvas it is
 a box icon with a badge counting its cards. Use the shortcut with no cards selected and no
 text field focused.
 
-| Action             | Control                                           |
-| ------------------ | ------------------------------------------------- |
-| Add an inventory   | `v`, at the pointer or view center                |
-| Open or close it   | Click its icon                                    |
-| Move the icon      | Drag it                                           |
-| Store cards        | Drag a card onto the icon or a slot               |
-| Rearrange cards    | Drag a card to another slot                       |
-| Take a card out    | Drag it from the grid onto the canvas             |
-| Rename it          | Double-click its name, or focus it and press `F2` |
-| Close or remove it | The `×` or bin button on its window               |
+| Action             | Control                                                   |
+| ------------------ | --------------------------------------------------------- |
+| Add an inventory   | `v`, at the pointer or view center                        |
+| Open or close it   | Click its icon                                            |
+| Move the icon      | Drag it                                                   |
+| Store cards        | Drag a card onto the icon or a slot                       |
+| Rearrange cards    | Drag a card to another slot                               |
+| Take a card out    | Drag it from the grid onto the canvas                     |
+| Rename it          | The pencil button on its window, or double-click its name |
+| Close or remove it | The `×` or bin button on its window                       |
 
 Open inventories appear on the left of the canvas and stay put while you pan.
 Drag cards into them from anywhere on the board.

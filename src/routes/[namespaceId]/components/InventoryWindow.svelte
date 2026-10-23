@@ -78,6 +78,9 @@
     draft = inventory.name;
     renaming = true;
     await tick();
+    // `select` alone does not focus the field everywhere, and without focus a blur never
+    // comes to save the name.
+    nameInput?.focus();
     nameInput?.select();
   }
 
@@ -152,6 +155,20 @@
       {cards.length}
     </span>
     {#if !readonly}
+      <!-- Keep focus in the name field on press, so finishing from here saves once rather than
+           on blur and again on click. -->
+      <button
+        class={iconButton}
+        title={renaming ? "Save name" : "Rename inventory"}
+        aria-label={renaming ? "Save inventory name" : `Rename inventory ${label}`}
+        aria-pressed={renaming}
+        onmousedown={(e) => e.preventDefault()}
+        onclick={() => (renaming ? finishRename(true) : void startRename())}
+      >
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" aria-hidden="true">
+          <path d="M7.5 1.5l2 2L3.5 9.5H1.5v-2z M6.5 2.5l2 2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
       <button class={iconButton} title="Remove inventory. Its cards go back on the canvas." aria-label="Remove inventory {label}" onclick={onRemove}>
         <svg width="11" height="12" viewBox="0 0 11 12" fill="none" aria-hidden="true">
           <path d="M1 3h9M4 3V1.5h3V3M2.2 3l.6 7.5h5.4L8.8 3" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" />
