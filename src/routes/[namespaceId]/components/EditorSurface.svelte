@@ -562,6 +562,10 @@
     // Keep the scrollbar's space reserved so it appearing cannot change the row width and
     // with it the wrapping that decided whether it appears.
     scrollbarGutter: "stable",
+    // Contain the rows', cursor's, and input sink's z-indexes so they stack only against
+    // each other. Otherwise rows spanning the panel paint over its resize handle and take
+    // its presses wherever there is text.
+    isolation: "isolate",
   })}
   style:overflow-x={wrapper.wraps ? "hidden" : null}
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}

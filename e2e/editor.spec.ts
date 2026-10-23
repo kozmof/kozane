@@ -417,12 +417,15 @@ test("resizes by dragging the left edge, and keeps the width across a close", as
   const panel = page.getByRole("dialog", { name: /Editing/ });
   const before = (await panel.boundingBox())!.width;
 
-  // Drag the edge 150px left to widen the panel by 150px.
+  // Drag the edge 150px left to widen the panel by 150px. Grab it beside a line of text,
+  // where the text's rows overlap the handle, rather than in the empty space below.
   const handle = page.getByRole("separator", { name: "Resize editor" });
   const grip = (await handle.boundingBox())!;
-  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+  const firstLine = (await page.locator('[data-line="0"]').first().boundingBox())!;
+  const gripY = firstLine.y + firstLine.height / 2;
+  await page.mouse.move(grip.x + grip.width / 2, gripY);
   await page.mouse.down();
-  await page.mouse.move(grip.x - 150, grip.y + grip.height / 2, { steps: 10 });
+  await page.mouse.move(grip.x - 150, gripY, { steps: 10 });
   await page.mouse.up();
 
   const widened = (await panel.boundingBox())!.width;
