@@ -7,6 +7,7 @@ import {
   selectionRects,
   visibleRange,
 } from "./geometry.js";
+import { WrapLayout } from "./wrap.js";
 
 /**
  * Monospace measurement stub with double-width CJK cells. jsdom has no layout and cannot
@@ -203,6 +204,72 @@ describe("selectionRects", () => {
 });
 
 /**
+ * Line 0, "hello brave world", wraps into "hello ", "brave ", and "world". Line 1, "again",
+ * fits. Each cell is 10 pixels, measured from the start of the row drawing the column.
+ */
+describe("wrapped rows", () => {
+  const lines = ["hello brave world", "again"];
+  const layout = WrapLayout.of([[0, 6, 12], [0]]);
+  const rowStart = (line: number, column: number) =>
+    layout.rowStarts(line)[layout.rowIndex(line, column)];
+  const measure: LineMeasurer = {
+    columnToX: (line, column) => (column - rowStart(line, column)) * 10,
+    xToColumn: (line, x, index = 0) => layout.rowStarts(line)[index] + Math.round(x / 10),
+  };
+  const lineLength = (line: number) => (lines[line] ?? "").length;
+  const select = (start: [number, number], end: [number, number], shown?: [number, number]) =>
+    selectionRects(
+      { line: start[0], column: start[1] },
+      { line: end[0], column: end[1] },
+      20,
+      measure,
+      lineLength,
+      [0, 1],
+      layout,
+      shown,
+    );
+
+  it("puts the caret on the row drawing its column", () => {
+    expect(caretPoint({ line: 0, column: 3 }, 20, measure, layout)).toEqual({ x: 30, y: 0 });
+    expect(caretPoint({ line: 0, column: 8 }, 20, measure, layout)).toEqual({ x: 20, y: 20 });
+    expect(caretPoint({ line: 1, column: 2 }, 20, measure, layout)).toEqual({ x: 20, y: 60 });
+  });
+
+  it("draws a caret at a wrap point at the start of the next row", () => {
+    expect(caretPoint({ line: 0, column: 6 }, 20, measure, layout)).toEqual({ x: 0, y: 20 });
+  });
+
+  it("resolves a click to the row under it", () => {
+    expect(pointToCaret(20, 25, 20, 2, measure, layout)).toEqual({ line: 0, column: 8 });
+    expect(pointToCaret(0, 45, 20, 2, measure, layout)).toEqual({ line: 0, column: 12 });
+    expect(pointToCaret(10, 65, 20, 2, measure, layout)).toEqual({ line: 1, column: 1 });
+  });
+
+  it("runs a selection to the edge on rows it continues past", () => {
+    expect(select([0, 2], [0, 8])).toEqual([
+      { top: 0, left: 20, width: null, height: 20 },
+      { top: 20, left: 0, width: 20, height: 20 },
+    ]);
+  });
+
+  it("starts a selection at a wrap point on the next row", () => {
+    expect(select([0, 6], [1, 2])).toEqual([
+      { top: 20, left: 0, width: null, height: 20 },
+      { top: 40, left: 0, width: null, height: 20 },
+      { top: 60, left: 0, width: 20, height: 20 },
+    ]);
+  });
+
+  it("draws nothing on the row a selection ends at the start of", () => {
+    expect(select([0, 0], [0, 6]).map(({ top }) => top)).toEqual([0]);
+  });
+
+  it("draws only the rows shown", () => {
+    expect(select([0, 0], [1, 5], [1, 3]).map(({ top }) => top)).toEqual([20, 40]);
+  });
+});
+
+/**
  * Stub element and Range rectangles in jsdom to test column lookup over known character
  * measurements.
  */
@@ -318,6 +385,28 @@ describe("domMeasurer", () => {
     const measure = domMeasurer(() => null);
     expect(measure.columnToX(0, 4)).toBe(0);
     expect(measure.xToColumn(0, 40)).toBe(0);
+  });
+
+  it("measures a wrapped line within the row drawing the column", () => {
+    stubLayout("hello brave world");
+    const els = ["hello ", "brave ", "world"].map((text) => {
+      const el = document.createElement("div");
+      el.textContent = text;
+      document.body.append(el);
+      return el;
+    });
+    const layout = WrapLayout.of([[0, 6, 12]]);
+    const measure = domMeasurer(
+      (_line, index) => els[index] ?? null,
+      () => layout,
+    );
+
+    expect(measure.columnToX(0, 8)).toBe(CELL * 2);
+    expect(measure.columnToX(0, 6)).toBe(0);
+    expect(measure.xToColumn(0, CELL, 1)).toBe(7);
+    // Past the end of a wrapped row, stay on it rather than jump to the next row.
+    expect(measure.xToColumn(0, 9999, 0)).toBe(5);
+    expect(measure.xToColumn(0, 9999, 2)).toBe(17);
   });
 
   it("answers zero for an empty line, which has no text node to measure", () => {

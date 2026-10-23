@@ -1,24 +1,30 @@
 import type { Caret } from "./document-store.svelte.js";
+import { WrapLayout } from "./wrap.js";
 
 /**
  * Rendered line measurement interface. Production uses DOM Range rectangles, while tests
  * provide fixed geometry.
  */
 export type LineMeasurer = {
-  /** Pixels from the start of the line to the left edge of `column`. */
+  /** Pixels from the start of the row drawing `column` to its left edge. */
   columnToX(line: number, column: number): number;
-  /** Column boundary nearest to `x`, clamped to the ends of the line. */
-  xToColumn(line: number, x: number): number;
+  /**
+   * Column boundary nearest to `x` on the line's row `index`, clamped to that row. Rows
+   * other than the last stop before their final character, so a click past a wrapped row's
+   * end leaves the caret on that row.
+   */
+  xToColumn(line: number, x: number, index?: number): number;
 };
 
 export type Viewport = {
   scrollTop: number;
   height: number;
   lineHeight: number;
+  /** Rows to scroll through, which are lines when nothing wraps. */
   lineCount: number;
 };
 
-/** The band of lines a viewport covers, widened by `overscan` at both ends. */
+/** The band of rows a viewport covers, widened by `overscan` at both ends. */
 export function visibleRange(
   { scrollTop, height, lineHeight, lineCount }: Viewport,
   overscan = 4,
@@ -36,12 +42,14 @@ export function caretPoint(
   { line, column }: Caret,
   lineHeight: number,
   measure: LineMeasurer,
+  layout?: WrapLayout,
 ): { x: number; y: number } {
-  return { x: measure.columnToX(line, column), y: line * lineHeight };
+  const row = layout ? layout.rowOf(line, column) : line;
+  return { x: measure.columnToX(line, column), y: row * lineHeight };
 }
 
 /**
- * Resolve a click to a document position. Fixed line height determines the line. Measure
+ * Resolve a click to a document position. Fixed row height determines the row. Measure
  * horizontal position to handle CJK, ligatures, and combining marks accurately.
  */
 export function pointToCaret(
@@ -50,9 +58,10 @@ export function pointToCaret(
   lineHeight: number,
   lineCount: number,
   measure: LineMeasurer,
+  layout: WrapLayout = WrapLayout.unwrapped(lineCount),
 ): Caret {
-  const line = Math.min(Math.max(0, Math.floor(y / lineHeight)), Math.max(0, lineCount - 1));
-  return { line, column: measure.xToColumn(line, Math.max(0, x)) };
+  const { line, index } = layout.rowAt(Math.floor(y / lineHeight));
+  return { line, column: measure.xToColumn(line, Math.max(0, x), index) };
 }
 
 export type SelectionRect = {
@@ -66,6 +75,9 @@ export type SelectionRect = {
 /**
  * Compute selection rectangles for the first-line tail, full middle lines, and last-line
  * head. Keep drawing independent of browser Selection state.
+ *
+ * With a `layout`, draw one rectangle per selected row of each mounted line, limited to
+ * `shownRows` (`[first, end)`) so one very long line cannot draw rows far off screen.
  */
 export function selectionRects(
   start: Caret,
@@ -74,6 +86,8 @@ export function selectionRects(
   measure: LineMeasurer,
   lineLength: (line: number) => number,
   mountedLines?: readonly number[],
+  layout?: WrapLayout,
+  shownRows?: readonly [number, number],
 ): SelectionRect[] {
   if (start.line === end.line && start.column === end.column) return [];
 
@@ -81,12 +95,43 @@ export function selectionRects(
   const push = (line: number, fromColumn: number, toColumn: number | null): void => {
     const left = measure.columnToX(line, fromColumn);
     rects.push({
-      top: line * lineHeight,
+      top: (layout ? layout.rowOf(line, fromColumn) : line) * lineHeight,
       left,
       width: toColumn === null ? null : Math.max(0, measure.columnToX(line, toColumn) - left),
       height: lineHeight,
     });
   };
+
+  if (mountedLines && layout) {
+    const [first, last] = shownRows ?? [0, layout.rowCount];
+    for (const line of mountedLines) {
+      if (line < start.line || line > end.line) continue;
+      const starts = layout.rowStarts(line);
+      const base = layout.firstRow(line);
+      for (let index = 0; index < starts.length; index++) {
+        if (base + index < first || base + index >= last) continue;
+        const rowStart = starts[index];
+        const rowEnd = layout.rowEnd(line, index);
+        // A selection starting at a wrap point starts on the next row.
+        if (line === start.line && rowEnd !== null && start.column >= rowEnd) continue;
+        // A selection ending at a wrap point covers none of the row it starts.
+        if (line === end.line && index > 0 && end.column <= rowStart) continue;
+        const from = line === start.line ? Math.max(start.column, rowStart) : rowStart;
+        // Run to the panel edge when the selection continues past this row, onto the next
+        // row of the line or through its newline.
+        const through = line < end.line || (rowEnd !== null && end.column >= rowEnd);
+        if (through) {
+          rects.push({
+            top: (base + index) * lineHeight,
+            left: measure.columnToX(line, from),
+            width: null,
+            height: lineHeight,
+          });
+        } else push(line, from, end.column);
+      }
+    }
+    return rects;
+  }
 
   // Keep selection overlays bounded by the viewport, including select-all.
   if (mountedLines) {
@@ -117,9 +162,12 @@ export function selectionRects(
  * actual layout. Binary-search those measurements to map x coordinates to columns. Each query
  * measures one line.
  */
-export function domMeasurer(lineElement: (line: number) => HTMLElement | null): LineMeasurer {
-  const textNodeOf = (line: number): { node: Text; length: number } | null => {
-    const el = lineElement(line);
+export function domMeasurer(
+  rowElement: (line: number, index: number) => HTMLElement | null,
+  layout: () => WrapLayout | undefined = () => undefined,
+): LineMeasurer {
+  const textNodeOf = (line: number, index = 0): { node: Text; length: number } | null => {
+    const el = rowElement(line, index);
     const node = el?.firstChild;
     if (!node || node.nodeType !== Node.TEXT_NODE) return null;
     const text = node as Text;
@@ -142,30 +190,49 @@ export function domMeasurer(lineElement: (line: number) => HTMLElement | null): 
 
   return {
     columnToX(line, column) {
-      const found = textNodeOf(line);
+      const rows = layout();
+      const index = rows ? rows.rowIndex(line, column) : 0;
+      const start = rows ? rows.rowStarts(line)[index] : 0;
+      const found = textNodeOf(line, index);
       if (!found) return 0;
-      return widthTo(found.node, column);
+      return widthTo(found.node, column - start);
     },
 
-    xToColumn(line, x) {
-      const found = textNodeOf(line);
-      if (!found) return 0;
-      if (x <= 0) return 0;
-
-      // Find the last column edge at or before x, then choose the nearer of that edge and the
-      // next.
-      let low = 0;
-      let high = found.length;
-      while (low < high) {
-        const mid = Math.ceil((low + high) / 2);
-        if (widthTo(found.node, mid) <= x) low = mid;
-        else high = mid - 1;
-      }
-
-      if (low >= found.length) return found.length;
-      const here = widthTo(found.node, low);
-      const next = widthTo(found.node, low + 1);
-      return x - here > next - x ? low + 1 : low;
+    xToColumn(line, x, index = 0) {
+      const rows = layout();
+      const start = rows ? (rows.rowStarts(line)[index] ?? 0) : 0;
+      const wrapped = rows ? rows.rowEnd(line, index) !== null : false;
+      const found = textNodeOf(line, index);
+      if (!found) return start;
+      return start + nearestColumn(found, x, wrapped);
     },
   };
+
+  /**
+   * Column in `found` nearest to `x`. On a wrapped row, stop before the last character,
+   * because the column after it is drawn at the start of the next row.
+   */
+  function nearestColumn(found: { node: Text; length: number }, x: number, wrapped: boolean) {
+    const limit = wrapped ? Math.max(0, found.length - 1) : found.length;
+    return Math.min(limit, columnAtX(found, x));
+  }
+
+  function columnAtX(found: { node: Text; length: number }, x: number): number {
+    if (x <= 0) return 0;
+
+    // Find the last column edge at or before x, then choose the nearer of that edge and the
+    // next.
+    let low = 0;
+    let high = found.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (widthTo(found.node, mid) <= x) low = mid;
+      else high = mid - 1;
+    }
+
+    if (low >= found.length) return found.length;
+    const here = widthTo(found.node, low);
+    const next = widthTo(found.node, low + 1);
+    return x - here > next - x ? low + 1 : low;
+  }
 }

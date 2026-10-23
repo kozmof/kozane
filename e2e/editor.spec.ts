@@ -120,6 +120,7 @@ test.beforeAll(async () => {
   writeFileSync(join(taskspaceDir, "cjk.md"), "あいうabc\nplain\n");
   writeFileSync(join(taskspaceDir, "selectme.md"), "abcdefghij\nsecond\n");
   writeFileSync(join(taskspaceDir, "grouped.md"), "start \n");
+  writeFileSync(join(taskspaceDir, "wrap.md"), `${"lorem ipsum dolor ".repeat(20)}end\nafter\n`);
   writeFileSync(
     join(taskspaceDir, "long.md"),
     Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n",
@@ -233,6 +234,53 @@ test("fits the text to the panel rather than overflowing it sideways", async ({ 
   const surfaceBox = await surface.boundingBox();
   if (!lineBox || !surfaceBox) throw new Error("no box");
   expect(lineBox.x + lineBox.width).toBeLessThanOrEqual(surfaceBox.x + surfaceBox.width + 1);
+});
+
+test("wraps a line wider than the panel onto rows that fit it", async ({ page }) => {
+  await openFile(page, "wrap.md");
+  const surface = page.getByTestId("editor-surface");
+
+  const rows = page.locator('[data-line="0"]');
+  expect(await rows.count()).toBeGreaterThan(1);
+  // Rows break after a space, so every row but the last ends in one.
+  const texts = await rows.allTextContents();
+  for (const text of texts.slice(0, -1)) expect(text.endsWith(" ")).toBe(true);
+  expect(texts.join("")).toBe(`${"lorem ipsum dolor ".repeat(20)}end`);
+
+  // Nothing runs past the panel, so it never scrolls sideways.
+  expect(await surface.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0);
+  const surfaceBox = await surface.boundingBox();
+  if (!surfaceBox) throw new Error("no box for the surface");
+  const textRight = await rows.evaluateAll((els) =>
+    Math.max(
+      ...els.map((el) => {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return range.getBoundingClientRect().right;
+      }),
+    ),
+  );
+  expect(textRight).toBeLessThanOrEqual(surfaceBox.x + surfaceBox.width);
+
+  // The next line starts below every row of the wrapped one.
+  const lastRow = await rows.last().boundingBox();
+  const after = await page.getByText("after", { exact: true }).boundingBox();
+  if (!lastRow || !after) throw new Error("no box for the rows");
+  expect(after.y).toBeGreaterThanOrEqual(lastRow.y + lastRow.height - 1);
+
+  // A click on the second row lands in line 1, past the first row's text.
+  const second = await rows.nth(1).boundingBox();
+  if (!second) throw new Error("no box for the second row");
+  await page.mouse.click(second.x + second.width / 2, second.y + second.height / 2);
+  const status = await page.getByText(/^Ln \d+, Col \d+$/).textContent();
+  const [, line, col] = status?.match(/Ln (\d+), Col (\d+)/) ?? [];
+  expect(Number(line)).toBe(1);
+  expect(Number(col)).toBeGreaterThan(texts[0].length);
+
+  // Down from the first row stays in the line, on its second row.
+  await page.mouse.click(surfaceBox.x + 20, (await rows.first().boundingBox())!.y + 5);
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByText(/^Ln 1, Col \d+$/)).toBeVisible();
 });
 
 test("puts the caret back at the edit an undo takes back", async ({ page }) => {

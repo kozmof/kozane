@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import EditorSurface from "./EditorSurface.svelte";
@@ -491,5 +491,84 @@ describe("EditorSurface test hooks", () => {
   it("paints nothing when there is no selection", () => {
     mount("hello world\n", { caret: { line: 0, column: 5 }, anchor: null });
     expect(document.querySelectorAll("[data-testid='editor-selection']")).toHaveLength(0);
+  });
+});
+
+/**
+ * Fake a panel 20 cells wide: ten-pixel cells, measured by the width probe and by Ranges,
+ * and a surface 224 pixels wide, which leaves 200 after the 12-pixel padding on each side.
+ */
+describe("EditorSurface wrapping", () => {
+  const LINE = "aaaa bbbb cccc dddd eeee ffff gggg";
+
+  beforeEach(() => {
+    Object.defineProperty(HTMLSpanElement.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value(this: HTMLElement) {
+        return { width: (this.textContent ?? "").length * 10 } as DOMRect;
+      },
+    });
+    Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+      configurable: true,
+      value(this: Range) {
+        return { width: this.toString().length * 10 } as DOMRect;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+      configurable: true,
+      get: () => 224,
+    });
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(HTMLSpanElement.prototype, "getBoundingClientRect");
+    Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
+    Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
+  });
+
+  const rowsOf = (line: number) =>
+    [...document.querySelectorAll(`[data-line="${line}"]`)].map((el) => el.textContent);
+
+  it("wraps a long line after the last space that fits", () => {
+    mount(`${LINE}\nshort`);
+    expect(rowsOf(0)).toEqual(["aaaa bbbb cccc dddd ", "eeee ffff gggg"]);
+    expect(rowsOf(1)).toEqual(["short"]);
+  });
+
+  it("draws the line after a wrapped one below all of its rows", () => {
+    mount(`${LINE}\nshort`);
+    const short = document.querySelector<HTMLElement>('[data-line="1"]');
+    expect(short?.style.top).toBe(`${2 * 20 + 8}px`);
+  });
+
+  it("moves down to the next row of the same line", async () => {
+    const { doc, sink } = mount(`${LINE}\nshort`, { caret: { line: 0, column: 2 } });
+    sink.focus();
+    await userEvent.keyboard("{ArrowDown}X");
+    expect(doc.lineText(0)).toBe("aaaa bbbb cccc dddd eeXee ffff gggg");
+  });
+
+  it("moves up from a continuation row onto the row above", async () => {
+    const { doc, sink } = mount(LINE, { caret: { line: 0, column: 22 } });
+    sink.focus();
+    await userEvent.keyboard("{ArrowUp}X");
+    expect(doc.lineText(0)).toBe("aaXaa bbbb cccc dddd eeee ffff gggg");
+  });
+
+  it("draws the cursor on the row its column wraps onto", () => {
+    mount(LINE, { caret: { line: 0, column: 22 } });
+    screen.getByTestId("editor-sink").focus();
+    return Promise.resolve().then(() => {
+      const cursor = screen.getByTestId("editor-cursor");
+      expect(cursor.style.top).toBe(`${20 + 8}px`);
+      expect(cursor.style.left).toBe(`${2 * 10 + 12}px`);
+    });
+  });
+
+  it("rewraps as typing lengthens a line", async () => {
+    const { sink } = mount("aaaa bbbb cccc", { caret: { line: 0, column: 14 } });
+    sink.focus();
+    await userEvent.keyboard(" dddd eeee");
+    expect(rowsOf(0)).toEqual(["aaaa bbbb cccc dddd ", "eeee"]);
   });
 });

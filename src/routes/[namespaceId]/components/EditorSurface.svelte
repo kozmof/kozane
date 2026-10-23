@@ -9,6 +9,7 @@
     selectionRects,
     visibleRange,
   } from "../lib/editor/geometry.js";
+  import { LineWrapper, TAB_SIZE, WrapLayout } from "../lib/editor/wrap.js";
 
   export type EditorMode = "insert" | "normal";
 
@@ -41,27 +42,67 @@
   const PAD_X = 12;
   const PAD_Y = 8;
   const OVERSCAN = 6;
+  /** Narrowest row wrapping allows, so a squeezed panel still shows whole words. */
+  const MIN_COLS = 10;
+  /** Text measured once to find the font's cell width. */
+  const PROBE = "0".repeat(64);
 
   let scrollEl: HTMLDivElement | undefined = $state();
   let sinkEl: HTMLTextAreaElement | undefined = $state();
   let scrollTop = $state(0);
   let viewportHeight = $state(400);
+  let viewportWidth = $state(0);
+  let probeEl: HTMLSpanElement | undefined = $state();
+  let cellWidth = $state(0);
   let focused = $state(false);
 
   /**
-   * Track rendered line elements for event-time measurement. The `lineEl` action adds entries
-   * and removes them when lines leave the DOM. This map does not drive rendering.
+   * The drawn element of a line's row, for measurement. Read from the DOM rather than kept by
+   * an action, because a row that wrapping just created is in the DOM before its action runs,
+   * and the measuring effect can run in between.
    */
-  const lineEls: Record<number, HTMLDivElement | undefined> = {};
-
-  function lineEl(node: HTMLDivElement, lineNumber: number) {
-    lineEls[lineNumber] = node;
-    return {
-      destroy() {
-        delete lineEls[lineNumber];
-      },
-    };
+  function rowElement(line: number, index: number): HTMLElement | null {
+    return (
+      scrollEl?.querySelector<HTMLElement>(`[data-line="${line}"][data-row-index="${index}"]`) ??
+      null
+    );
   }
+
+  // Measure the font's cell width, again once web fonts finish loading. Without layout, as in
+  // tests, the width stays 0 and lines do not wrap.
+  $effect(() => {
+    const probe = probeEl;
+    if (!probe) return;
+    let live = true;
+    const read = () => {
+      if (live) cellWidth = probe.getBoundingClientRect().width / PROBE.length;
+    };
+    read();
+    void document.fonts?.ready.then(read);
+    return () => {
+      live = false;
+    };
+  });
+
+  /** Cells that fit on a row, or Infinity before the panel can be measured. */
+  const cols = $derived(
+    cellWidth > 0 && viewportWidth > 0
+      ? Math.max(MIN_COLS, Math.floor((viewportWidth - PAD_X * 2) / cellWidth))
+      : Infinity,
+  );
+  const wrapper = $derived(new LineWrapper(cols, TAB_SIZE));
+  // A string, so Reed's background reconciliation, which replaces the state without an
+  // edit, does not lay the document out again.
+  const text = $derived(wrapper.wraps ? doc.text() : "");
+  const layout = $derived.by(() => {
+    if (!wrapper.wraps) return WrapLayout.unwrapped(doc.lineCount);
+    const wrapped = wrapper.layout(text);
+    // Lines are split the way Reed splits them. Should they ever disagree, draw unwrapped
+    // rather than put the caret on the wrong line.
+    return wrapped.lineCount === Math.max(1, doc.lineCount)
+      ? wrapped
+      : WrapLayout.unwrapped(doc.lineCount);
+  });
 
   /**
    * Display uncommitted IME text without editing the document. Commit at `compositionend`
@@ -70,16 +111,55 @@
   let preedit = $state("");
   let composing = $state(false);
 
-  const measure = domMeasurer((line) => lineEls[line] ?? null);
+  const measure = domMeasurer(rowElement, () => layout);
 
   const window_ = $derived(
     visibleRange(
-      { scrollTop, height: viewportHeight, lineHeight: LINE_HEIGHT, lineCount: doc.lineCount },
+      { scrollTop, height: viewportHeight, lineHeight: LINE_HEIGHT, lineCount: layout.rowCount },
       OVERSCAN,
     ),
   );
-  const lines = $derived(doc.visibleLines(window_.startLine, window_.visibleLineCount, 0));
-  const contentHeight = $derived(Math.max(1, doc.lineCount) * LINE_HEIGHT);
+  /** Rows drawn, as `[first, end)`. */
+  const shownRows = $derived<[number, number]>([
+    window_.startLine,
+    window_.startLine + window_.visibleLineCount,
+  ]);
+  const lines = $derived.by(() => {
+    const first = layout.rowAt(shownRows[0]).line;
+    const last = layout.rowAt(shownRows[1] - 1).line;
+    return doc.visibleLines(first, last - first + 1, 0);
+  });
+
+  type Row = {
+    key: string;
+    line: number;
+    index: number;
+    /** Row number in the whole document. */
+    row: number;
+    /** Column of the line where the row starts. */
+    start: number;
+    text: string;
+  };
+
+  /** The drawn rows of the drawn lines. A long line draws only its rows in view. */
+  const rows = $derived.by(() => {
+    const out: Row[] = [];
+    for (const { lineNumber: line, content } of lines) {
+      const starts = layout.rowStarts(line);
+      const base = layout.firstRow(line);
+      for (let index = 0; index < starts.length; index++) {
+        const row = base + index;
+        if (row < shownRows[0] || row >= shownRows[1]) continue;
+        const start = starts[index];
+        const text = content.slice(start, starts[index + 1] ?? content.length);
+        out.push({ key: `${line}:${index}`, line, index, row, start, text });
+      }
+    }
+    return out;
+  });
+  const contentHeight = $derived(layout.rowCount * LINE_HEIGHT);
+  /** Which of its line's rows the caret is on, where IME preedit text is drawn. */
+  const caretRowIndex = $derived(layout.rowIndex(caret.line, caret.column));
 
   const selection = $derived.by(() => {
     if (!anchor || sameCaret(anchor, caret)) return null;
@@ -102,18 +182,24 @@
           selection.start, selection.end, LINE_HEIGHT, measure,
           (line) => doc.lineText(line).length,
           lines.map((line) => line.lineNumber),
+          layout,
+          shownRows,
         )
       : [];
-    caretXY = caretPoint(caret, LINE_HEIGHT, measure);
-    const text = doc.lineText(caret.line);
+    caretXY = caretPoint(caret, LINE_HEIGHT, measure, layout);
+    const lineText = doc.lineText(caret.line);
+    const after = doc.columnAfter(caret.line, caret.column);
+    // A block cursor on a row's last character, before a wrap, cannot measure up to the next
+    // column, which is drawn on the following row.
+    const rowEnds =
+      layout.rowIndex(caret.line, after) !== layout.rowIndex(caret.line, caret.column);
     caretWidth = mode !== "normal"
       ? 2
-      : caret.column >= text.length
+      : caret.column >= lineText.length || rowEnds
         ? FONT_SIZE * 0.6
         : Math.max(
             2,
-            measure.columnToX(caret.line, doc.columnAfter(caret.line, caret.column)) -
-              measure.columnToX(caret.line, caret.column),
+            measure.columnToX(caret.line, after) - measure.columnToX(caret.line, caret.column),
           );
   });
 
@@ -156,6 +242,22 @@
   // ── Keyboard ──────────────────────────────────────────────────
   function moveTo(next: Caret, extend: boolean): void {
     setCaret(next, extend);
+  }
+
+  /**
+   * The caret `by` rows above or below the caret, as near its current x as the target row
+   * allows. A row out of view cannot be measured, so keep the caret's offset into its row.
+   */
+  function caretRowsAway(by: number): Caret {
+    const here = layout.rowOf(caret.line, caret.column);
+    const { line, index } = layout.rowAt(here + by);
+    if (wrapper.wraps && rowElement(line, index))
+      return { line, column: measure.xToColumn(line, caretXY.x, index) };
+    const from = layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
+    const offset = caret.column - from;
+    const end = layout.rowEnd(line, index);
+    const column = layout.rowStarts(line)[index] + offset;
+    return { line, column: end === null ? column : Math.min(column, end - 1) };
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -232,25 +334,19 @@
       }
       case "ArrowUp":
         event.preventDefault();
-        moveTo({ line: caret.line - 1, column: caret.column }, extend);
+        moveTo(caretRowsAway(-1), extend);
         return;
       case "ArrowDown":
         event.preventDefault();
-        moveTo({ line: caret.line + 1, column: caret.column }, extend);
+        moveTo(caretRowsAway(1), extend);
         return;
       case "PageUp":
         event.preventDefault();
-        moveTo(
-          { line: caret.line - Math.floor(viewportHeight / LINE_HEIGHT), column: caret.column },
-          extend,
-        );
+        moveTo(caretRowsAway(-Math.floor(viewportHeight / LINE_HEIGHT)), extend);
         return;
       case "PageDown":
         event.preventDefault();
-        moveTo(
-          { line: caret.line + Math.floor(viewportHeight / LINE_HEIGHT), column: caret.column },
-          extend,
-        );
+        moveTo(caretRowsAway(Math.floor(viewportHeight / LINE_HEIGHT)), extend);
         return;
       case "Home":
         event.preventDefault();
@@ -380,6 +476,7 @@
       LINE_HEIGHT,
       doc.lineCount,
       measure,
+      layout,
     );
   }
 
@@ -426,7 +523,7 @@
   // Follow caret changes without depending on reactive scroll state. Read the element's
   // current viewport directly so manual scrolling does not trigger a jump back to the caret.
   $effect(() => {
-    const top = caret.line * LINE_HEIGHT;
+    const top = layout.rowOf(caret.line, caret.column) * LINE_HEIGHT;
     if (!scrollEl) return;
     const viewTop = scrollEl.scrollTop;
     const viewHeight = scrollEl.clientHeight;
@@ -443,6 +540,7 @@
     left: "0",
     right: "0",
     whiteSpace: "pre",
+    tabSize: String(TAB_SIZE),
     height: "20px",
     lineHeight: "20px",
   });
@@ -461,10 +559,15 @@
     color: "ink.black",
     cursor: "text",
     outline: "none",
+    // Keep the scrollbar's space reserved so it appearing cannot change the row width and
+    // with it the wrapping that decided whether it appears.
+    scrollbarGutter: "stable",
   })}
+  style:overflow-x={wrapper.wraps ? "hidden" : null}
   onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
   onmousedown={handleMousedown}
   bind:clientHeight={viewportHeight}
+  bind:clientWidth={viewportWidth}
   data-testid="editor-surface"
 >
   <!-- Size the scroll area for the whole document, including virtualized lines. Keep this element unpadded because its children are absolutely positioned. Apply text padding to lines and caret or selection coordinates instead. -->
@@ -491,23 +594,31 @@
       ></div>
     {/each}
 
-    <!-- Draw only the windowed lines, each absolutely positioned by line number. -->
-    {#each lines as line (line.lineNumber)}
+    <!-- Measures the font's cell width for wrapping. Never visible. -->
+    <span
+      bind:this={probeEl}
+      class={css({ position: "absolute", visibility: "hidden", whiteSpace: "pre" })}
+      aria-hidden="true">{PROBE}</span
+    >
+
+    <!-- Draw only the windowed rows, each absolutely positioned by row number. A wrapped line
+         draws one element per row, all carrying its line number. -->
+    {#each rows as row (row.key)}
       <div
-        use:lineEl={line.lineNumber}
         class={lineClass}
-        data-line={line.lineNumber}
-        style:top={`${line.lineNumber * LINE_HEIGHT + PAD_Y}px`}
+        data-line={row.line}
+        data-row-index={row.index}
+        style:top={`${row.row * LINE_HEIGHT + PAD_Y}px`}
         style:padding-left={`${PAD_X}px`}
         style:padding-right={`${PAD_X}px`}
         style:z-index="1"
-      >{#if composing && preedit && line.lineNumber === caret.line}{line.content.slice(
+      >{#if composing && preedit && row.line === caret.line && row.index === caretRowIndex}{row.text.slice(
             0,
-            caret.column,
+            caret.column - row.start,
           )}<span
             class={css({ textDecoration: "underline", textUnderlineOffset: "2px" })}
             data-preedit>{preedit}</span
-          >{line.content.slice(caret.column)}{:else}{line.content}{/if}</div>
+          >{row.text.slice(caret.column - row.start)}{:else}{row.text}{/if}</div>
     {/each}
 
     <!-- The cursor is a sibling of the text, never spliced into it, so drawing it cannot move

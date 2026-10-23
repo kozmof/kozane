@@ -235,6 +235,9 @@ Click a text file to open the editor. Files must be valid UTF-8 and at most 1 MB
 | Close        | `Esc`, Close, or click outside                          |
 | Resize panel | Drag its left edge, or focus the edge and use `←` / `→` |
 
+Long lines wrap to the panel width, breaking after a space where one fits, and
+rewrap when the panel is resized. `↑` and `↓` move by wrapped row, not by line.
+
 A dot beside the path marks unsaved changes. Leaving the page, or closing the
 editor with auto save off, asks before discarding them. Closing the editor
 ends its undo history.
