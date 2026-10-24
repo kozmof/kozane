@@ -58,6 +58,12 @@ export class EditorSession {
   #opens = 0;
 
   /**
+   * Counts calls to {@link open}, so a request still waiting on {@link leaveGuard} can tell
+   * a newer one came in. The newest request wins, as the file clicked last should.
+   */
+  #requests = 0;
+
+  /**
    * Asked before opening another file over unsaved changes, so the panel can save or confirm
    * first. Resolves false to stay on the current file. Without one, the changes are dropped.
    */
@@ -75,10 +81,12 @@ export class EditorSession {
    * Open `ref` and dispose the previous document to release its scheduler.
    */
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
+    const request = ++this.#requests;
     // Reopening the same file is a reload, which discards edits on purpose.
     if (this.dirty && this.leaveGuard && this.file && fileKey(this.file) !== fileKey(ref)) {
       const asking = this.#opens;
-      if (!(await this.leaveGuard()) || this.#opens !== asking) return;
+      if (!(await this.leaveGuard())) return;
+      if (this.#opens !== asking || this.#requests !== request) return;
     }
 
     const pending = this.#inFlight.get(fileKey(ref));
@@ -130,6 +138,10 @@ export class EditorSession {
     await this.open(ctx, ref);
   }
 
+  /**
+   * Write the open document. Resolves true when the server took the content, even if the
+   * file was closed or replaced meanwhile, and false when nothing was written.
+   */
   save(ctx: EditorSessionContext): Promise<boolean> {
     const ref = this.file;
     const doc = this.doc;
@@ -172,7 +184,7 @@ export class EditorSession {
       const body = await res.json();
       // The file was closed or another opened while this save ran. Its state is no longer
       // the session's, so leave the new file's signature, errors, and saving flag alone.
-      if (this.doc !== doc) return false;
+      if (this.doc !== doc) return true;
       this.#signature = body?.signature ?? null;
       doc.markSaved(content);
       return true;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import { beforeNavigate } from "$app/navigation";
+  import { beforeNavigate, goto } from "$app/navigation";
   import EditorSurface, { type EditorMode } from "./EditorSurface.svelte";
   import type {
     EditorSession,
@@ -143,39 +143,43 @@
   }
 
   async function saveThenClose(): Promise<void> {
-    const saved = await savePending();
-    if (saved === null) return;
-    if (saved) close();
-    else confirmingClose = true;
+    const outcome = await savePending();
+    if (outcome === "saved") close();
+    else if (outcome === "unsaved") confirmingClose = true;
   }
 
   /**
-   * Save pending edits before leaving the file. True when nothing is left unsaved, or null
-   * when the file was replaced or closed meanwhile, which leaves it alone.
+   * How {@link savePending} ended: nothing left unsaved, edits still unsaved, or the file
+   * replaced or closed meanwhile, which leaves it alone.
    */
-  async function savePending(): Promise<boolean | null> {
+  type PendingSave = "saved" | "unsaved" | "replaced";
+
+  /** Save pending edits before leaving the file. */
+  async function savePending(): Promise<PendingSave> {
     const file = session.file;
     // An auto save may already be writing. Wait for it, then save whatever it did not cover.
     // After a conflict, saving again is refused too, so report it unsaved straight away.
     await session.settled();
-    if (session.file !== file) return null;
+    if (session.file !== file) return "replaced";
     if (session.dirty && !session.conflict) await session.save(ctx);
-    if (session.file !== file) return null;
-    return !session.dirty;
+    if (session.file !== file) return "replaced";
+    return session.dirty ? "unsaved" : "saved";
   }
 
   // Opening another file, as a pinned panel allows from the board, would drop unsaved edits.
   // Auto save writes them first and asks only when that fails. Otherwise ask.
   $effect(() => {
-    session.leaveGuard = async () => {
+    const guard = async (): Promise<boolean> => {
       if (autoSaving) {
-        const saved = await savePending();
-        if (saved !== false) return saved === true;
+        const outcome = await savePending();
+        if (outcome !== "unsaved") return outcome === "saved";
       }
       return globalThis.confirm(UNSAVED_LEAVE_PROMPT);
     };
+    session.leaveGuard = guard;
     return () => {
-      session.leaveGuard = null;
+      // Another panel may have set its own guard since. Leave that one in place.
+      if (session.leaveGuard === guard) session.leaveGuard = null;
     };
   });
 
@@ -187,9 +191,33 @@
 
   // Guard navigation and tab closing while a file has unsaved changes. Register once and read
   // the current file state when invoked. Navigation needs an immediate confirmation result.
-  beforeNavigate((nav) =>
-    guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT)),
-  );
+  beforeNavigate((nav) => {
+    if (!session.dirty) return;
+    if (autoSaving) {
+      // Within the app, hold a link or `goto` until the edits are saved, then go. Back and
+      // forward and form posts cannot be replayed faithfully, so they ask as usual.
+      if ((nav.type === "link" || nav.type === "goto") && nav.to && !nav.willUnload) {
+        nav.cancel();
+        void saveThenGo(nav.to.url);
+        return;
+      }
+      // While the browser asks about closing the tab, send the edits, so staying keeps them.
+      if (nav.type === "leave" && !session.saving && !session.conflict) void session.save(ctx);
+    }
+    guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT));
+  });
+
+  /** Save pending edits, then follow the held navigation. Ask when the save fails. */
+  async function saveThenGo(url: URL): Promise<void> {
+    const outcome = await savePending();
+    if (outcome === "replaced") return;
+    if (outcome === "unsaved") {
+      if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
+      // Discard the edits as confirmed, so the guard lets the replayed navigation through.
+      close();
+    }
+    await goto(url);
+  }
 
   function onSurfaceKey(event: KeyboardEvent): boolean {
     if (!vimMode || !session.doc) return false;

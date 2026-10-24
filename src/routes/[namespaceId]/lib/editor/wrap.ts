@@ -72,6 +72,8 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
     // carried down may still not fit, so check again until it does or the row is empty.
     while (width + w > cols && index > rowStart) {
       if (breakAt > rowStart) {
+        // Subtracting is exact only because the word carried down holds no tab, whose
+        // width would change with its new position. Tabs are break points, so it cannot.
         rowStart = breakAt;
         width -= widthAtBreak;
       } else {

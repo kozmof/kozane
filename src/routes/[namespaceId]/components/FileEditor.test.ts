@@ -3,10 +3,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "../lib/editor/editor-session.svelte.js";
-import { beforeNavigate } from "$app/navigation";
+import { beforeNavigate, goto } from "$app/navigation";
 
 // Mock navigation registration so the test can invoke the guard without a router.
-vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn() }));
+vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn(), goto: vi.fn(async () => {}) }));
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
 
@@ -496,11 +496,18 @@ describe("FileEditor leaving the page", () => {
   function guard() {
     const registered = vi.mocked(beforeNavigate).mock.calls.at(-1)?.[0];
     if (!registered) throw new Error("no navigation guard was registered");
-    return registered as (nav: { type: string; cancel: () => void }) => void;
+    return registered as (nav: {
+      type: string;
+      cancel: () => void;
+      to: { url: URL } | null;
+      willUnload: boolean;
+    }) => void;
   }
 
+  const TO = new URL("http://localhost/elsewhere");
+
   function navigate(type: string) {
-    const nav = { type, cancel: vi.fn() };
+    const nav = { type, cancel: vi.fn(), to: { url: TO }, willUnload: type === "leave" };
     guard()(nav);
     return nav;
   }
@@ -547,6 +554,71 @@ describe("FileEditor leaving the page", () => {
     expect(session.file?.path).toBe(REF.path);
     expect(calls).toHaveLength(1);
     asked.mockRestore();
+  });
+
+  it("saves before following a link when auto save is on", async () => {
+    vi.mocked(goto).mockClear();
+    const { session, calls } = await mount(
+      [ok({ path: REF.path, content: "hello\n", signature: "sig-1" }), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    expect(navigate("link").cancel).toHaveBeenCalledOnce();
+    await waitFor(() => expect(goto).toHaveBeenCalledWith(TO));
+    expect(calls[1]).toMatchObject({ method: "PUT", body: { content: "xhello\n" } });
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it("asks before following a link when the auto save fails", async () => {
+    vi.mocked(goto).mockClear();
+    const { session } = await mount(
+      [
+        ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
+        new Response("{}", { status: 500 }),
+      ],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    navigate("link");
+    await waitFor(() => expect(asked).toHaveBeenCalledOnce());
+    expect(goto).not.toHaveBeenCalled();
+    expect(session.isOpen).toBe(true);
+  });
+
+  it("sends the edits while the browser asks about closing the tab", async () => {
+    const { session, calls } = await mount(
+      [ok({ path: REF.path, content: "hello\n", signature: "sig-1" }), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+
+    expect(navigate("leave").cancel).toHaveBeenCalledOnce();
+    await waitFor(() => expect(session.dirty).toBe(false));
+    expect(calls[1]).toMatchObject({ method: "PUT" });
+  });
+
+  it("leaves another panel's guard in place when it unmounts", async () => {
+    const session = new EditorSession();
+    const props = {
+      session,
+      ctx: { fetcher: vi.fn() as unknown as typeof fetch, namespaceId: "p-1" },
+      onClose: vi.fn(),
+    };
+    const first = render(FileEditor, { props });
+    const firstGuard = session.leaveGuard;
+    render(FileEditor, { props });
+    const secondGuard = session.leaveGuard;
+    expect(secondGuard).not.toBe(firstGuard);
+
+    first.unmount();
+    expect(session.leaveGuard).toBe(secondGuard);
   });
 
   it("cancels a closing tab so the browser puts its own question up", async () => {

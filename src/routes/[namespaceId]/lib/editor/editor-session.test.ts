@@ -225,12 +225,12 @@ describe("EditorSession", () => {
     }
 
     it.each([
-      ["succeeds", ok({ signature: "sig-stale" })],
-      ["conflicts", fail(409, "File changed on disk")],
-    ])("keeps the old save off the new file when it %s", async (_, response) => {
+      ["succeeds", ok({ signature: "sig-stale" }), true],
+      ["conflicts", fail(409, "File changed on disk"), false],
+    ])("keeps the old save off the new file when it %s", async (_, response, written) => {
       const { s, stale, ctx, answer, bodies } = await saveThenSwitch();
       await answer(0, response);
-      expect(await stale).toBe(false);
+      expect(await stale).toBe(written);
 
       expect(s.conflict).toBe(false);
       expect(s.error).toBeNull();
@@ -482,6 +482,31 @@ describe("EditorSession", () => {
       await s.open(ctx, { ...REF, path: "b.md" });
       expect(s.file?.path).toBe("b.md");
       expect(s.doc?.text()).toBe("bbb\n");
+    });
+
+    it("opens the file clicked last when two wait on the guard", async () => {
+      const { fetcher } = fetcherFor({
+        read: [
+          ok({ path: "a.md", content: "aaa\n", signature: "s1" }),
+          ok({ path: "c.md", content: "ccc\n", signature: "s3" }),
+        ],
+      });
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, { ...REF, path: "a.md" });
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      const answers: ((agreed: boolean) => void)[] = [];
+      s.leaveGuard = () => new Promise((resolve) => answers.push(resolve));
+
+      const toB = s.open(ctx, { ...REF, path: "b.md" });
+      const toC = s.open(ctx, { ...REF, path: "c.md" });
+      answers[0](true);
+      await toB;
+      expect(s.file?.path).toBe("a.md");
+      answers[1](true);
+      await toC;
+      expect(s.file?.path).toBe("c.md");
+      expect(s.doc?.text()).toBe("ccc\n");
     });
 
     it("does not ask when the same file is reloaded", async () => {
