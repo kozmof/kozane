@@ -70,19 +70,22 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
     let w = advance();
     // Wrap the word in progress at the last whitespace, or here when there is none. A word
     // carried down may still not fit, so check again until it does or the row is empty.
-    while (width + w > cols && index > rowStart) {
-      if (breakAt > rowStart) {
-        // Subtracting is exact only because the word carried down holds no tab, whose
-        // width would change with its new position. Tabs are break points, so it cannot.
-        rowStart = breakAt;
-        width -= widthAtBreak;
-      } else {
-        rowStart = index;
-        width = 0;
+    // Whitespace never wraps. It hangs past the row's end, so no row holds only spaces.
+    if (!space) {
+      while (width + w > cols && index > rowStart) {
+        if (breakAt > rowStart) {
+          // Subtracting is exact only because the word carried down holds no tab, whose
+          // width would change with its new position. Tabs are break points, so it cannot.
+          rowStart = breakAt;
+          width -= widthAtBreak;
+        } else {
+          rowStart = index;
+          width = 0;
+        }
+        starts.push(rowStart);
+        breakAt = -1;
+        w = advance();
       }
-      starts.push(rowStart);
-      breakAt = -1;
-      w = advance();
     }
     width += w;
     if (space) {

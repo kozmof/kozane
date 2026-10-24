@@ -38,6 +38,13 @@ describe("wrapLine", () => {
     expect(rows("hello brave new world", 12)).toEqual(["hello brave ", "new world"]);
   });
 
+  it("lets whitespace at a row's end hang rather than start a row", () => {
+    expect(rows("abcd efgh", 4)).toEqual(["abcd ", "efgh"]);
+    expect(rows("abcd   efgh", 4)).toEqual(["abcd   ", "efgh"]);
+    expect(rows("abcd\tefgh", 4)).toEqual(["abcd\t", "efgh"]);
+    expect(rows("abcd ", 4)).toEqual(["abcd "]);
+  });
+
   it("breaks inside a word wider than a row", () => {
     expect(rows("abcdefghij", 4)).toEqual(["abcd", "efgh", "ij"]);
   });
