@@ -45,8 +45,9 @@ export class WrapView {
     // A string, so Reed's background reconciliation, which replaces the state without an
     // edit, does not lay the document out again.
     const text = $derived(this.#wrapper.wraps ? doc().text() : "");
+    // A number for the same reason. Read inline, it would subscribe the layout to the state.
+    const lineCount = $derived(doc().lineCount);
     this.layout = $derived.by(() => {
-      const lineCount = doc().lineCount;
       if (!this.#wrapper.wraps) return WrapLayout.unwrapped(lineCount);
       const wrapped = this.#wrapper.layout(text);
       // Lines are split the way Reed splits them. Should they ever disagree, draw unwrapped

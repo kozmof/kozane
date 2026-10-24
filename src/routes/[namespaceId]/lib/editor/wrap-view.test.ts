@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EditorDocument } from "./document-store.svelte.js";
 import { WrapView } from "./wrap-view.svelte.js";
+import { LineWrapper } from "./wrap.js";
 
 /**
  * A view over `text` with 24 pixels of padding and a 10-cell minimum. By default the font has
@@ -56,6 +57,19 @@ describe("WrapView", () => {
     expect(wrap.layout.rowCount).toBe(1);
     doc.insert({ line: 0, column: 5 }, " and now much longer than a row");
     expect(wrap.layout.rowCount).toBe(2);
+  });
+
+  it("keeps its layout when Reed replaces the state without an edit", async () => {
+    const { doc, wrap } = view("hello brave world, how are you");
+    doc.insert({ line: 0, column: 5 }, "\nand a new line that is long enough to wrap");
+    const before = wrap.layout;
+    const state = doc.state;
+    const layout = vi.spyOn(LineWrapper.prototype, "layout");
+
+    // The line break leaves Reed's line index to reconcile in the background.
+    await vi.waitFor(() => expect(doc.state).not.toBe(state));
+    expect(wrap.layout).toBe(before);
+    expect(layout).not.toHaveBeenCalled();
   });
 
   it("counts cells to a pixel offset, and none before the font is measured", () => {
