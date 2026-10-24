@@ -447,6 +447,62 @@ describe("EditorSession", () => {
     });
   });
 
+  describe("opening another file over unsaved changes", () => {
+    const twoFiles = () =>
+      fetcherFor({
+        read: [
+          ok({ path: "a.md", content: "aaa\n", signature: "s1" }),
+          ok({ path: "b.md", content: "bbb\n", signature: "s2" }),
+        ],
+      });
+
+    it("stays on the file when the guard declines", async () => {
+      const { fetcher, calls } = twoFiles();
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, { ...REF, path: "a.md" });
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      s.leaveGuard = vi.fn(async () => false);
+
+      await s.open(ctx, { ...REF, path: "b.md" });
+      expect(s.leaveGuard).toHaveBeenCalledOnce();
+      expect(s.file?.path).toBe("a.md");
+      expect(s.doc?.text()).toBe("xaaa\n");
+      expect(calls).toHaveLength(1);
+    });
+
+    it("opens the other file when the guard agrees", async () => {
+      const { fetcher } = twoFiles();
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, { ...REF, path: "a.md" });
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      s.leaveGuard = async () => true;
+
+      await s.open(ctx, { ...REF, path: "b.md" });
+      expect(s.file?.path).toBe("b.md");
+      expect(s.doc?.text()).toBe("bbb\n");
+    });
+
+    it("does not ask when the same file is reloaded", async () => {
+      const { fetcher } = fetcherFor({
+        read: [
+          ok({ path: REF.path, content: "a\n", signature: "s1" }),
+          ok({ path: REF.path, content: "b\n", signature: "s2" }),
+        ],
+      });
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      s.leaveGuard = vi.fn(async () => false);
+
+      await s.reload(ctx);
+      expect(s.leaveGuard).not.toHaveBeenCalled();
+      expect(s.doc?.text()).toBe("b\n");
+    });
+  });
+
   it("puts the caret back at the start for each file opened", async () => {
     const { fetcher } = fetcherFor({
       read: [

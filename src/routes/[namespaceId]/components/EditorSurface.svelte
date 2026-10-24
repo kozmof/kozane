@@ -188,7 +188,6 @@
       ? selectionRects(selection.start, selection.end, {
           lineHeight: LINE_HEIGHT,
           measure,
-          lineLength: (line) => doc.lineText(line).length,
           mountedLines: lines.map((line) => line.lineNumber),
           layout,
           shownRows,
@@ -257,14 +256,14 @@
    * where the last vertical move put it, so passing through a short row does not pull later
    * rows toward its end. Any other move drops it.
    */
-  let goal: { caret: Caret; x: number } | null = null;
+  let goal: { caret: Caret; x: number; offset: number } | null = null;
 
   /**
    * The caret `by` rows above or below the caret, as near `x` as the target row allows. A row
    * out of view cannot be measured, so count cells to `x` instead, or, before the font is
-   * measured, keep the caret's offset into its row.
+   * measured, aim for `offset` columns into the row.
    */
-  function caretRowsAway(by: number, x: number): Caret {
+  function caretRowsAway(by: number, x: number, offset: number): Caret {
     const here = layout.rowOf(caret.line, caret.column);
     const { line, index } = layout.rowAt(here + by);
     if (wrap.wraps && rowElement(line, index))
@@ -276,8 +275,7 @@
       const lineText = doc.lineText(line);
       column = columnAtCell(lineText, start, end ?? lineText.length, wrap.cellsAt(x), TAB_SIZE);
     } else {
-      const from = layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
-      column = start + caret.column - from;
+      column = start + offset;
     }
     // A wrapped row's last column is drawn on the next row, so stop before it. Clamping snaps
     // back to the start of the character.
@@ -285,9 +283,13 @@
   }
 
   function moveByRows(by: number, extend: boolean): void {
-    const x = goal && sameCaret(goal.caret, caret) ? goal.x : caretXY.x;
-    moveTo(caretRowsAway(by, x), extend);
-    goal = { caret, x };
+    const kept = goal && sameCaret(goal.caret, caret) ? goal : null;
+    const x = kept ? kept.x : caretXY.x;
+    const offset = kept
+      ? kept.offset
+      : caret.column - layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
+    moveTo(caretRowsAway(by, x, offset), extend);
+    goal = { caret, x, offset };
   }
 
   function handleKeydown(event: KeyboardEvent): void {
@@ -504,7 +506,6 @@
       event.clientX - box.left - PAD_X,
       event.clientY - box.top - PAD_Y,
       LINE_HEIGHT,
-      doc.lineCount,
       measure,
       layout,
     );

@@ -57,6 +57,12 @@ export class EditorSession {
   /** Counts opens and closes, so an open that waited can tell a later one replaced it. */
   #opens = 0;
 
+  /**
+   * Asked before opening another file over unsaved changes, so the panel can save or confirm
+   * first. Resolves false to stay on the current file. Without one, the changes are dropped.
+   */
+  leaveGuard: (() => Promise<boolean>) | null = null;
+
   get isOpen(): boolean {
     return this.file !== null;
   }
@@ -69,6 +75,12 @@ export class EditorSession {
    * Open `ref` and dispose the previous document to release its scheduler.
    */
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
+    // Reopening the same file is a reload, which discards edits on purpose.
+    if (this.dirty && this.leaveGuard && this.file && fileKey(this.file) !== fileKey(ref)) {
+      const asking = this.#opens;
+      if (!(await this.leaveGuard()) || this.#opens !== asking) return;
+    }
+
     const pending = this.#inFlight.get(fileKey(ref));
     this.#reset();
     this.file = ref;

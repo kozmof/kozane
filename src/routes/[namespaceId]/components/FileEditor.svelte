@@ -143,17 +143,41 @@
   }
 
   async function saveThenClose(): Promise<void> {
+    const saved = await savePending();
+    if (saved === null) return;
+    if (saved) close();
+    else confirmingClose = true;
+  }
+
+  /**
+   * Save pending edits before leaving the file. True when nothing is left unsaved, or null
+   * when the file was replaced or closed meanwhile, which leaves it alone.
+   */
+  async function savePending(): Promise<boolean | null> {
     const file = session.file;
     // An auto save may already be writing. Wait for it, then save whatever it did not cover.
-    // After a conflict, saving again is refused too, so ask straight away.
+    // After a conflict, saving again is refused too, so report it unsaved straight away.
     await session.settled();
-    // Leave a file that was replaced or closed while saving alone.
-    if (session.file !== file) return;
+    if (session.file !== file) return null;
     if (session.dirty && !session.conflict) await session.save(ctx);
-    if (session.file !== file) return;
-    if (session.dirty) confirmingClose = true;
-    else close();
+    if (session.file !== file) return null;
+    return !session.dirty;
   }
+
+  // Opening another file, as a pinned panel allows from the board, would drop unsaved edits.
+  // Auto save writes them first and asks only when that fails. Otherwise ask.
+  $effect(() => {
+    session.leaveGuard = async () => {
+      if (autoSaving) {
+        const saved = await savePending();
+        if (saved !== false) return saved === true;
+      }
+      return globalThis.confirm(UNSAVED_LEAVE_PROMPT);
+    };
+    return () => {
+      session.leaveGuard = null;
+    };
+  });
 
   function close(): void {
     confirmingClose = false;

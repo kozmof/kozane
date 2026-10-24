@@ -33,7 +33,8 @@ const ZERO_WIDTH = /^[\u200b-\u200f\u2028-\u202e\u2060-\u2064\ufeff]+$/;
 
 /** Cells one grapheme cluster takes in a monospace font. Tabs are handled by the caller. */
 export function cellWidth(grapheme: string): number {
-  if (grapheme.charCodeAt(0) < 0x7f) return 1;
+  // A cluster led by ASCII can still draw as an emoji, as a keycap like "1️⃣" does.
+  if (grapheme.length === 1 && grapheme.charCodeAt(0) < 0x7f) return 1;
   if (WIDE.test(grapheme) || EMOJI.test(grapheme)) return 2;
   if (ZERO_WIDTH.test(grapheme)) return 0;
   return 1;

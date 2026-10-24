@@ -433,9 +433,12 @@ describe("FileEditor closing", () => {
     const { session, ctx } = await dirty();
     await userEvent.keyboard("{Escape}");
     await screen.findByText("This file has unsaved changes.");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(true);
 
     await session.open(ctx, { ...REF, path: "other.md" });
+    expect(asked).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.queryByText("This file has unsaved changes.")).toBeNull());
+    asked.mockRestore();
   });
 });
 
@@ -531,6 +534,19 @@ describe("FileEditor leaving the page", () => {
     vi.spyOn(globalThis, "confirm").mockReturnValue(true);
 
     expect(navigate("link").cancel).not.toHaveBeenCalled();
+  });
+
+  it("asks before another file opens over unsaved edits when auto save is off", async () => {
+    const { session, ctx, calls } = await mount();
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    await session.open(ctx, { ...REF, path: "other.md" });
+    expect(asked).toHaveBeenCalledOnce();
+    expect(session.file?.path).toBe(REF.path);
+    expect(calls).toHaveLength(1);
+    asked.mockRestore();
   });
 
   it("cancels a closing tab so the browser puts its own question up", async () => {
@@ -682,6 +698,39 @@ describe("FileEditor auto save", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(calls).toHaveLength(4);
     expect(calls[3]).toMatchObject({ method: "PUT", body: { content: "xhello\n" } });
+  });
+
+  it("saves before another file opens over unsaved edits", async () => {
+    const other = { ...REF, path: "other.md" };
+    const { session, ctx, calls } = await mount(
+      [
+        loaded(),
+        ok({ signature: "sig-2" }),
+        ok({ path: other.path, content: "o\n", signature: "s" }),
+      ],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+
+    await session.open(ctx, other);
+    expect(calls[1]).toMatchObject({ method: "PUT", body: { content: "xhello\n" } });
+    expect(session.file?.path).toBe("other.md");
+  });
+
+  it("stays on the file when its save fails and opening another is declined", async () => {
+    const { session, ctx } = await mount([loaded(), new Response("{}", { status: 500 })], {
+      autoSave: true,
+    });
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    await session.open(ctx, { ...REF, path: "other.md" });
+    expect(asked).toHaveBeenCalledOnce();
+    expect(session.file?.path).toBe(REF.path);
+    expect(session.error).toBe("Failed to save file");
+    asked.mockRestore();
   });
 
   it("asks before closing when the save on close fails", async () => {

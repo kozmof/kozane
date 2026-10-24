@@ -16,6 +16,10 @@ describe("cellWidth", () => {
     for (const wide of ["あ", "漢", "한", "Ａ", "😀", "👩🏽‍💻"]) expect(cellWidth(wide)).toBe(2);
   });
 
+  it("counts a keycap emoji led by an ASCII digit as two cells", () => {
+    expect(cellWidth("1\ufe0f\u20e3")).toBe(2);
+  });
+
   it("counts a letter with a combining mark as one cell", () => {
     expect(cellWidth("é")).toBe(1);
   });

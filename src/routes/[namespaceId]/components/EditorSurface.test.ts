@@ -133,6 +133,13 @@ describe("EditorSurface", () => {
     expect(doc.text()).toBe("abXc\n");
   });
 
+  it("keeps its column through a shorter line before wrapping is measured", async () => {
+    const { doc, sink } = mount("aaaaaaaa\nab\naaaaaaaa", { caret: { line: 0, column: 6 } });
+    sink.focus();
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}X");
+    expect(doc.lineText(2)).toBe("aaaaaaXaa");
+  });
+
   it("walks the arrow keys over an emoji rather than into the middle of it", async () => {
     // The character occupies two UTF-16 columns. A caret between them would map inside
     // a UTF-8 code point, where Reed rejects edits.

@@ -75,41 +75,41 @@ describe("caretPoint", () => {
 
 describe("pointToCaret", () => {
   const measure = fixedMeasurer(["hello", "あい", ""]);
+  const unwrapped = WrapLayout.unwrapped(3);
 
   it("divides y by the line height to find the line", () => {
-    expect(pointToCaret(0, 25, 20, 3, measure).line).toBe(1);
+    expect(pointToCaret(0, 25, 20, measure, unwrapped).line).toBe(1);
   });
 
   it("clamps to the last line below the end of the document", () => {
-    expect(pointToCaret(0, 9999, 20, 3, measure).line).toBe(2);
+    expect(pointToCaret(0, 9999, 20, measure, unwrapped).line).toBe(2);
   });
 
   it("clamps to the first line above the start", () => {
-    expect(pointToCaret(0, -50, 20, 3, measure).line).toBe(0);
+    expect(pointToCaret(0, -50, 20, measure, unwrapped).line).toBe(0);
   });
 
   it("puts the caret after a character clicked on its right half", () => {
-    expect(pointToCaret(4, 0, 20, 3, measure).column).toBe(0);
-    expect(pointToCaret(6, 0, 20, 3, measure).column).toBe(1);
+    expect(pointToCaret(4, 0, 20, measure, unwrapped).column).toBe(0);
+    expect(pointToCaret(6, 0, 20, measure, unwrapped).column).toBe(1);
   });
 
   it("lands on the right column in a line of double-width cells", () => {
     // The two characters occupy horizontal ranges 0–20 and 20–40.
-    expect(pointToCaret(5, 25, 20, 3, measure).column).toBe(0);
-    expect(pointToCaret(25, 25, 20, 3, measure).column).toBe(1);
-    expect(pointToCaret(38, 25, 20, 3, measure).column).toBe(2);
+    expect(pointToCaret(5, 25, 20, measure, unwrapped).column).toBe(0);
+    expect(pointToCaret(25, 25, 20, measure, unwrapped).column).toBe(1);
+    expect(pointToCaret(38, 25, 20, measure, unwrapped).column).toBe(2);
   });
 
   it("clamps past the end of a line to its last column", () => {
-    expect(pointToCaret(9999, 0, 20, 3, measure).column).toBe(5);
+    expect(pointToCaret(9999, 0, 20, measure, unwrapped).column).toBe(5);
   });
 });
 
 describe("selectionRects", () => {
   const lines = ["hello", "world", "again", "here"];
   const measure = fixedMeasurer(lines);
-  const lineLength = (line: number) => (lines[line] ?? "").length;
-  const geometry = { lineHeight: 20, measure, lineLength };
+  const geometry = { lineHeight: 20, measure };
 
   it("clips a million-line selection to the mounted viewport", () => {
     const rects = selectionRects(
@@ -181,7 +181,6 @@ describe("selectionRects", () => {
  * fits. Each cell is 10 pixels, measured from the start of the row drawing the column.
  */
 describe("wrapped rows", () => {
-  const lines = ["hello brave world", "again"];
   const layout = WrapLayout.of([[0, 6, 12], [0]]);
   const rowStart = (line: number, column: number) =>
     layout.rowStarts(line)[layout.rowIndex(line, column)];
@@ -189,12 +188,11 @@ describe("wrapped rows", () => {
     columnToX: (line, column) => (column - rowStart(line, column)) * 10,
     xToColumn: (line, x, index = 0) => layout.rowStarts(line)[index] + Math.round(x / 10),
   };
-  const lineLength = (line: number) => (lines[line] ?? "").length;
   const select = (start: [number, number], end: [number, number], shown?: [number, number]) =>
     selectionRects(
       { line: start[0], column: start[1] },
       { line: end[0], column: end[1] },
-      { lineHeight: 20, measure, lineLength, mountedLines: [0, 1], layout, shownRows: shown },
+      { lineHeight: 20, measure, mountedLines: [0, 1], layout, shownRows: shown },
     );
 
   it("puts the caret on the row drawing its column", () => {
@@ -208,9 +206,9 @@ describe("wrapped rows", () => {
   });
 
   it("resolves a click to the row under it", () => {
-    expect(pointToCaret(20, 25, 20, 2, measure, layout)).toEqual({ line: 0, column: 8 });
-    expect(pointToCaret(0, 45, 20, 2, measure, layout)).toEqual({ line: 0, column: 12 });
-    expect(pointToCaret(10, 65, 20, 2, measure, layout)).toEqual({ line: 1, column: 1 });
+    expect(pointToCaret(20, 25, 20, measure, layout)).toEqual({ line: 0, column: 8 });
+    expect(pointToCaret(0, 45, 20, measure, layout)).toEqual({ line: 0, column: 12 });
+    expect(pointToCaret(10, 65, 20, measure, layout)).toEqual({ line: 1, column: 1 });
   });
 
   it("runs a selection to the edge on rows it continues past", () => {

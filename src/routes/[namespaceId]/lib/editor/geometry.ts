@@ -56,9 +56,8 @@ export function pointToCaret(
   x: number,
   y: number,
   lineHeight: number,
-  lineCount: number,
   measure: LineMeasurer,
-  layout: WrapLayout = WrapLayout.unwrapped(lineCount),
+  layout: WrapLayout,
 ): Caret {
   const { line, index } = layout.rowAt(Math.floor(y / lineHeight));
   return { line, column: measure.xToColumn(line, Math.max(0, x), index) };
@@ -76,7 +75,6 @@ export type SelectionRect = {
 export type SelectionGeometry = {
   lineHeight: number;
   measure: LineMeasurer;
-  lineLength: (line: number) => number;
   /** Lines in the DOM. When given, rectangles are drawn for these lines only. */
   mountedLines?: readonly number[];
   /** Visual rows. Needs `mountedLines`, and draws one rectangle per selected row. */
@@ -92,7 +90,7 @@ export type SelectionGeometry = {
 export function selectionRects(
   start: Caret,
   end: Caret,
-  { lineHeight, measure, lineLength, mountedLines, layout, shownRows }: SelectionGeometry,
+  { lineHeight, measure, mountedLines, layout, shownRows }: SelectionGeometry,
 ): SelectionRect[] {
   if (start.line === end.line && start.column === end.column) return [];
 
@@ -156,8 +154,7 @@ export function selectionRects(
   // newline is included.
   push(start.line, start.column, null);
   for (let line = start.line + 1; line < end.line; line++) push(line, 0, null);
-  if (end.column > 0) push(end.line, 0, end.column);
-  else if (lineLength(end.line) >= 0) push(end.line, 0, 0);
+  push(end.line, 0, end.column);
 
   return rects;
 }
