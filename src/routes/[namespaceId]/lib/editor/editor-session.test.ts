@@ -836,5 +836,19 @@ describe("EditorSession", () => {
       await answer(0, ok({ signature: "sig-2" }));
       expect(await flushing).toBe("replaced");
     });
+
+    it("reports a file reloaded while its save runs as replaced", async () => {
+      const { ctx, answer } = heldSaves();
+      const s = new EditorSession();
+      await s.open(ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+
+      const flushing = s.flush(ctx);
+      await vi.waitFor(() => expect(s.saving).toBe(true));
+      const reloading = s.reload(ctx);
+      await answer(0, ok({ signature: "sig-2" }));
+      await reloading;
+      expect(await flushing).toBe("replaced");
+    });
   });
 });

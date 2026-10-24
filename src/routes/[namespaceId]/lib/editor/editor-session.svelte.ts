@@ -243,11 +243,13 @@ export class EditorSession {
    * straight away.
    */
   async flush(ctx: EditorSessionContext): Promise<FlushOutcome> {
-    const file = this.file;
+    // Watch the open rather than the file, so a reload of the same file counts as replacing
+    // it too.
+    const leaving = this.#generation.signal;
     await this.settled();
-    if (this.file !== file) return "replaced";
+    if (leaving.aborted) return "replaced";
     if (this.dirty && !this.conflict) await this.save(ctx);
-    if (this.file !== file) return "replaced";
+    if (leaving.aborted) return "replaced";
     return this.dirty ? "unsaved" : "saved";
   }
 

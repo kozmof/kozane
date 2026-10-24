@@ -309,57 +309,57 @@ describe("domMeasurer", () => {
   it("puts a click at the very start of the text on column 0", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    expect(measure.xToColumn(0, 0)).toBe(0);
-    expect(measure.xToColumn(0, 1)).toBe(0);
+    expect(measure.xToColumn(0, 0, 0)).toBe(0);
+    expect(measure.xToColumn(0, 1, 0)).toBe(0);
   });
 
   it("round-trips a column through x and back", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
     for (const column of [0, 1, 2, 3, 4, 5]) {
-      expect(measure.xToColumn(0, measure.columnToX(0, column))).toBe(column);
+      expect(measure.xToColumn(0, measure.columnToX(0, column), 0)).toBe(column);
     }
   });
 
   it("puts a click at the end of the text on the last column, not past it", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    expect(measure.xToColumn(0, CELL * 5)).toBe(5);
+    expect(measure.xToColumn(0, CELL * 5, 0)).toBe(5);
   });
 
   it("finds the column a point falls in", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    expect(measure.xToColumn(0, 0)).toBe(0);
-    expect(measure.xToColumn(0, CELL * 3)).toBe(3);
+    expect(measure.xToColumn(0, 0, 0)).toBe(0);
+    expect(measure.xToColumn(0, CELL * 3, 0)).toBe(3);
   });
 
   it("puts the caret after a character clicked on its right half", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    expect(measure.xToColumn(0, CELL * 2 + 1)).toBe(2);
-    expect(measure.xToColumn(0, CELL * 3 - 1)).toBe(3);
+    expect(measure.xToColumn(0, CELL * 2 + 1, 0)).toBe(2);
+    expect(measure.xToColumn(0, CELL * 3 - 1, 0)).toBe(3);
   });
 
   it("clamps past either end of the line", () => {
     const { el } = stubLayout("hello");
     const measure = domMeasurer(() => el);
-    expect(measure.xToColumn(0, -50)).toBe(0);
-    expect(measure.xToColumn(0, 9999)).toBe(5);
+    expect(measure.xToColumn(0, -50, 0)).toBe(0);
+    expect(measure.xToColumn(0, 9999, 0)).toBe(5);
   });
 
   it("lands on the right column in a line of double-width cells", () => {
     const { el } = stubLayout("あいう");
     const measure = domMeasurer(() => el);
     expect(measure.columnToX(0, 1)).toBe(CELL * 2);
-    expect(measure.xToColumn(0, CELL * 2 + 1)).toBe(1);
-    expect(measure.xToColumn(0, CELL * 4 + 1)).toBe(2);
+    expect(measure.xToColumn(0, CELL * 2 + 1, 0)).toBe(1);
+    expect(measure.xToColumn(0, CELL * 4 + 1, 0)).toBe(2);
   });
 
   it("answers zero for a line that is not in the DOM", () => {
     const measure = domMeasurer(() => null);
     expect(measure.columnToX(0, 4)).toBe(0);
-    expect(measure.xToColumn(0, 40)).toBe(0);
+    expect(measure.xToColumn(0, 40, 0)).toBe(0);
   });
 
   it("measures a wrapped line within the row drawing the column", () => {
@@ -389,6 +389,6 @@ describe("domMeasurer", () => {
     document.body.append(el);
     const measure = domMeasurer(() => el);
     expect(measure.columnToX(0, 0)).toBe(0);
-    expect(measure.xToColumn(0, 40)).toBe(0);
+    expect(measure.xToColumn(0, 40, 0)).toBe(0);
   });
 });

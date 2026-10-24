@@ -13,7 +13,7 @@ export type LineMeasurer = {
    * other than the last stop before their final character, so a click past a wrapped row's
    * end leaves the caret on that row.
    */
-  xToColumn(line: number, x: number, index?: number): number;
+  xToColumn(line: number, x: number, index: number): number;
 };
 
 export type Viewport = {
@@ -168,7 +168,7 @@ export function domMeasurer(
       return widthTo(found.node, column - start);
     },
 
-    xToColumn(line, x, index = 0) {
+    xToColumn(line, x, index) {
       const rows = layout();
       const start = rows ? (rows.rowStarts(line)[index] ?? 0) : 0;
       const wrapped = rows ? rows.rowEnd(line, index) !== null : false;
