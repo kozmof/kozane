@@ -214,13 +214,26 @@
    * file is open now.
    */
   async function saveThenGo(url: URL): Promise<void> {
-    if ((await savePending()) === "unsaved") {
-      if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
-      // Discard the edits as confirmed, so the guard lets the replayed navigation through.
-      close();
+    // One save at a time. A link clicked while it runs replaces the destination, so the last
+    // one clicked is where the page goes, once.
+    const saving = heldNavigation !== null;
+    heldNavigation = url;
+    if (saving) return;
+    try {
+      if ((await savePending()) === "unsaved") {
+        if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
+        // Discard the edits as confirmed, so the guard lets the replayed navigation through.
+        close();
+      }
+      url = heldNavigation;
+    } finally {
+      heldNavigation = null;
     }
     await goto(url);
   }
+
+  /** Where a navigation held by {@link saveThenGo} goes, or null when none is held. */
+  let heldNavigation: URL | null = null;
 
   function onSurfaceKey(event: KeyboardEvent): boolean {
     if (!vimMode || !session.doc) return false;

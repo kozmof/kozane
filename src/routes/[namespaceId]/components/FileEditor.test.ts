@@ -572,6 +572,26 @@ describe("FileEditor leaving the page", () => {
     expect(asked).not.toHaveBeenCalled();
   });
 
+  it("saves once and follows only the last link clicked while the save runs", async () => {
+    vi.mocked(goto).mockClear();
+    const { session, calls } = await mount(
+      [ok({ path: REF.path, content: "hello\n", signature: "sig-1" }), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const LATER = new URL("http://localhost/later");
+
+    navigate("link");
+    const second = { type: "link", cancel: vi.fn(), to: { url: LATER }, willUnload: false };
+    guard()(second);
+    expect(second.cancel).toHaveBeenCalledOnce();
+
+    await waitFor(() => expect(goto).toHaveBeenCalledOnce());
+    expect(goto).toHaveBeenCalledWith(LATER);
+    expect(calls.filter((call) => call.method === "PUT")).toHaveLength(1);
+  });
+
   it("follows a held link when the file is closed before its save", async () => {
     vi.mocked(goto).mockClear();
     const { session } = await mount(undefined, { autoSave: true });
