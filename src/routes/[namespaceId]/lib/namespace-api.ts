@@ -1,4 +1,5 @@
 import { base } from "$app/paths";
+import { byteLength } from "$lib/byte-length.js";
 import type { CardPositionPatch } from "./namespace-page.js";
 import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types.js";
 import type { InventoryPlacement, TakenCard } from "$lib/inventory.js";
@@ -24,28 +25,34 @@ function jsonRequest(
   url: string,
   method: string,
   body?: unknown,
-  { keepalive = false }: { keepalive?: boolean } = {},
+  { keepalive = false }: SaveOptions = {},
 ): Promise<Response> {
   const json = body === undefined ? undefined : JSON.stringify(body);
   return fetcher(url, {
     method,
     ...(json !== undefined && { headers: { "Content-Type": "application/json" }, body: json }),
     // Browsers refuse a keepalive request over their body quota, so send a larger one as usual.
-    ...(keepalive &&
-      json !== undefined &&
-      byteLength(json) <= KEEPALIVE_MAX_BYTES && {
-        keepalive: true,
-      }),
+    ...(keepalive && json !== undefined && fitsKeepalive(json) && { keepalive: true }),
   });
 }
+
+/** Options for a request that may be sent as the page goes away. */
+export type SaveOptions = {
+  /** Let the request outlive the page, for a save sent as the tab closes. Small bodies only. */
+  keepalive?: boolean;
+};
 
 /** Kept under the 64 KiB that browsers allow keepalive request bodies in flight. */
 const KEEPALIVE_MAX_BYTES = 60 * 1024;
 
-const encoder = new TextEncoder();
-
-function byteLength(text: string): number {
-  return encoder.encode(text).length;
+/**
+ * Whether `json` is within {@link KEEPALIVE_MAX_BYTES}. A UTF-16 code unit is one to three
+ * UTF-8 bytes, so most bodies are decided by length alone without encoding them.
+ */
+function fitsKeepalive(json: string): boolean {
+  if (json.length > KEEPALIVE_MAX_BYTES) return false;
+  if (json.length * 3 <= KEEPALIVE_MAX_BYTES) return true;
+  return byteLength(json) <= KEEPALIVE_MAX_BYTES;
 }
 
 export function patchCardPositions(
@@ -496,7 +503,7 @@ export function saveTaskspaceFile(
   namespaceId: string,
   taskspaceId: string,
   file: { path: string; content: string; signature: string | null },
-  options: { keepalive?: boolean } = {},
+  options: SaveOptions = {},
 ): Promise<Response> {
   return jsonRequest(
     fetcher,

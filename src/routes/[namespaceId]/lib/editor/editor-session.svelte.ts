@@ -1,5 +1,10 @@
 import type { TaskspaceFileTree } from "$lib/types";
-import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../namespace-api.js";
+import {
+  failureMessage,
+  fetchTaskspaceFile,
+  type SaveOptions,
+  saveTaskspaceFile,
+} from "../namespace-api.js";
 import { findStaticNode } from "../taskspace-static.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
@@ -28,11 +33,6 @@ export type OpenFileRef = {
 
 /** See {@link EditorSession.leaveGuard}. */
 export type LeaveGuard = () => Promise<boolean>;
-
-export type SaveOptions = {
-  /** Let the request outlive the page, for a save sent as the tab closes. Small files only. */
-  keepalive?: boolean;
-};
 
 /**
  * Manage the open file's loading, saving, errors, and {@link EditorDocument} lifecycle.
@@ -199,9 +199,15 @@ export class EditorSession {
     return saving;
   }
 
-  /** Wait for the open file's save in flight to finish. Resolves at once when none is. */
+  /**
+   * Wait for the open file's saves in flight to finish, including one queued behind them by
+   * {@link save}, which starts only as the running one ends. Resolves at once when none is.
+   */
   async settled(): Promise<void> {
-    if (this.file) await this.#inFlight.get(fileKey(this.file));
+    if (!this.file) return;
+    const key = fileKey(this.file);
+    for (let running = this.#inFlight.get(key); running; running = this.#inFlight.get(key))
+      await running;
   }
 
   async #write(

@@ -1,4 +1,5 @@
 import { history, position, query, rendering, scan, store } from "@kozmof/reed";
+import { byteLength } from "$lib/byte-length.js";
 import { GraphemeCache } from "./graphemes.js";
 import type { ByteOffset, ContentChangeEvent, SelectionRange } from "@kozmof/reed";
 
@@ -317,10 +318,4 @@ export class EditorDocument {
     this.#store.dispatch(store.DocumentActions.redo());
     return this.selectionCaret();
   }
-}
-
-const encoder = new TextEncoder();
-
-function byteLength(text: string): number {
-  return encoder.encode(text).length;
 }

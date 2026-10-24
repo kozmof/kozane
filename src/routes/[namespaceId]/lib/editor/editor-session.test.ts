@@ -211,6 +211,26 @@ describe("EditorSession", () => {
     expect(s.dirty).toBe(false);
   });
 
+  it("lets a caller wait for a save queued behind the one in flight", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 1 }, "b");
+    void s.save(ctx);
+    s.doc!.insert({ line: 0, column: 2 }, "c");
+    void s.save(ctx);
+
+    let done = false;
+    void s.settled().then(() => (done = true));
+    await answer(0, ok({ signature: "sig-2" }));
+    await vi.waitFor(() => expect(bodies).toHaveLength(2));
+    expect(done).toBe(false);
+
+    await answer(1, ok({ signature: "sig-3" }));
+    await vi.waitFor(() => expect(done).toBe(true));
+    expect(s.dirty).toBe(false);
+  });
+
   it("writes edits made during a save once that save lands, when asked to save again", async () => {
     const { ctx, answer, bodies } = heldSaves();
     const s = new EditorSession();
@@ -429,6 +449,32 @@ describe("EditorSession", () => {
     s.doc!.insert({ line: 0, column: 0 }, "x");
     expect(await s.save(ctx, { keepalive: true })).toBe(true);
     expect(keepalive()).toBeUndefined();
+  });
+
+  it("counts keepalive's limit in bytes, not characters", async () => {
+    // 3 bytes per character in UTF-8: few enough characters to pass, too many bytes.
+    const wide = "あ".repeat(25 * 1024);
+    const { fetcher } = fetcherFor({
+      read: [
+        ok({ path: REF.path, content: wide, signature: "sig-1" }),
+        ok({ path: REF.path, content: "あ".repeat(1024), signature: "sig-2" }),
+      ],
+      write: [ok({ signature: "sig-3" }), ok({ signature: "sig-4" })],
+    });
+    const s = new EditorSession();
+    const ctx = { fetcher, namespaceId: "p-1" };
+    const keepalive = () =>
+      (vi.mocked(fetcher).mock.calls.at(-1)?.[1] as RequestInit | undefined)?.keepalive;
+
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    await s.save(ctx, { keepalive: true });
+    expect(keepalive()).toBeUndefined();
+
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    await s.save(ctx, { keepalive: true });
+    expect(keepalive()).toBe(true);
   });
 
   it("re-reads from disk on reload, discarding what was typed", async () => {
