@@ -231,6 +231,29 @@ describe("EditorSession", () => {
     expect(s.dirty).toBe(false);
   });
 
+  it("lets a caller that started waiting first wait for a save queued after it", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 1 }, "b");
+    void s.save(ctx);
+
+    let done = false;
+    void s.settled().then(() => (done = true));
+    s.doc!.insert({ line: 0, column: 2 }, "c");
+    void s.save(ctx);
+
+    await answer(0, ok({ signature: "sig-2" }));
+    await vi.waitFor(() => expect(bodies).toHaveLength(2));
+    // Let every pending continuation run, so a wait that ended early has shown it.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(done).toBe(false);
+
+    await answer(1, ok({ signature: "sig-3" }));
+    await vi.waitFor(() => expect(done).toBe(true));
+    expect(s.dirty).toBe(false);
+  });
+
   it("writes edits made during a save once that save lands, when asked to save again", async () => {
     const { ctx, answer, bodies } = heldSaves();
     const s = new EditorSession();
@@ -650,10 +673,10 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.setLeaveGuard(vi.fn(async () => false));
+      s.setSwitchGuard(vi.fn(async () => false));
 
       await s.open(ctx, { ...REF, path: "b.md" });
-      expect(s.leaveGuard).toHaveBeenCalledOnce();
+      expect(s.switchGuard).toHaveBeenCalledOnce();
       expect(s.file?.path).toBe("a.md");
       expect(s.doc?.text()).toBe("xaaa\n");
       expect(calls).toHaveLength(1);
@@ -665,7 +688,7 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.setLeaveGuard(async () => true);
+      s.setSwitchGuard(async () => true);
 
       await s.open(ctx, { ...REF, path: "b.md" });
       expect(s.file?.path).toBe("b.md");
@@ -684,7 +707,7 @@ describe("EditorSession", () => {
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       const answers: ((agreed: boolean) => void)[] = [];
-      s.setLeaveGuard(() => new Promise((resolve) => answers.push(resolve)));
+      s.setSwitchGuard(() => new Promise((resolve) => answers.push(resolve)));
 
       const toB = s.open(ctx, { ...REF, path: "b.md" });
       const toC = s.open(ctx, { ...REF, path: "c.md" });
@@ -703,7 +726,7 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.setLeaveGuard(async () => {
+      s.setSwitchGuard(async () => {
         s.close();
         return true;
       });
@@ -717,13 +740,13 @@ describe("EditorSession", () => {
       const s = new EditorSession();
       const first = async () => true;
       const second = async () => false;
-      const removeFirst = s.setLeaveGuard(first);
-      const removeSecond = s.setLeaveGuard(second);
+      const removeFirst = s.setSwitchGuard(first);
+      const removeSecond = s.setSwitchGuard(second);
 
       removeFirst();
-      expect(s.leaveGuard).toBe(second);
+      expect(s.switchGuard).toBe(second);
       removeSecond();
-      expect(s.leaveGuard).toBeNull();
+      expect(s.switchGuard).toBeNull();
     });
 
     it("does not ask when the same file is reloaded", async () => {
@@ -737,10 +760,10 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, REF);
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.setLeaveGuard(vi.fn(async () => false));
+      s.setSwitchGuard(vi.fn(async () => false));
 
       await s.reload(ctx);
-      expect(s.leaveGuard).not.toHaveBeenCalled();
+      expect(s.switchGuard).not.toHaveBeenCalled();
       expect(s.doc?.text()).toBe("b\n");
     });
   });
@@ -760,5 +783,58 @@ describe("EditorSession", () => {
     await s.open(ctx, { ...REF, path: "b.md" });
     expect(s.caret).toEqual({ line: 0, column: 0 });
     expect(s.anchor).toBeNull();
+  });
+
+  it("cancels a read that a later open or a close replaces", async () => {
+    const signals: AbortSignal[] = [];
+    const fetcher = vi.fn((_url: string, init?: RequestInit) => {
+      signals.push(init!.signal!);
+      return new Promise<Response>(() => undefined);
+    }) as unknown as typeof fetch;
+    const s = new EditorSession();
+    const ctx = { fetcher, namespaceId: "p-1" };
+
+    void s.open(ctx, { ...REF, path: "a.md" });
+    void s.open(ctx, { ...REF, path: "b.md" });
+    expect(signals.map((signal) => signal.aborted)).toEqual([true, false]);
+
+    s.close();
+    expect(signals[1].aborted).toBe(true);
+  });
+
+  describe("flush", () => {
+    it("saves pending edits and reports them saved", async () => {
+      const { s, ctx, calls } = session();
+      await s.open(ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+
+      expect(await s.flush(ctx)).toBe("saved");
+      expect(calls.filter((call) => call.method === "PUT")).toHaveLength(1);
+    });
+
+    it("reports a refused save unsaved, and does not save again after a conflict", async () => {
+      const { fetcher, calls } = fetcherFor({ write: [fail(409, "changed on disk")] });
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+
+      expect(await s.flush(ctx)).toBe("unsaved");
+      expect(await s.flush(ctx)).toBe("unsaved");
+      expect(calls.filter((call) => call.method === "PUT")).toHaveLength(1);
+    });
+
+    it("reports a file closed while its save runs as replaced", async () => {
+      const { ctx, answer } = heldSaves();
+      const s = new EditorSession();
+      await s.open(ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+
+      const flushing = s.flush(ctx);
+      await vi.waitFor(() => expect(s.saving).toBe(true));
+      s.close();
+      await answer(0, ok({ signature: "sig-2" }));
+      expect(await flushing).toBe("replaced");
+    });
   });
 });

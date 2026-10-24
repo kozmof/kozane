@@ -75,17 +75,20 @@ export type SelectionRect = {
 export type SelectionGeometry = {
   lineHeight: number;
   measure: LineMeasurer;
-  /** Lines in the DOM. When given, rectangles are drawn for these lines only. */
-  mountedLines?: readonly number[];
-  /** Visual rows. Needs `mountedLines`, and draws one rectangle per selected row. */
-  layout?: WrapLayout;
+  /**
+   * Lines in the DOM. Rectangles are drawn for these lines only, which keeps the overlay
+   * bounded by the viewport, select-all included.
+   */
+  mountedLines: readonly number[];
+  /** Visual rows. One rectangle is drawn per selected row. */
+  layout: WrapLayout;
   /** Rows drawn, as `[first, end)`, so one very long line cannot draw rows off screen. */
   shownRows?: readonly [number, number];
 };
 
 /**
- * Compute selection rectangles for the first-line tail, full middle lines, and last-line
- * head. Keep drawing independent of browser Selection state.
+ * Compute one selection rectangle per selected row that is drawn. Keep drawing independent
+ * of browser Selection state.
  */
 export function selectionRects(
   start: Caret,
@@ -95,67 +98,32 @@ export function selectionRects(
   if (start.line === end.line && start.column === end.column) return [];
 
   const rects: SelectionRect[] = [];
-  const push = (line: number, fromColumn: number, toColumn: number | null): void => {
-    const left = measure.columnToX(line, fromColumn);
-    rects.push({
-      top: (layout ? layout.rowOf(line, fromColumn) : line) * lineHeight,
-      left,
-      width: toColumn === null ? null : Math.max(0, measure.columnToX(line, toColumn) - left),
-      height: lineHeight,
-    });
-  };
-
-  if (mountedLines && layout) {
-    const [first, last] = shownRows ?? [0, layout.rowCount];
-    for (const line of mountedLines) {
-      if (line < start.line || line > end.line) continue;
-      const starts = layout.rowStarts(line);
-      const base = layout.firstRow(line);
-      for (let index = 0; index < starts.length; index++) {
-        if (base + index < first || base + index >= last) continue;
-        const rowStart = starts[index];
-        const rowEnd = layout.rowEnd(line, index);
-        // A selection starting at a wrap point starts on the next row.
-        if (line === start.line && rowEnd !== null && start.column >= rowEnd) continue;
-        // A selection ending at a wrap point covers none of the row it starts.
-        if (line === end.line && index > 0 && end.column <= rowStart) continue;
-        const from = line === start.line ? Math.max(start.column, rowStart) : rowStart;
-        // Run to the panel edge when the selection continues past this row, onto the next
-        // row of the line or through its newline.
-        const through = line < end.line || (rowEnd !== null && end.column >= rowEnd);
-        if (through) {
-          rects.push({
-            top: (base + index) * lineHeight,
-            left: measure.columnToX(line, from),
-            width: null,
-            height: lineHeight,
-          });
-        } else push(line, from, end.column);
-      }
+  const [first, last] = shownRows ?? [0, layout.rowCount];
+  for (const line of mountedLines) {
+    if (line < start.line || line > end.line) continue;
+    const starts = layout.rowStarts(line);
+    const base = layout.firstRow(line);
+    for (let index = 0; index < starts.length; index++) {
+      if (base + index < first || base + index >= last) continue;
+      const rowStart = starts[index];
+      const rowEnd = layout.rowEnd(line, index);
+      // A selection starting at a wrap point starts on the next row.
+      if (line === start.line && rowEnd !== null && start.column >= rowEnd) continue;
+      // A selection ending at a wrap point covers none of the row it starts.
+      if (line === end.line && index > 0 && end.column <= rowStart) continue;
+      const from = line === start.line ? Math.max(start.column, rowStart) : rowStart;
+      const left = measure.columnToX(line, from);
+      // Run to the panel edge when the selection continues past this row, onto the next row
+      // of the line or through its newline, so the highlight shows the newline is included.
+      const through = line < end.line || (rowEnd !== null && end.column >= rowEnd);
+      rects.push({
+        top: (base + index) * lineHeight,
+        left,
+        width: through ? null : Math.max(0, measure.columnToX(line, end.column) - left),
+        height: lineHeight,
+      });
     }
-    return rects;
   }
-
-  // Keep selection overlays bounded by the viewport, including select-all.
-  if (mountedLines) {
-    for (const line of mountedLines) {
-      if (line < start.line || line > end.line) continue;
-      push(line, line === start.line ? start.column : 0, line === end.line ? end.column : null);
-    }
-    return rects;
-  }
-
-  if (start.line === end.line) {
-    push(start.line, start.column, end.column);
-    return rects;
-  }
-
-  // Extend a selection through a newline to the panel edge so the highlight shows that the
-  // newline is included.
-  push(start.line, start.column, null);
-  for (let line = start.line + 1; line < end.line; line++) push(line, 0, null);
-  push(end.line, 0, end.column);
-
   return rects;
 }
 

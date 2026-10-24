@@ -121,15 +121,18 @@
    */
   let confirmingClose = $state(false);
 
+  /** Whether a save on close is running, so a second close request does not start another. */
+  let savingToClose = false;
+
+  /** Where a navigation held by {@link saveThenGo} goes, or null when none is held. */
+  let heldNavigation: URL | null = null;
+
   /** Request closing, prompting first when the file has unsaved changes. */
   function requestClose(): void {
     if (!session.dirty) close();
     else if (autoSaving) void saveAndClose();
     else confirmingClose = true;
   }
-
-  /** Whether a save on close is running, so a second close request does not start another. */
-  let savingToClose = false;
 
   /** Save pending edits before closing. Ask as usual when the save fails. */
   async function saveAndClose(): Promise<void> {
@@ -143,27 +146,9 @@
   }
 
   async function saveThenClose(): Promise<void> {
-    const outcome = await savePending();
+    const outcome = await session.flush(ctx);
     if (outcome === "saved") close();
     else if (outcome === "unsaved") confirmingClose = true;
-  }
-
-  /**
-   * How {@link savePending} ended: nothing left unsaved, edits still unsaved, or the file
-   * replaced or closed meanwhile, which leaves it alone.
-   */
-  type PendingSave = "saved" | "unsaved" | "replaced";
-
-  /** Save pending edits before leaving the file. */
-  async function savePending(): Promise<PendingSave> {
-    const file = session.file;
-    // An auto save may already be writing. Wait for it, then save whatever it did not cover.
-    // After a conflict, saving again is refused too, so report it unsaved straight away.
-    await session.settled();
-    if (session.file !== file) return "replaced";
-    if (session.dirty && !session.conflict) await session.save(ctx);
-    if (session.file !== file) return "replaced";
-    return session.dirty ? "unsaved" : "saved";
   }
 
   // Opening another file, as a pinned panel allows from the board, would drop unsaved edits.
@@ -173,11 +158,11 @@
       if (autoSaving) {
         // When the file was closed or replaced meanwhile, nothing here is left to lose. The
         // session decides whether the click still opens its file.
-        if ((await savePending()) !== "unsaved") return true;
+        if ((await session.flush(ctx)) !== "unsaved") return true;
       }
       return globalThis.confirm(UNSAVED_LEAVE_PROMPT);
     };
-    return session.setLeaveGuard(guard);
+    return session.setSwitchGuard(guard);
   });
 
   function close(): void {
@@ -198,19 +183,29 @@
         void saveThenGo(nav.to.url);
         return;
       }
-      // While the browser asks about closing the tab, send the edits, so staying keeps them.
-      // Keepalive lets a small file's save finish even when the user leaves. A larger one
-      // can still be cut off, which the prompt below warns about.
-      if (nav.type === "leave" && !session.saving && !session.conflict)
-        void session.save(ctx, { keepalive: true });
+      if (nav.type === "leave") saveOnUnload();
     }
     guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT));
   });
 
   /**
+   * Send the edits while the browser asks about closing the tab, so staying keeps them.
+   * Keepalive lets a small file's save finish even when the user leaves. A larger one can
+   * still be cut off, which the browser's prompt still warns about.
+   */
+  function saveOnUnload(): void {
+    if (session.saving || session.conflict) return;
+    void session.save(ctx, { keepalive: true });
+  }
+
+  /**
    * Save pending edits, then follow the held navigation. Ask when the save fails. When the
    * file was closed or replaced meanwhile, follow it anyway, and the guard looks at whatever
    * file is open now.
+   *
+   * SvelteKit does not pass a navigation's options to `beforeNavigate`, so the replay is a
+   * plain `goto`. A link or `goto` asking for `replaceState`, `noScroll`, or `keepFocus`
+   * would lose that here.
    */
   async function saveThenGo(url: URL): Promise<void> {
     // One save at a time. A link clicked while it runs replaces the destination, so the last
@@ -219,7 +214,7 @@
     heldNavigation = url;
     if (saving) return;
     try {
-      if ((await savePending()) === "unsaved") {
+      if ((await session.flush(ctx)) === "unsaved") {
         if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
         // Discard the edits as confirmed, so the guard lets the replayed navigation through.
         close();
@@ -230,9 +225,6 @@
     }
     await goto(url);
   }
-
-  /** Where a navigation held by {@link saveThenGo} goes, or null when none is held. */
-  let heldNavigation: URL | null = null;
 
   function onSurfaceKey(event: KeyboardEvent): boolean {
     if (!vimMode || !session.doc) return false;

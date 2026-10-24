@@ -43,6 +43,11 @@ export function cellWidth(grapheme: string): number {
   return 1;
 }
 
+/** Cells `segment` takes when drawn `width` cells into a row. A tab runs to the next stop. */
+function advanceAt(segment: string, width: number, tabSize: number): number {
+  return segment === "\t" ? tabSize - (width % tabSize) : cellWidth(segment);
+}
+
 function* segments(text: string): Generator<[index: number, segment: string]> {
   if (ASCII.test(text)) {
     for (let i = 0; i < text.length; i++) yield [i, text[i]];
@@ -84,8 +89,7 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
 
   for (const [index, segment] of segments(text)) {
     const space = isBreakSpace(segment);
-    const advance = () => (segment === "\t" ? tabSize - (width % tabSize) : cellWidth(segment));
-    let w = advance();
+    let w = advanceAt(segment, width, tabSize);
     // Wrap the word in progress at the last whitespace, or here when there is none. A word
     // carried down may still not fit, so check again until it does or the row is empty.
     // Whitespace never wraps. It hangs past the row's end, so no row holds only spaces.
@@ -102,7 +106,7 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
         }
         starts.push(rowStart);
         breakAt = -1;
-        w = advance();
+        w = advanceAt(segment, width, tabSize);
       }
     }
     width += w;
@@ -128,7 +132,7 @@ export function columnAtCell(
 ): number {
   let width = 0;
   for (const [index, segment] of segments(text.slice(from, to))) {
-    const w = segment === "\t" ? tabSize - (width % tabSize) : cellWidth(segment);
+    const w = advanceAt(segment, width, tabSize);
     if (width + w / 2 > cells) return from + index;
     width += w;
   }

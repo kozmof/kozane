@@ -645,13 +645,13 @@ describe("FileEditor leaving the page", () => {
       onClose: vi.fn(),
     };
     const first = render(FileEditor, { props });
-    const firstGuard = session.leaveGuard;
+    const firstGuard = session.switchGuard;
     render(FileEditor, { props });
-    const secondGuard = session.leaveGuard;
+    const secondGuard = session.switchGuard;
     expect(secondGuard).not.toBe(firstGuard);
 
     first.unmount();
-    expect(session.leaveGuard).toBe(secondGuard);
+    expect(session.switchGuard).toBe(secondGuard);
   });
 
   it("cancels a closing tab so the browser puts its own question up", async () => {

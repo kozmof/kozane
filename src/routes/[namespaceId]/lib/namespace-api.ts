@@ -25,7 +25,7 @@ function jsonRequest(
   url: string,
   method: string,
   body?: unknown,
-  { keepalive = false }: SaveOptions = {},
+  { keepalive = false }: RequestOptions = {},
 ): Promise<Response> {
   const json = body === undefined ? undefined : JSON.stringify(body);
   return fetcher(url, {
@@ -37,10 +37,13 @@ function jsonRequest(
 }
 
 /** Options for a request that may be sent as the page goes away. */
-export type SaveOptions = {
+export type RequestOptions = {
   /** Let the request outlive the page, for a save sent as the tab closes. Small bodies only. */
   keepalive?: boolean;
 };
+
+/** See {@link saveTaskspaceFile}. */
+export type SaveOptions = RequestOptions;
 
 /** Kept under the 64 KiB that browsers allow keepalive request bodies in flight. */
 const KEEPALIVE_MAX_BYTES = 60 * 1024;
@@ -489,9 +492,10 @@ export function fetchTaskspaceFile(
   namespaceId: string,
   taskspaceId: string,
   path: string,
+  signal?: AbortSignal,
 ): Promise<Response> {
   const query = `?path=${encodeURIComponent(path)}`;
-  return fetcher(apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file${query}`));
+  return fetcher(apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file${query}`), { signal });
 }
 
 /**

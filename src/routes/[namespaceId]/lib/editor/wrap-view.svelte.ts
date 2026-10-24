@@ -13,9 +13,9 @@ export class WrapView {
   viewportWidth = $state(0);
 
   /** Cells that fit on a row, or Infinity before the panel and font are measured. */
-  cols: number;
+  readonly cols: number;
   /** The rows the document is laid out in. One per line until wrapping is measured. */
-  layout: WrapLayout;
+  readonly layout: WrapLayout;
 
   #wrapper: LineWrapper;
   #warned = false;

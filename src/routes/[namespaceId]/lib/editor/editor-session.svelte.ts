@@ -31,8 +31,14 @@ export type OpenFileRef = {
   path: string;
 };
 
-/** See {@link EditorSession.leaveGuard}. */
-export type LeaveGuard = () => Promise<boolean>;
+/** See {@link EditorSession.switchGuard}. */
+export type SwitchGuard = () => Promise<boolean>;
+
+/**
+ * How {@link EditorSession.flush} ended: nothing left unsaved, edits still unsaved, or the
+ * file replaced or closed meanwhile, which leaves it alone.
+ */
+export type FlushOutcome = "saved" | "unsaved" | "replaced";
 
 /**
  * Manage the open file's loading, saving, errors, and {@link EditorDocument} lifecycle.
@@ -62,8 +68,11 @@ export class EditorSession {
    */
   #inFlight = new Map<string, Promise<boolean>>();
 
-  /** Counts opens and closes, so an open that waited can tell a later one replaced it. */
-  #opens = 0;
+  /**
+   * The current open. Every open or close aborts it and starts another, so work that waited
+   * can tell a later one replaced it, and a read still in flight is cancelled.
+   */
+  #generation = new AbortController();
 
   /**
    * Counts calls to {@link open}, so a request still waiting on {@link leaveGuard} can tell
@@ -71,24 +80,25 @@ export class EditorSession {
    */
   #requests = 0;
 
-  #leaveGuard: LeaveGuard | null = null;
+  #switchGuard: SwitchGuard | null = null;
 
   /**
    * Asked before opening another file over unsaved changes, so the panel can save or confirm
    * first. Resolves false to stay on the current file. Without one, the changes are dropped.
+   * Page navigation has its own guard, in `leave-guard.ts`.
    */
-  get leaveGuard(): LeaveGuard | null {
-    return this.#leaveGuard;
+  get switchGuard(): SwitchGuard | null {
+    return this.#switchGuard;
   }
 
   /**
-   * Install `guard` as {@link leaveGuard}. The returned function removes it, unless another
+   * Install `guard` as {@link switchGuard}. The returned function removes it, unless another
    * guard has been set since, which then stays in place.
    */
-  setLeaveGuard(guard: LeaveGuard): () => void {
-    this.#leaveGuard = guard;
+  setSwitchGuard(guard: SwitchGuard): () => void {
+    this.#switchGuard = guard;
     return () => {
-      if (this.#leaveGuard === guard) this.#leaveGuard = null;
+      if (this.#switchGuard === guard) this.#switchGuard = null;
     };
   }
 
@@ -106,26 +116,26 @@ export class EditorSession {
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
     const request = ++this.#requests;
     // Reopening the same file is a reload, which discards edits on purpose.
-    if (this.dirty && this.leaveGuard && this.file && fileKey(this.file) !== fileKey(ref)) {
-      const asking = this.#opens;
-      if (!(await this.leaveGuard())) return;
+    if (this.dirty && this.switchGuard && this.file && fileKey(this.file) !== fileKey(ref)) {
+      const asking = this.#generation.signal;
+      if (!(await this.switchGuard())) return;
       if (this.#requests !== request) return;
       // Another file opened meanwhile. A close, which the guard's own save can end in, leaves
       // nothing to replace, so the click still opens its file.
-      if (this.#opens !== asking && this.isOpen) return;
+      if (asking.aborted && this.isOpen) return;
     }
 
     const pending = this.#inFlight.get(fileKey(ref));
     this.#reset();
     this.file = ref;
-    const opening = this.#opens;
+    const opening = this.#generation.signal;
 
     // Reopening a file while its save runs would read what was on disk before that save, and
     // the next save would then be refused as a conflict. Let the save land first.
     if (pending) {
       this.loading = true;
       await pending;
-      if (this.#opens !== opening) return;
+      if (opening.aborted) return;
     }
 
     const staticTree = ctx.staticFiles?.[ref.taskspaceId];
@@ -140,11 +150,18 @@ export class EditorSession {
 
     this.loading = true;
 
-    // A file opened or closed while this one loads replaces it. Leave that one's document,
-    // errors, and loading flag alone, or a slow read would show its text under another path.
-    const current = () => this.#opens === opening;
+    // A file opened or closed while this one loads replaces it and cancels the read. Leave
+    // that one's document, errors, and loading flag alone, or a slow read would show its text
+    // under another path.
+    const current = () => !opening.aborted;
     try {
-      const res = await fetchTaskspaceFile(ctx.fetcher, ctx.namespaceId, ref.taskspaceId, ref.path);
+      const res = await fetchTaskspaceFile(
+        ctx.fetcher,
+        ctx.namespaceId,
+        ref.taskspaceId,
+        ref.path,
+        opening,
+      );
       if (!res.ok) {
         const message = await failureMessage(res, "Failed to open file");
         if (current()) this.error = message;
@@ -178,36 +195,60 @@ export class EditorSession {
     const ref = this.file;
     const doc = this.doc;
     if (!ref || !doc) return Promise.resolve(false);
+    const key = fileKey(ref);
     if (this.saving) {
-      const running = this.#inFlight.get(fileKey(ref));
+      const running = this.#inFlight.get(key);
       if (!running) return Promise.resolve(false);
       // A failed or refused save would fail again, and another file is not this one's.
-      return running.then((wrote) =>
-        wrote && this.doc === doc && doc.dirty && !this.conflict ? this.save(ctx, options) : wrote,
+      // Tracked at once, so whoever waits on the file waits for this save too.
+      return this.#track(
+        key,
+        running.then((wrote) =>
+          wrote && this.doc === doc && doc.dirty && !this.conflict
+            ? this.save(ctx, options)
+            : wrote,
+        ),
       );
     }
 
     this.saving = true;
     this.error = null;
     this.conflict = false;
+    return this.#track(key, this.#write(ctx, ref, doc, options));
+  }
 
-    const key = fileKey(ref);
-    const saving = this.#write(ctx, ref, doc, options).finally(() => {
-      if (this.#inFlight.get(key) === saving) this.#inFlight.delete(key);
+  /** Record `saving` as the file's save in flight until it ends. */
+  #track(key: string, saving: Promise<boolean>): Promise<boolean> {
+    const tracked = saving.finally(() => {
+      if (this.#inFlight.get(key) === tracked) this.#inFlight.delete(key);
     });
-    this.#inFlight.set(key, saving);
-    return saving;
+    this.#inFlight.set(key, tracked);
+    return tracked;
   }
 
   /**
-   * Wait for the open file's saves in flight to finish, including one queued behind them by
-   * {@link save}, which starts only as the running one ends. Resolves at once when none is.
+   * Wait for the open file's saves in flight to finish, including ones queued behind them by
+   * {@link save}. Resolves at once when none is.
    */
   async settled(): Promise<void> {
     if (!this.file) return;
     const key = fileKey(this.file);
     for (let running = this.#inFlight.get(key); running; running = this.#inFlight.get(key))
       await running;
+  }
+
+  /**
+   * Save pending edits before leaving the file: wait for saves in flight, then write what
+   * they did not cover. After a conflict, saving again is refused too, so report it unsaved
+   * straight away.
+   */
+  async flush(ctx: EditorSessionContext): Promise<FlushOutcome> {
+    const file = this.file;
+    await this.settled();
+    if (this.file !== file) return "replaced";
+    if (this.dirty && !this.conflict) await this.save(ctx);
+    if (this.file !== file) return "replaced";
+    return this.dirty ? "unsaved" : "saved";
   }
 
   async #write(
@@ -271,7 +312,8 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
     this.#signature = null;
-    this.#opens++;
+    this.#generation.abort();
+    this.#generation = new AbortController();
   }
 }
 

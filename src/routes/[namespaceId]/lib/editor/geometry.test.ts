@@ -109,13 +109,22 @@ describe("pointToCaret", () => {
 describe("selectionRects", () => {
   const lines = ["hello", "world", "again", "here"];
   const measure = fixedMeasurer(lines);
-  const geometry = { lineHeight: 20, measure };
+  const geometry = {
+    lineHeight: 20,
+    measure,
+    mountedLines: [0, 1, 2, 3],
+    layout: WrapLayout.unwrapped(lines.length),
+  };
 
   it("clips a million-line selection to the mounted viewport", () => {
     const rects = selectionRects(
       { line: 0, column: 2 },
       { line: 999999, column: 3 },
-      { ...geometry, mountedLines: [500000, 500001, 500002] },
+      {
+        ...geometry,
+        mountedLines: [500000, 500001, 500002],
+        layout: WrapLayout.unwrapped(1_000_000),
+      },
     );
     expect(rects).toEqual(
       [500000, 500001, 500002].map((line) => ({
