@@ -160,4 +160,16 @@ describe("LineWrapper", () => {
     expect(wrapper.wraps).toBe(false);
     expect(wrapper.layout("word ".repeat(100)).rowCount).toBe(1);
   });
+
+  it("reuses the rows of lines an edit left alone, and only those", () => {
+    const wrapper = new LineWrapper(6);
+    const first = wrapper.layout("hello brave world\nsecond long line");
+    const second = wrapper.layout("hello brave world\nsecond long line!");
+    expect(second.rowStarts(0)).toBe(first.rowStarts(0));
+    expect(second.rowStarts(1)).not.toBe(first.rowStarts(1));
+    // A line dropped by the last layout is laid out afresh rather than kept.
+    const third = wrapper.layout("second long line");
+    expect(third.rowStarts(0)).not.toBe(first.rowStarts(1));
+    expect(third.rowStarts(0)).toEqual(first.rowStarts(1));
+  });
 });

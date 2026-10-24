@@ -208,9 +208,6 @@ export class WrapLayout {
 /** Matches every line break Reed recognizes, so split lines number the same as its lines. */
 const LINE_BREAK = /\r\n|\r|\n/;
 
-const MAX_CACHED_LINES = 4096;
-const MAX_CACHED_CHARS = 4_000_000;
-
 /**
  * Lay out documents at one row width, reusing the rows of lines whose text has not changed.
  * Create a new one when the width changes.
@@ -218,9 +215,12 @@ const MAX_CACHED_CHARS = 4_000_000;
 export class LineWrapper {
   readonly cols: number;
   readonly tabSize: number;
+  /**
+   * Rows of the wrapping lines in the last layout. Each layout keeps only its own lines, so
+   * the cache follows the document: an edit misses on the lines it changed and nothing else,
+   * and lines no longer in the document are dropped.
+   */
   #cache = new Map<string, readonly number[]>();
-  /** Total length of the cached lines. */
-  #cachedChars = 0;
 
   constructor(cols: number, tabSize = TAB_SIZE) {
     this.cols = cols;
@@ -234,25 +234,16 @@ export class LineWrapper {
   layout(text: string): WrapLayout {
     const lines = text.split(LINE_BREAK);
     if (!this.wraps) return WrapLayout.unwrapped(lines.length);
-    return WrapLayout.of(lines.map((line) => this.#rows(line)));
+    const previous = this.#cache;
+    this.#cache = new Map();
+    return WrapLayout.of(lines.map((line) => this.#rows(line, previous)));
   }
 
-  #rows(line: string): readonly number[] {
+  #rows(line: string, previous: Map<string, readonly number[]>): readonly number[] {
     if (line.length * 2 <= this.cols && !line.includes("\t")) return SINGLE_ROW;
-    const cached = this.#cache.get(line);
-    if (cached) return cached;
-    const rows = wrapLine(line, this.cols, this.tabSize);
-    // Bound the cache to what a session of typing revisits rather than every past edit. Count
-    // characters as well as lines, since each key holds a whole line.
-    if (
-      this.#cache.size >= MAX_CACHED_LINES ||
-      this.#cachedChars + line.length > MAX_CACHED_CHARS
-    ) {
-      this.#cache.clear();
-      this.#cachedChars = 0;
-    }
+    const rows =
+      this.#cache.get(line) ?? previous.get(line) ?? wrapLine(line, this.cols, this.tabSize);
     this.#cache.set(line, rows);
-    this.#cachedChars += line.length;
     return rows;
   }
 }

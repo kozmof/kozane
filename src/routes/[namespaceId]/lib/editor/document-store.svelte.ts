@@ -319,6 +319,8 @@ export class EditorDocument {
   }
 }
 
+const encoder = new TextEncoder();
+
 function byteLength(text: string): number {
-  return new TextEncoder().encode(text).length;
+  return encoder.encode(text).length;
 }
