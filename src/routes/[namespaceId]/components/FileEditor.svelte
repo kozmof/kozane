@@ -171,8 +171,9 @@
   $effect(() => {
     const guard = async (): Promise<boolean> => {
       if (autoSaving) {
-        const outcome = await savePending();
-        if (outcome !== "unsaved") return outcome === "saved";
+        // When the file was closed or replaced meanwhile, nothing here is left to lose. The
+        // session decides whether the click still opens its file.
+        if ((await savePending()) !== "unsaved") return true;
       }
       return globalThis.confirm(UNSAVED_LEAVE_PROMPT);
     };
@@ -207,11 +208,13 @@
     guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT));
   });
 
-  /** Save pending edits, then follow the held navigation. Ask when the save fails. */
+  /**
+   * Save pending edits, then follow the held navigation. Ask when the save fails. When the
+   * file was closed or replaced meanwhile, follow it anyway, and the guard looks at whatever
+   * file is open now.
+   */
   async function saveThenGo(url: URL): Promise<void> {
-    const outcome = await savePending();
-    if (outcome === "replaced") return;
-    if (outcome === "unsaved") {
+    if ((await savePending()) === "unsaved") {
       if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
       // Discard the edits as confirmed, so the guard lets the replayed navigation through.
       close();

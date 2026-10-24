@@ -572,6 +572,19 @@ describe("FileEditor leaving the page", () => {
     expect(asked).not.toHaveBeenCalled();
   });
 
+  it("follows a held link when the file is closed before its save", async () => {
+    vi.mocked(goto).mockClear();
+    const { session } = await mount(undefined, { autoSave: true });
+    await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+
+    expect(navigate("link").cancel).toHaveBeenCalledOnce();
+    session.close();
+    await waitFor(() => expect(goto).toHaveBeenCalledWith(TO));
+    expect(asked).not.toHaveBeenCalled();
+  });
+
   it("asks before following a link when the auto save fails", async () => {
     vi.mocked(goto).mockClear();
     const { session } = await mount(

@@ -86,7 +86,10 @@ export class EditorSession {
     if (this.dirty && this.leaveGuard && this.file && fileKey(this.file) !== fileKey(ref)) {
       const asking = this.#opens;
       if (!(await this.leaveGuard())) return;
-      if (this.#opens !== asking || this.#requests !== request) return;
+      if (this.#requests !== request) return;
+      // Another file opened meanwhile. A close, which the guard's own save can end in, leaves
+      // nothing to replace, so the click still opens its file.
+      if (this.#opens !== asking && this.isOpen) return;
     }
 
     const pending = this.#inFlight.get(fileKey(ref));
@@ -108,6 +111,7 @@ export class EditorSession {
       if (node?.kind === "file") this.#adopt(node.content, null);
       else if (node?.kind === "file-skipped") this.error = SKIP_REASON_MESSAGE[node.reason];
       else this.error = "File not found";
+      this.loading = false;
       return;
     }
 
@@ -140,12 +144,21 @@ export class EditorSession {
 
   /**
    * Write the open document. Resolves true when the server took the content, even if the
-   * file was closed or replaced meanwhile, and false when nothing was written.
+   * file was closed or replaced meanwhile, and false when nothing was written. While a save
+   * runs, wait for it, then write what it did not cover.
    */
   save(ctx: EditorSessionContext): Promise<boolean> {
     const ref = this.file;
     const doc = this.doc;
-    if (!ref || !doc || this.saving) return Promise.resolve(false);
+    if (!ref || !doc) return Promise.resolve(false);
+    if (this.saving) {
+      const running = this.#inFlight.get(fileKey(ref));
+      if (!running) return Promise.resolve(false);
+      // A failed or refused save would fail again, and another file is not this one's.
+      return running.then((wrote) =>
+        wrote && this.doc === doc && doc.dirty && !this.conflict ? this.save(ctx) : wrote,
+      );
+    }
 
     this.saving = true;
     this.error = null;

@@ -211,6 +211,41 @@ describe("EditorSession", () => {
     expect(s.dirty).toBe(false);
   });
 
+  it("writes edits made during a save once that save lands, when asked to save again", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 1 }, "b");
+    const first = s.save(ctx);
+    s.doc!.insert({ line: 0, column: 2 }, "c");
+
+    const second = s.save(ctx);
+    await answer(0, ok({ signature: "sig-2" }));
+    await answer(1, ok({ signature: "sig-3" }));
+
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(bodies[1]).toMatchObject({ content: "abc\n", signature: "sig-2" });
+    expect(s.dirty).toBe(false);
+  });
+
+  it("does not write again when the save it waited for failed", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 1 }, "b");
+    const first = s.save(ctx);
+    s.doc!.insert({ line: 0, column: 2 }, "c");
+
+    const second = s.save(ctx);
+    await answer(0, fail(409, "File changed on disk"));
+
+    expect(await first).toBe(false);
+    expect(await second).toBe(false);
+    expect(bodies).toHaveLength(1);
+    expect(s.conflict).toBe(true);
+  });
+
   describe("when another file is opened while a save runs", () => {
     /** Start saving an edit to `REF`, then open and edit `other.md` before it answers. */
     async function saveThenSwitch() {
@@ -445,6 +480,31 @@ describe("EditorSession", () => {
       expect(s.doc).toBeNull();
       expect(s.error).toBe("File not found");
     });
+
+    it("stops loading when the embedded file waited on a save", async () => {
+      const held = heldSaves();
+      const s = new EditorSession();
+      await s.open(held.ctx, REF);
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      void s.save(held.ctx);
+
+      const reopened = s.open(
+        {
+          ...held.ctx,
+          staticFiles: {
+            [REF.taskspaceId]: {
+              root: { kind: "directory", name: "", truncated: null, children: [] },
+            },
+          },
+        },
+        REF,
+      );
+      await held.answer(0, ok({ signature: "sig-2" }));
+      await reopened;
+
+      expect(s.loading).toBe(false);
+      expect(s.error).toBe("File not found");
+    });
   });
 
   describe("opening another file over unsaved changes", () => {
@@ -507,6 +567,22 @@ describe("EditorSession", () => {
       await toC;
       expect(s.file?.path).toBe("c.md");
       expect(s.doc?.text()).toBe("ccc\n");
+    });
+
+    it("still opens the other file when the file was closed while the guard ran", async () => {
+      const { fetcher } = twoFiles();
+      const s = new EditorSession();
+      const ctx = { fetcher, namespaceId: "p-1" };
+      await s.open(ctx, { ...REF, path: "a.md" });
+      s.doc!.insert({ line: 0, column: 0 }, "x");
+      s.leaveGuard = async () => {
+        s.close();
+        return true;
+      };
+
+      await s.open(ctx, { ...REF, path: "b.md" });
+      expect(s.file?.path).toBe("b.md");
+      expect(s.doc?.text()).toBe("bbb\n");
     });
 
     it("does not ask when the same file is reloaded", async () => {
