@@ -48,8 +48,11 @@ export class EditorSession {
   /** File-version signature returned on save to detect changes on disk. */
   #signature: string | null = null;
 
-  /** The save in flight, so callers can wait for it instead of being refused. */
-  #inFlight: Promise<boolean> | null = null;
+  /**
+   * Saves in flight, by file. Kept across opens and closes, so a file reopened by way of
+   * another still waits for its save instead of reading what was on disk before it.
+   */
+  #inFlight = new Map<string, Promise<boolean>>();
 
   /** Counts opens and closes, so an open that waited can tell a later one replaced it. */
   #opens = 0;
@@ -66,15 +69,14 @@ export class EditorSession {
    * Open `ref` and dispose the previous document to release its scheduler.
    */
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
-    const pending = this.#inFlight;
-    const previous = this.file;
+    const pending = this.#inFlight.get(fileKey(ref));
     this.#reset();
     this.file = ref;
     const opening = this.#opens;
 
     // Reopening a file while its save runs would read what was on disk before that save, and
     // the next save would then be refused as a conflict. Let the save land first.
-    if (pending && previous && sameFile(previous, ref)) {
+    if (pending) {
       this.loading = true;
       await pending;
       if (this.#opens !== opening) return;
@@ -125,16 +127,17 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
 
+    const key = fileKey(ref);
     const saving = this.#write(ctx, ref, doc).finally(() => {
-      if (this.#inFlight === saving) this.#inFlight = null;
+      if (this.#inFlight.get(key) === saving) this.#inFlight.delete(key);
     });
-    this.#inFlight = saving;
+    this.#inFlight.set(key, saving);
     return saving;
   }
 
-  /** Wait for any save in flight to finish. Resolves at once when none is. */
+  /** Wait for the open file's save in flight to finish. Resolves at once when none is. */
   async settled(): Promise<void> {
-    await this.#inFlight;
+    if (this.file) await this.#inFlight.get(fileKey(this.file));
   }
 
   async #write(ctx: EditorSessionContext, ref: OpenFileRef, doc: EditorDocument): Promise<boolean> {
@@ -191,11 +194,10 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
     this.#signature = null;
-    this.#inFlight = null;
     this.#opens++;
   }
 }
 
-function sameFile(a: OpenFileRef, b: OpenFileRef): boolean {
-  return a.taskspaceId === b.taskspaceId && a.path === b.path;
+function fileKey({ taskspaceId, path }: OpenFileRef): string {
+  return JSON.stringify([taskspaceId, path]);
 }

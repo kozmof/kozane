@@ -281,6 +281,29 @@ describe("EditorSession", () => {
     expect(bodies[1]).toMatchObject({ signature: "sig-2" });
   });
 
+  it("reads a file reopened by way of another file only after its save lands", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    void s.save(ctx);
+    await s.open(ctx, { ...REF, path: "other.md" });
+
+    const reads = () =>
+      vi.mocked(ctx.fetcher).mock.calls.filter(([, init]) => (init?.method ?? "GET") === "GET")
+        .length;
+    const reopened = s.open(ctx, REF);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(s.loading).toBe(true);
+    expect(reads()).toBe(2);
+
+    await answer(0, ok({ signature: "sig-saved" }));
+    await reopened;
+    expect(reads()).toBe(3);
+    expect(s.doc).not.toBeNull();
+    expect(bodies).toHaveLength(1);
+  });
+
   it("settles at once when no save is in flight", async () => {
     const { s } = session();
     await expect(s.settled()).resolves.toBeUndefined();
