@@ -177,11 +177,7 @@
       }
       return globalThis.confirm(UNSAVED_LEAVE_PROMPT);
     };
-    session.leaveGuard = guard;
-    return () => {
-      // Another panel may have set its own guard since. Leave that one in place.
-      if (session.leaveGuard === guard) session.leaveGuard = null;
-    };
+    return session.setLeaveGuard(guard);
   });
 
   function close(): void {
@@ -203,7 +199,10 @@
         return;
       }
       // While the browser asks about closing the tab, send the edits, so staying keeps them.
-      if (nav.type === "leave" && !session.saving && !session.conflict) void session.save(ctx);
+      // Keepalive lets a small file's save finish even when the user leaves. A larger one
+      // can still be cut off, which the prompt below warns about.
+      if (nav.type === "leave" && !session.saving && !session.conflict)
+        void session.save(ctx, { keepalive: true });
     }
     guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT));
   });

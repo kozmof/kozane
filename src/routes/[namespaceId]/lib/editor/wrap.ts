@@ -23,9 +23,12 @@ const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 /** Text that is only printable ASCII and tabs, where every code unit is its own grapheme. */
 const ASCII = /^[\t\x20-\x7e]*$/;
 
-/** Hangul Jamo, CJK, Hangul syllables, compatibility forms, fullwidth forms, and planes 2 and 3. */
+/**
+ * Hangul Jamo, CJK, Hangul syllables, compatibility forms, fullwidth forms, enclosed
+ * ideographs, and planes 2 and 3.
+ */
 const WIDE =
-  /^[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u{20000}-\u{3fffd}]/u;
+  /^[\u1100-\u115f\u2e80-\u303e\u3041-\u33ff\u3400-\u4dbf\u4e00-\u9fff\ua000-\ua4cf\uac00-\ud7a3\uf900-\ufaff\ufe30-\ufe4f\uff00-\uff60\uffe0-\uffe6\u{1f200}-\u{1f2ff}\u{20000}-\u{3fffd}]/u;
 
 const EMOJI = /\p{Emoji_Presentation}|\ufe0f/u;
 
@@ -49,13 +52,28 @@ function* segments(text: string): Generator<[index: number, segment: string]> {
 }
 
 /**
+ * Whether a row may break after `segment`. The ideographic space breaks like a space. A
+ * no-break space does not, as its name says.
+ */
+function isBreakSpace(segment: string): boolean {
+  return segment === " " || segment === "\t" || segment === "　";
+}
+
+/**
+ * Whether `text` fits in `cols` without counting its cells. A grapheme is at least one code
+ * unit and at most two cells, so a short line without tabs always fits.
+ */
+function surelyFits(text: string, cols: number): boolean {
+  return text.length * 2 <= cols && !text.includes("\t");
+}
+
+/**
  * The columns where each visual row of `text` starts, beginning with 0. A line that fits, or
  * any line when `cols` is not a positive finite number, is one row.
  */
 export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readonly number[] {
   if (!(cols > 0 && Number.isFinite(cols))) return SINGLE_ROW;
-  // A grapheme is at least one code unit and at most two cells, so short tab-free lines fit.
-  if (text.length * 2 <= cols && !text.includes("\t")) return SINGLE_ROW;
+  if (surelyFits(text, cols)) return SINGLE_ROW;
 
   const starts = [0];
   let rowStart = 0;
@@ -65,7 +83,7 @@ export function wrapLine(text: string, cols: number, tabSize = TAB_SIZE): readon
   let widthAtBreak = 0;
 
   for (const [index, segment] of segments(text)) {
-    const space = segment === " " || segment === "\t";
+    const space = isBreakSpace(segment);
     const advance = () => (segment === "\t" ? tabSize - (width % tabSize) : cellWidth(segment));
     let w = advance();
     // Wrap the word in progress at the last whitespace, or here when there is none. A word
@@ -243,7 +261,7 @@ export class LineWrapper {
   }
 
   #rows(line: string, previous: Map<string, readonly number[]>): readonly number[] {
-    if (line.length * 2 <= this.cols && !line.includes("\t")) return SINGLE_ROW;
+    if (surelyFits(line, this.cols)) return SINGLE_ROW;
     const rows =
       this.#cache.get(line) ?? previous.get(line) ?? wrapLine(line, this.cols, this.tabSize);
     this.#cache.set(line, rows);

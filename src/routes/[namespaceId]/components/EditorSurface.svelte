@@ -85,8 +85,11 @@
       rowEls.delete(key);
       return null;
     }
-    // Rows scrolled away leave stale entries behind. Start over rather than track them.
-    if (rowEls.size >= 512) rowEls.clear();
+    // Rows scrolled away leave stale entries behind. Drop those, and keep the rows still drawn
+    // so the next measurements find them without searching again.
+    if (rowEls.size >= 512) {
+      for (const [k, el] of rowEls) if (!el.isConnected) rowEls.delete(k);
+    }
     rowEls.set(key, found);
     return found;
   }

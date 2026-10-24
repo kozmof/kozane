@@ -16,6 +16,10 @@ describe("cellWidth", () => {
     for (const wide of ["あ", "漢", "한", "Ａ", "😀", "👩🏽‍💻"]) expect(cellWidth(wide)).toBe(2);
   });
 
+  it("counts enclosed ideographs as two cells, emoji or not", () => {
+    for (const wide of ["\u{1f210}", "\u{1f240}", "\u{1f21a}"]) expect(cellWidth(wide)).toBe(2);
+  });
+
   it("counts a keycap emoji led by an ASCII digit as two cells", () => {
     expect(cellWidth("1\ufe0f\u20e3")).toBe(2);
   });
@@ -43,6 +47,11 @@ describe("wrapLine", () => {
     expect(rows("abcd   efgh", 4)).toEqual(["abcd   ", "efgh"]);
     expect(rows("abcd\tefgh", 4)).toEqual(["abcd\t", "efgh"]);
     expect(rows("abcd ", 4)).toEqual(["abcd "]);
+  });
+
+  it("breaks after an ideographic space but not a no-break space", () => {
+    expect(rows("あい　うえお", 8)).toEqual(["あい　", "うえお"]);
+    expect(rows("ab cdef", 5)).toEqual(["ab cd", "ef"]);
   });
 
   it("breaks inside a word wider than a row", () => {

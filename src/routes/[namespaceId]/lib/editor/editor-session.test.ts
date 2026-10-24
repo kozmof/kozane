@@ -401,6 +401,36 @@ describe("EditorSession", () => {
     expect(await s.save(ctx)).toBe(false);
   });
 
+  it("asks for keepalive only on a save small enough for the browser to allow it", async () => {
+    const big = "x".repeat(64 * 1024);
+    const { fetcher } = fetcherFor({
+      read: [
+        ok({ path: REF.path, content: "a\n", signature: "sig-1" }),
+        ok({ path: REF.path, content: big, signature: "sig-2" }),
+      ],
+      write: [ok({ signature: "sig-3" }), ok({ signature: "sig-4" }), ok({ signature: "sig-5" })],
+    });
+    const s = new EditorSession();
+    const ctx = { fetcher, namespaceId: "p-1" };
+    const keepalive = () => {
+      const calls = vi.mocked(fetcher).mock.calls;
+      return (calls.at(-1)?.[1] as RequestInit | undefined)?.keepalive;
+    };
+
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    await s.save(ctx);
+    expect(keepalive()).toBeUndefined();
+    s.doc!.insert({ line: 0, column: 0 }, "y");
+    await s.save(ctx, { keepalive: true });
+    expect(keepalive()).toBe(true);
+
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    expect(await s.save(ctx, { keepalive: true })).toBe(true);
+    expect(keepalive()).toBeUndefined();
+  });
+
   it("re-reads from disk on reload, discarding what was typed", async () => {
     const { fetcher } = fetcherFor({
       read: [
@@ -574,7 +604,7 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.leaveGuard = vi.fn(async () => false);
+      s.setLeaveGuard(vi.fn(async () => false));
 
       await s.open(ctx, { ...REF, path: "b.md" });
       expect(s.leaveGuard).toHaveBeenCalledOnce();
@@ -589,7 +619,7 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.leaveGuard = async () => true;
+      s.setLeaveGuard(async () => true);
 
       await s.open(ctx, { ...REF, path: "b.md" });
       expect(s.file?.path).toBe("b.md");
@@ -608,7 +638,7 @@ describe("EditorSession", () => {
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       const answers: ((agreed: boolean) => void)[] = [];
-      s.leaveGuard = () => new Promise((resolve) => answers.push(resolve));
+      s.setLeaveGuard(() => new Promise((resolve) => answers.push(resolve)));
 
       const toB = s.open(ctx, { ...REF, path: "b.md" });
       const toC = s.open(ctx, { ...REF, path: "c.md" });
@@ -627,14 +657,27 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.leaveGuard = async () => {
+      s.setLeaveGuard(async () => {
         s.close();
         return true;
-      };
+      });
 
       await s.open(ctx, { ...REF, path: "b.md" });
       expect(s.file?.path).toBe("b.md");
       expect(s.doc?.text()).toBe("bbb\n");
+    });
+
+    it("removes a guard only while it is still the one installed", () => {
+      const s = new EditorSession();
+      const first = async () => true;
+      const second = async () => false;
+      const removeFirst = s.setLeaveGuard(first);
+      const removeSecond = s.setLeaveGuard(second);
+
+      removeFirst();
+      expect(s.leaveGuard).toBe(second);
+      removeSecond();
+      expect(s.leaveGuard).toBeNull();
     });
 
     it("does not ask when the same file is reloaded", async () => {
@@ -648,7 +691,7 @@ describe("EditorSession", () => {
       const ctx = { fetcher, namespaceId: "p-1" };
       await s.open(ctx, REF);
       s.doc!.insert({ line: 0, column: 0 }, "x");
-      s.leaveGuard = vi.fn(async () => false);
+      s.setLeaveGuard(vi.fn(async () => false));
 
       await s.reload(ctx);
       expect(s.leaveGuard).not.toHaveBeenCalled();

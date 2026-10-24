@@ -24,14 +24,28 @@ function jsonRequest(
   url: string,
   method: string,
   body?: unknown,
+  { keepalive = false }: { keepalive?: boolean } = {},
 ): Promise<Response> {
+  const json = body === undefined ? undefined : JSON.stringify(body);
   return fetcher(url, {
     method,
-    ...(body !== undefined && {
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
+    ...(json !== undefined && { headers: { "Content-Type": "application/json" }, body: json }),
+    // Browsers refuse a keepalive request over their body quota, so send a larger one as usual.
+    ...(keepalive &&
+      json !== undefined &&
+      byteLength(json) <= KEEPALIVE_MAX_BYTES && {
+        keepalive: true,
+      }),
   });
+}
+
+/** Kept under the 64 KiB that browsers allow keepalive request bodies in flight. */
+const KEEPALIVE_MAX_BYTES = 60 * 1024;
+
+const encoder = new TextEncoder();
+
+function byteLength(text: string): number {
+  return encoder.encode(text).length;
 }
 
 export function patchCardPositions(
@@ -475,15 +489,22 @@ export function fetchTaskspaceFile(
 
 /**
  * Save text with the signature from the last read. The server returns 409 if the file changed
- * in the meantime.
+ * in the meantime. `keepalive` lets a small save outlive the page, as when the tab closes.
  */
 export function saveTaskspaceFile(
   fetcher: typeof fetch,
   namespaceId: string,
   taskspaceId: string,
   file: { path: string; content: string; signature: string | null },
+  options: { keepalive?: boolean } = {},
 ): Promise<Response> {
-  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file`), "PUT", file);
+  return jsonRequest(
+    fetcher,
+    apiUrl(namespaceId, `/taskspaces/${taskspaceId}/file`),
+    "PUT",
+    file,
+    options,
+  );
 }
 
 export function createInventory(

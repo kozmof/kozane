@@ -26,6 +26,14 @@ export type OpenFileRef = {
   path: string;
 };
 
+/** See {@link EditorSession.leaveGuard}. */
+export type LeaveGuard = () => Promise<boolean>;
+
+export type SaveOptions = {
+  /** Let the request outlive the page, for a save sent as the tab closes. Small files only. */
+  keepalive?: boolean;
+};
+
 /**
  * Manage the open file's loading, saving, errors, and {@link EditorDocument} lifecycle.
  * Dispose subscriptions when closing so the document scheduler does not remain active.
@@ -63,11 +71,26 @@ export class EditorSession {
    */
   #requests = 0;
 
+  #leaveGuard: LeaveGuard | null = null;
+
   /**
    * Asked before opening another file over unsaved changes, so the panel can save or confirm
    * first. Resolves false to stay on the current file. Without one, the changes are dropped.
    */
-  leaveGuard: (() => Promise<boolean>) | null = null;
+  get leaveGuard(): LeaveGuard | null {
+    return this.#leaveGuard;
+  }
+
+  /**
+   * Install `guard` as {@link leaveGuard}. The returned function removes it, unless another
+   * guard has been set since, which then stays in place.
+   */
+  setLeaveGuard(guard: LeaveGuard): () => void {
+    this.#leaveGuard = guard;
+    return () => {
+      if (this.#leaveGuard === guard) this.#leaveGuard = null;
+    };
+  }
 
   get isOpen(): boolean {
     return this.file !== null;
@@ -151,7 +174,7 @@ export class EditorSession {
    * file was closed or replaced meanwhile, and false when nothing was written. While a save
    * runs, wait for it, then write what it did not cover.
    */
-  save(ctx: EditorSessionContext): Promise<boolean> {
+  save(ctx: EditorSessionContext, options: SaveOptions = {}): Promise<boolean> {
     const ref = this.file;
     const doc = this.doc;
     if (!ref || !doc) return Promise.resolve(false);
@@ -160,7 +183,7 @@ export class EditorSession {
       if (!running) return Promise.resolve(false);
       // A failed or refused save would fail again, and another file is not this one's.
       return running.then((wrote) =>
-        wrote && this.doc === doc && doc.dirty && !this.conflict ? this.save(ctx) : wrote,
+        wrote && this.doc === doc && doc.dirty && !this.conflict ? this.save(ctx, options) : wrote,
       );
     }
 
@@ -169,7 +192,7 @@ export class EditorSession {
     this.conflict = false;
 
     const key = fileKey(ref);
-    const saving = this.#write(ctx, ref, doc).finally(() => {
+    const saving = this.#write(ctx, ref, doc, options).finally(() => {
       if (this.#inFlight.get(key) === saving) this.#inFlight.delete(key);
     });
     this.#inFlight.set(key, saving);
@@ -181,16 +204,23 @@ export class EditorSession {
     if (this.file) await this.#inFlight.get(fileKey(this.file));
   }
 
-  async #write(ctx: EditorSessionContext, ref: OpenFileRef, doc: EditorDocument): Promise<boolean> {
+  async #write(
+    ctx: EditorSessionContext,
+    ref: OpenFileRef,
+    doc: EditorDocument,
+    options: SaveOptions,
+  ): Promise<boolean> {
     // Capture exactly the content sent so edits made during the request remain dirty.
     const content = doc.text();
 
     try {
-      const res = await saveTaskspaceFile(ctx.fetcher, ctx.namespaceId, ref.taskspaceId, {
-        path: ref.path,
-        content,
-        signature: this.#signature,
-      });
+      const res = await saveTaskspaceFile(
+        ctx.fetcher,
+        ctx.namespaceId,
+        ref.taskspaceId,
+        { path: ref.path, content, signature: this.#signature },
+        options,
+      );
       if (!res.ok) {
         const message = await failureMessage(res, "Failed to save file");
         if (this.doc !== doc) return false;
