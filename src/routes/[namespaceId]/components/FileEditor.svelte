@@ -147,13 +147,12 @@
     // An auto save may already be writing. Wait for it, then save whatever it did not cover.
     // After a conflict, saving again is refused too, so ask straight away.
     await session.settled();
-    const saved =
-      session.file === file &&
-      (!session.dirty || (!session.conflict && (await session.save(ctx))));
     // Leave a file that was replaced or closed while saving alone.
     if (session.file !== file) return;
-    if (saved && !session.dirty) close();
-    else confirmingClose = true;
+    if (session.dirty && !session.conflict) await session.save(ctx);
+    if (session.file !== file) return;
+    if (session.dirty) confirmingClose = true;
+    else close();
   }
 
   function close(): void {

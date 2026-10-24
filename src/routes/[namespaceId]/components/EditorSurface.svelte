@@ -64,13 +64,18 @@
    */
   const rowEls = new Map<string, HTMLElement>();
 
+  /** Key of a line's row, shared by the drawn rows and the element cache. */
+  function rowKey(line: number, index: number): string {
+    return `${line}:${index}`;
+  }
+
   /**
    * The drawn element of a line's row, for measurement. Found in the DOM rather than kept by
    * an action, because a row that wrapping just created is in the DOM before its action runs,
    * and the measuring effect can run in between.
    */
   function rowElement(line: number, index: number): HTMLElement | null {
-    const key = `${line}:${index}`;
+    const key = rowKey(line, index);
     const cached = rowEls.get(key);
     if (cached?.isConnected) return cached;
     const found =
@@ -154,7 +159,7 @@
         if (row < shownRows[0] || row >= shownRows[1]) continue;
         const start = starts[index];
         const text = content.slice(start, starts[index + 1] ?? content.length);
-        out.push({ key: `${line}:${index}`, line, index, row, start, text });
+        out.push({ key: rowKey(line, index), line, index, row, start, text });
       }
     }
     return out;
