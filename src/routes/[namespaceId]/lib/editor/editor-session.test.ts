@@ -256,6 +256,31 @@ describe("EditorSession", () => {
     });
   });
 
+  it("reads a file reopened during its save only after the save lands", async () => {
+    const { ctx, answer, bodies } = heldSaves();
+    const s = new EditorSession();
+    await s.open(ctx, REF);
+    s.doc!.insert({ line: 0, column: 0 }, "x");
+    void s.save(ctx);
+
+    const reopened = s.open(ctx, REF);
+    await Promise.resolve();
+    expect(s.loading).toBe(true);
+    expect(s.doc).toBeNull();
+
+    await answer(0, ok({ signature: "sig-saved" }));
+    await reopened;
+    expect(s.loading).toBe(false);
+    expect(s.doc).not.toBeNull();
+
+    s.doc!.insert({ line: 0, column: 0 }, "y");
+    const next = s.save(ctx);
+    await answer(1, ok({ signature: "sig-3" }));
+    expect(await next).toBe(true);
+    // The read that followed the save, not the one before it.
+    expect(bodies[1]).toMatchObject({ signature: "sig-2" });
+  });
+
   it("settles at once when no save is in flight", async () => {
     const { s } = session();
     await expect(s.settled()).resolves.toBeUndefined();

@@ -107,7 +107,10 @@
     if (failedDraft?.doc === doc && failedDraft.text === text) return;
     if (!session.dirty || session.saving || session.conflict) return;
     const timer = setTimeout(async () => {
-      if (!(await session.save(ctx))) failedDraft = { doc, text };
+      // A save on close may have started since. This effect runs again when it finishes.
+      if (session.saving) return;
+      // A failure only counts against the document still open, not one closed meanwhile.
+      if (!(await session.save(ctx)) && session.doc === doc) failedDraft = { doc, text };
     }, AUTO_SAVE_DELAY_MS);
     return () => clearTimeout(timer);
   });
@@ -125,8 +128,21 @@
     else confirmingClose = true;
   }
 
+  /** Whether a save on close is running, so a second close request does not start another. */
+  let savingToClose = false;
+
   /** Save pending edits before closing. Ask as usual when the save fails. */
   async function saveAndClose(): Promise<void> {
+    if (savingToClose) return;
+    savingToClose = true;
+    try {
+      await saveThenClose();
+    } finally {
+      savingToClose = false;
+    }
+  }
+
+  async function saveThenClose(): Promise<void> {
     const file = session.file;
     // An auto save may already be writing. Wait for it, then save whatever it did not cover.
     // After a conflict, saving again is refused too, so ask straight away.

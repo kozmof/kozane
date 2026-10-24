@@ -51,6 +51,9 @@ export class EditorSession {
   /** The save in flight, so callers can wait for it instead of being refused. */
   #inFlight: Promise<boolean> | null = null;
 
+  /** Counts opens and closes, so an open that waited can tell a later one replaced it. */
+  #opens = 0;
+
   get isOpen(): boolean {
     return this.file !== null;
   }
@@ -63,8 +66,19 @@ export class EditorSession {
    * Open `ref` and dispose the previous document to release its scheduler.
    */
   async open(ctx: EditorSessionContext, ref: OpenFileRef): Promise<void> {
+    const pending = this.#inFlight;
+    const previous = this.file;
     this.#reset();
     this.file = ref;
+    const opening = this.#opens;
+
+    // Reopening a file while its save runs would read what was on disk before that save, and
+    // the next save would then be refused as a conflict. Let the save land first.
+    if (pending && previous && sameFile(previous, ref)) {
+      this.loading = true;
+      await pending;
+      if (this.#opens !== opening) return;
+    }
 
     const staticTree = ctx.staticFiles?.[ref.taskspaceId];
     if (staticTree) {
@@ -111,7 +125,9 @@ export class EditorSession {
     this.error = null;
     this.conflict = false;
 
-    const saving = this.#write(ctx, ref, doc);
+    const saving = this.#write(ctx, ref, doc).finally(() => {
+      if (this.#inFlight === saving) this.#inFlight = null;
+    });
     this.#inFlight = saving;
     return saving;
   }
@@ -176,5 +192,10 @@ export class EditorSession {
     this.conflict = false;
     this.#signature = null;
     this.#inFlight = null;
+    this.#opens++;
   }
+}
+
+function sameFile(a: OpenFileRef, b: OpenFileRef): boolean {
+  return a.taskspaceId === b.taskspaceId && a.path === b.path;
 }

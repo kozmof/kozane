@@ -634,6 +634,21 @@ describe("FileEditor auto save", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("saves once and does not ask when close is requested twice", async () => {
+    const { session, calls, onClose } = await mount([loaded(), ok({ signature: "sig-2" })], {
+      autoSave: true,
+    });
+    const dialog = await screen.findByRole("dialog");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => expect(session.isOpen).toBe(false));
+    expect(calls.filter((call) => call.method === "PUT")).toHaveLength(1);
+    expect(screen.queryByText("This file has unsaved changes.")).toBeNull();
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it("asks on close after a conflict without trying the save again", async () => {
     const { session, calls } = await mount([loaded(), new Response("{}", { status: 409 })], {
       autoSave: true,
