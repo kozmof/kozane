@@ -117,19 +117,23 @@ export class EditorSession {
 
     this.loading = true;
 
+    // A file opened or closed while this one loads replaces it. Leave that one's document,
+    // errors, and loading flag alone, or a slow read would show its text under another path.
+    const current = () => this.#opens === opening;
     try {
       const res = await fetchTaskspaceFile(ctx.fetcher, ctx.namespaceId, ref.taskspaceId, ref.path);
       if (!res.ok) {
-        this.error = await failureMessage(res, "Failed to open file");
-        this.loading = false;
+        const message = await failureMessage(res, "Failed to open file");
+        if (current()) this.error = message;
         return;
       }
       const body = await res.json();
+      if (!current()) return;
       this.#adopt(typeof body?.content === "string" ? body.content : "", body?.signature ?? null);
     } catch {
-      this.error = "Failed to open file";
+      if (current()) this.error = "Failed to open file";
     } finally {
-      this.loading = false;
+      if (current()) this.loading = false;
     }
   }
 

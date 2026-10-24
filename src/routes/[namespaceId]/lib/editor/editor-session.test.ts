@@ -291,6 +291,58 @@ describe("EditorSession", () => {
     });
   });
 
+  describe("when another file is opened while one loads", () => {
+    const OTHER = { ...REF, path: "other.md" };
+
+    /** Holds the read of REF until released, and answers OTHER at once. */
+    function slowFirstRead(first: Response) {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      const fetcher = vi.fn(async (url: string) => {
+        if (url.includes(REF.path)) {
+          await held;
+          return first;
+        }
+        return ok({ path: OTHER.path, content: "other\n", signature: "sig-other" });
+      }) as unknown as typeof fetch;
+      return { ctx: { fetcher, namespaceId: "p-1" }, release };
+    }
+
+    it("keeps the later file when the earlier read lands last", async () => {
+      const { ctx, release } = slowFirstRead(ok({ content: "first\n", signature: "sig-first" }));
+      const s = new EditorSession();
+      const first = s.open(ctx, REF);
+      await s.open(ctx, OTHER);
+      release();
+      await first;
+      expect(s.file).toEqual(OTHER);
+      expect(s.doc!.text()).toBe("other\n");
+      expect(s.loading).toBe(false);
+    });
+
+    it("keeps the earlier read's failure off the later file", async () => {
+      const { ctx, release } = slowFirstRead(fail(404, "gone"));
+      const s = new EditorSession();
+      const first = s.open(ctx, REF);
+      await s.open(ctx, OTHER);
+      release();
+      await first;
+      expect(s.error).toBeNull();
+      expect(s.doc!.text()).toBe("other\n");
+    });
+
+    it("leaves a file closed while it loads closed", async () => {
+      const { ctx, release } = slowFirstRead(ok({ content: "first\n", signature: "sig-first" }));
+      const s = new EditorSession();
+      const first = s.open(ctx, REF);
+      s.close();
+      release();
+      await first;
+      expect(s.isOpen).toBe(false);
+      expect(s.doc).toBeNull();
+    });
+  });
+
   it("reads a file reopened during its save only after the save lands", async () => {
     const { ctx, answer, bodies } = heldSaves();
     const s = new EditorSession();
