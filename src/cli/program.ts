@@ -367,7 +367,9 @@ export function buildProgram(): Command {
 
   card
     .command("squash [content]")
-    .description("Split an argument or stdin with a regex and add each part as a card")
+    .description(
+      "Split an argument or stdin with a regex and add each part as a card in a new inventory",
+    )
     .option("--namespace <namespaceId>", "Namespace ID or short ID to add the cards to")
     .option("--partition <partitionId>", "Partition ID or short ID (defaults to General)")
     .option("--scope <scopeId>", "Add the cards to a scope ID or short ID")
@@ -379,6 +381,8 @@ export function buildProgram(): Command {
       "--pattern <regex>",
       "JavaScript regex used to split cards (default: period-space, 。, or blank line)",
     )
+    .option("--x <number>", "Horizontal inventory position", integer)
+    .option("--y <number>", "Vertical inventory position", integer)
     .action((content, opts) => cardSquash(content, opts));
 
   card

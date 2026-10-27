@@ -93,9 +93,13 @@ Select a card and press `s` to split it on periods followed by whitespace,
 "Squash" is disabled when there is nothing to split, or when the card is
 stored in an inventory. Take it out first.
 
-The pieces replace the original and remain selected. They inherit its partition,
-layer, width, and scopes, but start with new histories and no glue group.
-Pieces are placed beside and below the original position. Drag any that overlap.
+The pieces replace the original card in a new inventory placed where the card
+was. The inventory opens with the pieces in text order. Each new inventory is
+named "Squash 1", "Squash 2", and so on.
+
+The pieces inherit the card's partition, layer, width, and scopes, but start with
+new histories and no glue group. Removing the inventory puts the pieces on the
+canvas near where the card was.
 
 ## Gluing cards
 

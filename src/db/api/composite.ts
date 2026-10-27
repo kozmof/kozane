@@ -30,7 +30,7 @@ import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
-import { releaseCardsInTx } from "./inventory.js";
+import { addSquashInventoryInTx, releaseCardsInTx } from "./inventory.js";
 import {
   NotFoundError,
   DefaultPartitionError,
@@ -40,9 +40,9 @@ import {
 } from "./utils.js";
 import { and, eq, gt, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
-import type { Card, NeedsPartition, NeedsTaskspace } from "./types.js";
+import type { Card, Inventory, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
-import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
+import { splitCardContent, squashCardPositions, squashInventorySlots } from "../../lib/squash.js";
 
 type CreateCardFromTaskspace = NeedsTaskspace & NeedsPartition & { content: string; db: DB };
 type CreateCardInTaskspaceContext = Omit<CreateCardFromTaskspace, "db"> & { db: Tx };
@@ -127,22 +127,27 @@ type SquashNamespaceCard = {
 };
 
 export type SquashCardResult =
-  | { ok: false; reason: "not-found" | "stored" | "indivisible" | "too-many" }
+  | { ok: false; reason: "not-found" | "stored" | "indivisible" | "too-many" | "inventory-full" }
   | {
       ok: true;
+      /** The new inventory holding the pieces, placed where the source card was. */
+      inventory: Inventory;
+      /** The pieces, stored in `inventory` in text order. */
       cards: Card[];
       /** Cards on the source's layer raised to make room for the pieces. */
       stacking: CardStacking[];
     };
 
 /**
- * Replace a card with one card per text segment in a single transaction. Pieces inherit the
- * partition, layer, taskspace, width, and scope memberships and are laid out from the
- * original position.
+ * Replace a card with one card per text segment in a single transaction, and store the pieces
+ * in a new inventory named "Squash N" at the original position. Pieces inherit the partition,
+ * layer, taskspace, width, and scope memberships. The positions they go back to are laid out
+ * from the original position.
  *
  * Reject a single segment to avoid replacing a card without changing its text. Reject a stored
- * card, since the pieces are laid out on the canvas around a position the card does not
- * occupy. Remove the source from its glue group and leave the new pieces unglued.
+ * card, since the new inventory goes where the card sits on the canvas. Reject pieces that
+ * would pass the inventory's last slot. Remove the source from its glue group. Stored pieces
+ * start unglued.
  *
  * The pieces take consecutive zIndex values from the source's. Cards above the source on its
  * layer are raised by the extra count so no piece ties with, or rises past, a card that sat
@@ -183,6 +188,8 @@ export async function squashNamespaceCard({
     const contents = splitCardContent(source.content);
     if (contents.length < 2) return { ok: false, reason: "indivisible" };
     if (contents.length > BATCH_MAX) return { ok: false, reason: "too-many" };
+    const slots = squashInventorySlots(contents);
+    if (!slots) return { ok: false, reason: "inventory-full" };
 
     // Layout slots only extend right of and below the origin, so cards elsewhere can never
     // block one. Skip reading them rather than scanning the whole board inside the write.
@@ -212,6 +219,13 @@ export async function squashNamespaceCard({
       .where(and(eq(cardTable.layerId, source.layerId), gt(cardTable.zIndex, source.zIndex)))
       .returning({ cardId: cardTable.id, zIndex: cardTable.zIndex });
 
+    const inventory = await addSquashInventoryInTx({
+      db: tx,
+      namespaceId,
+      posX: source.posX,
+      posY: source.posY,
+    });
+
     const cards: Card[] = [];
     // Use one timestamp for every piece, as `addCards` does for CLI squash. See {@link
     // newCardStamps}.
@@ -229,6 +243,8 @@ export async function squashNamespaceCard({
       // Above whatever the source sat above, and in the order the text reads.
       zIndex: source.zIndex + index,
       width: source.width,
+      inventoryId: inventory.id,
+      inventorySlot: slots[index],
     }));
     for (const batch of chunked(rows, { columnsPerRow: columnCount(cardTable) }))
       cards.push(...(await tx.insert(cardTable).values(batch).returning()));
@@ -246,7 +262,7 @@ export async function squashNamespaceCard({
     await unglueCardsInTx({ db: tx, cardIds: [cardId] });
     await tx.delete(cardTable).where(eq(cardTable.id, cardId));
 
-    return { ok: true, cards, stacking };
+    return { ok: true, inventory, cards, stacking };
   });
 }
 

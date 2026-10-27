@@ -122,7 +122,7 @@ Create one card from a quoted argument:
 kozane card add "Investigate caching"
 ```
 
-To turn sentences into separate cards, use `card squash`. By default it splits on a period followed by whitespace (a space or a line break), on `。`, and on blank lines, so dots inside URLs such as `example.com` are preserved. It trims whitespace and ignores empty segments:
+To turn sentences into separate cards, use `card squash`. It puts the cards in a new inventory named `Squash 1`, `Squash 2`, and so on. By default it splits on a period followed by whitespace (a space or a line break), on `。`, and on blank lines, so dots inside URLs such as `example.com` are preserved. It trims whitespace and ignores empty segments:
 
 ```sh
 cat foo.txt | kozane card squash

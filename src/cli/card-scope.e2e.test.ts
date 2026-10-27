@@ -93,7 +93,7 @@ describe("scoped card taskspace CLI flow", () => {
       namespaceId,
     );
 
-    expect(output).toContain("2 cards added.");
+    expect(output).toContain('2 cards added to inventory "Squash 1".');
     const listed = cli(root, "card", "list", "--namespace", namespaceId);
     expect(listed).toContain("Piped first");
     expect(listed).toContain("パイプ二番目");
@@ -116,7 +116,7 @@ describe("scoped card taskspace CLI flow", () => {
       scopeId,
     );
 
-    expect(output).toContain("3 cards added.");
+    expect(output).toContain('3 cards added to inventory "Squash 1".');
     const listed = cli(root, "card", "list", "--namespace", namespaceId);
     expect(listed).toContain("First thought");
     expect(listed).toContain("第二の考え");

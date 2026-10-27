@@ -15,11 +15,12 @@ const FAILURE_MESSAGE: Record<SquashFailure, string> = {
   stored: "Stored cards cannot be squashed. Take the card out of its inventory first",
   indivisible: "Card text does not split into more than one card",
   "too-many": `Card text splits into more than ${BATCH_MAX} cards`,
+  "inventory-full": "Card text splits into more pieces than one inventory holds",
 };
 
 /**
- * Replace one card with a card per text segment. Use the server's shared split pattern rather
- * than accepting arbitrary client regular expressions.
+ * Replace one card with a card per text segment, stored in a new inventory. Use the server's
+ * shared split pattern rather than accepting arbitrary client regular expressions.
  */
 export const POST: RequestHandler = async ({ locals, params, request }) => {
   const { db } = locals;
@@ -30,9 +31,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const result = await squashNamespaceCard({ db, namespaceId, cardId, ...canvasBounds() });
   if (!result.ok) throw error(400, FAILURE_MESSAGE[result.reason]);
 
-  // Return full stored rows so clients use the positions laid out and clamped here. The
+  // Return full stored rows so clients use the slots and return positions planned here. The
   // pieces start unglued. `stacking` names the cards raised above them.
   return json({
+    inventory: result.inventory,
     cards: result.cards.map(
       (card) => ({ ...withCardInventory(card), glueId: null }) satisfies CardWithGlue,
     ),

@@ -1,4 +1,5 @@
-import { CANVAS_W } from "./constants.js";
+import { CANVAS_W, INVENTORY_SLOT_MAX } from "./constants.js";
+import { cardSpan, lastCell, planStow } from "./inventory.js";
 
 /**
  * Split at a period followed by whitespace, at `。`, or at a blank line. Preserve periods
@@ -57,4 +58,32 @@ export function squashCardPositions(
   // any remaining positions.
   while (positions.length < count) positions.push({ ...origin });
   return positions;
+}
+
+/**
+ * Plan the slots of squashed pieces in a new, empty inventory, in text order. Return null when
+ * the pieces would pass {@link INVENTORY_SLOT_MAX}, so the caller can refuse before writing.
+ */
+export function squashInventorySlots(contents: readonly string[]): number[] | null {
+  const sized = contents.map((content, index) => ({
+    cardId: String(index),
+    span: cardSpan(content),
+  }));
+  const plan = planStow([], sized, null);
+  const slotOf = new Map(plan.map(({ cardId, slot }) => [cardId, slot]));
+  const slots = sized.map(({ cardId }) => slotOf.get(cardId)!);
+  const fits = sized.every(({ span }, index) => lastCell(slots[index], span) <= INVENTORY_SLOT_MAX);
+  return fits ? slots : null;
+}
+
+const SQUASH_INVENTORY_NAME = /^Squash (\d+)$/;
+
+/** The next free "Squash N" name, one past the highest N already taken. */
+export function nextSquashInventoryName(existingNames: Iterable<string>): string {
+  let highest = 0;
+  for (const name of existingNames) {
+    const match = SQUASH_INVENTORY_NAME.exec(name);
+    if (match) highest = Math.max(highest, Number(match[1]));
+  }
+  return `Squash ${highest + 1}`;
 }

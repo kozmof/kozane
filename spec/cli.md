@@ -334,9 +334,15 @@ Split argument or piped text into new cards, trimming segments and skipping empt
 default separator is a period followed by whitespace, `。`, or a blank line. Dots in
 `example.com` remain intact. Use `--pattern` for a JavaScript regular expression source.
 
+The cards go into a new inventory in text order. The inventory is named `Squash N`, where N
+is one more than the highest such number in the namespace. `--x` and `--y` place the
+inventory and default to 0. `kozane inventory take` without `--x` and `--y` puts a card at a
+free grid position near the inventory.
+
 Accepts `--namespace`, `--partition`, `--scope`, and `--layer` with the same resolution as
-`card add`. Cards occupy free grid positions. Creation and scope membership are atomic. All
-pieces share new creation and update timestamps, and each must fit `ui.contentMax`.
+`card add`. Creating the inventory, the cards, and scope membership is atomic. All pieces
+share new creation and update timestamps, and each must fit `ui.contentMax`. The command
+fails when the pieces do not fit in one inventory.
 
 ```bash
 kozane card squash "First thought. 第二の考え。 Third thought."

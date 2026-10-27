@@ -22,6 +22,7 @@ import {
   type SlotPlacement,
   type TakenCard,
 } from "../../lib/inventory.js";
+import { nextSquashInventoryName } from "../../lib/squash.js";
 import {
   caseUpdateBatches,
   cardsBelongToNamespace,
@@ -85,6 +86,24 @@ export async function addInventory({
     .values({ namespaceId, name, posX, posY })
     .returning();
   return row;
+}
+
+/**
+ * Add an inventory named after the namespace's next free "Squash N", to hold a squashed card's
+ * pieces. Call inside the squash's transaction so two squashes cannot take the same number.
+ */
+export async function addSquashInventoryInTx({
+  db: tx,
+  namespaceId,
+  posX,
+  posY,
+}: NeedsTx & { namespaceId: string; posX: number; posY: number }): Promise<Inventory> {
+  const existing = await tx
+    .select({ name: inventoryTable.name })
+    .from(inventoryTable)
+    .where(eq(inventoryTable.namespaceId, namespaceId));
+  const name = nextSquashInventoryName(existing.map(({ name }) => name));
+  return addInventory({ db: tx, namespaceId, name, posX, posY });
 }
 
 type UpdateInventory = NeedsNamespaceInventory & {

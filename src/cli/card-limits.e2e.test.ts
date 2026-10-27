@@ -220,7 +220,7 @@ describe("card squash", () => {
     cli(root, "init");
     const result = run(root, ["card", "squash"], "one. two. three. four");
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("4 cards added.");
+    expect(result.stdout).toContain('4 cards added to inventory "Squash 1".');
   });
 });
 

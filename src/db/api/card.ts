@@ -293,7 +293,14 @@ export async function addCard({
 
 type AddCards = NeedsPartition & {
   layerId: string;
-  cards: { content: string; posX: number; posY: number }[];
+  cards: {
+    content: string;
+    posX: number;
+    posY: number;
+    /** Store the card straight away. Set both or neither. */
+    inventoryId?: string;
+    inventorySlot?: number;
+  }[];
 };
 
 /**

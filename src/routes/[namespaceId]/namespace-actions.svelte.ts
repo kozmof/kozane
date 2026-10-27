@@ -3,7 +3,13 @@ import type { CardWithGlue, GlueRel } from "$lib/types";
 import type { NamespaceState } from "./namespace-state.svelte.js";
 import type { BoardRect } from "$lib/constants";
 import { storedCardIds } from "$lib/inventory";
-import { readArray, readFiniteNumber, readString, readStringArray } from "./lib/response.js";
+import {
+  readArray,
+  readFiniteNumber,
+  readObject,
+  readString,
+  readStringArray,
+} from "./lib/response.js";
 
 /**
  * Roll back only the affected cards and fields against current state. Restoring a captured
@@ -204,7 +210,8 @@ export function createNamespaceActions(state: NamespaceState) {
     }
     const parsed = await res.json().catch(() => null);
     const cards = api.parseCards(parsed);
-    if (!cards) {
+    const inventory = api.parseInventory(readObject(parsed, "inventory"));
+    if (!cards || !inventory) {
       state.setError("Failed to squash card");
       return;
     }
@@ -227,10 +234,13 @@ export function createNamespaceActions(state: NamespaceState) {
       ...state.scopeRels.filter((r) => r.cardId !== cardId),
       ...scopeIds.flatMap((scopeId) => cards.map((c) => ({ scopeId, cardId: c.id }))),
     ];
-    // Select the new pieces to keep the action bar available after replacing the original
-    // card.
-    state.selection.selectedCards = new Set<string>(cards.map((c) => c.id));
-    state.selection.primarySelectedId = cards[0].id;
+    // The pieces sit in a new inventory where the card was. Open it so they stay in view.
+    state.inventories = [...state.inventories, inventory];
+    state.openInventoryIds = new Set([...state.openInventoryIds, inventory.id]);
+    state.selection.selectedCards = new Set(
+      [...state.selection.selectedCards].filter((id) => id !== cardId),
+    );
+    if (state.selection.primarySelectedId === cardId) state.selection.primarySelectedId = null;
     state.selection.composerCard = null;
     state.selection.resizingCardId = null;
   }

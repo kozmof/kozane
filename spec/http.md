@@ -157,16 +157,20 @@ Links to unplaced taskspaces, and to taskspaces of the target namespace, are kep
 
 ### `POST /[namespaceId]/api/cards/squash`
 
-Atomically replace a card with one card per text segment, preserving its scopes.
-Body requires `cardId`. The separator matches the CLI default and cannot be customized.
+Atomically replace a card with one card per text segment, preserving its scopes. The
+pieces go into a new inventory at the card's position. The inventory is named `Squash N`,
+where N is one more than the highest such number in the namespace. Body requires `cardId`.
+The separator matches the CLI default and cannot be customized.
 
-Return `{ cards: [...], stacking: [{ cardId, zIndex }] }`.
-Pieces are complete rows with laid-out, clamped positions and null `glueId`.
-They take consecutive stacking values from the original. Cards above them are
-raised and included in `stacking`.
+Return `{ inventory, cards: [...], stacking: [{ cardId, zIndex }] }`.
+`inventory` is the new inventory's row. Pieces are complete rows stored in it in text
+order, with null `glueId`. Their `posX` and `posY` are where a take without a position
+returns them, laid out from the original and clamped to the board. They take consecutive
+stacking values from the original. Cards above them are raised and included in `stacking`.
 
 Return 400 for a card outside this namespace, a card stored in an inventory,
-fewer than two pieces, or more than 2,000 pieces.
+fewer than two pieces, more than 2,000 pieces, or pieces that do not fit in one
+inventory.
 
 ## Glue
 

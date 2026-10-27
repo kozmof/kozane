@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
 import NamespacePage from "./+page.svelte";
 import { SAFE_AREA_GRACE_MS } from "./lib/namespace-page.js";
 import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
@@ -1929,7 +1929,7 @@ describe("Squash", () => {
       zIndex: 0,
       glueId: null,
       taskspaceId: null,
-      inventory: null,
+      inventory: { id: "inv-squash", slot: 0 },
       width: null,
     },
     {
@@ -1942,13 +1942,24 @@ describe("Squash", () => {
       zIndex: 1,
       glueId: null,
       taskspaceId: null,
-      inventory: null,
+      inventory: { id: "inv-squash", slot: 1 },
       width: null,
     },
   ];
 
-  it("replaces the selected card with the pieces the server answers with", async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cards: pieces }) });
+  const squashInventory = {
+    id: "inv-squash",
+    namespaceId: "namespace-1",
+    name: "Squash 1",
+    posX: 24,
+    posY: 48,
+  };
+
+  it("replaces the selected card with an open inventory holding the pieces", async () => {
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ inventory: squashInventory, cards: pieces }),
+    });
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
       props: { data: splittable, params: { namespaceId: "namespace-1" }, form: null },
@@ -1964,15 +1975,32 @@ describe("Squash", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cardId: "card-1" }),
     });
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Card: First thought" })).toBeInTheDocument(),
-    );
-    expect(screen.getByRole("button", { name: "Card: Second thought" })).toBeInTheDocument();
+    const opened = await screen.findByRole("region", { name: "Inventory Squash 1" });
+    expect(within(opened).getByRole("button", { name: "Card: First thought" })).toBeInTheDocument();
+    expect(
+      within(opened).getByRole("button", { name: "Card: Second thought" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Card: First thought. Second thought" }),
     ).not.toBeInTheDocument();
-    // The pieces are what is selected now, so the next action lands on them.
-    expect(screen.getByText("2 cards")).toBeInTheDocument();
+  });
+
+  it("reports a failure when the answer leaves out the inventory", async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ cards: pieces }) });
+    vi.stubGlobal("fetch", fetch);
+    render(NamespacePage, {
+      props: { data: splittable, params: { namespaceId: "namespace-1" }, form: null },
+    });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: "Card: First thought. Second thought" }),
+    );
+    await fireEvent.keyDown(window, { key: "s" });
+
+    expect(await screen.findByText("Failed to squash card")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Card: First thought. Second thought" }),
+    ).toBeInTheDocument();
   });
 
   it("offers nothing to press for a card with no split in it", async () => {

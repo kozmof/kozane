@@ -9,6 +9,11 @@ function record(source: unknown): Record<string, unknown> | undefined {
   return source as Record<string, unknown>;
 }
 
+/** A nested object field, such as the inventory a squash created. */
+export function readObject(source: unknown, key: string): Record<string, unknown> | undefined {
+  return record(record(source)?.[key]);
+}
+
 export function readString(source: unknown, key: string): string | undefined {
   const value = record(source)?.[key];
   return typeof value === "string" && value.length > 0 ? value : undefined;

@@ -19,7 +19,7 @@ import { getGlueRelsByCards, glueCards } from "./glue.js";
 import { cardTable, glueTable } from "../schema.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer, getAllLayers, getDefaultLayer, getLayer } from "./layer.js";
-import { addInventory, stowCards } from "./inventory.js";
+import { addInventory, getAllInventories, getInventoryCards, stowCards } from "./inventory.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -607,6 +607,40 @@ describe("squashNamespaceCard", () => {
     ]);
     expect(await getCard({ db, partitionId, cardId })).toBeUndefined();
     expect(await getAllCards({ db, partitionId })).toHaveLength(3);
+  });
+
+  it("stores the pieces in a new inventory where the card sat, in text order", async () => {
+    const { db, namespaceId, cardId } = await squashSetup();
+
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.inventory).toMatchObject({
+      namespaceId,
+      name: "Squash 1",
+      posX: 1000,
+      posY: 500,
+    });
+    expect(await getAllInventories({ db, namespaceId })).toEqual([result.inventory]);
+    expect(await getInventoryCards({ db, inventoryId: result.inventory.id })).toEqual(
+      result.cards.map(({ id, content }, slot) => ({ id, content, slot })),
+    );
+    for (const card of result.cards) expect(card.inventoryId).toBe(result.inventory.id);
+  });
+
+  it("numbers each squash inventory one past the highest in the namespace", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    await addInventory({ db, namespaceId, name: "Squash 4", posX: 0, posY: 0 });
+    await addInventory({ db, namespaceId, name: "Bag", posX: 0, posY: 0 });
+    const first = await addCard({ db, partitionId, content: "A. B" });
+    const second = await addCard({ db, partitionId, content: "C. D" });
+
+    const a = await squashNamespaceCard({ db, namespaceId, cardId: first, ...CANVAS });
+    const b = await squashNamespaceCard({ db, namespaceId, cardId: second, ...CANVAS });
+
+    expect(a.ok && a.inventory.name).toBe("Squash 5");
+    expect(b.ok && b.inventory.name).toBe("Squash 6");
   });
 
   it("refuses a stored card and leaves it in its inventory", async () => {

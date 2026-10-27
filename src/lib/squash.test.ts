@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { splitCardContent, squashCardPositions } from "./squash";
-import { CANVAS_W } from "./constants";
+import {
+  nextSquashInventoryName,
+  splitCardContent,
+  squashCardPositions,
+  squashInventorySlots,
+} from "./squash";
+import { CANVAS_W, INVENTORY_COLUMNS } from "./constants";
 
 describe("splitCardContent", () => {
   it("splits on period-space, Japanese full stops, and blank lines by default", () => {
@@ -84,5 +89,34 @@ describe("squashCardPositions", () => {
       { posX: CANVAS_W - 100, posY: 0 },
       { posX: CANVAS_W - 100, posY: 160 },
     ]);
+  });
+});
+
+describe("squashInventorySlots", () => {
+  it("fills slots left to right in text order", () => {
+    expect(squashInventorySlots(["a", "b", "c"])).toEqual([0, 1, 2]);
+  });
+
+  it("wraps after the last column", () => {
+    const pieces = Array.from({ length: INVENTORY_COLUMNS + 1 }, (_, i) => `p${i}`);
+    expect(squashInventorySlots(pieces)?.at(-1)).toBe(INVENTORY_COLUMNS);
+  });
+
+  it("refuses pieces that pass the last slot", () => {
+    // Long pieces cover the most rows each, so fewer than the batch limit run off the grid.
+    const pieces = Array.from({ length: 2_000 }, () => "word ".repeat(200));
+    expect(squashInventorySlots(pieces)).toBeNull();
+  });
+});
+
+describe("nextSquashInventoryName", () => {
+  it("starts at 1", () => {
+    expect(nextSquashInventoryName([])).toBe("Squash 1");
+  });
+
+  it("goes one past the highest number, ignoring other names", () => {
+    expect(
+      nextSquashInventoryName(["Squash 2", "Bag", "Squash 9", "Squash x", "My Squash 20"]),
+    ).toBe("Squash 10");
   });
 });

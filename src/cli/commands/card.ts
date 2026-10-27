@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { and, eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
-import { partitionTable, cardTable, namespaceTable, scopeTable } from "../../db/schema.js";
+import {
+  partitionTable,
+  cardTable,
+  inventoryTable,
+  namespaceTable,
+  scopeTable,
+} from "../../db/schema.js";
 import {
   addCard,
   addCards,
@@ -45,8 +51,8 @@ import { compareIds } from "../../lib/order.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
 import { readTaskspaceMarker } from "../lib/taskspace-marker.js";
 import { withTx } from "../../db/tx.js";
-import { refitStoredCardInTx } from "../../db/api/inventory.js";
-import { splitCardContent, squashCardPositions } from "../../lib/squash.js";
+import { addSquashInventoryInTx, refitStoredCardInTx } from "../../db/api/inventory.js";
+import { splitCardContent, squashCardPositions, squashInventorySlots } from "../../lib/squash.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { checkCardContent, contentLimitIssue } from "../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
@@ -73,7 +79,7 @@ type CardAddOptions = Omit<CardOptions, "taskspace"> & {
   x?: number;
   y?: number;
 };
-type CardSquashOptions = Omit<CardAddOptions, "x" | "y"> & { pattern?: string };
+type CardSquashOptions = CardAddOptions & { pattern?: string };
 type CardShowOptions = { times?: boolean };
 type CardGlueOptions = { add?: boolean; alignList?: boolean };
 type CardMoveOptions = { x?: number | string; y?: number | string };
@@ -161,23 +167,33 @@ export async function cardSquash(
       if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
     }
 
+    const slots = squashInventorySlots(contents);
+    if (!slots)
+      throw new Error(
+        `${contents.length} cards do not fit in one inventory. Split the text more coarsely.`,
+      );
+
     const namespaceId = await resolveNamespaceId(db, options.namespace);
     const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
     const layerId = await resolveLayerId(db, namespaceId, options.layer);
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
+    const bounds = canvasBoundsForRoot(root);
+    const origin = clampToBounds(options.x ?? 0, options.y ?? 0, bounds);
     const occupied = await db
       .select({ posX: cardTable.posX, posY: cardTable.posY })
       .from(cardTable)
       .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
       // A stored card's position is where it goes back to, not space it takes up now.
       .where(and(eq(partitionTable.namespaceId, namespaceId), onCanvas));
-    // Lay out columns using the workspace's `ui.canvasWidth`, then clamp overflowing rows to
-    // the board. `squashNamespaceCard` uses the same steps.
-    const bounds = canvasBoundsForRoot(root);
+    // The cards go into a new inventory at the origin. Lay out the positions they go back to
+    // from there, using the workspace's `ui.canvasWidth`, and clamp them to the board.
+    // `squashNamespaceCard` uses the same steps.
     const positions = squashCardPositions(occupied, contents.length, {
+      origin,
       canvasWidth: bounds.canvasWidth,
     });
-    const ids = await withTx(db, async (tx) => {
+    const { inventory, ids } = await withTx(db, async (tx) => {
+      const inventory = await addSquashInventoryInTx({ db: tx, namespaceId, ...origin });
       const cardIds = await addCards({
         db: tx,
         partitionId,
@@ -185,15 +201,28 @@ export async function cardSquash(
         cards: contents.map((cardContent, index) => ({
           content: cardContent,
           ...clampToBounds(positions[index].posX, positions[index].posY, bounds),
+          inventoryId: inventory.id,
+          inventorySlot: slots[index],
         })),
       });
       if (scopeId) await addScopeRels({ db: tx, scopeId, cardIds });
-      return cardIds;
+      return { inventory, ids: cardIds };
     });
 
-    const allCards = await db.select({ id: cardTable.id }).from(cardTable);
+    const [allCards, allInventories] = await Promise.all([
+      db.select({ id: cardTable.id }).from(cardTable),
+      db.select({ id: inventoryTable.id }).from(inventoryTable),
+    ]);
     const shortIds = shortIdMap(allCards.map(({ id }) => id));
-    console.log(`${ids.length} ${ids.length === 1 ? "card" : "cards"} added.`);
+    console.log(
+      `${ids.length} ${ids.length === 1 ? "card" : "cards"} added to inventory "${inventory.name}".`,
+    );
+    console.log(
+      `  inventory: ${shortId(
+        inventory.id,
+        allInventories.map(({ id }) => id),
+      )}`,
+    );
     for (const id of ids) console.log(`  ${shortIds.get(id) ?? id}`);
   });
 }
