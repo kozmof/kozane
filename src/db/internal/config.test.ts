@@ -1,11 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   _resetWorkspaceRootForTest,
   getTaskspaceDefaultDir,
   getUiConfigForRoot,
+  getWorkspaceName,
   getWorkspaceUiConfig,
 } from "./config.js";
 import { DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
@@ -125,5 +126,25 @@ describe("two workspaces in one process", () => {
     } finally {
       rmSync(other, { recursive: true, force: true });
     }
+  });
+});
+
+describe("getWorkspaceName", () => {
+  it("reads the configured name", () => {
+    writeConfig({ name: "  My workspace  " });
+    expect(getWorkspaceName()).toBe("My workspace");
+  });
+
+  it("follows an edit to the name without a restart", () => {
+    expect(getWorkspaceName()).toBe("w");
+    writeConfig({ name: "renamed" });
+    expect(getWorkspaceName()).toBe("renamed");
+  });
+
+  it("falls back to the folder name when the config has no usable name", () => {
+    writeConfig({ name: "   " });
+    expect(getWorkspaceName()).toBe(basename(root));
+    writeConfig({});
+    expect(getWorkspaceName()).toBe(basename(root));
   });
 });

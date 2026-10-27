@@ -121,6 +121,18 @@ afterEach(() => {
 });
 
 describe("Namespace page", () => {
+  it("names the browser tab after the namespace", () => {
+    render(NamespacePage, {
+      props: {
+        data: { ...data, namespace: { ...data.namespace, name: "Research notes" } },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+      },
+    });
+
+    expect(document.title).toBe("Research notes");
+  });
+
   it("uses the configured zoom step", async () => {
     const { container } = render(NamespacePage, {
       props: {

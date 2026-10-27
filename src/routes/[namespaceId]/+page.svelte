@@ -606,6 +606,10 @@
   }
 </script>
 
+<svelte:head>
+  <title>{data.namespace.name}</title>
+</svelte:head>
+
 <svelte:window onkeydown={handleKeydown} />
 
 <div class={css({ display: "flex", height: "100vh", overflow: "hidden", backgroundColor: "ink.lighter" })}>

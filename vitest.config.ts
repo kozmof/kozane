@@ -28,6 +28,7 @@ export default defineConfig({
       "$app/navigation": path.resolve("./src/test-utils/app-navigation.ts"),
       "$app/environment": path.resolve("./src/test-utils/app-environment.ts"),
       "$app/state": path.resolve("./src/test-utils/app-state.ts"),
+      "$app/forms": path.resolve("./src/test-utils/app-forms.ts"),
     },
   },
   test: {

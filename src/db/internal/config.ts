@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
@@ -94,6 +94,18 @@ function workspaceDbUrl(): string | null {
 
 export function getWorkspaceRoot(): string | null {
   return resolveWorkspaceRoot();
+}
+
+/**
+ * The workspace's `name` from its config, trimmed. Fall back to the folder name when `name` is
+ * blank or missing, since `kozane init` uses the folder name as the default. Return null when
+ * no workspace is found.
+ */
+export function getWorkspaceName(): string | null {
+  const root = resolveWorkspaceRoot();
+  if (!root) return null;
+  const name = readParsedConfig(root)?.name;
+  return typeof name === "string" && name.trim() ? name.trim() : basename(root);
 }
 
 // The server uses the same parser as the CLI but skips invalid fields.

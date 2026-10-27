@@ -9,6 +9,11 @@ Run `kozane open` to start the server and open the browser at
 `http://127.0.0.1:17173` by default. Choose a namespace to open its canvas.
 The default namespace is marked "Default".
 
+The browser tab shows the workspace name on the namespace list and the namespace
+name on its canvas. To rename the workspace, edit `name` in `.kozane/config.json`.
+The change shows on the next page load. A blank or missing `name` falls back to
+the workspace folder name.
+
 To create a namespace, enter a name below the list and click `+`. It starts with
 the "General" partition and "Base" layer. The back arrow in the left panel
 returns to the namespace list.

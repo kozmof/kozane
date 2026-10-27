@@ -1,7 +1,7 @@
 import type { Actions, PageServerLoad, RequestEvent } from "./$types";
 import { fail } from "@sveltejs/kit";
 import { createNamespace, getAllNamespaces } from "../db/api/namespace.js";
-import { getWorkspaceRoot } from "../db/internal/config.js";
+import { getWorkspaceName, getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
 import { isSsgBuild } from "$lib/server/ssg";
 
@@ -14,6 +14,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   return {
     namespaces,
     workspaceRoot: readonly ? null : getWorkspaceRoot(),
+    workspaceName: getWorkspaceName(),
     readonly,
   };
 };

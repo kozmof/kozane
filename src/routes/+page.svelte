@@ -24,6 +24,10 @@
   });
 </script>
 
+<svelte:head>
+  <title>{data.workspaceName ?? "Kozane"}</title>
+</svelte:head>
+
 <main class={css({ padding: "48px", backgroundColor: "ink.lighter", minHeight: "100vh" })}>
   <!-- Link to workspace-wide map and tag views from the namespace index. These links also let the prerender crawler discover the routes. -->
   <div
