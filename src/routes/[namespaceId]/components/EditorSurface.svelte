@@ -236,8 +236,8 @@
   function deleteSelection(): boolean {
     const span = selected();
     if (!span) return false;
-    // The live caret is one end of the selection, and which end depends on the direction
-    // it was dragged. It is where undo has to put it back to.
+    // Preserve the caret's end of the selection so undo restores it after a drag in either
+    // direction.
     caret = doc.delete(span.start, span.end, caret);
     collapse();
     return true;
@@ -561,8 +561,7 @@
     if (!scrollEl) return;
     const viewTop = scrollEl.scrollTop;
     const viewHeight = scrollEl.clientHeight;
-    // Before the panel has been laid out there is no view to be in or out of, and scrolling
-    // against a zero height would only move the file away from the caret.
+    // Wait for a nonzero viewport height before scrolling to keep the caret visible.
     if (viewHeight === 0) return;
     if (top < viewTop) scrollEl.scrollTop = top;
     else if (top + LINE_HEIGHT > viewTop + viewHeight)
@@ -593,8 +592,7 @@
     color: "ink.black",
     cursor: "text",
     outline: "none",
-    // Keep the scrollbar's space reserved so it appearing cannot change the row width and
-    // with it the wrapping that decided whether it appears.
+    // Reserve scrollbar space so showing it cannot change row width and trigger rewrapping.
     scrollbarGutter: "stable",
     // Contain the rows', cursor's, and input sink's z-indexes so they stack only against
     // each other. Otherwise rows spanning the panel paint over its resize handle and take

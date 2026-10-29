@@ -222,9 +222,8 @@ export function createCardActions(state: NamespaceState) {
       state.setError("Failed to move cards to another layer");
       return;
     }
-    // The server restacks arriving cards above the target layer's own, and says where they
-    // landed. Applying that keeps the canvas from drawing them in the order they had on the
-    // layer they came from until the next snapshot poll corrects it.
+    // Apply server-assigned stacking immediately so arriving cards appear above existing
+    // cards on the target layer without waiting for a snapshot poll.
     const parsed = await res.json().catch(() => null);
     state.cards = withStacking(state.cards, readStacking(parsed));
     // Select the destination layer so the moved cards remain in front.

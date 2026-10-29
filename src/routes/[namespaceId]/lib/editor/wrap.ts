@@ -241,9 +241,8 @@ export class LineWrapper {
   readonly cols: number;
   readonly tabSize: number;
   /**
-   * Rows of the wrapping lines in the last layout. Each layout keeps only its own lines, so
-   * the cache follows the document: an edit misses on the lines it changed and nothing else,
-   * and lines no longer in the document are dropped.
+   * Cache wrapped rows for lines in the latest layout. Reuse unchanged lines, recalculate
+   * edited lines, and drop lines removed from the document.
    */
   #cache = new Map<string, readonly number[]>();
 

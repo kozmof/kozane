@@ -102,8 +102,8 @@
       return;
     }
     creating = null;
-    // Open newly created files in the editor, as the panel does. Folders and taskspaces need
-    // no editor; the refreshed listing shows them in the strip.
+    // Open newly created files in the editor. Show new folders and taskspaces in the
+    // refreshed strip listing.
     if ("kind" in made && made.kind === "file") onOpenFile?.(made.taskspaceId, made.path);
   }
 
@@ -133,9 +133,9 @@
   const top = $derived(area.posY + area.height + STRIP_GAP);
 
   /**
-   * Head each listing with its taskspace's name only when a scope has more than one, and only
-   * where there are no create controls; otherwise the frame's scope label is enough. With the
-   * controls, the name is written under them instead, on the line the file names use.
+   * Show taskspace headings when the scope has multiple taskspaces and no create controls.
+   * With create controls, label each taskspace below its controls instead. A single taskspace
+   * needs only the frame's scope label.
    */
   const named = $derived(groups.length > 1);
 

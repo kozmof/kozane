@@ -316,7 +316,7 @@ describe("deleteLayerWithReassign", () => {
     const { db, namespaceId, partitionId } = await setup();
     const defaultLayer = await getDefaultLayer({ db, namespaceId });
     const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
-    // Default-layer cards at 0..5; moved cards at 2 and 3 would otherwise interleave with them.
+    // Restack moved cards at 2 and 3 above the default layer's range of 0..5 to avoid interleaving.
     const base = await addCard({
       db,
       partitionId,

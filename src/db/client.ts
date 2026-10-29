@@ -48,8 +48,7 @@ export async function getDb(): Promise<DB> {
     const url = getDBURL();
     const opening: Promise<DB> = openDb(url)
       .then(({ db, close }) => {
-        // `resetDb` ran while this connection was opening. Close it rather than reinstall
-        // state the reset already cleared.
+        // Close this connection because `resetDb` cleared the cached state while it was opening.
         if (_dbPromise !== opening) {
           close();
           throw new Error("Database connection was reset while opening");

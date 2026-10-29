@@ -21,7 +21,7 @@ export function hasChange(changes: Changes, field: FieldSpec): boolean {
   return hasOwn(changes, field.path);
 }
 
-/** The value the form shows: a pending change, then the file, then the default. */
+/** Displayed value, chosen from pending changes, the file, then the default. */
 export function currentValue(
   snapshot: ConfigSnapshot,
   changes: Changes,

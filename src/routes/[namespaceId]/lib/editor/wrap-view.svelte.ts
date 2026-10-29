@@ -50,9 +50,8 @@ export class WrapView {
     this.layout = $derived.by(() => {
       if (!this.#wrapper.wraps) return WrapLayout.unwrapped(lineCount);
       const wrapped = this.#wrapper.layout(text);
-      // Lines are split the way Reed splits them. Should they ever disagree, draw unwrapped
-      // rather than put the caret on the wrong line, and say so once, since nothing on
-      // screen would.
+      // Fall back to unwrapped lines if our line count differs from Reed's so the caret stays
+      // on the correct line. Log the mismatch once because the UI does not report it.
       if (wrapped.lineCount === Math.max(1, lineCount)) return wrapped;
       if (!this.#warned) {
         this.#warned = true;

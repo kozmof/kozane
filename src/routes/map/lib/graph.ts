@@ -38,8 +38,7 @@ export function scopeRailRows(count: number, area: Rect): number {
   return Math.min(wanted, affordable);
 }
 
-/** The band those rows occupy, along the bottom of `area`. Zero-height when there are no
- *  scopes, so a workspace without any gives the whole map to the packing. */
+/** Bottom band of `area` reserved for scope rows. Without scopes, its height is zero. */
 export function scopeRail(count: number, area: Rect): Rect {
   const rows = scopeRailRows(count, area);
   if (rows === 0) return { x: area.x, y: area.y + area.height, width: area.width, height: 0 };

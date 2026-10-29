@@ -16,7 +16,7 @@ import {
   resolveScopeId,
 } from "./card-refs.js";
 
-/** A namespace with the default partition and layer `kozane namespace create` gives one. */
+/** A namespace with the default partition and layer created by `kozane namespace create`. */
 async function namespace(db: DB, name: string) {
   const namespaceId = await addNamespace({ db, name });
   const { id: layerId } = await addLayer({ db, namespaceId, name: "Base", isDefault: true });

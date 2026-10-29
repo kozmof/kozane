@@ -244,13 +244,11 @@ export function openTagCache({
         nextFiles[baseDir] = entries;
       }
       for (const { baseDir, changed: moved } of scanned) {
-        // The entries this process holds, but only where they can differ from what is
-        // already stored. Exporting rebuilds the record, and a fresh object of identical
-        // contents is what would make the no-op check below fail and write anyway.
+        // Reuse unchanged records to preserve object identity. Exporting identical entries
+        // would create a new object and trigger an unnecessary cache write.
         const kept = nextFiles[baseDir];
         const entries = moved || !kept ? exportTaskspaceTagCache(baseDir) : kept;
-        // Re-set even when it was already there, so a directory looked at again moves to the
-        // end of the insertion order the eviction below reads as least-recently-used.
+        // Move each visited directory to the end so eviction removes the least recently used.
         if (entries) setLast(nextFiles, baseDir, entries);
         else delete nextFiles[baseDir];
       }

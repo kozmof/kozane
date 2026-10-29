@@ -29,8 +29,8 @@ export type UiConfig = {
    */
   editorVimMode: boolean;
   /**
-   * Whether the file editor saves shortly after typing stops, and saves pending edits on
-   * close instead of asking. Enabled by default; set it to false to save only by hand.
+   * Whether the file editor saves after typing pauses and saves pending edits before closing.
+   * Enabled by default. Set it to false to save manually and prompt before closing unsaved edits.
    */
   editorAutoSave: boolean;
   /** Diameter of a warp marker, in canvas pixels. */

@@ -22,7 +22,7 @@
     onchange,
   }: {
     field: FieldSpec;
-    /** What the control starts with: a pending change, the file's value, or the default. */
+    /** Initial control value, chosen from pending changes, the file, then the default. */
     value: unknown;
     changed: boolean;
     usingDefault: boolean;

@@ -308,9 +308,7 @@
                   </button>
                   {#if !readonly}
                     <span class={taskspaceActionsClass}>
-                      <!-- The taskspace root gets the same pair every folder under it has,
-                           because the root is the folder most files are made in and reaching
-                           it through the tree would mean opening nothing. -->
+                      <!-- Offer file and folder creation at the taskspace root without opening its tree. -->
                       <TaskspaceCreateButtons
                         where="this taskspace"
                         onCreate={(kind) => startCreate(taskspace.id, kind)}

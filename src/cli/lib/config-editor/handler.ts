@@ -17,7 +17,7 @@ export type EditorContext = {
   token: string;
   /** `Host` header values the server answers to, such as `127.0.0.1:41234`. */
   allowedHosts: ReadonlySet<string>;
-  /** The built page, `dist/config-editor`: `index.html` and an `assets` directory. */
+  /** Built page in `dist/config-editor`, containing `index.html` and an `assets` directory. */
   assetsDir: string;
 };
 

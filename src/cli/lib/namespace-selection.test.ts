@@ -47,8 +47,8 @@ describe("resolveNamespaceId", () => {
       expect(await resolveNamespaceId(db, namespaceId)).toBe(namespaceId);
     });
 
-    // A short id is the last 12 characters of the compacted uuid, so an id given without
-    // its dashes has to resolve to the same row the dashed form does.
+    // Short IDs use the compact UUID's last 12 characters. Resolve the same row whether
+    // the full UUID includes dashes or omits them.
     it("accepts the id with its dashes stripped", async () => {
       const db = await createTestDB();
       const namespaceId = await addNamespace({ db, name: "target" });

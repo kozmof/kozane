@@ -121,8 +121,7 @@ describe("GET /tags", () => {
     expect(data.cardTotal).toBe(over);
   });
 
-  /** Which partition a card is in is deliberately not on a hit, so the page joins it back for
-   *  the hits it is actually showing. */
+  /** Look up partitions only for displayed hits because hits do not include partition data. */
   it("names the partition of each card it sends", async () => {
     const { db, partitionId } = await setup();
     const cardId = await addCard({ db, partitionId, content: ":perf" });
@@ -165,9 +164,8 @@ describe("as a static export", () => {
     vi.stubEnv("KOZANE_SSG", "1");
     for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
     vi.resetModules();
-    // The root is resolved once and cached for the process, so a test that sets one has to
-    // drop what an earlier one resolved. Imported from the module graph this call is about
-    // to rebuild, hence inside rather than at the top of the file.
+    // Clear the cached workspace root before rebuilding the module graph. Import the reset
+    // here so it uses the same module instance as the previously resolved root.
     (await import("$db/internal/config"))._resetWorkspaceRootForTest();
     const { load } = await import("./+page.server.js");
     return (await load({ locals: { db }, url: new URL("http://localhost/tags") } as never)) as {

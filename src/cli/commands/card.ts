@@ -293,8 +293,8 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
     if (!checked.ok) throw new Error(checked.issue);
     const { content } = checked;
     const { allIds, cardIds } = await resolveCardGroup(db, [requestedCardId]);
-    // `resolveShortId` already established that this id names a card, so there is no row to
-    // look up here beyond the partition the update has to name.
+    // `resolveShortId` already verified the card ID. Read only the partition needed for the
+    // update.
     const cardId = cardIds[0];
     const row = await db
       .select({ partitionId: cardTable.partitionId })

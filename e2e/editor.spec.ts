@@ -46,7 +46,7 @@ async function waitForServer(): Promise<void> {
 
 type Page = import("@playwright/test").Page;
 
-/** Opens the board, shows the panels, and opens one file from the taskspace tree. */
+/** Open the board, show the panels, and open one file from the taskspace tree. */
 async function openFile(page: Page, name: string): Promise<void> {
   await page.goto(`${baseUrl}/${namespaceId}`);
   await page.getByTitle("Show panels").click();
@@ -100,8 +100,8 @@ async function cellCentre(page: Page, lineText: string, column: number): Promise
 
 test.beforeAll(async () => {
   cli("init");
-  // These tests drive saving and the unsaved-changes prompts by hand, which auto save would
-  // otherwise do for them, and a pause in typing would write the fixtures they compare against.
+  // Disable auto save so tests control saving and unsaved-changes prompts. Pauses in typing
+  // must not write the fixtures used for comparison.
   const configPath = join(workspace, ".kozane", "config.json");
   const config = JSON.parse(readFileSync(configPath, "utf8"));
   writeFileSync(

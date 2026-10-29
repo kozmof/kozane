@@ -324,10 +324,8 @@
             <div class={css({ borderTop: "1px solid token(colors.neutral.dim)", padding: "4px 6px", display: "flex", flexDirection: "column", gap: "1px" })}>
               {#each scopeTaskspaces as taskspace (taskspace.id)}
                 {@const expanded = taskspaceTree.isExpanded(taskspace.id, "")}
-                <!-- Live, or a static export with an embedded tree for this one (built with
-                     `--include-scoped-files`). A plain export has neither a server to ask
-                     nor a tree to read instead, so its taskspaces stay the plain label they
-                     always were. -->
+                <!-- Enable browsing on live boards and exports with an embedded taskspace tree.
+                     Build embedded trees with `--include-scoped-files`. -->
                 {@const browsable = !readonly || treeContext.staticFiles?.[taskspace.id] !== undefined}
                 <div class={css({ display: "flex", flexDirection: "column", gap: "1px" })}>
                   <div class={css({ display: "flex", alignItems: "center", position: "relative", "&:hover .hover-reveal": { opacity: "1" } })}>
@@ -342,9 +340,7 @@
                       </button>
                       {#if !readonly}
                         <span class={taskspaceActionsClass}>
-                          <!-- The taskspace root gets the same pair every folder under it
-                               has, because the root is the folder most files are made in
-                               and reaching it through the tree would mean opening nothing. -->
+                          <!-- Offer file and folder creation at the taskspace root without opening its tree. -->
                           <TaskspaceCreateButtons
                             where="this taskspace"
                             onCreate={(kind) => startCreate(taskspace.id, kind)}

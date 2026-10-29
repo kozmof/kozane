@@ -501,9 +501,8 @@ describe("scanTaskspaceTags", () => {
   });
 
   /**
-   * The ceiling across a whole gather, on top of each taskspace's own. Without it a workspace
-   * of a dozen taskspaces cost a dozen times the per-taskspace budget on one page load, and
-   * the walk is synchronous, so the server answered nothing else while it ran.
+   * Bound total scan work across taskspaces as well as work within each taskspace. Per-taskspace
+   * limits alone let synchronous scan work grow with the number of taskspaces on a page load.
    */
   describe("the shared pool", () => {
     it("spends from the pool, and reports the taskspace that found it empty", () => {

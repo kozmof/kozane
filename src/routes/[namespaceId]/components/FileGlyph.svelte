@@ -50,9 +50,8 @@
       stroke-linejoin="round"
     />
   {:else}
-    <!-- A file, a symlink, and whatever else the filesystem holds all share the sheet. The
-         symlink earns the extra stroke because it is the one of the three that cannot be
-         opened, and the tooltip saying so is only there on hover. -->
+    <!-- Use the sheet glyph for files, symlinks, and other entries. Mark symlinks with an
+         extra stroke so their closed state is visible without hovering for the tooltip. -->
     <path
       d="M2.5 1h3l2 2v6h-5z"
       stroke="currentColor"

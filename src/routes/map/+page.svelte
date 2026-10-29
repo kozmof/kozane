@@ -231,7 +231,7 @@
   const headerLinkClass = css({
     display: "flex",
     alignItems: "center",
-    // Only ever between the icon and a name, so it costs nothing on the icon-only link.
+    // The gap separates the icon and label and takes no space when the link has only an icon.
     gap: "6px",
     padding: "6px",
     borderRadius: "2px",

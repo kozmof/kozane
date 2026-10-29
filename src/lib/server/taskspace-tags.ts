@@ -226,9 +226,8 @@ type Scan = {
   hitsMax: number;
   hits: TagHit[];
   truncated: Set<TagScanTruncation>;
-  /** Every file path the walk reached, whether or not it read one. What {@link pruneStale}
-   *  measures a completed directory against to find entries for files that are no longer
-   *  there. */
+  /** File paths reached by the walk, including files whose contents were not read.
+   * {@link pruneStale} uses these paths to find deleted files in fully scanned directories. */
   seen: Set<string>;
   /**
    * Directories whose listings were complete and whose returned entries were all visited. Use

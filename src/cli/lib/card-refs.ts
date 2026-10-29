@@ -14,7 +14,7 @@ import { resolveLayerRef } from "./layer-ref.js";
  * errors for `runWorkspaceCommand` to report. Do not print or exit here.
  */
 
-/** Every card ID in the workspace, which CLI short IDs are chosen against. */
+/** All workspace card IDs used to choose unambiguous CLI short IDs. */
 export async function allCardIds(db: AnyDB): Promise<string[]> {
   return (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
 }

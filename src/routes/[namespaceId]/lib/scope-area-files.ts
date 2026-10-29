@@ -190,8 +190,7 @@ export function visibleCells(
 ): CellWindow {
   const capacity = columnsIn(width) * maxRows - reserved;
   if (cells.length <= capacity) return { cells, overflow: 0 };
-  // One slot goes to the chip. `max(0, …)` for the degenerate single-slot strip, where the
-  // honest thing to draw is the chip alone rather than one arbitrary name beside nothing.
+  // Reserve one slot for the overflow chip. A single-slot strip shows only the chip.
   const shown = Math.max(0, capacity - 1);
   return { cells: cells.slice(0, shown), overflow: cells.length - shown };
 }
