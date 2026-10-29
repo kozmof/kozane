@@ -106,12 +106,12 @@ sync are disabled. Machine-specific workspace and taskspace paths are stripped.
 
 Use `--include-scoped-files` only for taskspace contents intended for publication.
 
-| File export boundary                                                    | Result                                                                    |
-| ----------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Dot-entries                                                             | Excluded                                                                  |
-| Symbolic links                                                          | Listed, never followed                                                    |
+| File export boundary                                                      | Result                                                                    |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Dot-entries                                                               | Excluded                                                                  |
+| Symbolic links                                                            | Listed, never followed                                                    |
 | Non-UTF-8 files, files over 16 MiB, or content beyond 20 MB per taskspace | Names listed, contents withheld                                           |
-| More than 50,000 entries per taskspace or 64 directory levels           | Walk stops and marks the directory truncated, further entries are omitted |
+| More than 50,000 entries per taskspace or 64 directory levels             | Walk stops and marks the directory truncated, further entries are omitted |
 
 Content caps apply per taskspace per page. Scoped taskspaces with no assigned
 namespace can appear on every board, duplicating their embedded contents across pages.
@@ -130,7 +130,7 @@ listing, file reads, saves, and creation.
 | Operation                | Boundary                                                                                                  |
 | ------------------------ | --------------------------------------------------------------------------------------------------------- |
 | List directory           | Names, kinds, sizes, and modification times only, symlinks listed but not followed                        |
-| Read file                | Regular UTF-8 files up to 16 MiB                                                                            |
+| Read file                | Regular UTF-8 files up to 16 MiB                                                                          |
 | Save file                | Existing files only, atomic replacement, 409 if the read signature no longer matches                      |
 | Create file or directory | One empty entry, no replacement or parent creation, 409 for an existing name and 404 for a missing parent |
 | Scan tags                | Same read boundaries, with byte, entry, depth, and hit limits and notices for incomplete scans            |
