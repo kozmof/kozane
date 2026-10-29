@@ -153,6 +153,53 @@ describe("Namespace page", () => {
     expect(screen.getByText("105%")).toBeInTheDocument();
   });
 
+  it("shows the zoom, layer, and side panel icons by default", () => {
+    render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
+
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
+    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Layers" })).toBeInTheDocument();
+    expect(screen.getByTitle("Hide panels")).toBeInTheDocument();
+  });
+
+  it("hides the zoom, layer, and side panel icons when configured", () => {
+    render(NamespacePage, {
+      props: {
+        data: {
+          ...data,
+          uiConfig: {
+            ...data.uiConfig,
+            showZoomControl: false,
+            showLayerControl: false,
+            showSidePanelToggle: false,
+          },
+        },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "Zoom in" })).not.toBeInTheDocument();
+    expect(screen.queryByText("100%")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Layers" })).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Hide panels")).not.toBeInTheDocument();
+  });
+
+  it("toggles the panels with the shortcut when their icon is hidden", async () => {
+    const { container } = render(NamespacePage, {
+      props: {
+        data: { ...data, uiConfig: { ...data.uiConfig, showSidePanelToggle: false } },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+      },
+    });
+    const panels = container.querySelectorAll<HTMLElement>("aside");
+
+    await fireEvent.keyDown(window, { key: "y" });
+
+    expect([...panels].every((panel) => panel.style.width === "0px")).toBe(true);
+  });
+
   it("uses the configured shortcuts to toggle footers and panels", async () => {
     const { container } = render(NamespacePage, {
       props: {

@@ -14,6 +14,15 @@ export type UiConfig = {
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
   defaultShowWarps: boolean;
+  /** Whether the board shows the zoom buttons and zoom level in the bottom-right corner. */
+  showZoomControl: boolean;
+  /** Whether the board shows the layer icon that opens the layer list. */
+  showLayerControl: boolean;
+  /**
+   * Whether the board shows the icon that shows or hides the side panels. The
+   * `togglePanelsShortcut` key works either way.
+   */
+  showSidePanelToggle: boolean;
   /**
    * Whether the file editor starts in Vim normal mode with Vim bindings. Disabled by default
    * so typing inserts text immediately.
@@ -62,6 +71,9 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowFooter: false,
   defaultShowSidePanel: false,
   defaultShowWarps: true,
+  showZoomControl: true,
+  showLayerControl: true,
+  showSidePanelToggle: true,
   editorVimMode: false,
   editorAutoSave: true,
   warpMarkerSize: 20,
@@ -116,6 +128,9 @@ export const UI_BOOL_FIELDS = [
   "defaultShowFooter",
   "defaultShowSidePanel",
   "defaultShowWarps",
+  "showZoomControl",
+  "showLayerControl",
+  "showSidePanelToggle",
   "editorVimMode",
   "editorAutoSave",
 ] as const;

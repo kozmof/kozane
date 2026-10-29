@@ -413,6 +413,9 @@ UI settings live under `ui` in `.kozane/config.json`.
 | `addInventoryShortcut` | Add an inventory                       | `v`             |
 | `editorVimMode`        | Enable Vim bindings in the file editor | `false`         |
 | `editorAutoSave`       | Save the open file once typing pauses  | `true`          |
+| `showZoomControl`      | Show the zoom buttons and zoom level   | `true`          |
+| `showLayerControl`     | Show the layer icon                    | `true`          |
+| `showSidePanelToggle`  | Show the side panel toggle icon        | `true`          |
 
 ## Live sync
 

@@ -761,6 +761,7 @@
       <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />
     {/if}
 
+    {#if data.uiConfig.showLayerControl}
     <LayerControl
       layers={s.layers}
       cards={s.cards}
@@ -771,6 +772,7 @@
       onReorderLayers={actions.handleReorderLayers}
       {readonly}
     />
+    {/if}
 
     <ScopeControl scopes={s.scopes} bind:activeScope={s.sidebar.activeScope} />
 
@@ -778,6 +780,8 @@
       {zoom}
       zoomStep={data.uiConfig.zoomStep}
       {sidebarsVisible}
+      showZoom={data.uiConfig.showZoomControl}
+      showSidebarToggle={data.uiConfig.showSidePanelToggle}
       onToggleSidebars={() => (sidebarsVisible = !sidebarsVisible)}
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />

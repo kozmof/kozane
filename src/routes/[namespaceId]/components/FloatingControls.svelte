@@ -5,17 +5,22 @@
     zoom,
     zoomStep,
     sidebarsVisible,
+    showZoom = true,
+    showSidebarToggle = true,
     onToggleSidebars,
     onZoom,
   }: {
     zoom: number;
     zoomStep: number;
     sidebarsVisible: boolean;
+    showZoom?: boolean;
+    showSidebarToggle?: boolean;
     onToggleSidebars: () => void;
     onZoom: (delta: number) => void;
   } = $props();
 </script>
 
+{#if showSidebarToggle}
 <button
   class={css({
     position: "absolute",
@@ -46,7 +51,9 @@
     {/if}
   </svg>
 </button>
+{/if}
 
+{#if showZoom}
 <div
   class={css({
     position: "absolute",
@@ -105,3 +112,4 @@
     {Math.round(zoom * 100)}%
   </div>
 </div>
+{/if}
