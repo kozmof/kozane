@@ -147,6 +147,22 @@ validation, limits, and cleanup.
 Static sites can read only the files embedded during export and cannot write to
 the original taskspaces.
 
+## Config page
+
+`kozane config open` runs its own small server, separate from `kozane open`. It always binds
+`127.0.0.1`, and it has no `--host` or `--allow-remote` flag. Each run makes a new random
+token and prints it in the page link. The page sends it in the `X-Kozane-Config-Token` header,
+and requests without it get 403. A custom header cannot be sent by a plain cross-site form, so
+the token also blocks cross-site writes. The server only answers `Host` values of
+`127.0.0.1:<port>` or `localhost:<port>`, and refuses a save whose `Origin` is another site.
+The page is a Svelte build served from `dist/config-editor`. Only `index.html` and the flat
+`assets` directory are served, and asset names must be plain file names. Its Content Security
+Policy allows scripts and styles from the same origin only, with nothing inline, and
+`Referrer-Policy: no-referrer` keeps the token out of referrers.
+
+The server reads and writes only `.kozane/config.json`. Saves accept only known settings, are
+checked with the `doctor config` rules, and are written atomically.
+
 ## Where each rule lives
 
 | Rule                                       | Source                                         |
@@ -159,3 +175,4 @@ the original taskspaces.
 | Taskspace file boundaries                  | `src/lib/server/taskspace-files.ts`            |
 | Taskspace tag scanning                     | `src/lib/server/taskspace-tags.ts`             |
 | Atomic file replacement                    | `src/lib/server/atomic-write.ts`               |
+| Config page token, host, and origin checks | `src/cli/lib/config-editor/handler.ts`         |

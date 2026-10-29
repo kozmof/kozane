@@ -35,13 +35,17 @@ function entries() {
   );
 }
 
-/** Present because `bin/server.js` cannot serve a request without them. */
+/**
+ * Present because `bin/server.js` cannot serve a request without them, and `kozane config
+ * open` cannot serve its page without the built editor.
+ */
 const REQUIRED = [
   "bin/kozane.js",
   "bin/server.js",
   "build/handler.js",
   "build/env.js",
   "build/shims.js",
+  "dist/config-editor/index.html",
 ];
 
 /** Absent because it binds every interface by default. See the note above. */

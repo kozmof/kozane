@@ -399,7 +399,8 @@ when narrowed to one, or to the namespace list otherwise.
 
 ## Settings
 
-UI settings live under `ui` in `.kozane/config.json`.
+UI settings live under `ui` in `.kozane/config.json`. Run `kozane config open` to edit
+them in a browser form, then reload the board to see the changes.
 
 | Setting                | Purpose                                | Default         |
 | ---------------------- | -------------------------------------- | --------------- |

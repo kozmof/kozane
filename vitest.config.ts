@@ -70,6 +70,8 @@ export default defineConfig({
         "src/db/schema.ts",
         // SvelteKit module wiring.
         "src/lib/index.ts",
+        // Mounts the config page in the browser. `App.test.ts` renders the app itself.
+        "src/config-editor/main.ts",
         // Exclude both page and layout server modules, which require integration coverage.
         "src/routes/**/*page.server.ts",
         "src/routes/**/*layout.server.ts",

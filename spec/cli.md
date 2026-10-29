@@ -150,6 +150,33 @@ kozane doctor config
 kozane doctor config --strict
 ```
 
+### `kozane config open`
+
+Edit `.kozane/config.json` in a browser form. Start a small server on `127.0.0.1`, print its
+link, and open it. The link carries a token made fresh for each run. Every request must send
+it, so other pages and other users on the machine cannot read or change the config. Press
+Ctrl+C to stop the server.
+
+The page groups settings by section and shows each setting's default and allowed range. Saving
+applies only the fields you changed and keeps other keys, including unknown ones, as they are.
+It uses the same checks as `doctor config`. Errors block the save, and warnings are shown but
+do not. If the file changed on disk since the page loaded it, the save is refused so the other
+edit is not lost.
+
+A running `kozane open` server picks up saved changes on its own. Reload open boards to see UI
+changes. `server.host` and `server.port` take effect the next time `kozane open` starts. The
+page also opens when the config has errors, so they can be fixed there. A file that is not
+valid JSON is shown read-only and must be fixed by hand.
+
+```bash
+kozane config open [--port <port>] [--no-open]
+```
+
+| Flag        | Default     | Description                              |
+| ----------- | ----------- | ---------------------------------------- |
+| `--port`    | a free port | Port number                              |
+| `--no-open` | false       | Start server without opening the browser |
+
 ### `kozane status`
 
 Show server state (stopped, persistent, or `:memory:`) and namespace, partition, card, scope,
@@ -747,7 +774,8 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
 
 ## Config file
 
-Edit `.kozane/config.json`, then run `kozane doctor config`.
+Edit `.kozane/config.json` with `kozane config open`, or edit it by hand and run
+`kozane doctor config`.
 Only `name`, `taskspace.defaultDir`, and `taskspace.searchRoots` are required.
 Other keys fall back to built-in defaults individually.
 

@@ -21,7 +21,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "node scripts/clean.mjs && TMPDIR=/tmp drizzle-kit generate && vite build && tsc --project tsconfig.cli.json",
+    "build": "node scripts/clean.mjs && TMPDIR=/tmp drizzle-kit generate && vite build && vite build --config vite.config-editor.ts && tsc --project tsconfig.cli.json",
+    "build:config-editor": "vite build --config vite.config-editor.ts",
     "build:cli": "tsc --project tsconfig.cli.json",
     "cli": "tsx src/cli/index.ts",
     "preview": "vite preview",

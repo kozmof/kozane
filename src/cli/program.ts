@@ -7,6 +7,7 @@ import { init } from "./commands/init.js";
 import { open } from "./commands/open.js";
 import { ssg, ssgPreview } from "./commands/ssg.js";
 import { doctor, doctorConfig } from "./commands/doctor.js";
+import { configOpen } from "./commands/config.js";
 import { status } from "./commands/status.js";
 import { taskspaceScan, taskspaceCreate, taskspaceList } from "./commands/taskspace.js";
 import {
@@ -159,6 +160,14 @@ export function buildProgram(): Command {
     .description("Check .kozane/config.json for missing keys, unknown keys, and invalid values")
     .option("--strict", "Exit non-zero for unknown keys as well as errors")
     .action((opts) => doctorConfig(opts));
+
+  const config = program.command("config").description("Workspace config");
+  config
+    .command("open")
+    .description("Edit .kozane/config.json in the browser")
+    .option("--port <port>", "Port number (default: a free port)")
+    .option("--no-open", "Start the server without opening the browser")
+    .action((opts) => configOpen(opts));
 
   program
     .command("status")
