@@ -48,7 +48,7 @@
   );
 </script>
 
-<!-- Draw frames below cards without layer dimming. Let pointer events pass through the body so normal canvas interactions work inside it. Only the tab and resize handle capture input. -->
+<!-- Draw frames below cards without layer dimming. Let pointer events pass through the body so normal canvas interactions work inside it. The header and resize handle capture input. -->
 <div
   class={css({ position: "absolute" })}
   data-scope-area-id={area.id}
@@ -69,82 +69,92 @@
       : "none"}
   ></div>
 
-  <button
-    class={css({
-      position: "absolute",
-      display: "flex",
-      alignItems: "center",
-      maxWidth: "100%",
-      padding: "0 8px",
-      borderRadius: "3px 3px 0 0",
-      border: "1px solid",
-      borderBottom: "none",
-      fontSize: "11px",
-      lineHeight: "1",
-      whiteSpace: "nowrap",
-      overflow: "hidden",
-      textOverflow: "ellipsis",
-    })}
-    aria-label="Scope area {name}"
-    aria-pressed={focused}
+  <!-- Keep a continuous hover target from the name across to the remove button. -->
+  <div
+    data-scope-area-header
+    class={css({ position: "absolute" })}
     style:left="0"
     style:top="-{TAB_HEIGHT}px"
+    style:width="calc(100% + 20px)"
     style:height="{TAB_HEIGHT}px"
-    style:pointer-events="auto"
-    style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
-    style:background={focused ? accent : "var(--colors-ink-light)"}
-    style:color={focused ? "var(--colors-ink-light)" : "var(--colors-neutral-secondary)"}
-    style:border-color={accent}
-    onmousedown={(e) => {
-      // `WarpMarker` does this for the same reason. The canvas underneath starts a pan on mousedown
-      // and a marquee on shift-mousedown, and a press on the tab means neither.
-      e.stopPropagation();
-      e.preventDefault();
-      onMouseDown(e);
-    }}
-    onclick={(e) => e.stopPropagation()}
+    style:pointer-events={draggable ? "auto" : "none"}
   >
-    {name}
-  </button>
-
-  {#if draggable}
-    <!-- Rides at the right-hand end of the tab, outside the tab's own button so a press on
-         it is a removal rather than the start of a drag. -->
     <button
       class={css({
         position: "absolute",
         display: "flex",
         alignItems: "center",
-        justifyContent: "center",
-        width: "16px",
-        border: "none",
-        background: "none",
-        cursor: "pointer",
-        fontSize: "12px",
+        maxWidth: "calc(100% - 20px)",
+        padding: "0 8px",
+        borderRadius: "3px 3px 0 0",
+        border: "1px solid",
+        borderBottom: "none",
+        fontSize: "11px",
         lineHeight: "1",
-        opacity: "0",
-        transition: "opacity 0.12s, color 0.12s",
-        "&:hover, &:focus-visible": { opacity: "1", color: "state.error" },
-        "[data-scope-area-id]:hover &": { opacity: "0.7" },
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
       })}
-      aria-label="Remove frame {name}"
-      title="Remove this frame. The scope keeps its cards."
-      style:left="calc(100% + 4px)"
-      style:top="-{TAB_HEIGHT}px"
+      aria-label="Scope area {name}"
+      aria-pressed={focused}
+      style:left="0"
+      style:top="0"
       style:height="{TAB_HEIGHT}px"
       style:pointer-events="auto"
-      style:color={focused ? accent : "var(--colors-neutral-secondary)"}
+      style:cursor={dragging ? "grabbing" : draggable ? "grab" : "default"}
+      style:background={focused ? accent : "var(--colors-ink-light)"}
+      style:color={focused ? "var(--colors-ink-light)" : "var(--colors-neutral-secondary)"}
+      style:border-color={accent}
       onmousedown={(e) => {
-        // The tab beside this one arms a drag on mousedown, but this must not.
+        // `WarpMarker` does this for the same reason. The canvas underneath starts a pan on mousedown
+        // and a marquee on shift-mousedown, and a press on the tab means neither.
         e.stopPropagation();
         e.preventDefault();
+        onMouseDown(e);
       }}
-      onclick={(e) => {
-        e.stopPropagation();
-        onRemove();
-      }}>×</button
+      onclick={(e) => e.stopPropagation()}
     >
-  {/if}
+      {name}
+    </button>
+
+    {#if draggable}
+      <!-- Keep removal separate from the name tab so pressing it does not start a drag. -->
+      <button
+        class={css({
+          position: "absolute",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "16px",
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+          fontSize: "12px",
+          lineHeight: "1",
+          opacity: "0",
+          transition: "opacity 0.12s, color 0.12s",
+          "&:hover, &:focus-visible": { opacity: "1", color: "state.error" },
+          "[data-scope-area-header]:hover &": { opacity: "0.7" },
+        })}
+        aria-label="Remove frame {name}"
+        title="Remove this frame. The scope keeps its cards."
+        style:right="0"
+        style:top="0"
+        style:height="{TAB_HEIGHT}px"
+        style:pointer-events="auto"
+        style:color={focused ? accent : "var(--colors-neutral-secondary)"}
+        onmousedown={(e) => {
+          // The tab beside this one arms a drag on mousedown, but this must not.
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+        onclick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}>×</button
+      >
+    {/if}
+  </div>
 
   {#if draggable}
     <button
