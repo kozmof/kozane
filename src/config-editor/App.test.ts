@@ -136,7 +136,9 @@ describe("config page", () => {
     await openPage();
 
     await fireEvent.click(
-      row("ui.removeWarpShortcut").querySelector<HTMLButtonElement>('button[title="Disable this shortcut"]')!,
+      row("ui.removeWarpShortcut").querySelector<HTMLButtonElement>(
+        'button[title="Disable this shortcut"]',
+      )!,
     );
     await fireEvent.click(saveButton());
 
