@@ -105,8 +105,22 @@ const CARD_DATA_SELECTION = {
 } satisfies Record<Exclude<keyof CardData, "inventory">, AnyColumn>;
 
 /**
- * A stored card's inventory and slot. Writers set and clear the two columns together, and a
- * row with only one of them reads as a card on the canvas.
+ * The two inventory columns for a card's place: both set for a stored card, both null for one
+ * on the canvas. Writers build the columns through this, so they cannot set one without the
+ * other. {@link cardInventory} is the reverse.
+ */
+export function inventoryColumns(placement: CardData["inventory"]): {
+  inventoryId: string | null;
+  inventorySlot: number | null;
+} {
+  return placement === null
+    ? { inventoryId: null, inventorySlot: null }
+    : { inventoryId: placement.id, inventorySlot: placement.slot };
+}
+
+/**
+ * A stored card's inventory and slot. Writers set and clear the two columns together through
+ * {@link inventoryColumns}, and a row with only one of them reads as a card on the canvas.
  */
 export function cardInventory(
   inventoryId: string | null,
@@ -323,9 +337,8 @@ type AddCards = NeedsPartition & {
     content: string;
     posX: number;
     posY: number;
-    /** Store the card straight away. Set both or neither. */
-    inventoryId?: string;
-    inventorySlot?: number;
+    /** Store the card straight away in this inventory slot. Omit to put it on the canvas. */
+    inventory?: NonNullable<CardData["inventory"]>;
   }[];
 };
 
@@ -344,7 +357,15 @@ export async function addCards({ db, partitionId, layerId, cards }: AddCards): P
   for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
       .insert(cardTable)
-      .values(batch.map((card) => ({ ...stamps, partitionId, layerId, ...card })))
+      .values(
+        batch.map(({ inventory, ...card }) => ({
+          ...stamps,
+          partitionId,
+          layerId,
+          ...card,
+          ...inventoryColumns(inventory ?? null),
+        })),
+      )
       .returning({ id: cardTable.id });
     ids.push(...rows.map(({ id }) => id));
   }

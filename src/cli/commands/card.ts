@@ -204,8 +204,7 @@ export async function cardSquash(
         cards: contents.map((cardContent, index) => ({
           content: cardContent,
           ...clampToBounds(positions[index].posX, positions[index].posY, bounds),
-          inventoryId: inventory.id,
-          inventorySlot: slots[index],
+          inventory: { id: inventory.id, slot: slots[index] },
         })),
       });
       if (scopeId) await addScopeRels({ db: tx, scopeId, cardIds });

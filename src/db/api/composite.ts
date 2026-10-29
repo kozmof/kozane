@@ -16,6 +16,7 @@ import {
   getCardLayerNames,
   reassignCardsToLayerInTx,
   onCanvas,
+  inventoryColumns,
   type CardStacking,
 } from "./card.js";
 import {
@@ -249,8 +250,7 @@ export async function squashNamespaceCard({
       // Above whatever the source sat above, and in the order the text reads.
       zIndex: source.zIndex + index,
       width: source.width,
-      inventoryId: inventory.id,
-      inventorySlot: slots[index],
+      ...inventoryColumns({ id: inventory.id, slot: slots[index] }),
     }));
     for (const batch of chunked(rows, { columnsPerRow: columnCount(cardTable) }))
       cards.push(...(await tx.insert(cardTable).values(batch).returning()));

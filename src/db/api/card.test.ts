@@ -962,3 +962,16 @@ describe("reassignPartitionCards", () => {
     expect(await getCard({ db, partitionId, cardId })).toBeDefined();
   });
 });
+
+describe("inventoryColumns", () => {
+  it("sets both columns for a stored card and clears both for one on the canvas", async () => {
+    const { inventoryColumns, cardInventory } = await import("./card.js");
+    expect(inventoryColumns({ id: "inv", slot: 4 })).toEqual({
+      inventoryId: "inv",
+      inventorySlot: 4,
+    });
+    expect(inventoryColumns(null)).toEqual({ inventoryId: null, inventorySlot: null });
+    const { inventoryId, inventorySlot } = inventoryColumns({ id: "inv", slot: 0 });
+    expect(cardInventory(inventoryId, inventorySlot)).toEqual({ id: "inv", slot: 0 });
+  });
+});

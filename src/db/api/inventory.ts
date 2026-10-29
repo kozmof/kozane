@@ -26,6 +26,7 @@ import { nextSquashInventoryName } from "../../lib/squash.js";
 import {
   caseUpdateBatches,
   cardsBelongToNamespace,
+  inventoryColumns,
   isStored,
   writeCardPositionsInTx,
 } from "./card.js";
@@ -349,10 +350,7 @@ export async function releaseCardsInTx({
   cardIds,
 }: NeedsTx & { cardIds: string[] }): Promise<void> {
   for (const batch of chunked(cardIds, { size: BATCH_MAX }))
-    await tx
-      .update(cardTable)
-      .set({ inventoryId: null, inventorySlot: null })
-      .where(inArray(cardTable.id, batch));
+    await tx.update(cardTable).set(inventoryColumns(null)).where(inArray(cardTable.id, batch));
 }
 
 /**
