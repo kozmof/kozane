@@ -1,3 +1,4 @@
+import { TASKSPACE_FILE_BYTES_MAX } from "../constants/taskspace.js";
 import { getUiConfigForRoot, getWorkspaceUiConfig } from "../../db/internal/config.js";
 
 /**
@@ -26,9 +27,11 @@ const BODY_ENVELOPE_BYTES = 64 * 1024;
 const WORST_BYTES_PER_UNIT = 6;
 
 /**
- * Compute an HTTP body allowance large enough for accepted card text. Account for worst-case
+ * Compute an HTTP body allowance large enough for accepted card text and editor files. Account for worst-case
  * JSON escaping so transport limits do not reject text the endpoint would store.
  */
 export function bodySizeLimitFor(contentMax: number): number {
-  return contentMax * WORST_BYTES_PER_UNIT + BODY_ENVELOPE_BYTES;
+  return (
+    Math.max(contentMax, TASKSPACE_FILE_BYTES_MAX) * WORST_BYTES_PER_UNIT + BODY_ENVELOPE_BYTES
+  );
 }

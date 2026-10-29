@@ -843,7 +843,7 @@ Other keys fall back to built-in defaults individually.
   Commands clamp positions and report the stored values.
 - `contentMax` ranges from 100 to 1000000 UTF-16 code units. Each squash segment
   is checked separately. Raising it increases live-sync payload size.
-- The HTTP body limit follows `contentMax` at startup. Override with
+- The HTTP body limit allows the larger of `contentMax` and the 16 MiB editor file limit at startup, including JSON escaping. Override with
   `BODY_SIZE_LIMIT`, using values such as `512K` or `2M`.
 
 ## Taskspace marker

@@ -9,7 +9,7 @@ import {
   scanTaskspaceTags,
 } from "./taskspace-tags.js";
 import type { TagHit } from "../types.js";
-import { TASKSPACE_DIR_ENTRIES_MAX } from "../constants.js";
+import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 
 const TASKSPACE_ID = "ts-1";
 
@@ -219,7 +219,7 @@ describe("scanTaskspaceTags", () => {
     /** Do not charge the byte budget for an oversized file rejected before reading. */
     it("does not spend the byte budget on a file it is going to refuse anyway", () => {
       // Over TASKSPACE_FILE_BYTES_MAX, and named so it is walked before the file below.
-      writeFileSync(join(dir, "a-big.bin"), Buffer.alloc(2 * 1024 * 1024, 0x41));
+      writeFileSync(join(dir, "a-big.bin"), Buffer.alloc(TASKSPACE_FILE_BYTES_MAX + 1, 0x41));
       write(join(dir, "b-notes.md"), ":mine");
 
       const result = scan(dir, { bytes: 2 * 1024 * 1024 });
@@ -229,7 +229,7 @@ describe("scanTaskspaceTags", () => {
     });
 
     it("tells a file too large to open apart from one that could not be read", () => {
-      writeFileSync(join(dir, "big.bin"), Buffer.alloc(2 * 1024 * 1024, 0x41));
+      writeFileSync(join(dir, "big.bin"), Buffer.alloc(TASKSPACE_FILE_BYTES_MAX + 1, 0x41));
       writeFileSync(join(dir, "binary.bin"), Buffer.from([0x00, 0x01, 0x02]));
 
       expect(scan(dir).truncated.sort()).toEqual(["too-large", "unreadable"]);

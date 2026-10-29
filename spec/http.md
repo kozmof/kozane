@@ -412,7 +412,7 @@ Do not create parents or replace entries. Return 404 for a missing parent and
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/file`
 
 Read a file. Query requires `path`. Return its content and read signature.
-Only regular UTF-8 files up to 1 MB are allowed, with no dot-entries or symlinks.
+Only regular UTF-8 files up to 16 MiB are allowed, with no dot-entries or symlinks.
 Return 413 for oversized files and 415 for non-text files.
 Other listing access rules and errors apply.
 

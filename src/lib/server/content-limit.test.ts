@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { TASKSPACE_FILE_BYTES_MAX } from "../constants/taskspace.js";
 import { bodySizeLimitFor, contentMax, contentMaxForRoot } from "./content-limit.js";
 import { _resetWorkspaceRootForTest } from "../../db/internal/config.js";
 import { CONTENT_MAX } from "../constants.js";
@@ -73,6 +74,10 @@ describe("bodySizeLimitFor", () => {
     }
   });
 
+  it("allows saving an editor file at the cap with worst-case JSON escaping", () => {
+    expect(bodySizeLimitFor(100)).toBeGreaterThan(TASKSPACE_FILE_BYTES_MAX * 6);
+  });
+
   it("clears the adapter's default at the built-in limit", () => {
     expect(bodySizeLimitFor(CONTENT_MAX)).toBeGreaterThan(ADAPTER_DEFAULT);
   });
@@ -83,8 +88,10 @@ describe("bodySizeLimitFor", () => {
     expect(bodySizeLimitFor(100)).toBeGreaterThan(64 * 1024);
   });
 
-  it("grows with the limit it is sized from", () => {
-    expect(bodySizeLimitFor(1_000_000)).toBeGreaterThan(bodySizeLimitFor(CONTENT_MAX));
+  it("grows when card text exceeds the editor file limit", () => {
+    expect(bodySizeLimitFor(TASKSPACE_FILE_BYTES_MAX + 1)).toBeGreaterThan(
+      bodySizeLimitFor(CONTENT_MAX),
+    );
   });
 });
 

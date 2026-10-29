@@ -234,7 +234,7 @@ New files open in the editor immediately.
 
 ### Editing a file
 
-Click a text file to open the editor. Files must be valid UTF-8 and at most 1 MB.
+Click a text file to open the editor. Files must be valid UTF-8 and at most 16 MiB.
 
 | Action       | Control                                                 |
 | ------------ | ------------------------------------------------------- |
@@ -359,7 +359,7 @@ Tree counts are distinct cards and files. Results show at most 200 card hits and
 200 file hits per tag. Repeated matches can share a row. Notices identify
 shortened results or incomplete scans. Choose a child tag to narrow results.
 
-File scans skip hidden entries, symbolic links, non-text files, files over 1 MB,
+File scans skip hidden entries, symbolic links, non-text files, files over 16 MiB,
 and generated or vendored directories such as `node_modules`, `build`, and
 `vendor`. They do not use `.gitignore`.
 

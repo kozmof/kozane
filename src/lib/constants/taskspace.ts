@@ -9,7 +9,7 @@ export const TASKSPACE_DIR_ENTRIES_MAX = 500;
  * Maximum file size the editor will open, in bytes. Reject oversized files before reading so
  * the editor cannot save a truncated copy.
  */
-export const TASKSPACE_FILE_BYTES_MAX = 1_048_576;
+export const TASKSPACE_FILE_BYTES_MAX = 16 * 1024 * 1024;
 
 /**
  * Maximum content bytes included per taskspace in a static export. List files beyond the
