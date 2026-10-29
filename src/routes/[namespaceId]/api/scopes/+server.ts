@@ -3,10 +3,11 @@ import { json, error } from "@sveltejs/kit";
 import { addScope } from "$db/api/scope";
 import { isUniqueConstraintError } from "$db/api/utils";
 import { readJsonObject, requireBoundedName } from "../../lib/request.js";
+import { apiHandler } from "../../lib/api-handler.js";
 
 // Scopes span namespaces, so the URL's namespace does not own the new row. An unused scope
 // appears on every board until a membership, taskspace, or frame places it.
-export const POST: RequestHandler = async ({ locals, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
   const name = requireBoundedName(body);
@@ -18,4 +19,4 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     if (isUniqueConstraintError(e)) throw error(400, `A scope named "${name}" already exists`);
     throw e;
   }
-};
+});

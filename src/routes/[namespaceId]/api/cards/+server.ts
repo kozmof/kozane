@@ -28,6 +28,7 @@ import {
   requireUniqueStrings,
 } from "../../lib/request.js";
 import { rejectBatch } from "../../lib/rejection.js";
+import { apiHandler } from "../../lib/api-handler.js";
 
 function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpdate[] {
   // Each position adds parameters to both CASE expressions and WHERE. Enforce the batch cap
@@ -50,7 +51,7 @@ function requirePositionUpdates(body: Record<string, unknown>): CardPositionUpda
   return positions;
 }
 
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -123,9 +124,9 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     width: null,
     inventory,
   } satisfies CardWithGlue);
-};
+});
 
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -135,9 +136,9 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (!result.ok) rejectBatch(result.reason);
 
   return json({ ok: true });
-};
+});
 
-export const DELETE: RequestHandler = async ({ locals, params, request }) => {
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -145,4 +146,4 @@ export const DELETE: RequestHandler = async ({ locals, params, request }) => {
   const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
   return json({ ok: true });
-};
+});

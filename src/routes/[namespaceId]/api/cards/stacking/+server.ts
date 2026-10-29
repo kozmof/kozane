@@ -3,6 +3,7 @@ import { json, error } from "@sveltejs/kit";
 import { reassignCardsStackOrder } from "$db/api/card";
 import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
 import { rejectBatch } from "../../../lib/rejection.js";
+import { apiHandler } from "../../../lib/api-handler.js";
 
 function requireStackDirection(body: Record<string, unknown>): "front" | "back" {
   const direction = requireString(body, "direction");
@@ -11,7 +12,7 @@ function requireStackDirection(body: Record<string, unknown>): "front" | "back" 
   return direction;
 }
 
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -22,4 +23,4 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   // Return each moved card's final stacking value because a glue group may span multiple
   // layers.
   return json({ ok: true, stacking: result.stacking });
-};
+});

@@ -3,8 +3,9 @@ import { json } from "@sveltejs/kit";
 import { reassignCardsToLayer } from "$db/api/card";
 import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
 import { rejectBatch } from "../../../lib/rejection.js";
+import { apiHandler } from "../../../lib/api-handler.js";
 
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -15,4 +16,4 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (!result.ok) rejectBatch(result.reason);
   // Return the new stacking values assigned above the destination layer's existing cards.
   return json({ ok: true, stacking: result.stacking });
-};
+});

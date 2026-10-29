@@ -1,38 +1,29 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import { moveScopeArea, deleteScopeArea } from "$db/api/scope-area";
-import { NotFoundError } from "$db/api/utils";
 import { readJsonObject } from "../../../../../lib/request.js";
 import { readAreaRect } from "../../../../../lib/scope-area-request.js";
 import { clampRectToCanvas } from "$lib/server/canvas";
+import { apiHandler } from "../../../../../lib/api-handler.js";
+
+const AREA_NOT_FOUND = { notFound: "Scope area not found" };
 
 /** Move or resize one frame using a complete rectangle. */
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId, scopeId, areaId } = params;
   const rect = readAreaRect(await readJsonObject(request));
 
-  try {
-    return json(
-      await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRectToCanvas(rect) }),
-    );
-  } catch (e) {
-    if (e instanceof NotFoundError) throw error(404, "Scope area not found");
-    throw e;
-  }
-};
+  return json(
+    await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRectToCanvas(rect) }),
+  );
+}, AREA_NOT_FOUND);
 
 /** Remove one frame while preserving scope memberships and other frames. */
-export const DELETE: RequestHandler = async ({ locals, params }) => {
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId, scopeId, areaId } = params;
 
-  try {
-    await deleteScopeArea({ db, namespaceId, scopeId, areaId });
-  } catch (e) {
-    if (e instanceof NotFoundError) throw error(404, "Scope area not found");
-    throw e;
-  }
-
+  await deleteScopeArea({ db, namespaceId, scopeId, areaId });
   return json({ ok: true });
-};
+}, AREA_NOT_FOUND);

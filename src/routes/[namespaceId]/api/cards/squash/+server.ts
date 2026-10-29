@@ -6,6 +6,7 @@ import { withCardInventory } from "$db/api/card";
 import { canvasBounds } from "$lib/server/canvas";
 import { BATCH_MAX } from "$lib/constants";
 import { readJsonObject, requireString } from "../../../lib/request.js";
+import { apiHandler } from "../../../lib/api-handler.js";
 
 type SquashFailure = Extract<SquashCardResult, { ok: false }>["reason"];
 
@@ -22,7 +23,7 @@ const FAILURE_MESSAGE: Record<SquashFailure, string> = {
  * Replace one card with a card per text segment, stored in a new inventory. Use the server's
  * shared split pattern rather than accepting arbitrary client regular expressions.
  */
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -40,4 +41,4 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
     ),
     stacking: result.stacking,
   });
-};
+});

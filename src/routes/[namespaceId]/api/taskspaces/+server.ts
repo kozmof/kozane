@@ -13,6 +13,7 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
+import { apiHandler } from "../../lib/api-handler.js";
 
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
 class OutsideWorkspaceError extends Error {}
@@ -25,7 +26,7 @@ function isInside(rel: string): boolean {
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const body = await readJsonObject(request);
   const name = requireBoundedName(body);
@@ -108,4 +109,4 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   }
 
   return json({ id, path: storedPath, pathKind: "workspace_relative" });
-};
+});

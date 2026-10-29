@@ -11,9 +11,10 @@ import {
 } from "../../../lib/request.js";
 import { rejectBatch } from "../../../lib/rejection.js";
 import { clampToCanvas } from "$lib/server/canvas";
+import { apiHandler } from "../../../lib/api-handler.js";
 
 /** Puts stored cards back on the canvas, at a given position or where they were before. */
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -36,4 +37,4 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   if (!result.ok) rejectBatch(result.reason);
   // The stored positions, so a board that sent a fractional drop point can draw what was kept.
   return json({ cards: cards.map(({ cardId, position }) => ({ cardId, ...position })) });
-};
+});

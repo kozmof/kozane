@@ -18,8 +18,9 @@ import {
   readJsonObject,
   requireString,
 } from "../../../lib/request.js";
+import { apiHandler } from "../../../lib/api-handler.js";
 
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId, cardId } = params;
   const body = await readJsonObject(request);
@@ -123,9 +124,9 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
     ...(refit?.moved && { inventory: { id: refit.moved.inventoryId, slot: refit.moved.slot } }),
     ...(refit && refit.placements.length > 0 && { placements: refit.placements }),
   });
-};
+});
 
-export const DELETE: RequestHandler = async ({ locals, params }) => {
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId, cardId } = params;
 
@@ -135,4 +136,4 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
   if (!result.ok) throw error(404, "Card not found");
 
   return json({ ok: true });
-};
+});

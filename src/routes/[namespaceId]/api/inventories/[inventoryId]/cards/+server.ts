@@ -4,9 +4,10 @@ import { stowCards } from "$db/api/inventory";
 import { INVENTORY_SLOT_MAX } from "$lib/constants";
 import { optionalNumber, readJsonObject, requireStringArray } from "../../../../lib/request.js";
 import { rejectBatch } from "../../../../lib/rejection.js";
+import { apiHandler } from "../../../../lib/api-handler.js";
 
 /** Puts cards into this inventory, from the canvas or from another inventory. */
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId, inventoryId } = params;
   const body = await readJsonObject(request);
@@ -18,4 +19,4 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const result = await stowCards({ db, namespaceId, inventoryId, cardIds, slot: slot ?? null });
   if (!result.ok) rejectBatch(result.reason);
   return json({ placements: result.placements, clearedCardIds: result.clearedCardIds });
-};
+});

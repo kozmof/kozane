@@ -1,11 +1,11 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { deleteInventory, updateInventory } from "$db/api/inventory";
-import { NotFoundError } from "$db/api/utils";
 import { optionalBoundedName, optionalNumber, readJsonObject } from "../../../lib/request.js";
 import { clampToCanvas } from "$lib/server/canvas";
+import { apiHandler } from "../../../lib/api-handler.js";
 
-export const PATCH: RequestHandler = async ({ locals, params, request }) => {
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId, inventoryId } = params;
   const body = await readJsonObject(request);
@@ -17,32 +17,22 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   if (posX === undefined && name === undefined)
     throw error(400, "Send posX and posY, name, or both");
 
-  try {
-    return json(
-      await updateInventory({
-        db,
-        namespaceId,
-        inventoryId,
-        name,
-        ...(posX !== undefined && posY !== undefined && { position: clampToCanvas(posX, posY) }),
-      }),
-    );
-  } catch (e) {
-    if (e instanceof NotFoundError) throw error(404, e.message);
-    throw e;
-  }
-};
+  return json(
+    await updateInventory({
+      db,
+      namespaceId,
+      inventoryId,
+      name,
+      ...(posX !== undefined && posY !== undefined && { position: clampToCanvas(posX, posY) }),
+    }),
+  );
+});
 
-export const DELETE: RequestHandler = async ({ locals, params }) => {
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
   const { db } = locals;
   const { namespaceId, inventoryId } = params;
 
-  try {
-    // Its cards go back where they were on the canvas. Their IDs let the board draw them
-    // there without waiting for the next poll.
-    return json(await deleteInventory({ db, namespaceId, inventoryId }));
-  } catch (e) {
-    if (e instanceof NotFoundError) throw error(404, e.message);
-    throw e;
-  }
-};
+  // Its cards go back where they were on the canvas. Their IDs let the board draw them
+  // there without waiting for the next poll.
+  return json(await deleteInventory({ db, namespaceId, inventoryId }));
+});

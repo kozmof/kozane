@@ -3,8 +3,9 @@ import { json, error } from "@sveltejs/kit";
 import { moveCardsToNamespace } from "$db/api/composite";
 import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
 import { rejectBatch } from "../../../lib/rejection.js";
+import { apiHandler } from "../../../lib/api-handler.js";
 
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
   const { namespaceId } = params;
   const body = await readJsonObject(request);
@@ -20,4 +21,4 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   });
   if (!result.ok) rejectBatch(result.reason);
   return json({ ok: true });
-};
+});

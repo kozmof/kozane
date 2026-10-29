@@ -9,8 +9,9 @@ import {
   unchangedSnapshotEtag,
 } from "$lib/server/snapshot-etag";
 import { loadNamespaceSnapshot } from "../../lib/namespace-snapshot.js";
+import { apiHandler } from "../../lib/api-handler.js";
 
-export const GET: RequestHandler = async ({ locals, params, request }) => {
+export const GET: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { namespaceId } = params;
   const ifNoneMatch = request.headers.get("if-none-match");
   const dbUrl = openedDbUrl();
@@ -58,4 +59,4 @@ export const GET: RequestHandler = async ({ locals, params, request }) => {
       "cache-control": "no-store",
     },
   });
-};
+});

@@ -7,27 +7,28 @@ import {
 } from "$lib/server/taskspace-files";
 import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { optionalString, readJsonObject, requireString } from "../../../../lib/request.js";
+import { apiHandler } from "../../../../lib/api-handler.js";
 
 /**
  * Read a taskspace file for the editor. Accept only regular, non-hidden files with valid
  * UTF-8 within the size limit. Keep this separate from `files/`, which returns only names and
  * metadata.
  */
-export const GET: RequestHandler = async ({ locals, params, url }) => {
+export const GET: RequestHandler = apiHandler(async ({ locals, params, url }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
   try {
     return json(readTaskspaceFile({ baseDir, subPath: url.searchParams.get("path") ?? "" }));
   } catch (e) {
     rethrowFilesError(e, "Failed to read taskspace file");
   }
-};
+});
 
 /**
  * Create an empty file and return its path, content, and signature so editing can begin
  * without another request. Reject supplied content, which belongs in PUT, and return 409 if
  * the name is already taken.
  */
-export const POST: RequestHandler = async ({ locals, params, request }) => {
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
   const body = await readJsonObject(request);
   const subPath = requireString(body, "path");
@@ -39,13 +40,13 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   } catch (e) {
     rethrowFilesError(e, "Failed to create taskspace file");
   }
-};
+});
 
 /**
  * Save text over an existing file only when the required read signature still matches. Return
  * 409 if the file changed since the editor read it.
  */
-export const PUT: RequestHandler = async ({ locals, params, request }) => {
+export const PUT: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
   const body = await readJsonObject(request);
   const subPath = requireString(body, "path");
@@ -61,4 +62,4 @@ export const PUT: RequestHandler = async ({ locals, params, request }) => {
   } catch (e) {
     rethrowFilesError(e, "Failed to save taskspace file");
   }
-};
+});
