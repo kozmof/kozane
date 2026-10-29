@@ -79,8 +79,15 @@ describe("DELETE /[namespaceId]/api/layers/[layerId]", () => {
     const response = await DELETE(event(db, namespaceId, layerId));
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ ok: true, defaultLayerId });
-    expect(await getCard({ db, partitionId, cardId })).toMatchObject({ layerId: defaultLayerId });
+    expect(await response.json()).toEqual({
+      ok: true,
+      defaultLayerId,
+      stacking: [{ cardId, zIndex: 1 }],
+    });
+    expect(await getCard({ db, partitionId, cardId })).toMatchObject({
+      layerId: defaultLayerId,
+      zIndex: 1,
+    });
     expect((await getAllLayers({ db, namespaceId })).map(({ id }) => id)).toEqual([defaultLayerId]);
   });
 

@@ -112,6 +112,29 @@ describe("addCard", () => {
     const id2 = await addCard({ db, partitionId, content: "B" });
     expect(id1).not.toBe(id2);
   });
+
+  it("rejects a layer from another namespace", async () => {
+    const { db, partitionId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    const { id: foreignLayerId } = await addLayer({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "Foreign",
+      isDefault: true,
+    });
+    await expect(
+      addCard({ db, partitionId, layerId: foreignLayerId, content: "X" }),
+    ).rejects.toThrow(NotFoundError);
+    await expect(
+      addCards({
+        db,
+        partitionId,
+        layerId: foreignLayerId,
+        cards: [{ content: "X", posX: 0, posY: 0 }],
+      }),
+    ).rejects.toThrow(NotFoundError);
+    expect(await getAllCards({ db, partitionId })).toHaveLength(0);
+  });
 });
 
 describe("getCard", () => {

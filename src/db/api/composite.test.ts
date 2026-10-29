@@ -301,6 +301,7 @@ describe("deleteLayerWithReassign", () => {
 
     await expect(deleteLayerWithReassign({ db, namespaceId, layerId })).resolves.toEqual({
       defaultLayerId: defaultLayer!.id,
+      stacking: [{ cardId, zIndex: 1 }],
     });
 
     expect(await getLayer({ db, namespaceId, layerId })).toBeUndefined();
@@ -309,6 +310,32 @@ describe("deleteLayerWithReassign", () => {
       content: "Move me",
       layerId: defaultLayer!.id,
     });
+  });
+
+  it("restacks moved cards above the default layer's cards, keeping their order", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const defaultLayer = await getDefaultLayer({ db, namespaceId });
+    const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
+    // Default-layer cards at 0..5; moved cards at 2 and 3 would otherwise interleave with them.
+    const base = await addCard({
+      db,
+      partitionId,
+      layerId: defaultLayer!.id,
+      content: "B",
+      zIndex: 5,
+    });
+    const low = await addCard({ db, partitionId, layerId, content: "L", zIndex: 3 });
+    const lower = await addCard({ db, partitionId, layerId, content: "M", zIndex: 2 });
+
+    const { stacking } = await deleteLayerWithReassign({ db, namespaceId, layerId });
+
+    expect(stacking).toEqual([
+      { cardId: lower, zIndex: 6 },
+      { cardId: low, zIndex: 7 },
+    ]);
+    expect((await getCard({ db, partitionId, cardId: base }))?.zIndex).toBe(5);
+    expect((await getCard({ db, partitionId, cardId: lower }))?.zIndex).toBe(6);
+    expect((await getCard({ db, partitionId, cardId: low }))?.zIndex).toBe(7);
   });
 
   it("throws NotFoundError for a missing layer", async () => {

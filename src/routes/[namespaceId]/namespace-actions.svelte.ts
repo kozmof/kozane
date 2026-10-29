@@ -107,8 +107,13 @@ export function createNamespaceActions(state: NamespaceState) {
     // A selection can reach into an inventory, and the server refuses to glue a stored card.
     const stored = storedCardIds(state.cards);
     const cardIds = selectedIds.filter((id) => !stored.has(id));
-    if (cardIds.length < selectedIds.length && cardIds.length < 2) {
-      state.setError("Stored cards cannot be glued");
+    // The server needs at least two cards. Name stored cards when they are why too few remain.
+    if (cardIds.length < 2) {
+      state.setError(
+        cardIds.length < selectedIds.length
+          ? "Stored cards cannot be glued"
+          : "Select at least two cards to glue",
+      );
       return;
     }
     const res = await api.glueCards(state.mutationFetcher, state.namespaceId, cardIds);
@@ -328,13 +333,18 @@ export function createNamespaceActions(state: NamespaceState) {
       state.setError(await api.failureMessage(res, "Failed to delete layer"));
       return;
     }
-    const defaultLayerId = readString(await res.json().catch(() => null), "defaultLayerId");
+    const parsed = await res.json().catch(() => null);
+    const defaultLayerId = readString(parsed, "defaultLayerId");
     if (defaultLayerId === undefined) {
       state.setError("Failed to delete layer");
       return;
     }
+    // The server restacks the moved cards above the default layer's cards.
+    const stacking = readStacking(parsed);
     state.cards = state.cards.map((c) =>
-      c.layerId === layerId ? { ...c, layerId: defaultLayerId } : c,
+      c.layerId === layerId
+        ? { ...c, layerId: defaultLayerId, zIndex: stacking.get(c.id) ?? c.zIndex }
+        : c,
     );
     state.layers = state.layers.filter((l) => l.id !== layerId);
     if (state.activeLayerId === layerId) state.activeLayerId = defaultLayerId;

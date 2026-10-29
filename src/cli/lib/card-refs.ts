@@ -3,7 +3,7 @@ import { partitionTable, cardTable, scopeTable } from "../../db/schema.js";
 import { getDefaultPartition } from "../../db/api/partition.js";
 import { getAllLayers } from "../../db/api/layer.js";
 import { chunked, STATEMENT_PARAMS_MAX } from "../../lib/constants.js";
-import type { DB } from "../../db/tx.js";
+import type { AnyDB } from "../../db/tx.js";
 import { findById, resolveShortId } from "./short-id.js";
 import { resolveLayerRef } from "./layer-ref.js";
 
@@ -15,7 +15,7 @@ import { resolveLayerRef } from "./layer-ref.js";
  */
 
 /** Every card ID in the workspace, which CLI short IDs are chosen against. */
-export async function allCardIds(db: DB): Promise<string[]> {
+export async function allCardIds(db: AnyDB): Promise<string[]> {
   return (await db.select({ id: cardTable.id }).from(cardTable)).map(({ id }) => id);
 }
 
@@ -35,7 +35,7 @@ export function movedCoordinate(value: number | string, current: number): number
  * after a card moves between namespaces. Read only the ID and namespace here. {@link
  * loadCards} fetches other columns for the selected cards.
  */
-export async function resolveCardGroup(db: DB, requestedIds: string[]) {
+export async function resolveCardGroup(db: AnyDB, requestedIds: string[]) {
   const index = await db
     .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
     .from(cardTable)
@@ -59,7 +59,7 @@ export type LoadedCard = {
  * Load full rows for resolved IDs in bounded batches. Glue expansion can produce a selection
  * larger than one statement's parameter budget.
  */
-export async function loadCards(db: DB, cardIds: string[]): Promise<LoadedCard[]> {
+export async function loadCards(db: AnyDB, cardIds: string[]): Promise<LoadedCard[]> {
   const rows: LoadedCard[] = [];
   for (const batch of chunked(cardIds, { size: STATEMENT_PARAMS_MAX })) {
     const found = await db
@@ -78,7 +78,7 @@ export async function loadCards(db: DB, cardIds: string[]): Promise<LoadedCard[]
 }
 
 export async function resolvePartitionId(
-  db: DB,
+  db: AnyDB,
   namespaceId: string,
   requestedId?: string,
 ): Promise<string> {
@@ -100,7 +100,7 @@ export async function resolvePartitionId(
 
 /** Resolve the requested layer, falling back to the namespace's default. */
 export async function resolveLayerId(
-  db: DB,
+  db: AnyDB,
   namespaceId: string,
   requested?: string,
 ): Promise<string> {
@@ -113,7 +113,7 @@ export async function resolveLayerId(
   return resolveLayerRef(layers, requested);
 }
 
-export async function resolveScopeId(db: DB, requestedId: string): Promise<string> {
+export async function resolveScopeId(db: AnyDB, requestedId: string): Promise<string> {
   const scopes = await db.select({ id: scopeTable.id }).from(scopeTable);
   return resolveShortId(
     requestedId,

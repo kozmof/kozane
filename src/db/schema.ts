@@ -269,7 +269,7 @@ export const cardTable = sqliteTable(
   (t) => [
     // Index cards by partition to avoid full scans on page loads and polls.
     index("card_partition").on(t.partitionId),
-    // Support `reassignLayerCards` lookup by layer when moving cards off a deleted layer.
+    // Support the lookup by layer when `deleteLayerWithReassign` moves cards off a deleted layer.
     index("card_layer").on(t.layerId),
     // Cover the partition and update-time columns read by `getCardChangeCounts` for map
     // activity bands. Keep the narrower partition index for frequent board reads.

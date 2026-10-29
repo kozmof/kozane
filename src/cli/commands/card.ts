@@ -92,13 +92,16 @@ export async function cardAdd(rawContent: string, options: CardAddOptions = {}):
     if (!checked.ok) throw new Error(checked.issue);
     const { content } = checked;
 
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
-    const layerId = await resolveLayerId(db, namespaceId, options.layer);
-    const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     // Clamp `--x` and `--y` to the workspace's board bounds so the viewport can reach the card.
     const placement = clampToBounds(options.x ?? 0, options.y ?? 0, canvasBoundsForRoot(root));
-    const id = await withTx(db, async (tx) => {
+    // Resolve inside the writing transaction, as the HTTP route does, so a partition, layer, or
+    // scope deleted by another writer in between is reported as not found rather than as a
+    // foreign-key failure.
+    const { id, namespaceId, partitionId, layerId, scopeId } = await withTx(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const partitionId = await resolvePartitionId(tx, namespaceId, options.partition);
+      const layerId = await resolveLayerId(tx, namespaceId, options.layer);
+      const scopeId = options.scope ? await resolveScopeId(tx, options.scope) : undefined;
       const cardId = await addCard({
         db: tx,
         partitionId,
@@ -107,7 +110,7 @@ export async function cardAdd(rawContent: string, options: CardAddOptions = {}):
         ...placement,
       });
       if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-      return cardId;
+      return { id: cardId, namespaceId, partitionId, layerId, scopeId };
     });
     const [namespaces, partitions, cards, scopes, layers] = await Promise.all([
       db.select({ id: namespaceTable.id }).from(namespaceTable),

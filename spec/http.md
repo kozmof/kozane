@@ -235,8 +235,10 @@ name.
 
 ### `DELETE /[namespaceId]/api/layers/[layerId]`
 
-Delete a layer, moving its cards to the namespace's default layer first. Return
-`{ ok: true, defaultLayerId }`.
+Delete a layer, moving its cards to the namespace's default layer first. The moved cards are
+restacked above the default layer's cards, keeping their relative order. Return
+`{ ok: true, defaultLayerId, stacking }`, where `stacking` lists each moved card's new
+`{ cardId, zIndex }`.
 
 `400` for the default layer, which cannot be deleted. `404` when it is not this namespace's.
 

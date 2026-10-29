@@ -11,7 +11,6 @@ import {
   addCard,
   newCardStamps,
   reassignPartitionCards,
-  reassignLayerCards,
   cardsBelongToNamespace,
   getCardPartitionNames,
   getCardLayerNames,
@@ -431,12 +430,16 @@ type DeleteLayerWithReassign = { db: DB; namespaceId: string; layerId: string };
  * Deletes a non-default layer and moves its cards to the namespace's default layer,
  * atomically. Without the reassign, deleting a layer would cascade its cards away.
  * Throws NotFoundError if the layer doesn't exist, DefaultLayerError for the default one.
+ *
+ * The moved cards are restacked above the default layer's cards, keeping their relative
+ * order, as any other layer move does. Keeping their old zIndex values would interleave them
+ * with the default layer's cards. Returns the new values so the board can apply them.
  */
 export async function deleteLayerWithReassign({
   db,
   namespaceId,
   layerId,
-}: DeleteLayerWithReassign): Promise<{ defaultLayerId: string }> {
+}: DeleteLayerWithReassign): Promise<{ defaultLayerId: string; stacking: CardStacking[] }> {
   return withTx(db, async (tx) => {
     const layer = await getLayer({ db: tx, namespaceId, layerId });
     if (!layer) throw new NotFoundError(`Layer namespaceId=${namespaceId} layerId=${layerId}`);
@@ -445,9 +448,19 @@ export async function deleteLayerWithReassign({
     const defaultLayer = await getDefaultLayer({ db: tx, namespaceId });
     if (!defaultLayer) throw new Error("No default layer found for this namespace");
 
-    await reassignLayerCards({ db: tx, fromLayerId: layerId, toLayerId: defaultLayer.id });
+    const cardIds = (
+      await tx.select({ id: cardTable.id }).from(cardTable).where(eq(cardTable.layerId, layerId))
+    ).map(({ id }) => id);
+    const moved = await reassignCardsToLayerInTx({
+      db: tx,
+      namespaceId,
+      cardIds,
+      layerId: defaultLayer.id,
+    });
+    // Both layers and every card on them belong to this namespace, so a refusal is a bug.
+    if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
     await deleteLayer({ db: tx, namespaceId, layerId });
 
-    return { defaultLayerId: defaultLayer.id };
+    return { defaultLayerId: defaultLayer.id, stacking: moved.stacking };
   });
 }

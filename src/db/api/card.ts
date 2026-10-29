@@ -265,6 +265,31 @@ export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
   return { createdAt: now, updatedAt: now };
 }
 
+/**
+ * Refuse a layer outside the partition's namespace. Foreign keys only check that both rows
+ * exist, so without this a caller could put a card on another namespace's layer.
+ */
+async function assertLayerMatchesPartition({
+  db,
+  partitionId,
+  layerId,
+}: NeedsPartition & { layerId: string }): Promise<void> {
+  const row = await db
+    .select({ id: layerTable.id })
+    .from(layerTable)
+    .innerJoin(partitionTable, eq(partitionTable.namespaceId, layerTable.namespaceId))
+    .where(and(eq(partitionTable.id, partitionId), eq(layerTable.id, layerId)))
+    .get();
+  if (!row)
+    throw new NotFoundError(
+      `Layer layerId=${layerId} in the namespace of partitionId=${partitionId}`,
+    );
+}
+
+/**
+ * Insert one card. An explicit `layerId` must be in the partition's namespace. Run inside a
+ * transaction when that check and the insert must not be split by another writer.
+ */
 export async function addCard({
   db,
   partitionId,
@@ -275,6 +300,7 @@ export async function addCard({
   posY,
   zIndex,
 }: AddCard): Promise<string> {
+  if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
   const [row] = await db
     .insert(cardTable)
     .values({
@@ -311,6 +337,7 @@ type AddCards = NeedsPartition & {
  */
 export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
+  await assertLayerMatchesPartition({ db, partitionId, layerId });
   // Share one timestamp across all chunks. See {@link newCardStamps}.
   const stamps = newCardStamps();
   const ids: string[] = [];
@@ -403,15 +430,6 @@ export async function reassignPartitionCards({
     .update(cardTable)
     .set({ partitionId: toPartitionId })
     .where(eq(cardTable.partitionId, fromPartitionId));
-}
-
-type ReassignLayerCards = NeedsDB & { fromLayerId: string; toLayerId: string };
-export async function reassignLayerCards({
-  db,
-  fromLayerId,
-  toLayerId,
-}: ReassignLayerCards): Promise<void> {
-  await db.update(cardTable).set({ layerId: toLayerId }).where(eq(cardTable.layerId, fromLayerId));
 }
 
 type UpdateCardFields = {

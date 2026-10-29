@@ -26,8 +26,12 @@ export const DELETE: RequestHandler = async ({ locals, params }) => {
   const { namespaceId, layerId } = params;
 
   try {
-    const { defaultLayerId } = await deleteLayerWithReassign({ db, namespaceId, layerId });
-    return json({ ok: true, defaultLayerId });
+    const { defaultLayerId, stacking } = await deleteLayerWithReassign({
+      db,
+      namespaceId,
+      layerId,
+    });
+    return json({ ok: true, defaultLayerId, stacking });
   } catch (e) {
     if (e instanceof NotFoundError) throw error(404, e.message);
     if (e instanceof DefaultLayerError) throw error(400, e.message);

@@ -1,8 +1,8 @@
-import type { DB } from "../../db/tx.js";
+import type { AnyDB } from "../../db/tx.js";
 import { namespaceTable } from "../../db/schema.js";
 import { resolveShortId } from "./short-id.js";
 
-export async function resolveNamespaceId(db: DB, requestedId?: string): Promise<string> {
+export async function resolveNamespaceId(db: AnyDB, requestedId?: string): Promise<string> {
   const namespaces = await db
     .select({ id: namespaceTable.id, isDefault: namespaceTable.isDefault })
     .from(namespaceTable);
