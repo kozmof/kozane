@@ -375,7 +375,12 @@ export async function cardSetNamespace(
       targetNamespaceId,
       cardIds,
     });
-    if (!result.ok) throw new Error("Cards must belong to the same source namespace.");
+    if (!result.ok)
+      throw new Error(
+        result.reason === "missing-namespace"
+          ? "Target namespace not found."
+          : "Cards must belong to the same source namespace.",
+      );
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to namespace.`);
     console.log(
       `  namespace: ${shortId(

@@ -53,6 +53,19 @@ describe("POST /[namespaceId]/api/cards/move", () => {
     expect(rows[0].partitionId).not.toBe(srcPartition);
   });
 
+  it("rejects a target namespace that does not exist and leaves the cards in place", async () => {
+    const { db, srcId, srcPartition } = await setup();
+    const cardId = await addCard({ db, partitionId: srcPartition, content: "Stay" });
+
+    await expectHttpRejection(
+      POST(event(db, srcId, jsonRequest({ cardIds: [cardId], targetNamespaceId: "missing" }))),
+      400,
+      "Target namespace not found",
+    );
+    const rows = await getCardPartitionNames({ db, cardIds: [cardId] });
+    expect(rows[0].partitionId).toBe(srcPartition);
+  });
+
   it("rejects when targetNamespaceId equals the source namespace", async () => {
     const { db, srcId, srcPartition } = await setup();
     const cardId = await addCard({ db, partitionId: srcPartition, content: "Self-move" });

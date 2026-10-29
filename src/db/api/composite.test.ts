@@ -373,6 +373,21 @@ describe("moveCardsToNamespace", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  it("refuses a target namespace that does not exist and creates nothing", async () => {
+    const { db, srcId, srcPartition } = await setupMove();
+    const cardId = await addCard({ db, partitionId: srcPartition, content: "Stay" });
+
+    await expect(
+      moveCardsToNamespace({
+        db,
+        sourceNamespaceId: srcId,
+        targetNamespaceId: "missing",
+        cardIds: [cardId],
+      }),
+    ).resolves.toEqual({ ok: false, reason: "missing-namespace" });
+    expect((await readCard(db, cardId))?.partitionId).toBe(srcPartition);
+  });
+
   it("refuses a move into the cards' own namespace and leaves their glue group alone", async () => {
     const { db, srcId, srcPartition } = await setupMove();
     const first = await addCard({ db, partitionId: srcPartition, content: "First" });

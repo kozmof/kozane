@@ -35,10 +35,17 @@ import {
   DefaultPartitionError,
   DefaultLayerError,
   columnCount,
+  type BatchResult,
   type CardBatchResult,
 } from "./utils.js";
 import { and, eq, gt, gte, inArray, isNotNull, ne, sql } from "drizzle-orm";
-import { partitionTable, cardTable, scopeRelTable, taskspaceTable } from "../schema.js";
+import {
+  namespaceTable,
+  partitionTable,
+  cardTable,
+  scopeRelTable,
+  taskspaceTable,
+} from "../schema.js";
 import type { Card, Inventory, NeedsPartition, NeedsTaskspace } from "./types.js";
 import { BATCH_MAX, chunked, clamp } from "../../lib/constants.js";
 import { splitCardContent, squashCardPositions, squashInventorySlots } from "../../lib/squash.js";
@@ -265,6 +272,9 @@ export async function squashNamespaceCard({
   });
 }
 
+/** Refusals for a namespace move: foreign source cards, or a target that does not exist. */
+export type MoveCardsResult = BatchResult<"foreign-cards" | "missing-namespace">;
+
 type MoveCardsToNamespace = {
   db: DB;
   sourceNamespaceId: string;
@@ -327,12 +337,21 @@ export async function moveCardsToNamespace({
   sourceNamespaceId,
   targetNamespaceId,
   cardIds: requestedIds,
-}: MoveCardsToNamespace): Promise<CardBatchResult> {
+}: MoveCardsToNamespace): Promise<MoveCardsResult> {
   if (sourceNamespaceId === targetNamespaceId)
     throw new Error("Target namespace must differ from source");
   if (requestedIds.length === 0) return { ok: true };
   const cardIds = [...new Set(requestedIds)];
   return withTx(db, async (tx) => {
+    // Check the target inside the transaction. Otherwise creating its partitions would fail
+    // on the foreign key and surface as a server error instead of a refusal.
+    const target = await tx
+      .select({ id: namespaceTable.id })
+      .from(namespaceTable)
+      .where(eq(namespaceTable.id, targetNamespaceId))
+      .get();
+    if (!target) return { ok: false, reason: "missing-namespace" };
+
     const owned = await cardsBelongToNamespace({ db: tx, namespaceId: sourceNamespaceId, cardIds });
     if (!owned.ok) return owned;
 

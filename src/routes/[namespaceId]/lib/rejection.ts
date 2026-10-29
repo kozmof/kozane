@@ -12,6 +12,7 @@ const BATCH_REJECTION_MESSAGE: Record<BatchRejection, string> = {
   "foreign-layer": "Layer not found in namespace",
   "foreign-scope": "Scope not found",
   "foreign-inventory": "Inventory not found in namespace",
+  "missing-namespace": "Target namespace not found",
   "inventory-full": "Inventory has no free slot there",
   "stored-cards": "Stored cards cannot be glued",
   "unstored-cards": "Card is not stored in an inventory",

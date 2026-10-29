@@ -22,6 +22,7 @@ export type BatchRejection =
   | "foreign-layer"
   | "foreign-scope"
   | "foreign-inventory"
+  | "missing-namespace"
   | "inventory-full"
   | "stored-cards"
   | "unstored-cards";

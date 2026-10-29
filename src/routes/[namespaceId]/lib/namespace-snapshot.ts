@@ -1,4 +1,5 @@
-import type { AnyDB } from "$db/client";
+import type { DB } from "$db/client";
+import { withTx } from "$db/tx";
 import type { Namespace } from "$db/api/types";
 import type { NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceSummary } from "$lib/types";
 import { getNamespace } from "$db/api/namespace";
@@ -18,7 +19,7 @@ import { buildTaskspaceFileTreeOnce } from "$lib/server/taskspace-snapshot";
 import { cardsWithGlueIds } from "./namespace-page.js";
 
 type LoadNamespaceSnapshot = {
-  db: AnyDB;
+  db: DB;
   namespaceId: string;
   /**
    * Whether to include local taskspace paths. Live boards use them to show directories.
@@ -53,37 +54,68 @@ export async function loadNamespaceSnapshot({
   namespace: Namespace;
   snapshot: NamespaceDataSnapshot;
 } | null> {
-  const namespace = await getNamespace({ db, namespaceId });
-  if (!namespace) return null;
+  // Read every table in one transaction so the snapshot reflects a single committed state.
+  // In WAL mode a read transaction sees one consistent view without blocking writers.
+  const rows = await withTx(db, async (tx) => {
+    const namespace = await getNamespace({ db: tx, namespaceId });
+    if (!namespace) return null;
 
-  const [partitions, layers, warps, inventories, scopes, scopeAreas, taskspaces] =
-    await Promise.all([
-      getAllPartitions({ db, namespaceId }),
-      getAllLayers({ db, namespaceId }),
-      getAllWarps({ db, namespaceId }),
-      getAllInventories({ db, namespaceId }),
-      includeScopes ? getScopesInNamespace({ db, namespaceId }) : Promise.resolve([]),
-      // Gate frames with `includeScopes` because their geometry also exposes scope organization
-      // in published exports.
-      includeScopes ? getScopeAreasInNamespace({ db, namespaceId }) : Promise.resolve([]),
-      includeScopes ? getTaskspacesInNamespace({ db, namespaceId }) : Promise.resolve([]),
+    const [partitions, layers, warps, inventories, scopes, scopeAreas, taskspaces] =
+      await Promise.all([
+        getAllPartitions({ db: tx, namespaceId }),
+        getAllLayers({ db: tx, namespaceId }),
+        getAllWarps({ db: tx, namespaceId }),
+        getAllInventories({ db: tx, namespaceId }),
+        includeScopes ? getScopesInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
+        // Gate frames with `includeScopes` because their geometry also exposes scope
+        // organization in published exports.
+        includeScopes ? getScopeAreasInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
+        includeScopes ? getTaskspacesInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
+      ]);
+
+    const cardRows = await getCardDataByPartitions({
+      db: tx,
+      partitionIds: partitions.map(({ id }) => id),
+    });
+    const [glueRels, scopeRels] = await Promise.all([
+      getGlueRelsByNamespace({ db: tx, namespaceId }),
+      includeScopes ? getScopeRelsByNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
     ]);
+    return {
+      namespace,
+      partitions,
+      layers,
+      warps,
+      inventories,
+      scopes,
+      scopeAreas,
+      taskspaces,
+      cardRows,
+      glueRels,
+      scopeRels,
+    };
+  });
+  if (!rows) return null;
+  const {
+    namespace,
+    partitions,
+    layers,
+    warps,
+    inventories,
+    scopes,
+    scopeAreas,
+    taskspaces,
+    cardRows,
+    glueRels,
+    scopeRels,
+  } = rows;
 
-  // Read cards before their relations. These sequential queries are not one database
-  // transaction, so concurrent writes can make the result span different states. Polling
-  // resolves temporary disagreement.
-  // Show cards whose inventory is absent at their saved canvas positions. An inventory
-  // created between these reads becomes available on the next poll.
+  // Show cards whose inventory is absent at their saved canvas positions. The reads share one
+  // transaction, so this only guards against rows a repair has not yet cleaned up.
   const inventoryIds = new Set(inventories.map(({ id }) => id));
-  const cards = (
-    await getCardDataByPartitions({ db, partitionIds: partitions.map(({ id }) => id) })
-  ).map((card) =>
+  const cards = cardRows.map((card) =>
     card.inventory && !inventoryIds.has(card.inventory.id) ? { ...card, inventory: null } : card,
   );
-  const [glueRels, scopeRels] = await Promise.all([
-    getGlueRelsByNamespace({ db, namespaceId }),
-    includeScopes ? getScopeRelsByNamespace({ db, namespaceId }) : Promise.resolve([]),
-  ]);
 
   // For static export, include only taskspaces whose scopes appear in this snapshot. The
   // exported panel cannot reach other taskspaces, so publishing their names and files would

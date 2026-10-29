@@ -749,6 +749,41 @@ async function layerStackBounds(tx: Tx, layerId: string): Promise<{ top: number;
 }
 
 /**
+ * {@link layerStackBounds} for several layers in one grouped query. A layer with no cards is
+ * absent from the result and reads as `{ top: 0, bottom: 0 }`.
+ */
+async function layerStackBoundsByLayer(
+  tx: Tx,
+  layerIds: string[],
+): Promise<Map<string, { top: number; bottom: number }>> {
+  const rows = await readByIds(layerIds, (batch) =>
+    tx
+      .select({
+        layerId: cardTable.layerId,
+        top: sql<number>`max(${cardTable.zIndex})`,
+        bottom: sql<number>`min(${cardTable.zIndex})`,
+      })
+      .from(cardTable)
+      .where(inArray(cardTable.layerId, batch))
+      .groupBy(cardTable.layerId),
+  );
+  return new Map(
+    rows.map(({ layerId, top, bottom }) => [
+      layerId,
+      { top: Math.max(top, 0), bottom: Math.min(bottom, 0) },
+    ]),
+  );
+}
+
+/** The zIndex that puts a new card above every card on `layerId`. */
+export async function nextLayerZIndexInTx({
+  db: tx,
+  layerId,
+}: NeedsTx & { layerId: string }): Promise<number> {
+  return (await layerStackBounds(tx, layerId)).top + 1;
+}
+
+/**
  * Move cards to another layer in the same namespace. Reject cards or a destination layer
  * outside that namespace.
  *
@@ -775,7 +810,7 @@ export async function reassignCardsToLayerInTx({
   namespaceId,
   cardIds,
   layerId,
-}: Omit<ReassignCardsToLayer, "db"> & { db: Tx }): Promise<ReassignLayerResult> {
+}: NeedsTx & Omit<ReassignCardsToLayer, "db">): Promise<ReassignLayerResult> {
   if (cardIds.length === 0) return { ok: true, stacking: [] };
   // Check the destination first so a request with both an invalid layer and invalid cards
   // reports the layer error consistently.
@@ -843,9 +878,10 @@ export async function reassignCardsStackOrder({
       else byLayer.set(card.layerId, [card]);
     }
 
+    const bounds = await layerStackBoundsByLayer(tx, [...byLayer.keys()]);
     const stacking: CardStacking[] = [];
     for (const [layerId, group] of byLayer) {
-      const { top, bottom } = await layerStackBounds(tx, layerId);
+      const { top, bottom } = bounds.get(layerId) ?? { top: 0, bottom: 0 };
 
       const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));
       if (direction === "front") {

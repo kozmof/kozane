@@ -113,6 +113,32 @@ describe("POST /[namespaceId]/api/cards", () => {
     expect(await response.json()).toMatchObject({ layerId: defaultLayer!.id });
   });
 
+  it("stacks a card above its layer's cards when zIndex is omitted", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "Below", zIndex: 7 });
+
+    const response = await POST(
+      event(db, namespaceId, jsonRequest({ partitionId, content: "On top" })),
+    );
+
+    const created = await response.json();
+    expect(created.zIndex).toBe(8);
+    await expect(getCard({ db, partitionId, cardId: created.id })).resolves.toMatchObject({
+      zIndex: 8,
+    });
+  });
+
+  it("keeps an explicit zIndex", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    await addCard({ db, partitionId, content: "Below", zIndex: 7 });
+
+    const response = await POST(
+      event(db, namespaceId, jsonRequest({ partitionId, content: "Placed", zIndex: 3 })),
+    );
+
+    expect(await response.json()).toMatchObject({ zIndex: 3 });
+  });
+
   it("puts a card on the requested layer", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });

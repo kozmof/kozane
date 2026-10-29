@@ -70,7 +70,8 @@ Create a card.
 
 Body fields are `partitionId` and `content` (required, text trimmed and non-blank),
 plus optional `posX`, `posY`, `zIndex` (integer), `scopeId`, `layerId`, and `inventoryId`.
-Omitting the layer uses the namespace default. Scope membership is atomic with creation.
+Omitting the layer uses the namespace default. Omitting `zIndex` stacks the card above every
+card on its layer. Scope membership is atomic with creation.
 With `inventoryId`, the card is stored in that inventory's first free slot in the same
 transaction.
 
@@ -153,7 +154,8 @@ Moved cards are restacked above the cards already on each destination layer and 
 glue groups. A card linked to a taskspace placed in another namespace loses that link.
 Links to unplaced taskspaces, and to taskspaces of the target namespace, are kept.
 
-`400` when the target is the source, or when the cards are not this namespace's.
+`400` when the target is the source, when the target namespace does not exist, or when the
+cards are not this namespace's.
 
 ### `POST /[namespaceId]/api/cards/squash`
 

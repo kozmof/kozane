@@ -6,7 +6,12 @@ import { getDefaultLayer, getLayer } from "$db/api/layer";
 import { getScope } from "$db/api/scope";
 import { addScopeRel } from "$db/api/scope-rel";
 import { withTx } from "$db/tx";
-import { addCard, updateNamespaceCardPositions, type CardPositionUpdate } from "$db/api/card";
+import {
+  addCard,
+  nextLayerZIndexInTx,
+  updateNamespaceCardPositions,
+  type CardPositionUpdate,
+} from "$db/api/card";
 import { deleteNamespaceCards } from "$db/api/composite";
 import { stowCardsInTx } from "$db/api/inventory";
 import { checkCardContent } from "$lib/constants";
@@ -55,8 +60,10 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
   const content = checked.content;
   const posX = optionalNumber(body, "posX") ?? 0;
   const posY = optionalNumber(body, "posY") ?? 0;
-  const zIndex = optionalNumber(body, "zIndex") ?? 0;
-  if (!Number.isSafeInteger(zIndex)) throw error(400, "zIndex must be an integer");
+  // Omitted means the top of the card's layer, resolved inside the transaction below.
+  const requestedZIndex = optionalNumber(body, "zIndex");
+  if (requestedZIndex !== undefined && !Number.isSafeInteger(requestedZIndex))
+    throw error(400, "zIndex must be an integer");
   const scopeId = optionalString(body, "scopeId");
   const requestedLayerId = optionalString(body, "layerId");
   // An open inventory on the board takes new cards. The card is still given a canvas position,
@@ -86,7 +93,7 @@ export const POST: RequestHandler = async ({ locals, params, request }) => {
       layerId: layer.id,
       content,
       ...clampToCanvas(posX, posY),
-      zIndex,
+      zIndex: requestedZIndex ?? (await nextLayerZIndexInTx({ db: tx, layerId: layer.id })),
     };
     const cardId = await addCard({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
