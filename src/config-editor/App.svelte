@@ -184,8 +184,8 @@
   <main class={cx(barClass, css({ paddingBlock: "16px 64px" }))}>
     {#if snapshot?.readError}
       <div class={cx(noticeClass, css({ backgroundColor: "neutral.bg", color: "state.error" }))}>
-        <strong>{snapshot.readError}</strong>
-        <div>Fix the file by hand, then reload this page.</div>
+        <div>{snapshot.readError}</div>
+        <div>Edit the config file to fix the error, then reload this page.</div>
       </div>
     {:else}
       {#each ["error", "warning"] as const as severity (severity)}
@@ -200,9 +200,9 @@
                 : css({ backgroundColor: "neutral.bg", color: "ink.secondary" }),
             )}
           >
-            <strong>
-              {severity === "error" ? "The config has errors. Fix them to save." : "Warnings (saving still works):"}
-            </strong>
+            <div>
+              {severity === "error" ? "Fix the config errors before saving." : "Review these warnings. Saving is still available."}
+            </div>
             <ul class={css({ margin: "4px 0 0", paddingLeft: "20px" })}>
               {#each list as issue, index (index)}
                 <li>{issue.message}{knownPaths.has(issue.path) ? "" : " (not on this page)"}</li>

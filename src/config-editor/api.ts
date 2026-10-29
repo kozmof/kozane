@@ -12,7 +12,7 @@ export type SaveResult =
   | { ok: false; error: string; issues?: ConfigIssue[] };
 
 export const UNREACHABLE =
-  "Could not reach the config server. Is kozane config open still running?";
+  "Could not reach the config server. Keep kozane config open running, then reload this page.";
 
 async function call(
   token: string,
@@ -47,7 +47,7 @@ export async function saveConfig(
   try {
     const { status, data } = await call(token, "PUT", { signature, changes });
     if (status === 200) return { ok: true, snapshot: data.snapshot };
-    return { ok: false, error: data.error ?? "Could not save.", issues: data.issues };
+    return { ok: false, error: data.error ?? "Could not save the config.", issues: data.issues };
   } catch {
     return { ok: false, error: UNREACHABLE };
   }

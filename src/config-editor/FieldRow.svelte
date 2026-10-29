@@ -169,12 +169,12 @@
           readonly
           {disabled}
           value={text}
-          title="Click, then press a key"
+          title="Select this field, then press a key"
           placeholder="Press a key"
           onkeydown={recordKey}
           class={cx(inputClass, monoClass, css({ cursor: "pointer" }))}
         />
-        <button type="button" title="Bind no key" {disabled} onclick={clearKey} class={smallButtonClass}>
+        <button type="button" title="Disable this shortcut" {disabled} onclick={clearKey} class={smallButtonClass}>
           None
         </button>
       </div>
