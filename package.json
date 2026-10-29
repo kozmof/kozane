@@ -53,7 +53,8 @@
     "verify": "pnpm check && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
-    "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e"
+    "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
+    "publish:npm": "NPM_CONFIG_USERCONFIG=$(mktemp /tmp/kozane-npmrc.XXXXXX) && export NPM_CONFIG_USERCONFIG && trap 'rm -f -- \"$NPM_CONFIG_USERCONFIG\"' EXIT && npm login --registry=https://registry.npmjs.org/ && npm whoami --registry=https://registry.npmjs.org/ && npm publish --registry=https://registry.npmjs.org/"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",
