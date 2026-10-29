@@ -31,10 +31,6 @@ export async function openDb(url: string): Promise<OpenedDb> {
   return { db: brandDb(db), close: () => client.close() };
 }
 
-export async function createDb(url: string): Promise<DB> {
-  return (await openDb(url)).db;
-}
-
 let _dbPromise: Promise<DB> | null = null;
 /**
  * Cleanup function for the connection cached by {@link getDb}. The Drizzle handle does not

@@ -420,12 +420,28 @@ export async function getCardLayerNames({
   );
 }
 
-type ReassignPartitionCards = NeedsDB & { fromPartitionId: string; toPartitionId: string };
+type ReassignPartitionCards = NeedsTx & {
+  namespaceId: string;
+  fromPartitionId: string;
+  toPartitionId: string;
+};
+/**
+ * Move every card from one partition to another in the same namespace. Throw when either
+ * partition is outside `namespaceId`, so no caller can move cards across namespaces.
+ */
 export async function reassignPartitionCards({
   db,
+  namespaceId,
   fromPartitionId,
   toPartitionId,
 }: ReassignPartitionCards): Promise<void> {
+  const ids = [...new Set([fromPartitionId, toPartitionId])];
+  const found = await db
+    .select({ id: partitionTable.id })
+    .from(partitionTable)
+    .where(and(inArray(partitionTable.id, ids), eq(partitionTable.namespaceId, namespaceId)));
+  if (found.length !== ids.length)
+    throw new NotFoundError(`Partitions ${ids.join(", ")} in namespace namespaceId=${namespaceId}`);
   await db
     .update(cardTable)
     .set({ partitionId: toPartitionId })

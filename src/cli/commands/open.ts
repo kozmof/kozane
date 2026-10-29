@@ -7,8 +7,8 @@ import { requireWorkspace } from "../lib/workspace.js";
 import { dbUrl } from "../lib/config.js";
 import { readApiKeyResult } from "../../lib/server/api-key.js";
 import { requireCurrentMigrations, runMigrations } from "../lib/db.js";
-import { createDb } from "../../db/client.js";
-import { namespaceTable, partitionTable, layerTable } from "../../db/schema.js";
+import { openDb } from "../../db/client.js";
+import { createNamespace } from "../../db/api/namespace.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import {
   activeServerProcess,
@@ -19,7 +19,7 @@ import {
 import { hyperlink } from "../lib/hyperlink.js";
 import { resolvePort } from "../lib/port.js";
 import { fileDbUrl } from "../../lib/db-url.js";
-import { DEFAULT_LAYER_NAME, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
+import { DEFAULT_SERVER_PORT } from "../../lib/constants.js";
 
 // dist/cli/commands (or src/cli/commands with tsx) → up 3 → package root
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -121,17 +121,13 @@ export async function open(options: OpenOptions): Promise<void> {
     dbURL = fileDbUrl(join(memoryDir, "kozane.db"));
     try {
       await runMigrations(dbURL);
-      const db = await createDb(dbURL);
-      const [namespace] = await db
-        .insert(namespaceTable)
-        .values({ name: ":memory:", isDefault: true })
-        .returning({ id: namespaceTable.id });
-      await db
-        .insert(partitionTable)
-        .values({ namespaceId: namespace.id, name: "General", isDefault: true });
-      await db
-        .insert(layerTable)
-        .values({ namespaceId: namespace.id, name: DEFAULT_LAYER_NAME, isDefault: true });
+      // Close this setup connection before the server opens the same file.
+      const { db, close } = await openDb(dbURL);
+      try {
+        await createNamespace({ db, name: ":memory:", isDefault: true });
+      } finally {
+        close();
+      }
     } catch (error) {
       rmSync(memoryDir, { recursive: true, force: true });
       throw error;

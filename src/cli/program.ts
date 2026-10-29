@@ -461,8 +461,7 @@ export function buildProgram(): Command {
       cardSortKey,
     )
     .option("--reverse", "Reverse the --sort order")
-    // Handle validation failures that occur before `runWorkspaceCommand`. `program.parse()`
-    // does not await the action, so an uncaught failure would become an unhandled rejection.
+    // Handle validation failures that occur before `runWorkspaceCommand`.
     .action((opts) => cardList(opts).catch(fail));
 
   cardListCommand.addHelpText(

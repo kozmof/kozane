@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { KOZANE_DIR, defaultConfig, writeConfig, dbUrl } from "../lib/config.js";
 import { runMigrations } from "../lib/db.js";
-import { createDb } from "../../db/client.js";
+import { openDb } from "../../db/client.js";
 import { createNamespace } from "../../db/api/namespace.js";
 
 /**
@@ -49,8 +49,12 @@ export async function init(): Promise<void> {
   console.log(`Initializing Kozane workspace "${workspaceName}"...`);
 
   await runMigrations(dbUrl(workspaceRoot));
-  const db = await createDb(dbUrl(workspaceRoot));
-  await createNamespace({ db, name: "main", isDefault: true });
+  const { db, close } = await openDb(dbUrl(workspaceRoot));
+  try {
+    await createNamespace({ db, name: "main", isDefault: true });
+  } finally {
+    close();
+  }
 
   console.log(`
 Kozane initialized.

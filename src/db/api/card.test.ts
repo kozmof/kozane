@@ -22,7 +22,9 @@ import {
   reassignCardsToPartition,
   reassignCardsToLayer,
   cardsInNamespace,
+  reassignPartitionCards,
 } from "./card.js";
+import { withTx } from "../tx.js";
 import { addNamespace } from "./namespace.js";
 import { addPartition } from "./partition.js";
 import { NotFoundError } from "./utils.js";
@@ -920,5 +922,43 @@ describe("card timestamps", () => {
     const card = await getCard({ db, partitionId: otherPartitionId, cardId });
     expect(card?.layerId).toBe(otherLayerId);
     expect(card?.updatedAt.getTime()).toBe(LONG_AGO.getTime());
+  });
+});
+
+describe("reassignPartitionCards", () => {
+  it("moves every card between partitions of the namespace", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const toPartitionId = await addPartition({ db, namespaceId, name: "Other" });
+    const cardId = await addCard({ db, partitionId, content: "moving" });
+
+    await withTx(db, (tx) =>
+      reassignPartitionCards({ db: tx, namespaceId, fromPartitionId: partitionId, toPartitionId }),
+    );
+
+    expect((await getCard({ db, partitionId: toPartitionId, cardId }))?.content).toBe("moving");
+  });
+
+  it("refuses a destination partition in another namespace and moves nothing", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other Namespace" });
+    const foreignPartitionId = await addPartition({
+      db,
+      namespaceId: otherNamespaceId,
+      name: "General",
+    });
+    const cardId = await addCard({ db, partitionId, content: "staying" });
+
+    await expect(
+      withTx(db, (tx) =>
+        reassignPartitionCards({
+          db: tx,
+          namespaceId,
+          fromPartitionId: partitionId,
+          toPartitionId: foreignPartitionId,
+        }),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
   });
 });

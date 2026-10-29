@@ -415,6 +415,7 @@ export async function deletePartitionWithReassign({
 
     await reassignPartitionCards({
       db: tx,
+      namespaceId,
       fromPartitionId: partitionId,
       toPartitionId: defaultPartition.id,
     });
