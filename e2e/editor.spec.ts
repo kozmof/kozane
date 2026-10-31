@@ -488,9 +488,7 @@ test("commits an IME composition as one word rather than one character at a time
   await expect(page.getByText("日本")).toBeHidden();
 });
 
-test("keeps the IME sink on the caret's row so the candidate window opens below the line", async ({
-  page,
-}) => {
+test("keeps the IME window below the line and still while a word is typed", async ({ page }) => {
   writeFileSync(join(taskspaceDir, "notes.md"), "first\nsecond\n");
   await openTheFile(page);
 
@@ -513,8 +511,24 @@ test("keeps the IME sink on the caret's row so the candidate window opens below 
   expect(row && box).toBeTruthy();
   expect(box!.y).toBeCloseTo(row!.y, 0);
   expect(box!.y + box!.height).toBeCloseTo(row!.y + row!.height, 0);
-  // The sink keeps the preedit on one line rather than wrapping it in its 1px width.
+  // The sink keeps the preedit on one line rather than wrapping it.
   expect(await sink.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+  // The window must not drift sideways as the word grows: the sink starts where the preedit
+  // is drawn, holds the whole word, and never scrolls.
+  for (const text of ["に", "にほん", "にほんごにゅうりょく"]) {
+    await client.send("Input.imeSetComposition", {
+      text,
+      selectionStart: text.length,
+      selectionEnd: text.length,
+    });
+    await expect(page.locator("[data-preedit]")).toHaveText(text);
+    const preedit = await page.locator("[data-preedit]").boundingBox();
+    const now = await sink.boundingBox();
+    expect(now!.x).toBeCloseTo(preedit!.x, 0);
+    expect(now!.width).toBeGreaterThanOrEqual(preedit!.width - 1);
+    expect(await sink.evaluate((el) => el.scrollLeft)).toBe(0);
+  }
 
   await client.send("Input.insertText", { text: "日本語" });
   await expect(page.getByText("second日本語")).toBeVisible();

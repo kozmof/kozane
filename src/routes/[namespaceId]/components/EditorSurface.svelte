@@ -179,6 +179,8 @@
   let rects = $state<ReturnType<typeof selectionRects>>([]);
   let caretXY = $state({ x: 0, y: 0 });
   let caretWidth = $state(2);
+  /** The IME sink reaches from the caret to the row's end, so preedit fits without scrolling. */
+  const sinkWidth = $derived(Math.max(1, wrap.viewportWidth - caretXY.x - PAD_X * 2));
 
   // DOM ranges must see the newly rendered text. Effects run after DOM updates, while
   // derived values used during rendering can still measure the previous line content.
@@ -454,6 +456,9 @@
 
   function handleCompositionUpdate(event: CompositionEvent): void {
     preedit = event.data ?? "";
+    // A word longer than the rest of the row would scroll the sink and move the IME window.
+    // Keep the word's start pinned at the caret.
+    if (sinkEl) sinkEl.scrollLeft = 0;
   }
 
   function handleCompositionEnd(event: CompositionEvent): void {
@@ -679,16 +684,16 @@
       ></div>
     {/if}
 
-    <!-- The IME sink. Invisible, one pixel wide and one row tall, parked at the caret. IMEs
-         open the candidate window below the sink's caret box, so the box must span the whole
-         row, and the sink must not wrap, or the window can open over the line being typed.
-         It renders nothing and holds no document text. -->
+    <!-- The IME sink. Invisible, one row tall, parked at the caret and reaching to the row's
+         end. IMEs place the candidate window from the sink's preedit position, so the sink
+         must span the whole row, must not wrap, and must not scroll, or the window can cover
+         the line or drift while a word is typed. It renders nothing and holds no document
+         text. -->
     <textarea
       bind:this={sinkEl}
       wrap="off"
       class={css({
         position: "absolute",
-        width: "1px",
         padding: "0",
         margin: "0",
         whiteSpace: "pre",
@@ -704,6 +709,7 @@
       })}
       style:top={`${caretXY.y + PAD_Y}px`}
       style:left={`${caretXY.x + PAD_X}px`}
+      style:width={`${sinkWidth}px`}
       style:height={`${LINE_HEIGHT}px`}
       style:line-height={`${LINE_HEIGHT}px`}
       onkeydown={handleKeydown}
