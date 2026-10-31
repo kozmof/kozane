@@ -679,15 +679,20 @@
       ></div>
     {/if}
 
-    <!-- The IME sink. One pixel, invisible, parked at the caret so the candidate window
-         opens where the text will land. It renders nothing and holds no document text. -->
+    <!-- The IME sink. Invisible, one pixel wide and one row tall, parked at the caret. IMEs
+         open the candidate window below the sink's caret box, so the box must span the whole
+         row, and the sink must not wrap, or the window can open over the line being typed.
+         It renders nothing and holds no document text. -->
     <textarea
       bind:this={sinkEl}
+      wrap="off"
       class={css({
         position: "absolute",
         width: "1px",
-        height: "1px",
         padding: "0",
+        margin: "0",
+        whiteSpace: "pre",
+        pointerEvents: "none",
         border: "none",
         outline: "none",
         resize: "none",
@@ -699,6 +704,8 @@
       })}
       style:top={`${caretXY.y + PAD_Y}px`}
       style:left={`${caretXY.x + PAD_X}px`}
+      style:height={`${LINE_HEIGHT}px`}
+      style:line-height={`${LINE_HEIGHT}px`}
       onkeydown={handleKeydown}
       oninput={handleInput}
       oncompositionstart={handleCompositionStart}

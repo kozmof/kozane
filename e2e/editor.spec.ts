@@ -488,6 +488,38 @@ test("commits an IME composition as one word rather than one character at a time
   await expect(page.getByText("日本")).toBeHidden();
 });
 
+test("keeps the IME sink on the caret's row so the candidate window opens below the line", async ({
+  page,
+}) => {
+  writeFileSync(join(taskspaceDir, "notes.md"), "first\nsecond\n");
+  await openTheFile(page);
+
+  const sink = page.getByTestId("editor-sink");
+  await page.locator('[data-line="1"]').click();
+  await page.keyboard.press("End");
+
+  const client = await page.context().newCDPSession(page);
+  await client.send("Input.imeSetComposition", {
+    text: "にほんご",
+    selectionStart: 4,
+    selectionEnd: 4,
+  });
+  await expect(page.locator("[data-preedit]")).toHaveText("にほんご");
+
+  // IMEs place the candidate window under the sink's caret box. The sink must span the
+  // whole row, top to bottom, or the window can open over the text being typed.
+  const row = await page.locator('[data-line="1"]').boundingBox();
+  const box = await sink.boundingBox();
+  expect(row && box).toBeTruthy();
+  expect(box!.y).toBeCloseTo(row!.y, 0);
+  expect(box!.y + box!.height).toBeCloseTo(row!.y + row!.height, 0);
+  // The sink keeps the preedit on one line rather than wrapping it in its 1px width.
+  expect(await sink.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+
+  await client.send("Input.insertText", { text: "日本語" });
+  await expect(page.getByText("second日本語")).toBeVisible();
+});
+
 test("closes on Escape and on a click outside the panel", async ({ page }) => {
   const panel = page.getByRole("dialog", { name: /Editing/ });
 
