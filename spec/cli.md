@@ -804,6 +804,7 @@ Other keys fall back to built-in defaults individually.
     "defaultShowWarps": true,
     "showZoomControl": true,
     "showLayerControl": true,
+    "showScopeControl": true,
     "showSidePanelToggle": true,
     "editorVimMode": false,
     "editorAutoSave": true,

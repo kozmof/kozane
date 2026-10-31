@@ -153,16 +153,17 @@ describe("Namespace page", () => {
     expect(screen.getByText("105%")).toBeInTheDocument();
   });
 
-  it("shows the zoom, layer, and side panel icons by default", () => {
+  it("shows the zoom, scope, layer, and side panel icons by default", () => {
     render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
 
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeInTheDocument();
     expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Focus a scope" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Layers" })).toBeInTheDocument();
     expect(screen.getByTitle("Hide panels")).toBeInTheDocument();
   });
 
-  it("hides the zoom, layer, and side panel icons when configured", () => {
+  it("hides the zoom, scope, layer, and side panel icons when configured", () => {
     render(NamespacePage, {
       props: {
         data: {
@@ -170,6 +171,7 @@ describe("Namespace page", () => {
           uiConfig: {
             ...data.uiConfig,
             showZoomControl: false,
+            showScopeControl: false,
             showLayerControl: false,
             showSidePanelToggle: false,
           },
@@ -181,8 +183,28 @@ describe("Namespace page", () => {
 
     expect(screen.queryByRole("button", { name: "Zoom in" })).not.toBeInTheDocument();
     expect(screen.queryByText("100%")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Focus a scope" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Layers" })).not.toBeInTheDocument();
     expect(screen.queryByTitle("Hide panels")).not.toBeInTheDocument();
+  });
+
+  it("packs the visible top-right icons into one right-aligned row", () => {
+    render(NamespacePage, {
+      props: {
+        data: {
+          ...data,
+          uiConfig: { ...data.uiConfig, showLayerControl: false, showSidePanelToggle: false },
+        },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+      },
+    });
+
+    // The row is anchored to the right edge, so its only icon sits there with no gap for
+    // the hidden ones.
+    const row = screen.getByTestId("board-controls");
+    expect(row.querySelectorAll("button")).toHaveLength(1);
+    expect(row.querySelector("button")).toBe(screen.getByRole("button", { name: "Focus a scope" }));
   });
 
   it("toggles the panels with the shortcut when their icon is hidden", async () => {

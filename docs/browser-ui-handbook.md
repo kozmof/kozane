@@ -416,6 +416,7 @@ them in a browser form, then reload the board to see the changes.
 | `editorAutoSave`       | Save the open file once typing pauses  | `true`          |
 | `showZoomControl`      | Show the zoom buttons and zoom level   | `true`          |
 | `showLayerControl`     | Show the layer icon                    | `true`          |
+| `showScopeControl`     | Show the scope icon                    | `true`          |
 | `showSidePanelToggle`  | Show the side panel toggle icon        | `true`          |
 
 ## Live sync

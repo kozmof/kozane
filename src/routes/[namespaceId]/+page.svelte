@@ -32,6 +32,7 @@
   import FloatingControls from "./components/FloatingControls.svelte";
   import LayerControl from "./components/LayerControl.svelte";
   import ScopeControl from "./components/ScopeControl.svelte";
+  import SidePanelToggle from "./components/SidePanelToggle.svelte";
   import FloatingComposer from "./components/FloatingComposer.svelte";
   import ScopeAreaPrompt from "./components/ScopeAreaPrompt.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
@@ -761,28 +762,45 @@
       <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />
     {/if}
 
-    {#if data.uiConfig.showLayerControl}
-    <LayerControl
-      layers={s.layers}
-      cards={s.cards}
-      bind:activeLayerId={s.activeLayerId}
-      onCreateLayer={actions.handleCreateLayer}
-      onDeleteLayer={actions.handleDeleteLayer}
-      onRenameLayer={actions.handleRenameLayer}
-      onReorderLayers={actions.handleReorderLayers}
-      {readonly}
-    />
-    {/if}
-
-    <ScopeControl scopes={s.scopes} bind:activeScope={s.sidebar.activeScope} />
+    <!-- The top-right icons share one row packed to the right, so hiding one leaves no gap. -->
+    <div
+      class={css({
+        position: "absolute",
+        top: "12px",
+        right: "16px",
+        zIndex: "51",
+        display: "flex",
+        gap: "8px",
+      })}
+      data-testid="board-controls"
+    >
+      {#if data.uiConfig.showScopeControl}
+        <ScopeControl scopes={s.scopes} bind:activeScope={s.sidebar.activeScope} />
+      {/if}
+      {#if data.uiConfig.showLayerControl}
+        <LayerControl
+          layers={s.layers}
+          cards={s.cards}
+          bind:activeLayerId={s.activeLayerId}
+          onCreateLayer={actions.handleCreateLayer}
+          onDeleteLayer={actions.handleDeleteLayer}
+          onRenameLayer={actions.handleRenameLayer}
+          onReorderLayers={actions.handleReorderLayers}
+          {readonly}
+        />
+      {/if}
+      {#if data.uiConfig.showSidePanelToggle}
+        <SidePanelToggle
+          {sidebarsVisible}
+          onToggleSidebars={() => (sidebarsVisible = !sidebarsVisible)}
+        />
+      {/if}
+    </div>
 
     <FloatingControls
       {zoom}
       zoomStep={data.uiConfig.zoomStep}
-      {sidebarsVisible}
       showZoom={data.uiConfig.showZoomControl}
-      showSidebarToggle={data.uiConfig.showSidePanelToggle}
-      onToggleSidebars={() => (sidebarsVisible = !sidebarsVisible)}
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />
 

@@ -95,7 +95,7 @@
 {#if hasScopes}
   <div
     bind:this={controlEl}
-    class={css({ position: "absolute", top: "12px", right: "88px", zIndex: "51" })}
+    class={css({ position: "relative" })}
     onkeydown={(e) => {
       if (e.key !== "Escape" || !open) return;
       // Close the menu without disturbing the focus the board is already under. Leaving a

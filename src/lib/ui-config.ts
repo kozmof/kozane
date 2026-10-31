@@ -18,6 +18,8 @@ export type UiConfig = {
   showZoomControl: boolean;
   /** Whether the board shows the layer icon that opens the layer list. */
   showLayerControl: boolean;
+  /** Whether the board shows the scope icon that focuses the board on a scope. */
+  showScopeControl: boolean;
   /**
    * Whether the board shows the icon that shows or hides the side panels. The
    * `togglePanelsShortcut` key works either way.
@@ -73,6 +75,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultShowWarps: true,
   showZoomControl: true,
   showLayerControl: true,
+  showScopeControl: true,
   showSidePanelToggle: true,
   editorVimMode: false,
   editorAutoSave: true,
@@ -130,6 +133,7 @@ export const UI_BOOL_FIELDS = [
   "defaultShowWarps",
   "showZoomControl",
   "showLayerControl",
+  "showScopeControl",
   "showSidePanelToggle",
   "editorVimMode",
   "editorAutoSave",

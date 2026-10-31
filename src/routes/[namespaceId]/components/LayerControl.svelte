@@ -211,7 +211,7 @@
 
 <div
   bind:this={controlEl}
-  class={css({ position: "absolute", top: "12px", right: "52px", zIndex: "51" })}
+  class={css({ position: "relative" })}
   role="presentation"
   onmouseenter={() => {
     hovering = true;

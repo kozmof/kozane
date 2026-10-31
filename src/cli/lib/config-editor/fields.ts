@@ -83,6 +83,10 @@ const UI_FIELD_INFO: Record<keyof UiConfig, { group: FieldGroup; help: string }>
   defaultShowWarps: { group: "View", help: "Show warp markers when a board opens." },
   showZoomControl: { group: "View", help: "Show the zoom buttons and zoom level." },
   showLayerControl: { group: "View", help: "Show the layer icon that opens the layer list." },
+  showScopeControl: {
+    group: "View",
+    help: "Show the scope icon that focuses the board on a scope.",
+  },
   showSidePanelToggle: {
     group: "View",
     help: "Show the icon that shows or hides the side panels. The keyboard shortcut also works when the icon is hidden.",
