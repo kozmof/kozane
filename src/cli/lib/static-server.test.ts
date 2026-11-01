@@ -1,7 +1,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AddressInfo } from "node:net";
+import { connect, createServer, type AddressInfo } from "node:net";
 import type { Server } from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { contentTypeFor, createStaticServer, resolveRequest } from "./static-server.js";
@@ -15,6 +15,33 @@ mkdirSync(join(root, "_app"));
 writeFileSync(join(root, "_app", "app.css"), "body{}");
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+/**
+ * Whether this process may open a TCP connection to loopback. Some sandboxes refuse it with
+ * EACCES or EPERM, and the server tests below would then fail for reasons unrelated to the
+ * code. Any other failure still runs the tests, so a real regression is not hidden.
+ */
+async function loopbackConnectAllowed(): Promise<boolean> {
+  const probe = createServer();
+  await new Promise<void>((r) => probe.listen(0, "127.0.0.1", r));
+  const { port } = probe.address() as AddressInfo;
+  try {
+    await new Promise<void>((ok, fail) => {
+      const socket = connect(port, "127.0.0.1", () => {
+        socket.end();
+        ok();
+      });
+      socket.on("error", fail);
+    });
+    return true;
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    return code !== "EACCES" && code !== "EPERM";
+  } finally {
+    probe.close();
+  }
+}
+const socketsBlocked = !(await loopbackConnectAllowed());
 
 describe("resolveRequest", () => {
   it("serves index.html for the root", async () => {
@@ -68,7 +95,7 @@ describe("contentTypeFor", () => {
   });
 });
 
-describe("createStaticServer", () => {
+describe.skipIf(socketsBlocked)("createStaticServer", () => {
   let server: Server;
   let origin: string;
 
@@ -113,7 +140,7 @@ describe("createStaticServer", () => {
   });
 });
 
-describe("createStaticServer with a base path", () => {
+describe.skipIf(socketsBlocked)("createStaticServer with a base path", () => {
   let server: Server;
   let origin: string;
 
