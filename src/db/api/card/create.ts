@@ -122,8 +122,11 @@ async function assertInventoriesMatchPartition({
  * other writes call {@link addCardInTx}.
  */
 export async function addCard({ db, ...fields }: AddCard): Promise<string> {
-  return withTx(db, (tx) => addCardInTx({ db: tx, ...fields }));
+  return withTx(db, async (tx) => (await addCardInTx({ db: tx, ...fields })).id);
 }
+
+/** The inserted card's ID and the stacking value it was stored with. */
+export type AddedCard = { id: string; zIndex: number };
 
 /**
  * {@link addCard} inside a caller-owned transaction. An explicit `layerId` or `taskspaceId`
@@ -131,7 +134,8 @@ export async function addCard({ db, ...fields }: AddCard): Promise<string> {
  * insert atomic, so another writer cannot move the layer or taskspace in between.
  *
  * An omitted `zIndex` puts the card above every card on its layer, as the board does, so
- * cards added from the CLI do not land underneath existing ones.
+ * cards added from the CLI do not land underneath existing ones. The result carries the stored
+ * `zIndex`, so callers can report it without resolving that default a second time.
  */
 export async function addCardInTx({
   db,
@@ -142,7 +146,7 @@ export async function addCardInTx({
   posX,
   posY,
   zIndex,
-}: AddCardInTx): Promise<string> {
+}: AddCardInTx): Promise<AddedCard> {
   if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
   if (taskspaceId !== undefined)
     await assertTaskspaceMatchesPartition({ db, partitionId, taskspaceId });
@@ -159,8 +163,8 @@ export async function addCardInTx({
       ...(posY !== undefined && { posY }),
       zIndex: zIndex ?? (await nextLayerZIndexInTx({ db, layerId: resolvedLayerId })),
     })
-    .returning({ id: cardTable.id });
-  return row.id;
+    .returning({ id: cardTable.id, zIndex: cardTable.zIndex });
+  return row;
 }
 
 type AddCardsFields = {

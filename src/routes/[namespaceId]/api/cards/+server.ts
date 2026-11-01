@@ -6,12 +6,7 @@ import { getDefaultLayer, getLayer } from "$db/api/layer";
 import { getScope } from "$db/api/scope";
 import { addScopeRel } from "$db/api/scope-rel";
 import { withTx } from "$db/tx";
-import {
-  addCardInTx,
-  nextLayerZIndexInTx,
-  updateNamespaceCardPositions,
-  type CardPositionUpdate,
-} from "$db/api/card";
+import { addCardInTx, updateNamespaceCardPositions, type CardPositionUpdate } from "$db/api/card";
 import { deleteNamespaceCards } from "$db/api/composite";
 import { stowCardsInTx } from "$db/api/inventory";
 import { checkCardContent } from "$lib/constants";
@@ -89,14 +84,15 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
         requestedLayerId ? "Layer not found in namespace" : "Namespace has no default layer",
       );
 
-    const stored = {
-      partitionId,
-      layerId: layer.id,
-      content,
-      ...clampToCanvas(posX, posY),
-      zIndex: requestedZIndex ?? (await nextLayerZIndexInTx({ db: tx, layerId: layer.id })),
-    };
-    const cardId = await addCardInTx({ db: tx, ...stored });
+    const fields = { partitionId, layerId: layer.id, content, ...clampToCanvas(posX, posY) };
+    // An omitted zIndex goes to the top of the layer. `addCardInTx` owns that default and
+    // reports the value it stored.
+    const { id: cardId, zIndex } = await addCardInTx({
+      db: tx,
+      ...fields,
+      zIndex: requestedZIndex,
+    });
+    const stored = { ...fields, zIndex };
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
     if (!inventoryId) return { id: cardId, stored, inventory: null, placements: [] };
     // Throwing rolls the card back with the transaction, so a refused store leaves no card.

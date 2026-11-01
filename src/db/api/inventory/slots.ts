@@ -97,7 +97,12 @@ export function passesSlotMax(
   plan: readonly SlotPlacement[],
   spans: ReadonlyMap<string, number>,
 ): boolean {
-  return plan.some(({ cardId, slot }) => lastCell(slot, spans.get(cardId)!) > INVENTORY_SLOT_MAX);
+  return plan.some(({ cardId, slot }) => {
+    const span = spans.get(cardId);
+    // A missing span would compare NaN against the cap and let the plan through unchecked.
+    if (span === undefined) throw new Error(`passesSlotMax: no span for cardId=${cardId}`);
+    return lastCell(slot, span) > INVENTORY_SLOT_MAX;
+  });
 }
 
 /** `held` with planned slots applied to the cards named in `plan`. */

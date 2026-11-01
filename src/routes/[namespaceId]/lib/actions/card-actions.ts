@@ -24,7 +24,7 @@ export function createCardActions(state: NamespaceState) {
       partitionId: newPartitionId,
     });
     if (!res.ok) {
-      state.cards = restoreField(state.cards, "partitionId", previous);
+      state.cards = restoreField(state.cards, "partitionId", previous, newPartitionId);
       state.setError("Failed to change partition");
     }
   }
@@ -42,7 +42,7 @@ export function createCardActions(state: NamespaceState) {
       newPartitionId,
     );
     if (!res.ok) {
-      state.cards = restoreField(state.cards, "partitionId", previous);
+      state.cards = restoreField(state.cards, "partitionId", previous, newPartitionId);
       state.setError("Failed to change partition for selected cards");
     }
   }
@@ -218,7 +218,7 @@ export function createCardActions(state: NamespaceState) {
       layerId,
     );
     if (!res.ok) {
-      state.cards = restoreField(state.cards, "layerId", previous);
+      state.cards = restoreField(state.cards, "layerId", previous, layerId);
       state.setError("Failed to move cards to another layer");
       return;
     }

@@ -18,13 +18,21 @@ export function fieldSnapshot<K extends keyof CardWithGlue>(
   return previous;
 }
 
+/**
+ * Undo a failed optimistic change to `field`. Restore a card only while it still holds
+ * `applied`, the value the failed change set, so a later change to the same card that was
+ * made while the request was in flight is kept.
+ */
 export function restoreField<K extends keyof CardWithGlue>(
   cards: CardWithGlue[],
   field: K,
   previous: Map<string, CardWithGlue[K]>,
+  applied: CardWithGlue[K],
 ): CardWithGlue[] {
   return cards.map((card) =>
-    previous.has(card.id) ? { ...card, [field]: previous.get(card.id)! } : card,
+    previous.has(card.id) && card[field] === applied
+      ? { ...card, [field]: previous.get(card.id)! }
+      : card,
   );
 }
 
