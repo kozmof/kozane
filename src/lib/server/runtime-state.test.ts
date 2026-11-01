@@ -1,8 +1,10 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { fileDbUrl } from "../db-url";
 import {
+  MEMORY_DIR_PREFIX,
   activeServerProcess,
   removeServerState,
   claimServerState,
@@ -85,6 +87,54 @@ describe("server runtime state", () => {
       JSON.stringify({ pid: 2147483647, startedAt: new Date().toISOString() }),
     );
     expect(activeServerProcess(root)).toBeNull();
+  });
+
+  it("deletes the temporary database of a memory server that was killed", () => {
+    const root = workspace();
+    const memoryDir = mkdtempSync(join(tmpdir(), MEMORY_DIR_PREFIX));
+    roots.push(memoryDir);
+    writeFileSync(join(memoryDir, "kozane.db"), "");
+    writeFileSync(
+      serverStatePath(root),
+      JSON.stringify({
+        pid: 2147483647,
+        startedAt: new Date().toISOString(),
+        memory: true,
+        databaseUrl: fileDbUrl(join(memoryDir, "kozane.db")),
+      }),
+    );
+    expect(activeServerProcess(root)).toBeNull();
+    expect(existsSync(memoryDir)).toBe(false);
+  });
+
+  it("keeps the temporary database of a memory server that is still running", () => {
+    const root = workspace();
+    const memoryDir = mkdtempSync(join(tmpdir(), MEMORY_DIR_PREFIX));
+    roots.push(memoryDir);
+    writeServerState(root, process.pid, {
+      memory: true,
+      databaseUrl: fileDbUrl(join(memoryDir, "kozane.db")),
+    });
+    expect(activeServerProcess(root)?.pid).toBe(process.pid);
+    expect(existsSync(memoryDir)).toBe(true);
+  });
+
+  it("deletes nothing a stale reservation names outside a memory directory", () => {
+    const root = workspace();
+    // A hand-edited reservation pointing at the workspace's own database.
+    const keep = join(root, ".kozane");
+    writeFileSync(join(keep, "kozane.db"), "");
+    writeFileSync(
+      serverStatePath(root),
+      JSON.stringify({
+        pid: 2147483647,
+        startedAt: new Date().toISOString(),
+        memory: true,
+        databaseUrl: fileDbUrl(join(keep, "kozane.db")),
+      }),
+    );
+    expect(activeServerProcess(root)).toBeNull();
+    expect(existsSync(join(keep, "kozane.db"))).toBe(true);
   });
 
   it("still trusts a reservation written before start tokens existed", () => {

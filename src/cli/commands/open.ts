@@ -11,6 +11,7 @@ import { openDb } from "../../db/client.js";
 import { createNamespace } from "../../db/api/namespace.js";
 import { isLoopbackHost, normalizeHost } from "../../lib/server/security.js";
 import {
+  MEMORY_DIR_PREFIX,
   activeServerProcess,
   claimServerState,
   removeServerState,
@@ -117,7 +118,7 @@ export async function open(options: OpenOptions): Promise<void> {
   let memoryDir: string | undefined;
   let dbURL = dbUrl(resolve(root));
   if (options.memory) {
-    memoryDir = mkdtempSync(join(tmpdir(), "kozane-memory-"));
+    memoryDir = mkdtempSync(join(tmpdir(), MEMORY_DIR_PREFIX));
     dbURL = fileDbUrl(join(memoryDir, "kozane.db"));
     try {
       await runMigrations(dbURL);

@@ -5,10 +5,13 @@ import {
   fsyncSync,
   openSync,
   readFileSync,
+  rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { dbPathFromUrl } from "../db-url.js";
 
 export const SERVER_STATE_FILE = "server.json";
 
@@ -72,6 +75,29 @@ function processIsRunning(pid: number, startToken?: string): boolean {
   return alive && isSameProcess(startToken, processStartToken(pid));
 }
 
+/** Prefix of the temporary directory `kozane open --memory` creates for its database. */
+export const MEMORY_DIR_PREFIX = "kozane-memory-";
+
+/**
+ * Delete the temporary database directory of a memory server that is no longer running. That
+ * server normally removes it on exit, but cannot when it is killed outright.
+ *
+ * The URL comes from a file anyone with workspace access can edit, so delete only a directory
+ * shaped like one `open --memory` creates: a `kozane-memory-*` folder directly in the system
+ * temporary directory.
+ */
+function removeMemoryDir(databaseUrl: string | undefined): void {
+  const dbPath = databaseUrl ? dbPathFromUrl(databaseUrl) : null;
+  if (!dbPath) return;
+  const dir = dirname(resolve(dbPath));
+  if (dirname(dir) !== resolve(tmpdir()) || !basename(dir).startsWith(MEMORY_DIR_PREFIX)) return;
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Leave it for the operating system's temporary-file cleanup.
+  }
+}
+
 export function activeServerProcess(root: string): ServerState | null {
   const path = serverStatePath(root);
   if (!existsSync(path)) return null;
@@ -88,6 +114,7 @@ export function activeServerProcess(root: string): ServerState | null {
       return null;
     }
     if (processIsRunning(value.pid!, value.startToken)) return value as ServerState;
+    if (value.memory) removeMemoryDir(value.databaseUrl);
   } catch {
     return null;
   }
