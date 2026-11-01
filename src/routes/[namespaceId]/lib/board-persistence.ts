@@ -1,4 +1,6 @@
 import type { BoardRect } from "$lib/constants";
+import type { CardInventory } from "$lib/types";
+import type { InventoryPlacement } from "$lib/inventory";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";
@@ -14,6 +16,19 @@ import {
   patchCardPositions,
   updateCard,
 } from "./namespace-api.js";
+
+/** Move each card named in `placements` to its returned inventory slot. */
+function withPlacements<C extends { id: string; inventory: CardInventory | null }>(
+  cards: C[],
+  placements: InventoryPlacement[],
+): C[] {
+  if (placements.length === 0) return cards;
+  const slotOf = new Map(placements.map((p) => [p.cardId, p]));
+  return cards.map((c) => {
+    const p = slotOf.get(c.id);
+    return p ? { ...c, inventory: { id: p.inventoryId, slot: p.slot } } : c;
+  });
+}
 
 /**
  * Persist optimistic canvas and composer edits and report success for rollback handling.
@@ -76,14 +91,9 @@ export function createBoardPersistence(s: NamespaceState) {
       const stored = typeof returned === "string" ? returned : content.trim();
       // Apply every returned slot change, including moves caused by longer text or repairs
       // to neighbouring cards.
-      const placements = parsePlacements(body) ?? [];
-      const slotOf = new Map(placements.map((p) => [p.cardId, p]));
-      s.cards = s.cards.map((c) => {
-        const p = slotOf.get(c.id);
-        const moved = p && { inventory: { id: p.inventoryId, slot: p.slot } };
-        if (c.id === id) return { ...c, content: stored, partitionId, ...moved };
-        return moved ? { ...c, ...moved } : c;
-      });
+      s.cards = withPlacements(s.cards, parsePlacements(body) ?? []).map((c) =>
+        c.id === id ? { ...c, content: stored, partitionId } : c,
+      );
       s.selection.composerCard = null;
       return;
     }
@@ -118,13 +128,15 @@ export function createBoardPersistence(s: NamespaceState) {
     }
     // Storing the card can repair overlaps in its inventory. Apply those neighbour moves now
     // rather than waiting for the next snapshot poll.
-    const slotOf = new Map((parsePlacements(body) ?? []).map((p) => [p.cardId, p]));
-    const others = s.cards.map((c) => {
-      const p = slotOf.get(c.id);
-      return p ? { ...c, inventory: { id: p.inventoryId, slot: p.slot } } : c;
-    });
+    //
+    // A snapshot poll can start after the request ends and land before this line, already
+    // holding the new card. Drop that copy so the card is not listed twice.
+    const others = withPlacements(s.cards, parsePlacements(body) ?? []).filter(
+      (c) => c.id !== created.id,
+    );
     s.cards = [...others, created];
-    if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
+    if (scopeId && !s.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === created.id))
+      s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
   }
 
   return { persistPositions, persistWidth, persistWarpPosition, persistScopeArea, submitComposer };

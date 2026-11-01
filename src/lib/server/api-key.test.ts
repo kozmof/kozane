@@ -120,4 +120,14 @@ describe("API key", () => {
     ).toBe("two");
     expect(requestApiKey(new Request("http://localhost"), "three")).toBe("three");
   });
+
+  it("reads the bearer scheme name in any case", () => {
+    for (const scheme of ["bearer", "BEARER", "BeArEr"]) {
+      expect(
+        requestApiKey(
+          new Request("http://localhost", { headers: { authorization: `${scheme} four` } }),
+        ),
+      ).toBe("four");
+    }
+  });
 });

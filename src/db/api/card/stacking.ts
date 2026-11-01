@@ -1,6 +1,6 @@
 /** Card stacking: layer moves and front/back reordering. */
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { cardTable, layerTable } from "../../schema.js";
 import type { NeedsTx } from "../types.js";
@@ -112,6 +112,35 @@ async function layerStackBoundsByLayer(
   );
 }
 
+/**
+ * Whether `group` already sits above (front) or below (back) every other card on `layerId`.
+ * Count the layer's cards at or beyond the group's innermost value: only the group's own cards
+ * are there when it is at the edge. A tie with another card counts as not at the edge.
+ */
+async function atStackEdge(
+  tx: Tx,
+  layerId: string,
+  group: { zIndex: number }[],
+  direction: "front" | "back",
+): Promise<boolean> {
+  const front = direction === "front";
+  const edge = group.reduce(
+    (inner, { zIndex }) => (front ? Math.min(inner, zIndex) : Math.max(inner, zIndex)),
+    front ? Infinity : -Infinity,
+  );
+  const row = await tx
+    .select({ n: sql<number>`count(*)` })
+    .from(cardTable)
+    .where(
+      and(
+        eq(cardTable.layerId, layerId),
+        front ? gte(cardTable.zIndex, edge) : lte(cardTable.zIndex, edge),
+      ),
+    )
+    .get();
+  return row?.n === group.length;
+}
+
 /** The zIndex that puts a new card above every card on `layerId`. */
 export async function nextLayerZIndexInTx({
   db: tx,
@@ -218,6 +247,9 @@ export async function reassignCardsStackOrder({
     const bounds = await layerStackBoundsByLayer(tx, [...byLayer.keys()]);
     const stacking: CardStacking[] = [];
     for (const [layerId, group] of byLayer) {
+      // Leave a group that is already at the edge alone, so repeating the command does not
+      // keep pushing its values further out.
+      if (await atStackEdge(tx, layerId, group, direction)) continue;
       const { top, bottom } = bounds.get(layerId) ?? { top: 0, bottom: 0 };
 
       const ordered = [...group].sort((a, b) => a.zIndex - b.zIndex || compareIds(a.id, b.id));

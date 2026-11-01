@@ -195,6 +195,30 @@ describe("createBoardPersistence", () => {
       expect(s.scopeRels).toContainEqual({ scopeId: "s1", cardId: "c3" });
     });
 
+    it("lists a created card once when a snapshot poll already brought it in", async () => {
+      const s = state();
+      s.sidebar.activeScope = "s1";
+      const created = card("c3", { posX: 10, posY: 20, zIndex: 5 });
+      // The poll lands while the create's answer is being read.
+      vi.mocked(api.createCard).mockResolvedValueOnce({
+        ok: true,
+        json: async () => {
+          s.cards = [card("c1"), card("c3")];
+          s.scopeRels = [{ scopeId: "s1", cardId: "c3" }];
+          return {};
+        },
+      } as unknown as Response);
+      vi.mocked(api.parseCard).mockReturnValueOnce(created);
+
+      await createBoardPersistence(s).submitComposer(null, "c3", "p1", () => ({
+        posX: 10,
+        posY: 20,
+      }));
+      expect(s.cards.map((c) => c.id)).toEqual(["c1", "c3"]);
+      expect(s.cards.at(-1)).toEqual(created);
+      expect(s.scopeRels).toEqual([{ scopeId: "s1", cardId: "c3" }]);
+    });
+
     it("refuses a created card whose answer is not a row", async () => {
       const s = state();
       vi.mocked(api.createCard).mockResolvedValueOnce(succeeded);

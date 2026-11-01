@@ -91,7 +91,8 @@ export function apiKeysEqual(actual: string | undefined, expected: string): bool
 
 export function requestApiKey(request: Request, cookieValue?: string): string | undefined {
   const authorization = request.headers.get("authorization");
-  if (authorization?.startsWith("Bearer ")) return authorization.slice(7);
+  // The auth scheme name is case-insensitive (RFC 9110 §11.1).
+  if (authorization && /^bearer /i.test(authorization)) return authorization.slice(7);
   return request.headers.get("x-api-key") ?? cookieValue ?? undefined;
 }
 

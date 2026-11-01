@@ -61,6 +61,13 @@ describe("isUniqueConstraintError", () => {
     expect(isUniqueConstraintError(driver)).toBe(true);
     expect(isForeignKeyError(driver)).toBe(false);
   });
+
+  it("stops on a cause chain that loops back on itself", () => {
+    const a = new Error("first");
+    const b = new Error("second", { cause: a });
+    a.cause = b;
+    expect(isUniqueConstraintError(a)).toBe(false);
+  });
 });
 
 describe("isForeignKeyError", () => {

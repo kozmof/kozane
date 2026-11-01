@@ -92,12 +92,52 @@ describe("PATCH /[namespaceId]/api/cards/stacking", () => {
     );
 
     expect(response.status).toBe(200);
-    // Move each card above the top of its own layer.
+    // Move each card above the top of its own layer. The other layer's only card is already
+    // on top there, so it keeps its value.
     await expect(getCard({ db, partitionId, cardId: lowId })).resolves.toMatchObject({ zIndex: 4 });
     await expect(getCard({ db, partitionId, cardId: otherId })).resolves.toMatchObject({
-      zIndex: 11,
+      zIndex: 10,
     });
     expect(layerId).not.toBe(otherLayerId);
+  });
+
+  it("leaves a group already at the front unchanged, so repeating it does not drift", async () => {
+    const { db, namespaceId, partitionId, midId, highId } = await setup();
+
+    const response = await PATCH(
+      event(db, namespaceId, jsonRequest({ cardIds: [midId, highId], direction: "front" })),
+    );
+
+    expect((await response.json()).stacking).toEqual([]);
+    await expect(getCard({ db, partitionId, cardId: midId })).resolves.toMatchObject({ zIndex: 2 });
+    await expect(getCard({ db, partitionId, cardId: highId })).resolves.toMatchObject({
+      zIndex: 3,
+    });
+  });
+
+  it("leaves a group already at the back unchanged", async () => {
+    const { db, namespaceId, partitionId, lowId } = await setup();
+
+    const response = await PATCH(
+      event(db, namespaceId, jsonRequest({ cardIds: [lowId], direction: "back" })),
+    );
+
+    expect((await response.json()).stacking).toEqual([]);
+    await expect(getCard({ db, partitionId, cardId: lowId })).resolves.toMatchObject({ zIndex: 1 });
+  });
+
+  it("still restacks a group that ties with another card at the edge", async () => {
+    const { db, namespaceId, partitionId, layerId, highId } = await setup();
+    const tiedId = await addCard({ db, partitionId, layerId, content: "Tied", zIndex: 3 });
+
+    await PATCH(event(db, namespaceId, jsonRequest({ cardIds: [highId], direction: "front" })));
+
+    await expect(getCard({ db, partitionId, cardId: highId })).resolves.toMatchObject({
+      zIndex: 4,
+    });
+    await expect(getCard({ db, partitionId, cardId: tiedId })).resolves.toMatchObject({
+      zIndex: 3,
+    });
   });
 
   it("rejects cards that do not belong to the namespace", async () => {

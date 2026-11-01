@@ -101,11 +101,15 @@ export function assertFound<T>(rows: T[], label: string): void {
  * `extendedCode` first, and fall back to the message text for errors that carry no code.
  */
 function constraintInChain(e: unknown, codes: readonly string[], text: string): boolean {
-  if (!(e instanceof Error)) return false;
-  const { extendedCode } = e as { extendedCode?: unknown };
-  if (typeof extendedCode === "string" && codes.includes(extendedCode)) return true;
-  if (e.message.includes(text)) return true;
-  return constraintInChain(e.cause, codes, text);
+  // Remember visited errors so a `cause` chain that loops back cannot recurse forever.
+  const seen = new Set<Error>();
+  for (let current = e; current instanceof Error && !seen.has(current); current = current.cause) {
+    seen.add(current);
+    const { extendedCode } = current as { extendedCode?: unknown };
+    if (typeof extendedCode === "string" && codes.includes(extendedCode)) return true;
+    if (current.message.includes(text)) return true;
+  }
+  return false;
 }
 
 /** A duplicate primary key counts too: SQLite reports it as a UNIQUE failure. */
