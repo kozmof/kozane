@@ -358,3 +358,57 @@ describe("the snapshot prune helpers", () => {
     });
   });
 });
+
+describe("NamespaceState.mutationFetcher", () => {
+  /** A response whose body arrives only when `finish` is called. */
+  function slowResponse(text: string) {
+    let finish!: () => void;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        finish = () => {
+          controller.enqueue(new TextEncoder().encode(text));
+          controller.close();
+        };
+      },
+    });
+    return { response: new Response(body, { status: 200 }), finish: () => finish() };
+  }
+
+  it("stays in flight until the response body has arrived", async () => {
+    const s = new NamespaceState();
+    const { response, finish } = slowResponse('{"id":"c1"}');
+    s.fetcher = async () => response;
+
+    const pending = s.mutationFetcher("/x", { method: "POST" });
+    // Headers are in, but the body is not, so a poll must still wait.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(s.mutations.idle).toBe(false);
+
+    finish();
+    const res = await pending;
+    expect(s.mutations.idle).toBe(true);
+    // The caller can still read the body it was handed.
+    expect(await res.json()).toEqual({ id: "c1" });
+  });
+
+  it("passes through a response without a body", async () => {
+    const s = new NamespaceState();
+    s.fetcher = async () => new Response(null, { status: 204 });
+    const res = await s.mutationFetcher("/x");
+    expect(res.status).toBe(204);
+    expect(s.mutations.idle).toBe(true);
+  });
+
+  it("ends tracking when the body fails to arrive, leaving the error to the caller", async () => {
+    const s = new NamespaceState();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.error(new Error("connection reset"));
+      },
+    });
+    s.fetcher = async () => new Response(body);
+    const res = await s.mutationFetcher("/x");
+    expect(s.mutations.idle).toBe(true);
+    await expect(res.json()).rejects.toThrow();
+  });
+});

@@ -1,7 +1,11 @@
 import {
   type Dirent,
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
   lstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -258,6 +262,50 @@ function statRegularFile(real: string): number {
 }
 
 /**
+ * Open flags for reading an editor file. `O_NOFOLLOW` refuses a symlink swapped in after
+ * {@link statRegularFile} looked at the path, and `O_NONBLOCK` keeps a FIFO swapped in the
+ * same way from blocking the server. Both are absent on Windows.
+ */
+const READ_FLAGS =
+  fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+
+/**
+ * Read a regular file within the size limit. Check the path first for clear errors, then
+ * open it once and check and read through that descriptor, so the file cannot be replaced
+ * between the check and the read.
+ */
+function readRegularFile(real: string): Uint8Array {
+  statRegularFile(real);
+  let fd: number;
+  try {
+    fd = openSync(real, READ_FLAGS);
+  } catch (e) {
+    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    // With `O_NOFOLLOW`, ELOOP means the final entry became a symlink.
+    if (code === "ELOOP")
+      throw new TaskspaceFilesError("invalid-path", "Symbolic links cannot be opened");
+    throw mapFsError(e, "File not found");
+  }
+  try {
+    if (!fstatSync(fd).isFile())
+      throw new TaskspaceFilesError("invalid-path", "Not a regular file");
+    const bytes = readFileSync(fd);
+    // Check what was read too, in case the file grew after the size check.
+    if (bytes.length > TASKSPACE_FILE_BYTES_MAX)
+      throw new TaskspaceFilesError(
+        "too-large",
+        `File is larger than ${TASKSPACE_FILE_BYTES_MAX} bytes`,
+      );
+    return bytes;
+  } catch (e) {
+    if (e instanceof TaskspaceFilesError) throw e;
+    throw mapFsError(e, "File not found");
+  } finally {
+    closeSync(fd);
+  }
+}
+
+/**
  * Decode strict UTF-8 and reject NUL-containing content before editing. Lenient decoding
  * could replace invalid bytes and corrupt the original on save.
  */
@@ -304,14 +352,7 @@ type TaskspaceFileTarget = {
  */
 export function readTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): TaskspaceFile {
   const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
-  statRegularFile(real);
-
-  let bytes: Uint8Array;
-  try {
-    bytes = readFileSync(real);
-  } catch (e) {
-    throw mapFsError(e, "File not found");
-  }
+  const bytes = readRegularFile(real);
 
   return {
     path: relative(base, real).split(sep).join("/"),
@@ -354,12 +395,7 @@ export function writeTaskspaceFile({
   // Check the on-disk version immediately before writing to narrow the race window.
   // Another process can still write before the rename and have its change overwritten.
   // Node offers no compare-and-swap rename to prevent this.
-  let current: Uint8Array;
-  try {
-    current = readFileSync(real);
-  } catch (e) {
-    throw mapFsError(e, "File not found");
-  }
+  const current = readRegularFile(real);
   if (editorSignature(real, current) !== signature)
     throw new TaskspaceFilesError("stale", "File changed on disk since it was opened");
 
