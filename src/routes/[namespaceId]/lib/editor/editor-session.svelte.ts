@@ -11,7 +11,7 @@ import { type Caret, EditorDocument } from "./document-store.svelte.js";
 export type EditorSessionContext = {
   fetcher: typeof fetch;
   namespaceId: string;
-  /** Embedded taskspace trees for static export. See {@link TaskspaceTreeContext}. */
+  /** Embedded taskspace trees for reading files in a static export. */
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
@@ -35,8 +35,8 @@ export type OpenFileRef = {
 export type SwitchGuard = () => Promise<boolean>;
 
 /**
- * How {@link EditorSession.flush} ended: nothing left unsaved, edits still unsaved, or the
- * file replaced or closed meanwhile, which leaves it alone.
+ * Result of {@link EditorSession.flush}. A replaced or closed file returns `replaced`
+ * without saving the new document.
  */
 export type FlushOutcome = "saved" | "unsaved" | "replaced";
 
@@ -59,24 +59,24 @@ export class EditorSession {
    */
   conflict = $state(false);
 
-  /** File-version signature returned on save to detect changes on disk. */
+  /** File-version signature from the last read or save, used to detect changes on disk. */
   #signature: string | null = null;
 
   /**
-   * Saves in flight, by file. Kept across opens and closes, so a file reopened by way of
-   * another still waits for its save instead of reading what was on disk before it.
+   * Pending saves keyed by taskspace and path. Keep them across opens and closes so
+   * reopening a file waits for its save before reading from disk.
    */
   #inFlight = new Map<string, Promise<boolean>>();
 
   /**
-   * The current open. Every open or close aborts it and starts another, so work that waited
-   * can tell a later one replaced it, and a read still in flight is cancelled.
+   * Controller for the current document session. Opening or closing a file aborts pending
+   * reads and lets asynchronous work detect that its session has ended.
    */
   #generation = new AbortController();
 
   /**
-   * Counts calls to {@link open}, so a request still waiting on {@link leaveGuard} can tell
-   * a newer one came in. The newest request wins, as the file clicked last should.
+   * Count open requests so a request awaiting {@link switchGuard} can detect a newer one.
+   * The most recent open request wins.
    */
   #requests = 0;
 
@@ -120,8 +120,8 @@ export class EditorSession {
       const asking = this.#generation.signal;
       if (!(await this.switchGuard())) return;
       if (this.#requests !== request) return;
-      // Another file opened meanwhile. A close, which the guard's own save can end in, leaves
-      // nothing to replace, so the click still opens its file.
+      // Cancel if another document session opened while the guard ran. If the guard
+      // closed the file, continue opening the requested file.
       if (asking.aborted && this.isOpen) return;
     }
 
@@ -150,9 +150,8 @@ export class EditorSession {
 
     this.loading = true;
 
-    // A file opened or closed while this one loads replaces it and cancels the read. Leave
-    // that one's document, errors, and loading flag alone, or a slow read would show its text
-    // under another path.
+    // Ignore results after this session ends so a slow read cannot overwrite the next
+    // session's document, error, or loading state.
     const current = () => !opening.aborted;
     try {
       const res = await fetchTaskspaceFile(
@@ -187,9 +186,10 @@ export class EditorSession {
   }
 
   /**
-   * Write the open document. Resolves true when the server took the content, even if the
-   * file was closed or replaced meanwhile, and false when nothing was written. While a save
-   * runs, wait for it, then write what it did not cover.
+   * Save the open document. Resolve true after a successful write, even if the document
+   * was closed or replaced during the request. Resolve false if no document is open or
+   * the write fails. If a save is pending, wait for it and save remaining edits only
+   * if that write succeeded and the same document is still open.
    */
   save(ctx: EditorSessionContext, options: SaveOptions = {}): Promise<boolean> {
     const ref = this.file;
@@ -199,8 +199,8 @@ export class EditorSession {
     if (this.saving) {
       const running = this.#inFlight.get(key);
       if (!running) return Promise.resolve(false);
-      // A failed or refused save would fail again, and another file is not this one's.
-      // Tracked at once, so whoever waits on the file waits for this save too.
+      // Retry remaining edits only after a successful save of the same document.
+      // Track the queued save now so reopening the file waits for it too.
       return this.#track(
         key,
         running.then((wrote) =>
@@ -227,8 +227,8 @@ export class EditorSession {
   }
 
   /**
-   * Wait for the open file's saves in flight to finish, including ones queued behind them by
-   * {@link save}. Resolves at once when none is.
+   * Wait for all pending saves of the current file, including saves queued by {@link save}.
+   * Resolve immediately if the file has no pending saves.
    */
   async settled(): Promise<void> {
     if (!this.file) return;
@@ -238,13 +238,11 @@ export class EditorSession {
   }
 
   /**
-   * Save pending edits before leaving the file: wait for saves in flight, then write what
-   * they did not cover. After a conflict, saving again is refused too, so report it unsaved
-   * straight away.
+   * Save remaining edits after pending saves finish. Return `replaced` if the document
+   * session changes while waiting. Leave conflicts unsaved so the user can resolve them.
    */
   async flush(ctx: EditorSessionContext): Promise<FlushOutcome> {
-    // Watch the open rather than the file, so a reload of the same file counts as replacing
-    // it too.
+    // Track the document session so reloading the same path also counts as replacement.
     const leaving = this.#generation.signal;
     await this.settled();
     if (leaving.aborted) return "replaced";

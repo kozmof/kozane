@@ -1,4 +1,4 @@
-/** Squashing one card into several, on the canvas or into a new inventory. */
+/** Replace a canvas card with text segments stored in a new inventory. */
 import { withTx, type DB } from "../../tx.js";
 import {
   newCardStamps,

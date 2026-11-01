@@ -20,7 +20,7 @@ const SQUASH_ROW_SPACING = 160;
 export type CardPosition = { posX: number; posY: number };
 
 type SquashLayout = {
-  /** Where the first slot sits. The CLI squashes onto the board itself and starts at 0,0. */
+  /** Origin for positions used when cards leave the inventory. Defaults to (0, 0). */
   origin?: CardPosition;
   /** Available board width. Defaults to the built-in canvas width. */
   canvasWidth?: number;
