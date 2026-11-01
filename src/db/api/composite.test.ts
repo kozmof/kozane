@@ -439,12 +439,13 @@ describe("moveCardsToNamespace", () => {
       content: "Source",
       taskspaceId: sourceTaskspace,
     });
-    const fromTarget = await addCard({
-      db,
-      partitionId: srcPartition,
-      content: "Target",
-      taskspaceId: targetTaskspace,
-    });
+    // `addCard` refuses a taskspace from another namespace, but rows written before that
+    // check can still link one, so write the link directly.
+    const fromTarget = await addCard({ db, partitionId: srcPartition, content: "Target" });
+    await db
+      .update(cardTable)
+      .set({ taskspaceId: targetTaskspace })
+      .where(eq(cardTable.id, fromTarget));
     const fromUnplaced = await addCard({
       db,
       partitionId: srcPartition,

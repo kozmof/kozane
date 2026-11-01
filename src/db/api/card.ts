@@ -1,5 +1,5 @@
-import { partitionTable, cardTable, layerTable } from "../schema.js";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { partitionTable, cardTable, layerTable, taskspaceTable } from "../schema.js";
+import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type {
   NeedsDB,
@@ -301,7 +301,37 @@ async function assertLayerMatchesPartition({
 }
 
 /**
- * Insert one card. An explicit `layerId` must be in the partition's namespace. Run inside a
+ * Refuse a taskspace placed in another namespace. An unplaced taskspace appears on every
+ * board, so it can link cards in any namespace.
+ */
+async function assertTaskspaceMatchesPartition({
+  db,
+  partitionId,
+  taskspaceId,
+}: NeedsPartition & { taskspaceId: string }): Promise<void> {
+  const row = await db
+    .select({ id: taskspaceTable.id })
+    .from(taskspaceTable)
+    .innerJoin(partitionTable, eq(partitionTable.id, partitionId))
+    .where(
+      and(
+        eq(taskspaceTable.id, taskspaceId),
+        or(
+          isNull(taskspaceTable.namespaceId),
+          eq(taskspaceTable.namespaceId, partitionTable.namespaceId),
+        ),
+      ),
+    )
+    .get();
+  if (!row)
+    throw new NotFoundError(
+      `Taskspace taskspaceId=${taskspaceId} in the namespace of partitionId=${partitionId}`,
+    );
+}
+
+/**
+ * Insert one card. An explicit `layerId` or `taskspaceId` must be in the partition's
+ * namespace. Run inside a
  * transaction when that check and the insert must not be split by another writer.
  */
 export async function addCard({
@@ -315,6 +345,8 @@ export async function addCard({
   zIndex,
 }: AddCard): Promise<string> {
   if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
+  if (taskspaceId !== undefined)
+    await assertTaskspaceMatchesPartition({ db, partitionId, taskspaceId });
   const [row] = await db
     .insert(cardTable)
     .values({

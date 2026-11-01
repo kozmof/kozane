@@ -29,6 +29,7 @@ import { addNamespace } from "./namespace.js";
 import { addPartition } from "./partition.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer } from "./layer.js";
+import { addTaskspace } from "./taskspace.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -113,6 +114,23 @@ describe("addCard", () => {
     const id1 = await addCard({ db, partitionId, content: "A" });
     const id2 = await addCard({ db, partitionId, content: "B" });
     expect(id1).not.toBe(id2);
+  });
+
+  it("rejects a taskspace placed in another namespace", async () => {
+    const { db, partitionId } = await setup();
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    const foreignId = await addTaskspace({ db, namespaceId: otherNamespaceId });
+    await expect(
+      addCard({ db, partitionId, taskspaceId: foreignId, content: "X" }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("accepts an unplaced taskspace from any namespace", async () => {
+    const { db, partitionId } = await setup();
+    const unplacedId = await addTaskspace({ db });
+    const id = await addCard({ db, partitionId, taskspaceId: unplacedId, content: "X" });
+    const card = await getCard({ db, partitionId, cardId: id });
+    expect(card?.taskspaceId).toBe(unplacedId);
   });
 
   it("rejects a layer from another namespace", async () => {
