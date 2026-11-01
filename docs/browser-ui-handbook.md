@@ -225,6 +225,42 @@ be available. Errors appear in the panel.
 
 Press `Esc` or click outside to close.
 
+### The file browser
+
+Press `o` with no cards selected to open the file browser. It shows three
+columns: scopes, the selected scope's taskspaces, and the selected taskspace's
+files and folders. It opens on the file in the editor, if one is open, and
+otherwise on the scope selected in the right panel.
+
+Click a scope or taskspace to select it, click a folder to expand it, and click
+a file to open it in the editor. Taskspaces with no scope appear under "No scope".
+
+| Action                      | Control                                               |
+| --------------------------- | ----------------------------------------------------- |
+| Move within a column        | `↑` / `↓`                                             |
+| Move to the next column     | `←` / `→`                                             |
+| Create a scope or taskspace | The column's `+`                                      |
+| Create a file or folder     | The Files column's buttons, or a folder's hover ones  |
+| Rename                      | A row's pencil button                                 |
+| Delete                      | A row's bin button                                    |
+| Refresh from disk           | The Files column's `⟳`                                |
+| Close                       | `Esc`, or click outside                               |
+
+Each delete asks first.
+
+- Deleting a scope removes it from this board, as the right panel's `×` does.
+  A scope that still has taskspaces cannot be deleted.
+- Deleting a taskspace deletes its directory and everything in it, when the
+  directory sits directly in `taskspace.defaultDir` and its `.taskspace.json`
+  names the taskspace. Other directories, such as ones chosen with
+  `kozane taskspace create --dir`, stay on disk.
+- Deleting a folder deletes everything in it. These deletes cannot be undone.
+- Renaming a taskspace renames its directory under the same rule. Other
+  taskspaces change only their name.
+
+The file open in the editor and the folders holding it cannot be renamed or
+deleted, and its taskspace cannot be deleted. Close the file first.
+
 ### Adding a file or folder
 
 Hover a taskspace or folder and use its new-file or new-folder control.
@@ -412,6 +448,7 @@ them in a browser form, then reload the board to see the changes.
 | `toggleWarpsShortcut`  | Show or hide warps                     | `A` (Shift+A)   |
 | `removeWarpShortcut`   | Remove a warp                          | `x`             |
 | `addInventoryShortcut` | Add an inventory                       | `v`             |
+| `openFileBrowserShortcut` | Open the file browser               | `o`             |
 | `editorVimMode`        | Enable Vim bindings in the file editor | `false`         |
 | `editorAutoSave`       | Save the open file once typing pauses  | `true`          |
 | `showZoomControl`      | Show the zoom buttons and zoom level   | `true`          |

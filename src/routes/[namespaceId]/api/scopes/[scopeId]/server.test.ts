@@ -6,7 +6,7 @@ import { addScopeRel, getScopeRelsByCards } from "$db/api/scope-rel.js";
 import { addNamespace } from "$db/api/namespace.js";
 import type { DB } from "$db/tx.js";
 import { createTestDB } from "../../../../../test-utils/db.js";
-import { DELETE } from "./+server.js";
+import { DELETE, PATCH } from "./+server.js";
 import { addLayer } from "$db/api/layer.js";
 
 function event(db: DB, namespaceId: string, scopeId: string) {
@@ -67,5 +67,52 @@ describe("DELETE /[namespaceId]/api/scopes/[scopeId]", () => {
       404,
       "Scope not found in namespace",
     );
+  });
+});
+
+function patchEvent(db: DB, namespaceId: string, scopeId: string, payload: unknown) {
+  return {
+    locals: { db },
+    params: { namespaceId, scopeId },
+    request: new Request("http://localhost/", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }),
+  } as never;
+}
+
+describe("PATCH /[namespaceId]/api/scopes/[scopeId]", () => {
+  it("renames the scope", async () => {
+    const { db, namespaceId, scopeId } = await setup();
+
+    const res = await PATCH(patchEvent(db, namespaceId, scopeId, { name: "Renamed" }));
+
+    expect(await res.json()).toEqual({ id: scopeId, name: "Renamed" });
+    expect((await getAllScopes({ db })).map(({ name }) => name)).toEqual(["Renamed"]);
+  });
+
+  it("refuses a name another scope uses", async () => {
+    const { db, namespaceId, scopeId } = await setup();
+    await addScope({ db, name: "Taken" });
+
+    await expectHttpRejection(
+      PATCH(patchEvent(db, namespaceId, scopeId, { name: "Taken" })),
+      400,
+      'A scope named "Taken" already exists',
+    );
+  });
+
+  it("404s an unknown scope and 400s a blank name", async () => {
+    const { db, namespaceId, scopeId } = await setup();
+
+    await expectHttpRejection(
+      PATCH(patchEvent(db, namespaceId, "missing", { name: "X" })),
+      404,
+      "Scope not found",
+    );
+    await expect(
+      Promise.resolve(PATCH(patchEvent(db, namespaceId, scopeId, { name: "  " }))),
+    ).rejects.toMatchObject({ status: 400 });
   });
 });

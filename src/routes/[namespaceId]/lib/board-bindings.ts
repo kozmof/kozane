@@ -12,6 +12,7 @@ export type BoardShortcuts = Pick<
   | "setWarpShortcut"
   | "removeWarpShortcut"
   | "addInventoryShortcut"
+  | "openFileBrowserShortcut"
 >;
 
 /** Page-owned actions and state used by the keyboard binding table. */
@@ -37,6 +38,8 @@ export type BoardCommands = {
   removeFocusedWarp: () => void;
   /** Drops a new inventory icon where a warp would be set. */
   addInventoryHere: () => void;
+  /** Opens the three-column browser of scopes, taskspaces, and files. */
+  openFileBrowser: () => void;
 };
 
 /**
@@ -118,6 +121,14 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       keys: [shortcuts.addInventoryShortcut],
       when: () => c.noSelection() && !c.readonly,
       run: c.addInventoryHere,
+    },
+    {
+      // Read-only exports can still browse embedded files, so this stays available there.
+      name: "open the file browser",
+      keys: [shortcuts.openFileBrowserShortcut],
+      when: c.noSelection,
+      preventDefault: true,
+      run: c.openFileBrowser,
     },
   ];
 }

@@ -1,9 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { lstatSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { GET, POST } from "./+server.js";
+import { DELETE, GET, PATCH, POST } from "./+server.js";
 import { addNamespace } from "$db/api/namespace.js";
 import { addTaskspace } from "$db/api/taskspace.js";
 import { createTestDB } from "../../../../../../test-utils/db.js";
@@ -285,5 +293,119 @@ describe("POST /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
       404,
       "Taskspace not found",
     );
+  });
+});
+
+function bodyEvent(
+  db: DB,
+  namespaceId: string,
+  taskspaceId: string,
+  method: "PATCH" | "DELETE",
+  payload: unknown,
+) {
+  const request = new Request(
+    `http://localhost/${namespaceId}/api/taskspaces/${taskspaceId}/files`,
+    { method, body: JSON.stringify(payload), headers: { "content-type": "application/json" } },
+  );
+  return { locals: { db }, params: { namespaceId, taskspaceId }, request } as never;
+}
+
+describe("PATCH and DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files", () => {
+  let fx: Fixture;
+  let prevEnv: string | undefined;
+
+  beforeEach(async () => {
+    fx = await makeWorkspace();
+    prevEnv = process.env.KOZANE_WORKSPACE_ROOT;
+    process.env.KOZANE_WORKSPACE_ROOT = fx.tmpRoot;
+    _resetWorkspaceRootForTest();
+  });
+
+  afterEach(() => {
+    if (prevEnv === undefined) delete process.env.KOZANE_WORKSPACE_ROOT;
+    else process.env.KOZANE_WORKSPACE_ROOT = prevEnv;
+    _resetWorkspaceRootForTest();
+    rmSync(fx.tmpRoot, { recursive: true, force: true });
+  });
+
+  const patch = (payload: unknown) =>
+    PATCH(bodyEvent(fx.db, fx.namespaceId, fx.taskspaceId, "PATCH", payload));
+  const del = (payload: unknown) =>
+    DELETE(bodyEvent(fx.db, fx.namespaceId, fx.taskspaceId, "DELETE", payload));
+
+  it("renames a file in place", async () => {
+    const res = await patch({ path: "src/app.ts", name: "main.ts" });
+    expect(await res.json()).toEqual({ path: "src/main.ts", kind: "file" });
+    expect(readdirSync(join(fx.tmpRoot, "demo", "src"))).toEqual(["main.ts"]);
+  });
+
+  it("renames a directory with its contents", async () => {
+    const res = await patch({ path: "src", name: "lib" });
+    expect(await res.json()).toEqual({ path: "lib", kind: "directory" });
+    expect(existsSync(join(fx.tmpRoot, "demo", "lib", "app.ts"))).toBe(true);
+  });
+
+  it("refuses to replace an existing entry", async () => {
+    await expectHttpRejection(
+      patch({ path: "README.md", name: "src" }),
+      409,
+      '"src" already exists',
+    );
+    expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
+  });
+
+  it("refuses names that would move or hide the entry", async () => {
+    await expectHttpRejection(
+      patch({ path: "README.md", name: "../x" }),
+      400,
+      "Name cannot contain a path separator",
+    );
+    await expectHttpRejection(
+      patch({ path: "README.md", name: ".hidden" }),
+      400,
+      "Name cannot start with a dot",
+    );
+  });
+
+  it("404s a missing entry", async () => {
+    await expectHttpRejection(patch({ path: "nope.md", name: "x.md" }), 404, "Entry not found");
+  });
+
+  it("deletes a file", async () => {
+    const res = await del({ path: "README.md" });
+    expect(await res.json()).toEqual({ path: "README.md", kind: "file" });
+    expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(false);
+  });
+
+  it("deletes a directory recursively", async () => {
+    await del({ path: "src" });
+    expect(existsSync(join(fx.tmpRoot, "demo", "src"))).toBe(false);
+    expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
+  });
+
+  it("removes a symlink without touching its target", async () => {
+    const outside = join(fx.tmpRoot, "outside");
+    mkdirSync(outside);
+    writeFileSync(join(outside, "keep.md"), "keep");
+    symlinkSync(outside, join(fx.tmpRoot, "demo", "link"));
+
+    const res = await del({ path: "link" });
+    expect((await res.json()).kind).toBe("symlink");
+    expect(existsSync(join(outside, "keep.md"))).toBe(true);
+  });
+
+  it("refuses to delete the taskspace root, hidden entries, or paths outside", async () => {
+    await expectHttpRejection(del({ path: "/" }), 400, "No file named");
+    await expectHttpRejection(
+      del({ path: ".taskspace.json" }),
+      400,
+      "Dot-entries cannot be opened",
+    );
+    await expectHttpRejection(
+      del({ path: "../.kozane" }),
+      400,
+      "Path must stay inside the taskspace",
+    );
+    expect(existsSync(join(fx.tmpRoot, "demo", ".taskspace.json"))).toBe(true);
   });
 });

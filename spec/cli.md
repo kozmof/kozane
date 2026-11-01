@@ -829,6 +829,7 @@ Other keys fall back to built-in defaults individually.
     "squashCardShortcut": "s",
     "deleteCardsShortcut": "Delete",
     "openFilePaletteShortcut": "e",
+    "openFileBrowserShortcut": "o",
     "setWarpShortcut": "a",
     "toggleWarpsShortcut": "A",
     "removeWarpShortcut": "x",

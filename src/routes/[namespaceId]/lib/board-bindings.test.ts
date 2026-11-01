@@ -10,6 +10,7 @@ const shortcuts: BoardShortcuts = {
   setWarpShortcut: "s",
   removeWarpShortcut: "x",
   addInventoryShortcut: "v",
+  openFileBrowserShortcut: "o",
 };
 
 function commands(overrides: Partial<BoardCommands> = {}): BoardCommands {
@@ -28,6 +29,7 @@ function commands(overrides: Partial<BoardCommands> = {}): BoardCommands {
     setWarpHere: vi.fn(),
     removeFocusedWarp: vi.fn(),
     addInventoryHere: vi.fn(),
+    openFileBrowser: vi.fn(),
     ...overrides,
   };
 }
@@ -39,6 +41,16 @@ function press(c: BoardCommands, key: string, init: KeyboardEventInit = {}) {
 }
 
 describe("boardKeyBindings", () => {
+  it("opens the file browser with no selection, and leaves the key alone with one", () => {
+    const c = commands();
+    expect(press(c, "o").defaultPrevented).toBe(true);
+    expect(c.openFileBrowser).toHaveBeenCalledTimes(1);
+
+    const selected = commands({ noSelection: () => false });
+    press(selected, "o");
+    expect(selected.openFileBrowser).not.toHaveBeenCalled();
+  });
+
   it("lets Escape dismiss a pending frame before anything else", () => {
     const c = commands({ hasPendingFrame: () => true });
     expect(press(c, "Escape").defaultPrevented).toBe(true);

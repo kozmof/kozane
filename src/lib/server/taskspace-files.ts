@@ -1,5 +1,6 @@
 import {
   type Dirent,
+  type Stats,
   closeSync,
   constants as fsConstants,
   fstatSync,
@@ -9,6 +10,9 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
@@ -469,4 +473,91 @@ export function createTaskspaceDirectory({
   }
 
   return { path: relative(base, real).split(sep).join("/"), entries: [], truncated: false };
+}
+
+/**
+ * Why `name` cannot replace an entry's name, or null when it can. Allow one plain segment
+ * only, so a rename never moves an entry to another directory or hides it.
+ */
+export function entryNameIssue(name: string): string | null {
+  if (!name.trim()) return "Name is required";
+  if (name !== name.trim()) return "Name cannot start or end with whitespace";
+  if (/[/\\\0]/.test(name)) return "Name cannot contain a path separator";
+  if (name.startsWith(".")) return "Name cannot start with a dot";
+  return null;
+}
+
+export type TaskspaceEntryChange = {
+  /** The entry after the change, relative to the taskspace root and `/`-separated. */
+  path: string;
+  kind: TaskspaceEntryKind;
+};
+
+function kindOf(stat: Stats): TaskspaceEntryKind {
+  if (stat.isSymbolicLink()) return "symlink";
+  if (stat.isDirectory()) return "directory";
+  if (stat.isFile()) return "file";
+  return "other";
+}
+
+function statEntry(real: string): Stats {
+  try {
+    return lstatSync(real);
+  } catch (e) {
+    throw mapFsError(e, "Entry not found");
+  }
+}
+
+/**
+ * Rename one entry within its directory. A symlink is renamed itself, never followed. Refuse
+ * to replace an existing entry.
+ */
+export function renameTaskspaceEntry({
+  baseDir,
+  subPath,
+  name,
+}: TaskspaceFileTarget & { name: string }): TaskspaceEntryChange {
+  const issue = entryNameIssue(name);
+  if (issue) throw new TaskspaceFilesError("invalid-path", issue);
+
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
+  const source = statEntry(real);
+  const target = resolve(dirname(real), name);
+
+  let existing;
+  try {
+    existing = lstatSync(target);
+  } catch {
+    existing = null;
+  }
+  // A case-only rename on a case-insensitive disk finds the entry itself.
+  if (existing && (existing.ino !== source.ino || existing.dev !== source.dev))
+    throw new TaskspaceFilesError("exists", `"${name}" already exists`);
+
+  try {
+    renameSync(real, target);
+  } catch (e) {
+    throw mapFsError(e, "Entry not found");
+  }
+  return { path: relative(base, target).split(sep).join("/"), kind: kindOf(source) };
+}
+
+/**
+ * Delete one entry. A directory goes with everything under it. Symlinks are removed
+ * themselves, never followed, at the top and inside the tree. The taskspace root cannot be
+ * named, so it is never removed here.
+ */
+export function deleteTaskspaceEntry({
+  baseDir,
+  subPath,
+}: TaskspaceFileTarget): TaskspaceEntryChange {
+  const { real, base } = resolveTaskspaceEntry(baseDir, subPath);
+  const stat = statEntry(real);
+  try {
+    if (!stat.isSymbolicLink() && stat.isDirectory()) rmSync(real, { recursive: true });
+    else unlinkSync(real);
+  } catch (e) {
+    throw mapFsError(e, "Entry not found");
+  }
+  return { path: relative(base, real).split(sep).join("/"), kind: kindOf(stat) };
 }

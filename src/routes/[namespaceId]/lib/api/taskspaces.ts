@@ -84,3 +84,56 @@ export function saveTaskspaceFile(
     options,
   );
 }
+
+/**
+ * Rename a taskspace. The server also moves the directory when it manages it, and answers
+ * the stored `path` either way.
+ */
+export function renameTaskspace(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+  name: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}`), "PATCH", {
+    name,
+  });
+}
+
+/**
+ * Delete a taskspace. The server deletes a directory it manages with everything in it, and
+ * answers `directory: "deleted" | "missing" | "kept"`.
+ */
+export function deleteTaskspace(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}`), "DELETE");
+}
+
+/** Rename one file or folder within its directory. Answers its new `path`. */
+export function renameTaskspaceEntry(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+  path: string,
+  name: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/files`), "PATCH", {
+    path,
+    name,
+  });
+}
+
+/** Delete one file, or one folder with everything under it. */
+export function deleteTaskspaceEntry(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  taskspaceId: string,
+  path: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/files`), "DELETE", {
+    path,
+  });
+}

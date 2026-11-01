@@ -255,6 +255,11 @@ Create a workspace-wide scope. Body requires `name`. Return `{ id }`.
 The namespace path parameter is ignored. An unused scope appears on every board.
 Return 400 for a name already used in the workspace.
 
+### `PATCH /[namespaceId]/api/scopes/[scopeId]`
+
+Rename a scope workspace-wide. Body requires `name`. Return `{ id, name }`.
+Return 400 for a name already used in the workspace and 404 for an unknown scope.
+
 ### `DELETE /[namespaceId]/api/scopes/[scopeId]`
 
 Delete a scope. Taskspaces that were in it are kept and become unattached.
@@ -392,6 +397,29 @@ Return 400 for an invalid name, unknown scope, or configured directory outside
 the workspace, 404 for an unknown namespace, 409 for an existing directory,
 or 503 without a workspace.
 
+### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
+
+Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
+
+A managed directory is renamed on disk too. A directory is managed when its path is
+workspace-relative and sits directly in `taskspace.defaultDir`, where this API creates
+taskspaces. The name must then follow the creation rules. Other taskspaces change only
+their label.
+
+Return 400 for an invalid name, 404 for a taskspace not on this board or a missing managed
+directory, and 409 when the new directory name is taken.
+
+### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
+
+Delete a taskspace. A managed directory is deleted with everything in it, but only when its
+`.taskspace.json` names this taskspace. Other directories stay on disk. The directory goes
+first, so a failure keeps the record. Cards linked to the taskspace keep their text and
+lose the link.
+
+Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
+Return 404 for a taskspace not on this board and 409 when the marker names another
+taskspace.
+
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 
 List a taskspace directory. Optional query `path` is relative to its root and
@@ -411,6 +439,21 @@ Create one directory. Body requires a taskspace-relative `path`.
 Return 201 with the directory listing shape used by GET.
 Do not create parents or replace entries. Return 404 for a missing parent and
 409 for an existing file, directory, or symlink. Listing access rules also apply.
+
+### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]/files`
+
+Rename one file, directory, or symlink within its directory. Body requires `path` and
+`name`. The name must be one segment that does not start with a dot. Return the new
+`{ path, kind }`. Symlinks are renamed, not followed.
+Return 404 for a missing entry and 409 when the name is taken.
+Listing access rules also apply.
+
+### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files`
+
+Delete one entry. Body requires `path`. Directories are deleted with everything under
+them. Symlinks are removed, not followed, at the top and inside the tree. Return
+`{ path, kind }`. The taskspace root and dot-entries cannot be deleted.
+Listing access rules also apply.
 
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/file`
 

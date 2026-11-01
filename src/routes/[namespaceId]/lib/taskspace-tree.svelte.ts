@@ -2,7 +2,9 @@ import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$li
 import {
   createTaskspaceFile,
   createTaskspaceFolder,
+  deleteTaskspaceEntry,
   failureMessage,
+  renameTaskspaceEntry,
   fetchTaskspaceFiles,
 } from "./namespace-api.js";
 import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
@@ -68,6 +70,17 @@ export function nodeKey(taskspaceId: string, path: string): string {
 
 function taskspaceOf(key: string): string {
   return key.slice(0, key.indexOf(":"));
+}
+
+/** The directory holding `path`. Empty is the taskspace root. */
+export function parentPath(path: string): string {
+  const slash = path.lastIndexOf("/");
+  return slash === -1 ? "" : path.slice(0, slash);
+}
+
+function siblingPath(path: string, name: string): string {
+  const parent = parentPath(path);
+  return parent ? `${parent}/${name}` : name;
 }
 
 /**
@@ -203,6 +216,72 @@ export class TaskspaceTreeState {
     const made = await this.#request(ctx, target, name);
     if (!("error" in made)) await this.load(ctx, target.taskspaceId, target.path, true);
     return made;
+  }
+
+  /**
+   * Rename one entry within its directory. Keep a renamed folder's open subfolders and cached
+   * listings under its new path, then re-read the parent. Return the new path or the reason.
+   */
+  async rename(
+    ctx: TaskspaceTreeContext,
+    taskspaceId: string,
+    path: string,
+    name: string,
+  ): Promise<{ path: string } | { error: string }> {
+    const trimmed = name.trim();
+    if (!trimmed) return { error: "Name is required" };
+    if (trimmed.includes("/") || trimmed.includes("\\"))
+      return { error: "Name cannot contain a path separator" };
+    if (trimmed.startsWith(".")) return { error: "Name cannot start with a dot" };
+
+    let next: string;
+    try {
+      const res = await renameTaskspaceEntry(
+        ctx.fetcher,
+        ctx.namespaceId,
+        taskspaceId,
+        path,
+        trimmed,
+      );
+      if (!res.ok) return { error: await failureMessage(res, "Failed to rename") };
+      const body = await res.json().catch(() => null);
+      next = typeof body?.path === "string" ? body.path : siblingPath(path, trimmed);
+    } catch {
+      return { error: "Failed to rename" };
+    }
+
+    const from = nodeKey(taskspaceId, path);
+    const to = nodeKey(taskspaceId, next);
+    const moved = (key: string) =>
+      key === from ? to : key.startsWith(`${from}/`) ? to + key.slice(from.length) : key;
+    this.expanded = new Set([...this.expanded].map(moved));
+    this.nodes = Object.fromEntries(Object.entries(this.nodes).map(([k, v]) => [moved(k), v]));
+    await this.load(ctx, taskspaceId, parentPath(path), true);
+    return { path: next };
+  }
+
+  /**
+   * Delete one entry, a folder with everything under it, and forget what was cached for it.
+   * Return the reason on failure.
+   */
+  async remove(
+    ctx: TaskspaceTreeContext,
+    taskspaceId: string,
+    path: string,
+  ): Promise<{ error: string } | null> {
+    try {
+      const res = await deleteTaskspaceEntry(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
+      if (!res.ok) return { error: await failureMessage(res, "Failed to delete") };
+    } catch {
+      return { error: "Failed to delete" };
+    }
+
+    const key = nodeKey(taskspaceId, path);
+    const gone = (k: string) => k === key || k.startsWith(`${key}/`);
+    this.expanded = new Set([...this.expanded].filter((k) => !gone(k)));
+    this.nodes = Object.fromEntries(Object.entries(this.nodes).filter(([k]) => !gone(k)));
+    await this.load(ctx, taskspaceId, parentPath(path), true);
+    return null;
   }
 
   /**

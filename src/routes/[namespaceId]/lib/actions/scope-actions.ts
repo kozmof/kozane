@@ -342,7 +342,85 @@ export function createScopeActions(state: NamespaceState) {
     }
   }
 
+  /** Create a scope by name, answering its id or the server's reason. */
+  async function createScope(rawName: string): Promise<{ id: string } | { error: string }> {
+    const name = rawName.trim();
+    if (!name) return { error: "Scope name is required" };
+    const res = await api.createScope(state.mutationFetcher, state.namespaceId, name);
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to create scope") };
+    const id = readString(await res.json().catch(() => null), "id");
+    if (id === undefined) return { error: "Failed to create scope" };
+    state.scopes = [...state.scopes, { id, name }];
+    return { id };
+  }
+
+  async function renameScope(scopeId: string, rawName: string): Promise<{ error: string } | null> {
+    const name = rawName.trim();
+    if (!name) return { error: "Scope name is required" };
+    const res = await api.renameScope(state.mutationFetcher, state.namespaceId, scopeId, name);
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to rename scope") };
+    state.scopes = state.scopes.map((scope) => (scope.id === scopeId ? { ...scope, name } : scope));
+    return null;
+  }
+
+  /**
+   * Remove a scope from this board, as the sidebar's `×` does. Answer the reason on failure
+   * instead of raising the banner.
+   */
+  async function removeScope(scopeId: string): Promise<{ error: string } | null> {
+    const res = await api.deleteScope(state.mutationFetcher, state.namespaceId, scopeId);
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to delete scope") };
+    state.scopes = state.scopes.filter((s) => s.id !== scopeId);
+    state.scopeRels = state.scopeRels.filter((r) => r.scopeId !== scopeId);
+    state.scopeAreas = state.scopeAreas.filter((a) => a.scopeId !== scopeId);
+    if (state.sidebar.activeScope === scopeId) state.sidebar.activeScope = null;
+    return null;
+  }
+
+  async function renameTaskspace(
+    taskspaceId: string,
+    rawName: string,
+  ): Promise<{ error: string } | null> {
+    const name = rawName.trim();
+    if (!name) return { error: "Taskspace name is required" };
+    const res = await api.renameTaskspace(
+      state.mutationFetcher,
+      state.namespaceId,
+      taskspaceId,
+      name,
+    );
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to rename taskspace") };
+    const parsed = await res.json().catch(() => null);
+    const path = readString(parsed, "path");
+    state.taskspaces = state.taskspaces.map((taskspace) =>
+      taskspace.id === taskspaceId
+        ? { ...taskspace, name, ...(path !== undefined && { path }) }
+        : taskspace,
+    );
+    return null;
+  }
+
+  /**
+   * Delete a taskspace, and with it the directory when the server manages it. Answer what
+   * happened to the directory, or the reason on failure.
+   */
+  async function deleteTaskspace(
+    taskspaceId: string,
+  ): Promise<{ directory: string } | { error: string }> {
+    const res = await api.deleteTaskspace(state.mutationFetcher, state.namespaceId, taskspaceId);
+    if (!res.ok) return { error: await api.failureMessage(res, "Failed to delete taskspace") };
+    const directory = readString(await res.json().catch(() => null), "directory") ?? "kept";
+    state.taskspaces = state.taskspaces.filter(({ id }) => id !== taskspaceId);
+    state.taskspaceTree.prune(state.taskspaces.map(({ id }) => id));
+    return { directory };
+  }
+
   return {
+    createScope,
+    renameScope,
+    removeScope,
+    renameTaskspace,
+    deleteTaskspace,
     handleCreateScope,
     handleCreateTaskspace,
     createTaskspace,

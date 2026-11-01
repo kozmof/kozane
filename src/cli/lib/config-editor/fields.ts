@@ -125,6 +125,10 @@ const UI_FIELD_INFO: Record<keyof UiConfig, { group: FieldGroup; help: string }>
   },
   deleteCardsShortcut: { group: "Shortcuts", help: "Delete the selected cards." },
   openFilePaletteShortcut: { group: "Shortcuts", help: "Open the file palette." },
+  openFileBrowserShortcut: {
+    group: "Shortcuts",
+    help: "Open the file browser for scopes, taskspaces, and files.",
+  },
   setWarpShortcut: { group: "Shortcuts", help: "Set a warp." },
   toggleWarpsShortcut: { group: "Shortcuts", help: "Show or hide warp markers." },
   removeWarpShortcut: { group: "Shortcuts", help: "Remove the focused warp." },

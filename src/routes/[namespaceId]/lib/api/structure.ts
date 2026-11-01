@@ -62,6 +62,16 @@ export function createScope(
   return jsonRequest(fetcher, apiUrl(namespaceId, "/scopes"), "POST", { name });
 }
 
+/** Rename a workspace-wide scope. */
+export function renameScope(
+  fetcher: typeof fetch,
+  namespaceId: string,
+  scopeId: string,
+  name: string,
+): Promise<Response> {
+  return jsonRequest(fetcher, apiUrl(namespaceId, `/scopes/${scopeId}`), "PATCH", { name });
+}
+
 export function deleteScope(
   fetcher: typeof fetch,
   namespaceId: string,

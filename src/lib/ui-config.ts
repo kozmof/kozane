@@ -51,6 +51,8 @@ export type UiConfig = {
   squashCardShortcut: string;
   deleteCardsShortcut: string;
   openFilePaletteShortcut: string;
+  /** Open the three-column file browser for scopes, taskspaces, and their files. */
+  openFileBrowserShortcut: string;
   setWarpShortcut: string;
   toggleWarpsShortcut: string;
   removeWarpShortcut: string;
@@ -94,6 +96,7 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   squashCardShortcut: "s",
   deleteCardsShortcut: "Delete",
   openFilePaletteShortcut: "e",
+  openFileBrowserShortcut: "o",
   setWarpShortcut: "a",
   // Shift+A. Shortcuts are compared against `event.key`, which already carries the shift.
   toggleWarpsShortcut: "A",
@@ -160,6 +163,7 @@ export const UI_SHORTCUT_FIELDS = [
   "squashCardShortcut",
   "deleteCardsShortcut",
   "openFilePaletteShortcut",
+  "openFileBrowserShortcut",
   "setWarpShortcut",
   "toggleWarpsShortcut",
   "removeWarpShortcut",

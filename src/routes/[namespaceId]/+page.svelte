@@ -29,6 +29,7 @@
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
   import FilePalette from "./components/FilePalette.svelte";
+  import FileBrowser from "./components/FileBrowser.svelte";
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
   import { InFlight } from "./lib/in-flight.js";
   import { startSnapshotPoll } from "./lib/snapshot-poll.js";
@@ -57,6 +58,8 @@
   // The file palette, opened from a selection. Unlike the warp palette it is up while
   // cards are selected, which is why the composer is told to stand down below.
   let filePaletteOpen = $state(false);
+  // The three-column browser of scopes, taskspaces, and files, opened by its shortcut.
+  let fileBrowserOpen = $state(false);
   // The single taskspace file currently open in the editor.
   const editor = new EditorSession();
   // Keep the dragged panel width on the page so it survives closing a file. Null uses the
@@ -256,7 +259,10 @@
     s,
     editor,
     context: () => editorContext,
-    closeFilePalette: () => (filePaletteOpen = false),
+    closeFilePalette: () => {
+      filePaletteOpen = false;
+      fileBrowserOpen = false;
+    },
     createScopeWithFile: actions.handleCreateScopeWithFile,
   });
 
@@ -292,6 +298,7 @@
       },
       // Place under the pointer or at the view center, using the warp placement rule.
       addInventoryHere: () => void inventoryActions.add(canvasComponent.getWarpPosition()),
+      openFileBrowser: () => (fileBrowserOpen = true),
     }),
   );
 
@@ -300,6 +307,7 @@
     // including their close shortcut.
     if (warps.paletteOpen) return;
     if (filePaletteOpen) return;
+    if (fileBrowserOpen) return;
     // An open editor owns the keyboard even when focus is on panel controls that do not stop
     // propagation. A pinned one is left open while the board is used, so the board keeps its
     // shortcuts. Keys typed in the panel never reach here, because the panel stops them.
@@ -414,6 +422,34 @@
       onLinkScope={actions.handleLinkScope}
       onCreate={files.createFromPalette}
       onClose={() => (filePaletteOpen = false)}
+    />
+  {/if}
+
+  {#if fileBrowserOpen}
+    <FileBrowser
+      scopes={s.scopes}
+      taskspaces={s.taskspaces}
+      tree={s.taskspaceTree}
+      ctx={editorContext}
+      {readonly}
+      editorFile={editor.file}
+      initialScopeId={s.sidebar.activeScope}
+      actions={{
+        createScope: actions.createScope,
+        renameScope: actions.renameScope,
+        removeScope: actions.removeScope,
+        createTaskspace: actions.createTaskspace,
+        renameTaskspace: async (taskspaceId, name) => {
+          const failed = await actions.renameTaskspace(taskspaceId, name);
+          // Keep the open file's title in step with its taskspace.
+          if (!failed && editor.file?.taskspaceId === taskspaceId)
+            editor.file = { ...editor.file, taskspaceName: name.trim() };
+          return failed;
+        },
+        deleteTaskspace: actions.deleteTaskspace,
+      }}
+      onOpenFile={files.openFromPalette}
+      onClose={() => (fileBrowserOpen = false)}
     />
   {/if}
 
