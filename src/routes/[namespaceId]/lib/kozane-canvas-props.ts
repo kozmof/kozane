@@ -40,11 +40,11 @@ export type KozaneCanvasProps = {
   activeScopeId: string | null;
   /**
    * Every taskspace this board draws, whichever scope it belongs to. Narrowed per frame by
-   * `taskspacesForScope`, the same filter the scope panel applies to its own rows.
+   * `taskspacesForScope`.
    */
   taskspaces: TaskspaceSummary[];
   /**
-   * Share the directory cache with the scope panel and file palette so refreshes and folder
+   * Share the directory cache with the file browser and file palette so refreshes and folder
    * loads update every view.
    */
   taskspaceTree: TaskspaceTreeState;

@@ -10,7 +10,6 @@ export type UiConfig = {
   defaultZoom: number;
   zoomStep: number;
   leftPanelWidth: number;
-  rightPanelWidth: number;
   defaultShowFooter: boolean;
   defaultShowSidePanel: boolean;
   defaultShowWarps: boolean;
@@ -21,7 +20,7 @@ export type UiConfig = {
   /** Whether the board shows the scope icon that focuses the board on a scope. */
   showScopeControl: boolean;
   /**
-   * Whether the board shows the icon that shows or hides the side panels. The
+   * Whether the board shows the icon that shows or hides the side panel. The
    * `togglePanelsShortcut` key works either way.
    */
   showSidePanelToggle: boolean;
@@ -71,7 +70,6 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   defaultZoom: 1,
   zoomStep: 0.05,
   leftPanelWidth: 216,
-  rightPanelWidth: 232,
   defaultShowFooter: false,
   defaultShowSidePanel: false,
   defaultShowWarps: true,
@@ -119,7 +117,6 @@ export const UI_NUM_RANGES: Partial<Record<keyof UiConfig, [number, number]>> = 
   defaultZoom: [0.1, 10],
   zoomStep: [0.01, 1],
   leftPanelWidth: [80, 800],
-  rightPanelWidth: [80, 800],
   warpMarkerSize: [8, 64],
   canvasWidth: [400, 20000],
   canvasHeight: [400, 20000],

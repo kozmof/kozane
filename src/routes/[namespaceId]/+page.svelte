@@ -11,7 +11,6 @@
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
-  import ScopeSidebar from "./components/ScopeSidebar.svelte";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
   import FloatingControls from "./components/FloatingControls.svelte";
   import BoardControls from "./components/BoardControls.svelte";
@@ -30,6 +29,7 @@
   import FileEditor from "./components/FileEditor.svelte";
   import FilePalette from "./components/FilePalette.svelte";
   import FileBrowser from "./components/FileBrowser.svelte";
+  import type { FileManagementActions } from "./lib/file-management.js";
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
   import { InFlight } from "./lib/in-flight.js";
   import { startSnapshotPoll } from "./lib/snapshot-poll.js";
@@ -255,6 +255,22 @@
     staticFiles,
   });
 
+  /** What the file browser changes. */
+  const fileActions: FileManagementActions = {
+    createScope: actions.createScope,
+    renameScope: actions.renameScope,
+    removeScope: actions.removeScope,
+    createTaskspace: actions.createTaskspace,
+    renameTaskspace: async (taskspaceId, name) => {
+      const failed = await actions.renameTaskspace(taskspaceId, name);
+      // Keep the open file's title in step with its taskspace.
+      if (!failed && editor.file?.taskspaceId === taskspaceId)
+        editor.file = { ...editor.file, taskspaceName: name.trim() };
+      return failed;
+    },
+    deleteTaskspace: actions.deleteTaskspace,
+  };
+
   const files = createBoardFiles({
     s,
     editor,
@@ -434,20 +450,7 @@
       {readonly}
       editorFile={editor.file}
       initialScopeId={s.sidebar.activeScope}
-      actions={{
-        createScope: actions.createScope,
-        renameScope: actions.renameScope,
-        removeScope: actions.removeScope,
-        createTaskspace: actions.createTaskspace,
-        renameTaskspace: async (taskspaceId, name) => {
-          const failed = await actions.renameTaskspace(taskspaceId, name);
-          // Keep the open file's title in step with its taskspace.
-          if (!failed && editor.file?.taskspaceId === taskspaceId)
-            editor.file = { ...editor.file, taskspaceName: name.trim() };
-          return failed;
-        },
-        deleteTaskspace: actions.deleteTaskspace,
-      }}
+      actions={fileActions}
       onOpenFile={files.openFromPalette}
       onClose={() => (fileBrowserOpen = false)}
     />
@@ -507,28 +510,6 @@
       />
     {/if}
   </div>
-
-  <ScopeSidebar
-    visible={sidebarsVisible}
-    panelWidth={data.uiConfig.rightPanelWidth}
-    scopes={s.scopes}
-    scopeRels={s.scopeRels}
-    taskspaces={s.taskspaces}
-    taskspaceTree={s.taskspaceTree}
-    treeContext={editorContext}
-    selectedCards={s.selection.selectedCards}
-    bind:activeScope={s.sidebar.activeScope}
-    bind:newScopeName={s.sidebar.newScopeName}
-    bind:newWcName={s.sidebar.newWcName}
-    onCreateScope={actions.handleCreateScope}
-    onDeleteScope={actions.handleDeleteScope}
-    onAddToScope={actions.handleAddToScope}
-    onRemoveFromScope={actions.handleRemoveFromScope}
-    frameCountByScopeId={view.frameCountByScopeId}
-    onCreateTaskspace={actions.handleCreateTaskspace}
-    onOpenFile={!readonly || staticFiles ? files.open : undefined}
-    {readonly}
-  />
 
   <FileEditor
     session={editor}

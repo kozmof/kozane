@@ -73,7 +73,7 @@ export function boardKeyBindings(shortcuts: BoardShortcuts, c: BoardCommands): K
       run: c.toggleFooters,
     },
     {
-      name: "toggle side panels",
+      name: "toggle the side panel",
       keys: [shortcuts.togglePanelsShortcut],
       when: c.noSelection,
       run: c.togglePanels,

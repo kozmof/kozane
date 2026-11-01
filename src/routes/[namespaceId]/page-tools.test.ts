@@ -190,13 +190,15 @@ describe("Scoped-file export", () => {
     const second = exportData("b");
     await rerender({ data: second, params: { namespaceId: "namespace-b" }, form: null });
 
-    await fireEvent.click(screen.getByRole("button", { name: /Scope b/ }));
-    const row = screen.getByRole("button", { name: "taskspace-in-b" });
+    await fireEvent.keyDown(window, { key: "e" });
+    const browser = within(screen.getByRole("dialog", { name: "Files" }));
+    await fireEvent.click(browser.getByRole("option", { name: /Scope b/ }));
+    const row = browser.getByRole("option", { name: "taskspace-in-b" });
     expect(row).toBeInTheDocument();
 
     // And it is the arriving namespace's tree behind the row, not a leftover.
     await fireEvent.click(row);
-    expect(await screen.findByText("b.md")).toBeInTheDocument();
+    expect(await browser.findByText("b.md")).toBeInTheDocument();
     expect(screen.queryByText("a.md")).not.toBeInTheDocument();
   });
 });

@@ -95,15 +95,11 @@ export class SidebarState {
   activePartition = $state<string | null>(null);
   activeScope = $state<string | null>(null);
   newPartitionName = $state("");
-  newScopeName = $state("");
-  newWcName = $state("");
 
   reset() {
     this.activePartition = null;
     this.activeScope = null;
     this.newPartitionName = "";
-    this.newScopeName = "";
-    this.newWcName = "";
   }
 }
 

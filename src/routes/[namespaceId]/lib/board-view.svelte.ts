@@ -52,14 +52,6 @@ export class BoardView {
     () => new Map(this.#s.scopes.map((scope) => [scope.id, scope.name])),
   );
 
-  /** How many frames each scope has on this board, which is what the panel reports. */
-  readonly frameCountByScopeId = $derived.by(() =>
-    this.#s.scopeAreas.reduce(
-      (counts, area) => counts.set(area.scopeId, (counts.get(area.scopeId) ?? 0) + 1),
-      new Map<string, number>(),
-    ),
-  );
-
   readonly defaultPartitionId = $derived.by(
     () => this.#s.sidebar.activePartition ?? this.partitions[0]?.id ?? "",
   );

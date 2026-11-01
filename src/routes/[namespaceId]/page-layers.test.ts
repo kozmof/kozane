@@ -451,7 +451,8 @@ describe("Layers", () => {
       props: { data: scoped, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    await fireEvent.click(screen.getByRole("button", { name: /Now/ }));
+    await fireEvent.click(screen.getByLabelText("Focus a scope"));
+    await fireEvent.click(screen.getByRole("option", { name: /Now/ }));
     // Do not multiply scope dimming by layer dimming. The layer's opacity alone should apply
     // to an inactive layer.
     const card = screen.getByRole("button", { name: "Card: Alpha" });

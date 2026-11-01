@@ -114,9 +114,9 @@ A link icon in the footer marks glued cards.
 
 ## Layout
 
-The left panel holds partitions. The right panel holds scopes and taskspaces.
-Both are hidden by default. Use the top-right panels button or press `b` to
-show or hide them.
+The left panel holds partitions. It is hidden by default. Use the top-right
+panel button or press `b` to show or hide it. Scopes, taskspaces, and their
+files live in the [file browser](#the-file-browser), opened with `o`.
 
 Press `f` to toggle card footers, which show the partition, glue icon, and
 `taskspace` badge when applicable.
@@ -149,16 +149,17 @@ beside the composer's partition picker.
 
 ## Scopes
 
-Scopes group cards across namespaces. The right panel shows scopes used by this
-namespace's cards or taskspaces, plus scopes not yet used anywhere. Counts refer
-to cards in the current namespace.
+Scopes group cards across namespaces. A board shows scopes used by its cards or
+taskspaces, plus scopes not yet used anywhere.
 
-- Click a scope to highlight its cards, and click again to clear.
-- Create one by entering a name and pressing `Enter` or `+`.
-- Select cards and use "Link" or "Unlink" to change their membership.
-- Click a scope's hover `×` to remove this namespace's cards from it. Cards are
-  kept. The scope is deleted workspace-wide only when no cards, taskspaces, or
-  frames refer to it.
+- Focus a scope from the top-right scope icon to highlight its cards. New cards
+  join the focused scope.
+- Create, rename, and delete scopes in the [file browser](#the-file-browser).
+  A new name shows on every board. Deleting a scope removes it from this board.
+  Its cards are kept and leave the scope. The scope is deleted workspace-wide
+  only when no cards, taskspaces, or frames refer to it.
+- Add selected cards to a scope with a frame, or with "Link" in
+  [Edit a file](#opening-a-file-from-a-selection).
 
 ### Scope areas
 
@@ -174,11 +175,10 @@ on each board.
 
 Crossing into a frame adds a card to the scope. Crossing out removes it only
 when it is outside every frame of that scope. Moving or resizing a frame also
-updates membership. Cards linked through the panel can remain outside all frames
+updates membership. Cards linked without a frame can remain outside all frames
 without losing membership until they cross a frame edge.
 
-Frames belong to individual boards and stay visible across layers. A `▣` on a
-scope row indicates frames on this board, with a count when there is more than one.
+Frames belong to individual boards and stay visible across layers.
 
 #### Files on a frame
 
@@ -186,27 +186,25 @@ A framed scope's taskspaces appear as file and folder icons below the frame.
 Click a file to edit it, or a folder to browse it. Use `‹ back` to go up.
 Each frame remembers its own folder.
 
-Icons show at most two rows. Use the right panel for the full listing or to
+Icons show at most two rows. Use the file browser for the full listing or to
 refresh it. Symbolic links cannot be opened.
 
 ## Taskspaces
 
-A taskspace is a filesystem directory tied to a scope. Select a scope in the
-right panel to see its taskspaces. To create one, enter a name and press
-`Enter` or `+`.
+A taskspace is a filesystem directory tied to a scope. Browse, create, rename,
+and delete taskspaces in the [file browser](#the-file-browser).
 
-The panel shows this namespace's taskspaces and those with no namespace.
+A board shows this namespace's taskspaces and those with no namespace.
 For workspace-wide listing and disk management, see the
 [CLI specification](../spec/cli.md).
 
 ### Browsing a taskspace
 
-Click a taskspace or folder to expand it. Dotfiles and dot-directories are hidden,
-and symbolic links cannot be opened. Listings stop at 500 entries and show a
-notice when shortened.
+Dotfiles and dot-directories are hidden, and symbolic links cannot be opened.
+Listings stop at 500 entries and show a notice when shortened.
 
-Disk changes do not refresh automatically. Hover an open taskspace and click
-`⟳` to refresh its tree and frame icons.
+Disk changes do not refresh automatically. Use `⟳` in the file browser's Files
+column to refresh a taskspace's tree and frame icons.
 
 ### Opening a file from a selection
 
@@ -230,7 +228,7 @@ Press `Esc` or click outside to close.
 Press `o` with no cards selected to open the file browser. It shows three
 columns: scopes, the selected scope's taskspaces, and the selected taskspace's
 files and folders. It opens on the file in the editor, if one is open, and
-otherwise on the scope selected in the right panel.
+otherwise on the focused scope.
 
 Click a scope or taskspace to select it, click a folder to expand it, and click
 a file to open it in the editor. Taskspaces with no scope appear under "No scope".
@@ -246,10 +244,27 @@ a file to open it in the editor. Taskspaces with no scope appear under "No scope
 | Refresh from disk           | The Files column's `⟳`                                |
 | Close                       | `Esc`, or click outside                               |
 
+Renaming and deleting follow the rules in
+[Renaming and deleting](#renaming-and-deleting).
+
+### Adding a file or folder
+
+In the file browser, use the Files column's new-file or new-folder button for the
+taskspace's top level, or hover a folder and use its own.
+Enter one name and press `Enter` to create, or `Esc` to cancel.
+Names cannot contain `/` or start with a dot. Existing entries are never replaced.
+New files open in the editor immediately.
+
+### Renaming and deleting
+
+In the file browser, hover a scope, taskspace, file, or folder and use its
+pencil to rename it, or its bin to delete it. Enter the new name and press `Enter` to save, or `Esc` to cancel.
+New names follow the same rules as new ones.
+
 Each delete asks first.
 
-- Deleting a scope removes it from this board, as the right panel's `×` does.
-  A scope that still has taskspaces cannot be deleted.
+- Deleting a scope removes it from this board. A scope that still has
+  taskspaces cannot be deleted.
 - Deleting a taskspace deletes its directory and everything in it, when the
   directory sits directly in `taskspace.defaultDir` and its `.taskspace.json`
   names the taskspace. Other directories, such as ones chosen with
@@ -260,13 +275,6 @@ Each delete asks first.
 
 The file open in the editor and the folders holding it cannot be renamed or
 deleted, and its taskspace cannot be deleted. Close the file first.
-
-### Adding a file or folder
-
-Hover a taskspace or folder and use its new-file or new-folder control.
-Enter one name and press `Enter` to create, or `Esc` to cancel.
-Names cannot contain `/` or start with a dot. Existing entries are never replaced.
-New files open in the editor immediately.
 
 ### Editing a file
 
@@ -454,7 +462,7 @@ them in a browser form, then reload the board to see the changes.
 | `showZoomControl`      | Show the zoom buttons and zoom level   | `true`          |
 | `showLayerControl`     | Show the layer icon                    | `true`          |
 | `showScopeControl`     | Show the scope icon                    | `true`          |
-| `showSidePanelToggle`  | Show the side panel toggle icon        | `true`          |
+| `showSidePanelToggle`  | Show the partition panel toggle icon   | `true`          |
 
 ## Live sync
 

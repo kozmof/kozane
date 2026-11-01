@@ -1,20 +1,17 @@
-<script module lang="ts">
-/** What the modal changes, supplied by the board's actions. */
-export type FileBrowserActions = {
-  createScope: (name: string) => Promise<{ id: string } | { error: string }>;
-  renameScope: (scopeId: string, name: string) => Promise<{ error: string } | null>;
-  removeScope: (scopeId: string) => Promise<{ error: string } | null>;
-  createTaskspace: (scopeId: string, name: string) => Promise<{ id: string } | { error: string }>;
-  renameTaskspace: (taskspaceId: string, name: string) => Promise<{ error: string } | null>;
-  deleteTaskspace: (taskspaceId: string) => Promise<{ directory: string } | { error: string }>;
-};
-</script>
-
 <script lang="ts">
   import { css, cx } from "styled-system/css";
   import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "$lib/types";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
   import type { OpenFileRef } from "../lib/editor/editor-session.svelte.js";
+  import {
+    blockedByEditor,
+    deleteEntryFlow,
+    deleteTaskspaceFlow,
+    removeScopeFlow,
+    scopeDeleteBlock,
+    type FileManagementActions,
+    type ManagementMessage,
+  } from "../lib/file-management.js";
   import FileBrowserTree from "./FileBrowserTree.svelte";
   import InlineNameInput from "./InlineNameInput.svelte";
   import RowActionButtons from "./RowActionButtons.svelte";
@@ -41,7 +38,7 @@ export type FileBrowserActions = {
     editorFile: OpenFileRef | null;
     /** The scope to start on when the editor has no file open, such as the sidebar's. */
     initialScopeId?: string | null;
-    actions: FileBrowserActions;
+    actions: FileManagementActions;
     onOpenFile: (taskspaceId: string, taskspaceName: string, path: string) => void;
     onClose: () => void;
   } = $props();
@@ -140,12 +137,9 @@ export type FileBrowserActions = {
     panelEl?.focus();
   }
 
-  /** Why the open file prevents changing `path` in `taskspaceId`, or null when it does not. */
-  function blockedByEditor(taskspaceId: string, path?: string): string | null {
-    if (!editorFile || editorFile.taskspaceId !== taskspaceId) return null;
-    if (path !== undefined && editorFile.path !== path && !editorFile.path.startsWith(`${path}/`))
-      return null;
-    return `Close ${editorFile.path} in the editor first.`;
+  function show(message: ManagementMessage | null): void {
+    if (message?.kind === "error") error = message.text;
+    else if (message) notice = message.text;
   }
 
   // ── Scopes ──────────────────────────────────────────────────────
@@ -165,20 +159,9 @@ export type FileBrowserActions = {
     return null;
   }
 
-  function scopeDeleteBlock(id: string): string | null {
-    if (taskspaces.some((t) => t.scopeId === id)) return "Delete its taskspaces first";
-    return null;
-  }
-
   async function removeScope(scope: Scope): Promise<void> {
     clearMessages();
-    if (scopeDeleteBlock(scope.id)) return;
-    const ok = globalThis.confirm(
-      `Delete scope "${scope.name}" from this board?\n\nCards stay on the board and leave the scope. Its frames on this board are removed.`,
-    );
-    if (!ok) return;
-    const failed = await actions.removeScope(scope.id);
-    if (failed) error = failed.error;
+    show(await removeScopeFlow(actions, taskspaces, scope));
     panelEl?.focus();
   }
 
@@ -202,22 +185,7 @@ export type FileBrowserActions = {
 
   async function deleteTaskspace(target: TaskspaceSummary): Promise<void> {
     clearMessages();
-    const blocked = blockedByEditor(target.id);
-    if (blocked) {
-      error = blocked;
-      return;
-    }
-    const disk =
-      target.path === null
-        ? "It has no directory."
-        : target.pathKind === "absolute"
-          ? `Its directory ${target.path} stays on disk.`
-          : `Its directory ${target.path} and everything in it will be deleted from disk. This cannot be undone.`;
-    if (!globalThis.confirm(`Delete taskspace "${target.name}"?\n\n${disk}`)) return;
-    const result = await actions.deleteTaskspace(target.id);
-    if ("error" in result) error = result.error;
-    else if (result.directory === "kept" && target.path !== null && target.pathKind !== "absolute")
-      notice = `Taskspace deleted. ${target.path} was kept because it is outside the taskspace folder.`;
+    show(await deleteTaskspaceFlow(actions, editorFile, target));
     panelEl?.focus();
   }
 
@@ -230,7 +198,7 @@ export type FileBrowserActions = {
 
   function startRenameEntry(path: string): void {
     if (!taskspace) return;
-    const blocked = blockedByEditor(taskspace.id, path);
+    const blocked = blockedByEditor(editorFile, taskspace.id, path);
     if (blocked) {
       clearMessages();
       error = blocked;
@@ -250,18 +218,15 @@ export type FileBrowserActions = {
   async function deleteEntry(path: string, kind: TaskspaceEntryKind): Promise<void> {
     if (!taskspace) return;
     clearMessages();
-    const blocked = blockedByEditor(taskspace.id, path);
-    if (blocked) {
-      error = blocked;
-      return;
-    }
-    const what =
-      kind === "directory"
-        ? `Delete folder "${path}" and everything in it?`
-        : `Delete "${path}"?`;
-    if (!globalThis.confirm(`${what}\n\nThis cannot be undone.`)) return;
-    const failed = await tree.remove(ctx, taskspace.id, path);
-    if (failed) error = failed.error;
+    show(
+      await deleteEntryFlow(
+        (id, p) => tree.remove(ctx, id, p),
+        editorFile,
+        taskspace.id,
+        path,
+        kind,
+      ),
+    );
     panelEl?.focus();
   }
 
@@ -478,7 +443,7 @@ export type FileBrowserActions = {
                       what={scope.name}
                       onRename={() => begin({ kind: "scope", id: scope.id })}
                       onDelete={() => removeScope(scope)}
-                      deleteDisabledReason={scopeDeleteBlock(scope.id)}
+                      deleteDisabledReason={scopeDeleteBlock(taskspaces, scope.id)}
                     />
                   </span>
                 {/if}

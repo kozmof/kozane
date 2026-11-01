@@ -77,9 +77,8 @@ const UI_FIELD_INFO: Record<keyof UiConfig, { group: FieldGroup; help: string }>
     help: "Zoom change per button press or scroll step. A value of 0.05 means 5 percentage points.",
   },
   leftPanelWidth: { group: "View", help: "Width of the partition panel in pixels." },
-  rightPanelWidth: { group: "View", help: "Width of the scope panel in pixels." },
   defaultShowFooter: { group: "View", help: "Show card footers when a board opens." },
-  defaultShowSidePanel: { group: "View", help: "Show the side panels when a board opens." },
+  defaultShowSidePanel: { group: "View", help: "Show the partition panel when a board opens." },
   defaultShowWarps: { group: "View", help: "Show warp markers when a board opens." },
   showZoomControl: { group: "View", help: "Show the zoom buttons and zoom level." },
   showLayerControl: { group: "View", help: "Show the layer icon that opens the layer list." },
@@ -89,7 +88,7 @@ const UI_FIELD_INFO: Record<keyof UiConfig, { group: FieldGroup; help: string }>
   },
   showSidePanelToggle: {
     group: "View",
-    help: "Show the icon that shows or hides the side panels. The keyboard shortcut also works when the icon is hidden.",
+    help: "Show the icon that shows or hides the partition panel. The keyboard shortcut also works when the icon is hidden.",
   },
   editorVimMode: {
     group: "File editor",
@@ -100,7 +99,7 @@ const UI_FIELD_INFO: Record<keyof UiConfig, { group: FieldGroup; help: string }>
     help: "Save file edits shortly after typing stops and when the editor closes. Turn off to save manually.",
   },
   toggleFootersShortcut: { group: "Shortcuts", help: "Show or hide card footers." },
-  togglePanelsShortcut: { group: "Shortcuts", help: "Show or hide the side panels." },
+  togglePanelsShortcut: { group: "Shortcuts", help: "Show or hide the partition panel." },
   focusCardInputShortcut: { group: "Shortcuts", help: "Move focus to the card input." },
   clearSelectionShortcut: { group: "Shortcuts", help: "Clear the selection." },
   copyCardIdShortcut: { group: "Shortcuts", help: "Copy the selected card's ID." },

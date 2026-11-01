@@ -804,7 +804,6 @@ Other keys fall back to built-in defaults individually.
     "defaultZoom": 1,
     "zoomStep": 0.05,
     "leftPanelWidth": 216,
-    "rightPanelWidth": 232,
     "defaultShowFooter": false,
     "defaultShowSidePanel": false,
     "defaultShowWarps": true,

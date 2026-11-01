@@ -5,38 +5,6 @@ import { readString } from "../response.js";
 
 /** Scope, scope frame, membership, and taskspace actions. */
 export function createScopeActions(state: NamespaceState) {
-  async function handleCreateScope() {
-    const name = state.sidebar.newScopeName.trim();
-    if (!name) return;
-    const res = await api.createScope(state.mutationFetcher, state.namespaceId, name);
-    if (!res.ok) {
-      state.setError("Failed to create scope");
-      return;
-    }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
-      state.setError("Failed to create scope");
-      return;
-    }
-    state.scopes = [...state.scopes, { id: parsed.id, name }];
-    state.sidebar.newScopeName = "";
-  }
-
-  async function handleCreateTaskspace() {
-    const name = state.sidebar.newWcName.trim();
-    if (!state.sidebar.activeScope) {
-      state.setError("Select a scope before creating a taskspace");
-      return;
-    }
-    if (!name) return;
-    const made = await createTaskspace(state.sidebar.activeScope, name);
-    if ("error" in made) {
-      state.setError("Failed to create taskspace");
-      return;
-    }
-    state.sidebar.newWcName = "";
-  }
-
   /**
    * Create a taskspace directory in a scope and add it to the board. Return the server's
    * reason on failure so callers with their own name field, such as scope frames, can show it
@@ -61,49 +29,6 @@ export function createScopeActions(state: NamespaceState) {
       { id, name, scopeId, path: parsed.path, pathKind: parsed.pathKind },
     ];
     return { id };
-  }
-
-  async function handleDeleteScope(scopeId: string) {
-    const prevScopes = state.scopes;
-    const prevScopeRels = state.scopeRels;
-    const prevActiveScope = state.sidebar.activeScope;
-
-    state.scopes = state.scopes.filter((s) => s.id !== scopeId);
-    state.scopeRels = state.scopeRels.filter((r) => r.scopeId !== scopeId);
-    if (state.sidebar.activeScope === scopeId) state.sidebar.activeScope = null;
-
-    const res = await api.deleteScope(state.mutationFetcher, state.namespaceId, scopeId);
-    if (!res.ok) {
-      state.scopes = prevScopes;
-      state.scopeRels = prevScopeRels;
-      state.sidebar.activeScope = prevActiveScope;
-      state.setError("Failed to delete scope");
-    }
-  }
-
-  async function handleAddToScope(scopeId: string) {
-    if (state.selection.selectedCards.size === 0) return;
-    const cardIds = [...state.selection.selectedCards];
-    const res = await api.addCardsToScope(
-      state.mutationFetcher,
-      state.namespaceId,
-      scopeId,
-      cardIds,
-    );
-    if (!res.ok) {
-      state.setError("Failed to add cards to scope");
-      return;
-    }
-    const newRels = cardIds
-      .filter((cid) => !state.scopeRels.some((r) => r.scopeId === scopeId && r.cardId === cid))
-      .map((cardId) => ({ scopeId, cardId }));
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
-      state.setError("Failed to add cards to scope");
-      return;
-    }
-    state.scopeRels = [...state.scopeRels, ...newRels];
-    state.selection.selectedCards = new Set();
   }
 
   /**
@@ -205,31 +130,6 @@ export function createScopeActions(state: NamespaceState) {
     await handleLinkScope(scopeId);
 
     return { taskspaceId, taskspaceName, path: file.path };
-  }
-
-  async function handleRemoveFromScope(scopeId: string) {
-    if (state.selection.selectedCards.size === 0) return;
-    const cardIds = [...state.selection.selectedCards];
-    const res = await api.removeCardsFromScope(
-      state.mutationFetcher,
-      state.namespaceId,
-      scopeId,
-      cardIds,
-    );
-    if (!res.ok) {
-      state.setError("Failed to remove cards from scope");
-      return;
-    }
-    const parsed = await res.json().catch(() => null);
-    if (!parsed) {
-      state.setError("Failed to remove cards from scope");
-      return;
-    }
-    const removed = new Set(cardIds);
-    state.scopeRels = state.scopeRels.filter(
-      (r) => !(r.scopeId === scopeId && removed.has(r.cardId)),
-    );
-    state.selection.selectedCards = new Set();
   }
 
   /**
@@ -421,14 +321,9 @@ export function createScopeActions(state: NamespaceState) {
     removeScope,
     renameTaskspace,
     deleteTaskspace,
-    handleCreateScope,
-    handleCreateTaskspace,
     createTaskspace,
-    handleDeleteScope,
-    handleAddToScope,
     handleLinkScope,
     handleCreateScopeWithFile,
-    handleRemoveFromScope,
     handleScopeMembershipChange,
     handleCreateScopeArea,
     handleCreateScopeWithArea,

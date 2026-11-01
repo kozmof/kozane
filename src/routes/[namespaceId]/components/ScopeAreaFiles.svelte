@@ -218,7 +218,7 @@
               style:width="{CELL_WIDTH}px"
               style:padding="3px 2px"
               style:text-align="center"
-              title="{shown.overflow} more in this folder — open this taskspace in the scope panel to see them"
+              title="{shown.overflow} more in this folder — open the file browser to see them"
             >
               +{shown.overflow} more
             </span>
@@ -266,7 +266,7 @@
               beginCreate({ kind: "taskspace" });
             }}
           >
-            <!-- The scope panel's briefcase for a taskspace, not a box, which is the inventory's
+            <!-- A briefcase for a taskspace, not a box, which is the inventory's
                  icon on the same board. The plus sits in the same corner as New folder's so the
                  pair still reads as one set, with the case left open there to make room. -->
             <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">

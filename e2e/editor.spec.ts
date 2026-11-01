@@ -46,13 +46,18 @@ async function waitForServer(): Promise<void> {
 
 type Page = import("@playwright/test").Page;
 
-/** Open the board, show the panels, and open one file from the taskspace tree. */
+/** Open the board, open the file browser, and open one file from the taskspace's top level. */
 async function openFile(page: Page, name: string): Promise<void> {
   await page.goto(`${baseUrl}/${namespaceId}`);
-  await page.getByTitle("Show panels").click();
-  await page.getByRole("button", { name: "Work" }).click();
-  await page.getByRole("button", { name: "demo" }).click();
-  await page.getByRole("button", { name, exact: true }).click();
+  const browser = page.getByRole("dialog", { name: "Files" });
+  // The shortcut works once the page has hydrated, so retry until the modal opens.
+  await expect(async () => {
+    await page.keyboard.press("o");
+    await expect(browser).toBeVisible({ timeout: 500 });
+  }).toPass();
+  await browser.getByRole("option", { name: "Work" }).click();
+  await browser.getByRole("option", { name: "demo" }).click();
+  await browser.getByRole("button", { name, exact: true }).click();
   await expect(page.getByRole("dialog", { name: new RegExp(`Editing ${name}`) })).toBeVisible();
 }
 

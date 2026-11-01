@@ -80,6 +80,7 @@
     borderRadius: "2px",
     "&:hover, &:focus-within": { backgroundColor: "neutral.bg" },
     "&:hover .hover-reveal, &:focus-within .hover-reveal": { opacity: "1" },
+    "&:hover .row-actions, &:focus-within .row-actions": { opacity: "1" },
   });
   const rowClass = css({
     display: "flex",
@@ -101,7 +102,21 @@
   });
   const openClass = css({ color: "ink.black", fontWeight: "600" });
   const nameClass = css({ flex: "1", overflow: "hidden", textOverflow: "ellipsis" });
-  const actionsClass = css({ display: "flex", alignItems: "center", gap: "1px", paddingRight: "4px" });
+  // Laid over the end of the row while it is hovered or focused, so the buttons never take
+  // width from the name in a narrow panel. The fill matches the hovered row behind it.
+  const actionsClass = css({
+    position: "absolute",
+    right: "0",
+    top: "0",
+    bottom: "0",
+    display: "flex",
+    alignItems: "center",
+    gap: "1px",
+    padding: "0 4px",
+    backgroundColor: "neutral.bg",
+    borderRadius: "2px",
+    opacity: "0",
+  });
   const noteClass = css({ padding: "3px 6px", fontSize: "11px", color: "neutral.subtle", fontStyle: "italic" });
 </script>
 
@@ -160,7 +175,7 @@
           <span class={nameClass}>{entry.name}</span>
         </button>
         {#if !readonly}
-          <span class={actionsClass}>
+          <span class={cx("row-actions", actionsClass)}>
             {#if isDir}
               <TaskspaceCreateButtons
                 where={`"${entry.name}"`}

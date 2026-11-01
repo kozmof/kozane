@@ -54,7 +54,7 @@ describe("Namespace page", () => {
     expect(screen.getByText("100%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Focus a scope" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Layers" })).toBeInTheDocument();
-    expect(screen.getByTitle("Hide panels")).toBeInTheDocument();
+    expect(screen.getByTitle("Hide panel")).toBeInTheDocument();
   });
 
   it("hides the zoom, scope, layer, and side panel icons when configured", () => {
@@ -79,7 +79,7 @@ describe("Namespace page", () => {
     expect(screen.queryByText("100%")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Focus a scope" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Layers" })).not.toBeInTheDocument();
-    expect(screen.queryByTitle("Hide panels")).not.toBeInTheDocument();
+    expect(screen.queryByTitle("Hide panel")).not.toBeInTheDocument();
   });
 
   it("packs the visible top-right icons into one right-aligned row", () => {

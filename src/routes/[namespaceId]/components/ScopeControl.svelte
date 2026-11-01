@@ -6,7 +6,7 @@
     scopes,
     activeScope = $bindable(),
   }: {
-    // Already narrowed to this namespace by the snapshot, the same list the side panel gets.
+    // Already narrowed to this namespace by the snapshot.
     scopes: Scope[];
     activeScope: string | null;
   } = $props();

@@ -209,7 +209,7 @@ describe("ScopeAreaFiles", () => {
 
     const note = screen.getByText(/more$/);
     expect(note.tagName).toBe("SPAN");
-    expect(note).toHaveAttribute("title", expect.stringContaining("scope panel"));
+    expect(note).toHaveAttribute("title", expect.stringContaining("file browser"));
   });
 
   it("names each taskspace once a scope has more than one", () => {

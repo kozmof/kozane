@@ -24,8 +24,7 @@
     onCreate,
     onClose,
   }: {
-    // The snapshot already limits scopes to those this namespace displays, as in
-    // ScopeSidebar.
+    // The snapshot already limits scopes to those this namespace displays.
     scopes: Scope[];
     scopeRels: ScopeRel[];
     taskspaces: TaskspaceSummary[];

@@ -23,7 +23,7 @@
     justifyContent: "center",
     boxShadow: "0 0.5px 1.5px rgba(0,0,0,0.018)",
   })}
-  title={sidebarsVisible ? "Hide panels" : "Show panels"}
+  title={sidebarsVisible ? "Hide panel" : "Show panel"}
   onclick={onToggleSidebars}
 >
   <svg width="14" height="10" viewBox="0 0 14 10" fill="none">
