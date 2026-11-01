@@ -154,11 +154,12 @@ export async function loadTagIndex({
   let scannedAny = false;
   for (const taskspace of rows) {
     if (!taskspace.path) continue;
+    const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+    if (!baseDir) continue;
     // Yield between taskspaces so queued requests can run. Individual walks remain
     // synchronous, and a single-taskspace gather needs no yield.
     if (scannedAny) await yieldToEventLoop();
     scannedAny = true;
-    const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
     // Load cached file entries before scanning. The walk still validates signatures but can
     // avoid rereading unchanged files.
     store?.seedFiles(baseDir);

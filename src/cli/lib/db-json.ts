@@ -4,6 +4,7 @@ import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import * as schema from "../../db/schema.js";
 import { chunked, INVENTORY_SLOT_MAX, NAME_MAX } from "../../lib/constants.js";
 import { plural } from "./plural.js";
+import { taskspacePathIssue } from "../../lib/server/taskspace-path.js";
 
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 9;
@@ -495,12 +496,44 @@ export function dumpLimitWarnings(input: unknown, limits: DumpLimits): string[] 
   return warnings;
 }
 
+export type ImportDbJsonOptions = {
+  /**
+   * Accept taskspaces stored with absolute paths. The server reads and writes files in a
+   * taskspace's directory, so an export from elsewhere could otherwise expose any directory
+   * on this machine to the board.
+   */
+  allowAbsolutePaths?: boolean;
+};
+
+/**
+ * Refuse taskspace paths that could reach outside the workspace before writing any row.
+ * Absolute paths are refused unless the caller opts in.
+ */
+function validateDumpPaths(tables: TableRows, { allowAbsolutePaths = false }: ImportDbJsonOptions) {
+  const absolute: string[] = [];
+  for (const row of tables.taskspace) {
+    if (row.path === null || row.path === undefined) continue;
+    if (typeof row.path !== "string")
+      throw new Error(`taskspace ${row.id}: path must be a string or null`);
+    const issue = taskspacePathIssue(row.path, String(row.path_kind));
+    if (issue) throw new Error(`taskspace ${row.id}: ${issue}`);
+    if (row.path_kind === "absolute") absolute.push(`${row.id} (${row.path})`);
+  }
+  if (absolute.length > 0 && !allowAbsolutePaths)
+    throw new Error(
+      `Export has ${plural(absolute.length, "taskspace")} with an absolute path outside the workspace: ${absolute.join(", ")}. ` +
+        "Kozane serves files from these directories. Rerun with --allow-absolute-paths if you trust them.",
+    );
+}
+
 export async function importDbJson(
   dbUrl: string,
   input: unknown,
+  options: ImportDbJsonOptions = {},
 ): Promise<Record<TableName, number>> {
   const dump = parseDump(input);
   validateDumpRefs(dump.tables);
+  validateDumpPaths(dump.tables, options);
   const client = createClient({ url: dbUrl });
 
   try {

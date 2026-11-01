@@ -138,6 +138,7 @@ export async function loadNamespaceSnapshot({
       for (const taskspace of namedTaskspaces) {
         if (!taskspace.path) continue;
         const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+        if (!baseDir) continue;
         taskspaceFiles[taskspace.id] = buildTaskspaceFileTreeOnce(baseDir);
       }
     }

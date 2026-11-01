@@ -36,6 +36,7 @@ type DbExportOptions = {
 
 type DbImportOptions = {
   force?: boolean;
+  allowAbsolutePaths?: boolean;
 };
 
 export async function dbStatus(): Promise<void> {
@@ -175,7 +176,9 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
   }
 
   try {
-    const counts = await importDbJson(url, parsed);
+    const counts = await importDbJson(url, parsed, {
+      allowAbsolutePaths: options.allowAbsolutePaths,
+    });
     console.log(`Backup created: ${backupPath}`);
     console.log(`Database imported: ${source}`);
     for (const [table, count] of Object.entries(counts)) {

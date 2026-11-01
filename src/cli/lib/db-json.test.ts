@@ -521,6 +521,33 @@ describe("import reference validation", () => {
     await expect(importDbJson(targetUrl, dump)).resolves.toMatchObject({ taskspace: 1 });
   });
 
+  it("rejects a workspace-relative taskspace path that leaves the workspace", async () => {
+    await expectRejectedImport((tables) => {
+      tables.taskspace[0].path = "../../elsewhere";
+    }, "taskspace taskspace-1: workspace-relative path leaves the workspace");
+  });
+
+  it("rejects an unknown taskspace path kind", async () => {
+    await expectRejectedImport((tables) => {
+      tables.taskspace[0].path_kind = "remote";
+    }, 'taskspace taskspace-1: unknown path kind "remote"');
+  });
+
+  it("rejects absolute taskspace paths unless allowed", async () => {
+    await expectRejectedImport((tables) => {
+      tables.taskspace[0].path = "/home/someone";
+      tables.taskspace[0].path_kind = "absolute";
+    }, /--allow-absolute-paths/);
+
+    const dump = await seededDump();
+    dump.tables.taskspace[0].path = "/home/someone";
+    dump.tables.taskspace[0].path_kind = "absolute";
+    const targetUrl = await migratedDbUrl(`refs-target-${sequence++}.db`);
+    await expect(
+      importDbJson(targetUrl, dump, { allowAbsolutePaths: true }),
+    ).resolves.toMatchObject({ taskspace: 1 });
+  });
+
   // `card.layer_id` is NOT NULL, so a null here would otherwise reach SQLite as a
   // constraint failure rather than as the missing reference it is.
   it("reports a null layer_id as an unknown reference rather than a constraint failure", async () => {

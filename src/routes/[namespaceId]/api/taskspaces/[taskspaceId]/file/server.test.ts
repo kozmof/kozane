@@ -190,6 +190,17 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]/file", () => {
       );
     });
 
+    it("answers 404 for a stored relative path that leaves the workspace", async () => {
+      // A hand-edited row or an older import could hold such a path.
+      const escapingId = await addTaskspace({ db, namespaceId, name: "out", path: "../outside" });
+
+      await expectHttpRejection(
+        GET(getEvent(db, namespaceId, escapingId, "README.md")),
+        404,
+        "Taskspace directory is not valid",
+      );
+    });
+
     it("reads a taskspace assigned to no namespace from any namespace's endpoint", async () => {
       // Allow access to unplaced taskspaces, which appear on every board.
       const unassignedId = await addTaskspace({ db, name: "demo", path: "demo" });

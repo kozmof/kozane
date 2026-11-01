@@ -703,13 +703,17 @@ kozane db export [file] [--compact]
 Import an exported JSON file. Requires current migrations and `--force` when the database is
 non-empty. Back up first, validate foreign keys before writing, and print per-table counts.
 
+Taskspace paths must stay inside the workspace. Taskspaces with absolute paths are refused
+unless `--allow-absolute-paths` is passed, because the board reads and writes files in those
+directories.
+
 Rows exceeding text, canvas, or name limits are imported with warnings so backups from
 different settings remain restorable. Shorten oversized text, move out-of-bounds cards, or
 adjust settings before editing. `kozane doctor` reports these rows afterward. Stored cards
 that overlap are moved apart after the import, as `kozane inventory repair` does.
 
 ```bash
-kozane db import <file> [--force]
+kozane db import <file> [--force] [--allow-absolute-paths]
 ```
 
 ### `kozane db restore [file]`

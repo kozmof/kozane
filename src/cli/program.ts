@@ -321,6 +321,10 @@ export function buildProgram(): Command {
   db.command("import <file>")
     .description("Import workspace database data from JSON")
     .option("--force", "Replace existing workspace database data")
+    .option(
+      "--allow-absolute-paths",
+      "Accept taskspaces whose directories are outside the workspace",
+    )
     .action((file, opts) => dbImport(file, opts));
 
   db.command("restore [file]")

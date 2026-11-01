@@ -96,7 +96,7 @@ async function scanWithin(
   for (const { record, scanned } of diff.moved) {
     console.log(`  moved   ${shortId(record.id, taskspaceIds)}`);
     const oldAbsolute = record.path
-      ? resolveTaskspacePath(record.path, record.pathKind, root)
+      ? (resolveTaskspacePath(record.path, record.pathKind, root) ?? "(invalid path)")
       : "(none)";
     console.log(`    old: ${oldAbsolute}`);
     console.log(`    new: ${scanned.path}`);
@@ -137,7 +137,7 @@ async function scanWithin(
 
   for (const record of diff.missing) {
     const absolutePath = record.path
-      ? resolveTaskspacePath(record.path, record.pathKind, root)
+      ? (resolveTaskspacePath(record.path, record.pathKind, root) ?? "(invalid path)")
       : "(no path)";
     console.log(`  missing ${shortId(record.id, taskspaceIds)}  ${absolutePath}`);
     if (options.apply && options.cleanup) {
@@ -299,7 +299,7 @@ export async function taskspaceList(options: TaskspaceListOptions = {}): Promise
         ? (scopeNameById.get(taskspace.scopeId) ?? taskspace.scopeId)
         : "—";
       const path = taskspace.path
-        ? resolveTaskspacePath(taskspace.path, taskspace.pathKind, root)
+        ? (resolveTaskspacePath(taskspace.path, taskspace.pathKind, root) ?? "(invalid path)")
         : "(no path)";
       console.log(
         `${shortId(taskspace.id, taskspaceIds)}  ${taskspace.name || "(unnamed)"}  ${namespace}  ${scope}  ${path}`,

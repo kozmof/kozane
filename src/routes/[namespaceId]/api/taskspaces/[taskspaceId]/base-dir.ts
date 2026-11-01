@@ -28,7 +28,10 @@ export async function taskspaceBaseDir(
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
 
-  return resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+  const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
+  // A stored path that would leave the workspace, such as `../elsewhere`, is not served.
+  if (!baseDir) throw error(404, "Taskspace directory is not valid");
+  return baseDir;
 }
 
 /**
