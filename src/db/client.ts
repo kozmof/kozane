@@ -8,8 +8,8 @@ import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
 import { brandDb, type DB } from "./tx.js";
 
-export type { DB, Tx, AnyDB } from "./tx.js";
-export { withTx } from "./tx.js";
+export type { DB, Tx, ReadTx, AnyDB } from "./tx.js";
+export { withTx, withReadTx } from "./tx.js";
 
 /**
  * Database handle and cleanup function for callers that open a short-lived connection. Close

@@ -1,5 +1,5 @@
 import type { DB } from "$db/client";
-import { withTx } from "$db/tx";
+import { withReadTx } from "$db/tx";
 import type { Namespace } from "$db/api/types";
 import type { NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceSummary } from "$lib/types";
 import { getNamespace } from "$db/api/namespace";
@@ -54,9 +54,9 @@ export async function loadNamespaceSnapshot({
   namespace: Namespace;
   snapshot: NamespaceDataSnapshot;
 } | null> {
-  // Read every table in one transaction so the snapshot reflects a single committed state.
-  // In WAL mode a read transaction sees one consistent view without blocking writers.
-  const rows = await withTx(db, async (tx) => {
+  // Read every table in one read transaction so the snapshot reflects a single committed
+  // state. In WAL mode it sees one consistent view without taking the write lock.
+  const rows = await withReadTx(db, async (tx) => {
     const namespace = await getNamespace({ db: tx, namespaceId });
     if (!namespace) return null;
 
