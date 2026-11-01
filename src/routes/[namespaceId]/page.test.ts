@@ -821,6 +821,9 @@ describe("Layers", () => {
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe("/namespace-1/api/cards");
     expect(JSON.parse(init.body)).toMatchObject({ layerId: "l2", content: "Gamma" });
+    // The server stacks the card inside its transaction. A value from this board's copy
+    // could tie with a card another writer added since the last poll.
+    expect(JSON.parse(init.body)).not.toHaveProperty("zIndex");
   });
 
   it("creates the card on the namespace navigated to, not the one left behind", async () => {

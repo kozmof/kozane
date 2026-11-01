@@ -127,6 +127,18 @@ describe("createBoardPersistence", () => {
       expect(s.cards[0].content).toBe("new text");
     });
 
+    it("holds the text the server says it stored", async () => {
+      const s = state();
+      s.cards = [card("c1")];
+      vi.mocked(api.updateCard).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ ok: true, content: "normalized" }),
+      } as unknown as Response);
+
+      await createBoardPersistence(s).submitComposer("c1", "  typed  ", "p1", vi.fn());
+      expect(s.cards[0].content).toBe("normalized");
+    });
+
     it("draws every card a refit moved, a repaired neighbour included", async () => {
       const s = state();
       const stored = (slot: number) => ({ inventory: { id: "i1", slot } });
@@ -158,7 +170,7 @@ describe("createBoardPersistence", () => {
       expect(s.cards[0].content).toBe("c1");
     });
 
-    it("creates a card above its layer, in the active scope, from the stored row", async () => {
+    it("creates a card in the active scope from the stored row, leaving stacking to the server", async () => {
       const s = state();
       s.cards = [card("c1", { zIndex: 4 }), card("c2", { layerId: "l2", zIndex: 9 })];
       s.activeLayerId = "l1";
@@ -176,7 +188,6 @@ describe("createBoardPersistence", () => {
         content: "c3",
         posX: 10,
         posY: 20,
-        zIndex: 5,
         scopeId: "s1",
         layerId: "l1",
       });

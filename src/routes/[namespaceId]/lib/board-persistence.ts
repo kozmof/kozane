@@ -2,7 +2,6 @@ import type { BoardRect } from "$lib/constants";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
 import type { CardPositionPatch } from "./namespace-page.js";
-import { maxZIndex } from "./namespace-page.js";
 import {
   createCard,
   failureMessage,
@@ -69,12 +68,15 @@ export function createBoardPersistence(s: NamespaceState) {
         s.setError(await failureMessage(res, "Failed to save card"));
         return;
       }
-      // The server stores the text trimmed, so hold the same value rather than waiting for
-      // the next snapshot poll to correct it.
-      const stored = content.trim();
+      const body: unknown = await res.json().catch(() => null);
+      // Hold the text the server stored, so the board matches it without waiting for the
+      // next snapshot poll. Fall back to trimming, the server's normalization, if the
+      // response leaves it out.
+      const returned = (body as { content?: unknown } | null)?.content;
+      const stored = typeof returned === "string" ? returned : content.trim();
       // Apply every returned slot change, including moves caused by longer text or repairs
       // to neighbouring cards.
-      const placements = parsePlacements(await res.json().catch(() => null)) ?? [];
+      const placements = parsePlacements(body) ?? [];
       const slotOf = new Map(placements.map((p) => [p.cardId, p]));
       s.cards = s.cards.map((c) => {
         const p = slotOf.get(c.id);
@@ -90,14 +92,14 @@ export function createBoardPersistence(s: NamespaceState) {
     const scopeId = s.sidebar.activeScope;
     const layerId = s.activeLayerId;
     const inventoryId = s.receivingInventoryId;
-    // Only cards on the same layer compete for stacking, so the new card starts above them.
-    const zIndex = maxZIndex(s.cards.filter((c) => c.layerId === layerId)) + 1;
+    // Leave out zIndex so the server stacks the card above its layer inside the writing
+    // transaction. This board's copy can miss cards another tab or the CLI added since the
+    // last poll, and a value computed from it could tie with theirs.
     const res = await createCard(s.mutationFetcher, s.namespaceId, {
       partitionId,
       content,
       posX,
       posY,
-      zIndex,
       ...(scopeId && { scopeId }),
       ...(layerId && { layerId }),
       ...(inventoryId && { inventoryId }),

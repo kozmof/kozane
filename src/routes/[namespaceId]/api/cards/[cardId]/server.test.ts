@@ -41,6 +41,8 @@ describe("PATCH /[namespaceId]/api/cards/[cardId]", () => {
     );
 
     expect(response.status).toBe(200);
+    // The response carries the stored text, so the board does not have to guess it.
+    await expect(response.json()).resolves.toMatchObject({ content: "Updated" });
     await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
       content: "Updated",
     });

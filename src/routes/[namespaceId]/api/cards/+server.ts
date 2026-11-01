@@ -7,7 +7,7 @@ import { getScope } from "$db/api/scope";
 import { addScopeRel } from "$db/api/scope-rel";
 import { withTx } from "$db/tx";
 import {
-  addCard,
+  addCardInTx,
   nextLayerZIndexInTx,
   updateNamespaceCardPositions,
   type CardPositionUpdate,
@@ -19,7 +19,7 @@ import { clampToCanvas } from "$lib/server/canvas";
 import { contentMax } from "$lib/server/content-limit";
 import {
   optionalNumber,
-  optionalString,
+  optionalId,
   readJsonObject,
   requireFiniteNumber,
   requireObjectArray,
@@ -65,11 +65,11 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   const requestedZIndex = optionalNumber(body, "zIndex");
   if (requestedZIndex !== undefined && !Number.isSafeInteger(requestedZIndex))
     throw error(400, "zIndex must be an integer");
-  const scopeId = optionalString(body, "scopeId");
-  const requestedLayerId = optionalString(body, "layerId");
+  const scopeId = optionalId(body, "scopeId");
+  const requestedLayerId = optionalId(body, "layerId");
   // An open inventory on the board takes new cards. The card is still given a canvas position,
   // which it goes to if it is ever taken out without being dropped somewhere.
-  const inventoryId = optionalString(body, "inventoryId");
+  const inventoryId = optionalId(body, "inventoryId");
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.
@@ -96,7 +96,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
       ...clampToCanvas(posX, posY),
       zIndex: requestedZIndex ?? (await nextLayerZIndexInTx({ db: tx, layerId: layer.id })),
     };
-    const cardId = await addCard({ db: tx, ...stored });
+    const cardId = await addCardInTx({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
     if (!inventoryId) return { id: cardId, stored, inventory: null };
     // Throwing rolls the card back with the transaction, so a refused store leaves no card.

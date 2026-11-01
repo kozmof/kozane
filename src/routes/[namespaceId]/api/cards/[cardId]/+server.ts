@@ -128,6 +128,8 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
   return json({
     ok: true,
     stacking,
+    // The stored text after normalization, so the board can show exactly what was saved.
+    ...(content !== undefined && { content }),
     ...(refit?.moved && { inventory: { id: refit.moved.inventoryId, slot: refit.moved.slot } }),
     ...(refit && refit.placements.length > 0 && { placements: refit.placements }),
   });

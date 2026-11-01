@@ -64,6 +64,16 @@ export function optionalString(body: JsonRecord, key: string): string | undefine
   return value;
 }
 
+/**
+ * Read an optional reference such as an ID. Unlike {@link optionalString}, refuse `""`, which
+ * would otherwise read as "not given" and quietly fall back to a default.
+ */
+export function optionalId(body: JsonRecord, key: string): string | undefined {
+  const value = optionalString(body, key);
+  if (value === "") throw error(400, `${key} must be a non-empty string`);
+  return value;
+}
+
 export function optionalNumber(body: JsonRecord, key: string): number | undefined {
   const value = body[key];
   if (value === undefined) return undefined;

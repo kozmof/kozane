@@ -280,7 +280,8 @@ export async function defaultLayerIdForPartition({
   return row.id;
 }
 
-type AddCard = NeedsPartition & {
+type AddCardFields = {
+  partitionId: string;
   content: string;
   layerId?: string;
   taskspaceId?: string;
@@ -288,6 +289,8 @@ type AddCard = NeedsPartition & {
   posY?: number;
   zIndex?: number;
 };
+type AddCard = { db: DB } & AddCardFields;
+type AddCardInTx = NeedsTx & AddCardFields;
 /**
  * Create both card timestamps from one clock reading. Per-column defaults could cross a
  * second boundary and make a new card appear edited.
@@ -378,11 +381,19 @@ async function assertInventoriesMatchPartition({
 }
 
 /**
- * Insert one card. An explicit `layerId` or `taskspaceId` must be in the partition's
- * namespace. Run inside a
- * transaction when that check and the insert must not be split by another writer.
+ * Insert one card in its own transaction. Routes and commands that combine the insert with
+ * other writes call {@link addCardInTx}.
  */
-export async function addCard({
+export async function addCard({ db, ...fields }: AddCard): Promise<string> {
+  return withTx(db, (tx) => addCardInTx({ db: tx, ...fields }));
+}
+
+/**
+ * {@link addCard} inside a caller-owned transaction. An explicit `layerId` or `taskspaceId`
+ * must be in the partition's namespace. Requiring a transaction keeps that check and the
+ * insert atomic, so another writer cannot move the layer or taskspace in between.
+ */
+export async function addCardInTx({
   db,
   partitionId,
   content,
@@ -391,7 +402,7 @@ export async function addCard({
   posX,
   posY,
   zIndex,
-}: AddCard): Promise<string> {
+}: AddCardInTx): Promise<string> {
   if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
   if (taskspaceId !== undefined)
     await assertTaskspaceMatchesPartition({ db, partitionId, taskspaceId });

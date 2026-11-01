@@ -9,7 +9,7 @@ import {
   scopeTable,
 } from "../../db/schema.js";
 import {
-  addCard,
+  addCardInTx,
   addCards,
   onCanvas,
   reassignCardsToPartition,
@@ -102,7 +102,7 @@ export async function cardAdd(rawContent: string, options: CardAddOptions = {}):
       const partitionId = await resolvePartitionId(tx, namespaceId, options.partition);
       const layerId = await resolveLayerId(tx, namespaceId, options.layer);
       const scopeId = options.scope ? await resolveScopeId(tx, options.scope) : undefined;
-      const cardId = await addCard({
+      const cardId = await addCardInTx({
         db: tx,
         partitionId,
         layerId,

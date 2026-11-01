@@ -8,7 +8,7 @@
 
 import { withTx, type DB, type Tx } from "../tx.js";
 import {
-  addCard,
+  addCardInTx,
   newCardStamps,
   reassignPartitionCards,
   cardsBelongToNamespace,
@@ -83,7 +83,7 @@ async function createCardInTaskspaceContext({
       `Partition partitionId=${partitionId} in namespace namespaceId=${taskspace.namespaceId}`,
     );
   }
-  const cardId = await addCard({ db, partitionId, content, taskspaceId });
+  const cardId = await addCardInTx({ db, partitionId, content, taskspaceId });
   if (taskspace.scopeId) {
     await addScopeRel({ db, scopeId: taskspace.scopeId, cardId });
   }

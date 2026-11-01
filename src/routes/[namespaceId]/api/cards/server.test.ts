@@ -200,6 +200,20 @@ describe("POST /[namespaceId]/api/cards", () => {
     await expect(getAllCards({ db, partitionId })).resolves.toHaveLength(0);
   });
 
+  it.each(["scopeId", "layerId", "inventoryId"])(
+    "rejects an empty %s instead of falling back to a default",
+    async (key) => {
+      const { db, namespaceId, partitionId } = await setup();
+
+      await expectHttpRejection(
+        POST(event(db, namespaceId, jsonRequest({ partitionId, content: "Card", [key]: "" }))),
+        400,
+        `${key} must be a non-empty string`,
+      );
+      await expect(getAllCards({ db, partitionId })).resolves.toHaveLength(0);
+    },
+  );
+
   it("rejects blank card content", async () => {
     const { db, namespaceId, partitionId } = await setup();
 

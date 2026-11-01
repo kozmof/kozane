@@ -70,7 +70,7 @@ Create a card.
 
 Body fields are `partitionId` and `content` (required, text trimmed and non-blank),
 plus optional `posX`, `posY`, `zIndex` (integer), `scopeId`, `layerId`, and `inventoryId`.
-Omitting the layer uses the namespace default. Omitting `zIndex` stacks the card above every
+The three IDs must be non-empty when sent. Omitting the layer uses the namespace default. Omitting `zIndex` stacks the card above every
 card on its layer. Scope membership is atomic with creation.
 With `inventoryId`, the card is stored in that inventory's first free slot in the same
 transaction.
@@ -111,7 +111,8 @@ or null to follow `ui.defaultCardWidth`). Only changed text updates `updatedAt`.
 
 Changing layers stacks the card above destination cards. An explicit `zIndex`
 overrides that value. Return `{ ok: true, stacking: [{ cardId, zIndex }] }`,
-with empty `stacking` unless the layer changed.
+with empty `stacking` unless the layer changed. When `content` was sent, the response
+also carries the stored, trimmed `content`.
 
 New text can make a stored card cover cells another card holds. It then moves to the
 first place it fits, and the response adds `inventory: { id, slot }` for where it went.
