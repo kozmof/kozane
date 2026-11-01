@@ -25,6 +25,8 @@
     fontFamily: string;
     readonly: boolean;
     onCardMouseDown: (e: MouseEvent, cardId: string) => void;
+    /** Width covered by the partition panel at the left, which the dock stays clear of. */
+    leftInset?: number;
   };
 
   let {
@@ -36,6 +38,7 @@
     fontFamily,
     readonly,
     onCardMouseDown,
+    leftInset = 0,
   }: Props = $props();
 
   let cardById = $derived(new Map(s.cards.map((c) => [c.id, c])));
@@ -74,7 +77,8 @@
 
 {#if openInventories.length > 0}
   <div
-    class={css({ position: "absolute", top: "12px", left: "12px", zIndex: "52", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "calc(100% - 96px)", overflowY: "auto", overflowX: "hidden" })}
+    style:left="{12 + leftInset}px"
+    class={css({ position: "absolute", top: "12px", zIndex: "52", transition: "left 0.22s ease", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "calc(100% - 96px)", overflowY: "auto", overflowX: "hidden" })}
     data-inventory-dock
   >
     {#each openInventories as { inventory, cards } (inventory.id)}

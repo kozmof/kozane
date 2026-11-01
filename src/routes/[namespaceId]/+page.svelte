@@ -344,7 +344,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class={css({ display: "flex", height: "100vh", overflow: "hidden", backgroundColor: "ink.lighter" })}>
+<div class={css({ display: "flex", height: "100vh", overflow: "hidden", position: "relative", backgroundColor: "ink.lighter" })}>
   <PartitionSidebar
     visible={sidebarsVisible}
     panelWidth={data.uiConfig.leftPanelWidth}
@@ -423,6 +423,7 @@
       fontFamily={data.uiConfig.defaultFontFamily}
       {readonly}
       onCardMouseDown={(e, cardId) => canvasComponent.pressStowedCard(e, cardId)}
+      leftInset={sidebarsVisible ? data.uiConfig.leftPanelWidth : 0}
     />
 
     {#if filePaletteOpen}

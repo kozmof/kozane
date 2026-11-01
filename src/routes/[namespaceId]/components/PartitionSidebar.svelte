@@ -54,9 +54,14 @@
   }
 </script>
 
+<!-- Float over the left edge of the board, so opening the panel never moves the canvas. -->
 <aside
   class={css({
-    flexShrink: "0",
+    position: "absolute",
+    top: "0",
+    bottom: "0",
+    left: "0",
+    zIndex: "55",
     backgroundColor: "ink.light",
     display: "flex",
     flexDirection: "column",

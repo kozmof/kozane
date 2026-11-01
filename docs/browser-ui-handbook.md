@@ -115,7 +115,9 @@ A link icon in the footer marks glued cards.
 ## Layout
 
 The left panel holds partitions. It is hidden by default. Use the top-right
-panel button or press `b` to show or hide it. Scopes, taskspaces, and their
+panel button or press `b` to show or hide it. It opens over the board's left
+edge, so the canvas stays where it is. Open inventories move aside to stay clear
+of it. Scopes, taskspaces, and their
 files live in the [file browser](#the-file-browser), opened with `o`.
 
 Press `f` to toggle card footers, which show the partition, glue icon, and
