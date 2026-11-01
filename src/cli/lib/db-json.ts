@@ -5,6 +5,7 @@ import * as schema from "../../db/schema.js";
 import { chunked, INVENTORY_SLOT_MAX, NAME_MAX } from "../../lib/constants.js";
 import { plural } from "./plural.js";
 import { taskspacePathIssue } from "../../lib/server/taskspace-path.js";
+import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "../../db/pragmas.js";
 
 const EXPORT_KIND = "kozane.db.export";
 const EXPORT_VERSION = 9;
@@ -394,6 +395,25 @@ function validateDumpRefs(tables: TableRows): void {
     if (!namespaceIds.has(row.namespace_id as string))
       throw new Error(`scope_area ${row.id}: references unknown namespace_id ${row.namespace_id}`);
   }
+  // Every namespace needs exactly one default partition and one default layer. Cards created
+  // without a partition or layer go there, and deleting a partition or layer moves its cards
+  // there. Checked last so a dangling reference above is reported first.
+  for (const [label, rows] of [
+    ["partition", tables.partition],
+    ["layer", tables.layer],
+  ] as const) {
+    const defaults = new Map<string, number>();
+    for (const row of rows)
+      if (Number(row.is_default) === 1) {
+        const namespaceId = row.namespace_id as string;
+        defaults.set(namespaceId, (defaults.get(namespaceId) ?? 0) + 1);
+      }
+    for (const { id } of tables.namespace) {
+      const found = defaults.get(id as string) ?? 0;
+      if (found !== 1)
+        throw new Error(`namespace ${id}: must have exactly one default ${label}, found ${found}`);
+    }
+  }
 }
 
 /**
@@ -534,11 +554,10 @@ export async function importDbJson(
   const dump = parseDump(input);
   validateDumpRefs(dump.tables);
   validateDumpPaths(dump.tables, options);
-  const client = createClient({ url: dbUrl });
+  const client = createClient({ url: dbUrl, timeout: BUSY_TIMEOUT_MS });
 
   try {
-    await client.execute("PRAGMA busy_timeout = 5000");
-    await client.execute("PRAGMA foreign_keys = ON");
+    await applyConnectionPragmas(client, dbUrl);
     await client.execute("BEGIN");
     try {
       for (const table of [...TABLES].reverse()) {
@@ -558,7 +577,12 @@ export async function importDbJson(
 
       await client.execute("COMMIT");
     } catch (e) {
-      await client.execute("ROLLBACK");
+      // Report the failure that stopped the import, not a rollback failing after it.
+      try {
+        await client.execute("ROLLBACK");
+      } catch {
+        // SQLite may already have rolled back, for example after SQLITE_FULL.
+      }
       throw e;
     }
 

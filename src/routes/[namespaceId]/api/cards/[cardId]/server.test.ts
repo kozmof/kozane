@@ -214,12 +214,16 @@ describe("PATCH /[namespaceId]/api/cards/[cardId]", () => {
     const { id: layerId } = await addLayer({ db, namespaceId, name: "Draft" });
     await addCard({ db, partitionId, layerId, content: "Resident", zIndex: 7 });
 
-    await PATCH(event(db, namespaceId, cardId, jsonRequest({ layerId, zIndex: 2 })));
+    const response = await PATCH(
+      event(db, namespaceId, cardId, jsonRequest({ layerId, zIndex: 2 })),
+    );
 
     await expect(getCard({ db, partitionId, cardId })).resolves.toMatchObject({
       layerId,
       zIndex: 2,
     });
+    // The response reports the stored value, not the restack the explicit zIndex replaced.
+    await expect(response.json()).resolves.toMatchObject({ stacking: [{ cardId, zIndex: 2 }] });
   });
 
   it("answers an empty stacking list when the layer is unchanged", async () => {

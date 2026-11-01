@@ -258,6 +258,31 @@ async function inventoryConflicts(
   }
 }
 
+/**
+ * Namespaces missing their default partition or default layer. Every writer creates both with
+ * the namespace, but raw SQL or an older import can leave one out, and then adding a card
+ * without a partition or layer, or deleting one, fails.
+ */
+async function namespacesWithoutDefaults(
+  url: string,
+): Promise<{ partition: string[]; layer: string[] }> {
+  const { db, close } = await openDb(url);
+  try {
+    const missing = async (table: typeof partitionTable | typeof layerTable) =>
+      (
+        await db
+          .select({ id: namespaceTable.id })
+          .from(namespaceTable)
+          .where(
+            sql`NOT EXISTS (SELECT 1 FROM ${table} WHERE ${table.namespaceId} = ${namespaceTable.id} AND ${table.isDefault} = 1)`,
+          )
+      ).map(({ id }) => id);
+    return { partition: await missing(partitionTable), layer: await missing(layerTable) };
+  } finally {
+    close();
+  }
+}
+
 function check(label: string, ok: boolean, detail?: string): Check {
   return { label, ok, detail };
 }
@@ -453,7 +478,33 @@ export async function doctor(): Promise<void> {
     checks.push(check("Inventories consistent", consistent, detail));
   }
 
-  // 11. Port available
+  // 11. Report namespaces missing a default partition or layer. No command recreates them, so
+  // point at a backup.
+  if (dbOk && migrationOk) {
+    let complete = false;
+    let detail: string | undefined;
+    try {
+      const missing = await namespacesWithoutDefaults(workspaceDbUrl);
+      complete = missing.partition.length === 0 && missing.layer.length === 0;
+      const parts: string[] = [];
+      for (const label of ["partition", "layer"] as const) {
+        const ids = missing[label];
+        if (ids.length > 0)
+          parts.push(
+            `${plural(ids.length, "namespace")} without a default ${label}: ${nameSome({
+              total: ids.length,
+              named: ids.slice(0, NAMED_BAD_STAMPS),
+            })}`,
+          );
+      }
+      if (parts.length > 0) detail = `${parts.join("; ")}; restore a backup with kozane db restore`;
+    } catch (e) {
+      detail = e instanceof Error ? e.message : String(e);
+    }
+    checks.push(check("Namespace defaults present", complete, detail));
+  }
+
+  // 12. Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);

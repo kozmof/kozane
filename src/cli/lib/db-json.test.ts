@@ -482,6 +482,24 @@ describe("import reference validation", () => {
     }, "more than one namespace is marked as the default");
   });
 
+  it("rejects a namespace without a default partition", async () => {
+    await expectRejectedImport((tables) => {
+      tables.partition[0].is_default = 0;
+    }, "namespace namespace-1: must have exactly one default partition, found 0");
+  });
+
+  it("rejects a namespace without a default layer", async () => {
+    await expectRejectedImport((tables) => {
+      tables.layer[0].is_default = 0;
+    }, "namespace namespace-1: must have exactly one default layer, found 0");
+  });
+
+  it("rejects a namespace with two default layers", async () => {
+    await expectRejectedImport((tables) => {
+      tables.layer.push({ ...tables.layer[0], id: "layer-2", name: "Second" });
+    }, "namespace namespace-1: must have exactly one default layer, found 2");
+  });
+
   it("rejects a taskspace in an unknown namespace", async () => {
     await expectRejectedImport((tables) => {
       tables.taskspace[0].namespace_id = "namespace-missing";

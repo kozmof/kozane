@@ -17,6 +17,7 @@ import {
   reassignCardsToLayerInTx,
   onCanvas,
   inventoryColumns,
+  cardInventory,
   type CardStacking,
 } from "./card.js";
 import {
@@ -190,13 +191,17 @@ export async function squashNamespaceCard({
         zIndex: cardTable.zIndex,
         width: cardTable.width,
         inventoryId: cardTable.inventoryId,
+        inventorySlot: cardTable.inventorySlot,
       })
       .from(cardTable)
       .innerJoin(partitionTable, inNamespace)
       .where(eq(cardTable.id, cardId))
       .get();
     if (!source) return { ok: false, reason: "not-found" };
-    if (source.inventoryId !== null) return { ok: false, reason: "stored" };
+    // The same test the board uses, so a card with only one inventory column set, which it
+    // draws on the canvas, can be squashed like any other card there.
+    if (cardInventory(source.inventoryId, source.inventorySlot) !== null)
+      return { ok: false, reason: "stored" };
 
     const contents = splitCardContent(source.content);
     if (contents.length < 2) return { ok: false, reason: "indivisible" };

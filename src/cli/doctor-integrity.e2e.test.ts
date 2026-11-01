@@ -148,6 +148,21 @@ describe("kozane doctor — integrity and limits", () => {
     expect(result.stdout).toContain("✓  Database integrity");
   });
 
+  it("reports a namespace without a default partition or layer", async () => {
+    const root = initWorkspace();
+    expect(runCli(root, "doctor").stdout).toContain("✓  Namespace defaults present");
+
+    await withRawDb(root, async (client) => {
+      await client.execute("UPDATE layer SET is_default = 0");
+    });
+
+    const result = runCli(root, "doctor");
+    expect(result.stdout).toContain("✗  Namespace defaults present");
+    expect(result.stdout).toContain("1 namespace without a default layer");
+    expect(result.stdout).not.toContain("without a default partition");
+    expect(result.status).toBe(1);
+  });
+
   it("reports a card with only one inventory column set, and repair clears it", async () => {
     const root = initWorkspace();
     const { partitionId, layerId } = await defaults(root);

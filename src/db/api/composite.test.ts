@@ -707,6 +707,17 @@ describe("squashNamespaceCard", () => {
     expect(await getAllCards({ db, partitionId })).toHaveLength(1);
   });
 
+  it("squashes a card with only one inventory column set, which the board draws on the canvas", async () => {
+    const { db, namespaceId, cardId } = await squashSetup();
+    const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    // Raw SQL can leave this. No writer does.
+    await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, cardId));
+
+    const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });
+
+    expect(result.ok).toBe(true);
+  });
+
   it("lays the pieces out from where the card sat, the first one in its place", async () => {
     const { db, namespaceId, cardId } = await squashSetup();
 

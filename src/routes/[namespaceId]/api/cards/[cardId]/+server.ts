@@ -104,7 +104,14 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
         });
         // Both were checked above inside this transaction, so a refusal here is a bug.
         if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
-        stacking = moved.stacking;
+        // Report the value that ends up stored, so the board does not apply the restack an
+        // explicit zIndex replaces below.
+        stacking =
+          zIndex === undefined
+            ? moved.stacking
+            : moved.stacking.map((entry) =>
+                entry.cardId === cardId ? { ...entry, zIndex } : entry,
+              );
       }
 
       const rest = { newPartitionId, content, posX, posY, zIndex, width };
