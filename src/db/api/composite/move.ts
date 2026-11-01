@@ -72,8 +72,7 @@ async function remapCardsByName({
  *
  * Arriving cards are restacked above each destination layer's cards, as a layer move is.
  * A card whose taskspace is placed in another namespace loses that link, because a placed
- * taskspace only originates cards in its own namespace (see
- * {@link createCardFromTaskspace}).
+ * taskspace only links cards in its own namespace (see `addCardInTx`).
  */
 export async function moveCardsToNamespace({
   db,

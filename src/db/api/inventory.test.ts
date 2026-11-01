@@ -290,7 +290,7 @@ describe("tall cards", () => {
     });
 
     const moved = { cardId: grows, inventoryId: inventory.id, slot: 1 };
-    expect(refit).toEqual({ moved, placements: [moved] });
+    expect(refit).toEqual({ ok: true, moved, placements: [moved] });
     expect((await placement(db, grows)).inventorySlot).toBe(1);
     expect((await placement(db, below)).inventorySlot).toBe(6);
   });
@@ -301,13 +301,65 @@ describe("tall cards", () => {
     const loose = await card("loose");
     await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [stored], slot: 0 });
 
-    const unmoved = { moved: null, placements: [] };
+    const unmoved = { ok: true, moved: null, placements: [] };
     expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: stored }))).toEqual(
       unmoved,
     );
     expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: loose }))).toEqual(
       unmoved,
     );
+  });
+
+  /**
+   * A tall card covering the last slot overlaps a card stored there by an older layout. The
+   * repair can only move that card forward, past the last slot.
+   */
+  async function overlapAtLastSlot() {
+    const ctx = await setup();
+    const { db, inventory, card } = ctx;
+    const tall = await card(long);
+    const last = await card("last");
+    for (const [cardId, slot] of [
+      [tall, INVENTORY_SLOT_MAX - INVENTORY_COLUMNS],
+      [last, INVENTORY_SLOT_MAX],
+    ] as const)
+      await db
+        .update(cardTable)
+        .set({ inventoryId: inventory.id, inventorySlot: slot })
+        .where(eq(cardTable.id, cardId));
+    return { ...ctx, last };
+  }
+
+  it("refuses a refit whose repair would pass the last slot, writing nothing", async () => {
+    const { db, inventory, card, last } = await overlapAtLastSlot();
+    const edited = await card("edited");
+    // Stored directly, since a stow would run the same repair and be refused.
+    await db
+      .update(cardTable)
+      .set({ inventoryId: inventory.id, inventorySlot: 0 })
+      .where(eq(cardTable.id, edited));
+
+    expect(await withTx(db, (tx) => refitStoredCardInTx({ db: tx, cardId: edited }))).toEqual({
+      ok: false,
+      reason: "inventory-full",
+    });
+    expect((await placement(db, last)).inventorySlot).toBe(INVENTORY_SLOT_MAX);
+  });
+
+  it("refuses a stow whose repair would pass the last slot", async () => {
+    const { db, namespaceId, inventory, card, last } = await overlapAtLastSlot();
+    const incoming = await card("incoming");
+
+    expect(
+      await stowCards({
+        db,
+        namespaceId,
+        inventoryId: inventory.id,
+        cardIds: [incoming],
+        slot: 0,
+      }),
+    ).toEqual({ ok: false, reason: "inventory-full" });
+    expect((await placement(db, last)).inventorySlot).toBe(INVENTORY_SLOT_MAX);
   });
 });
 
@@ -537,6 +589,7 @@ describe("a write to an overlapping inventory", () => {
       await updateCardInTx({ db: tx, cardId: edited, partitionId, content: "cc" });
       return refitStoredCardInTx({ db: tx, cardId: edited });
     });
+    if (!refit.ok) throw new Error(`refit refused: ${refit.reason}`);
 
     expect((await placement(db, below)).inventorySlot).toBe(INVENTORY_COLUMNS + 1);
     expect(refit.moved).not.toBeNull();

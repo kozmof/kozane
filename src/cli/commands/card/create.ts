@@ -9,7 +9,7 @@ import {
   namespaceTable,
   scopeTable,
 } from "../../../db/schema.js";
-import { addCardInTx, addCards, onCanvas } from "../../../db/api/card.js";
+import { addCardInTx, addCardsInTx, onCanvas } from "../../../db/api/card.js";
 import { getAllLayers } from "../../../db/api/layer.js";
 import { addScopeRel, addScopeRels } from "../../../db/api/scope-rel.js";
 import { shortId, shortIdMap } from "../../lib/short-id.js";
@@ -140,7 +140,7 @@ export async function cardSquash(
     });
     const { inventory, ids } = await withTx(db, async (tx) => {
       const inventory = await addSquashInventoryInTx({ db: tx, namespaceId, ...origin });
-      const cardIds = await addCards({
+      const cardIds = await addCardsInTx({
         db: tx,
         partitionId,
         layerId,

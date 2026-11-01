@@ -19,6 +19,7 @@ import {
   requireString,
 } from "../../../lib/request.js";
 import { apiHandler } from "../../../lib/api-handler.js";
+import { rejectBatch } from "../../../lib/rejection.js";
 
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
@@ -120,7 +121,10 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
       // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
       // the first free slot and return every changed position, including repaired neighbours,
       // so the board can update immediately.
-      const refit = content === undefined ? null : await refitStoredCardInTx({ db: tx, cardId });
+      if (content === undefined) return { stacking, refit: null };
+      const refit = await refitStoredCardInTx({ db: tx, cardId });
+      // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
+      if (!refit.ok) rejectBatch(refit.reason);
       return { stacking, refit };
     },
   );

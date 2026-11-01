@@ -56,8 +56,9 @@ export function startSnapshotPoll({
       // A 304 response means the board is current.
       if (response.status === 304) return;
       if (!response.ok) return;
-      // Validate the response before applying it. Preserve the current board and leave the
-      // ETag unset when parsing fails so the next poll requests a full snapshot.
+      // Validate the response before applying it. Preserve the current board and keep the
+      // previous ETag when parsing fails. It no longer matches, so the next poll still gets
+      // the full snapshot.
       const snapshot = readNamespaceSnapshot(await response.json());
       if (!snapshot) return;
       // Discard responses for a namespace left during the request. The next poll targets the

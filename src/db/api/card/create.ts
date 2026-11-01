@@ -15,6 +15,7 @@ import { NotFoundError, columnCount, readByIds } from "../utils.js";
 import { withTx, type DB } from "../../tx.js";
 import { defaultLayerIdForPartition } from "./read.js";
 import { inventoryColumns } from "./placement.js";
+import { nextLayerZIndexInTx } from "./stacking.js";
 
 type AddCardFields = {
   partitionId: string;
@@ -128,6 +129,9 @@ export async function addCard({ db, ...fields }: AddCard): Promise<string> {
  * {@link addCard} inside a caller-owned transaction. An explicit `layerId` or `taskspaceId`
  * must be in the partition's namespace. Requiring a transaction keeps that check and the
  * insert atomic, so another writer cannot move the layer or taskspace in between.
+ *
+ * An omitted `zIndex` puts the card above every card on its layer, as the board does, so
+ * cards added from the CLI do not land underneath existing ones.
  */
 export async function addCardInTx({
   db,
@@ -142,23 +146,25 @@ export async function addCardInTx({
   if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
   if (taskspaceId !== undefined)
     await assertTaskspaceMatchesPartition({ db, partitionId, taskspaceId });
+  const resolvedLayerId = layerId ?? (await defaultLayerIdForPartition({ db, partitionId }));
   const [row] = await db
     .insert(cardTable)
     .values({
       ...newCardStamps(),
       partitionId,
-      layerId: layerId ?? (await defaultLayerIdForPartition({ db, partitionId })),
+      layerId: resolvedLayerId,
       content,
       taskspaceId,
       ...(posX !== undefined && { posX }),
       ...(posY !== undefined && { posY }),
-      ...(zIndex !== undefined && { zIndex }),
+      zIndex: zIndex ?? (await nextLayerZIndexInTx({ db, layerId: resolvedLayerId })),
     })
     .returning({ id: cardTable.id });
   return row.id;
 }
 
-type AddCards = NeedsPartition & {
+type AddCardsFields = {
+  partitionId: string;
   layerId: string;
   cards: {
     content: string;
@@ -168,15 +174,31 @@ type AddCards = NeedsPartition & {
     inventory?: NonNullable<CardData["inventory"]>;
   }[];
 };
+type AddCards = { db: DB } & AddCardsFields;
+type AddCardsInTx = NeedsTx & AddCardsFields;
 
 /**
- * Insert cards into one partition and layer using {@link chunked} statements. Any inventory
- * named must be in the partition's namespace. Return IDs in
- * input order.
- *
- * Require a resolved `layerId` to avoid a default-layer lookup for each chunk.
+ * Insert cards in their own transaction. Commands that combine the insert with other writes
+ * call {@link addCardsInTx}.
  */
-export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
+export async function addCards({ db, ...fields }: AddCards): Promise<string[]> {
+  return withTx(db, (tx) => addCardsInTx({ db: tx, ...fields }));
+}
+
+/**
+ * Insert cards into one partition and layer using {@link chunked} statements, stacked above
+ * the layer's cards in input order. Any inventory named must be in the partition's namespace.
+ * Return IDs in input order.
+ *
+ * Require a resolved `layerId` to avoid a default-layer lookup for each chunk. Requiring a
+ * transaction keeps the stacking read and the inserts atomic.
+ */
+export async function addCardsInTx({
+  db,
+  partitionId,
+  layerId,
+  cards,
+}: AddCardsInTx): Promise<string[]> {
   if (cards.length === 0) return [];
   await assertLayerMatchesPartition({ db, partitionId, layerId });
   await assertInventoriesMatchPartition({
@@ -186,6 +208,7 @@ export async function addCards({ db, partitionId, layerId, cards }: AddCards): P
   });
   // Share one timestamp across all chunks. See {@link newCardStamps}.
   const stamps = newCardStamps();
+  let zIndex = await nextLayerZIndexInTx({ db, layerId });
   const ids: string[] = [];
   for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
     const rows = await db
@@ -196,6 +219,7 @@ export async function addCards({ db, partitionId, layerId, cards }: AddCards): P
           partitionId,
           layerId,
           ...card,
+          zIndex: zIndex++,
           ...inventoryColumns(inventory ?? null),
         })),
       )

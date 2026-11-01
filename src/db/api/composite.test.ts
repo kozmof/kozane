@@ -6,12 +6,7 @@ import {
   seedCards,
   SQLITE_VARIABLE_MAX,
 } from "../../test-utils/db.js";
-import {
-  createCardFromTaskspace,
-  deleteNamespaceCards,
-  moveCardsToNamespace,
-  squashNamespaceCard,
-} from "./composite.js";
+import { deleteNamespaceCards, moveCardsToNamespace, squashNamespaceCard } from "./composite.js";
 import { deletePartitionWithReassign, deleteLayerWithReassign } from "./composite.js";
 import { addNamespace } from "./namespace.js";
 import { addPartition, getAllPartitions, getPartition } from "./partition.js";
@@ -124,124 +119,6 @@ describe("deleteNamespaceCards", () => {
       ok: true,
     });
     expect(await getAllCards({ db, partitionId })).toEqual([]);
-  });
-});
-
-describe("createCardFromTaskspace context rules", () => {
-  it("creates a card and returns its id", async () => {
-    const { db, namespaceId, partitionId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "Hi",
-    });
-    expect(cardId).toBeTruthy();
-  });
-
-  it("card is stored in the correct partition with the taskspaceId set", async () => {
-    const { db, namespaceId, partitionId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "Content",
-    });
-    const card = await getCard({ db, partitionId, cardId });
-    expect(card?.content).toBe("Content");
-    expect(card?.taskspaceId).toBe(wcId);
-  });
-
-  it("auto-adds the card to the scope when taskspace has a scope", async () => {
-    const { db, namespaceId, partitionId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "Scoped",
-    });
-    const scopeCards = await getAllCardsByScope({ db, scopeId });
-    expect(scopeCards.map((c) => c.id)).toContain(cardId);
-  });
-
-  it("does NOT add to scope when taskspace has no scope", async () => {
-    const { db, namespaceId, partitionId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId });
-
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "X",
-    });
-
-    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
-    const scopeCards = await getAllCardsByScope({ db, scopeId });
-    expect(scopeCards.map((c) => c.id)).not.toContain(cardId);
-  });
-
-  it("throws NotFoundError for a missing taskspaceId", async () => {
-    const { db, partitionId } = await setup();
-    await expect(
-      createCardFromTaskspace({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
-    ).rejects.toThrow(NotFoundError);
-  });
-
-  it("throws NotFoundError for a partition outside the taskspace's namespace", async () => {
-    const { db, namespaceId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const otherNs = await addNamespace({ db, name: "Q" });
-    await addLayer({ db, namespaceId: otherNs, name: "Base", isDefault: true });
-    const foreignPartition = await addPartition({ db, namespaceId: otherNs, name: "F" });
-
-    await expect(
-      createCardFromTaskspace({
-        db,
-        taskspaceId: wcId,
-        partitionId: foreignPartition,
-        content: "Hi",
-      }),
-    ).rejects.toThrow(NotFoundError);
-    expect(await getAllCards({ db, partitionId: foreignPartition })).toHaveLength(0);
-  });
-
-  it("accepts any partition for a taskspace with no namespace", async () => {
-    const { db, partitionId } = await setup();
-    const wcId = await addTaskspace({ db });
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "Hi",
-    });
-    expect(await getCard({ db, partitionId, cardId })).toBeDefined();
-  });
-});
-
-// The transaction uses a separate connection from the in-memory fixture. Check that the
-// wrapper resolves.
-describe("createCardFromTaskspace", () => {
-  it("returns a card id", async () => {
-    const { db, namespaceId, partitionId, scopeId } = await setup();
-    const wcId = await addTaskspace({ db, namespaceId, scopeId });
-    const cardId = await createCardFromTaskspace({
-      db,
-      taskspaceId: wcId,
-      partitionId,
-      content: "Tx",
-    });
-    expect(typeof cardId).toBe("string");
-    expect(cardId.length).toBeGreaterThan(0);
-  });
-
-  it("throws NotFoundError for a missing taskspaceId", async () => {
-    const { db, partitionId } = await setup();
-    await expect(
-      createCardFromTaskspace({ db, taskspaceId: "ghost", partitionId, content: "Hi" }),
-    ).rejects.toThrow(NotFoundError);
   });
 });
 

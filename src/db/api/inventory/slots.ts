@@ -2,10 +2,11 @@
 import { cardTable } from "../../schema.js";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { NeedsTx } from "../types.js";
-import { BATCH_MAX, chunked } from "../../../lib/constants.js";
+import { BATCH_MAX, INVENTORY_SLOT_MAX, chunked } from "../../../lib/constants.js";
 import {
   INVENTORY_SPAN_SOURCE_CHARS,
   cardSpan,
+  lastCell,
   planRepair,
   type Footprint,
   type SlotPlacement,
@@ -86,6 +87,17 @@ export function mergedPlans(
 ): SlotPlacement[] {
   const final = new Map([...first, ...then].map(({ cardId, slot }) => [cardId, slot]));
   return [...final].map(([cardId, slot]) => ({ cardId, slot }));
+}
+
+/**
+ * Whether any planned card would cover a cell past {@link INVENTORY_SLOT_MAX}. `spans` must
+ * size every card in `plan`. Check before writing, so a refusal leaves the inventory as it was.
+ */
+export function passesSlotMax(
+  plan: readonly SlotPlacement[],
+  spans: ReadonlyMap<string, number>,
+): boolean {
+  return plan.some(({ cardId, slot }) => lastCell(slot, spans.get(cardId)!) > INVENTORY_SLOT_MAX);
 }
 
 /** `held` with planned slots applied to the cards named in `plan`. */

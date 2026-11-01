@@ -40,6 +40,28 @@ async function setup() {
   return { db, namespaceId, partitionId };
 }
 
+describe("addCard stacking", () => {
+  it("puts a card with no zIndex above every card on its layer", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const layerId = await defaultLayerIdForPartition({ db, partitionId });
+    await addCard({ db, partitionId, content: "High", layerId, zIndex: 12 });
+    // A card on another layer does not count.
+    const { id: other } = await addLayer({ db, namespaceId, name: "Other" });
+    await addCard({ db, partitionId, content: "Elsewhere", layerId: other, zIndex: 50 });
+
+    const cardId = await addCard({ db, partitionId, content: "New" });
+    expect(await getCard({ db, partitionId, cardId })).toMatchObject({ layerId, zIndex: 13 });
+  });
+
+  it("starts an empty layer at 1 and keeps an explicit zIndex", async () => {
+    const { db, partitionId } = await setup();
+    const first = await addCard({ db, partitionId, content: "First" });
+    const pinned = await addCard({ db, partitionId, content: "Pinned", zIndex: 0 });
+    expect(await getCard({ db, partitionId, cardId: first })).toMatchObject({ zIndex: 1 });
+    expect(await getCard({ db, partitionId, cardId: pinned })).toMatchObject({ zIndex: 0 });
+  });
+});
+
 describe("addCards", () => {
   it("returns nothing for an empty list, without touching the database", async () => {
     const { db, partitionId } = await setup();
@@ -84,6 +106,23 @@ describe("addCards", () => {
     const stored = await getAllCards({ db, partitionId });
     const byId = new Map(stored.map((card) => [card.id, card]));
     expect(ids.map((id) => byId.get(id)?.content)).toEqual(cards.map(({ content }) => content));
+  });
+
+  it("stacks the new cards above the layer in input order", async () => {
+    const { db, partitionId } = await setup();
+    const layerId = await defaultLayerIdForPartition({ db, partitionId });
+    await addCard({ db, partitionId, content: "Resident", layerId, zIndex: 7 });
+    const ids = await addCards({
+      db,
+      partitionId,
+      layerId,
+      cards: [
+        { content: "first", posX: 0, posY: 0 },
+        { content: "second", posX: 0, posY: 0 },
+      ],
+    });
+    const stacked = await Promise.all(ids.map((cardId) => getCard({ db, partitionId, cardId })));
+    expect(stacked.map((card) => card?.zIndex)).toEqual([8, 9]);
   });
 
   it("stores cards in an inventory of the partition's namespace", async () => {
@@ -264,7 +303,7 @@ describe("getCardMarkersByNamespaces", () => {
   it("returns the position, stacking and content of every card in the named namespaces", async () => {
     const { db, namespaceId, partitionId } = await setup();
     const b2 = await addPartition({ db, namespaceId, name: "Second" });
-    await addCard({ db, partitionId, content: "In b1", posX: 24, posY: 48 });
+    await addCard({ db, partitionId, content: "In b1", posX: 24, posY: 48, zIndex: 0 });
     await addCard({ db, partitionId: b2, content: "In b2", posX: 96, posY: 96, zIndex: 3 });
 
     const markers = await getCardMarkersByNamespaces({ db, namespaceIds: [namespaceId] });
@@ -298,7 +337,14 @@ describe("getCardMarkersByNamespaces", () => {
   // Pin the width used to calculate warp distance.
   it("carries the width of a card that has been resized", async () => {
     const { db, namespaceId, partitionId } = await setup();
-    const cardId = await addCard({ db, partitionId, content: "Wide", posX: 24, posY: 48 });
+    const cardId = await addCard({
+      db,
+      partitionId,
+      content: "Wide",
+      posX: 24,
+      posY: 48,
+      zIndex: 0,
+    });
     await updateCard({ db, cardId, partitionId, width: 420 });
 
     const markers = await getCardMarkersByNamespaces({ db, namespaceIds: [namespaceId] });

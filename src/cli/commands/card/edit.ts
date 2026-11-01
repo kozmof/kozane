@@ -99,7 +99,11 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
     // two writes share one transaction.
     const refit = await withTx(db, async (tx) => {
       await updateCardInTx({ db: tx, cardId, partitionId: row.partitionId, content });
-      return refitStoredCardInTx({ db: tx, cardId });
+      const result = await refitStoredCardInTx({ db: tx, cardId });
+      // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
+      if (!result.ok)
+        throw new Error("The longer text does not fit anywhere in the card's inventory.");
+      return result;
     });
     console.log("Card updated.");
     console.log(`  id: ${shortId(cardId, allIds)}`);

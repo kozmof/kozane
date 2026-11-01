@@ -2,9 +2,7 @@
 import { cardTable, inventoryTable } from "../../schema.js";
 import { and, eq, inArray } from "drizzle-orm";
 import type { NeedsNamespace, NeedsNamespaceInventory } from "../types.js";
-import { INVENTORY_SLOT_MAX } from "../../../lib/constants.js";
 import {
-  lastCell,
   planRefit,
   planRepair,
   planStow,
@@ -19,6 +17,7 @@ import { withTx, type DB, type Tx } from "../../tx.js";
 import {
   heldFootprints,
   mergedPlans,
+  passesSlotMax,
   releaseCardsInTx,
   settledFootprints,
   sizedCards,
@@ -35,8 +34,15 @@ export type Refit = {
 };
 
 /**
+ * Refusal for a refit. `inventory-full` means the card's new size fits nowhere before
+ * {@link INVENTORY_SLOT_MAX}, as {@link stowCardsInTx} refuses.
+ */
+export type RefitResult = BatchResult<"inventory-full", Refit>;
+
+/**
  * Move an edited stored card to the first available slot if its new size overlaps another
- * card. Call this inside the transaction that changed the text.
+ * card. Call this inside the transaction that changed the text, and roll it back on a
+ * refusal: nothing is written then, so the text change would leave the card overlapping.
  */
 export async function refitStoredCardInTx({
   db: tx,
@@ -44,13 +50,13 @@ export async function refitStoredCardInTx({
 }: {
   db: Tx;
   cardId: string;
-}): Promise<Refit> {
+}): Promise<RefitResult> {
   const card = await tx
     .select({ inventoryId: cardTable.inventoryId })
     .from(cardTable)
     .where(eq(cardTable.id, cardId))
     .get();
-  if (!card?.inventoryId) return { moved: null, placements: [] };
+  if (!card?.inventoryId) return { ok: true, moved: null, placements: [] };
   const { inventoryId } = card;
   // Repair the rest first, leaving this card to the refit, so its longer text moves it rather
   // than the neighbour it now covers.
@@ -60,8 +66,11 @@ export async function refitStoredCardInTx({
   // moves this card, and both go in one write, which frees every slot before filling any.
   const [moved]: SlotPlacement[] = planRefit(withSlots(held, repaired), cardId);
   const plan = moved ? [...repaired, moved] : repaired;
+  const spans = new Map(held.map(({ cardId: id, span }) => [id, span]));
+  if (passesSlotMax(plan, spans)) return { ok: false, reason: "inventory-full" };
   if (plan.length > 0) await writePlacements(tx, inventoryId, plan);
   return {
+    ok: true,
     moved: moved ? { ...moved, inventoryId } : null,
     placements: plan.map((p) => ({ ...p, inventoryId })),
   };
@@ -121,14 +130,12 @@ export async function stowCardsInTx({
   const moving = await sizedCards(tx, unique);
   const plan = planStow(held, moving, slot);
   const spans = new Map([...held, ...moving].map(({ cardId, span }) => [cardId, span]));
-  // Checked before anything is written, so a refusal leaves the inventory as it was, overlap
-  // and all, rather than committing half the work.
-  if (plan.some(({ cardId, slot: at }) => lastCell(at, spans.get(cardId)!) > INVENTORY_SLOT_MAX))
-    return { ok: false, reason: "inventory-full" };
-
   // The repair and the stow go in one write. A card the repair moved and the plan then moved
   // again is named once, where it ended up.
   const final = mergedPlans(repaired, plan);
+  // Check the whole write, repairs included, before anything is written, so a refusal leaves
+  // the inventory as it was, overlap and all, rather than committing half the work.
+  if (passesSlotMax(final, spans)) return { ok: false, reason: "inventory-full" };
   await writePlacements(tx, inventoryId, final);
 
   const heldIds = new Set(held.map(({ cardId }) => cardId));
