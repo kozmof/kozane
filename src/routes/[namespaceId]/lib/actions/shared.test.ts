@@ -49,3 +49,11 @@ describe("restoreField", () => {
     expect(restored.map((c) => c.partitionId)).toEqual(["p1", "p2"]);
   });
 });
+
+describe("rollback field types", () => {
+  it("refuse object fields, which `===` could never match after a copy", () => {
+    // @ts-expect-error `inventory` holds an object.
+    void (() => fieldSnapshot([], [], "inventory"));
+    expect(fieldSnapshot([], [], "layerId").size).toBe(0);
+  });
+});

@@ -2,7 +2,10 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { getDBURL } from "./internal/config.js";
-import { isMemoryDbUrl } from "../lib/db-url.js";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileDbUrl, isMemoryDbUrl } from "../lib/db-url.js";
 import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "./pragmas.js";
 import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
@@ -18,17 +21,40 @@ export { withTx, withReadTx } from "./tx.js";
 export type OpenedDb = { db: DB; close: () => void };
 
 export async function openDb(url: string): Promise<OpenedDb> {
+  if (isMemoryDbUrl(url)) return openTemporaryDb();
   // Set the client timeout for new connections after the transaction. A connection-local
   // pragma is insufficient.
   const client = createClient({ url, timeout: BUSY_TIMEOUT_MS });
   await applyConnectionPragmas(client, url);
-  const db = drizzle(client, { schema });
+  return { db: brandDb(drizzle(client, { schema })), close: () => client.close() };
+}
 
-  if (isMemoryDbUrl(url)) {
-    await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
+/**
+ * Serve an in-memory URL from a fresh file that is deleted on close. libsql hands its
+ * connection to each transaction and opens a new one afterwards, and a new `:memory:`
+ * connection is a separate, empty database, so everything would vanish after the first
+ * transaction. `kozane open --memory` uses a temporary file for the same reason.
+ */
+async function openTemporaryDb(): Promise<OpenedDb> {
+  const dir = mkdtempSync(join(tmpdir(), "kozane-memory-db-"));
+  const remove = () => rmSync(dir, { recursive: true, force: true });
+  try {
+    const opened = await openDb(fileDbUrl(join(dir, "kozane.db")));
+    await migrate(opened.db, { migrationsFolder: resolveMigrationsFolder() });
+    return {
+      db: opened.db,
+      close: () => {
+        try {
+          opened.close();
+        } finally {
+          remove();
+        }
+      },
+    };
+  } catch (e) {
+    remove();
+    throw e;
   }
-
-  return { db: brandDb(db), close: () => client.close() };
 }
 
 let _dbPromise: Promise<DB> | null = null;

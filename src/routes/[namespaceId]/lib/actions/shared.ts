@@ -4,10 +4,20 @@ import { readArray, readFiniteNumber, readString } from "../response.js";
 /** Optimistic-update helpers shared by the board's action modules. */
 
 /**
+ * Card fields holding a primitive value. {@link restoreField} compares values with `===`, which
+ * never matches a copied object such as `inventory`, so a rollback of one would do nothing.
+ */
+export type ScalarCardField = {
+  [K in keyof CardWithGlue]-?: CardWithGlue[K] extends string | number | boolean | null | undefined
+    ? K
+    : never;
+}[keyof CardWithGlue];
+
+/**
  * Roll back only the affected cards and fields against current state. Restoring a captured
  * array would also undo unrelated edits completed while the failed request was in flight.
  */
-export function fieldSnapshot<K extends keyof CardWithGlue>(
+export function fieldSnapshot<K extends ScalarCardField>(
   cards: CardWithGlue[],
   cardIds: Iterable<string>,
   field: K,
@@ -23,7 +33,7 @@ export function fieldSnapshot<K extends keyof CardWithGlue>(
  * `applied`, the value the failed change set, so a later change to the same card that was
  * made while the request was in flight is kept.
  */
-export function restoreField<K extends keyof CardWithGlue>(
+export function restoreField<K extends ScalarCardField>(
   cards: CardWithGlue[],
   field: K,
   previous: Map<string, CardWithGlue[K]>,

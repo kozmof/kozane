@@ -27,7 +27,7 @@ function whereaboutsOf(cards: CardWithGlue[], cardIds: Iterable<string>): Map<st
 
 /**
  * Restore only the named cards, against current state, so edits that finished while the
- * request was in flight are kept. See `fieldSnapshot` in `namespace-actions`.
+ * request was in flight are kept. See `fieldSnapshot` in `actions/shared.ts`.
  */
 function restored(cards: CardWithGlue[], previous: Map<string, Whereabouts>): CardWithGlue[] {
   return cards.map((card) => {
