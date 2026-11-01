@@ -218,16 +218,18 @@ export const cardTable = sqliteTable(
     /**
      * The inventory the card is stored in, or null while it is on the canvas. Deleting an
      * inventory goes through `deleteInventory`, which clears both columns itself. The
-     * `set null` here is the fallback for any other path.
+     * `set null` here is the fallback for any other path, and a trigger from migration 0019
+     * clears the slot with it.
      */
     inventoryId: text("inventory_id").references(() => inventoryTable.id, {
       onDelete: "set null",
       onUpdate: "cascade",
     }),
     /**
-     * Slot index within the inventory, counted left to right and top to bottom. Readers treat
-     * a card as stored only when both inventory fields are set. Writers clear both together, since
-     * SQLite cannot add a CHECK to an existing table without rebuilding it.
+     * Slot index within the inventory, counted left to right and top to bottom. Both inventory
+     * fields are set or both are null. SQLite cannot add a CHECK to an existing table without
+     * rebuilding it, so triggers from migration 0019 refuse a write that sets only one. Readers
+     * still treat a card as stored only when both are set, for rows written before 0019.
      */
     inventorySlot: integer("inventory_slot"),
     content: text().notNull(),
@@ -241,8 +243,9 @@ export const cardTable = sqliteTable(
     /** A null card width follows the configured default. */
     width: integer(),
     /**
-     * Migration 0011 leaves `DEFAULT 0` on both database columns. Raw SQL inserts that omit
-     * them therefore produce epoch timestamps, which `kozane doctor` reports.
+     * Migration 0011 leaves `DEFAULT 0` on both database columns. Since migration 0019, a
+     * trigger stamps raw SQL inserts that omit them with the insert time. Epoch timestamps from
+     * before 0019 can remain, and `kozane doctor` reports them.
      *
      * Application writers set both timestamps explicitly from one clock reading, and batch
      * writers share that reading across all rows. The `$defaultFn` is a fallback called

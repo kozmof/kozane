@@ -1,6 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDB, seedCards, SQLITE_VARIABLE_MAX } from "../../test-utils/db.js";
+import {
+  createTestDB,
+  dropCardGuards,
+  seedCards,
+  SQLITE_VARIABLE_MAX,
+} from "../../test-utils/db.js";
 import {
   createCardFromTaskspace,
   deleteNamespaceCards,
@@ -710,7 +715,8 @@ describe("squashNamespaceCard", () => {
   it("squashes a card with only one inventory column set, which the board draws on the canvas", async () => {
     const { db, namespaceId, cardId } = await squashSetup();
     const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
-    // Raw SQL can leave this. No writer does.
+    // A database from before migration 0019 can hold this. No writer leaves it.
+    await dropCardGuards(db);
     await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, cardId));
 
     const result = await squashNamespaceCard({ db, namespaceId, cardId, ...CANVAS });

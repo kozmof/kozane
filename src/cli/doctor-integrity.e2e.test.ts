@@ -5,6 +5,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
+import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
 
 /**
  * Test `kozane doctor` through the CLI, including SQLite integrity checks and reports of rows
@@ -172,6 +173,8 @@ describe("kozane doctor — integrity and limits", () => {
         sql: INSERT_CARD,
         args: ["half-placed", partitionId, layerId, "halfway", 0],
       });
+      // Migration 0019 refuses such a row. A database from before it can still hold one.
+      for (const statement of DROP_CARD_GUARDS_SQL) await client.execute(statement);
       await client.execute("UPDATE card SET inventory_slot = 4 WHERE id = 'half-placed'");
     });
 

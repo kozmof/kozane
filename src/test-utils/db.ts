@@ -25,6 +25,27 @@ export async function createTestDB(dbPath?: string): Promise<DB> {
   return db;
 }
 
+/** Triggers migration 0019 adds to `card`. */
+export const CARD_GUARD_TRIGGERS = [
+  "card_inventory_pair_insert",
+  "card_inventory_pair_update",
+  "card_inventory_clear_slot",
+  "card_stamp_missing_timestamps",
+] as const;
+
+/** Statements that remove the 0019 triggers, for raw clients outside Drizzle. */
+export const DROP_CARD_GUARDS_SQL = CARD_GUARD_TRIGGERS.map(
+  (name) => `DROP TRIGGER IF EXISTS \`${name}\``,
+);
+
+/**
+ * Remove the 0019 triggers so a test can write the rows a database from before them may
+ * still hold, such as a card with only one inventory column set.
+ */
+export async function dropCardGuards(db: AnyDB): Promise<void> {
+  for (const statement of DROP_CARD_GUARDS_SQL) await db.run(sql.raw(statement));
+}
+
 /**
  * SQLite's bound-parameter limit, checked against the driver. Tests that exceed it distinguish
  * namespace queries from queries that bind a list of card IDs.

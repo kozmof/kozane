@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { createTestDB } from "../../test-utils/db.js";
+import { createTestDB, dropCardGuards } from "../../test-utils/db.js";
 import { cardTable } from "../schema.js";
 import {
   addInventory,
@@ -370,6 +370,7 @@ describe("takeCards", () => {
   it("treats a card with only inventory_id set as on the canvas, as the board draws it", async () => {
     const { db, namespaceId, inventory, card } = await setup();
     const half = await card("half", 30, 40);
+    await dropCardGuards(db);
     await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, half));
 
     expect(await takeCards({ db, namespaceId, cards: [{ cardId: half }] })).toEqual({
@@ -462,6 +463,7 @@ describe("repairInventories", () => {
     const { db, inventory, card } = await setup();
     const noSlot = await card("no slot");
     const noInventory = await card("no inventory");
+    await dropCardGuards(db);
     await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, noSlot));
     await db.update(cardTable).set({ inventorySlot: 2 }).where(eq(cardTable.id, noInventory));
 

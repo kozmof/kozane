@@ -5,6 +5,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createRequire } from "node:module";
 import { createClient } from "@libsql/client";
 import { afterEach, describe, expect, it } from "vitest";
+import { DROP_CARD_GUARDS_SQL } from "../test-utils/db.js";
 
 /**
  * Test `kozane card list --sort` against a workspace created by `kozane init`. Set timestamps
@@ -286,6 +287,8 @@ describe("kozane card list --sort", () => {
           // Drop `scope_area` so migration 0016 can recreate it after its journal entry is
           // removed. Its indexes disappear with it.
           "DROP TABLE IF EXISTS scope_area",
+          // Undo 0019, whose triggers name the inventory and timestamp columns dropped below.
+          ...DROP_CARD_GUARDS_SQL,
           // Undo 0018, whose journal entry goes with the rest below. The index has to go before
           // the column it covers.
           "DROP INDEX IF EXISTS card_inventory_slot",
@@ -356,6 +359,8 @@ describe("kozane card list --sort", () => {
     expect(cli(root, "doctor")).toContain("✓  Card timestamps valid");
 
     await withDb(root, async (client) => {
+      // Migration 0019 stamps such inserts. A database from before it can still hold one.
+      for (const statement of DROP_CARD_GUARDS_SQL) await client.execute(statement);
       const [partition, layer] = await Promise.all([
         client.execute("SELECT id FROM partition LIMIT 1"),
         client.execute("SELECT id FROM layer LIMIT 1"),
