@@ -19,7 +19,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { union } from "drizzle-orm/sqlite-core";
-import type { NeedsDB, NeedsNamespace, NeedsScope, Scope } from "./types.js";
+import type { NeedsDB, NeedsReader, ReadsNamespace, NeedsScope, Scope } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
@@ -27,7 +27,7 @@ import { withTx, type DB } from "../tx.js";
  * List all workspace scopes for the CLI. Use {@link getScopesInNamespace} for a board's
  * scoped view.
  */
-export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
+export async function getAllScopes({ db }: NeedsReader): Promise<Scope[]> {
   return db.select().from(scopeTable);
 }
 
@@ -43,7 +43,7 @@ export async function getAllScopes({ db }: NeedsDB): Promise<Scope[]> {
  * mishandle nullable `taskspace.scope_id` values. The uncorrelated card query also required
  * SQLite to build a temporary covering index in measured query plans.
  */
-export async function getScopesInNamespace({ db, namespaceId }: NeedsNamespace): Promise<Scope[]> {
+export async function getScopesInNamespace({ db, namespaceId }: ReadsNamespace): Promise<Scope[]> {
   const cardOfThisNamespace = db
     .select({ present: sql`1` })
     .from(scopeRelTable)
@@ -110,7 +110,7 @@ export type ScopeNamespaceUsage = { scopeId: string; namespaceId: string };
  * namespace pair appears once. This workspace-wide scan runs for the CLI, outside the board
  * polling path.
  */
-export async function getScopeNamespaceUsage({ db }: NeedsDB): Promise<ScopeNamespaceUsage[]> {
+export async function getScopeNamespaceUsage({ db }: NeedsReader): Promise<ScopeNamespaceUsage[]> {
   const fromCards = db
     .select({ scopeId: scopeRelTable.scopeId, namespaceId: partitionTable.namespaceId })
     .from(scopeRelTable)
@@ -142,7 +142,7 @@ export type ScopePartitionUsage = { scopeId: string; partitionId: string; cards:
  * getScopeNamespaceUsage}. Group counts in SQL to return one row per scope and partition
  * pair. This scans workspace memberships on page load, outside board polling.
  */
-export async function getScopePartitionUsage({ db }: NeedsDB): Promise<ScopePartitionUsage[]> {
+export async function getScopePartitionUsage({ db }: NeedsReader): Promise<ScopePartitionUsage[]> {
   return db
     .select({
       scopeId: scopeRelTable.scopeId,

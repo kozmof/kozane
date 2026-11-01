@@ -4,13 +4,14 @@ import {
   addLayer,
   getLayer,
   getAllLayers,
-  deleteLayer,
+  deleteLayerCascadingInTx,
   reorderLayers,
   updateLayerName,
   getDefaultLayer,
 } from "./layer.js";
 import { addNamespace } from "./namespace.js";
 import { NotFoundError } from "./utils.js";
+import { withTx } from "../tx.js";
 import { NAME_MAX } from "../../lib/constants.js";
 
 async function setup() {
@@ -127,12 +128,12 @@ describe("getLayer", () => {
   });
 });
 
-describe("deleteLayer", () => {
+describe("deleteLayerCascadingInTx", () => {
   it("removes the layer", async () => {
     const { db, namespaceId } = await setup();
     const { id } = await addLayer({ db, namespaceId, name: "Draft" });
 
-    await deleteLayer({ db, namespaceId, layerId: id });
+    await withTx(db, (tx) => deleteLayerCascadingInTx({ db: tx, namespaceId, layerId: id }));
 
     expect(await getAllLayers({ db, namespaceId })).toEqual([]);
   });
@@ -143,7 +144,9 @@ describe("deleteLayer", () => {
     const p2 = await addNamespace({ db, name: "P2" });
     const { id } = await addLayer({ db, namespaceId: p2, name: "Theirs" });
 
-    await expect(deleteLayer({ db, namespaceId: p1, layerId: id })).rejects.toThrow(NotFoundError);
+    await expect(
+      withTx(db, (tx) => deleteLayerCascadingInTx({ db: tx, namespaceId: p1, layerId: id })),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 

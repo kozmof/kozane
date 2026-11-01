@@ -1,6 +1,6 @@
 import { scopeAreaTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
-import type { NeedsNamespace, ScopeArea } from "./types.js";
+import type { ReadsNamespace, NeedsNamespace, ScopeArea } from "./types.js";
 import type { BoardRect } from "../../lib/constants.js";
 import { assertFound } from "./utils.js";
 
@@ -15,7 +15,7 @@ type Rect = BoardRect;
 export async function getScopeAreasInNamespace({
   db,
   namespaceId,
-}: NeedsNamespace): Promise<ScopeArea[]> {
+}: ReadsNamespace): Promise<ScopeArea[]> {
   return db
     .select()
     .from(scopeAreaTable)

@@ -1,6 +1,6 @@
 import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import { partitionTable, cardTable, glueRelTable, scopeRelTable, scopeTable } from "../schema.js";
-import type { NeedsDB, NeedsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
+import type { NeedsDB, ReadsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound, columnCount, type BatchResult } from "./utils.js";
 import { cardsBelongToNamespace } from "./card.js";
 import { withTx, type DB } from "../tx.js";
@@ -163,7 +163,7 @@ export async function getScopeRelsByCards({
 export async function getScopeRelsByNamespace({
   db,
   namespaceId,
-}: NeedsNamespace): Promise<ScopeRel[]> {
+}: ReadsNamespace): Promise<ScopeRel[]> {
   return db
     .select(getTableColumns(scopeRelTable))
     .from(scopeRelTable)

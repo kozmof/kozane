@@ -1,5 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import type { AnyDB, Tx } from "../tx.js";
+import type { AnyDB, DB, Tx } from "../tx.js";
 import type {
   namespaceTable,
   partitionTable,
@@ -15,7 +15,19 @@ import type {
   inventoryTable,
 } from "../schema.js";
 
-export type NeedsDB = { db: AnyDB };
+/**
+ * A handle that can write: the database or a write transaction. A read transaction from
+ * `withReadTx` does not fit, so write helpers cannot run inside one, where SQLite would try to
+ * take the write lock midway and may fail with `SQLITE_BUSY`.
+ */
+export type NeedsDB = { db: DB | Tx };
+/**
+ * Any handle, read transactions included. Reserved for read-only helpers that a read
+ * transaction calls. Widen a read helper from {@link NeedsDB} to this when it needs to.
+ */
+export type NeedsReader = { db: AnyDB };
+/** {@link NeedsReader} for one namespace. */
+export type ReadsNamespace = NeedsReader & { namespaceId: string };
 /**
  * Require a branded transaction handle for operations that run inside a caller-owned
  * transaction. A plain DB handle cannot satisfy this type.

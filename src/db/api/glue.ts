@@ -1,6 +1,6 @@
 import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
-import type { GlueRel, NeedsDB, NeedsNamespace, NeedsTx } from "./types.js";
+import type { NeedsDB, ReadsNamespace, NeedsTx, GlueRel } from "./types.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { cardsBelongToNamespace, isStored } from "./card.js";
 import { BATCH_MAX, chunked } from "../../lib/constants.js";
@@ -28,7 +28,7 @@ export async function getGlueRelsByCards({
 export async function getGlueRelsByNamespace({
   db,
   namespaceId,
-}: NeedsNamespace): Promise<GlueRel[]> {
+}: ReadsNamespace): Promise<GlueRel[]> {
   return db
     .select(getTableColumns(glueRelTable))
     .from(glueRelTable)

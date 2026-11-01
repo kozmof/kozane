@@ -1,6 +1,13 @@
 import { partitionTable, cardTable } from "../schema.js";
 import { and, asc, count, eq } from "drizzle-orm";
-import type { NeedsDB, NeedsNamespace, NeedsNamespacePartition, Partition } from "./types.js";
+import type {
+  NeedsReader,
+  ReadsNamespace,
+  NeedsTx,
+  NeedsNamespace,
+  NeedsNamespacePartition,
+  Partition,
+} from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 /**
@@ -8,7 +15,7 @@ import { assertFound, assertNameWithinLimit } from "./utils.js";
  * depends on this order, so adding a partition does not shift existing colors as name
  * ordering would.
  */
-export async function getAllPartitions({ db, namespaceId }: NeedsNamespace): Promise<Partition[]> {
+export async function getAllPartitions({ db, namespaceId }: ReadsNamespace): Promise<Partition[]> {
   return db
     .select()
     .from(partitionTable)
@@ -32,7 +39,7 @@ export type PartitionCardCount = {
  * zero cards. Group in one workspace-wide query instead of querying each namespace
  * separately.
  */
-export async function getPartitionCardCounts({ db }: NeedsDB): Promise<PartitionCardCount[]> {
+export async function getPartitionCardCounts({ db }: NeedsReader): Promise<PartitionCardCount[]> {
   return db
     .select({
       id: partitionTable.id,
@@ -78,7 +85,7 @@ export async function addPartition({
 export async function getDefaultPartition({
   db,
   namespaceId,
-}: NeedsNamespace): Promise<Partition | undefined> {
+}: ReadsNamespace): Promise<Partition | undefined> {
   return db
     .select()
     .from(partitionTable)
@@ -86,12 +93,19 @@ export async function getDefaultPartition({
     .get();
 }
 
-type DeletePartition = NeedsNamespacePartition;
-export async function deletePartition({
+type DeletePartitionCascading = NeedsTx & { namespaceId: string; partitionId: string };
+
+/**
+ * Delete a partition and, through the foreign-key cascade, every card still in it. Move the
+ * cards off first in the same transaction, as `deletePartitionWithReassign` in `composite.ts`
+ * does. The name and the transaction requirement keep this from being called as a plain
+ * delete.
+ */
+export async function deletePartitionCascadingInTx({
   db,
   namespaceId,
   partitionId,
-}: DeletePartition): Promise<void> {
+}: DeletePartitionCascading): Promise<void> {
   const deleted = await db
     .delete(partitionTable)
     .where(and(eq(partitionTable.namespaceId, namespaceId), eq(partitionTable.id, partitionId)))

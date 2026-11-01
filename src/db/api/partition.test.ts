@@ -5,7 +5,7 @@ import {
   getPartition,
   getAllPartitions,
   getPartitionCardCounts,
-  deletePartition,
+  deletePartitionCascadingInTx,
   updatePartitionName,
   getDefaultPartition,
 } from "./partition.js";
@@ -13,6 +13,7 @@ import { addNamespace } from "./namespace.js";
 import { addLayer } from "./layer.js";
 import { addCard } from "./card.js";
 import { NotFoundError } from "./utils.js";
+import { withTx } from "../tx.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -117,19 +118,21 @@ describe("getAllPartitions", () => {
   });
 });
 
-describe("deletePartition", () => {
+describe("deletePartitionCascadingInTx", () => {
   it("removes the partition", async () => {
     const { db, namespaceId } = await setup();
     const partitionId = await addPartition({ db, namespaceId, name: "ToDelete" });
-    await deletePartition({ db, namespaceId, partitionId });
+    await withTx(db, (tx) => deletePartitionCascadingInTx({ db: tx, namespaceId, partitionId }));
     expect(await getPartition({ db, namespaceId, partitionId })).toBeUndefined();
   });
 
   it("throws NotFoundError for a missing partitionId", async () => {
     const { db, namespaceId } = await setup();
-    await expect(deletePartition({ db, namespaceId, partitionId: "ghost" })).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(
+      withTx(db, (tx) =>
+        deletePartitionCascadingInTx({ db: tx, namespaceId, partitionId: "ghost" }),
+      ),
+    ).rejects.toThrow(NotFoundError);
   });
 
   it("throws NotFoundError when partitionId belongs to a different namespace", async () => {
@@ -137,9 +140,9 @@ describe("deletePartition", () => {
     const p1 = await addNamespace({ db, name: "P1" });
     const p2 = await addNamespace({ db, name: "P2" });
     const partitionId = await addPartition({ db, namespaceId: p1, name: "Mine" });
-    await expect(deletePartition({ db, namespaceId: p2, partitionId })).rejects.toThrow(
-      NotFoundError,
-    );
+    await expect(
+      withTx(db, (tx) => deletePartitionCascadingInTx({ db: tx, namespaceId: p2, partitionId })),
+    ).rejects.toThrow(NotFoundError);
   });
 });
 

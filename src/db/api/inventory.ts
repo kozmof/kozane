@@ -7,6 +7,7 @@ import type {
   NeedsNamespace,
   NeedsNamespaceInventory,
   NeedsTx,
+  ReadsNamespace,
 } from "./types.js";
 import { BATCH_MAX, INVENTORY_SLOT_MAX, chunked } from "../../lib/constants.js";
 import {
@@ -36,7 +37,7 @@ import { assertFound, assertNameWithinLimit, readByIds, type BatchResult } from 
 import { withTx, type DB, type Tx } from "../tx.js";
 
 /** A namespace's inventories in creation order, which their UUIDv7 IDs sort in. */
-export async function getAllInventories({ db, namespaceId }: NeedsNamespace): Promise<Inventory[]> {
+export async function getAllInventories({ db, namespaceId }: ReadsNamespace): Promise<Inventory[]> {
   return db
     .select()
     .from(inventoryTable)

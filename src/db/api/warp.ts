@@ -1,10 +1,16 @@
 import { warpTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
-import type { NeedsDB, NeedsNamespace, NeedsNamespaceWarp, Warp } from "./types.js";
+import type {
+  NeedsReader,
+  ReadsNamespace,
+  NeedsNamespace,
+  NeedsNamespaceWarp,
+  Warp,
+} from "./types.js";
 import { assertFound } from "./utils.js";
 
 /** Number warps in UUIDv7 creation order. */
-export async function getAllWarps({ db, namespaceId }: NeedsNamespace): Promise<Warp[]> {
+export async function getAllWarps({ db, namespaceId }: ReadsNamespace): Promise<Warp[]> {
   return db
     .select()
     .from(warpTable)
@@ -16,7 +22,7 @@ export async function getAllWarps({ db, namespaceId }: NeedsNamespace): Promise<
  * List workspace warps for the cross-namespace palette, ordered by namespace and ID.
  * Preserve the creation order used by {@link getAllWarps} so marker numbers stay consistent.
  */
-export async function getAllWorkspaceWarps({ db }: NeedsDB): Promise<Warp[]> {
+export async function getAllWorkspaceWarps({ db }: NeedsReader): Promise<Warp[]> {
   return db.select().from(warpTable).orderBy(asc(warpTable.namespaceId), asc(warpTable.id));
 }
 

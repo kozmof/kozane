@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, like, type SQL } from "drizzle-orm";
 import { partitionTable, cardTable } from "../schema.js";
-import type { NeedsDB } from "./types.js";
+import type { NeedsReader } from "./types.js";
 import type { TagHit } from "../../lib/types.js";
 import { scanTagLines } from "../../lib/tag.js";
 import { TAG_CARD_HITS_MAX, TAG_CARD_ROWS_PAGE, TAG_SIGIL } from "../../lib/constants.js";
@@ -39,7 +39,7 @@ export type CardTagHits = {
 type NotLikeWildcard<T extends string> = T extends "%" | "_" ? never : T;
 const SIGIL_PATTERN: NotLikeWildcard<typeof TAG_SIGIL> = TAG_SIGIL;
 
-type GetCardTagHits = NeedsDB & {
+type GetCardTagHits = NeedsReader & {
   /** Optional namespace filter. Omit it to read cards across the workspace. */
   namespaceId?: string;
   /**

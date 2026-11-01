@@ -1,6 +1,6 @@
 import { partitionTable, cardTable, glueRelTable, namespaceTable } from "../schema.js";
 import { and, asc, eq } from "drizzle-orm";
-import type { NeedsDB, Namespace } from "./types.js";
+import type { ReadsNamespace, NeedsDB, Namespace, NeedsReader } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB, type Tx } from "../tx.js";
 import { addPartition } from "./partition.js";
@@ -9,11 +9,11 @@ import { DEFAULT_PARTITION_NAME, DEFAULT_LAYER_NAME } from "../../lib/constants.
 // Importing glue is safe because card does not import this module.
 import { dissolveOrphanGlueGroupsInTx } from "./glue.js";
 
-export async function getAllNamespaces({ db }: NeedsDB): Promise<Namespace[]> {
+export async function getAllNamespaces({ db }: NeedsReader): Promise<Namespace[]> {
   return db.select().from(namespaceTable);
 }
 
-type GetNamespace = NeedsDB & { namespaceId: string };
+type GetNamespace = ReadsNamespace;
 export async function getNamespace({
   db,
   namespaceId,

@@ -14,6 +14,7 @@ import type {
   NeedsNamespace,
   NeedsNamespaceCards,
   Card,
+  NeedsReader,
 } from "./types.js";
 import type { CardData } from "../../lib/types.js";
 import { BATCH_MAX, WARP_HINT_MAX_CHARS, chunked } from "../../lib/constants.js";
@@ -82,7 +83,7 @@ export async function getNamespaceCardIds({ db, namespaceId }: NeedsNamespace): 
   return rows.map(({ id }) => id);
 }
 
-type GetCardsByPartitions = NeedsDB & { partitionIds: string[] };
+type GetCardsByPartitions = NeedsReader & { partitionIds: string[] };
 export async function getCardsByPartitions({
   db,
   partitionIds,
@@ -147,18 +148,22 @@ export function withCardInventory<
 }
 
 /**
- * Cards on the canvas, leaving out stored ones. A stored card keeps the position it goes back
- * to, so any read that treats positions as space taken up on the board filters with this.
+ * Cards stored in an inventory: both inventory columns set, the same test
+ * {@link cardInventory} uses, so SQL reads and the board agree on where a card is.
  */
-export const onCanvas = isNull(cardTable.inventoryId);
+export const isStored = and(isNotNull(cardTable.inventoryId), isNotNull(cardTable.inventorySlot))!;
 
-/** Cards stored in an inventory. The opposite of {@link onCanvas}. */
-export const isStored = isNotNull(cardTable.inventoryId);
+/**
+ * Cards on the canvas, leaving out stored ones. The opposite of {@link isStored}. A stored
+ * card keeps the position it goes back to, so any read that treats positions as space taken
+ * up on the board filters with this.
+ */
+export const onCanvas = or(isNull(cardTable.inventoryId), isNull(cardTable.inventorySlot))!;
 
 /**
  * Cards with only one of the two inventory columns set. No writer leaves this, but raw SQL can.
- * {@link cardInventory} draws such a card on the canvas while {@link onCanvas} leaves it out,
- * so `kozane doctor` reports it and `kozane inventory repair` clears both columns.
+ * Such a card counts as on the canvas everywhere ({@link onCanvas}, {@link cardInventory}).
+ * `kozane doctor` reports it and `kozane inventory repair` clears both columns.
  */
 export const halfPlaced = or(
   and(isNotNull(cardTable.inventoryId), isNull(cardTable.inventorySlot)),
@@ -200,7 +205,7 @@ export type CardMarker = {
    */
   width: number | null;
 };
-type GetCardMarkers = NeedsDB & { namespaceIds: string[] };
+type GetCardMarkers = NeedsReader & { namespaceIds: string[] };
 
 /**
  * Maximum source text read for a warp hint. Keep this bounded while reading the full
@@ -489,7 +494,7 @@ export type CardChangeCount = { day: string; partitionId: string; cards: number 
 export async function getCardChangeCounts({
   db,
   namespaceIds,
-}: NeedsDB & { namespaceIds?: string[] }): Promise<CardChangeCount[]> {
+}: NeedsReader & { namespaceIds?: string[] }): Promise<CardChangeCount[]> {
   if (namespaceIds?.length === 0) return [];
   const day = sql<string>`strftime('%Y-%m-%d', ${cardTable.updatedAt}, 'unixepoch')`;
   const query = db

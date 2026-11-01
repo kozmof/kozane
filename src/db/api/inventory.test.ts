@@ -366,6 +366,17 @@ describe("takeCards", () => {
     expect(await placement(db, stored)).toMatchObject({ inventoryId: inventory.id });
     expect(await placement(db, loose)).toMatchObject({ posX: 30, posY: 40 });
   });
+
+  it("treats a card with only inventory_id set as on the canvas, as the board draws it", async () => {
+    const { db, namespaceId, inventory, card } = await setup();
+    const half = await card("half", 30, 40);
+    await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, half));
+
+    expect(await takeCards({ db, namespaceId, cards: [{ cardId: half }] })).toEqual({
+      ok: false,
+      reason: "unstored-cards",
+    });
+  });
 });
 
 describe("glueNamespaceCards", () => {

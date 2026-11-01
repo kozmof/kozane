@@ -1,11 +1,17 @@
 import { layerTable } from "../schema.js";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import type { NeedsNamespace, NeedsNamespaceLayer, Layer } from "./types.js";
+import type {
+  ReadsNamespace,
+  NeedsNamespace,
+  NeedsNamespaceLayer,
+  NeedsTx,
+  Layer,
+} from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 import { withTx, type DB } from "../tx.js";
 
 /** Choose the lowest position, using the ID to break ties. */
-export async function getAllLayers({ db, namespaceId }: NeedsNamespace): Promise<Layer[]> {
+export async function getAllLayers({ db, namespaceId }: ReadsNamespace): Promise<Layer[]> {
   return db
     .select()
     .from(layerTable)
@@ -58,13 +64,18 @@ export async function addLayer({
   return { id: row.id, position: row.position };
 }
 
-type DeleteLayer = NeedsNamespaceLayer;
+type DeleteLayerCascading = NeedsTx & { namespaceId: string; layerId: string };
 
 /**
- * Delete a layer and all its cards through cascading deletion. Use
- * `deleteLayerWithReassign` in `composite.ts` to preserve cards on the default layer.
+ * Delete a layer and, through the foreign-key cascade, every card still on it. Move the cards
+ * off first in the same transaction, as `deleteLayerWithReassign` in `composite.ts` does. The
+ * name and the transaction requirement keep this from being called as a plain delete.
  */
-export async function deleteLayer({ db, namespaceId, layerId }: DeleteLayer): Promise<void> {
+export async function deleteLayerCascadingInTx({
+  db,
+  namespaceId,
+  layerId,
+}: DeleteLayerCascading): Promise<void> {
   const deleted = await db
     .delete(layerTable)
     .where(and(eq(layerTable.namespaceId, namespaceId), eq(layerTable.id, layerId)))

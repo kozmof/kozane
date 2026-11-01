@@ -55,32 +55,28 @@ export async function loadNamespaceSnapshot({
   snapshot: NamespaceDataSnapshot;
 } | null> {
   // Read every table in one read transaction so the snapshot reflects a single committed
-  // state. In WAL mode it sees one consistent view without taking the write lock.
+  // state. In WAL mode it sees one consistent view without taking the write lock. The
+  // transaction holds one connection, which runs statements one at a time, so the reads
+  // below are awaited in turn rather than through `Promise.all`.
   const rows = await withReadTx(db, async (tx) => {
     const namespace = await getNamespace({ db: tx, namespaceId });
     if (!namespace) return null;
 
-    const [partitions, layers, warps, inventories, scopes, scopeAreas, taskspaces] =
-      await Promise.all([
-        getAllPartitions({ db: tx, namespaceId }),
-        getAllLayers({ db: tx, namespaceId }),
-        getAllWarps({ db: tx, namespaceId }),
-        getAllInventories({ db: tx, namespaceId }),
-        includeScopes ? getScopesInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
-        // Gate frames with `includeScopes` because their geometry also exposes scope
-        // organization in published exports.
-        includeScopes ? getScopeAreasInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
-        includeScopes ? getTaskspacesInNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
-      ]);
-
+    const partitions = await getAllPartitions({ db: tx, namespaceId });
+    const layers = await getAllLayers({ db: tx, namespaceId });
+    const warps = await getAllWarps({ db: tx, namespaceId });
+    const inventories = await getAllInventories({ db: tx, namespaceId });
+    const scopes = includeScopes ? await getScopesInNamespace({ db: tx, namespaceId }) : [];
+    // Gate frames with `includeScopes` because their geometry also exposes scope
+    // organization in published exports.
+    const scopeAreas = includeScopes ? await getScopeAreasInNamespace({ db: tx, namespaceId }) : [];
+    const taskspaces = includeScopes ? await getTaskspacesInNamespace({ db: tx, namespaceId }) : [];
     const cardRows = await getCardDataByPartitions({
       db: tx,
       partitionIds: partitions.map(({ id }) => id),
     });
-    const [glueRels, scopeRels] = await Promise.all([
-      getGlueRelsByNamespace({ db: tx, namespaceId }),
-      includeScopes ? getScopeRelsByNamespace({ db: tx, namespaceId }) : Promise.resolve([]),
-    ]);
+    const glueRels = await getGlueRelsByNamespace({ db: tx, namespaceId });
+    const scopeRels = includeScopes ? await getScopeRelsByNamespace({ db: tx, namespaceId }) : [];
     return {
       namespace,
       partitions,

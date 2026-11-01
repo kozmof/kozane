@@ -20,13 +20,19 @@ import {
   type CardStacking,
 } from "./card.js";
 import {
-  deletePartition,
+  deletePartitionCascadingInTx,
   getPartition,
   getDefaultPartition,
   getAllPartitions,
   addPartition,
 } from "./partition.js";
-import { deleteLayer, getLayer, getDefaultLayer, getAllLayers, addLayer } from "./layer.js";
+import {
+  deleteLayerCascadingInTx,
+  getLayer,
+  getDefaultLayer,
+  getAllLayers,
+  addLayer,
+} from "./layer.js";
 import { addScopeRel, getScopeRelsByCards } from "./scope-rel.js";
 import { getTaskspace } from "./taskspace.js";
 import { unglueCardsInTx } from "./glue.js";
@@ -438,7 +444,7 @@ export async function deletePartitionWithReassign({
       fromPartitionId: partitionId,
       toPartitionId: defaultPartition.id,
     });
-    await deletePartition({ db: tx, namespaceId, partitionId });
+    await deletePartitionCascadingInTx({ db: tx, namespaceId, partitionId });
 
     return { defaultPartitionId: defaultPartition.id };
   });
@@ -479,7 +485,7 @@ export async function deleteLayerWithReassign({
     });
     // Both layers and every card on them belong to this namespace, so a refusal is a bug.
     if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
-    await deleteLayer({ db: tx, namespaceId, layerId });
+    await deleteLayerCascadingInTx({ db: tx, namespaceId, layerId });
 
     return { defaultLayerId: defaultLayer.id, stacking: moved.stacking };
   });

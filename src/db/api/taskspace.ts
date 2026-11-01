@@ -1,14 +1,21 @@
 import { taskspaceTable } from "../schema.js";
 import type { PathKind } from "../schema.js";
 import { and, eq, isNull, or } from "drizzle-orm";
-import type { NeedsDB, NeedsNamespace, NeedsTaskspace, Taskspace } from "./types.js";
+import type {
+  ReadsNamespace,
+  NeedsDB,
+  NeedsNamespace,
+  NeedsTaskspace,
+  Taskspace,
+  NeedsReader,
+} from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
 
 /**
  * List every workspace taskspace for CLI listing and scanning. Use {@link
  * getTaskspacesInNamespace} for board data.
  */
-export async function getAllTaskspaces({ db }: NeedsDB): Promise<Taskspace[]> {
+export async function getAllTaskspaces({ db }: NeedsReader): Promise<Taskspace[]> {
   return db.select().from(taskspaceTable);
 }
 
@@ -19,7 +26,7 @@ export async function getAllTaskspaces({ db }: NeedsDB): Promise<Taskspace[]> {
 export async function getTaskspacesInNamespace({
   db,
   namespaceId,
-}: NeedsNamespace): Promise<Taskspace[]> {
+}: ReadsNamespace): Promise<Taskspace[]> {
   return db
     .select()
     .from(taskspaceTable)

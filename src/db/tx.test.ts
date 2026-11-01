@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { createTestDB } from "../test-utils/db.js";
 import { withReadTx, withTx } from "./tx.js";
 import { namespaceTable } from "./schema.js";
+import { addNamespace, getAllNamespaces } from "./api/namespace.js";
 
 /** A test database in WAL mode plus a second client on the same file, as the CLI would be. */
 async function twoClients() {
@@ -19,6 +20,16 @@ async function twoClients() {
 }
 
 describe("withReadTx", () => {
+  it("gives read helpers a handle that write helpers refuse at compile time", async () => {
+    const db = await createTestDB();
+    const namespaces = await withReadTx(db, async (tx) => {
+      // @ts-expect-error A write helper needs `DB | Tx`, not a read transaction.
+      void (() => addNamespace({ db: tx, name: "Refused" }));
+      return getAllNamespaces({ db: tx });
+    });
+    expect(namespaces).toEqual([]);
+  });
+
   it("does not block another connection's writes while it reads", async () => {
     const { db, other } = await twoClients();
     try {
