@@ -5,9 +5,12 @@ import { cardTable } from "../schema.js";
 import type { DB } from "../tx.js";
 import {
   INSERT_CHUNK_MAX,
+  INVENTORY_COLUMNS,
+  INVENTORY_SLOT_MAX,
   STATEMENT_PARAMS_MAX,
   WARP_HINT_MAX_CHARS,
 } from "../../lib/constants.js";
+import { cardSpan } from "../../lib/inventory.js";
 import {
   addCard,
   addCards,
@@ -156,6 +159,89 @@ describe("addCards", () => {
       }),
     ).rejects.toBeInstanceOf(NotFoundError);
     expect(await getAllCards({ db, partitionId })).toHaveLength(0);
+  });
+
+  describe("inventory slot checks", () => {
+    // Enough lines to make the card cover more than one row of the grid.
+    const TALL = "line\n".repeat(30);
+
+    async function inventorySetup() {
+      const { db, namespaceId, partitionId } = await setup();
+      const layerId = await defaultLayerIdForPartition({ db, partitionId });
+      const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+      return { db, partitionId, layerId, inventoryId: inventory.id };
+    }
+
+    it("uses a test card that spans more than one row", () => {
+      expect(cardSpan(TALL)).toBeGreaterThan(1);
+    });
+
+    it("rejects a tall new card covering another new card's slot", async () => {
+      const { db, partitionId, layerId, inventoryId } = await inventorySetup();
+      await expect(
+        addCards({
+          db,
+          partitionId,
+          layerId,
+          cards: [
+            { content: TALL, posX: 0, posY: 0, inventory: { id: inventoryId, slot: 0 } },
+            {
+              content: "below",
+              posX: 0,
+              posY: 0,
+              inventory: { id: inventoryId, slot: INVENTORY_COLUMNS },
+            },
+          ],
+        }),
+      ).rejects.toThrow(/overlap/);
+      expect(await getAllCards({ db, partitionId })).toHaveLength(0);
+    });
+
+    it("rejects a new card covering a card the inventory already holds", async () => {
+      const { db, partitionId, layerId, inventoryId } = await inventorySetup();
+      const card = (slot: number, content: string) => ({
+        content,
+        posX: 0,
+        posY: 0,
+        inventory: { id: inventoryId, slot },
+      });
+      await addCards({ db, partitionId, layerId, cards: [card(INVENTORY_COLUMNS, "held")] });
+      await expect(addCards({ db, partitionId, layerId, cards: [card(0, TALL)] })).rejects.toThrow(
+        /overlap/,
+      );
+      expect(await getAllCards({ db, partitionId })).toHaveLength(1);
+    });
+
+    it("rejects a slot past the last slot or below zero", async () => {
+      const { db, partitionId, layerId, inventoryId } = await inventorySetup();
+      for (const slot of [INVENTORY_SLOT_MAX + 1, -1, 1.5]) {
+        await expect(
+          addCards({
+            db,
+            partitionId,
+            layerId,
+            cards: [{ content: "x", posX: 0, posY: 0, inventory: { id: inventoryId, slot } }],
+          }),
+        ).rejects.toThrow(/slot/);
+      }
+      expect(await getAllCards({ db, partitionId })).toHaveLength(0);
+    });
+
+    it("accepts cards that sit side by side", async () => {
+      const { db, partitionId, layerId, inventoryId } = await inventorySetup();
+      const ids = await addCards({
+        db,
+        partitionId,
+        layerId,
+        cards: [0, 1, 2].map((slot) => ({
+          content: TALL,
+          posX: 0,
+          posY: 0,
+          inventory: { id: inventoryId, slot },
+        })),
+      });
+      expect(ids).toHaveLength(3);
+    });
   });
 });
 

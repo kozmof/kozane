@@ -10,9 +10,11 @@ import {
 } from "../../schema.js";
 import type { NeedsPartition, NeedsTx } from "../types.js";
 import type { CardData } from "../../../lib/types.js";
-import { chunked } from "../../../lib/constants.js";
+import { INVENTORY_SLOT_MAX, chunked } from "../../../lib/constants.js";
+import { cardSpan, lastCell, overlappingCards, type Footprint } from "../../../lib/inventory.js";
 import { NotFoundError, columnCount, readByIds } from "../utils.js";
 import { withTx, type DB } from "../../tx.js";
+import { heldFootprints } from "../inventory/slots.js";
 import { defaultLayerIdForPartition } from "./read.js";
 import { inventoryColumns } from "./placement.js";
 import { nextLayerZIndexInTx } from "./stacking.js";
@@ -118,6 +120,37 @@ async function assertInventoriesMatchPartition({
 }
 
 /**
+ * Refuse planned inventory slots that would not fit. The unique index only stops two cards
+ * from starting on the same slot. A card that spans several rows can still cover a cell
+ * another card starts on, or run past {@link INVENTORY_SLOT_MAX}. Check every new card
+ * together with the cards each inventory already holds.
+ */
+async function assertSlotsFit(
+  tx: NeedsTx["db"],
+  cards: { content: string; inventory?: NonNullable<CardData["inventory"]> }[],
+): Promise<void> {
+  const incoming = new Map<string, Footprint[]>();
+  for (const [index, { content, inventory }] of cards.entries()) {
+    if (!inventory) continue;
+    const { id, slot } = inventory;
+    if (!Number.isSafeInteger(slot) || slot < 0)
+      throw new Error(`Card ${index + 1}: inventory slot must be a non-negative integer`);
+    const span = cardSpan(content);
+    if (lastCell(slot, span) > INVENTORY_SLOT_MAX)
+      throw new Error(`Card ${index + 1}: inventory slot ${slot} runs past the last slot`);
+    // New cards have no ID yet, so key them by input position.
+    const footprints = incoming.get(id) ?? [];
+    footprints.push({ cardId: `new:${index}`, slot, span });
+    incoming.set(id, footprints);
+  }
+  for (const [inventoryId, footprints] of incoming) {
+    const held = await heldFootprints(tx, inventoryId);
+    if (overlappingCards([...held, ...footprints]).length > 0)
+      throw new Error(`Cards overlap in inventory inventoryId=${inventoryId}`);
+  }
+}
+
+/**
  * Insert one card in its own transaction. Routes and commands that combine the insert with
  * other writes call {@link addCardInTx}.
  */
@@ -191,7 +224,8 @@ export async function addCards({ db, ...fields }: AddCards): Promise<string[]> {
 
 /**
  * Insert cards into one partition and layer using {@link chunked} statements, stacked above
- * the layer's cards in input order. Any inventory named must be in the partition's namespace.
+ * the layer's cards in input order. Any inventory named must be in the partition's namespace,
+ * and stored cards must fit beside what it already holds (see {@link assertSlotsFit}).
  * Return IDs in input order.
  *
  * Require a resolved `layerId` to avoid a default-layer lookup for each chunk. Requiring a
@@ -210,6 +244,7 @@ export async function addCardsInTx({
     partitionId,
     inventoryIds: cards.flatMap(({ inventory }) => (inventory ? [inventory.id] : [])),
   });
+  await assertSlotsFit(db, cards);
   // Share one timestamp across all chunks. See {@link newCardStamps}.
   const stamps = newCardStamps();
   let zIndex = await nextLayerZIndexInTx({ db, layerId });

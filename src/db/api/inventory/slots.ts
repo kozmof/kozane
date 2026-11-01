@@ -11,7 +11,10 @@ import {
   type Footprint,
   type SlotPlacement,
 } from "../../../lib/inventory.js";
-import { caseUpdateBatches, inventoryColumns } from "../card.js";
+// Import the card leaf modules rather than the `card.js` barrel, so card creation can use
+// this module without an import cycle.
+import { caseUpdateBatches } from "../card/case-update.js";
+import { inventoryColumns } from "../card/placement.js";
 import { readByIds } from "../utils.js";
 import { type Tx } from "../../tx.js";
 

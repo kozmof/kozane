@@ -125,20 +125,22 @@ export async function cardSquash(
     const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
     const bounds = canvasBoundsForRoot(root);
     const origin = clampToBounds(options.x ?? 0, options.y ?? 0, bounds);
-    const occupied = await db
-      .select({ posX: cardTable.posX, posY: cardTable.posY })
-      .from(cardTable)
-      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
-      // A stored card's position is where it goes back to, not space it takes up now.
-      .where(and(eq(partitionTable.namespaceId, namespaceId), onCanvas));
-    // The cards go into a new inventory at the origin. Lay out the positions they go back to
-    // from there, using the workspace's `ui.canvasWidth`, and clamp them to the board.
-    // `squashNamespaceCard` uses the same steps.
-    const positions = squashCardPositions(occupied, contents.length, {
-      origin,
-      canvasWidth: bounds.canvasWidth,
-    });
     const { inventory, ids } = await withTx(db, async (tx) => {
+      // Read occupied positions in the same transaction as the inserts, so a card the board
+      // places in between cannot end up under the new cards.
+      const occupied = await tx
+        .select({ posX: cardTable.posX, posY: cardTable.posY })
+        .from(cardTable)
+        .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
+        // A stored card's position is where it goes back to, not space it takes up now.
+        .where(and(eq(partitionTable.namespaceId, namespaceId), onCanvas));
+      // The cards go into a new inventory at the origin. Lay out the positions they go back
+      // to from there, using the workspace's `ui.canvasWidth`, and clamp them to the board.
+      // `squashNamespaceCard` uses the same steps.
+      const positions = squashCardPositions(occupied, contents.length, {
+        origin,
+        canvasWidth: bounds.canvasWidth,
+      });
       const inventory = await addSquashInventoryInTx({ db: tx, namespaceId, ...origin });
       const cardIds = await addCardsInTx({
         db: tx,
