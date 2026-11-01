@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
-  import type { Snippet } from "svelte";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
@@ -12,7 +11,6 @@
     groupHitRows,
     groupHitsByTaskspace,
     normalizeTag,
-    taggedWith,
     tagMatcher,
     tagMatches,
     truncationReasons,
@@ -26,6 +24,8 @@
   } from "$lib/tag";
   import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
   import type { TagHit } from "$lib/types";
+  import TagResults from "./components/TagResults.svelte";
+  import { activeRowClass, countClass, noteClass, rowClass } from "./lib/styles.js";
 
   let { data }: PageProps = $props();
 
@@ -180,81 +180,12 @@
       .filter(Boolean)
       .join(", ");
 
-  const rowClass = css({
-    display: "flex",
-    alignItems: "baseline",
-    gap: "8px",
-    padding: "3px 8px",
-    borderRadius: "2px",
-    color: "ink.black",
-    textDecoration: "none",
-    fontSize: "13px",
-    _hover: { backgroundColor: "neutral.bg" },
-  });
-  const activeRowClass = css({ backgroundColor: "neutral.bg", fontWeight: "600" });
-  const countClass = css({ fontSize: "10.5px", color: "neutral.subtle", fontFamily: "mono" });
-  /** Taskspace heading that identifies the base directory for relative file paths. */
-  const taskspaceHeadingClass = css({
-    fontSize: "11px",
-    fontWeight: "400",
-    fontFamily: "mono",
-    color: "neutral.muted",
-    marginBottom: "6px",
-  });
-  /**
-   * Render card text and matching file excerpts as primary content, with quieter surrounding
-   * metadata.
-   */
-  const excerptClass = css({
-    fontSize: "12.5px",
-    color: "ink.black",
-    fontFamily: "mono",
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-  });
-
-  /**
-   * Use consistent secondary styling for card truncation, partial taskspace scans, and
-   * unavailable taskspaces.
-   */
-  const noteClass = css({ fontSize: "12px", color: "neutral.subtle", marginTop: "8px" });
-
-  /**
-   * Apply link styling only to rows with destinations. Render rows without a board as plain
-   * elements so hover and pointer cues do not imply an unavailable action.
-   */
-  const linkableRowClass = css({
-    textDecoration: "none",
-    transition: "border-color 0.1s",
-    _hover: { borderColor: "neutral.muted" },
-  });
-  const rowSurface = {
-    background: "ink.white",
-    border: "1px solid token(colors.neutral.border)",
-    borderRadius: "2px",
-  } as const;
-  const cardRowClass = css({ ...rowSurface, display: "block", padding: "10px 14px" });
-  const fileRowClass = css({
-    ...rowSurface,
-    display: "flex",
-    gap: "12px",
-    alignItems: "baseline",
-    padding: "6px 14px",
-  });
 </script>
 
 <svelte:head>
   <title>{selectedNamespace ? `Tags · ${selectedNamespace.name}` : "Tags"}</title>
 </svelte:head>
 
-{#snippet hitRow(href: string | null, shape: string, body: Snippet)}
-  {#if href}
-    <a {href} class="{shape} {linkableRowClass}">{@render body()}</a>
-  {:else}
-    <!-- Show the result without link behavior when no destination board exists. -->
-    <div class={shape}>{@render body()}</div>
-  {/if}
-{/snippet}
 
 {#snippet branch(nodes: TagNode[], depth: number)}
   <ul class={css({ listStyle: "none", margin: "0", padding: "0" })}>
@@ -373,100 +304,19 @@
             <code class={css({ fontFamily: "mono" })}>:foo:bar</code>.
           </p>
         {:else}
-          <h2 class={css({ fontSize: "15px", fontFamily: "mono", marginBottom: "16px" })}>
-            '{selectedTag}
-          </h2>
-
-          {#if shownCount === 0}
-            <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>Nothing under this tag.</p>
-          {:else if cappedNotice}
-            <p
-              class={css({ color: "neutral.subtle", fontSize: "12px", marginBottom: "12px" })}
-            >
-              {cappedNotice}
-            </p>
-          {/if}
-
-          {#if cardRows.length > 0}
-            <ul
-              class={css({
-                listStyle: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: "6px",
-                marginBottom: "28px",
-              })}
-            >
-              {#each cardRows as { key, source, hits } (key)}
-                {@const cardId = source.cardId}
-                <!-- Guard both optional lookups before reading partition metadata. -->
-                {@const partitionId = data.cardPartitionIds[cardId]}
-                {@const partition = partitionId ? data.partitions[partitionId] : undefined}
-                <li>
-                  {#snippet cardBody()}
-                    <span class={excerptClass}>{hits[0].excerpt}</span>
-                    <span
-                      class={css({
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        marginTop: "8px",
-                        fontSize: "11px",
-                        color: "neutral.subtle",
-                      })}
-                    >
-                      {#if partition}
-                        <span
-                          style="background: {partition.dot}"
-                          class={css({ width: "8px", height: "8px", borderRadius: "999px" })}
-                        ></span>
-                        {partition.name}
-                      {/if}
-                      <!-- Identify each card's board in workspace-wide results. -->
-                      {#if !selectedNamespaceId}
-                        <span>{namespaceName(data.cardNamespaces[cardId])}</span>
-                      {/if}
-                      <span class={css({ fontFamily: "mono" })}>{taggedWith(hits).join(" ")}</span>
-                    </span>
-                  {/snippet}
-                  {@render hitRow(cardHref(cardId), cardRowClass, cardBody)}
-                </li>
-              {/each}
-            </ul>
-          {/if}
-
-          {#each fileRowsByTaskspace as { taskspaceId, rows } (taskspaceId)}
-            <!-- Show the taskspace name to distinguish identical relative paths in different taskspaces. -->
-            <h3 class={taskspaceHeadingClass}>{taskspaceName(taskspaceId)}</h3>
-            <ul
-              class={css({
-                listStyle: "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: "4px",
-                marginBottom: "28px",
-              })}
-            >
-              {#each rows as { key, source, hits } (key)}
-                <li>
-                  {#snippet fileBody()}
-                    <span
-                      class={css({
-                        fontFamily: "mono",
-                        fontSize: "11.5px",
-                        color: "neutral.muted",
-                        flexShrink: "0",
-                      })}
-                    >
-                      {source.path}:{source.line}
-                    </span>
-                    <span class={excerptClass}>{hits[0].excerpt}</span>
-                  {/snippet}
-                  {@render hitRow(fileHref(taskspaceId, source.path), fileRowClass, fileBody)}
-                </li>
-              {/each}
-            </ul>
-          {/each}
+          <TagResults
+            {data}
+            {selectedTag}
+            {selectedNamespaceId}
+            {shownCount}
+            {cappedNotice}
+            {cardRows}
+            {fileRowsByTaskspace}
+            {namespaceName}
+            {taskspaceName}
+            {cardHref}
+            {fileHref}
+          />
         {/if}
 
         <!-- Show card truncation before file warnings using the shared CLI label. -->

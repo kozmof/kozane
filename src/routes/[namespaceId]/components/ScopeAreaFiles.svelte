@@ -2,7 +2,6 @@
   import { css, cx } from "styled-system/css";
   import type { ScopeArea } from "$lib/types";
   import {
-    CELL_HEIGHT,
     CELL_WIDTH,
     STRIP_GAP,
     stripWidth,
@@ -12,6 +11,15 @@
   import type { TaskspaceCreated, TaskspaceCreateKind } from "../lib/taskspace-tree.svelte.js";
   import { truncationNote } from "../lib/taskspace-truncation.js";
   import FileGlyph from "./FileGlyph.svelte";
+  import ScopeAreaFileCell from "./ScopeAreaFileCell.svelte";
+  import ScopeAreaCreateCell from "./ScopeAreaCreateCell.svelte";
+  import {
+    cellClass,
+    clickableClass,
+    createButtonClass,
+    noteClass,
+    swallow,
+  } from "../lib/scope-area-files-styles.js";
 
   let {
     area,
@@ -139,76 +147,6 @@
    */
   const named = $derived(groups.length > 1);
 
-  const noteClass = css({
-    fontSize: "10px",
-    lineHeight: "1.3",
-    color: "neutral.subtle",
-    fontStyle: "italic",
-    textAlign: "right",
-  });
-
-  const cellClass = css({
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "3px",
-    padding: "3px 2px",
-    border: "none",
-    borderRadius: "3px",
-    background: "transparent",
-    color: "neutral.iconDim",
-    fontFamily: "inherit",
-    textAlign: "center",
-  });
-
-  const clickableClass = css({
-    cursor: "pointer",
-    "&:hover": { backgroundColor: "neutral.bg", color: "ink.secondary" },
-  });
-
-  /** The create buttons side by side in the icon line of their cell. */
-  const createIconsClass = css({ display: "flex", justifyContent: "center", gap: "2px" });
-
-  /**
-   * A square around one glyph. The negative margin lets it overhang the cell's padding so the
-   * glyph itself lands exactly where a file cell draws its icon.
-   */
-  const createButtonClass = css({
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "22px",
-    height: "22px",
-    margin: "-2px 0",
-    flexShrink: "0",
-    padding: "0",
-    border: "none",
-    borderRadius: "3px",
-    background: "transparent",
-    color: "neutral.iconDim",
-  });
-
-  /**
-   * Clip names after two lines to preserve row height. Expose the complete name in the cell
-   * title.
-   */
-  const labelClass = css({
-    width: "100%",
-    fontSize: "9.5px",
-    lineHeight: "1.2",
-    maxHeight: "23px",
-    color: "neutral.secondary",
-    overflow: "hidden",
-    overflowWrap: "anywhere",
-  });
-
-  /**
-   * Stop file-cell presses from starting canvas panning or Shift-drag selection.
-   */
-  function swallow(event: MouseEvent) {
-    event.stopPropagation();
-    event.preventDefault();
-  }
 </script>
 
 <!-- Draw file icons at the frame's z-index so cards can cover them. Enable pointer events only on icon cells so gaps still allow panning and rectangle selection. -->
@@ -266,58 +204,11 @@
           })}
         >
           {#each shown.cells as cell (cell.kind === "up" ? "..up" : cell.path)}
-            {@const openable = cell.kind === "entry" && cell.entry.kind === "file" && onOpenFile}
-            {@const navigable = cell.kind === "up" || cell.entry.kind === "directory"}
-            {@const label = cell.kind === "up" ? "‹ back" : cell.entry.name}
-            {#if navigable}
-              <button
-                class={cx(cellClass, clickableClass)}
-                style:width="{CELL_WIDTH}px"
-                style:min-height="{CELL_HEIGHT}px"
-                style:pointer-events="auto"
-                aria-label={cell.kind === "up"
-                  ? `Leave ${cell.label}`
-                  : `Open folder ${cell.entry.name}`}
-                title={cell.kind === "up" ? `Leave ${cell.label}` : cell.entry.name}
-                onmousedown={swallow}
-                onclick={(e) => {
-                  e.stopPropagation();
-                  onNavigate(group.taskspaceId, cell.path);
-                }}
-              >
-                <FileGlyph kind={cell.kind === "up" ? "up" : "directory"} size={18} />
-                <span class={labelClass}>{label}</span>
-              </button>
-            {:else if openable && cell.kind === "entry"}
-              <button
-                class={cx(cellClass, clickableClass)}
-                style:width="{CELL_WIDTH}px"
-                style:min-height="{CELL_HEIGHT}px"
-                style:pointer-events="auto"
-                aria-label="Open file {cell.entry.name}"
-                title={cell.entry.name}
-                onmousedown={swallow}
-                onclick={(e) => {
-                  e.stopPropagation();
-                  onOpenFile?.(group.taskspaceId, cell.path);
-                }}
-              >
-                <FileGlyph kind="file" size={18} />
-                <span class={labelClass}>{cell.entry.name}</span>
-              </button>
-            {:else if cell.kind === "entry"}
-              <!-- Label symlinks and keep them closed to preserve taskspace containment. Keep other
-                   special entries and files without a read endpoint inactive. -->
-              <div
-                class={cellClass}
-                style:width="{CELL_WIDTH}px"
-                style:min-height="{CELL_HEIGHT}px"
-                title={cell.entry.kind === "symlink" ? "Symbolic link" : cell.entry.name}
-              >
-                <FileGlyph kind={cell.entry.kind} size={18} />
-                <span class={labelClass}>{cell.entry.name}</span>
-              </div>
-            {/if}
+            <ScopeAreaFileCell
+              {cell}
+              onNavigate={(path) => onNavigate(group.taskspaceId, path)}
+              onOpenFile={onOpenFile && ((path) => onOpenFile?.(group.taskspaceId, path))}
+            />
           {/each}
 
           {#if shown.overflow > 0}
@@ -336,68 +227,11 @@
           {#if onCreate && editing && creating}
             {@render nameField(FIELD_LABEL[creating.kind])}
           {:else if onCreate}
-            {@const where = group.path || group.name}
-            <!-- Shaped like a file cell so the pair of buttons sits where a file's icon does
-                 and the taskspace's name sits on the same line as the file names. -->
-            <div
-              class={cellClass}
-              style:width="{CELL_WIDTH}px"
-              style:min-height="{CELL_HEIGHT}px"
-              title={group.path ? `${group.name}/${group.path}` : group.name}
-            >
-              <div class={createIconsClass}>
-                <button
-                  class={cx(clickableClass, createButtonClass)}
-                  style:pointer-events="auto"
-                  aria-label="New file in {where}"
-                  title="New file in {where}"
-                  onmousedown={swallow}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    beginCreate({ kind: "file", taskspaceId: group.taskspaceId, path: group.path });
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                    <path
-                      d="M5 2v6M2 5h6"
-                      stroke="currentColor"
-                      stroke-width="0.6"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </button>
-                <button
-                  class={cx(clickableClass, createButtonClass)}
-                  style:pointer-events="auto"
-                  aria-label="New folder in {where}"
-                  title="New folder in {where}"
-                  onmousedown={swallow}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    beginCreate({ kind: "directory", taskspaceId: group.taskspaceId, path: group.path });
-                  }}
-                >
-                  <!-- The panel's new-folder glyph, so the two buttons read apart at a glance. -->
-                  <svg width="18" height="18" viewBox="0 0 10 10" fill="none" aria-hidden="true">
-                    <path
-                      d="M1 8.4V2.2h2.5l.9 1.1H8.2V5.4"
-                      stroke="currentColor"
-                      stroke-width="0.6"
-                      stroke-linejoin="round"
-                      stroke-linecap="round"
-                    />
-                    <path d="M1 8.4h3.4" stroke="currentColor" stroke-width="0.6" stroke-linecap="round" />
-                    <path
-                      d="M7.2 6v3.2M5.6 7.6h3.2"
-                      stroke="currentColor"
-                      stroke-width="0.6"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <span class={labelClass}>{group.name}</span>
-            </div>
+            <ScopeAreaCreateCell
+              name={group.name}
+              path={group.path}
+              onCreate={(kind) => beginCreate({ kind, taskspaceId: group.taskspaceId, path: group.path })}
+            />
           {/if}
         </div>
 

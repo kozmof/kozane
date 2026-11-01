@@ -1,0 +1,206 @@
+/** Card inserts, with the namespace checks foreign keys cannot make. */
+
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import {
+  cardTable,
+  inventoryTable,
+  layerTable,
+  partitionTable,
+  taskspaceTable,
+} from "../../schema.js";
+import type { NeedsPartition, NeedsTx } from "../types.js";
+import type { CardData } from "../../../lib/types.js";
+import { chunked } from "../../../lib/constants.js";
+import { NotFoundError, columnCount, readByIds } from "../utils.js";
+import { withTx, type DB } from "../../tx.js";
+import { defaultLayerIdForPartition } from "./read.js";
+import { inventoryColumns } from "./placement.js";
+
+type AddCardFields = {
+  partitionId: string;
+  content: string;
+  layerId?: string;
+  taskspaceId?: string;
+  posX?: number;
+  posY?: number;
+  zIndex?: number;
+};
+type AddCard = { db: DB } & AddCardFields;
+type AddCardInTx = NeedsTx & AddCardFields;
+/**
+ * Create both card timestamps from one clock reading. Per-column defaults could cross a
+ * second boundary and make a new card appear edited.
+ *
+ * Call once per batch so cards created together also share timestamps across insert
+ * statements.
+ */
+export function newCardStamps(): { createdAt: Date; updatedAt: Date } {
+  const now = new Date();
+  return { createdAt: now, updatedAt: now };
+}
+
+/**
+ * Refuse a layer outside the partition's namespace. Foreign keys only check that both rows
+ * exist, so without this a caller could put a card on another namespace's layer.
+ */
+async function assertLayerMatchesPartition({
+  db,
+  partitionId,
+  layerId,
+}: NeedsPartition & { layerId: string }): Promise<void> {
+  const row = await db
+    .select({ id: layerTable.id })
+    .from(layerTable)
+    .innerJoin(partitionTable, eq(partitionTable.namespaceId, layerTable.namespaceId))
+    .where(and(eq(partitionTable.id, partitionId), eq(layerTable.id, layerId)))
+    .get();
+  if (!row)
+    throw new NotFoundError(
+      `Layer layerId=${layerId} in the namespace of partitionId=${partitionId}`,
+    );
+}
+
+/**
+ * Refuse a taskspace placed in another namespace. An unplaced taskspace appears on every
+ * board, so it can link cards in any namespace.
+ */
+async function assertTaskspaceMatchesPartition({
+  db,
+  partitionId,
+  taskspaceId,
+}: NeedsPartition & { taskspaceId: string }): Promise<void> {
+  const row = await db
+    .select({ id: taskspaceTable.id })
+    .from(taskspaceTable)
+    .innerJoin(partitionTable, eq(partitionTable.id, partitionId))
+    .where(
+      and(
+        eq(taskspaceTable.id, taskspaceId),
+        or(
+          isNull(taskspaceTable.namespaceId),
+          eq(taskspaceTable.namespaceId, partitionTable.namespaceId),
+        ),
+      ),
+    )
+    .get();
+  if (!row)
+    throw new NotFoundError(
+      `Taskspace taskspaceId=${taskspaceId} in the namespace of partitionId=${partitionId}`,
+    );
+}
+
+/**
+ * Refuse an inventory outside the partition's namespace. As with layers, the foreign key only
+ * checks that the row exists.
+ */
+async function assertInventoriesMatchPartition({
+  db,
+  partitionId,
+  inventoryIds,
+}: NeedsPartition & { inventoryIds: string[] }): Promise<void> {
+  const wanted = [...new Set(inventoryIds)];
+  if (wanted.length === 0) return;
+  const found = await readByIds(wanted, (batch) =>
+    db
+      .select({ id: inventoryTable.id })
+      .from(inventoryTable)
+      .innerJoin(partitionTable, eq(partitionTable.namespaceId, inventoryTable.namespaceId))
+      .where(and(eq(partitionTable.id, partitionId), inArray(inventoryTable.id, batch))),
+  );
+  if (found.length !== wanted.length) {
+    const present = new Set(found.map(({ id }) => id));
+    const missing = wanted.find((id) => !present.has(id));
+    throw new NotFoundError(
+      `Inventory inventoryId=${missing} in the namespace of partitionId=${partitionId}`,
+    );
+  }
+}
+
+/**
+ * Insert one card in its own transaction. Routes and commands that combine the insert with
+ * other writes call {@link addCardInTx}.
+ */
+export async function addCard({ db, ...fields }: AddCard): Promise<string> {
+  return withTx(db, (tx) => addCardInTx({ db: tx, ...fields }));
+}
+
+/**
+ * {@link addCard} inside a caller-owned transaction. An explicit `layerId` or `taskspaceId`
+ * must be in the partition's namespace. Requiring a transaction keeps that check and the
+ * insert atomic, so another writer cannot move the layer or taskspace in between.
+ */
+export async function addCardInTx({
+  db,
+  partitionId,
+  content,
+  layerId,
+  taskspaceId,
+  posX,
+  posY,
+  zIndex,
+}: AddCardInTx): Promise<string> {
+  if (layerId !== undefined) await assertLayerMatchesPartition({ db, partitionId, layerId });
+  if (taskspaceId !== undefined)
+    await assertTaskspaceMatchesPartition({ db, partitionId, taskspaceId });
+  const [row] = await db
+    .insert(cardTable)
+    .values({
+      ...newCardStamps(),
+      partitionId,
+      layerId: layerId ?? (await defaultLayerIdForPartition({ db, partitionId })),
+      content,
+      taskspaceId,
+      ...(posX !== undefined && { posX }),
+      ...(posY !== undefined && { posY }),
+      ...(zIndex !== undefined && { zIndex }),
+    })
+    .returning({ id: cardTable.id });
+  return row.id;
+}
+
+type AddCards = NeedsPartition & {
+  layerId: string;
+  cards: {
+    content: string;
+    posX: number;
+    posY: number;
+    /** Store the card straight away in this inventory slot. Omit to put it on the canvas. */
+    inventory?: NonNullable<CardData["inventory"]>;
+  }[];
+};
+
+/**
+ * Insert cards into one partition and layer using {@link chunked} statements. Any inventory
+ * named must be in the partition's namespace. Return IDs in
+ * input order.
+ *
+ * Require a resolved `layerId` to avoid a default-layer lookup for each chunk.
+ */
+export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
+  if (cards.length === 0) return [];
+  await assertLayerMatchesPartition({ db, partitionId, layerId });
+  await assertInventoriesMatchPartition({
+    db,
+    partitionId,
+    inventoryIds: cards.flatMap(({ inventory }) => (inventory ? [inventory.id] : [])),
+  });
+  // Share one timestamp across all chunks. See {@link newCardStamps}.
+  const stamps = newCardStamps();
+  const ids: string[] = [];
+  for (const batch of chunked(cards, { columnsPerRow: columnCount(cardTable) })) {
+    const rows = await db
+      .insert(cardTable)
+      .values(
+        batch.map(({ inventory, ...card }) => ({
+          ...stamps,
+          partitionId,
+          layerId,
+          ...card,
+          ...inventoryColumns(inventory ?? null),
+        })),
+      )
+      .returning({ id: cardTable.id });
+    ids.push(...rows.map(({ id }) => id));
+  }
+  return ids;
+}

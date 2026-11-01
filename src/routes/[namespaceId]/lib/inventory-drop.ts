@@ -37,3 +37,15 @@ export function sameDropTarget(a: DropTarget | null, b: DropTarget | null): bool
   if (a.kind === "canvas" || b.kind === "canvas") return a.kind === b.kind;
   return a.inventoryId === b.inventoryId && a.slot === b.slot;
 }
+
+/**
+ * Inventory drag state the canvas reports to the grids outside it: the target slot, the
+ * dragged stored card, and where its preview is drawn.
+ */
+export type InventoryDrag = {
+  target: DropTarget | null;
+  cardId: string | null;
+  /** The card a drag carries, from the canvas or a grid, whose size the highlight shows. */
+  carriedCardId: string | null;
+  pointer: { x: number; y: number } | null;
+};

@@ -9,8 +9,15 @@
     selectionRects,
     visibleRange,
   } from "../lib/editor/geometry.js";
-  import { columnAtCell, TAB_SIZE } from "../lib/editor/wrap.js";
+  import { TAB_SIZE } from "../lib/editor/wrap.js";
   import { WrapView } from "../lib/editor/wrap-view.svelte.js";
+  import { handleSurfaceKey, type SurfaceKeyHost } from "../lib/editor/surface-keys.js";
+  import {
+    RowElements,
+    caretRowsAway,
+    caretWidth as measureCaretWidth,
+    drawnRows,
+  } from "../lib/editor/surface-rows.js";
 
   export type EditorMode = "insert" | "normal";
 
@@ -58,41 +65,8 @@
   const wrap = new WrapView(() => doc, { padding: PAD_X * 2, minCols: MIN_COLS });
   const layout = $derived(wrap.layout);
 
-  /**
-   * Row elements already found, by row key. A keyed row keeps its element while it stays
-   * drawn, so a hit that is still in the DOM is current.
-   */
-  const rowEls = new Map<string, HTMLElement>();
-
-  /** Key of a line's row, shared by the drawn rows and the element cache. */
-  function rowKey(line: number, index: number): string {
-    return `${line}:${index}`;
-  }
-
-  /**
-   * The drawn element of a line's row, for measurement. Found in the DOM rather than kept by
-   * an action, because a row that wrapping just created is in the DOM before its action runs,
-   * and the measuring effect can run in between.
-   */
-  function rowElement(line: number, index: number): HTMLElement | null {
-    const key = rowKey(line, index);
-    const cached = rowEls.get(key);
-    if (cached?.isConnected) return cached;
-    const found =
-      scrollEl?.querySelector<HTMLElement>(`[data-line="${line}"][data-row-index="${index}"]`) ??
-      null;
-    if (!found) {
-      rowEls.delete(key);
-      return null;
-    }
-    // Rows scrolled away leave stale entries behind. Drop those, and keep the rows still drawn
-    // so the next measurements find them without searching again.
-    if (rowEls.size >= 512) {
-      for (const [k, el] of rowEls) if (!el.isConnected) rowEls.delete(k);
-    }
-    rowEls.set(key, found);
-    return found;
-  }
+  const rowElements = new RowElements(() => scrollEl);
+  const rowElement = (line: number, index: number) => rowElements.get(line, index);
 
   // Measure the font's cell width, again once web fonts finish loading and whenever a font
   // loads later, such as a fallback for characters first typed now. Without layout, as in
@@ -140,33 +114,8 @@
     return doc.visibleLines(first, last - first + 1, 0);
   });
 
-  type Row = {
-    key: string;
-    line: number;
-    index: number;
-    /** Row number in the whole document. */
-    row: number;
-    /** Column of the line where the row starts. */
-    start: number;
-    text: string;
-  };
-
   /** The drawn rows of the drawn lines. A long line draws only its rows in view. */
-  const rows = $derived.by(() => {
-    const out: Row[] = [];
-    for (const { lineNumber: line, content } of lines) {
-      const starts = layout.rowStarts(line);
-      const base = layout.firstRow(line);
-      for (let index = 0; index < starts.length; index++) {
-        const row = base + index;
-        if (row < shownRows[0] || row >= shownRows[1]) continue;
-        const start = starts[index];
-        const text = content.slice(start, starts[index + 1] ?? content.length);
-        out.push({ key: rowKey(line, index), line, index, row, start, text });
-      }
-    }
-    return out;
-  });
+  const rows = $derived(drawnRows(lines, layout, shownRows));
   const contentHeight = $derived(layout.rowCount * LINE_HEIGHT);
   /** Which of its line's rows the caret is on, where IME preedit text is drawn. */
   const caretRowIndex = $derived(layout.rowIndex(caret.line, caret.column));
@@ -199,20 +148,7 @@
         })
       : [];
     caretXY = caretPoint(caret, LINE_HEIGHT, measure, layout);
-    const lineText = doc.lineText(caret.line);
-    const after = doc.columnAfter(caret.line, caret.column);
-    // A block cursor on a row's last character, before a wrap, cannot measure up to the next
-    // column, which is drawn on the following row.
-    const rowEnds =
-      layout.rowIndex(caret.line, after) !== layout.rowIndex(caret.line, caret.column);
-    caretWidth = mode !== "normal"
-      ? 2
-      : caret.column >= lineText.length || rowEnds
-        ? FONT_SIZE * 0.6
-        : Math.max(
-            2,
-            measure.columnToX(caret.line, after) - measure.columnToX(caret.line, caret.column),
-          );
+    caretWidth = measureCaretWidth(measures, caret, mode, FONT_SIZE);
   });
 
   export function focus(): void {
@@ -263,29 +199,18 @@
    */
   let goal: { caret: Caret; x: number; offset: number } | null = null;
 
-  /**
-   * The caret `by` rows above or below the caret, as near `x` as the target row allows. A row
-   * out of view cannot be measured, so count cells to `x` instead, or, before the font is
-   * measured, aim for `offset` columns into the row.
-   */
-  function caretRowsAway(by: number, x: number, offset: number): Caret {
-    const here = layout.rowOf(caret.line, caret.column);
-    const { line, index } = layout.rowAt(here + by);
-    if (wrap.wraps && rowElement(line, index))
-      return { line, column: measure.xToColumn(line, x, index) };
-    const start = layout.rowStarts(line)[index];
-    const end = layout.rowEnd(line, index);
-    let column: number;
-    if (wrap.wraps) {
-      const lineText = doc.lineText(line);
-      column = columnAtCell(lineText, start, end ?? lineText.length, wrap.cellsAt(x), TAB_SIZE);
-    } else {
-      column = start + offset;
-    }
-    // A wrapped row's last column is drawn on the next row, so stop before it. Clamping snaps
-    // back to the start of the character.
-    return { line, column: end === null ? column : Math.min(column, end - 1) };
-  }
+  /** Caret measurements read the surface's current layout and drawn rows. */
+  const measures = {
+    get doc() {
+      return doc;
+    },
+    get layout() {
+      return layout;
+    },
+    wrap,
+    measure,
+    rowElement,
+  };
 
   function moveByRows(by: number, extend: boolean): void {
     const kept = goal && sameCaret(goal.caret, caret) ? goal : null;
@@ -293,7 +218,7 @@
     const offset = kept
       ? kept.offset
       : caret.column - layout.rowStarts(caret.line)[layout.rowIndex(caret.line, caret.column)];
-    moveTo(caretRowsAway(by, x, offset), extend);
+    moveTo(caretRowsAway(measures, caret, by, x, offset), extend);
     goal = { caret, x, offset };
   }
 
@@ -309,142 +234,38 @@
       return;
     }
 
-    const extend = event.shiftKey;
-    const accel = event.ctrlKey || event.metaKey;
-    const lastLine = Math.max(0, doc.lineCount - 1);
-
-    // Let the parent handle saving and closing.
-    if (accel && (event.key === "s" || event.key === "S")) return;
-
-    if (accel) {
-      switch (event.key) {
-        case "z":
-        case "Z": {
-          event.preventDefault();
-          // Move the caret to the undone edit so the changed text stays visible.
-          const to = event.shiftKey ? doc.redo() : doc.undo();
-          collapse();
-          caret = doc.clamp(to ?? caret);
-          return;
-        }
-        case "y": {
-          event.preventDefault();
-          const to = doc.redo();
-          collapse();
-          caret = doc.clamp(to ?? caret);
-          return;
-        }
-        case "a":
-          event.preventDefault();
-          anchor = { line: 0, column: 0 };
-          caret = { line: lastLine, column: doc.lineText(lastLine).length };
-          return;
-        case "Home":
-          event.preventDefault();
-          moveTo({ line: 0, column: 0 }, extend);
-          return;
-        case "End":
-          event.preventDefault();
-          moveTo({ line: lastLine, column: doc.lineText(lastLine).length }, extend);
-          return;
-      }
-      // Leave clipboard accelerators to the browser, which dispatches the handled clipboard
-      // events.
-      return;
-    }
-
-    switch (event.key) {
-      case "ArrowLeft": {
-        event.preventDefault();
-        if (caret.column > 0)
-          moveTo({ line: caret.line, column: doc.columnBefore(caret.line, caret.column) }, extend);
-        else if (caret.line > 0)
-          moveTo({ line: caret.line - 1, column: doc.lineText(caret.line - 1).length }, extend);
-        return;
-      }
-      case "ArrowRight": {
-        event.preventDefault();
-        if (caret.column < doc.lineText(caret.line).length)
-          moveTo({ line: caret.line, column: doc.columnAfter(caret.line, caret.column) }, extend);
-        else if (caret.line < lastLine) moveTo({ line: caret.line + 1, column: 0 }, extend);
-        return;
-      }
-      case "ArrowUp":
-        event.preventDefault();
-        moveByRows(-1, extend);
-        return;
-      case "ArrowDown":
-        event.preventDefault();
-        moveByRows(1, extend);
-        return;
-      case "PageUp":
-        event.preventDefault();
-        moveByRows(-Math.floor(viewportHeight / LINE_HEIGHT), extend);
-        return;
-      case "PageDown":
-        event.preventDefault();
-        moveByRows(Math.floor(viewportHeight / LINE_HEIGHT), extend);
-        return;
-      case "Home":
-        event.preventDefault();
-        moveTo({ line: caret.line, column: 0 }, extend);
-        return;
-      case "End":
-        event.preventDefault();
-        moveTo({ line: caret.line, column: doc.lineText(caret.line).length }, extend);
-        return;
-    }
-
-    if (readonly) return;
-
-    switch (event.key) {
-      case "Enter":
-        event.preventDefault();
-        insertText("\n");
-        return;
-      case "Tab":
-        event.preventDefault();
-        insertText("  ");
-        return;
-      case "Backspace": {
-        event.preventDefault();
-        if (deleteSelection()) return;
-        // Restore the caret to the deleted range's end when undoing Backspace.
-        if (caret.column > 0)
-          caret = doc.delete(
-            { line: caret.line, column: doc.columnBefore(caret.line, caret.column) },
-            caret,
-            caret,
-          );
-        else if (caret.line > 0)
-          caret = doc.delete(
-            { line: caret.line - 1, column: doc.lineText(caret.line - 1).length },
-            caret,
-            caret,
-          );
-        return;
-      }
-      case "Delete": {
-        event.preventDefault();
-        if (deleteSelection()) return;
-        const lineLength = doc.lineText(caret.line).length;
-        if (caret.column < lineLength)
-          caret = doc.delete(caret, {
-            line: caret.line,
-            column: doc.columnAfter(caret.line, caret.column),
-          });
-        else if (caret.line < lastLine)
-          caret = doc.delete(caret, { line: caret.line + 1, column: 0 });
-        return;
-      }
-    }
-
-    // Handle a single printable code point. Leave unrecognized named keys unhandled.
-    if ([...event.key].length === 1 && !event.altKey) {
-      event.preventDefault();
-      insertText(event.key);
-    }
+    handleSurfaceKey(event, keyHost);
   }
+
+  /** The surface's state and edits, as the default key handling sees them. */
+  const keyHost: SurfaceKeyHost = {
+    get doc() {
+      return doc;
+    },
+    get caret() {
+      return caret;
+    },
+    set caret(next) {
+      caret = next;
+    },
+    get anchor() {
+      return anchor;
+    },
+    set anchor(next) {
+      anchor = next;
+    },
+    get readonly() {
+      return readonly;
+    },
+    get pageRows() {
+      return Math.floor(viewportHeight / LINE_HEIGHT);
+    },
+    moveTo,
+    moveByRows,
+    collapse,
+    deleteSelection,
+    insertText,
+  };
 
   // Keep composition text in the input sink and display the preedit inline. Update the
   // document only when composition commits.

@@ -4,45 +4,28 @@
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
-  import { goto, replaceState } from "$app/navigation";
   import { page } from "$app/state";
-  import {
-    fetchWarpDirectory,
-    parseWarpEntries,
-    deleteWarp,
-    failureMessage,
-  } from "./lib/namespace-api.js";
-  import { applyPalette } from "$lib/palette";
-  import { ARROW_DIRECTIONS, warpInDirection } from "./lib/namespace-page.js";
-  import {
-    cardMetrics,
-    warpEntriesForNamespace,
-    withoutWarp,
-    type WarpListEntry,
-  } from "$lib/warp-list";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
   import { boardKeyBindings } from "./lib/board-bindings.js";
   import { createBoardPersistence } from "./lib/board-persistence.js";
-  import type { BoardPoint } from "./lib/canvas-viewport.js";
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
   import ScopeSidebar from "./components/ScopeSidebar.svelte";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
   import FloatingControls from "./components/FloatingControls.svelte";
-  import LayerControl from "./components/LayerControl.svelte";
-  import ScopeControl from "./components/ScopeControl.svelte";
-  import SidePanelToggle from "./components/SidePanelToggle.svelte";
-  import FloatingComposer from "./components/FloatingComposer.svelte";
-  import ScopeAreaPrompt from "./components/ScopeAreaPrompt.svelte";
+  import BoardControls from "./components/BoardControls.svelte";
+  import BoardComposer from "./components/BoardComposer.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
-  import InventoryWindow from "./components/InventoryWindow.svelte";
+  import InventoryDock from "./components/InventoryDock.svelte";
   import { createInventoryActions } from "./lib/inventory-actions.js";
-  import { cardSpan } from "$lib/inventory";
-  import type { DropTarget } from "./lib/inventory-drop.js";
-  import { STOWED_GRAB_INSET } from "./lib/board-gestures.svelte.js";
-  import { INVENTORY_CELL, clampZoom } from "$lib/constants";
-  import type { Inventory } from "$lib/types";
+  import type { InventoryDrag } from "./lib/inventory-drop.js";
+  import { arrivalWarp, clearArrivalParams, readArrival } from "./lib/board-arrival.js";
+  import { createBoardFiles } from "./lib/board-files.js";
+  import { BoardWarps } from "./lib/board-warps.svelte.js";
+  import { BoardView } from "./lib/board-view.svelte.js";
+  import { PendingFrame } from "./lib/pending-frame.svelte.js";
+  import { clampZoom } from "$lib/constants";
   import ErrorBanner from "./components/ErrorBanner.svelte";
   import FileEditor from "./components/FileEditor.svelte";
   import FilePalette from "./components/FilePalette.svelte";
@@ -70,9 +53,7 @@
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
   let showFooters = $state(untrack(() => data.uiConfig.defaultShowFooter));
-  let warpsVisible = $state(untrack(() => data.uiConfig.defaultShowWarps));
   let zoom = $state(untrack(() => data.uiConfig.defaultZoom));
-  let warpPaletteOpen = $state(false);
   // The file palette, opened from a selection. Unlike the warp palette it is up while
   // cards are selected, which is why the composer is told to stand down below.
   let filePaletteOpen = $state(false);
@@ -83,9 +64,6 @@
   let editorWidth = $state<number | null>(null);
   // Whether the editor stays open on a click outside it. Kept here for the same reason.
   let editorPinned = $state(false);
-  // Load other namespaces' warps with the page, then refresh when the palette opens. Older
-  // static exports may omit this directory.
-  let warpDirectory = $state.raw<WarpListEntry[]>(untrack(() => data.warpDirectory ?? []));
   let newCardSeq = 0;
   // Track the drag and its save separately from requests so polling pauses before the final
   // PATCH begins.
@@ -96,67 +74,29 @@
   const noSelection = () => s.selection.selectedCards.size === 0;
 
   // ── Canvas component ref (for getNewCardPosition) ─────────────
-  let canvasComponent: {
-    getNewCardPosition: (seq: number) => BoardPoint;
-    getViewCenter: () => BoardPoint;
-    getWarpPosition: () => BoardPoint;
-    isCenteredOn: (posX: number, posY: number) => boolean;
-    centerOn: (posX: number, posY: number) => void;
-    recenter: () => void;
-    cardIdsInWorldRect: (rect: { x: number; y: number; w: number; h: number }) => string[];
-    pressStowedCard: (e: MouseEvent, cardId: string) => void;
-  } = $state()!;
-  let composerComponent: { focusInput: () => void } = $state()!;
+  let canvasComponent: ReturnType<typeof KozaneCanvas> = $state()!;
+  let composerComponent: ReturnType<typeof BoardComposer> | undefined = $state();
+
+  // Warp markers, the warp palette, and arrow-key navigation between warps.
+  const warps = new BoardWarps(
+    {
+      s,
+      readonly,
+      removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
+      canvas: () => canvasComponent,
+    },
+    untrack(() => ({
+      visible: data.uiConfig.defaultShowWarps,
+      directory: data.warpDirectory ?? [],
+    })),
+  );
 
   // ── Derived values ────────────────────────────────────────────
-  let partitionsWithColors = $derived(applyPalette(s.partitions));
-  let partitionColorById = $derived(new Map(partitionsWithColors.map((b) => [b.id, b])));
-  // A stored card lives in its inventory's grid and is not drawn on the canvas.
-  let canvasCards = $derived(s.cards.filter((c) => c.inventory === null));
-  let visibleCards = $derived(
-    s.sidebar.activePartition
-      ? canvasCards.filter((c) => c.partitionId === s.sidebar.activePartition)
-      : canvasCards,
+  const view = new BoardView(
+    s,
+    () => data,
+    () => warps.directory,
   );
-  let scopeCardIds = $derived(
-    s.sidebar.activeScope
-      ? new Set(s.scopeRels.filter((r) => r.scopeId === s.sidebar.activeScope).map((r) => r.cardId))
-      : null,
-  );
-  /** What each frame writes on its tab. Built from the scopes this board draws. */
-  let scopeNameById = $derived(new Map(s.scopes.map((scope) => [scope.id, scope.name])));
-  /** How many frames each scope has on this board, which is what the panel reports. */
-  let frameCountByScopeId = $derived(
-    s.scopeAreas.reduce(
-      (counts, area) => counts.set(area.scopeId, (counts.get(area.scopeId) ?? 0) + 1),
-      new Map<string, number>(),
-    ),
-  );
-  let defaultPartitionId = $derived(s.sidebar.activePartition ?? partitionsWithColors[0]?.id ?? "");
-  // One pass over the cards instead of a scan per selected id. A selection is capped at
-  // BATCH_MAX, so the pair-wise form was up to two thousand scans of the whole board on
-  // every keystroke that touched the selection.
-  let cardById = $derived(new Map(s.cards.map((c) => [c.id, c])));
-  // Drop selected IDs whose cards were deleted before the next snapshot arrived.
-  let selectedCardObjects = $derived(
-    [...s.selection.selectedCards].flatMap((id) => cardById.get(id) ?? []),
-  );
-  let selectionGlueRels = $derived(s.glueRels.filter((r) => s.selection.selectedCards.has(r.cardId)));
-  let primaryCard = $derived(
-    s.selection.primarySelectedId ? (cardById.get(s.selection.primarySelectedId) ?? null) : null,
-  );
-  // This namespace's rows come from live state rather than the server, so a warp just set
-  // with the warp key is in the palette before any request comes back.
-  let warpEntries = $derived([
-    ...warpEntriesForNamespace({
-      namespace: { id: data.namespace.id, name: data.namespace.name },
-      warps: s.warps,
-      cards: canvasCards,
-      metrics: cardMetrics(data.uiConfig),
-      isCurrent: true,
-    }),
-    ...warpDirectory,
-  ]);
 
   // ── Reset on namespace navigation ───────────────────────────────
   let loadedNamespaceId = $state(untrack(() => data.namespace.id));
@@ -169,12 +109,12 @@
       loadedNamespaceId = data.namespace.id;
       // Replace the warp directory only on namespace changes so same-namespace reloads
       // preserve palette updates. Older static exports may omit the directory.
-      warpDirectory = data.warpDirectory ?? [];
+      warps.directory = data.warpDirectory ?? [];
       s.resetFromData(data);
       newCardSeq = 0;
       sidebarsVisible = data.uiConfig.defaultShowSidePanel;
       showFooters = data.uiConfig.defaultShowFooter;
-      warpsVisible = data.uiConfig.defaultShowWarps;
+      warps.visible = data.uiConfig.defaultShowWarps;
       zoom = data.uiConfig.defaultZoom;
       // Cross-namespace navigation reuses this component, so land here without waiting for
       // the canvas to remount.
@@ -184,16 +124,12 @@
     }
   });
 
-  /**
-   * The warp named by `?warp=`, which is how a jump to another namespace says where it was
-   * headed. Null whenever the id is absent or belongs to a warp this namespace no longer has.
-   */
+  /** The warp named by `?warp=`. Read only in the browser: prerendering has no query. */
   function warpFromUrl() {
-    // Read query parameters only in the browser. Static prerendering cannot access them.
-    if (!browser) return null;
-    const warpId = page.url.searchParams.get("warp");
-    return warpId ? (s.warps.find(({ id }) => id === warpId) ?? null) : null;
+    return browser ? arrivalWarp(page.url.searchParams, s.warps) : null;
   }
+
+  const clearQuery = (...names: string[]) => clearArrivalParams(page.url, names);
 
   /**
    * Open a namespace at the requested warp or at its center. Do not reuse the previous
@@ -205,7 +141,7 @@
       tick().then(() => canvasComponent.recenter());
       return;
     }
-    focusWarp(target.id);
+    warps.focus(target.id);
     tick().then(() => {
       canvasComponent.centerOn(target.posX, target.posY);
       clearQuery("warp");
@@ -213,66 +149,31 @@
   }
 
   /**
-   * Remove arrival parameters after use so reloading does not repeat the jump. Preserve
-   * unrelated parameters and ignore router errors during this cosmetic update.
-   */
-  function clearQuery(...names: string[]) {
-    const url = new URL(page.url);
-    for (const name of names) url.searchParams.delete(name);
-    try {
-      replaceState(`${url.pathname}${url.search}`, {});
-    } catch {
-      // Ignored for the reason given above.
-    }
-  }
-
-  /** Resolve the card named by `?card=`, or return null if it is absent from this namespace. */
-  function cardFromUrl() {
-    if (!browser) return null;
-    const cardId = page.url.searchParams.get("card");
-    return cardId ? (s.cards.find(({ id }) => id === cardId) ?? null) : null;
-  }
-
-  /**
    * Open the card named by `?card=` or the taskspace file named by `?taskspace=&path=`.
-   * Remove those parameters after use, as with `?warp=`.
+   * Remove those parameters after use, as with `?warp=`. See `readArrival`.
    */
   function openFromUrl() {
     if (!browser) return;
 
-    // Read all URL actions before applying them, then remove handled parameters together so
-    // asynchronous actions cannot read a partially cleared URL.
-    const card = cardFromUrl();
-    const taskspaceId = page.url.searchParams.get("taskspace");
-    const path = page.url.searchParams.get("path");
-    // Open static-export files only when their contents are embedded. There is no live
-    // endpoint to fetch omitted content.
-    const taskspace =
-      taskspaceId && path && !(readonly && !staticFiles)
-        ? (s.taskspaces.find(({ id }) => id === taskspaceId) ?? null)
-        : null;
-
-    const acted: string[] = [];
-    if (taskspace && path) {
-      editor.open(editorContext, { taskspaceId: taskspace.id, taskspaceName: taskspace.name, path });
-      acted.push("taskspace", "path");
+    // Open static-export files only when their contents are embedded.
+    const { card, file, inventory, handled } = readArrival(
+      page.url.searchParams,
+      s,
+      !(readonly && !staticFiles),
+    );
+    if (file) {
+      const { taskspace, path } = file;
+      files.open(taskspace.id, taskspace.name, path);
     }
-    if (card) {
-      // Select the card as well as centring it so the matched card is clear on a dense board.
-      // Skip selection in read-only exports, where it cannot be cleared.
-      if (!readonly) {
-        s.selection.selectedCards = new Set([card.id]);
-        s.selection.primarySelectedId = card.id;
-      }
-      acted.push("card");
+    // Select the card as well as centring it so the matched card is clear on a dense board.
+    // Skip selection in read-only exports, where it cannot be cleared.
+    if (card && !readonly) {
+      s.selection.selectedCards = new Set([card.id]);
+      s.selection.primarySelectedId = card.id;
     }
-    if (acted.length > 0) clearQuery(...acted);
+    if (handled.length > 0) clearQuery(...handled);
 
-    // A stored card's own position is where it last sat on the canvas, so land on the icon of
-    // the inventory holding it instead, and open its grid to show the card there.
-    const inventory = card?.inventory
-      ? (s.inventories.find(({ id }) => id === card.inventory?.id) ?? null)
-      : null;
+    // Open the grid of the inventory holding a stored card, to show the card there.
     if (inventory) s.openInventoryIds = new Set([...s.openInventoryIds, inventory.id]);
     const landing = inventory ?? card;
 
@@ -287,7 +188,7 @@
   // Resolved before the canvas mounts, so a page loaded with `?warp=` opens on the warp
   // instead of scrolling to it once the middle of the board has already been painted.
   const initialWarp = untrack(warpFromUrl);
-  if (initialWarp) untrack(() => focusWarp(initialWarp.id));
+  if (initialWarp) untrack(() => warps.focus(initialWarp.id));
 
   onMount(() => {
     if (initialWarp) clearQuery("warp");
@@ -319,68 +220,12 @@
   const inventoryActions = createInventoryActions(s);
 
   /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
-  let inventoryDrag = $state<{
-    target: DropTarget | null;
-    cardId: string | null;
-    carriedCardId: string | null;
-    pointer: { x: number; y: number } | null;
-  }>({ target: null, cardId: null, carriedCardId: null, pointer: null });
-
-  /** An inventory's name, or its number in creation order when it has none. */
-  function inventoryLabel(inventory: Inventory): string {
-    if (inventory.name) return inventory.name;
-    return `Inventory ${s.inventories.findIndex(({ id }) => id === inventory.id) + 1}`;
-  }
-
-  /** The open inventories, in creation order, each with the cards it holds. */
-  let openInventories = $derived(
-    s.inventories
-      .filter(({ id }) => s.openInventoryIds.has(id))
-      .map((inventory) => ({
-        inventory,
-        cards: s.cards.filter((c) => c.inventory?.id === inventory.id),
-      })),
-  );
-
-  /** The open inventory the composer's new cards go into. See `receivingInventoryId`. */
-  let receivingInventory = $derived(
-    s.inventories.find(({ id }) => id === s.receivingInventoryId) ?? null,
-  );
-
-  /** Rows the carried card covers, for the drop highlight. */
-  let carriedSpan = $derived.by(() => {
-    const carried = inventoryDrag.carriedCardId ? cardById.get(inventoryDrag.carriedCardId) : null;
-    return carried ? cardSpan(carried.content) : 1;
+  let inventoryDrag = $state<InventoryDrag>({
+    target: null,
+    cardId: null,
+    carriedCardId: null,
+    pointer: null,
   });
-
-  let draggedStoredCard = $derived(
-    inventoryDrag.cardId ? (cardById.get(inventoryDrag.cardId) ?? null) : null,
-  );
-
-  /**
-   * Select a stored card the way a click selects a canvas one, so the composer's actions
-   * reach it. A stored card has no glue group, so it is selected alone.
-   */
-  function handleStoredCardClick(e: MouseEvent, cardId: string) {
-    if (readonly) return;
-    const { selection } = s;
-    if (selection.composerCard && selection.composerCard.id !== cardId) selection.composerCard = null;
-    if (e.shiftKey) {
-      const next = new Set(selection.selectedCards);
-      if (!next.delete(cardId)) next.add(cardId);
-      selection.selectedCards = next;
-      return;
-    }
-    const onlyThis = selection.selectedCards.size === 1 && selection.selectedCards.has(cardId);
-    selection.selectedCards = onlyThis ? new Set() : new Set([cardId]);
-    selection.primarySelectedId = onlyThis ? null : cardId;
-  }
-
-  function handleStoredCardDblClick(cardId: string) {
-    if (readonly) return;
-    const card = cardById.get(cardId);
-    if (card) s.selection.composerCard = card;
-  }
 
   function handleComposerSubmit(id: string | null, content: string, partitionId: string) {
     return persistence.submitComposer(id, content, partitionId, () =>
@@ -388,69 +233,17 @@
     );
   }
 
-  /**
-   * An Alt-drawn rectangle awaiting a scope. The canvas sets it on release, and the page
-   * clears it after handling the scope prompt.
-   */
-  let pendingScopeAreaRect = $state<{ x: number; y: number; w: number; h: number } | null>(null);
-
-  /**
-   * Card count measured when the rectangle is drawn, for display in the prompt.
-   * `handleChooseScopeForArea` measures again when the user answers to account for
-   * intervening changes.
-   */
-  let pendingScopeAreaCardCount = $state(0);
-  $effect(() => {
-    const rect = pendingScopeAreaRect;
-    pendingScopeAreaCardCount = rect ? canvasComponent.cardIdsInWorldRect(rect).length : 0;
+  /** An Alt-drawn rectangle awaiting a scope from the prompt. */
+  const frame = new PendingFrame({
+    cardIdsIn: (rect) => canvasComponent.cardIdsInWorldRect(rect),
+    addToScope: actions.handleCreateScopeArea,
+    addToNewScope: actions.handleCreateScopeWithArea,
   });
-
-  /** The drawn rectangle as the API takes it. */
-  function pendingRectAsArea(rect: { x: number; y: number; w: number; h: number }) {
-    return { posX: rect.x, posY: rect.y, width: rect.w, height: rect.h };
-  }
-
-  async function handleChooseScopeForArea(scopeId: string) {
-    const rect = pendingScopeAreaRect;
-    if (!rect) return;
-    // Measure again because polling may have changed the board while the prompt was open.
-    const covers = canvasComponent.cardIdsInWorldRect(rect);
-    pendingScopeAreaRect = null;
-    await actions.handleCreateScopeArea(scopeId, pendingRectAsArea(rect), covers);
-  }
-
-  async function handleCreateScopeForArea(name: string) {
-    const rect = pendingScopeAreaRect;
-    if (!rect) return;
-    const covers = canvasComponent.cardIdsInWorldRect(rect);
-    pendingScopeAreaRect = null;
-    await actions.handleCreateScopeWithArea(name, pendingRectAsArea(rect), covers);
-  }
+  $effect(() => frame.measure());
 
   /** Shows the card's resize handle, or takes it away when it is the one already showing. */
   function handleResizeToggle(cardId: string) {
     s.selection.resizingCardId = s.selection.resizingCardId === cardId ? null : cardId;
-  }
-
-  /** Refresh the palette with warps added by another tab or the CLI. */
-  async function refreshWarpDirectory() {
-    // A static export has no endpoint to ask, and nothing can have changed under it.
-    if (readonly) return;
-    try {
-      const res = await fetchWarpDirectory(s.fetcher, s.namespaceId);
-      if (!res.ok) return;
-      const parsed = parseWarpEntries(await res.json().catch(() => null));
-      // An answer that is not a list of rows is treated as no answer at all.
-      if (parsed) warpDirectory = parsed;
-    } catch {
-      // Keep the copy that came with the page, because a stale list beats an empty one.
-    }
-  }
-
-  /** Focus a warp and reveal its marker so the remove shortcut's target is visible. */
-  function focusWarp(warpId: string) {
-    warpsVisible = true;
-    s.focusedWarpId = warpId;
   }
 
   const editorContext = $derived({
@@ -459,96 +252,13 @@
     staticFiles,
   });
 
-  /**
-   * Close the palette before opening its selected file so the editor receives focus and
-   * outside-press events correctly.
-   */
-  function handlePaletteOpenFile(taskspaceId: string, taskspaceName: string, path: string) {
-    filePaletteOpen = false;
-    editor.open(editorContext, { taskspaceId, taskspaceName, path });
-  }
-
-  /**
-   * Open a file from a scope frame's icon. Resolve the taskspace name here for the editor
-   * title using the same rows that supply the canvas icons.
-   */
-  function handleFrameOpenFile(taskspaceId: string, path: string) {
-    const taskspace = s.taskspaces.find(({ id }) => id === taskspaceId);
-    if (!taskspace) return;
-    editor.open(editorContext, { taskspaceId, taskspaceName: taskspace.name, path });
-  }
-
-  /** Create a scope, taskspace, and file, then open the new file. */
-  async function handlePaletteCreate(names: {
-    scope: string;
-    taskspace: string;
-    file: string;
-  }) {
-    const made = await actions.handleCreateScopeWithFile(names);
-    if (!made) return; // the action has already said why
-    handlePaletteOpenFile(made.taskspaceId, made.taskspaceName, made.path);
-  }
-
-  function handleWarpJump(entry: WarpListEntry) {
-    warpPaletteOpen = false;
-    if (entry.namespaceId === s.namespaceId) {
-      canvasComponent.centerOn(entry.posX, entry.posY);
-      focusWarp(entry.id);
-      return;
-    }
-    // Pass cross-namespace warp targets in the URL so the destination page controls its
-    // viewport and the link can be shared. Preserve the route's trailing-slash style.
-    const slash = page.url.pathname.endsWith("/") ? "/" : "";
-    void goto(`${base}/${entry.namespaceId}${slash}?warp=${entry.id}`);
-  }
-
-  /**
-   * Remove a warp through the palette, including warps in other namespaces. The `x` shortcut
-   * affects only the focused marker on this board.
-   */
-  async function handleWarpDelete(entry: WarpListEntry) {
-    if (entry.namespaceId === s.namespaceId) {
-      // Same path the `x` key takes, so one warp cannot be removed two different ways.
-      await actions.handleRemoveWarp(entry.id);
-      return;
-    }
-    const previous = warpDirectory;
-    warpDirectory = withoutWarp(warpDirectory, entry.id);
-    const res = await deleteWarp(s.mutationFetcher, entry.namespaceId, entry.id);
-    if (!res.ok) {
-      warpDirectory = previous;
-      s.setError(await failureMessage(res, "Failed to remove warp"));
-    }
-  }
-
-  /**
-   * Exclude the focused warp once the viewport is as centered on it as canvas bounds allow.
-   * Otherwise an edge warp remains ahead of the center and repeated arrow navigation keeps
-   * choosing it. Panning away makes it eligible again.
-   */
-  function reachableWarps() {
-    const focused = s.warps.find(({ id }) => id === s.focusedWarpId);
-    return focused && canvasComponent.isCenteredOn(focused.posX, focused.posY)
-      ? s.warps.filter(({ id }) => id !== focused.id)
-      : s.warps;
-  }
-
-  /** Center on a warp in the arrow key's direction and return whether one was found. */
-  function warpToward(key: string): boolean {
-    // Measured from where the view is now, so warping works the same whether you arrived
-    // by arrow key or by dragging the canvas.
-    const { posX, posY } = canvasComponent.getViewCenter();
-    const target = warpInDirection(
-      reachableWarps(),
-      { x: posX, y: posY },
-      ARROW_DIRECTIONS[key],
-      s.focusedWarpId,
-    );
-    if (!target) return false;
-    canvasComponent.centerOn(target.posX, target.posY);
-    focusWarp(target.id);
-    return true;
-  }
+  const files = createBoardFiles({
+    s,
+    editor,
+    context: () => editorContext,
+    closeFilePalette: () => (filePaletteOpen = false),
+    createScopeWithFile: actions.handleCreateScopeWithFile,
+  });
 
   /**
    * Derive keyboard bindings from the current namespace configuration.
@@ -557,27 +267,24 @@
   const keyBindings = $derived(
     boardKeyBindings(data.uiConfig, {
       readonly,
-      hasPendingFrame: () => pendingScopeAreaRect !== null,
+      hasPendingFrame: () => frame.rect !== null,
       noSelection,
       hasFocusedWarp: () => s.focusedWarpId !== null,
-      dismissPendingFrame: () => (pendingScopeAreaRect = null),
+      dismissPendingFrame: () => frame.cancel(),
       focusComposer: () => {
         s.selection.composerCard = null;
         s.selection.selectedCards = new Set();
         s.selection.primarySelectedId = null;
-        tick().then(() => composerComponent.focusInput());
+        tick().then(() => composerComponent?.focusInput());
       },
       toggleFooters: () => (showFooters = !showFooters),
       togglePanels: () => (sidebarsVisible = !sidebarsVisible),
-      toggleWarps: () => (warpsVisible = !warpsVisible),
-      openWarpPalette: () => {
-        warpPaletteOpen = true;
-        void refreshWarpDirectory();
-      },
-      warpToward,
+      toggleWarps: () => (warps.visible = !warps.visible),
+      openWarpPalette: () => warps.openPalette(),
+      warpToward: (key) => warps.toward(key),
       setWarpHere: () => {
         // A warp you cannot see is a warp you cannot remove, so setting one reveals them.
-        warpsVisible = true;
+        warps.visible = true;
         void actions.handleSetWarp(canvasComponent.getWarpPosition());
       },
       removeFocusedWarp: () => {
@@ -591,7 +298,7 @@
   function handleKeydown(e: KeyboardEvent) {
     // Apply keyboard ownership gates before resolving shortcuts. Open palettes own all keys,
     // including their close shortcut.
-    if (warpPaletteOpen) return;
+    if (warps.paletteOpen) return;
     if (filePaletteOpen) return;
     // An open editor owns the keyboard even when focus is on panel controls that do not stop
     // propagation. A pinned one is left open while the board is used, so the board keeps its
@@ -618,7 +325,7 @@
     visible={sidebarsVisible}
     panelWidth={data.uiConfig.leftPanelWidth}
     cards={s.cards}
-    partitions={partitionsWithColors}
+    partitions={view.partitions}
     bind:activePartition={s.sidebar.activePartition}
     bind:newPartitionName={s.sidebar.newPartitionName}
     onCreatePartition={actions.handleCreatePartition}
@@ -630,35 +337,35 @@
     <KozaneCanvas
       bind:this={canvasComponent}
       bind:cards={s.cards}
-      {visibleCards}
+      visibleCards={view.visibleCards}
       glueRels={s.glueRels}
       layers={s.layers}
       activeLayerId={s.activeLayerId}
-      {partitionColorById}
+      partitionColorById={view.partitionColorById}
       selection={s.selection}
-      {scopeCardIds}
+      scopeCardIds={view.scopeCardIds}
       bind:scopeAreas={s.scopeAreas}
-      {scopeNameById}
+      scopeNameById={view.scopeNameById}
       activeScopeId={s.sidebar.activeScope}
       taskspaces={s.taskspaces}
       taskspaceTree={s.taskspaceTree}
       treeContext={editorContext}
-      onOpenFile={!readonly || staticFiles ? handleFrameOpenFile : undefined}
+      onOpenFile={!readonly || staticFiles ? files.openFromFrame : undefined}
       onCreateTaskspace={readonly ? undefined : actions.createTaskspace}
-      bind:pendingScopeAreaRect
+      bind:pendingScopeAreaRect={frame.rect}
       onPersistScopeArea={persistence.persistScopeArea}
       onRemoveScopeArea={actions.handleDeleteScopeArea}
       onScopeMembershipChange={actions.handleScopeMembershipChange}
       bind:warps={s.warps}
       focusedWarpId={s.focusedWarpId}
-      {warpsVisible}
+      warpsVisible={warps.visible}
       warpMarkerSize={data.uiConfig.warpMarkerSize}
       initialCenter={initialWarp && { posX: initialWarp.posX, posY: initialWarp.posY }}
-      onFocusWarp={focusWarp}
+      onFocusWarp={(warpId) => warps.focus(warpId)}
       onPersistWarpPosition={persistence.persistWarpPosition}
       bind:inventories={s.inventories}
       openInventoryIds={s.openInventoryIds}
-      {inventoryLabel}
+      inventoryLabel={view.inventoryLabel}
       onToggleInventory={inventoryActions.toggle}
       onPersistInventoryPosition={inventoryActions.persistPosition}
       onStow={inventoryActions.stow}
@@ -683,53 +390,16 @@
       {readonly}
     />
 
-    <!-- Open inventories, stacked down the left of the canvas. They stay put while the
-         canvas pans, so a card can be carried in from anywhere on the board. -->
-    {#if openInventories.length > 0}
-      <div
-        class={css({ position: "absolute", top: "12px", left: "12px", zIndex: "52", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "calc(100% - 96px)", overflowY: "auto", overflowX: "hidden" })}
-        data-inventory-dock
-      >
-        {#each openInventories as { inventory, cards } (inventory.id)}
-          <InventoryWindow
-            {inventory}
-            label={inventoryLabel(inventory)}
-            {cards}
-            selectedCards={s.selection.selectedCards}
-            draggingCardId={inventoryDrag.pointer ? inventoryDrag.cardId : null}
-            dropTarget={inventoryDrag.target}
-            aimSpan={carriedSpan}
-            fontFamily={data.uiConfig.defaultFontFamily}
-            {readonly}
-            onClose={() => inventoryActions.toggle(inventory.id)}
-            onRemove={() => void inventoryActions.remove(inventory.id)}
-            onRename={(name) => void inventoryActions.rename(inventory.id, name)}
-            onCardMouseDown={(e, cardId) => canvasComponent.pressStowedCard(e, cardId)}
-            onCardClick={handleStoredCardClick}
-            onCardDblClick={handleStoredCardDblClick}
-          />
-        {/each}
-      </div>
-    {/if}
-
-    <!-- The card being carried out of a grid, following the pointer. It lets the pointer
-         through so whatever is underneath can be found as the drop target. -->
-    {#if draggedStoredCard && inventoryDrag.pointer}
-      {@const draggedStoredSpan = cardSpan(draggedStoredCard.content)}
-      <div
-        aria-hidden="true"
-        data-stored-card-preview
-        class={css({ position: "fixed", zIndex: "1000", pointerEvents: "none", overflow: "hidden", background: "ink.white", border: "1px solid token(colors.select.accent)", boxShadow: "0 4px 12px rgba(0,0,0,0.08)", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "ink.content" })}
-        style:left="{inventoryDrag.pointer.x - STOWED_GRAB_INSET * zoom}px"
-        style:top="{inventoryDrag.pointer.y - STOWED_GRAB_INSET * zoom}px"
-        style:width="{INVENTORY_CELL.width}px"
-        style:height="{draggedStoredSpan * INVENTORY_CELL.height + (draggedStoredSpan - 1) * INVENTORY_CELL.gap}px"
-        style:padding="{INVENTORY_CELL.paddingY}px {INVENTORY_CELL.paddingX}px"
-        style:font-size="{INVENTORY_CELL.fontSize}px"
-        style:line-height={INVENTORY_CELL.lineHeight}
-        style:font-family={data.uiConfig.defaultFontFamily}
-      >{draggedStoredCard.content || "Empty card…"}</div>
-    {/if}
+    <InventoryDock
+      {s}
+      {inventoryActions}
+      inventoryLabel={view.inventoryLabel}
+      {inventoryDrag}
+      {zoom}
+      fontFamily={data.uiConfig.defaultFontFamily}
+      {readonly}
+      onCardMouseDown={(e, cardId) => canvasComponent.pressStowedCard(e, cardId)}
+    />
 
     {#if filePaletteOpen}
     <FilePalette
@@ -740,21 +410,21 @@
       tree={s.taskspaceTree}
       ctx={editorContext}
       {readonly}
-      onOpenFile={handlePaletteOpenFile}
+      onOpenFile={files.openFromPalette}
       onLinkScope={actions.handleLinkScope}
-      onCreate={handlePaletteCreate}
+      onCreate={files.createFromPalette}
       onClose={() => (filePaletteOpen = false)}
     />
   {/if}
 
-  {#if warpPaletteOpen}
+  {#if warps.paletteOpen}
       <WarpPalette
-        entries={warpEntries}
+        entries={view.warpEntries}
         focusedWarpId={s.focusedWarpId}
         {readonly}
-        onJump={handleWarpJump}
-        onDelete={handleWarpDelete}
-        onClose={() => (warpPaletteOpen = false)}
+        onJump={(entry) => warps.jump(entry)}
+        onDelete={(entry) => warps.remove(entry)}
+        onClose={() => (warps.paletteOpen = false)}
       />
     {/if}
 
@@ -762,40 +432,15 @@
       <ErrorBanner message={s.lastError} onDismiss={() => (s.lastError = null)} />
     {/if}
 
-    <!-- The top-right icons share one row packed to the right, so hiding one leaves no gap. -->
-    <div
-      class={css({
-        position: "absolute",
-        top: "12px",
-        right: "16px",
-        zIndex: "51",
-        display: "flex",
-        gap: "8px",
-      })}
-      data-testid="board-controls"
-    >
-      {#if data.uiConfig.showScopeControl}
-        <ScopeControl scopes={s.scopes} bind:activeScope={s.sidebar.activeScope} />
-      {/if}
-      {#if data.uiConfig.showLayerControl}
-        <LayerControl
-          layers={s.layers}
-          cards={s.cards}
-          bind:activeLayerId={s.activeLayerId}
-          onCreateLayer={actions.handleCreateLayer}
-          onDeleteLayer={actions.handleDeleteLayer}
-          onRenameLayer={actions.handleRenameLayer}
-          onReorderLayers={actions.handleReorderLayers}
-          {readonly}
-        />
-      {/if}
-      {#if data.uiConfig.showSidePanelToggle}
-        <SidePanelToggle
-          {sidebarsVisible}
-          onToggleSidebars={() => (sidebarsVisible = !sidebarsVisible)}
-        />
-      {/if}
-    </div>
+    <BoardControls
+      {s}
+      {actions}
+      showScopeControl={data.uiConfig.showScopeControl}
+      showLayerControl={data.uiConfig.showLayerControl}
+      showSidePanelToggle={data.uiConfig.showSidePanelToggle}
+      bind:sidebarsVisible
+      {readonly}
+    />
 
     <FloatingControls
       {zoom}
@@ -804,45 +449,26 @@
       onZoom={(delta) => (zoom = clampZoom(zoom + delta))}
     />
 
-    <!-- Replace the composer with the scope prompt while the rectangle awaits a scope. -->
-    {#if !readonly && pendingScopeAreaRect}
-    <ScopeAreaPrompt
-      scopes={s.scopes}
-      cardCount={pendingScopeAreaCardCount}
-      onChoose={handleChooseScopeForArea}
-      onCreate={handleCreateScopeForArea}
-      onCancel={() => (pendingScopeAreaRect = null)}
-    />
-    {:else if !readonly}
-    <FloatingComposer
-      bind:this={composerComponent}
-      editingCard={s.selection.composerCard}
-      selectedCards={selectedCardObjects}
-      {selectionGlueRels}
-      {primaryCard}
-      partitions={partitionsWithColors}
-      {defaultPartitionId}
-      layers={s.layers}
-      onSubmit={handleComposerSubmit}
-      onCancel={() => { s.selection.composerCard = null; s.selection.selectedCards = new Set(); s.selection.primarySelectedId = null; }}
-      onPartitionChange={actions.handleCardPartitionChange}
-      onSelectionPartitionChange={actions.handleSelectionPartitionChange}
-      onGlueSelected={actions.handleGlueSelected}
-      onUnglueSelected={actions.handleUnglueSelected}
-      onUnglueOne={actions.handleUnglueOne}
-      onDeleteSelected={actions.handleDeleteSelected}
-      otherNamespaces={data.otherNamespaces}
-      onMoveToNamespace={actions.handleMoveSelectionToNamespace}
-      onSelectionLayerChange={actions.handleSelectionLayerChange}
-      onStackOrderChange={actions.handleStackOrderChange}
-      onResizeToggle={handleResizeToggle}
-      onSquashCard={actions.handleSquashCard}
-      onOpenFilePalette={() => (filePaletteOpen = true)}
-      suspendShortcuts={filePaletteOpen}
-      resizingCardId={s.selection.resizingCardId}
-      newCardTarget={receivingInventory ? inventoryLabel(receivingInventory) : null}
-      shortcuts={data.uiConfig}
-    />
+    {#if !readonly}
+      <BoardComposer
+        bind:this={composerComponent}
+        {s}
+        {actions}
+        hasPendingFrame={frame.rect !== null}
+        pendingFrameCardCount={frame.cardCount}
+        onChooseScope={(scopeId) => frame.chooseScope(scopeId)}
+        onCreateScope={(name) => frame.createScope(name)}
+        onCancelFrame={() => frame.cancel()}
+        partitions={view.partitions}
+        defaultPartitionId={view.defaultPartitionId}
+        otherNamespaces={data.otherNamespaces}
+        onSubmit={handleComposerSubmit}
+        onResizeToggle={handleResizeToggle}
+        onOpenFilePalette={() => (filePaletteOpen = true)}
+        {filePaletteOpen}
+        newCardTarget={view.receivingInventory && view.inventoryLabel(view.receivingInventory)}
+        shortcuts={data.uiConfig}
+      />
     {/if}
   </div>
 
@@ -862,12 +488,9 @@
     onDeleteScope={actions.handleDeleteScope}
     onAddToScope={actions.handleAddToScope}
     onRemoveFromScope={actions.handleRemoveFromScope}
-    {frameCountByScopeId}
+    frameCountByScopeId={view.frameCountByScopeId}
     onCreateTaskspace={actions.handleCreateTaskspace}
-    onOpenFile={!readonly || staticFiles
-      ? (taskspaceId, taskspaceName, path) =>
-          editor.open(editorContext, { taskspaceId, taskspaceName, path })
-      : undefined}
+    onOpenFile={!readonly || staticFiles ? files.open : undefined}
     {readonly}
   />
 
