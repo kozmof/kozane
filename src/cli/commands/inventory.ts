@@ -204,10 +204,17 @@ export async function inventoryPut(
  * Print each repaired card on its own line. Print nothing when no cards changed.
  * `allIds` is every card ID in the workspace, for short IDs.
  */
+/** Whether a repair changed any card. */
+export function repairChanged({ moved, unglued, cleared }: InventoryRepair): boolean {
+  return moved.length > 0 || unglued.length > 0 || cleared.length > 0;
+}
+
 export function printInventoryRepair(repair: InventoryRepair, allIds: string[]): void {
   for (const { cardId, slot } of repair.moved)
     console.log(`  ${shortId(cardId, allIds)}  moved to slot ${slot}`);
   for (const cardId of repair.unglued) console.log(`  ${shortId(cardId, allIds)}  unglued`);
+  for (const cardId of repair.cleared)
+    console.log(`  ${shortId(cardId, allIds)}  put back on the canvas`);
 }
 
 /**
@@ -217,7 +224,7 @@ export function printInventoryRepair(repair: InventoryRepair, allIds: string[]):
 export async function inventoryRepair(): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
     const repair = await repairInventories({ db });
-    if (repair.moved.length === 0 && repair.unglued.length === 0) {
+    if (!repairChanged(repair)) {
       console.log("Inventories already consistent.");
       return;
     }

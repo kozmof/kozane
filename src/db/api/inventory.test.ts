@@ -389,7 +389,11 @@ describe("findInventoryConflicts", () => {
     const cardIds = [await card("a"), await card("word ".repeat(40)), await card("c")];
     await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds, slot: null });
 
-    expect(await findInventoryConflicts({ db })).toEqual({ overlapping: [], glued: [] });
+    expect(await findInventoryConflicts({ db })).toEqual({
+      overlapping: [],
+      glued: [],
+      halfPlaced: [],
+    });
   });
 
   it("names cards that overlap and stored cards left in a group", async () => {
@@ -435,8 +439,31 @@ describe("repairInventories", () => {
     ]);
     expect(repair.unglued).toEqual([glued]);
     expect((await placement(db, tall)).inventorySlot).toBe(0);
-    expect(await findInventoryConflicts({ db })).toEqual({ overlapping: [], glued: [] });
-    expect(await repairInventories({ db })).toEqual({ moved: [], unglued: [] });
+    expect(await findInventoryConflicts({ db })).toEqual({
+      overlapping: [],
+      glued: [],
+      halfPlaced: [],
+    });
+    expect(await repairInventories({ db })).toEqual({ moved: [], unglued: [], cleared: [] });
+  });
+
+  it("puts cards with only one inventory column set back on the canvas", async () => {
+    const { db, inventory, card } = await setup();
+    const noSlot = await card("no slot");
+    const noInventory = await card("no inventory");
+    await db.update(cardTable).set({ inventoryId: inventory.id }).where(eq(cardTable.id, noSlot));
+    await db.update(cardTable).set({ inventorySlot: 2 }).where(eq(cardTable.id, noInventory));
+
+    const found = await findInventoryConflicts({ db });
+    expect(found.halfPlaced.toSorted()).toEqual([noSlot, noInventory].toSorted());
+    // Not stored, so not reported as a stored card still in a group either.
+    expect(found.glued).toEqual([]);
+
+    const repair = await repairInventories({ db });
+    expect(repair.cleared.toSorted()).toEqual([noSlot, noInventory].toSorted());
+    for (const cardId of [noSlot, noInventory])
+      expect(await placement(db, cardId)).toMatchObject({ inventoryId: null, inventorySlot: null });
+    expect((await findInventoryConflicts({ db })).halfPlaced).toEqual([]);
   });
 });
 

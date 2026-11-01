@@ -125,9 +125,10 @@ integrity and references, workspace limits, inventory consistency, and port avai
 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
-names, out-of-bounds cards, and stored cards that overlap or are glued are reported with
-example IDs. Run `inventory repair` for the last two. Limit checks use SQLite character
-counts, which can miss text that exceeds the UTF-16 limit through astral characters.
+names, out-of-bounds cards, stored cards that overlap or are glued, and cards with only one of
+`inventory_id` and `inventory_slot` set are reported with example IDs. Run `inventory repair`
+for the last three. Limit checks use SQLite character counts, which can miss text that exceeds
+the UTF-16 limit through astral characters.
 
 For broken config, run `doctor config`. For database corruption, export readable data before
 restoring a backup.
@@ -619,12 +620,13 @@ kozane inventory take <cardIds...> [--x <number> --y <number>]
 
 ### `kozane inventory repair`
 
-Move stored cards that overlap apart, and take stored cards out of glue groups, in every
-inventory of the workspace. A card stays in its slot if it still fits, and otherwise moves to
-the first free place after it. A card's height in the grid comes from its text, so an upgrade
-that changes the grid layout, or an imported dump, can leave cards overlapping. Any write to
-an inventory repairs it first, and `kozane db import` repairs every inventory after it
-imports. Run this to clear what `kozane doctor` reports without waiting for either.
+Move stored cards that overlap apart, take stored cards out of glue groups, and put cards with
+only one inventory column set back on the canvas, in every inventory of the workspace. A card
+stays in its slot if it still fits, and otherwise moves to the first free place after it. A
+card's height in the grid comes from its text, so an upgrade that changes the grid layout, or
+an imported dump, can leave cards overlapping. Any write to an inventory repairs it first, and
+`kozane db import` repairs every inventory after it imports. Run this to clear what `kozane
+doctor` reports without waiting for either.
 
 ```bash
 kozane inventory repair

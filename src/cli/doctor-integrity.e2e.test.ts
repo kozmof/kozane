@@ -147,4 +147,28 @@ describe("kozane doctor — integrity and limits", () => {
     // Valid references distinguish limit violations from foreign-key failures.
     expect(result.stdout).toContain("✓  Database integrity");
   });
+
+  it("reports a card with only one inventory column set, and repair clears it", async () => {
+    const root = initWorkspace();
+    const { partitionId, layerId } = await defaults(root);
+
+    await withRawDb(root, async (client) => {
+      await client.execute({
+        sql: INSERT_CARD,
+        args: ["half-placed", partitionId, layerId, "halfway", 0],
+      });
+      await client.execute("UPDATE card SET inventory_slot = 4 WHERE id = 'half-placed'");
+    });
+
+    const before = runCli(root, "doctor");
+    expect(before.stdout).toContain("✗  Inventories consistent");
+    expect(before.stdout).toContain("1 card with only one of inventory_id and inventory_slot set");
+    expect(before.status).toBe(1);
+
+    const repair = runCli(root, "inventory", "repair");
+    expect(repair.status).toBe(0);
+    expect(repair.stdout).toContain("put back on the canvas");
+
+    expect(runCli(root, "doctor").stdout).toContain("✓  Inventories consistent");
+  });
 });

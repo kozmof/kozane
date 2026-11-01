@@ -24,7 +24,7 @@ import { contentMaxForRoot } from "../../lib/server/content-limit.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import { openDb } from "../../db/client.js";
 import { repairInventories } from "../../db/api/inventory.js";
-import { printInventoryRepair } from "./inventory.js";
+import { printInventoryRepair, repairChanged } from "./inventory.js";
 import { allCardIds } from "../lib/card-refs.js";
 
 // Use `dbUrl` for the persistent workspace database. Migrations, backups, and restores must
@@ -197,7 +197,7 @@ export async function dbImport(file: string, options: DbImportOptions = {}): Pro
     const { db, close } = await openDb(url);
     try {
       const repair = await repairInventories({ db });
-      if (repair.moved.length > 0 || repair.unglued.length > 0) {
+      if (repairChanged(repair)) {
         console.log("Inventories repaired:");
         printInventoryRepair(repair, await allCardIds(db));
       }

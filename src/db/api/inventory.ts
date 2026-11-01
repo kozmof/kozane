@@ -26,6 +26,7 @@ import { nextSquashInventoryName } from "../../lib/squash.js";
 import {
   caseUpdateBatches,
   cardsBelongToNamespace,
+  halfPlaced,
   inventoryColumns,
   isStored,
   writeCardPositionsInTx,
@@ -222,15 +223,25 @@ export type InventoryRepair = {
   moved: InventoryPlacement[];
   /** Stored cards taken out of the glue groups they were still in. */
   unglued: string[];
+  /** Cards with only one inventory column set, put back on the canvas. */
+  cleared: string[];
 };
 
 /**
  * Repair every inventory using {@link planRepair} and remove stored cards from glue groups.
- * Return moved cards and stored cards removed from glue groups.
+ * First put cards with only one inventory column set back on the canvas, which is where the
+ * board already draws them. Return what changed.
  * After repair, {@link findInventoryConflicts} should find no conflicts.
  */
 export async function repairInventories({ db }: { db: DB }): Promise<InventoryRepair> {
   return withTx(db, async (tx) => {
+    const cleared = (
+      await tx
+        .update(cardTable)
+        .set(inventoryColumns(null))
+        .where(halfPlaced)
+        .returning({ cardId: cardTable.id })
+    ).map(({ cardId }) => cardId);
     const inventories = await tx.select({ id: inventoryTable.id }).from(inventoryTable);
     const moved: InventoryPlacement[] = [];
     for (const { id: inventoryId } of inventories) {
@@ -247,7 +258,7 @@ export async function repairInventories({ db }: { db: DB }): Promise<InventoryRe
     // Ungluing can dissolve a group, which also frees partners left on the canvas. Only the
     // stored cards are reported, since those are what was wrong.
     await unglueCardsInTx({ db: tx, cardIds: stored });
-    return { moved, unglued: stored };
+    return { moved, unglued: stored, cleared };
   });
 }
 
@@ -257,10 +268,16 @@ export type InventoryConflicts = {
   overlapping: string[];
   /** Stored cards still in a glue group, which storing a card ends. */
   glued: string[];
+  /** Cards with only one of `inventory_id` and `inventory_slot` set. See {@link halfPlaced}. */
+  halfPlaced: string[];
 };
 
-/** Find stored cards that overlap or belong to glue groups across the workspace. */
+/**
+ * Find stored cards that overlap or belong to glue groups, and cards with only one inventory
+ * column set, across the workspace.
+ */
 export async function findInventoryConflicts({ db }: NeedsDB): Promise<InventoryConflicts> {
+  const half = await db.select({ cardId: cardTable.id }).from(cardTable).where(halfPlaced);
   const rows = await db
     .select({
       cardId: cardTable.id,
@@ -281,7 +298,10 @@ export async function findInventoryConflicts({ db }: NeedsDB): Promise<Inventory
   }
   return {
     overlapping: [...byInventory.values()].flatMap(overlappingCards),
-    glued: rows.flatMap(({ cardId, glueId }) => (glueId === null ? [] : [cardId])),
+    glued: rows.flatMap(({ cardId, glueId, slot }) =>
+      glueId === null || slot === null ? [] : [cardId],
+    ),
+    halfPlaced: half.map(({ cardId }) => cardId),
   };
 }
 

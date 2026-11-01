@@ -156,6 +156,16 @@ export const onCanvas = isNull(cardTable.inventoryId);
 export const isStored = isNotNull(cardTable.inventoryId);
 
 /**
+ * Cards with only one of the two inventory columns set. No writer leaves this, but raw SQL can.
+ * {@link cardInventory} draws such a card on the canvas while {@link onCanvas} leaves it out,
+ * so `kozane doctor` reports it and `kozane inventory repair` clears both columns.
+ */
+export const halfPlaced = or(
+  and(isNotNull(cardTable.inventoryId), isNull(cardTable.inventorySlot)),
+  and(isNull(cardTable.inventoryId), isNotNull(cardTable.inventorySlot)),
+)!;
+
+/**
  * Read the card fields used by the board. Page loads and snapshot polls share this selection
  * through `loadNamespaceSnapshot`.
  */

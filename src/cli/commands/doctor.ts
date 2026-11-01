@@ -230,24 +230,29 @@ async function rowsOverLimits(
 }
 
 /**
- * Stored cards that overlap or are still glued, each counted with a sample of short IDs. See
- * {@link findInventoryConflicts}.
+ * Stored cards that overlap or are still glued, and cards with only one inventory column set,
+ * each counted with a sample of short IDs. See {@link findInventoryConflicts}.
  */
 async function inventoryConflicts(
   url: string,
-): Promise<{ overlapping: BadStamps; glued: BadStamps }> {
+): Promise<{ overlapping: BadStamps; glued: BadStamps; halfPlaced: BadStamps }> {
   const { db, close } = await openDb(url);
   try {
-    const { overlapping, glued } = await findInventoryConflicts({ db });
-    if (overlapping.length === 0 && glued.length === 0)
-      return { overlapping: { total: 0, named: [] }, glued: { total: 0, named: [] } };
+    const conflicts = await findInventoryConflicts({ db });
+    const none = { total: 0, named: [] };
+    if (Object.values(conflicts).every((ids) => ids.length === 0))
+      return { overlapping: none, glued: none, halfPlaced: none };
     // Use short IDs accepted by `kozane inventory take`.
     const shortIds = shortIdMap(await allCardIds(db));
     const sample = (ids: string[]): BadStamps => ({
       total: ids.length,
       named: ids.slice(0, NAMED_BAD_STAMPS).map((id) => shortIds.get(id) ?? id),
     });
-    return { overlapping: sample(overlapping), glued: sample(glued) };
+    return {
+      overlapping: sample(conflicts.overlapping),
+      glued: sample(conflicts.glued),
+      halfPlaced: sample(conflicts.halfPlaced),
+    };
   } finally {
     close();
   }
@@ -421,14 +426,15 @@ export async function doctor(): Promise<void> {
     checks.push(check("Rows within workspace limits", withinLimits, detail));
   }
 
-  // 10. Report stored cards that overlap or are glued, without moving them. Spans come from
-  // text and layout constants, so an upgrade or an imported dump can leave either behind.
+  // 10. Report stored cards that overlap or are glued, and cards with only one inventory
+  // column set, without changing them. Spans come from text and layout constants, so an
+  // upgrade or an imported dump can leave overlaps behind. Raw SQL can leave the others.
   if (dbOk && migrationOk) {
     let consistent = false;
     let detail: string | undefined;
     try {
-      const { overlapping, glued } = await inventoryConflicts(workspaceDbUrl);
-      consistent = overlapping.total === 0 && glued.total === 0;
+      const { overlapping, glued, halfPlaced } = await inventoryConflicts(workspaceDbUrl);
+      consistent = overlapping.total === 0 && glued.total === 0 && halfPlaced.total === 0;
       const parts: string[] = [];
       if (overlapping.total > 0)
         parts.push(
@@ -436,6 +442,10 @@ export async function doctor(): Promise<void> {
         );
       if (glued.total > 0)
         parts.push(`${plural(glued.total, "stored card")} still glued: ${nameSome(glued)}`);
+      if (halfPlaced.total > 0)
+        parts.push(
+          `${plural(halfPlaced.total, "card")} with only one of inventory_id and inventory_slot set: ${nameSome(halfPlaced)}`,
+        );
       if (parts.length > 0) detail = `${parts.join("; ")}; run kozane inventory repair`;
     } catch (e) {
       detail = e instanceof Error ? e.message : String(e);
