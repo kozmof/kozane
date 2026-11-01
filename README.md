@@ -8,8 +8,7 @@ The name "Kozane" comes from こざね法 (kozane method), developed by Japanese
 
 ## Structures
 
-Start by adding cards. This is the main way to use Kozane.
-Use other structures only when you need them.
+Start by adding cards to a namespace. Use other structures only when you need them.
 
 ### Main
 
@@ -34,7 +33,7 @@ Kozane is beta software under active development and is not yet production-ready
 
 ## Install
 
-Install Kozane globally with npm or pnpm to make the `kozane` command available everywhere:
+Install Kozane globally to use the `kozane` command from any directory.
 
 ```sh
 npm install --global kozane
@@ -42,7 +41,8 @@ npm install --global kozane
 pnpm add --global kozane
 ```
 
-Or install it as a development dependency to keep the `kozane` command scoped to the project:
+For a project-local installation, add Kozane as a development dependency and run it
+with `npx`.
 
 ```sh
 npm install --save-dev kozane
@@ -50,7 +50,7 @@ npx kozane init
 npx kozane open
 ```
 
-With pnpm:
+For a project-local installation with pnpm, use `pnpm exec`.
 
 ```sh
 pnpm add --save-dev kozane
@@ -60,7 +60,7 @@ pnpm exec kozane open
 
 ## Quick start
 
-Create a workspace and open it:
+Initialize a workspace in a new directory, then launch the browser.
 
 ```sh
 mkdir my-workspace && cd my-workspace
@@ -68,7 +68,12 @@ kozane init
 kozane open
 ```
 
-To start with an empty database that exists only for the lifetime of the server, use `kozane open --memory`. It creates a namespace named `:memory:`, and all changes are discarded when the server stops. `kozane init` creates a default namespace named `main`. Run `kozane namespace default <id>` to change which namespace commands use when `--namespace` is omitted.
+`kozane init` creates a default namespace named `main`. Commands use this namespace
+when `--namespace` is omitted. Change it with `kozane namespace default <id>`.
+
+Use `kozane open --memory` for a temporary database with a namespace named
+`:memory:`. Workspace commands use that database while the server runs. All changes
+are discarded when the server stops.
 
 The `/health` endpoint checks server and database readiness. If the workspace has an API key, send it with monitoring probes. See [Production operations](./docs/production.md).
 
@@ -116,31 +121,36 @@ The [CLI specification](./spec/cli.md) covers every command, and the
 
 ### Adding cards from text
 
-Create one card from a quoted argument:
+Pass the card text as a quoted argument to `card add`.
 
 ```sh
 kozane card add "Investigate caching"
 ```
 
-To turn sentences into separate cards, use `card squash`. It puts the cards in a new inventory named `Squash 1`, `Squash 2`, and so on. By default it splits on a period followed by whitespace (a space or a line break), on `。`, and on blank lines, so dots inside URLs such as `example.com` are preserved. It trims whitespace and ignores empty segments:
+Use `card squash` to turn sentences into separate cards in a new inventory named
+`Squash 1`, `Squash 2`, and so on. The default separator splits at a period followed
+by whitespace, at `。`, or at a blank line. Periods inside URLs such as `example.com`
+are preserved. Leading and trailing whitespace and empty segments are removed.
+
+Pipe a file into the command.
 
 ```sh
 cat foo.txt | kozane card squash
 ```
 
-Pass a JavaScript regular expression source to customize the separator:
+Set `--pattern` to a JavaScript regular expression source for a custom separator.
 
 ```sh
 kozane card squash "one | two, three" --pattern '\s*[|,]\s*'
 ```
 
-Namespace, partition, layer, and scope options also work with piped files:
+Choose where to put the new cards with namespace, partition, layer, and scope options.
 
 ```sh
 cat foo.txt | kozane card squash --namespace eb155d6 --partition 72ac1f8 --scope e3ee90b
 ```
 
-Every namespace starts with a `Base` layer. Use layer commands to organize cards:
+Every namespace starts with a `Base` layer. Add layers to organize cards.
 
 ```sh
 kozane layer list
@@ -155,15 +165,14 @@ A layer can be named by its name, its ID, or a short ID. An exact name wins.
 
 ### Tagging
 
-A tag is text that begins with a colon. A colon also separates subcategories, so
-a tag can nest without a second character:
+Add a tag to card text with a leading colon. Separate tag levels with more colons.
 
 ```sh
 kozane card add "caching work :perf:cache"
 ```
 
-Find cards and files tagged `:perf` or any child tag, including
-`:perf:cache` and `:perf:cache:invalidation`:
+Use `tag show perf` to find cards and files with `:perf` or its child tags, such as
+`:perf:cache` and `:perf:cache:invalidation`.
 
 ```sh
 kozane tag list          # every tag in the namespace, as a tree, with counts
@@ -178,18 +187,19 @@ To list cards alone, run `kozane tag show <tag> --no-files`.
 
 ### Seeing across namespaces
 
-List scopes and taskspaces across the workspace:
+Inspect workspace-wide scopes and taskspaces with their list commands.
 
 ```sh
 kozane scope list                    # every scope, and the namespaces each one reaches
 kozane taskspace list                # every taskspace, with its namespace and scope
 ```
 
-Pass `--namespace <id>` to either to see exactly what that namespace's board draws.
+Pass `--namespace <id>` to either command to list the scopes or taskspaces visible
+on that namespace's board.
 
 ### Security and remote access
 
-Generate a per-workspace API key before allowing remote access:
+Before starting a remote server, generate an API key for the workspace.
 
 ```sh
 kozane api key generate
@@ -207,13 +217,14 @@ For a full breakdown of what each run mode exposes, see the [Security matrix](./
 
 ### Publishing a read-only static site
 
-Export the current workspace as a static site:
+Use `net ssg generate` to build a read-only site from the workspace.
 
 ```sh
 kozane net ssg generate --out ./site
 ```
 
-When hosting under a subdirectory, such as `https://[username].github.io/kozane/`, pass the base path:
+Set `--base` to the URL path when hosting under a subdirectory such as
+`https://[username].github.io/kozane/`.
 
 ```sh
 kozane net ssg generate --out ./site --base /kozane
@@ -221,7 +232,8 @@ kozane net ssg generate --out ./site --base /kozane
 
 The output directory includes a `.nojekyll` file so GitHub Pages serves SvelteKit's `_app/` directory. Commit the directory to a branch and enable Pages for it. Static export requires the source build toolchain, so run it from a cloned repository after `pnpm install`.
 
-By default, the export includes only the card board, without scopes or taskspaces. Pass `--include-scoped-files` to also bake in scopes, taskspace names, and a read-only, browsable copy of each taskspace's files:
+The default export omits scopes and taskspaces. Add `--include-scoped-files` to
+include scopes, taskspace names, and browsable copies of scoped taskspace files.
 
 ```sh
 kozane net ssg generate --out ./site --include-scoped-files
@@ -239,7 +251,12 @@ Preview it over HTTP, not by opening the files directly.
 kozane net ssg preview      # serves ./site at http://127.0.0.1:17174
 ```
 
-`kozane net ssg preview` resolves URLs the same way GitHub Pages does, so it matches what you get once deployed. Use `--out <dir>` to serve a different directory, `--port` and `--host` (or `KOZANE_PREVIEW_PORT` and `KOZANE_PREVIEW_HOST`) to change the address, and `--no-open` to skip launching a browser. If the site was built with `--base`, preview it with the same base:
+The preview server resolves URLs the same way GitHub Pages does. Use `--out <dir>`
+to serve a different directory. Set `--port` and `--host`, or `KOZANE_PREVIEW_PORT`
+and `KOZANE_PREVIEW_HOST`, to change the address. Add `--no-open` to skip launching
+a browser.
+
+Preview a site built with `--base` using the same base path.
 
 ```sh
 kozane net ssg preview --base /kozane
@@ -247,7 +264,8 @@ kozane net ssg preview --base /kozane
 
 ### Upgrades and recovery
 
-Check database status, apply migrations, and inspect workspace problems:
+Use the database commands to check status, migrate, export, or restore data.
+Run `doctor` to inspect workspace problems.
 
 ```sh
 kozane db status
