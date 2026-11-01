@@ -110,12 +110,20 @@ export function createBoardPersistence(s: NamespaceState) {
     }
     // Validate the returned card and use its stored coordinates because the server clamps
     // positions. See `parseCard`.
-    const created = parseCard(await res.json().catch(() => null));
+    const body: unknown = await res.json().catch(() => null);
+    const created = parseCard(body);
     if (!created) {
       s.setError("Failed to create card");
       return;
     }
-    s.cards = [...s.cards, created];
+    // Storing the card can repair overlaps in its inventory. Apply those neighbour moves now
+    // rather than waiting for the next snapshot poll.
+    const slotOf = new Map((parsePlacements(body) ?? []).map((p) => [p.cardId, p]));
+    const others = s.cards.map((c) => {
+      const p = slotOf.get(c.id);
+      return p ? { ...c, inventory: { id: p.inventoryId, slot: p.slot } } : c;
+    });
+    s.cards = [...others, created];
     if (scopeId) s.scopeRels = [...s.scopeRels, { scopeId, cardId: created.id }];
   }
 

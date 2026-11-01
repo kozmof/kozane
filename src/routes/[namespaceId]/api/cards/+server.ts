@@ -73,7 +73,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.
-  const { id, stored, inventory } = await withTx(db, async (tx) => {
+  const { id, stored, inventory, placements } = await withTx(db, async (tx) => {
     const partition = await getPartition({ db: tx, namespaceId, partitionId });
     if (!partition) throw error(400, "Partition not found in namespace");
     if (scopeId && !(await getScope({ db: tx, scopeId }))) throw error(400, "Scope not found");
@@ -98,7 +98,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     };
     const cardId = await addCardInTx({ db: tx, ...stored });
     if (scopeId) await addScopeRel({ db: tx, scopeId, cardId });
-    if (!inventoryId) return { id: cardId, stored, inventory: null };
+    if (!inventoryId) return { id: cardId, stored, inventory: null, placements: [] };
     // Throwing rolls the card back with the transaction, so a refused store leaves no card.
     const stowed = await stowCardsInTx({
       db: tx,
@@ -111,19 +111,27 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     // The placements can also name cards a repair of the inventory moved, so find this one.
     const placed = stowed.placements.find((p) => p.cardId === cardId);
     if (!placed) throw new Error("stowCardsInTx placed no slot for the new card");
-    return { id: cardId, stored, inventory: { id: inventoryId, slot: placed.slot } };
+    return {
+      id: cardId,
+      stored,
+      inventory: { id: inventoryId, slot: placed.slot },
+      placements: stowed.placements,
+    };
   });
 
   // Return stored coordinates after clamping so the client renders the saved position
-  // immediately. New cards use the configured default width.
-  return json({
+  // immediately. New cards use the configured default width. `placements` lists every slot
+  // the store changed, including neighbours a repair of the inventory moved, so the board can
+  // apply them without waiting for the next poll.
+  const card = {
     id,
     ...stored,
     taskspaceId: null,
     glueId: null,
     width: null,
     inventory,
-  } satisfies CardWithGlue);
+  } satisfies CardWithGlue;
+  return json({ ...card, placements });
 });
 
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {

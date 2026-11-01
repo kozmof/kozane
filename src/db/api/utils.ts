@@ -96,16 +96,26 @@ export function assertFound<T>(rows: T[], label: string): void {
   if (rows.length === 0) throw new NotFoundError(label);
 }
 
-function messageInChain(e: unknown, text: string): boolean {
+/**
+ * Walk an error and its `cause` chain, since Drizzle wraps the driver's error. Match libsql's
+ * `extendedCode` first, and fall back to the message text for errors that carry no code.
+ */
+function constraintInChain(e: unknown, codes: readonly string[], text: string): boolean {
   if (!(e instanceof Error)) return false;
+  const { extendedCode } = e as { extendedCode?: unknown };
+  if (typeof extendedCode === "string" && codes.includes(extendedCode)) return true;
   if (e.message.includes(text)) return true;
-  return messageInChain(e.cause, text);
+  return constraintInChain(e.cause, codes, text);
 }
 
+/** A duplicate primary key counts too: SQLite reports it as a UNIQUE failure. */
+const UNIQUE_CODES = ["SQLITE_CONSTRAINT_UNIQUE", "SQLITE_CONSTRAINT_PRIMARYKEY"] as const;
+const FOREIGN_KEY_CODES = ["SQLITE_CONSTRAINT_FOREIGNKEY"] as const;
+
 export function isUniqueConstraintError(e: unknown): boolean {
-  return messageInChain(e, "UNIQUE constraint failed");
+  return constraintInChain(e, UNIQUE_CODES, "UNIQUE constraint failed");
 }
 
 export function isForeignKeyError(e: unknown): boolean {
-  return messageInChain(e, "FOREIGN KEY constraint failed");
+  return constraintInChain(e, FOREIGN_KEY_CODES, "FOREIGN KEY constraint failed");
 }

@@ -9,6 +9,8 @@ import { createTestDB } from "../../../../test-utils/db.js";
 import { DELETE, PATCH, POST } from "./+server.js";
 import { addLayer, getDefaultLayer } from "$db/api/layer.js";
 import { addInventory, stowCards } from "$db/api/inventory.js";
+import { cardTable } from "$db/schema.js";
+import { eq } from "drizzle-orm";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/namespace-1/api/cards", {
@@ -65,6 +67,48 @@ describe("POST /[namespaceId]/api/cards", () => {
       inventoryId: inventory.id,
       inventorySlot: 1,
     });
+  });
+
+  it("returns the neighbour moves a repair of the inventory made", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    const tall = await addCard({ db, partitionId, content: "short" });
+    const below = await addCard({ db, partitionId, content: "below" });
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [tall], slot: 0 });
+    await stowCards({ db, namespaceId, inventoryId: inventory.id, cardIds: [below], slot: 6 });
+    // Grow the top card behind the API's back so it now covers the cell below it.
+    await db
+      .update(cardTable)
+      .set({ content: "line\n".repeat(20) })
+      .where(eq(cardTable.id, tall));
+
+    const response = await POST(
+      event(
+        db,
+        namespaceId,
+        jsonRequest({ partitionId, content: "new", inventoryId: inventory.id }),
+      ),
+    );
+
+    const created = await response.json();
+    const moved = await getCard({ db, partitionId, cardId: below });
+    expect(moved?.inventorySlot).not.toBe(6);
+    expect(created.placements).toEqual(
+      expect.arrayContaining([
+        { cardId: below, inventoryId: inventory.id, slot: moved?.inventorySlot },
+        { cardId: created.id, inventoryId: inventory.id, slot: created.inventory.slot },
+      ]),
+    );
+  });
+
+  it("returns no placements for a card created on the canvas", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+
+    const response = await POST(
+      event(db, namespaceId, jsonRequest({ partitionId, content: "canvas" })),
+    );
+
+    await expect(response.json()).resolves.toMatchObject({ inventory: null, placements: [] });
   });
 
   it("creates no card when the inventory is not this namespace's", async () => {

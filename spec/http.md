@@ -77,7 +77,9 @@ transaction.
 
 Return the stored card with `id`, `partitionId`, `layerId`, `content`, clamped
 `posX` / `posY`, `zIndex`, null `taskspaceId`, `glueId`, and `width`, and
-`inventory`: `{ id, slot }` for where it was stored, or null.
+`inventory`: `{ id, slot }` for where it was stored, or null. `placements` lists
+`{ cardId, inventoryId, slot }` for every slot the store changed, including neighbours moved
+by a repair of the inventory. It is empty for a card created on the canvas.
 
 Return 400 for missing or oversized fields, unknown partition or scope, a layer
 outside this namespace, an inventory outside this namespace, or a missing default layer.

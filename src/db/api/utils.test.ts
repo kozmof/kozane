@@ -46,6 +46,21 @@ describe("isUniqueConstraintError", () => {
     expect(isUniqueConstraintError("UNIQUE constraint failed")).toBe(false);
     expect(isUniqueConstraintError(null)).toBe(false);
   });
+
+  it("matches libsql's extended code on a wrapped cause, whatever the message", () => {
+    const driver = Object.assign(new Error("reworded"), {
+      extendedCode: "SQLITE_CONSTRAINT_UNIQUE",
+    });
+    expect(isUniqueConstraintError(new Error("Failed query", { cause: driver }))).toBe(true);
+  });
+
+  it("treats a duplicate primary key as a unique failure", () => {
+    const driver = Object.assign(new Error("reworded"), {
+      extendedCode: "SQLITE_CONSTRAINT_PRIMARYKEY",
+    });
+    expect(isUniqueConstraintError(driver)).toBe(true);
+    expect(isForeignKeyError(driver)).toBe(false);
+  });
 });
 
 describe("isForeignKeyError", () => {
@@ -60,5 +75,13 @@ describe("isForeignKeyError", () => {
   it("returns false for a non-Error value", () => {
     expect(isForeignKeyError("FOREIGN KEY constraint failed")).toBe(false);
     expect(isForeignKeyError(42)).toBe(false);
+  });
+
+  it("matches libsql's extended code on a wrapped cause, whatever the message", () => {
+    const driver = Object.assign(new Error("reworded"), {
+      extendedCode: "SQLITE_CONSTRAINT_FOREIGNKEY",
+    });
+    expect(isForeignKeyError(new Error("Failed query", { cause: driver }))).toBe(true);
+    expect(isUniqueConstraintError(driver)).toBe(false);
   });
 });
