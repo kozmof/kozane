@@ -1,4 +1,10 @@
-import { partitionTable, cardTable, layerTable, taskspaceTable } from "../schema.js";
+import {
+  partitionTable,
+  cardTable,
+  layerTable,
+  taskspaceTable,
+  inventoryTable,
+} from "../schema.js";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type {
@@ -330,6 +336,33 @@ async function assertTaskspaceMatchesPartition({
 }
 
 /**
+ * Refuse an inventory outside the partition's namespace. As with layers, the foreign key only
+ * checks that the row exists.
+ */
+async function assertInventoriesMatchPartition({
+  db,
+  partitionId,
+  inventoryIds,
+}: NeedsPartition & { inventoryIds: string[] }): Promise<void> {
+  const wanted = [...new Set(inventoryIds)];
+  if (wanted.length === 0) return;
+  const found = await readByIds(wanted, (batch) =>
+    db
+      .select({ id: inventoryTable.id })
+      .from(inventoryTable)
+      .innerJoin(partitionTable, eq(partitionTable.namespaceId, inventoryTable.namespaceId))
+      .where(and(eq(partitionTable.id, partitionId), inArray(inventoryTable.id, batch))),
+  );
+  if (found.length !== wanted.length) {
+    const present = new Set(found.map(({ id }) => id));
+    const missing = wanted.find((id) => !present.has(id));
+    throw new NotFoundError(
+      `Inventory inventoryId=${missing} in the namespace of partitionId=${partitionId}`,
+    );
+  }
+}
+
+/**
  * Insert one card. An explicit `layerId` or `taskspaceId` must be in the partition's
  * namespace. Run inside a
  * transaction when that check and the insert must not be split by another writer.
@@ -375,7 +408,8 @@ type AddCards = NeedsPartition & {
 };
 
 /**
- * Insert cards into one partition and layer using {@link chunked} statements. Return IDs in
+ * Insert cards into one partition and layer using {@link chunked} statements. Any inventory
+ * named must be in the partition's namespace. Return IDs in
  * input order.
  *
  * Require a resolved `layerId` to avoid a default-layer lookup for each chunk.
@@ -383,6 +417,11 @@ type AddCards = NeedsPartition & {
 export async function addCards({ db, partitionId, layerId, cards }: AddCards): Promise<string[]> {
   if (cards.length === 0) return [];
   await assertLayerMatchesPartition({ db, partitionId, layerId });
+  await assertInventoriesMatchPartition({
+    db,
+    partitionId,
+    inventoryIds: cards.flatMap(({ inventory }) => (inventory ? [inventory.id] : [])),
+  });
   // Share one timestamp across all chunks. See {@link newCardStamps}.
   const stamps = newCardStamps();
   const ids: string[] = [];

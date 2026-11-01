@@ -30,6 +30,7 @@ import { addPartition } from "./partition.js";
 import { NotFoundError } from "./utils.js";
 import { addLayer } from "./layer.js";
 import { addTaskspace } from "./taskspace.js";
+import { addInventory } from "./inventory.js";
 
 async function setup() {
   const db = await createTestDB();
@@ -83,6 +84,39 @@ describe("addCards", () => {
     const stored = await getAllCards({ db, partitionId });
     const byId = new Map(stored.map((card) => [card.id, card]));
     expect(ids.map((id) => byId.get(id)?.content)).toEqual(cards.map(({ content }) => content));
+  });
+
+  it("stores cards in an inventory of the partition's namespace", async () => {
+    const { db, namespaceId, partitionId } = await setup();
+    const layerId = await defaultLayerIdForPartition({ db, partitionId });
+    const inventory = await addInventory({ db, namespaceId, posX: 0, posY: 0 });
+    const [id] = await addCards({
+      db,
+      partitionId,
+      layerId,
+      cards: [{ content: "stored", posX: 0, posY: 0, inventory: { id: inventory.id, slot: 3 } }],
+    });
+    const card = await getCard({ db, partitionId, cardId: id });
+    expect(card).toMatchObject({ inventoryId: inventory.id, inventorySlot: 3 });
+  });
+
+  it("rejects an inventory from another namespace and inserts nothing", async () => {
+    const { db, partitionId } = await setup();
+    const layerId = await defaultLayerIdForPartition({ db, partitionId });
+    const otherNamespaceId = await addNamespace({ db, name: "Other" });
+    const foreign = await addInventory({ db, namespaceId: otherNamespaceId, posX: 0, posY: 0 });
+    await expect(
+      addCards({
+        db,
+        partitionId,
+        layerId,
+        cards: [
+          { content: "a", posX: 0, posY: 0 },
+          { content: "b", posX: 0, posY: 0, inventory: { id: foreign.id, slot: 0 } },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(await getAllCards({ db, partitionId })).toHaveLength(0);
   });
 });
 
