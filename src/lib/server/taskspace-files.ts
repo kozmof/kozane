@@ -533,10 +533,8 @@ export function renameTaskspaceEntry({
     const same = sameEntry(existing, source);
     // The same inode listed under its own name is a hard link, and `rename` between two
     // links to one file quietly does nothing.
-    const otherLink =
-      same && name !== basename(real) && readdirSync(dirname(real)).includes(name);
-    if (!same || otherLink)
-      throw new TaskspaceFilesError("exists", `"${name}" already exists`);
+    const otherLink = same && name !== basename(real) && readdirSync(dirname(real)).includes(name);
+    if (!same || otherLink) throw new TaskspaceFilesError("exists", `"${name}" already exists`);
   }
 
   try {

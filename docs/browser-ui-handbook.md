@@ -235,16 +235,16 @@ otherwise on the focused scope.
 Click a scope or taskspace to select it, click a folder to expand it, and click
 a file to open it in the editor. Taskspaces with no scope appear under "No scope".
 
-| Action                      | Control                                               |
-| --------------------------- | ----------------------------------------------------- |
-| Move within a column        | `↑` / `↓`                                             |
-| Move to the next column     | `←` / `→`                                             |
-| Create a scope or taskspace | The column's `+`                                      |
-| Create a file or folder     | The Files column's buttons, or a folder's hover ones  |
-| Rename                      | A row's pencil button                                 |
-| Delete                      | A row's bin button                                    |
-| Refresh from disk           | The Files column's `⟳`                                |
-| Close                       | `Esc`, or click outside                               |
+| Action                      | Control                                              |
+| --------------------------- | ---------------------------------------------------- |
+| Move within a column        | `↑` / `↓`                                            |
+| Move to the next column     | `←` / `→`                                            |
+| Create a scope or taskspace | The column's `+`                                     |
+| Create a file or folder     | The Files column's buttons, or a folder's hover ones |
+| Rename                      | A row's pencil button                                |
+| Delete                      | A row's bin button                                   |
+| Refresh from disk           | The Files column's `⟳`                               |
+| Close                       | `Esc`, or click outside                              |
 
 Renaming and deleting follow the rules in
 [Renaming and deleting](#renaming-and-deleting).
@@ -449,23 +449,23 @@ when narrowed to one, or to the namespace list otherwise.
 UI settings live under `ui` in `.kozane/config.json`. Run `kozane config open` to edit
 them in a browser form, then reload the board to see the changes.
 
-| Setting                | Purpose                                | Default         |
-| ---------------------- | -------------------------------------- | --------------- |
-| `newCardPlacement`     | `vertical-list` or four-column `grid`  | `vertical-list` |
-| `defaultCardWidth`     | Width of unresized cards in pixels     | `210`           |
-| `zoomStep`             | Zoom increment                         | `0.05` (5%)     |
-| `warpMarkerSize`       | Marker size in pixels, from 8 to 64    | `20`            |
-| `setWarpShortcut`      | Set a warp                             | `a`             |
-| `toggleWarpsShortcut`  | Show or hide warps                     | `A` (Shift+A)   |
-| `removeWarpShortcut`   | Remove a warp                          | `x`             |
-| `addInventoryShortcut` | Add an inventory                       | `v`             |
-| `openFileBrowserShortcut` | Open the file browser               | `o`             |
-| `editorVimMode`        | Enable Vim bindings in the file editor | `false`         |
-| `editorAutoSave`       | Save the open file once typing pauses  | `true`          |
-| `showZoomControl`      | Show the zoom buttons and zoom level   | `true`          |
-| `showLayerControl`     | Show the layer icon                    | `true`          |
-| `showScopeControl`     | Show the scope icon                    | `true`          |
-| `showSidePanelToggle`  | Show the partition panel toggle icon   | `true`          |
+| Setting                   | Purpose                                | Default         |
+| ------------------------- | -------------------------------------- | --------------- |
+| `newCardPlacement`        | `vertical-list` or four-column `grid`  | `vertical-list` |
+| `defaultCardWidth`        | Width of unresized cards in pixels     | `210`           |
+| `zoomStep`                | Zoom increment                         | `0.05` (5%)     |
+| `warpMarkerSize`          | Marker size in pixels, from 8 to 64    | `20`            |
+| `setWarpShortcut`         | Set a warp                             | `a`             |
+| `toggleWarpsShortcut`     | Show or hide warps                     | `A` (Shift+A)   |
+| `removeWarpShortcut`      | Remove a warp                          | `x`             |
+| `addInventoryShortcut`    | Add an inventory                       | `v`             |
+| `openFileBrowserShortcut` | Open the file browser                  | `o`             |
+| `editorVimMode`           | Enable Vim bindings in the file editor | `false`         |
+| `editorAutoSave`          | Save the open file once typing pauses  | `true`          |
+| `showZoomControl`         | Show the zoom buttons and zoom level   | `true`          |
+| `showLayerControl`        | Show the layer icon                    | `true`          |
+| `showScopeControl`        | Show the scope icon                    | `true`          |
+| `showSidePanelToggle`     | Show the partition panel toggle icon   | `true`          |
 
 ## Live sync
 
