@@ -83,11 +83,11 @@ describe("taskspace CLI flow", () => {
 
     const nested = runCli(root, "taskspace", "create", "a/b", "--no-scope");
     expect(nested.status).not.toBe(0);
-    expect(nested.stderr).toContain("name must not contain");
+    expect(nested.stderr).toContain("Taskspace name cannot contain a path separator");
 
     const hidden = runCli(root, "taskspace", "create", ".hidden", "--no-scope");
     expect(hidden.status).not.toBe(0);
-    expect(hidden.stderr).toContain("name must not start with '.'");
+    expect(hidden.stderr).toContain("Taskspace name cannot start with a dot");
 
     // With --dir the name is only a label.
     const target = join(root, "explicit");

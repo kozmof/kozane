@@ -1,3 +1,5 @@
+import { entryNameIssue } from "../entry-name.js";
+
 /**
  * Limits for live taskspace listings, editor reads, and recursive static exports. Tag scan
  * limits are defined in `tag.ts`.
@@ -34,12 +36,10 @@ export const TASKSPACE_SSG_NODES_MAX = 50_000;
  * Check a taskspace name used as its directory under `taskspace.defaultDir`. Return the
  * problem, or null when the name is usable. Share this between the HTTP route and the CLI.
  *
- * Require one plain path segment. A separator or `..` would place the directory outside
- * `defaultDir`, and a leading dot would create a hidden directory the file panel refuses to
- * open.
+ * Require one plain path segment, by the same rules as files and folders. A separator or
+ * `..` would place the directory outside `defaultDir`, and a leading dot would create a
+ * hidden directory the file panel refuses to open.
  */
 export function taskspaceNameIssue(name: string): string | null {
-  if (/[/\\\0]/.test(name)) return "name must not contain '/', '\\', or NUL";
-  if (name.startsWith(".")) return "name must not start with '.'";
-  return null;
+  return entryNameIssue(name, "Taskspace name");
 }

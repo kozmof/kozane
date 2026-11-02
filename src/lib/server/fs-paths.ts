@@ -12,6 +12,8 @@ export function isWithin(parent: string, child: string): boolean {
 }
 
 /** The `code` of a Node filesystem error, such as `ENOENT`, or undefined. */
-export function errorCode(e: unknown): unknown {
-  return e && typeof e === "object" && "code" in e ? e.code : undefined;
+export function errorCode(e: unknown): string | undefined {
+  return e && typeof e === "object" && "code" in e && typeof e.code === "string"
+    ? e.code
+    : undefined;
 }

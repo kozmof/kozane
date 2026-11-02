@@ -108,7 +108,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: "../../outside", scopeId }))),
       400,
-      "name must not contain '/', '\\', or NUL",
+      "Taskspace name cannot contain a path separator",
     );
   });
 
@@ -116,7 +116,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: "a/b", scopeId }))),
       400,
-      "name must not contain '/', '\\', or NUL",
+      "Taskspace name cannot contain a path separator",
     );
     expect(existsSync(join(tmpRoot, "a"))).toBe(false);
     expect(await getAllTaskspaces({ db })).toHaveLength(0);
@@ -126,7 +126,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: ".hidden", scopeId }))),
       400,
-      "name must not start with '.'",
+      "Taskspace name cannot start with a dot",
     );
     expect(existsSync(join(tmpRoot, ".hidden"))).toBe(false);
   });

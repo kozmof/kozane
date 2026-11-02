@@ -17,6 +17,7 @@ import type { TaskspaceDirectoryOutcome } from "$lib/types";
 import { readJsonObject, requireBoundedName } from "../../../lib/request.js";
 import { apiHandler } from "../../../lib/api-handler.js";
 import { rethrowFilesError } from "./base-dir.js";
+import { oneAtATime } from "./queue.js";
 
 /** The taskspace visible on this board, or 404. */
 async function visibleTaskspace(locals: App.Locals, namespaceId: string, taskspaceId: string) {
@@ -25,27 +26,6 @@ async function visibleTaskspace(locals: App.Locals, namespaceId: string, taskspa
   const taskspace = await getTaskspaceInNamespace({ db, namespaceId, taskspaceId });
   if (!taskspace) throw error(404, "Taskspace not found");
   return taskspace;
-}
-
-/** The last request queued for each taskspace. See {@link oneAtATime}. */
-const queues = new Map<string, Promise<unknown>>();
-
-/**
- * Run `work` after every earlier rename or delete of the same taskspace has finished. Each
- * reads the record and then moves the directory, so two at once could both start from the
- * old path and leave the name and the directory out of step. This covers requests to this
- * server only, not the CLI.
- */
-async function oneAtATime<T>(taskspaceId: string, work: () => Promise<T>): Promise<T> {
-  const before = queues.get(taskspaceId) ?? Promise.resolve();
-  const run = before.then(work);
-  const tail = run.catch(() => undefined);
-  queues.set(taskspaceId, tail);
-  try {
-    return await run;
-  } finally {
-    if (queues.get(taskspaceId) === tail) queues.delete(taskspaceId);
-  }
 }
 
 type TaskspaceRow = { id: string; path: string | null; pathKind: PathKind };

@@ -763,8 +763,9 @@ Create a database record, target directory, and `.taskspace.json` identity marke
 either `--scope` or `--no-scope`.
 
 Without `--dir`, use `<workspaceRoot>/<name>`. The name must then be one path segment,
-contain no `/`, `\`, or NUL, and not start with a dot. With `--dir`, the name is only a
-label. Store internal paths relative to the workspace and external paths as absolute.
+contain no `/`, `\`, or NUL, not start with a dot, and not start or end with whitespace.
+With `--dir`, the name is only a label. Store internal paths relative to the workspace and
+external paths as absolute.
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]

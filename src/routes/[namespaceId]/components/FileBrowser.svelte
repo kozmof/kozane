@@ -196,6 +196,20 @@
     return null;
   }
 
+  /**
+   * Open the name field for a taskspace, unless its file is open in the editor. The rename
+   * may move the directory under the editor, and the editor's label would go stale.
+   */
+  function startRenameTaskspace(id: string): void {
+    const blocked = blockedByEditor(editorFile, id);
+    if (blocked) {
+      clearMessages();
+      error = blocked;
+      return;
+    }
+    begin({ kind: "taskspace", id });
+  }
+
   async function renameTaskspace(id: string, name: string): Promise<string | null> {
     const failed = await actions.renameTaskspace(id, name);
     if (failed) return failed.error;
@@ -558,7 +572,7 @@
                   <span class={actionsClass}>
                     <RowActionButtons
                       what={item.name}
-                      onRename={() => begin({ kind: "taskspace", id: item.id })}
+                      onRename={() => startRenameTaskspace(item.id)}
                       onDelete={() => deleteTaskspace(item)}
                     />
                   </span>

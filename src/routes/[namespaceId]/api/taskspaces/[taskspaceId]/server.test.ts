@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { DELETE, PATCH } from "./+server.js";
+import { POST as createFile } from "./file/+server.js";
 import { addNamespace } from "$db/api/namespace.js";
 import { addScope } from "$db/api/scope.js";
 import { addTaskspace, getTaskspace } from "$db/api/taskspace.js";
@@ -25,13 +26,17 @@ import {
   TASKSPACE_MARKER_VERSION,
 } from "../../../../../lib/taskspace-marker.js";
 
-/** Set `next` to make the following taskspace update fail, as a database error would. */
-const failUpdate = vi.hoisted(() => ({ next: false }));
+/**
+ * Set `next` to make the following taskspace update fail, as a database error would. Set
+ * `hold` to make updates wait for it, as a slow database would.
+ */
+const failUpdate = vi.hoisted(() => ({ next: false, hold: null as Promise<void> | null }));
 vi.mock("$db/api/taskspace", async (importOriginal) => {
   const real = await importOriginal<typeof import("$db/api/taskspace")>();
   return {
     ...real,
     updateTaskspace: async (args: Parameters<typeof real.updateTaskspace>[0]) => {
+      if (failUpdate.hold) await failUpdate.hold;
       if (failUpdate.next) {
         failUpdate.next = false;
         throw new Error("database is down");
@@ -156,7 +161,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       await expectHttpRejection(
         PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "../up" })),
         400,
-        "name must not contain '/', '\\', or NUL",
+        "Taskspace name cannot contain a path separator",
       );
     });
 
@@ -187,6 +192,40 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
         path: join("tasks", "two"),
       });
       expect(existsSync(join(tmpRoot, "tasks", "two", "notes", "a.md"))).toBe(true);
+    });
+
+    it("runs a file change sent during a rename against the moved directory", async () => {
+      const save = new Request(
+        `http://localhost/${namespaceId}/api/taskspaces/${taskspaceId}/file`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ path: "new.md" }),
+        },
+      );
+      let release = () => {};
+      failUpdate.hold = new Promise((resolve) => (release = resolve));
+      try {
+        // The directory has moved, but the record still names the old path.
+        const renaming = PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" }));
+        await vi.waitFor(() => expect(existsSync(join(tmpRoot, "tasks", "final"))).toBe(true));
+        const creating = createFile({
+          locals: { db },
+          params: { namespaceId, taskspaceId },
+          request: save,
+        } as never);
+        // Give a create that did not wait time to read the old path and fail.
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        release();
+        await renaming;
+        expect((await creating).status).toBe(201);
+      } finally {
+        failUpdate.hold = null;
+        release();
+      }
+
+      expect(existsSync(join(tmpRoot, "tasks", "final", "new.md"))).toBe(true);
+      expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
     });
 
     it("changes only the label of a directory outside the default folder", async () => {

@@ -172,7 +172,9 @@ describe("FileBrowser", () => {
     row.focus();
     outside.focus();
 
-    expect(screen.getByRole("dialog", { name: "Files" }).contains(document.activeElement)).toBe(true);
+    expect(screen.getByRole("dialog", { name: "Files" }).contains(document.activeElement)).toBe(
+      true,
+    );
     outside.remove();
   });
 
@@ -191,7 +193,9 @@ describe("FileBrowser", () => {
 
     await userEvent.click(screen.getByRole("button", { name: 'Delete "drafts"' }));
 
-    expect(confirm.mock.calls[0][0]).toContain("If Kozane created its directory t1, that directory and everything in it");
+    expect(confirm.mock.calls[0][0]).toContain(
+      "If Kozane created its directory t1, that directory and everything in it",
+    );
     expect(props.actions.deleteTaskspace).toHaveBeenCalledWith("t1");
   });
 
@@ -231,6 +235,19 @@ describe("FileBrowser", () => {
     await userEvent.click(screen.getByRole("button", { name: 'Delete "notes.md"' }));
 
     expect(confirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert").textContent).toBe("Close notes.md in the editor first.");
+  });
+
+  it("blocks renaming the taskspace whose file is open in the editor", async () => {
+    render(FileBrowser, {
+      props: makeProps({
+        editorFile: { taskspaceId: "t1", taskspaceName: "drafts", path: "notes.md" },
+      }),
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: 'Rename "drafts"' }));
+
+    expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.getByRole("alert").textContent).toBe("Close notes.md in the editor first.");
   });
 
@@ -289,19 +306,20 @@ describe("FileBrowser", () => {
   });
 
   it("steps over file rows that cannot be opened", async () => {
-    const fetcher = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          path: "",
-          entries: [
-            { name: "docs", kind: "directory", size: null, modifiedAt: null },
-            { name: "link", kind: "symlink", size: null, modifiedAt: null },
-            { name: "notes.md", kind: "file", size: null, modifiedAt: null },
-          ],
-          truncated: false,
-        }),
-        { status: 200 },
-      ),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            path: "",
+            entries: [
+              { name: "docs", kind: "directory", size: null, modifiedAt: null },
+              { name: "link", kind: "symlink", size: null, modifiedAt: null },
+              { name: "notes.md", kind: "file", size: null, modifiedAt: null },
+            ],
+            truncated: false,
+          }),
+          { status: 200 },
+        ),
     );
     render(FileBrowser, {
       props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
@@ -315,20 +333,21 @@ describe("FileBrowser", () => {
   });
 
   it("moves from a symlink's action button to the rows beside it, not to the ends", async () => {
-    const fetcher = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          path: "",
-          entries: ["a.md", "docs", "link", "notes.md", "z.md"].map((name) => ({
-            name,
-            kind: name === "link" ? "symlink" : name.includes(".") ? "file" : "directory",
-            size: null,
-            modifiedAt: null,
-          })),
-          truncated: false,
-        }),
-        { status: 200 },
-      ),
+    const fetcher = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            path: "",
+            entries: ["a.md", "docs", "link", "notes.md", "z.md"].map((name) => ({
+              name,
+              kind: name === "link" ? "symlink" : name.includes(".") ? "file" : "directory",
+              size: null,
+              modifiedAt: null,
+            })),
+            truncated: false,
+          }),
+          { status: 200 },
+        ),
     );
     render(FileBrowser, {
       props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
