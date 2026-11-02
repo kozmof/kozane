@@ -239,14 +239,33 @@ export class TaskspaceTreeState {
       return { error: "Failed to rename" };
     }
 
-    const from = nodeKey(taskspaceId, path);
     const to = nodeKey(taskspaceId, next);
-    const moved = (key: string) =>
-      key === from ? to : key.startsWith(`${from}/`) ? to + key.slice(from.length) : key;
-    this.expanded = new Set([...this.expanded].map(moved));
-    this.nodes = Object.fromEntries(Object.entries(this.nodes).map(([k, v]) => [moved(k), v]));
+    this.rekeySubtree(taskspaceId, path, (rest) => to + rest);
     await this.load(ctx, taskspaceId, parentPath(path), true);
     return { path: next };
+  }
+
+  /**
+   * Re-key what is open and cached for `path` and everything under it. `to` gets the part of
+   * each key after `path` (empty for `path` itself) and answers the new key, or null to drop it.
+   */
+  private rekeySubtree(
+    taskspaceId: string,
+    path: string,
+    to: (rest: string) => string | null,
+  ): void {
+    const from = nodeKey(taskspaceId, path);
+    const next = (key: string): string | null =>
+      key === from || key.startsWith(`${from}/`) ? to(key.slice(from.length)) : key;
+    this.expanded = new Set(
+      [...this.expanded].map(next).filter((key): key is string => key !== null),
+    );
+    this.nodes = Object.fromEntries(
+      Object.entries(this.nodes).flatMap(([key, node]) => {
+        const k = next(key);
+        return k === null ? [] : [[k, node]];
+      }),
+    );
   }
 
   /**
@@ -265,10 +284,7 @@ export class TaskspaceTreeState {
       return { error: "Failed to delete" };
     }
 
-    const key = nodeKey(taskspaceId, path);
-    const gone = (k: string) => k === key || k.startsWith(`${key}/`);
-    this.expanded = new Set([...this.expanded].filter((k) => !gone(k)));
-    this.nodes = Object.fromEntries(Object.entries(this.nodes).filter(([k]) => !gone(k)));
+    this.rekeySubtree(taskspaceId, path, () => null);
     await this.load(ctx, taskspaceId, parentPath(path), true);
     return null;
   }

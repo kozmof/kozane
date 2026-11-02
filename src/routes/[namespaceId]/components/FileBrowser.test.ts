@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
+import { tick } from "svelte";
 import FileBrowser from "./FileBrowser.svelte";
 import { TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
 import type { TaskspaceSummary } from "$lib/types";
@@ -311,6 +312,64 @@ describe("FileBrowser", () => {
     await fireEvent.keyDown(docs, { key: "ArrowDown" });
 
     expect(document.activeElement?.textContent).toContain("notes.md");
+  });
+
+  it("moves from a row's action button to the next row in the same column", async () => {
+    render(FileBrowser, {
+      props: makeProps({
+        taskspaces: [
+          taskspace({ id: "t1", name: "drafts" }),
+          taskspace({ id: "t3", name: "outline" }),
+        ],
+      }),
+    });
+
+    const remove = screen.getByRole("button", { name: 'Delete "drafts"' });
+    remove.focus();
+    await fireEvent.keyDown(remove, { key: "ArrowDown" });
+
+    expect(document.activeElement?.textContent).toBe("outline");
+    const writing = column("Scopes").getByRole("option", { name: "Writing" });
+    expect(writing.getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("moves from a column header's button into that column", async () => {
+    render(FileBrowser, { props: makeProps() });
+
+    const add = screen.getByRole("button", { name: "New taskspace" });
+    add.focus();
+    await fireEvent.keyDown(add, { key: "ArrowDown" });
+
+    expect(document.activeElement?.textContent).toBe("drafts");
+  });
+
+  it("says new taskspaces need a scope while No scope is chosen", async () => {
+    render(FileBrowser, {
+      props: makeProps({ taskspaces: [taskspace({ id: "t1", name: "loose", scopeId: null })] }),
+    });
+
+    await userEvent.click(column("Scopes").getByRole("option", { name: "No scope" }));
+
+    const add = screen.getByRole("button", { name: "New taskspace" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+    expect(add.title).toBe("New taskspaces need a scope");
+  });
+
+  it("keeps a message while focus moves across rows, and clears it on a click", async () => {
+    vi.spyOn(globalThis, "confirm").mockReturnValue(true);
+    const props = makeProps();
+    vi.mocked(props.actions.deleteTaskspace).mockResolvedValue({ error: "Disk is busy" } as never);
+    render(FileBrowser, { props });
+
+    await userEvent.click(screen.getByRole("button", { name: 'Delete "drafts"' }));
+    expect(screen.getByRole("alert").textContent).toBe("Disk is busy");
+
+    column("Scopes").getByRole("option", { name: "Research" }).focus();
+    await tick();
+    expect(screen.getByRole("alert").textContent).toBe("Disk is busy");
+
+    await userEvent.click(column("Scopes").getByRole("option", { name: "Writing" }));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("leaves focus where it went when a name field loses it inside the modal", async () => {

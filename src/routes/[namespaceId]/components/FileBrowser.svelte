@@ -121,17 +121,18 @@
     return () => document.removeEventListener("focusin", pullBack);
   });
 
-  function selectScope(id: string): void {
+  /** Select a scope. A click clears the messages; moving focus onto the row keeps them. */
+  function selectScope(id: string, clear = true): void {
+    if (clear) clearMessages();
     if (chosenScopeId === id && scopeId === id) return;
     chosenScopeId = id;
     chosenTaskspaceId = null;
-    clearMessages();
   }
 
-  function selectTaskspace(id: string): void {
+  function selectTaskspace(id: string, clear = true): void {
+    if (clear) clearMessages();
     if (chosenTaskspaceId === id) return;
     chosenTaskspaceId = id;
-    clearMessages();
   }
 
   function clearMessages(): void {
@@ -187,7 +188,7 @@
   // ── Taskspaces ──────────────────────────────────────────────────
 
   async function createTaskspace(name: string): Promise<string | null> {
-    if (!scopeId) return "Choose a scope first";
+    if (!scopeId) return scopeId === NO_SCOPE ? "New taskspaces need a scope" : "Choose a scope first";
     const made = await actions.createTaskspace(scopeId, name);
     if ("error" in made) return made.error;
     stopEditing();
@@ -268,6 +269,19 @@
       .filter((row) => !row.disabled);
   }
 
+  /**
+   * The row `el` belongs to: the row itself, or the row beside a rename or delete button.
+   * Null for anything outside a row, such as a column header's buttons.
+   */
+  function ownRow(el: HTMLElement): HTMLButtonElement | null {
+    if (el instanceof HTMLButtonElement && el.dataset.col !== undefined) return el;
+    for (let p = el.parentElement; p && p !== panelEl; p = p.parentElement) {
+      const row = p.querySelector<HTMLButtonElement>(":scope > button[data-col]");
+      if (row) return row;
+    }
+    return null;
+  }
+
   function handleKeydown(e: KeyboardEvent): void {
     // Keep keys away from the board's shortcuts while the modal is up.
     e.stopPropagation();
@@ -276,14 +290,17 @@
       onClose();
       return;
     }
-    const target = e.target instanceof HTMLButtonElement ? e.target : null;
-    const col = target?.dataset.col !== undefined ? Number(target.dataset.col) : null;
+    const el = e.target instanceof HTMLElement ? e.target : null;
+    const row = el ? ownRow(el) : null;
+    // The column comes from where focus is, so a button in a column never counts as the first.
+    const colAttr = el?.closest<HTMLElement>("[data-column]")?.dataset.column;
+    const col = colAttr !== undefined ? Number(colAttr) : null;
 
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const rows = columnRows(col ?? 0);
       if (rows.length === 0) return;
-      const at = target ? rows.indexOf(target) : -1;
+      const at = row ? rows.indexOf(row) : -1;
       const step = e.key === "ArrowDown" ? 1 : -1;
       const next = at === -1 ? (step === 1 ? 0 : rows.length - 1) : at + step;
       rows[Math.max(0, Math.min(rows.length - 1, next))]?.focus();
@@ -427,7 +444,7 @@
   >
     <div class={columnsClass}>
       <!-- Scopes -->
-      <section class={columnClass} aria-label="Scopes">
+      <section class={columnClass} aria-label="Scopes" data-column="0">
         <div class={headerClass}>
           <span class={headerTitleClass}>scopes</span>
           {#if !readonly}
@@ -457,7 +474,7 @@
                   role="option"
                   aria-selected={scopeId === scope.id}
                   onclick={() => selectScope(scope.id)}
-                  onfocus={() => selectScope(scope.id)}
+                  onfocus={() => selectScope(scope.id, false)}
                 >{scope.name}</button>
                 {#if !readonly}
                   <span class={actionsClass}>
@@ -480,7 +497,7 @@
                 role="option"
                 aria-selected={scopeId === NO_SCOPE}
                 onclick={() => selectScope(NO_SCOPE)}
-                onfocus={() => selectScope(NO_SCOPE)}
+                onfocus={() => selectScope(NO_SCOPE, false)}
               >No scope</button>
             </div>
           {/if}
@@ -488,13 +505,13 @@
       </section>
 
       <!-- Taskspaces -->
-      <section class={columnClass} aria-label="Taskspaces">
+      <section class={columnClass} aria-label="Taskspaces" data-column="1">
         <div class={headerClass}>
           <span class={headerTitleClass}>taskspaces</span>
           {#if !readonly}
             <button
               class={addBtnClass}
-              title={scopeId ? "New taskspace" : "Choose a scope first"}
+              title={scopeId ? "New taskspace" : scopeId === NO_SCOPE ? "New taskspaces need a scope" : "Choose a scope first"}
               aria-label="New taskspace"
               disabled={!scopeId}
               onclick={() => begin({ kind: "new-taskspace" })}
@@ -527,7 +544,7 @@
                   aria-selected={taskspace?.id === item.id}
                   title={item.path ?? "No directory"}
                   onclick={() => selectTaskspace(item.id)}
-                  onfocus={() => selectTaskspace(item.id)}
+                  onfocus={() => selectTaskspace(item.id, false)}
                 >{item.name}</button>
                 {#if !readonly}
                   <span class={actionsClass}>
@@ -545,7 +562,7 @@
       </section>
 
       <!-- Files and folders -->
-      <section class={columnClass} aria-label="Files">
+      <section class={columnClass} aria-label="Files" data-column="2">
         <div class={headerClass}>
           <span class={headerTitleClass} title={taskspace?.path ?? undefined}>
             {taskspace ? taskspace.name : "files"}

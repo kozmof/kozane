@@ -204,7 +204,7 @@ export function removeTaskspaceDirectory({
     throw new TaskspaceFilesError(
       "exists",
       "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
-        "Move the directory aside or restore its .taskspace.json, then delete again.",
+        `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
     );
   // `rm` removes symlinks inside the tree without following them.
   for (const name of readdirSync(dir)) {

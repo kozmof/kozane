@@ -217,7 +217,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       await expectHttpRejection(
         DELETE(event(db, namespaceId, taskspaceId, "DELETE")),
         409,
-        "The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json, then delete again.",
+        `The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
       );
       expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
       expect(await getTaskspace({ db, taskspaceId })).toBeDefined();
@@ -277,7 +277,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       await expectHttpRejection(
         DELETE(event(db, namespaceId, taskspaceId, "DELETE")),
         409,
-        "The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json, then delete again.",
+        `The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
       );
       expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
     });
