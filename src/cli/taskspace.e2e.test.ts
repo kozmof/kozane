@@ -59,10 +59,10 @@ describe("taskspace CLI flow", () => {
     const output = cli(root, "taskspace", "create", "unscoped", "--no-scope", "--dir", target);
     expect(output).toContain(`path : ${target}`);
     // Pin the marker version. Version 2 uses `namespaceId` in place of `projectId`.
-    expect(JSON.parse(readFileSync(join(target, ".taskspace.json"), "utf-8"))).toMatchObject({
-      kind: "kozane.taskspace",
-      version: 2,
-    });
+    const marker = JSON.parse(readFileSync(join(target, ".taskspace.json"), "utf-8"));
+    expect(marker).toMatchObject({ kind: "kozane.taskspace", version: 2 });
+    // A directory chosen with --dir stays the user's.
+    expect(marker.ownsDirectory).toBeUndefined();
 
     const duplicate = runCli(
       root,
@@ -134,6 +134,22 @@ describe("taskspace CLI flow", () => {
     expect(unknown.status).not.toBe(0);
     expect(unknown.stderr).toContain("Namespace not found: ffff");
   }, 30_000);
+
+  it("marks only a directory it made itself as owned", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    const readMarker = (dir: string) =>
+      JSON.parse(readFileSync(join(root, dir, ".taskspace.json"), "utf-8"));
+
+    cli(root, "taskspace", "create", "fresh", "--no-scope");
+    expect(readMarker("fresh").ownsDirectory).toBe(true);
+
+    // A directory that was already there stays the user's, even in the default folder.
+    mkdirSync(join(root, "existing"));
+    writeFileSync(join(root, "existing", "keep.txt"), "mine");
+    cli(root, "taskspace", "create", "existing", "--no-scope");
+    expect(readMarker("existing").ownsDirectory).toBeUndefined();
+  });
 
   it("detects and applies moved, missing, and orphan taskspace changes", () => {
     const root = tempWorkspace();

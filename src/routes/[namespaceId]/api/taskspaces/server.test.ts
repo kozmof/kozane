@@ -164,6 +164,8 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     const marker = JSON.parse(readFileSync(markerPath, "utf-8"));
     expect(marker.taskspaceId).toBe(id);
     expect(marker.namespaceId).toBe(namespaceId);
+    // The browser made this directory, so it may rename or delete it later.
+    expect(marker.ownsDirectory).toBe(true);
   });
 
   it("rejects an existing directory without changing its contents or creating a DB row", async () => {

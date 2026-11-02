@@ -16,7 +16,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, request }) => {
     const id = await addScope({ db, name });
     return json({ id });
   } catch (e) {
-    if (isUniqueConstraintError(e)) throw error(400, `A scope named "${name}" already exists`);
+    if (isUniqueConstraintError(e)) throw error(409, `A scope named "${name}" already exists`);
     throw e;
   }
 });

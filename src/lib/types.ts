@@ -46,6 +46,12 @@ export interface PartitionWithColor {
 export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path" | "pathKind">;
 
 /**
+ * What deleting a taskspace did to its directory: `deleted` with everything in it, already
+ * `missing`, or `kept` because Kozane did not create it.
+ */
+export type TaskspaceDirectoryOutcome = "deleted" | "missing" | "kept";
+
+/**
  * Directory entry metadata without file contents. Report symlinks as links and do not expand
  * them in the panel.
  */

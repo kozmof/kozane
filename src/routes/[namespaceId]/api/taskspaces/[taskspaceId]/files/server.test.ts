@@ -354,6 +354,17 @@ describe("PATCH and DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files", (
     expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
   });
 
+  it("refuses to replace a dangling symlink", async () => {
+    symlinkSync(join(fx.tmpRoot, "nowhere"), join(fx.tmpRoot, "demo", "dangling"));
+
+    await expectHttpRejection(
+      patch({ path: "README.md", name: "dangling" }),
+      409,
+      '"dangling" already exists',
+    );
+    expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
+  });
+
   it("refuses names that would move or hide the entry", async () => {
     await expectHttpRejection(
       patch({ path: "README.md", name: "../x" }),

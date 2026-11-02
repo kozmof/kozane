@@ -862,8 +862,14 @@ to update its recorded path.
 ```json
 {
   "kind": "kozane.taskspace",
-  "version": 1,
+  "version": 2,
   "taskspaceId": "019dddef-87e3-7127-b5c9-0d5878bbf826",
-  "namespaceId": "019dddef-87e3-7000-ac4d-aa414b7e75d7"
+  "namespaceId": "019dddef-87e3-7000-ac4d-aa414b7e75d7",
+  "ownsDirectory": true
 }
 ```
+
+`ownsDirectory` is present only when Kozane created the directory in
+`taskspace.defaultDir`, either from the browser or with `taskspace create`
+without `--dir`. The browser renames and deletes only such directories along
+with their taskspace.

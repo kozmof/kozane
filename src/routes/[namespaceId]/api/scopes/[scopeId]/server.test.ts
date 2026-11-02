@@ -98,7 +98,7 @@ describe("PATCH /[namespaceId]/api/scopes/[scopeId]", () => {
 
     await expectHttpRejection(
       PATCH(patchEvent(db, namespaceId, scopeId, { name: "Taken" })),
-      400,
+      409,
       'A scope named "Taken" already exists',
     );
   });

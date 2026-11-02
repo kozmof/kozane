@@ -14,4 +14,10 @@ export type TaskspaceMarker = {
   version: typeof TASKSPACE_MARKER_VERSION;
   taskspaceId: string;
   namespaceId: string;
+  /**
+   * Set when Kozane made this directory itself in `taskspace.defaultDir`. Only such a
+   * directory is renamed or deleted along with its taskspace from the browser. Absent for a
+   * directory the user chose with `--dir` or one that already existed.
+   */
+  ownsDirectory?: true;
 };

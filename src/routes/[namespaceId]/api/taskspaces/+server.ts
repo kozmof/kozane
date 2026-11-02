@@ -85,6 +85,8 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
             version: TASKSPACE_MARKER_VERSION,
             taskspaceId: id,
             namespaceId: params.namespaceId,
+            // This route always makes the directory itself, so the browser may manage it.
+            ownsDirectory: true,
           },
           null,
           2,

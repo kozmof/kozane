@@ -1,4 +1,5 @@
 import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
+import { entryNameIssue } from "$lib/entry-name";
 import {
   createTaskspaceFile,
   createTaskspaceFolder,
@@ -49,19 +50,9 @@ export type TaskspaceTreeContext = {
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
-/**
- * Why `name` cannot become a new entry, or null when it can. Require a single
- * non-dot-prefixed name rather than a path.
- */
+/** Why `name` cannot become a new entry, or null when it can. See {@link entryNameIssue}. */
 function invalidName(kind: TaskspaceCreateKind, name: string): string | null {
-  const trimmed = name.trim();
-  const what = kind === "file" ? "File" : "Folder";
-  if (!trimmed) return `${what} name is required`;
-  if (trimmed.includes("/") || trimmed.includes("\\")) {
-    return `${what} name cannot contain a path separator`;
-  }
-  if (trimmed.startsWith(".")) return `${what} name cannot start with a dot`;
-  return null;
+  return entryNameIssue(name.trim(), kind === "file" ? "File name" : "Folder name");
 }
 
 export function nodeKey(taskspaceId: string, path: string): string {
@@ -229,10 +220,8 @@ export class TaskspaceTreeState {
     name: string,
   ): Promise<{ path: string } | { error: string }> {
     const trimmed = name.trim();
-    if (!trimmed) return { error: "Name is required" };
-    if (trimmed.includes("/") || trimmed.includes("\\"))
-      return { error: "Name cannot contain a path separator" };
-    if (trimmed.startsWith(".")) return { error: "Name cannot start with a dot" };
+    const invalid = entryNameIssue(trimmed);
+    if (invalid) return { error: invalid };
 
     let next: string;
     try {

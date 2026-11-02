@@ -31,7 +31,7 @@ async function expectHttpRejection(value: unknown, status: number, message: stri
   await expect(Promise.resolve(value)).rejects.toMatchObject({ status, body: { message } });
 }
 
-function writeMarker(dir: string, taskspaceId: string, namespaceId: string) {
+function writeMarker(dir: string, taskspaceId: string, namespaceId: string, owns = true) {
   writeFileSync(
     join(dir, TASKSPACE_MARKER_FILE),
     JSON.stringify({
@@ -39,6 +39,7 @@ function writeMarker(dir: string, taskspaceId: string, namespaceId: string) {
       version: TASKSPACE_MARKER_VERSION,
       taskspaceId,
       namespaceId,
+      ...(owns && { ownsDirectory: true }),
     }),
   );
 }
@@ -133,6 +134,30 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       const row = await getTaskspace({ db, taskspaceId: id });
       expect(row).toMatchObject({ name: "Renamed label", path: "mine" });
     });
+
+    it("changes only the label of a directory Kozane did not create", async () => {
+      // `kozane taskspace create mine --dir src` with the default `defaultDir` of `.`.
+      useDefaultDir(".");
+      mkdirSync(join(tmpRoot, "src"));
+      const id = await addTaskspace({ db, namespaceId, name: "mine", path: "src" });
+      writeMarker(join(tmpRoot, "src"), id, namespaceId, false);
+
+      const res = await PATCH(event(db, namespaceId, id, "PATCH", { name: "a/b label" }));
+
+      expect(await res.json()).toMatchObject({ name: "a/b label", path: "src" });
+      expect(existsSync(join(tmpRoot, "src", TASKSPACE_MARKER_FILE))).toBe(true);
+    });
+
+    it("404s when an owned directory is gone", async () => {
+      rmSync(join(tmpRoot, "tasks", "draft"), { recursive: true });
+
+      await expectHttpRejection(
+        PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" })),
+        404,
+        "Taskspace directory not found",
+      );
+      expect((await getTaskspace({ db, taskspaceId }))?.name).toBe("draft");
+    });
   });
 
   describe("DELETE", () => {
@@ -164,6 +189,32 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       );
       expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
       expect(await getTaskspace({ db, taskspaceId })).toBeDefined();
+    });
+
+    it("keeps a directory Kozane did not create, even in the default folder", async () => {
+      // `kozane taskspace create mine --dir src` with the default `defaultDir` of `.`.
+      useDefaultDir(".");
+      mkdirSync(join(tmpRoot, "src"));
+      writeFileSync(join(tmpRoot, "src", "main.ts"), "code");
+      const id = await addTaskspace({ db, namespaceId, name: "mine", path: "src" });
+      writeMarker(join(tmpRoot, "src"), id, namespaceId, false);
+
+      const res = await DELETE(event(db, namespaceId, id, "DELETE"));
+
+      expect(await res.json()).toEqual({ ok: true, directory: "kept" });
+      expect(readFileSync(join(tmpRoot, "src", "main.ts"), "utf-8")).toBe("code");
+      expect(await getTaskspace({ db, taskspaceId: id })).toBeUndefined();
+    });
+
+    it("keeps everything when a managed path has no marker", async () => {
+      rmSync(join(tmpRoot, "tasks", "draft", TASKSPACE_MARKER_FILE));
+
+      await expectHttpRejection(
+        DELETE(event(db, namespaceId, taskspaceId, "DELETE")),
+        409,
+        "The directory's .taskspace.json does not name this taskspace, so it was not deleted",
+      );
+      expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
     });
 
     it("keeps a directory outside the default folder", async () => {

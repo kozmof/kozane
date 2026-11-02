@@ -15,7 +15,7 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
   try {
     await updateScopeName({ db, scopeId: params.scopeId, name });
   } catch (e) {
-    if (isUniqueConstraintError(e)) throw error(400, `A scope named "${name}" already exists`);
+    if (isUniqueConstraintError(e)) throw error(409, `A scope named "${name}" already exists`);
     throw e;
   }
   return json({ id: params.scopeId, name });

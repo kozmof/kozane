@@ -267,10 +267,11 @@ Each delete asks first.
 
 - Deleting a scope removes it from this board. A scope that still has
   taskspaces cannot be deleted.
-- Deleting a taskspace deletes its directory and everything in it, when the
-  directory sits directly in `taskspace.defaultDir` and its `.taskspace.json`
-  names the taskspace. Other directories, such as ones chosen with
-  `kozane taskspace create --dir`, stay on disk.
+- Deleting a taskspace deletes its directory and everything in it, when Kozane
+  created that directory in `taskspace.defaultDir`. Its `.taskspace.json`
+  records this as `ownsDirectory: true`. Other directories, such as ones chosen
+  with `kozane taskspace create --dir` or ones that already existed, stay on
+  disk.
 - Deleting a folder deletes everything in it. These deletes cannot be undone.
 - Renaming a taskspace renames its directory under the same rule. Other
   taskspaces change only their name.

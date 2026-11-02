@@ -1,4 +1,9 @@
-import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "$lib/types";
+import type {
+  Scope,
+  TaskspaceDirectoryOutcome,
+  TaskspaceEntryKind,
+  TaskspaceSummary,
+} from "$lib/types";
 import type { OpenFileRef } from "./editor/editor-session.svelte.js";
 
 /**
@@ -13,7 +18,9 @@ export type FileManagementActions = {
   removeScope: (scopeId: string) => Promise<{ error: string } | null>;
   createTaskspace: (scopeId: string, name: string) => Promise<{ id: string } | { error: string }>;
   renameTaskspace: (taskspaceId: string, name: string) => Promise<{ error: string } | null>;
-  deleteTaskspace: (taskspaceId: string) => Promise<{ directory: string } | { error: string }>;
+  deleteTaskspace: (
+    taskspaceId: string,
+  ) => Promise<{ directory: TaskspaceDirectoryOutcome } | { error: string }>;
 };
 
 /**
@@ -51,7 +58,8 @@ export function confirmDeleteTaskspace(taskspace: TaskspaceSummary): boolean {
       ? "It has no directory."
       : taskspace.pathKind === "absolute"
         ? `Its directory ${taskspace.path} stays on disk.`
-        : `Its directory ${taskspace.path} and everything in it will be deleted from disk. This cannot be undone.`;
+        : // Only the server can tell whether Kozane created the directory, so say both cases.
+          `If Kozane created its directory ${taskspace.path}, that directory and everything in it will be deleted from disk. This cannot be undone.\nA directory you chose yourself stays on disk.`;
   return globalThis.confirm(`Delete taskspace "${taskspace.name}"?\n\n${disk}`);
 }
 
@@ -62,13 +70,16 @@ export function confirmDeleteEntry(path: string, kind: TaskspaceEntryKind): bool
 }
 
 /**
- * What to tell the user after a taskspace delete kept a directory the confirmation said would
+ * What to tell the user after a taskspace delete kept a directory the confirmation said might
  * go, or null when nothing needs saying.
  */
-export function keptDirectoryNotice(taskspace: TaskspaceSummary, directory: string): string | null {
+export function keptDirectoryNotice(
+  taskspace: TaskspaceSummary,
+  directory: TaskspaceDirectoryOutcome,
+): string | null {
   if (directory !== "kept" || taskspace.path === null || taskspace.pathKind === "absolute")
     return null;
-  return `Taskspace deleted. ${taskspace.path} was kept because it is outside the taskspace folder.`;
+  return `Taskspace deleted. ${taskspace.path} was kept because Kozane did not create it.`;
 }
 
 /** A failure or a notice from one of the steps above, for the view to show. */

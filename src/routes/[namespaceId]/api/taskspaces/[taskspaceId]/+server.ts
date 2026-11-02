@@ -10,7 +10,10 @@ import {
   removeTaskspaceDirectory,
   renameTaskspaceDirectory,
   restoreTaskspaceDirectory,
+  taskspaceDirectoryClaim,
+  type DirectoryClaim,
 } from "$lib/server/taskspace-directory";
+import type { TaskspaceDirectoryOutcome } from "$lib/types";
 import { readJsonObject, requireBoundedName } from "../../../lib/request.js";
 import { apiHandler } from "../../../lib/api-handler.js";
 import { rethrowFilesError } from "./base-dir.js";
@@ -24,8 +27,14 @@ async function visibleTaskspace(locals: App.Locals, namespaceId: string, taskspa
   return taskspace;
 }
 
-/** Whether the browser may change this taskspace's directory on disk. */
-function managedDirectory(storedPath: string | null, pathKind: PathKind) {
+type TaskspaceRow = { id: string; path: string | null; pathKind: PathKind };
+
+/**
+ * Where the browser may change this taskspace's directory on disk, with who owns what is
+ * there, or null when the path is not where Kozane creates taskspaces.
+ */
+function managedDirectory(taskspace: TaskspaceRow) {
+  const { path: storedPath, pathKind } = taskspace;
   if (!storedPath || taskspacePathIssue(storedPath, pathKind)) return null;
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
@@ -34,11 +43,19 @@ function managedDirectory(storedPath: string | null, pathKind: PathKind) {
     pathKind,
     defaultDir: getTaskspaceDefaultDir(root),
   });
-  return managed ? { root, storedPath } : null;
+  if (!managed) return null;
+  const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };
+  let claim: DirectoryClaim;
+  try {
+    claim = taskspaceDirectoryClaim(target);
+  } catch (e) {
+    rethrowFilesError(e, "Failed to read taskspace directory");
+  }
+  return { ...target, claim };
 }
 
 /**
- * Rename a taskspace. A directory the browser manages moves to the new name too. Others keep
+ * Rename a taskspace. A directory Kozane created moves to the new name too. Others keep
  * their directory and change only the label. Return `{ id, name, path, pathKind }`.
  */
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
@@ -51,8 +68,9 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
 
   if (name === taskspace.name) return reply(taskspace.path);
 
-  const managed = managedDirectory(taskspace.path, taskspace.pathKind);
-  if (!managed) {
+  const managed = managedDirectory(taskspace);
+  if (managed?.claim === "missing") throw error(404, "Taskspace directory not found");
+  if (managed?.claim !== "owned") {
     await updateTaskspace({ db, taskspaceId: taskspace.id, name });
     return reply(taskspace.path);
   }
@@ -63,11 +81,7 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
 
   let nextPath: string;
   try {
-    nextPath = renameTaskspaceDirectory({
-      workspaceRoot: managed.root,
-      storedPath: managed.storedPath,
-      newName: name,
-    });
+    nextPath = renameTaskspaceDirectory({ ...managed, newName: name });
   } catch (e) {
     rethrowFilesError(e, "Failed to rename taskspace directory");
   }
@@ -77,7 +91,7 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
   } catch (e) {
     // Put the directory back so the record and the disk keep agreeing.
     try {
-      restoreTaskspaceDirectory(managed.root, nextPath, managed.storedPath);
+      restoreTaskspaceDirectory(managed.workspaceRoot, nextPath, managed.storedPath);
     } catch (restoreError) {
       console.error("Failed to restore taskspace directory after rename:", restoreError);
     }
@@ -87,24 +101,23 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
 });
 
 /**
- * Delete a taskspace. A directory the browser manages is deleted with everything in it,
- * before the record, so a failure leaves the taskspace in place to retry. Others keep their
+ * Delete a taskspace. A directory Kozane created is deleted with everything in it, before
+ * the record, so a failure leaves the taskspace in place to retry. Others keep their
  * directory. Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or
- * `kept`.
+ * `kept`. Return 409 when a managed path holds a directory whose marker names another
+ * taskspace, or none.
  */
 export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
   const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
-  const managed = managedDirectory(taskspace.path, taskspace.pathKind);
+  const managed = managedDirectory(taskspace);
 
-  let directory: "deleted" | "missing" | "kept" = "kept";
-  if (managed) {
+  let directory: TaskspaceDirectoryOutcome = "kept";
+  if (managed?.claim === "missing") directory = "missing";
+  else if (managed?.claim === "owned" || managed?.claim === "foreign") {
+    // A foreign directory is refused inside, rather than quietly kept.
     try {
-      directory = removeTaskspaceDirectory({
-        workspaceRoot: managed.root,
-        storedPath: managed.storedPath,
-        taskspaceId: taskspace.id,
-      });
+      directory = removeTaskspaceDirectory(managed);
     } catch (e) {
       rethrowFilesError(e, "Failed to delete taskspace directory");
     }

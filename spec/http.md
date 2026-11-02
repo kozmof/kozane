@@ -253,12 +253,12 @@ restacked above the default layer's cards, keeping their relative order. Return
 
 Create a workspace-wide scope. Body requires `name`. Return `{ id }`.
 The namespace path parameter is ignored. An unused scope appears on every board.
-Return 400 for a name already used in the workspace.
+Return 409 for a name already used in the workspace.
 
 ### `PATCH /[namespaceId]/api/scopes/[scopeId]`
 
 Rename a scope workspace-wide. Body requires `name`. Return `{ id, name }`.
-Return 400 for a name already used in the workspace and 404 for an unknown scope.
+Return 409 for a name already used in the workspace and 404 for an unknown scope.
 
 ### `DELETE /[namespaceId]/api/scopes/[scopeId]`
 
@@ -401,24 +401,25 @@ or 503 without a workspace.
 
 Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
 
-A managed directory is renamed on disk too. A directory is managed when its path is
-workspace-relative and sits directly in `taskspace.defaultDir`, where this API creates
-taskspaces. The name must then follow the creation rules. Other taskspaces change only
-their label.
+A managed directory is renamed on disk too. A directory is managed when Kozane created it:
+its path is workspace-relative and sits directly in `taskspace.defaultDir`, and its
+`.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
+follow the creation rules. Other taskspaces, including directories chosen with
+`kozane taskspace create --dir`, change only their label.
 
 Return 400 for an invalid name, 404 for a taskspace not on this board or a missing managed
 directory, and 409 when the new directory name is taken.
 
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
-Delete a taskspace. A managed directory is deleted with everything in it, but only when its
-`.taskspace.json` names this taskspace. Other directories stay on disk. The directory goes
+Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
+Other directories stay on disk. The directory goes
 first, so a failure keeps the record. Cards linked to the taskspace keep their text and
 lose the link.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
-Return 404 for a taskspace not on this board and 409 when the marker names another
-taskspace.
+Return 404 for a taskspace not on this board, and 409 when the directory at a managed path
+has no marker or one naming another taskspace.
 
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 

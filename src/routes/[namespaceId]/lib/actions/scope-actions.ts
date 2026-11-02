@@ -1,6 +1,7 @@
 import * as api from "../namespace-api.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
 import type { BoardRect } from "$lib/constants";
+import type { TaskspaceDirectoryOutcome } from "$lib/types";
 import { readString } from "../response.js";
 
 /** Scope, scope frame, membership, and taskspace actions. */
@@ -306,10 +307,12 @@ export function createScopeActions(state: NamespaceState) {
    */
   async function deleteTaskspace(
     taskspaceId: string,
-  ): Promise<{ directory: string } | { error: string }> {
+  ): Promise<{ directory: TaskspaceDirectoryOutcome } | { error: string }> {
     const res = await api.deleteTaskspace(state.mutationFetcher, state.namespaceId, taskspaceId);
     if (!res.ok) return { error: await api.failureMessage(res, "Failed to delete taskspace") };
-    const directory = readString(await res.json().catch(() => null), "directory") ?? "kept";
+    const reported = readString(await res.json().catch(() => null), "directory");
+    const directory: TaskspaceDirectoryOutcome =
+      reported === "deleted" || reported === "missing" ? reported : "kept";
     state.taskspaces = state.taskspaces.filter(({ id }) => id !== taskspaceId);
     state.taskspaceTree.prune(state.taskspaces.map(({ id }) => id));
     return { directory };

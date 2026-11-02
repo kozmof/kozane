@@ -59,7 +59,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       removeScope: vi.fn(async () => null),
       createTaskspace: vi.fn(async () => ({ id: "t9" })),
       renameTaskspace: vi.fn(async () => null),
-      deleteTaskspace: vi.fn(async () => ({ directory: "deleted" })),
+      deleteTaskspace: vi.fn(async () => ({ directory: "deleted" as const })),
     },
     onOpenFile: vi.fn(),
     onClose: vi.fn(),
@@ -162,7 +162,7 @@ describe("FileBrowser", () => {
 
     await userEvent.click(screen.getByRole("button", { name: 'Delete "drafts"' }));
 
-    expect(confirm.mock.calls[0][0]).toContain("Its directory t1 and everything in it");
+    expect(confirm.mock.calls[0][0]).toContain("If Kozane created its directory t1, that directory and everything in it");
     expect(props.actions.deleteTaskspace).toHaveBeenCalledWith("t1");
   });
 

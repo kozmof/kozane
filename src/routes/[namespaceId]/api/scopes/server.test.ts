@@ -58,7 +58,7 @@ describe("POST /[namespaceId]/api/scopes", () => {
 
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: "dup" }))),
-      400,
+      409,
       'A scope named "dup" already exists',
     );
   });

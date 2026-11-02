@@ -16,11 +16,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { fileSignature } from "./file-signature.js";
+import { errorCode, isWithin } from "./fs-paths.js";
+import { entryNameIssue } from "../entry-name.js";
 
 export type TaskspaceFilesReason =
   | "invalid-path"
@@ -62,13 +64,6 @@ export class TaskspaceFilesError extends Error {
   }
 }
 
-/** True when `child` is `parent` itself or sits underneath it. */
-function isWithin(parent: string, child: string): boolean {
-  const rel = relative(parent, child);
-  if (rel === "") return true;
-  return !isAbsolute(rel) && rel !== ".." && !rel.startsWith(`..${sep}`);
-}
-
 /**
  * True when a resolved path inside `realBase` passes through a dot-entry. Checking only the
  * requested segments would let a visible symlink such as `docs -> .secrets` reach a hidden
@@ -85,7 +80,7 @@ function resolvesThroughDotEntry(realBase: string, real: string): boolean {
  * missing file.
  */
 function mapFsError(e: unknown, whatIsMissing: string): unknown {
-  const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+  const code = errorCode(e);
   if (code === "EACCES" || code === "EPERM")
     return new TaskspaceFilesError("forbidden", "Permission denied");
   if (code === "ELOOP")
@@ -284,7 +279,7 @@ function readRegularFile(real: string): Uint8Array {
   try {
     fd = openSync(real, READ_FLAGS);
   } catch (e) {
-    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    const code = errorCode(e);
     // With `O_NOFOLLOW`, ELOOP means the final entry became a symlink.
     if (code === "ELOOP")
       throw new TaskspaceFilesError("invalid-path", "Symbolic links cannot be opened");
@@ -441,7 +436,7 @@ export function createTaskspaceFile({ baseDir, subPath }: TaskspaceFileTarget): 
   try {
     writeFileSync(real, "", { flag: "wx" });
   } catch (e) {
-    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    const code = errorCode(e);
     if (code === "EEXIST") throw new TaskspaceFilesError("exists", "File already exists");
     throw mapFsError(e, "Directory not found");
   }
@@ -467,7 +462,7 @@ export function createTaskspaceDirectory({
   try {
     mkdirSync(real);
   } catch (e) {
-    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    const code = errorCode(e);
     if (code === "EEXIST") throw new TaskspaceFilesError("exists", "Directory already exists");
     throw mapFsError(e, "Directory not found");
   }
@@ -475,17 +470,7 @@ export function createTaskspaceDirectory({
   return { path: relative(base, real).split(sep).join("/"), entries: [], truncated: false };
 }
 
-/**
- * Why `name` cannot replace an entry's name, or null when it can. Allow one plain segment
- * only, so a rename never moves an entry to another directory or hides it.
- */
-export function entryNameIssue(name: string): string | null {
-  if (!name.trim()) return "Name is required";
-  if (name !== name.trim()) return "Name cannot start or end with whitespace";
-  if (/[/\\\0]/.test(name)) return "Name cannot contain a path separator";
-  if (name.startsWith(".")) return "Name cannot start with a dot";
-  return null;
-}
+export { entryNameIssue };
 
 export type TaskspaceEntryChange = {
   /** The entry after the change, relative to the taskspace root and `/`-separated. */
@@ -500,6 +485,16 @@ function kindOf(stat: Stats): TaskspaceEntryKind {
   return "other";
 }
 
+/** Whether anything, even a dangling symlink, is at `real`. */
+function existsAfter(real: string): boolean {
+  try {
+    lstatSync(real);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function statEntry(real: string): Stats {
   try {
     return lstatSync(real);
@@ -510,7 +505,11 @@ function statEntry(real: string): Stats {
 
 /**
  * Rename one entry within its directory. A symlink is renamed itself, never followed. Refuse
- * to replace an existing entry.
+ * to replace an entry that exists when checked.
+ *
+ * Node has no rename that refuses to replace its target, so a file or empty directory that
+ * another process creates under `name` between the check and the move is replaced. A
+ * nonempty directory, or a mismatch between file and directory, makes the move fail instead.
  */
 export function renameTaskspaceEntry({
   baseDir,
@@ -537,6 +536,12 @@ export function renameTaskspaceEntry({
   try {
     renameSync(real, target);
   } catch (e) {
+    const code = errorCode(e);
+    // Something took the name after the check above.
+    if (code === "EEXIST" || code === "ENOTEMPTY" || code === "EISDIR")
+      throw new TaskspaceFilesError("exists", `"${name}" already exists`);
+    if (code === "ENOTDIR" && existsAfter(target))
+      throw new TaskspaceFilesError("exists", `"${name}" already exists`);
     throw mapFsError(e, "Entry not found");
   }
   return { path: relative(base, target).split(sep).join("/"), kind: kindOf(source) };

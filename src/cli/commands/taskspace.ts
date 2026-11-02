@@ -240,6 +240,8 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
         version: TASKSPACE_MARKER_VERSION,
         taskspaceId: id,
         namespaceId: namespaceId ?? "",
+        // Only a directory made here under `defaultDir` is Kozane's to rename or delete.
+        ...(!options.dir && dirCreated && { ownsDirectory: true }),
       };
       writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
     } catch (e) {
