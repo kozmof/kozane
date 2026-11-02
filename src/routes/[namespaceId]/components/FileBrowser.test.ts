@@ -233,6 +233,39 @@ describe("FileBrowser", () => {
     expect(screen.getByRole("alert").textContent).toBe("Close notes.md in the editor first.");
   });
 
+  it("keeps a file rename in its own taskspace after switching to another", async () => {
+    let answerRename: (res: Response) => void = () => {};
+    const listing = fetcherFor(["notes.md"]);
+    const fetcher = vi.fn((url: string, init?: RequestInit) =>
+      init?.method === "PATCH"
+        ? new Promise<Response>((resolve) => (answerRename = resolve))
+        : listing(url, init),
+    );
+    const props = makeProps({
+      taskspaces: [
+        taskspace({ id: "t1", name: "drafts", scopeId: "s1" }),
+        taskspace({ id: "t3", name: "copies", scopeId: "s1" }),
+      ],
+      ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" },
+    });
+    render(FileBrowser, { props });
+
+    await column("Files").findByText("notes.md");
+    await userEvent.click(screen.getByRole("button", { name: 'Rename "notes.md"' }));
+    const input = screen.getByRole("textbox", { name: "New name for notes.md" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "taken.md{Enter}");
+    // Switch while the rename is still in flight, then let it fail.
+    await userEvent.click(column("Taskspaces").getByRole("option", { name: "copies" }));
+    await column("Files").findByText("notes.md");
+    answerRename(new Response(JSON.stringify({ message: "Taken" }), { status: 409 }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.queryByRole("textbox", { name: "New name for notes.md" })).toBeNull();
+    const patches = fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
+    expect(patches.map(([u]) => u)).toEqual([expect.stringContaining("/taskspaces/t1/files")]);
+  });
+
   it("hides every change control when read-only", async () => {
     render(FileBrowser, { props: makeProps({ readonly: true }) });
 

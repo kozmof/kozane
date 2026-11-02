@@ -406,7 +406,8 @@ its path is workspace-relative and sits directly in `taskspace.defaultDir`, and 
 `.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
 follow the creation rules. Other taskspaces, including directories chosen with
 `kozane taskspace create --dir`, change only their label. So does a taskspace whose managed
-directory is no longer on disk.
+directory is no longer on disk, or whose path holds something Kozane never makes, such as a
+symlink or a file.
 
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
@@ -414,9 +415,10 @@ directory name is taken.
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
 Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
-Other directories stay on disk. The directory goes
-first, so a failure keeps the record. Cards linked to the taskspace keep their text and
-lose the link.
+Other directories stay on disk, and so does a symlink or file at a managed path, which is
+`kept`. The directory goes first, with its `.taskspace.json` last, so a failure keeps the
+record and a retry still recognizes the directory. Cards linked to the taskspace keep their
+text and lose the link.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
 Return 404 for a taskspace not on this board, and 409 when the directory at a managed path

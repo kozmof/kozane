@@ -66,7 +66,9 @@
     | { kind: "new-taskspace" }
     | { kind: "scope"; id: string }
     | { kind: "taskspace"; id: string }
-    | { kind: "entry"; path: string };
+    // The taskspace too, so a field left open after switching taskspaces never renames the
+    // same path in the one now shown.
+    | { kind: "entry"; taskspaceId: string; path: string };
   let editing = $state<Editing | null>(null);
   let error = $state<string | null>(null);
   let notice = $state<string | null>(null);
@@ -221,12 +223,12 @@
       error = blocked;
       return;
     }
-    begin({ kind: "entry", path });
+    begin({ kind: "entry", taskspaceId: taskspace.id, path });
   }
 
   async function renameEntry(path: string, name: string): Promise<string | null> {
-    if (!taskspace) return null;
-    const result = await tree.rename(ctx, taskspace.id, path, name);
+    if (editing?.kind !== "entry" || editing.path !== path) return null;
+    const result = await tree.rename(ctx, editing.taskspaceId, path, name);
     if ("error" in result) return result.error;
     stopEditing();
     return null;
@@ -575,7 +577,9 @@
                 {readonly}
                 canOpen={!readonly || ctx.staticFiles !== undefined}
                 {openPath}
-                renaming={editing?.kind === "entry" ? editing.path : null}
+                renaming={editing?.kind === "entry" && editing.taskspaceId === taskspace.id
+                  ? editing.path
+                  : null}
                 onOpenFile={openFile}
                 onStartRename={startRenameEntry}
                 onRename={renameEntry}

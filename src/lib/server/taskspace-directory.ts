@@ -1,4 +1,12 @@
-import { lstatSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs";
+import {
+  lstatSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  renameSync,
+  rmSync,
+  rmdirSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
@@ -76,9 +84,11 @@ function assertOwnDirectory(dir: string, workspaceRoot: string): boolean {
  * - `owned`: its marker names this taskspace and says Kozane made the directory.
  * - `adopted`: its marker names this taskspace, but the directory was the user's.
  * - `foreign`: no readable marker, or one naming another taskspace.
+ * - `unmanaged`: something Kozane never makes is at the path, such as a symlink, a file, or
+ *   a directory that resolves outside the workspace. It is left alone, as `adopted` is.
  * - `missing`: nothing is at the path.
  */
-export type DirectoryClaim = "owned" | "adopted" | "foreign" | "missing";
+export type DirectoryClaim = "owned" | "adopted" | "foreign" | "unmanaged" | "missing";
 
 function readClaim(dir: string, taskspaceId: string): Exclude<DirectoryClaim, "missing"> {
   let marker;
@@ -105,7 +115,13 @@ export function taskspaceDirectoryClaim({
   taskspaceId,
 }: DirectoryTarget): DirectoryClaim {
   const dir = resolve(workspaceRoot, storedPath);
-  if (!assertOwnDirectory(dir, workspaceRoot)) return "missing";
+  try {
+    if (!assertOwnDirectory(dir, workspaceRoot)) return "missing";
+  } catch (e) {
+    // Not a directory Kozane could have made, so it is the user's to keep.
+    if (e instanceof TaskspaceFilesError && e.reason === "invalid-path") return "unmanaged";
+    throw e;
+  }
   return readClaim(dir, taskspaceId);
 }
 
@@ -172,6 +188,10 @@ export function restoreTaskspaceDirectory(
  * Delete an owned taskspace directory and everything in it. Check the marker again right
  * before deleting, so a directory that took the path over is never removed. Return whether
  * there was anything to delete.
+ *
+ * The marker goes last. A delete that stops partway, such as on a file it may not remove,
+ * leaves the marker in place, so the directory is still recognized and the delete can be
+ * retried.
  */
 export function removeTaskspaceDirectory({
   workspaceRoot,
@@ -187,6 +207,10 @@ export function removeTaskspaceDirectory({
         "Move the directory aside or restore its .taskspace.json, then delete again.",
     );
   // `rm` removes symlinks inside the tree without following them.
-  rmSync(dir, { recursive: true });
+  for (const name of readdirSync(dir)) {
+    if (name !== TASKSPACE_MARKER_FILE) rmSync(join(dir, name), { recursive: true });
+  }
+  rmSync(join(dir, TASKSPACE_MARKER_FILE), { force: true });
+  rmdirSync(dir);
   return "deleted";
 }

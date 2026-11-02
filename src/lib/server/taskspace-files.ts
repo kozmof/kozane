@@ -16,7 +16,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createHash } from "node:crypto";
-import { dirname, relative, resolve, sep } from "node:path";
+import { basename, dirname, relative, resolve, sep } from "node:path";
 import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constants.js";
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
 import { writeFileAtomic } from "./atomic-write.js";
@@ -523,15 +523,23 @@ export function renameTaskspaceEntry({
   const source = statEntry(real);
   const target = resolve(dirname(real), name);
 
-  let existing;
+  let existing: Stats | null;
   try {
     existing = lstatSync(target);
-  } catch {
+  } catch (e) {
+    if (errorCode(e) !== "ENOENT") throw mapFsError(e, "Directory not found");
     existing = null;
   }
-  // A case-only rename on a case-insensitive disk finds the entry itself.
-  if (existing && (existing.ino !== source.ino || existing.dev !== source.dev))
-    throw new TaskspaceFilesError("exists", `"${name}" already exists`);
+  if (existing) {
+    // A case-only rename on a case-insensitive disk finds the entry itself.
+    const sameEntry = existing.ino === source.ino && existing.dev === source.dev;
+    // The same inode listed under its own name is a hard link, and `rename` between two
+    // links to one file quietly does nothing.
+    const otherLink =
+      sameEntry && name !== basename(real) && readdirSync(dirname(real)).includes(name);
+    if (!sameEntry || otherLink)
+      throw new TaskspaceFilesError("exists", `"${name}" already exists`);
+  }
 
   try {
     renameSync(real, target);

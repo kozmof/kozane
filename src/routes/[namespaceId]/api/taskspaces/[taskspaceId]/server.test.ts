@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -169,6 +178,18 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect((await getTaskspace({ db, taskspaceId }))?.name).toBe("final");
       expect(existsSync(join(tmpRoot, "tasks", "final"))).toBe(false);
     });
+
+    it("changes only the label of a symlink at a managed path", async () => {
+      mkdirSync(join(tmpRoot, "mine"));
+      symlinkSync(join(tmpRoot, "mine"), join(tmpRoot, "tasks", "linked"));
+      const id = await addTaskspace({ db, namespaceId, name: "linked", path: "tasks/linked" });
+
+      const res = await PATCH(event(db, namespaceId, id, "PATCH", { name: "renamed" }));
+
+      expect(await res.json()).toMatchObject({ name: "renamed", path: "tasks/linked" });
+      expect(lstatSync(join(tmpRoot, "tasks", "linked")).isSymbolicLink()).toBe(true);
+      expect(existsSync(join(tmpRoot, "tasks", "renamed"))).toBe(false);
+    });
   });
 
   describe("DELETE", () => {
@@ -216,6 +237,39 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect(readFileSync(join(tmpRoot, "src", "main.ts"), "utf-8")).toBe("code");
       expect(await getTaskspace({ db, taskspaceId: id })).toBeUndefined();
     });
+
+    it("keeps a symlink at a managed path and the directory it points to", async () => {
+      mkdirSync(join(tmpRoot, "mine"));
+      writeFileSync(join(tmpRoot, "mine", "keep.md"), "keep");
+      symlinkSync(join(tmpRoot, "mine"), join(tmpRoot, "tasks", "linked"));
+      const id = await addTaskspace({ db, namespaceId, name: "linked", path: "tasks/linked" });
+
+      const res = await DELETE(event(db, namespaceId, id, "DELETE"));
+
+      expect(await res.json()).toEqual({ ok: true, directory: "kept" });
+      expect(lstatSync(join(tmpRoot, "tasks", "linked")).isSymbolicLink()).toBe(true);
+      expect(readFileSync(join(tmpRoot, "mine", "keep.md"), "utf-8")).toBe("keep");
+      expect(await getTaskspace({ db, taskspaceId: id })).toBeUndefined();
+    });
+
+    it.skipIf(process.getuid?.() === 0)(
+      "keeps the marker when a delete stops partway, so it can be retried",
+      async () => {
+        const locked = join(tmpRoot, "tasks", "draft", "notes");
+        chmodSync(locked, 0o500);
+        try {
+          await expect(DELETE(event(db, namespaceId, taskspaceId, "DELETE"))).rejects.toThrow();
+          expect(existsSync(join(tmpRoot, "tasks", "draft", TASKSPACE_MARKER_FILE))).toBe(true);
+          expect(await getTaskspace({ db, taskspaceId })).toBeDefined();
+        } finally {
+          chmodSync(locked, 0o700);
+        }
+
+        const res = await DELETE(event(db, namespaceId, taskspaceId, "DELETE"));
+        expect(await res.json()).toEqual({ ok: true, directory: "deleted" });
+        expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
+      },
+    );
 
     it("keeps everything when a managed path has no marker", async () => {
       rmSync(join(tmpRoot, "tasks", "draft", TASKSPACE_MARKER_FILE));

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   existsSync,
+  linkSync,
   lstatSync,
   mkdirSync,
   readdirSync,
@@ -350,6 +351,17 @@ describe("PATCH and DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files", (
       patch({ path: "README.md", name: "src" }),
       409,
       '"src" already exists',
+    );
+    expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
+  });
+
+  it("refuses to rename a file onto another hard link to it", async () => {
+    linkSync(join(fx.tmpRoot, "demo", "README.md"), join(fx.tmpRoot, "demo", "COPY.md"));
+
+    await expectHttpRejection(
+      patch({ path: "README.md", name: "COPY.md" }),
+      409,
+      '"COPY.md" already exists',
     );
     expect(existsSync(join(fx.tmpRoot, "demo", "README.md"))).toBe(true);
   });
