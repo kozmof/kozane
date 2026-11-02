@@ -4,6 +4,7 @@ import { getTaskspaceInNamespace } from "$db/api/taskspace";
 import { getWorkspaceRoot } from "$db/internal/config";
 import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import { TASKSPACE_FILES_STATUS, TaskspaceFilesError } from "$lib/server/taskspace-files";
+import { oneAtATime } from "./queue.js";
 
 /**
  * Resolve the request's trusted taskspace root from its database record and workspace root.
@@ -32,6 +33,28 @@ export async function taskspaceBaseDir(
   // A stored path that would leave the workspace, such as `../elsewhere`, is not served.
   if (!baseDir) throw error(404, "Taskspace directory is not valid");
   return baseDir;
+}
+
+/**
+ * Change a taskspace's files after every earlier change to it has finished, see
+ * {@link oneAtATime}. The directory is resolved inside the queue, so it reflects any rename
+ * before it. Read and check the request body before calling this, so a slow upload never
+ * holds up other changes to the taskspace.
+ */
+export function queuedFilesChange<T>(
+  locals: App.Locals,
+  params: { namespaceId: string; taskspaceId: string },
+  whatFailed: string,
+  change: (baseDir: string) => T,
+): Promise<T> {
+  return oneAtATime(params.taskspaceId, async () => {
+    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
+    try {
+      return change(baseDir);
+    } catch (e) {
+      rethrowFilesError(e, whatFailed);
+    }
+  });
 }
 
 /**

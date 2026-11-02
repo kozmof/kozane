@@ -219,8 +219,8 @@ describe("FileBrowser", () => {
 
     const fetcher = props.ctx.fetcher as unknown as ReturnType<typeof vi.fn>;
     const call = fetcher.mock.calls.find(([, init]) => init?.method === "DELETE");
-    expect(call?.[0]).toContain("/taskspaces/t1/files");
-    expect(JSON.parse(call?.[1].body)).toEqual({ path: "docs" });
+    expect(call?.[0]).toContain("/taskspaces/t1/files?path=docs");
+    expect(call?.[1].body).toBeUndefined();
   });
 
   it("protects the file open in the editor", async () => {

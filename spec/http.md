@@ -455,7 +455,7 @@ Listing access rules also apply.
 
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 
-Delete one entry. Body requires `path`. Directories are deleted with everything under
+Delete one entry. Query requires `path`. Directories are deleted with everything under
 them. Symlinks are removed, not followed, at the top and inside the tree. Return
 `{ path, kind }`. The taskspace root and dot-entries cannot be deleted.
 Listing access rules also apply.

@@ -59,6 +59,7 @@ export function nodeKey(taskspaceId: string, path: string): string {
   return `${taskspaceId}:${path}`;
 }
 
+/** The taskspace part of a {@link nodeKey}. IDs never contain `:`, but paths may. */
 function taskspaceOf(key: string): string {
   return key.slice(0, key.indexOf(":"));
 }

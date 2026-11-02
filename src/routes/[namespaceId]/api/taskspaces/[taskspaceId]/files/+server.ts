@@ -1,4 +1,4 @@
-import { json } from "@sveltejs/kit";
+import { error, json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import {
   createTaskspaceDirectory,
@@ -6,8 +6,7 @@ import {
   listTaskspaceDirectory,
   renameTaskspaceEntry,
 } from "$lib/server/taskspace-files";
-import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
-import { oneAtATime } from "../queue.js";
+import { queuedFilesChange, rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { readJsonObject, requireString } from "../../../../lib/request.js";
 import { apiHandler } from "../../../../lib/api-handler.js";
 
@@ -31,53 +30,47 @@ export const GET: RequestHandler = apiHandler(async ({ locals, params, url }) =>
  * Create one directory and return its empty listing. Require an existing parent and return
  * 409 when any entry already occupies the requested name.
  */
-export const POST: RequestHandler = apiHandler(({ locals, params, request }) =>
-  oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
-    const body = await readJsonObject(request);
-    const subPath = requireString(body, "path");
-
-    try {
-      return json(createTaskspaceDirectory({ baseDir, subPath }), { status: 201 });
-    } catch (e) {
-      rethrowFilesError(e, "Failed to create taskspace directory");
-    }
-  }),
-);
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
+  const subPath = requireString(await readJsonObject(request), "path");
+  const created = await queuedFilesChange(
+    locals,
+    params,
+    "Failed to create taskspace directory",
+    (baseDir) => createTaskspaceDirectory({ baseDir, subPath }),
+  );
+  return json(created, { status: 201 });
+});
 
 /**
  * Rename one file, directory, or symlink within its directory. Return the new path and the
  * entry's kind. Return 409 when the new name is taken.
  */
-export const PATCH: RequestHandler = apiHandler(({ locals, params, request }) =>
-  oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
-    const body = await readJsonObject(request);
-    const subPath = requireString(body, "path");
-    const name = requireString(body, "name");
-
-    try {
-      return json(renameTaskspaceEntry({ baseDir, subPath, name }));
-    } catch (e) {
-      rethrowFilesError(e, "Failed to rename taskspace entry");
-    }
-  }),
-);
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
+  const body = await readJsonObject(request);
+  const subPath = requireString(body, "path");
+  const name = requireString(body, "name");
+  const renamed = await queuedFilesChange(
+    locals,
+    params,
+    "Failed to rename taskspace entry",
+    (baseDir) => renameTaskspaceEntry({ baseDir, subPath, name }),
+  );
+  return json(renamed);
+});
 
 /**
- * Delete one file or symlink, or a directory with everything under it. The taskspace root
- * itself cannot be deleted here.
+ * Delete one file or symlink, or a directory with everything under it, named by the `path`
+ * query. The taskspace root itself cannot be deleted here.
  */
-export const DELETE: RequestHandler = apiHandler(({ locals, params, request }) =>
-  oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
-    const body = await readJsonObject(request);
-    const subPath = requireString(body, "path");
-
-    try {
-      return json(deleteTaskspaceEntry({ baseDir, subPath }));
-    } catch (e) {
-      rethrowFilesError(e, "Failed to delete taskspace entry");
-    }
-  }),
-);
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params, url }) => {
+  // A query rather than a body, which some proxies and clients drop from DELETE.
+  const subPath = url.searchParams.get("path");
+  if (!subPath) throw error(400, "path is required");
+  const deleted = await queuedFilesChange(
+    locals,
+    params,
+    "Failed to delete taskspace entry",
+    (baseDir) => deleteTaskspaceEntry({ baseDir, subPath }),
+  );
+  return json(deleted);
+});

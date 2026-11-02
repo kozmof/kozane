@@ -301,7 +301,7 @@ function bodyEvent(
   db: DB,
   namespaceId: string,
   taskspaceId: string,
-  method: "PATCH" | "DELETE",
+  method: "PATCH",
   payload: unknown,
 ) {
   const request = new Request(
@@ -331,8 +331,15 @@ describe("PATCH and DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files", (
 
   const patch = (payload: unknown) =>
     PATCH(bodyEvent(fx.db, fx.namespaceId, fx.taskspaceId, "PATCH", payload));
-  const del = (payload: unknown) =>
-    DELETE(bodyEvent(fx.db, fx.namespaceId, fx.taskspaceId, "DELETE", payload));
+  const del = ({ path }: { path?: string }) => {
+    const query = path === undefined ? "" : `?path=${encodeURIComponent(path)}`;
+    const url = new URL(
+      `http://localhost/${fx.namespaceId}/api/taskspaces/${fx.taskspaceId}/files${query}`,
+    );
+    const request = new Request(url, { method: "DELETE" });
+    const params = { namespaceId: fx.namespaceId, taskspaceId: fx.taskspaceId };
+    return DELETE({ locals: { db: fx.db }, params, request, url } as never);
+  };
 
   it("renames a file in place", async () => {
     const res = await patch({ path: "src/app.ts", name: "main.ts" });
@@ -430,5 +437,9 @@ describe("PATCH and DELETE /[namespaceId]/api/taskspaces/[taskspaceId]/files", (
       "Path must stay inside the taskspace",
     );
     expect(existsSync(join(fx.tmpRoot, "demo", ".taskspace.json"))).toBe(true);
+  });
+
+  it("requires the path in the query", async () => {
+    await expectHttpRejection(del({}), 400, "path is required");
   });
 });

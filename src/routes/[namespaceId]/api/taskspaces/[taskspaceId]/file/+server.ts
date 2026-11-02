@@ -5,8 +5,7 @@ import {
   readTaskspaceFile,
   writeTaskspaceFile,
 } from "$lib/server/taskspace-files";
-import { rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
-import { oneAtATime } from "../queue.js";
+import { queuedFilesChange, rethrowFilesError, taskspaceBaseDir } from "../base-dir.js";
 import { optionalString, readJsonObject, requireString } from "../../../../lib/request.js";
 import { apiHandler } from "../../../../lib/api-handler.js";
 
@@ -29,42 +28,40 @@ export const GET: RequestHandler = apiHandler(async ({ locals, params, url }) =>
  * without another request. Reject supplied content, which belongs in PUT, and return 409 if
  * the name is already taken.
  */
-export const POST: RequestHandler = apiHandler(({ locals, params, request }) =>
-  oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
-    const body = await readJsonObject(request);
-    const subPath = requireString(body, "path");
-    if (optionalString(body, "content") !== undefined)
-      throw error(400, "content is not accepted here; create the file, then PUT its contents");
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
+  const body = await readJsonObject(request);
+  const subPath = requireString(body, "path");
+  if (optionalString(body, "content") !== undefined)
+    throw error(400, "content is not accepted here; create the file, then PUT its contents");
 
-    try {
-      return json(createTaskspaceFile({ baseDir, subPath }), { status: 201 });
-    } catch (e) {
-      rethrowFilesError(e, "Failed to create taskspace file");
-    }
-  }),
-);
+  const created = await queuedFilesChange(
+    locals,
+    params,
+    "Failed to create taskspace file",
+    (baseDir) => createTaskspaceFile({ baseDir, subPath }),
+  );
+  return json(created, { status: 201 });
+});
 
 /**
  * Save text over an existing file only when the required read signature still matches. Return
  * 409 if the file changed since the editor read it.
  */
-export const PUT: RequestHandler = apiHandler(({ locals, params, request }) =>
-  oneAtATime(params.taskspaceId, async () => {
-    const baseDir = await taskspaceBaseDir(locals, params.namespaceId, params.taskspaceId);
-    const body = await readJsonObject(request);
-    const subPath = requireString(body, "path");
-    const content = optionalString(body, "content");
-    if (content === undefined) throw error(400, "content is required");
-    if (!("signature" in body)) throw error(400, "signature is required");
-    const signature = body.signature;
-    if (signature !== null && typeof signature !== "string")
-      throw error(400, "signature must be a string or null");
+export const PUT: RequestHandler = apiHandler(async ({ locals, params, request }) => {
+  const body = await readJsonObject(request);
+  const subPath = requireString(body, "path");
+  const content = optionalString(body, "content");
+  if (content === undefined) throw error(400, "content is required");
+  if (!("signature" in body)) throw error(400, "signature is required");
+  const signature = body.signature;
+  if (signature !== null && typeof signature !== "string")
+    throw error(400, "signature must be a string or null");
 
-    try {
-      return json(writeTaskspaceFile({ baseDir, subPath, content, signature }));
-    } catch (e) {
-      rethrowFilesError(e, "Failed to save taskspace file");
-    }
-  }),
-);
+  const saved = await queuedFilesChange(
+    locals,
+    params,
+    "Failed to save taskspace file",
+    (baseDir) => writeTaskspaceFile({ baseDir, subPath, content, signature }),
+  );
+  return json(saved);
+});

@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { isAbsolute, relative, sep } from "node:path";
 
 /** True when `child` sits strictly underneath `parent`. Compares whole path segments. */
@@ -16,4 +17,9 @@ export function errorCode(e: unknown): string | undefined {
   return e && typeof e === "object" && "code" in e && typeof e.code === "string"
     ? e.code
     : undefined;
+}
+
+/** True when two `lstat` results describe the same entry on disk. */
+export function sameEntry(a: Stats, b: Stats): boolean {
+  return a.ino === b.ino && a.dev === b.dev;
 }

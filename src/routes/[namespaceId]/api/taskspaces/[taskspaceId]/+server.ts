@@ -101,7 +101,13 @@ async function rename(locals: App.Locals, params: TaskspaceParams, name: string)
     try {
       restoreTaskspaceDirectory(managed.workspaceRoot, nextPath, managed.storedPath);
     } catch (restoreError) {
-      console.error("Failed to restore taskspace directory after rename:", restoreError);
+      console.error("Failed to restore taskspace directory after rename:", e, restoreError);
+      // The record still names the old path, so say where the directory went.
+      throw error(
+        500,
+        `Failed to rename taskspace. Its directory is now at ${nextPath}; ` +
+          `move it back to ${managed.storedPath}.`,
+      );
     }
     throw e;
   }

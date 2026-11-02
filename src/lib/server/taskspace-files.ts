@@ -21,7 +21,7 @@ import { TASKSPACE_DIR_ENTRIES_MAX, TASKSPACE_FILE_BYTES_MAX } from "../constant
 import type { TaskspaceEntry, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
 import { writeFileAtomic } from "./atomic-write.js";
 import { fileSignature } from "./file-signature.js";
-import { errorCode, isWithin } from "./fs-paths.js";
+import { errorCode, isWithin, sameEntry } from "./fs-paths.js";
 import { entryNameIssue } from "../entry-name.js";
 
 export type TaskspaceFilesReason =
@@ -530,12 +530,12 @@ export function renameTaskspaceEntry({
   }
   if (existing) {
     // A case-only rename on a case-insensitive disk finds the entry itself.
-    const sameEntry = existing.ino === source.ino && existing.dev === source.dev;
+    const same = sameEntry(existing, source);
     // The same inode listed under its own name is a hard link, and `rename` between two
     // links to one file quietly does nothing.
     const otherLink =
-      sameEntry && name !== basename(real) && readdirSync(dirname(real)).includes(name);
-    if (!sameEntry || otherLink)
+      same && name !== basename(real) && readdirSync(dirname(real)).includes(name);
+    if (!same || otherLink)
       throw new TaskspaceFilesError("exists", `"${name}" already exists`);
   }
 

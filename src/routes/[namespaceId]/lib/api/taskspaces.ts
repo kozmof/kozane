@@ -133,7 +133,8 @@ export function deleteTaskspaceEntry(
   taskspaceId: string,
   path: string,
 ): Promise<Response> {
-  return jsonRequest(fetcher, apiUrl(namespaceId, `/taskspaces/${taskspaceId}/files`), "DELETE", {
-    path,
+  const query = `?path=${encodeURIComponent(path)}`;
+  return fetcher(apiUrl(namespaceId, `/taskspaces/${taskspaceId}/files${query}`), {
+    method: "DELETE",
   });
 }

@@ -10,7 +10,8 @@ import {
 import { dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
-import { errorCode, isStrictlyInside } from "./fs-paths.js";
+import type { TaskspaceDirectoryOutcome } from "../types.js";
+import { errorCode, isStrictlyInside, sameEntry } from "./fs-paths.js";
 import { TaskspaceFilesError } from "./taskspace-files.js";
 
 /**
@@ -155,9 +156,8 @@ export function renameTaskspaceDirectory({
 
   try {
     const existing = lstatSync(to);
-    const source = lstatSync(from);
     // A case-only rename on a case-insensitive disk finds the directory itself.
-    if (existing.ino !== source.ino || existing.dev !== source.dev)
+    if (!sameEntry(existing, lstatSync(from)))
       throw new TaskspaceFilesError("exists", "A directory with that name already exists");
   } catch (e) {
     if (e instanceof TaskspaceFilesError) throw e;
@@ -197,19 +197,33 @@ export function removeTaskspaceDirectory({
   workspaceRoot,
   storedPath,
   taskspaceId,
-}: DirectoryTarget): "deleted" | "missing" {
+}: DirectoryTarget): Extract<TaskspaceDirectoryOutcome, "deleted" | "missing"> {
   const dir = resolve(workspaceRoot, storedPath);
   if (!assertOwnDirectory(dir, workspaceRoot)) return "missing";
+  const checked = lstatSync(dir);
   if (readClaim(dir, taskspaceId) !== "owned")
     throw new TaskspaceFilesError(
       "exists",
       "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
         `Move the directory aside or restore its .taskspace.json (taskspace ID ${taskspaceId}), then delete again.`,
     );
+  /**
+   * Stop when the path no longer holds the directory checked above. If another process
+   * swapped in a symlink, `join(dir, name)` would follow it out of the workspace. Node has
+   * no `unlinkat`, so this narrows that window rather than closing it.
+   */
+  const stillChecked = () => {
+    const now = lstatSync(dir);
+    if (now.isSymbolicLink() || !sameEntry(now, checked))
+      throw new TaskspaceFilesError("invalid-path", "Taskspace directory changed while deleting");
+  };
   // `rm` removes symlinks inside the tree without following them.
   for (const name of readdirSync(dir)) {
-    if (name !== TASKSPACE_MARKER_FILE) rmSync(join(dir, name), { recursive: true });
+    if (name === TASKSPACE_MARKER_FILE) continue;
+    stillChecked();
+    rmSync(join(dir, name), { recursive: true });
   }
+  stillChecked();
   rmSync(join(dir, TASKSPACE_MARKER_FILE), { force: true });
   rmdirSync(dir);
   return "deleted";
