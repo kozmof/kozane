@@ -47,7 +47,7 @@
     onOpenFile: (path: string) => void;
     onStartRename: (path: string) => void;
     onRename: (path: string, name: string) => Promise<string | null>;
-    onCancelRename: () => void;
+    onCancelRename: (focusTo?: EventTarget | null) => void;
     onDelete: (path: string, kind: TaskspaceEntryKind) => void;
   } = $props();
 

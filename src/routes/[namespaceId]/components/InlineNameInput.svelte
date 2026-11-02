@@ -16,7 +16,8 @@
     indent?: number;
     /** Resolve to the reason the name was refused, or null when it was accepted. */
     onSubmit: (name: string) => Promise<string | null>;
-    onCancel: () => void;
+    /** Close the field. A blur passes where focus is going, or null. */
+    onCancel: (focusTo?: EventTarget | null) => void;
   } = $props();
 
   // Seeded once. Later changes to the row's name do not overwrite what is being typed.
@@ -91,7 +92,7 @@
     aria-label={label}
     aria-invalid={error !== null}
     onkeydown={onKeydown}
-    onblur={() => !busy && onCancel()}
+    onblur={(e) => !busy && onCancel(e.relatedTarget)}
   />
 </div>
 {#if error}

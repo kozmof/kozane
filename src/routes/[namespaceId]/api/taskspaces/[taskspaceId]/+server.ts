@@ -56,8 +56,8 @@ function managedDirectory(taskspace: TaskspaceRow) {
 }
 
 /**
- * Rename a taskspace. A directory Kozane created moves to the new name too. Others keep
- * their directory and change only the label. Return `{ id, name, path, pathKind }`.
+ * Rename a taskspace. A directory Kozane created moves to the new name too. Others, and one
+ * whose directory is gone, change only the label. Return `{ id, name, path, pathKind }`.
  */
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
@@ -70,7 +70,7 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
   if (name === taskspace.name) return reply(taskspace.path);
 
   const managed = managedDirectory(taskspace);
-  if (managed?.claim === "missing") throw error(404, "Taskspace directory not found");
+  // A missing directory has nothing to move, so only the label changes, as DELETE allows.
   if (managed?.claim !== "owned") {
     await updateTaskspace({ db, taskspaceId: taskspace.id, name });
     return reply(taskspace.path);

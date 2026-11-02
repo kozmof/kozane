@@ -254,6 +254,58 @@ describe("FileBrowser", () => {
     expect(document.activeElement?.textContent).toBe("papers");
   });
 
+  it("steps over file rows that cannot be opened", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          path: "",
+          entries: [
+            { name: "docs", kind: "directory", size: null, modifiedAt: null },
+            { name: "link", kind: "symlink", size: null, modifiedAt: null },
+            { name: "notes.md", kind: "file", size: null, modifiedAt: null },
+          ],
+          truncated: false,
+        }),
+        { status: 200 },
+      ),
+    );
+    render(FileBrowser, {
+      props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
+    });
+
+    const docs = (await column("Files").findByText("docs")).closest("button")!;
+    docs.focus();
+    await fireEvent.keyDown(docs, { key: "ArrowDown" });
+
+    expect(document.activeElement?.textContent).toContain("notes.md");
+  });
+
+  it("leaves focus where it went when a name field loses it inside the modal", async () => {
+    render(FileBrowser, { props: makeProps() });
+    const dialog = screen.getByRole("dialog", { name: "Files" });
+
+    await userEvent.click(screen.getByRole("button", { name: 'Rename "Writing"' }));
+    // jsdom lets a focus() made during blur lose to the click's own focus, unlike browsers,
+    // so watch for the call rather than where focus ends up.
+    const pull = vi.spyOn(dialog, "focus");
+    const research = column("Scopes").getByRole("option", { name: "Research" });
+    await fireEvent.blur(screen.getByRole("textbox"), { relatedTarget: research });
+
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(pull).not.toHaveBeenCalled();
+  });
+
+  it("takes focus back when a name field loses it to nothing", async () => {
+    render(FileBrowser, { props: makeProps() });
+    const dialog = screen.getByRole("dialog", { name: "Files" });
+
+    await userEvent.click(screen.getByRole("button", { name: 'Rename "Writing"' }));
+    const pull = vi.spyOn(dialog, "focus");
+    await fireEvent.blur(screen.getByRole("textbox"), { relatedTarget: null });
+
+    expect(pull).toHaveBeenCalled();
+  });
+
   it("leaves F2 and Delete alone on a focused row", async () => {
     const confirm = vi.spyOn(globalThis, "confirm");
     const props = makeProps();

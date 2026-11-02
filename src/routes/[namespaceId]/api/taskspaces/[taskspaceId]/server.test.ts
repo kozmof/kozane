@@ -160,15 +160,14 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect(existsSync(join(tmpRoot, "src", TASKSPACE_MARKER_FILE))).toBe(true);
     });
 
-    it("404s when an owned directory is gone", async () => {
+    it("changes only the label when an owned directory is gone", async () => {
       rmSync(join(tmpRoot, "tasks", "draft"), { recursive: true });
 
-      await expectHttpRejection(
-        PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" })),
-        404,
-        "Taskspace directory not found",
-      );
-      expect((await getTaskspace({ db, taskspaceId }))?.name).toBe("draft");
+      const res = await PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" }));
+
+      expect(await res.json()).toMatchObject({ name: "final", path: "tasks/draft" });
+      expect((await getTaskspace({ db, taskspaceId }))?.name).toBe("final");
+      expect(existsSync(join(tmpRoot, "tasks", "final"))).toBe(false);
     });
   });
 
@@ -197,7 +196,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       await expectHttpRejection(
         DELETE(event(db, namespaceId, taskspaceId, "DELETE")),
         409,
-        "The directory's .taskspace.json does not name this taskspace, so it was not deleted",
+        "The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json, then delete again.",
       );
       expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
       expect(await getTaskspace({ db, taskspaceId })).toBeDefined();
@@ -224,7 +223,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       await expectHttpRejection(
         DELETE(event(db, namespaceId, taskspaceId, "DELETE")),
         409,
-        "The directory's .taskspace.json does not name this taskspace, so it was not deleted",
+        "The directory's .taskspace.json does not name this taskspace, so it was not deleted. Move the directory aside or restore its .taskspace.json, then delete again.",
       );
       expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
     });

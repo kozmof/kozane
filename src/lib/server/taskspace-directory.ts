@@ -183,7 +183,8 @@ export function removeTaskspaceDirectory({
   if (readClaim(dir, taskspaceId) !== "owned")
     throw new TaskspaceFilesError(
       "exists",
-      "The directory's .taskspace.json does not name this taskspace, so it was not deleted",
+      "The directory's .taskspace.json does not name this taskspace, so it was not deleted. " +
+        "Move the directory aside or restore its .taskspace.json, then delete again.",
     );
   // `rm` removes symlinks inside the tree without following them.
   rmSync(dir, { recursive: true });

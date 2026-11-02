@@ -143,9 +143,14 @@
     editing = next;
   }
 
-  function stopEditing(): void {
+  /**
+   * Close the name field. After a blur, `focusTo` is where focus is going: leave it there
+   * when it stays in the modal, such as on a clicked row. Otherwise give the keyboard back
+   * to the modal rather than the page body.
+   */
+  function stopEditing(focusTo?: EventTarget | null): void {
     editing = null;
-    // Give the keyboard back to the modal rather than the page body.
+    if (focusTo instanceof Node && panelEl?.contains(focusTo)) return;
     panelEl?.focus();
   }
 
@@ -252,10 +257,13 @@
 
   // ── Keyboard ────────────────────────────────────────────────────
 
-  /** Rows of one column, in screen order. */
+  /**
+   * Rows of one column that can take focus, in screen order. Disabled rows, such as symlinks,
+   * are skipped: focusing one does nothing, so the arrow keys would stop there.
+   */
   function columnRows(col: number): HTMLButtonElement[] {
     return [...(panelEl?.querySelectorAll<HTMLButtonElement>(`button[data-col="${col}"]`) ?? [])]
-      .filter((row) => !row.disabled || col === 2);
+      .filter((row) => !row.disabled);
   }
 
   function handleKeydown(e: KeyboardEvent): void {

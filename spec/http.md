@@ -405,10 +405,11 @@ A managed directory is renamed on disk too. A directory is managed when Kozane c
 its path is workspace-relative and sits directly in `taskspace.defaultDir`, and its
 `.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
 follow the creation rules. Other taskspaces, including directories chosen with
-`kozane taskspace create --dir`, change only their label.
+`kozane taskspace create --dir`, change only their label. So does a taskspace whose managed
+directory is no longer on disk.
 
-Return 400 for an invalid name, 404 for a taskspace not on this board or a missing managed
-directory, and 409 when the new directory name is taken.
+Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
+directory name is taken.
 
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
@@ -419,7 +420,8 @@ lose the link.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
 Return 404 for a taskspace not on this board, and 409 when the directory at a managed path
-has no marker or one naming another taskspace.
+has no marker or one naming another taskspace. To delete it anyway, move the directory
+aside, which makes it `missing`, or restore its marker.
 
 ### `GET /[namespaceId]/api/taskspaces/[taskspaceId]/files`
 
