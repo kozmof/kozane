@@ -1,14 +1,14 @@
 # Kozane
 
-Kozane provides data structures for organizing text.
-The names of these structures do not fix how you use them, so different projects can
-use them in different ways.
+Kozane is a tool for organizing text with structured data.
 
 The name "Kozane" comes from こざね法 (kozane method), developed by Japanese anthropologist Tadao Umesao.
 
 ## Structures
 
 Start by adding cards to a namespace. Use other structures only when you need them.
+
+The names of these structures do not fix how you use them, so different projects can use them in different ways.
 
 ### Main
 
@@ -17,7 +17,7 @@ Start by adding cards to a namespace. Use other structures only when you need th
 
 ### Others
 
-- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General."
+- Partition: A sub-container assigned to each card. Every namespace has a default partition named "General".
 - Layer: A group of cards with its own stacking order.
 - Scope: A group of cards that can span namespaces and connect to taskspace directories. Add canvas frames to include overlapping cards. Scope names are unique across the workspace. A scope named `docs` is the same scope in every namespace.
 - Warp: A saved point to jump to. Warps are not related to cards.
