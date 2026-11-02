@@ -391,7 +391,7 @@ describe("Namespace page", () => {
     await selectAlpha();
 
     expect(screen.queryByRole("dialog", { name: "Edit a file" })).toBeNull();
-    await fireEvent.keyDown(window, { key: "o" });
+    await fireEvent.keyDown(window, { key: "e" });
 
     expect(screen.getByRole("dialog", { name: "Edit a file" })).toBeInTheDocument();
   });
@@ -412,7 +412,7 @@ describe("Namespace page", () => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) });
     vi.stubGlobal("fetch", fetch);
     await selectAlpha();
-    await fireEvent.keyDown(window, { key: "o" });
+    await fireEvent.keyDown(window, { key: "e" });
 
     await fireEvent.keyDown(window, { key: "Delete" });
 
@@ -426,7 +426,7 @@ describe("Namespace page", () => {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
     });
 
-    await fireEvent.keyDown(window, { key: "o" });
+    await fireEvent.keyDown(window, { key: "e" });
 
     expect(screen.queryByRole("dialog", { name: "Edit a file" })).toBeNull();
   });

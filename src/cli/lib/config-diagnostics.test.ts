@@ -140,6 +140,10 @@ describe("diagnoseConfig", () => {
       ]);
     });
 
+    it("ignores a setting Kozane no longer reads", () => {
+      expect(messages({ ...validConfig, ui: { rightPanelWidth: 232 } })).toEqual([]);
+    });
+
     it("stays quiet about a suggestion when nothing is close", () => {
       expect(messages({ ...validConfig, ui: { wallpaper: "blue" } })).toEqual([
         "ui.wallpaper is not a known key",

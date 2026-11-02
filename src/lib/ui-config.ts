@@ -173,6 +173,13 @@ export const UI_STR_FIELDS = ["defaultFontFamily", ...UI_SHORTCUT_FIELDS] as con
 /** Every field name a `ui` block may carry. Anything else is an unknown key. */
 export const UI_KNOWN_KEYS = Object.keys(DEFAULT_UI_CONFIG) as (keyof UiConfig)[];
 
+/**
+ * Settings Kozane no longer reads. A config written before their removal may still carry
+ * them, so they are ignored without an unknown-key warning.
+ * - `rightPanelWidth`: the scope panel, replaced by the file browser.
+ */
+export const UI_RETIRED_KEYS: readonly string[] = ["rightPanelWidth"];
+
 export type ConfigIssue = {
   /** Dotted path of the offending field, e.g. `ui.defaultZoom`. */
   path: string;

@@ -4,6 +4,7 @@ import {
   type UiConfig,
   type ValidationResult,
   UI_KNOWN_KEYS,
+  UI_RETIRED_KEYS,
   validateUiOverrides,
 } from "../../lib/ui-config.js";
 
@@ -175,8 +176,9 @@ export function suggestKey(unknown: string, known: readonly string[]): string | 
 
 function unknownKeyIssues(parent: string, raw: Record<string, unknown>): ConfigIssue[] {
   const known = knownKeys().find((entry) => entry.parent === parent)?.keys ?? [];
+  const retired = parent === "ui" ? UI_RETIRED_KEYS : [];
   return Object.keys(raw)
-    .filter((key) => !known.includes(key))
+    .filter((key) => !known.includes(key) && !retired.includes(key))
     .map((key) => {
       const path = parent ? `${parent}.${key}` : key;
       const suggestion = suggestKey(key, known);

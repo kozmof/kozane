@@ -190,7 +190,7 @@ describe("Scoped-file export", () => {
     const second = exportData("b");
     await rerender({ data: second, params: { namespaceId: "namespace-b" }, form: null });
 
-    await fireEvent.keyDown(window, { key: "e" });
+    await fireEvent.keyDown(window, { key: "o" });
     const browser = within(screen.getByRole("dialog", { name: "Files" }));
     await fireEvent.click(browser.getByRole("option", { name: /Scope b/ }));
     const row = browser.getByRole("option", { name: "taskspace-in-b" });
