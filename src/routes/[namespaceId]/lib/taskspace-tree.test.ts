@@ -577,6 +577,28 @@ describe("TaskspaceTreeState rename and remove while listings are in flight", ()
     expect(tree.creating).toBeNull();
   });
 
+  it("moves a name field open inside a renamed folder to its new path", async () => {
+    const fetcher = router({ "": ["new"] });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "old/sub", "directory");
+
+    await tree.rename(ctx, TS, "old", "new");
+
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "new/sub", kind: "directory" });
+  });
+
+  it("leaves a name field in a folder that only shares the renamed one's prefix", async () => {
+    const fetcher = router({ "": ["new"] });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "old-sibling", "file");
+
+    await tree.rename(ctx, TS, "old", "new");
+
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "old-sibling", kind: "file" });
+  });
+
   it("keeps a name field open elsewhere when an unrelated entry is deleted", async () => {
     const fetcher = router({ "": [] });
     const ctx = context(fetcher as never);

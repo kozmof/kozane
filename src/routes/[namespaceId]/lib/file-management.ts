@@ -18,9 +18,10 @@ export type FileManagementActions = {
   removeScope: (scopeId: string) => Promise<{ error: string } | null>;
   createTaskspace: (scopeId: string, name: string) => Promise<{ id: string } | { error: string }>;
   renameTaskspace: (taskspaceId: string, name: string) => Promise<{ error: string } | null>;
+  /** `directory` is null when the server's answer did not say what happened to it. */
   deleteTaskspace: (
     taskspaceId: string,
-  ) => Promise<{ directory: TaskspaceDirectoryOutcome } | { error: string }>;
+  ) => Promise<{ directory: TaskspaceDirectoryOutcome | null } | { error: string }>;
 };
 
 /**
@@ -75,7 +76,7 @@ export function confirmDeleteEntry(path: string, kind: TaskspaceEntryKind): bool
  */
 export function keptDirectoryNotice(
   taskspace: TaskspaceSummary,
-  directory: TaskspaceDirectoryOutcome,
+  directory: TaskspaceDirectoryOutcome | null,
 ): string | null {
   if (directory !== "kept" || taskspace.path === null || taskspace.pathKind === "absolute")
     return null;

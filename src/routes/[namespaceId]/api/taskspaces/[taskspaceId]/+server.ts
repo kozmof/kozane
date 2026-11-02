@@ -27,6 +27,27 @@ async function visibleTaskspace(locals: App.Locals, namespaceId: string, taskspa
   return taskspace;
 }
 
+/** The last request queued for each taskspace. See {@link oneAtATime}. */
+const queues = new Map<string, Promise<unknown>>();
+
+/**
+ * Run `work` after every earlier rename or delete of the same taskspace has finished. Each
+ * reads the record and then moves the directory, so two at once could both start from the
+ * old path and leave the name and the directory out of step. This covers requests to this
+ * server only, not the CLI.
+ */
+async function oneAtATime<T>(taskspaceId: string, work: () => Promise<T>): Promise<T> {
+  const before = queues.get(taskspaceId) ?? Promise.resolve();
+  const run = before.then(work);
+  const tail = run.catch(() => undefined);
+  queues.set(taskspaceId, tail);
+  try {
+    return await run;
+  } finally {
+    if (queues.get(taskspaceId) === tail) queues.delete(taskspaceId);
+  }
+}
+
 type TaskspaceRow = { id: string; path: string | null; pathKind: PathKind };
 
 /**
@@ -60,9 +81,15 @@ function managedDirectory(taskspace: TaskspaceRow) {
  * whose directory is gone, change only the label. Return `{ id, name, path, pathKind }`.
  */
 export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
-  const { db } = locals;
   const body = await readJsonObject(request);
   const name = requireBoundedName(body);
+  return oneAtATime(params.taskspaceId, () => rename(locals, params, name));
+});
+
+type TaskspaceParams = { namespaceId: string; taskspaceId: string };
+
+async function rename(locals: App.Locals, params: TaskspaceParams, name: string) {
+  const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
   const reply = (path: string | null) =>
     json({ id: taskspace.id, name, path, pathKind: taskspace.pathKind });
@@ -99,7 +126,7 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
     throw e;
   }
   return reply(nextPath);
-});
+}
 
 /**
  * Delete a taskspace. A directory Kozane created is deleted with everything in it, before
@@ -108,7 +135,11 @@ export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request
  * `kept`. Return 409 when a managed path holds a directory whose marker names another
  * taskspace, or none.
  */
-export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
+export const DELETE: RequestHandler = apiHandler(({ locals, params }) =>
+  oneAtATime(params.taskspaceId, () => remove(locals, params)),
+);
+
+async function remove(locals: App.Locals, params: TaskspaceParams) {
   const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
   const managed = managedDirectory(taskspace);
@@ -126,4 +157,4 @@ export const DELETE: RequestHandler = apiHandler(async ({ locals, params }) => {
 
   await deleteTaskspace({ db, taskspaceId: taskspace.id });
   return json({ ok: true, directory });
-});
+}

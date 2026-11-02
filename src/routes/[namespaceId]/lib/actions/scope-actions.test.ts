@@ -27,3 +27,37 @@ describe("scope actions used by the file browser", () => {
     expect(await actions.deleteTaskspace("t1")).toEqual({ error: "Failed to delete taskspace" });
   });
 });
+
+describe("deleteTaskspace", () => {
+  /** Board state holding one taskspace, answered by `body`. */
+  function stateAnswering(body: unknown) {
+    return {
+      namespaceId: "namespace-1",
+      mutationFetcher: async () => Response.json(body),
+      taskspaces: [
+        {
+          id: "t1",
+          name: "draft",
+          scopeId: "s1",
+          path: "tasks/draft",
+          pathKind: "workspace_relative",
+        },
+      ],
+      taskspaceTree: { prune: () => {} },
+    };
+  }
+
+  it("passes on what the server did to the directory", async () => {
+    const state = stateAnswering({ ok: true, directory: "kept" });
+    const actions = createScopeActions(state as never);
+
+    expect(await actions.deleteTaskspace("t1")).toEqual({ directory: "kept" });
+    expect(state.taskspaces).toEqual([]);
+  });
+
+  it("claims no outcome when the answer names none", async () => {
+    const actions = createScopeActions(stateAnswering({ ok: true }) as never);
+
+    expect(await actions.deleteTaskspace("t1")).toEqual({ directory: null });
+  });
+});

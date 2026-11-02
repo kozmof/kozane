@@ -267,8 +267,9 @@ export class TaskspaceTreeState {
    * each key after `path` (empty for `path` itself) and answers the new key, or null to drop it.
    *
    * Requests in flight for the subtree are abandoned, since they would land under the old
-   * key. Answer the new keys of moved directories that were still loading, so the caller can
-   * read them again.
+   * key. An open name field moves with its directory, or closes when it is dropped. Answer
+   * the new keys of moved directories that were still loading, so the caller can read them
+   * again.
    */
   private rekeySubtree(
     taskspaceId: string,
@@ -293,6 +294,15 @@ export class TaskspaceTreeState {
         return [[k, { ...node, loading: false }]];
       }),
     );
+    // A name field open inside the subtree follows it, or closes with nowhere to create into.
+    const creating = this.creating;
+    if (creating?.taskspaceId === taskspaceId) {
+      const key = nodeKey(taskspaceId, creating.path);
+      const moved = next(key);
+      if (moved === null) this.cancelCreate();
+      else if (moved !== key)
+        this.creating = { ...creating, path: moved.slice(taskspaceId.length + 1) };
+    }
     return interrupted;
   }
 
@@ -313,13 +323,6 @@ export class TaskspaceTreeState {
     }
 
     this.rekeySubtree(taskspaceId, path, () => null);
-    // A name field left open inside the deleted entry has nowhere to create into.
-    const creating = this.creating;
-    if (
-      creating?.taskspaceId === taskspaceId &&
-      (creating.path === path || creating.path.startsWith(`${path}/`))
-    )
-      this.cancelCreate();
     await this.load(ctx, taskspaceId, parentPath(path), true);
     return null;
   }

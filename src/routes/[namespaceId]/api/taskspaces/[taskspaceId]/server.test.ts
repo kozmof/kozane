@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   chmodSync,
   existsSync,
@@ -24,6 +24,22 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../../lib/taskspace-marker.js";
+
+/** Set `next` to make the following taskspace update fail, as a database error would. */
+const failUpdate = vi.hoisted(() => ({ next: false }));
+vi.mock("$db/api/taskspace", async (importOriginal) => {
+  const real = await importOriginal<typeof import("$db/api/taskspace")>();
+  return {
+    ...real,
+    updateTaskspace: async (args: Parameters<typeof real.updateTaskspace>[0]) => {
+      if (failUpdate.next) {
+        failUpdate.next = false;
+        throw new Error("database is down");
+      }
+      return real.updateTaskspace(args);
+    },
+  };
+});
 
 function event(db: DB, namespaceId: string, taskspaceId: string, method: string, body?: unknown) {
   const request = new Request(`http://localhost/${namespaceId}/api/taskspaces/${taskspaceId}`, {
@@ -142,6 +158,35 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
         400,
         "name must not contain '/', '\\', or NUL",
       );
+    });
+
+    it("moves the directory back when the record cannot be updated", async () => {
+      failUpdate.next = true;
+
+      await expect(
+        PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" })),
+      ).rejects.toBeDefined();
+
+      expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
+      expect(existsSync(join(tmpRoot, "tasks", "final"))).toBe(false);
+      expect(await getTaskspace({ db, taskspaceId })).toMatchObject({
+        name: "draft",
+        path: join("tasks", "draft"),
+      });
+    });
+
+    it("keeps the name and the directory together when two renames arrive at once", async () => {
+      const results = await Promise.allSettled([
+        PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "one" })),
+        PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "two" })),
+      ]);
+
+      expect(results.map(({ status }) => status)).toEqual(["fulfilled", "fulfilled"]);
+      expect(await getTaskspace({ db, taskspaceId })).toMatchObject({
+        name: "two",
+        path: join("tasks", "two"),
+      });
+      expect(existsSync(join(tmpRoot, "tasks", "two", "notes", "a.md"))).toBe(true);
     });
 
     it("changes only the label of a directory outside the default folder", async () => {

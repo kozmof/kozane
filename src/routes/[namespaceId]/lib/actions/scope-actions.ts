@@ -319,12 +319,13 @@ export function createScopeActions(state: NamespaceState) {
    */
   async function deleteTaskspace(
     taskspaceId: string,
-  ): Promise<{ directory: TaskspaceDirectoryOutcome } | { error: string }> {
+  ): Promise<{ directory: TaskspaceDirectoryOutcome | null } | { error: string }> {
     const res = await api.deleteTaskspace(state.mutationFetcher, state.namespaceId, taskspaceId);
     if (!res.ok) return { error: await api.failureMessage(res, "Failed to delete taskspace") };
     const reported = readString(await res.json().catch(() => null), "directory");
-    const directory: TaskspaceDirectoryOutcome =
-      reported === "deleted" || reported === "missing" ? reported : "kept";
+    // An answer that names no outcome says nothing, rather than claiming one.
+    const directory =
+      reported === "deleted" || reported === "missing" || reported === "kept" ? reported : null;
     state.taskspaces = state.taskspaces.filter(({ id }) => id !== taskspaceId);
     state.taskspaceTree.prune(state.taskspaces.map(({ id }) => id));
     return { directory };

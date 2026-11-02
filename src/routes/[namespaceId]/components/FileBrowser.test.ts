@@ -314,6 +314,36 @@ describe("FileBrowser", () => {
     expect(document.activeElement?.textContent).toContain("notes.md");
   });
 
+  it("moves from a symlink's action button to the rows beside it, not to the ends", async () => {
+    const fetcher = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          path: "",
+          entries: ["a.md", "docs", "link", "notes.md", "z.md"].map((name) => ({
+            name,
+            kind: name === "link" ? "symlink" : name.includes(".") ? "file" : "directory",
+            size: null,
+            modifiedAt: null,
+          })),
+          truncated: false,
+        }),
+        { status: 200 },
+      ),
+    );
+    render(FileBrowser, {
+      props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
+    });
+
+    const remove = await screen.findByRole("button", { name: 'Delete "link"' });
+    remove.focus();
+    await fireEvent.keyDown(remove, { key: "ArrowDown" });
+    expect(document.activeElement?.textContent).toContain("notes.md");
+
+    remove.focus();
+    await fireEvent.keyDown(remove, { key: "ArrowUp" });
+    expect(document.activeElement?.textContent).toContain("docs");
+  });
+
   it("moves from a row's action button to the next row in the same column", async () => {
     render(FileBrowser, {
       props: makeProps({

@@ -300,10 +300,18 @@
       e.preventDefault();
       const rows = columnRows(col ?? 0);
       if (rows.length === 0) return;
+      const down = e.key === "ArrowDown";
       const at = row ? rows.indexOf(row) : -1;
-      const step = e.key === "ArrowDown" ? 1 : -1;
-      const next = at === -1 ? (step === 1 ? 0 : rows.length - 1) : at + step;
-      rows[Math.max(0, Math.min(rows.length - 1, next))]?.focus();
+      if (at !== -1) {
+        rows[Math.max(0, Math.min(rows.length - 1, at + (down ? 1 : -1)))]?.focus();
+      } else if (row) {
+        // A disabled row, reached through its buttons: move to its neighbor on screen.
+        const after = (r: HTMLButtonElement) =>
+          (row.compareDocumentPosition(r) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+        (down ? rows.find(after) : rows.findLast((r) => !after(r)))?.focus();
+      } else {
+        (down ? rows[0] : rows[rows.length - 1])?.focus();
+      }
     } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && col !== null) {
       const nextCol = col + (e.key === "ArrowRight" ? 1 : -1);
       if (nextCol < 0 || nextCol > 2) return;
