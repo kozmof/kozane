@@ -49,6 +49,14 @@ type Page = import("@playwright/test").Page;
 /** Open the board, open the file browser, and open one file from the taskspace's top level. */
 async function openFile(page: Page, name: string): Promise<void> {
   await page.goto(`${baseUrl}/${namespaceId}`);
+  await openFromBrowser(page, name);
+}
+
+/**
+ * Open a file through the file browser on the board already shown, such as after the editor
+ * closed. The board lists no files of its own, so reopening one goes through the modal.
+ */
+async function openFromBrowser(page: Page, name: string): Promise<void> {
   const browser = page.getByRole("dialog", { name: "Files" });
   // The shortcut works once the page has hydrated, so retry until the modal opens.
   await expect(async () => {
@@ -440,7 +448,7 @@ test("resizes by dragging the left edge, and keeps the width across a close", as
   await page.getByRole("button", { name: "Close" }).click();
   await expect(panel).toBeHidden();
 
-  await page.getByRole("button", { name: "notes.md", exact: true }).click();
+  await openFromBrowser(page, "notes.md");
   await expect(panel).toBeVisible();
   expect((await panel.boundingBox())!.width).toBeCloseTo(widened, 0);
 
@@ -547,9 +555,9 @@ test("closes on Escape and on a click outside the panel", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(panel).toBeHidden();
 
-  // Use the board as the click target outside the editor panel.
-  await page.getByRole("button", { name: "notes.md", exact: true }).click();
+  await openFromBrowser(page, "notes.md");
   await expect(panel).toBeVisible();
+  // Use the board as the click target outside the editor panel.
   await page.mouse.click(80, 300);
   await expect(panel).toBeHidden();
 });
