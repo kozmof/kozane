@@ -107,6 +107,18 @@
     if (panelEl && !panelEl.contains(document.activeElement)) panelEl.focus();
   });
 
+  // Keep focus inside the dialog, as `aria-modal` promises. Watch where focus lands rather
+  // than Tab, because the name field keeps its keys to itself.
+  $effect(() => {
+    const panel = panelEl;
+    if (!panel) return;
+    const pullBack = (e: FocusEvent) => {
+      if (e.target instanceof Node && !panel.contains(e.target)) panel.focus();
+    };
+    document.addEventListener("focusin", pullBack);
+    return () => document.removeEventListener("focusin", pullBack);
+  });
+
   function selectScope(id: string): void {
     if (chosenScopeId === id && scopeId === id) return;
     chosenScopeId = id;

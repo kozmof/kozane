@@ -47,7 +47,8 @@ export type TaskspaceSummary = Pick<Taskspace, "id" | "name" | "scopeId" | "path
 
 /**
  * What deleting a taskspace did to its directory: `deleted` with everything in it, already
- * `missing`, or `kept` because Kozane did not create it.
+ * `missing`, or `kept` because it is not marked as made by Kozane, such as one the user chose
+ * or one made before Kozane marked its own directories.
  */
 export type TaskspaceDirectoryOutcome = "deleted" | "missing" | "kept";
 

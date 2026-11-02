@@ -79,7 +79,7 @@ export function keptDirectoryNotice(
 ): string | null {
   if (directory !== "kept" || taskspace.path === null || taskspace.pathKind === "absolute")
     return null;
-  return `Taskspace deleted. ${taskspace.path} was kept because Kozane did not create it.`;
+  return `Taskspace deleted. ${taskspace.path} was kept because it is not marked as made by Kozane.`;
 }
 
 /** A failure or a notice from one of the steps above, for the view to show. */

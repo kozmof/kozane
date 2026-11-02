@@ -4,6 +4,18 @@ import type { BoardRect } from "$lib/constants";
 import type { TaskspaceDirectoryOutcome } from "$lib/types";
 import { readString } from "../response.js";
 
+/** Answer `fallback` as the reason when `run` throws, as `fetch` does when offline. */
+async function orFailure<T>(
+  fallback: string,
+  run: () => Promise<T>,
+): Promise<T | { error: string }> {
+  try {
+    return await run();
+  } catch {
+    return { error: fallback };
+  }
+}
+
 /** Scope, scope frame, membership, and taskspace actions. */
 export function createScopeActions(state: NamespaceState) {
   /**
@@ -318,13 +330,20 @@ export function createScopeActions(state: NamespaceState) {
     return { directory };
   }
 
+  // These answer a reason to a name field or the file browser, so a network failure has to
+  // come back as one too, rather than as a rejected promise.
   return {
-    createScope,
-    renameScope,
-    removeScope,
-    renameTaskspace,
-    deleteTaskspace,
-    createTaskspace,
+    createScope: (name: string) => orFailure("Failed to create scope", () => createScope(name)),
+    renameScope: (scopeId: string, name: string) =>
+      orFailure("Failed to rename scope", () => renameScope(scopeId, name)),
+    removeScope: (scopeId: string) =>
+      orFailure("Failed to delete scope", () => removeScope(scopeId)),
+    renameTaskspace: (taskspaceId: string, name: string) =>
+      orFailure("Failed to rename taskspace", () => renameTaskspace(taskspaceId, name)),
+    deleteTaskspace: (taskspaceId: string) =>
+      orFailure("Failed to delete taskspace", () => deleteTaskspace(taskspaceId)),
+    createTaskspace: (scopeId: string, name: string) =>
+      orFailure("Failed to create taskspace", () => createTaskspace(scopeId, name)),
     handleLinkScope,
     handleCreateScopeWithFile,
     handleScopeMembershipChange,

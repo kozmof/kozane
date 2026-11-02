@@ -41,8 +41,14 @@
       return;
     }
     busy = true;
-    error = await onSubmit(value);
-    busy = false;
+    try {
+      error = await onSubmit(value);
+    } catch {
+      error = "Something went wrong. Try again.";
+    } finally {
+      // Never leave the field refusing Enter after a failure.
+      busy = false;
+    }
   }
 
   function onKeydown(event: KeyboardEvent): void {

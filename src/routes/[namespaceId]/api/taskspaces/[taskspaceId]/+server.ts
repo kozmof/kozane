@@ -39,6 +39,7 @@ function managedDirectory(taskspace: TaskspaceRow) {
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
   const managed = isManagedTaskspaceDirectory({
+    workspaceRoot: root,
     storedPath,
     pathKind,
     defaultDir: getTaskspaceDefaultDir(root),

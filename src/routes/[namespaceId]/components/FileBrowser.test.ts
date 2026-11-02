@@ -147,6 +147,34 @@ describe("FileBrowser", () => {
     expect((await screen.findByRole("alert")).textContent).toBe("Taken");
   });
 
+  it("lets a name field submit again after its request throws", async () => {
+    const props = makeProps();
+    props.actions.renameScope.mockRejectedValueOnce(new Error("offline"));
+    render(FileBrowser, { props });
+
+    await userEvent.click(screen.getByRole("button", { name: 'Rename "Writing"' }));
+    const input = screen.getByRole("textbox", { name: "New name for Writing" });
+    await userEvent.clear(input);
+    await userEvent.type(input, "Prose{Enter}");
+    expect(await screen.findByRole("alert")).toBeTruthy();
+
+    await userEvent.type(input, "{Enter}");
+    expect(props.actions.renameScope).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps focus inside the dialog", async () => {
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    render(FileBrowser, { props: makeProps() });
+
+    const row = column("Scopes").getByRole("option", { name: "Writing" });
+    row.focus();
+    outside.focus();
+
+    expect(screen.getByRole("dialog", { name: "Files" }).contains(document.activeElement)).toBe(true);
+    outside.remove();
+  });
+
   it("will not delete a scope that still has taskspaces", () => {
     render(FileBrowser, { props: makeProps() });
 

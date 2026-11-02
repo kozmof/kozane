@@ -103,6 +103,18 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect(row?.path).toBe(join("tasks", "final"));
     });
 
+    it.each(["tasks/", "./tasks", "ABSOLUTE"])(
+      "moves the directory when defaultDir is written as %s",
+      async (spelling) => {
+        useDefaultDir(spelling === "ABSOLUTE" ? join(tmpRoot, "tasks") : spelling);
+
+        await PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" }));
+
+        expect(existsSync(join(tmpRoot, "tasks", "final", "notes", "a.md"))).toBe(true);
+        expect((await getTaskspace({ db, taskspaceId }))?.path).toBe(join("tasks", "final"));
+      },
+    );
+
     it("refuses a name whose directory exists, leaving everything as it was", async () => {
       mkdirSync(join(tmpRoot, "tasks", "taken"));
 

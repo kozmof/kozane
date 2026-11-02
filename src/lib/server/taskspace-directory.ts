@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs";
-import { dirname, join, normalize, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import { errorCode, isStrictlyInside } from "./fs-paths.js";
@@ -17,23 +17,28 @@ import { TaskspaceFilesError } from "./taskspace-files.js";
  */
 
 type ManagedCheck = {
+  workspaceRoot: string;
   storedPath: string | null;
   pathKind: PathKind;
-  /** `taskspace.defaultDir` from the workspace config, relative to the root. */
+  /** `taskspace.defaultDir` from the workspace config, relative to the root or absolute. */
   defaultDir: string;
 };
 
 /**
  * Whether the stored path is where Kozane creates taskspaces. A first check only. The
  * directory's marker decides, see {@link taskspaceDirectoryClaim}.
+ *
+ * Both sides are resolved against the root, so `tasks/`, `./tasks`, and an absolute path to
+ * the same directory all match, as they do when the CLI creates the taskspace.
  */
 export function isManagedTaskspaceDirectory({
+  workspaceRoot,
   storedPath,
   pathKind,
   defaultDir,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
-  return normalize(dirname(storedPath)) === normalize(defaultDir);
+  return dirname(resolve(workspaceRoot, storedPath)) === resolve(workspaceRoot, defaultDir);
 }
 
 /**
