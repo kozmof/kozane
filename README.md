@@ -1,6 +1,6 @@
 # Kozane
 
-Kozane is a tool for organizing text with structured data.
+Kozane is a tool for organizing text fragments and the relationships between them.
 
 The name "Kozane" comes from こざね法 (kozane method), developed by Japanese anthropologist Tadao Umesao.
 
