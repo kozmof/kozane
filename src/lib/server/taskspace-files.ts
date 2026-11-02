@@ -470,8 +470,6 @@ export function createTaskspaceDirectory({
   return { path: relative(base, real).split(sep).join("/"), entries: [], truncated: false };
 }
 
-export { entryNameIssue };
-
 export type TaskspaceEntryChange = {
   /** The entry after the change, relative to the taskspace root and `/`-separated. */
   path: string;

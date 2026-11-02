@@ -92,6 +92,14 @@ export class TaskspaceTreeState {
   createError = $state<string | null>(null);
   createBusy = $state(false);
 
+  /**
+   * The latest listing request for each directory key. A response is kept only while its
+   * request is still the latest, so a re-read, rename, delete, or reset makes older ones
+   * land nowhere.
+   */
+  #pending = new Map<string, number>();
+  #nextRequest = 0;
+
   isExpanded(taskspaceId: string, path: string): boolean {
     return this.expanded.has(nodeKey(taskspaceId, path));
   }
@@ -143,12 +151,15 @@ export class TaskspaceTreeState {
       Object.entries(this.nodes).filter(([key]) => alive.has(taskspaceOf(key))),
     );
     if (Object.keys(nodes).length !== Object.keys(this.nodes).length) this.nodes = nodes;
+    for (const key of [...this.#pending.keys()])
+      if (!alive.has(taskspaceOf(key))) this.#pending.delete(key);
     if (this.creating && !alive.has(this.creating.taskspaceId)) this.cancelCreate();
   }
 
   reset(): void {
     this.expanded = new Set();
     this.nodes = {};
+    this.#pending.clear();
     this.cancelCreate();
   }
 
@@ -240,32 +251,49 @@ export class TaskspaceTreeState {
     }
 
     const to = nodeKey(taskspaceId, next);
-    this.rekeySubtree(taskspaceId, path, (rest) => to + rest);
-    await this.load(ctx, taskspaceId, parentPath(path), true);
+    const interrupted = this.rekeySubtree(taskspaceId, path, (rest) => to + rest);
+    // Folders that were still loading under the old path are read again under the new one.
+    await Promise.all([
+      this.load(ctx, taskspaceId, parentPath(path), true),
+      ...interrupted.map((key) =>
+        this.load(ctx, taskspaceId, key.slice(taskspaceId.length + 1), true),
+      ),
+    ]);
     return { path: next };
   }
 
   /**
    * Re-key what is open and cached for `path` and everything under it. `to` gets the part of
    * each key after `path` (empty for `path` itself) and answers the new key, or null to drop it.
+   *
+   * Requests in flight for the subtree are abandoned, since they would land under the old
+   * key. Answer the new keys of moved directories that were still loading, so the caller can
+   * read them again.
    */
   private rekeySubtree(
     taskspaceId: string,
     path: string,
     to: (rest: string) => string | null,
-  ): void {
+  ): string[] {
     const from = nodeKey(taskspaceId, path);
+    const inSubtree = (key: string) => key === from || key.startsWith(`${from}/`);
     const next = (key: string): string | null =>
-      key === from || key.startsWith(`${from}/`) ? to(key.slice(from.length)) : key;
+      inSubtree(key) ? to(key.slice(from.length)) : key;
+    for (const key of [...this.#pending.keys()]) if (inSubtree(key)) this.#pending.delete(key);
     this.expanded = new Set(
       [...this.expanded].map(next).filter((key): key is string => key !== null),
     );
+    const interrupted: string[] = [];
     this.nodes = Object.fromEntries(
       Object.entries(this.nodes).flatMap(([key, node]) => {
         const k = next(key);
-        return k === null ? [] : [[k, node]];
+        if (k === null) return [];
+        if (!inSubtree(key) || !node.loading) return [[k, node]];
+        interrupted.push(k);
+        return [[k, { ...node, loading: false }]];
       }),
     );
+    return interrupted;
   }
 
   /**
@@ -285,6 +313,13 @@ export class TaskspaceTreeState {
     }
 
     this.rekeySubtree(taskspaceId, path, () => null);
+    // A name field left open inside the deleted entry has nowhere to create into.
+    const creating = this.creating;
+    if (
+      creating?.taskspaceId === taskspaceId &&
+      (creating.path === path || creating.path.startsWith(`${path}/`))
+    )
+      this.cancelCreate();
     await this.load(ctx, taskspaceId, parentPath(path), true);
     return null;
   }
@@ -319,9 +354,9 @@ export class TaskspaceTreeState {
   ): Promise<void> {
     const key = nodeKey(taskspaceId, path);
     const current = this.nodes[key];
-    if (current?.loading) return;
-    // A directory already read stays as it is until a refresh asks for it again.
-    if (!force && current?.entries) return;
+    // A directory already read, or being read, stays as it is until a refresh asks again. A
+    // forced read replaces one in flight, which may predate the change it has to show.
+    if (!force && (current?.loading || current?.entries)) return;
 
     const staticTree = ctx.staticFiles?.[taskspaceId];
     if (staticTree) {
@@ -336,15 +371,23 @@ export class TaskspaceTreeState {
     // The rows already on screen are left in place while the re-read is in flight, so a
     // refresh does not blank the tree out and reflow everything under it.
     this.nodes[key] = { ...(current ?? EMPTY_NODE), loading: true, error: null };
+    const request = ++this.#nextRequest;
+    this.#pending.set(key, request);
+    /** Whether a later read, rename, delete, or reset took this directory over. */
+    const superseded = () => this.#pending.get(key) !== request;
 
     try {
       const res = await fetchTaskspaceFiles(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
       if (!res.ok) {
         const message = await failureMessage(res, "Failed to list files");
+        if (superseded()) return;
+        this.#pending.delete(key);
         this.nodes[key] = { ...(this.nodes[key] ?? EMPTY_NODE), loading: false, error: message };
         return;
       }
       const body = await res.json();
+      if (superseded()) return;
+      this.#pending.delete(key);
       this.nodes[key] = {
         entries: Array.isArray(body?.entries) ? body.entries : [],
         // Live listings are truncated only by the entry limit.
@@ -353,6 +396,8 @@ export class TaskspaceTreeState {
         error: null,
       };
     } catch {
+      if (superseded()) return;
+      this.#pending.delete(key);
       this.nodes[key] = {
         ...(this.nodes[key] ?? EMPTY_NODE),
         loading: false,

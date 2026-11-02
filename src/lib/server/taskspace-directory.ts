@@ -74,7 +74,7 @@ function assertOwnDirectory(dir: string, workspaceRoot: string): boolean {
   if (real === join(realRoot, ".kozane") || isStrictlyInside(join(realRoot, ".kozane"), real))
     throw new TaskspaceFilesError(
       "invalid-path",
-      "Taskspace directory must be inside the workspace",
+      "Taskspace directory cannot be the workspace's .kozane settings",
     );
   return true;
 }

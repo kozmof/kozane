@@ -480,3 +480,111 @@ describe("TaskspaceTreeState.create", () => {
     expect(made).toEqual({ error: "File already exists" });
   });
 });
+
+describe("TaskspaceTreeState rename and remove while listings are in flight", () => {
+  /** A listing response that arrives only when `resolve` is called. */
+  function deferred() {
+    let resolve!: (res: Response) => void;
+    const promise = new Promise<Response>((r) => (resolve = r));
+    return { promise, resolve };
+  }
+
+  /**
+   * Answer listings by path from `listings`, holding back any path in `held`, and accept
+   * PATCH and DELETE on the files route.
+   */
+  function router(
+    listings: Record<string, string[]>,
+    held: Record<string, ReturnType<typeof deferred>> = {},
+  ) {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.method === "PATCH") {
+        const { path, name } = JSON.parse(String(init.body));
+        const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+        return jsonResponse({ path: parent ? `${parent}/${name}` : name, kind: "directory" });
+      }
+      if (init?.method === "DELETE") return jsonResponse({ path: "", kind: "directory" });
+      const path = new URL(url, "http://x").searchParams.get("path") ?? "";
+      const hold = held[path];
+      if (hold) {
+        delete held[path];
+        return hold.promise;
+      }
+      return jsonResponse(listing(listings[path] ?? []));
+    });
+  }
+
+  it("re-reads a folder renamed while it was still loading, instead of leaving it stuck", async () => {
+    const slow = deferred();
+    const fetcher = router({ "": ["old"], old: ["a.ts"], new: ["a.ts"] }, { old: slow });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    const opening = tree.toggle(ctx, TS, "old");
+    expect(tree.node(TS, "old").loading).toBe(true);
+
+    const result = await tree.rename(ctx, TS, "old", "new");
+    expect(result).toEqual({ path: "new" });
+    // The old request finishes late and must not bring the old key back.
+    slow.resolve(jsonResponse(listing(["stale.ts"])));
+    await opening;
+
+    expect(tree.node(TS, "new")).toMatchObject({ loading: false, error: null });
+    expect(tree.node(TS, "new").entries?.map(({ name }) => name)).toEqual(["a.ts"]);
+    expect(tree.nodes[nodeKey(TS, "old")]).toBeUndefined();
+    expect(tree.isExpanded(TS, "new")).toBe(true);
+  });
+
+  it("lets a forced re-read replace one in flight, and ignores the older answer", async () => {
+    const slow = deferred();
+    const fetcher = router({ "": ["after"] }, { "": slow });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    const first = tree.ensure(ctx, TS, "");
+
+    await tree.ensure(ctx, TS, "", true);
+    slow.resolve(jsonResponse(listing(["before"])));
+    await first;
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["after"]);
+  });
+
+  it("drops a deleted folder's listing even when its answer arrives after the delete", async () => {
+    const slow = deferred();
+    const fetcher = router({ "": [] }, { gone: slow });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    const opening = tree.toggle(ctx, TS, "gone");
+
+    expect(await tree.remove(ctx, TS, "gone")).toBeNull();
+    slow.resolve(jsonResponse(listing(["late.ts"])));
+    await opening;
+
+    expect(tree.nodes[nodeKey(TS, "gone")]).toBeUndefined();
+    expect(tree.isExpanded(TS, "gone")).toBe(false);
+  });
+
+  it("closes a name field left open inside a deleted folder", async () => {
+    const fetcher = router({ "": [] });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "gone/sub", "file");
+
+    await tree.remove(ctx, TS, "gone");
+
+    expect(tree.creating).toBeNull();
+  });
+
+  it("keeps a name field open elsewhere when an unrelated entry is deleted", async () => {
+    const fetcher = router({ "": [] });
+    const ctx = context(fetcher as never);
+    const tree = new TaskspaceTreeState();
+    tree.beginCreate(TS, "gone-too", "file");
+
+    await tree.remove(ctx, TS, "gone");
+
+    expect(tree.creating).toEqual({ taskspaceId: TS, path: "gone-too", kind: "file" });
+  });
+});

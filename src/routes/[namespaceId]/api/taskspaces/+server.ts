@@ -13,6 +13,7 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
+import { errorCode } from "$lib/server/fs-paths";
 import { apiHandler } from "../../lib/api-handler.js";
 
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
@@ -105,7 +106,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     }
     if (e instanceof OutsideWorkspaceError)
       throw error(400, "Taskspace path must be inside the workspace root");
-    const code = e && typeof e === "object" && "code" in e ? e.code : undefined;
+    const code = errorCode(e);
     if (code === "EEXIST") throw error(409, "Taskspace directory already exists");
     throw error(500, "Failed to initialize taskspace directory");
   }
