@@ -467,6 +467,63 @@ describe("nested taskspaces", () => {
     );
   });
 
+  /** Two namespaces, each with one owned taskspace `t` at the given path. */
+  async function twoNamespaces(
+    paths: { alpha: string; beta: string },
+    listFirst: "alpha" | "beta",
+  ) {
+    const ws = await workspace({ defaultDir: "taskspaces" });
+    const ids = {
+      alpha: await createNamespace({ db: ws.db, name: "Alpha" }),
+      beta: await createNamespace({ db: ws.db, name: "Beta" }),
+    };
+    const order =
+      listFirst === "alpha" ? (["alpha", "beta"] as const) : (["beta", "alpha"] as const);
+    for (const key of order) {
+      const id = await addTaskspace({
+        db: ws.db,
+        namespaceId: ids[key],
+        name: "t",
+        path: paths[key],
+      });
+      mkdirSync(join(ws.root, paths[key]), { recursive: true });
+      writeFileSync(
+        join(ws.root, paths[key], TASKSPACE_MARKER_FILE),
+        JSON.stringify({ kind: TASKSPACE_MARKER_KIND, taskspaceId: id, ownsDirectory: true }),
+      );
+    }
+    return ws;
+  }
+
+  it("moves a directory away before another lands on its path", async () => {
+    // Alpha's target is where Beta's taskspace is now, and Alpha is listed first.
+    const alpha = join("taskspaces", "Old", "t");
+    const beta = join("taskspaces", "Alpha", "t");
+    const { db, root, plan } = await twoNamespaces({ alpha, beta }, "alpha");
+
+    const planned = await plan();
+    expect(planned.moves.map(({ from }) => from)).toEqual([beta, alpha]);
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.failed).toEqual([]);
+    expect(existsSync(join(root, "taskspaces", "Alpha", "t", TASKSPACE_MARKER_FILE))).toBe(true);
+    expect(existsSync(join(root, "taskspaces", "Beta", "t", TASKSPACE_MARKER_FILE))).toBe(true);
+  });
+
+  it("skips two moves that would trade places", async () => {
+    const alpha = join("taskspaces", "Beta", "t");
+    const beta = join("taskspaces", "Alpha", "t");
+    const { plan } = await twoNamespaces({ alpha, beta }, "alpha");
+
+    const { moves, skipped } = await plan();
+    expect(moves).toEqual([]);
+    expect(skipped.map(({ move, reason }) => [move.from, reason])).toEqual(
+      expect.arrayContaining([
+        [alpha, `its target is where the taskspace at ${beta} is, which cannot move first`],
+        [beta, `its target is where the taskspace at ${alpha} is, which cannot move first`],
+      ]),
+    );
+  });
+
   it("does not move a directory that holds another taskspace", async () => {
     const { owned, plan } = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
     await owned(join("elsewhere", "outer"));

@@ -10,7 +10,7 @@
  * `kozane doctor --fix` makes it. Other moves, such as after a namespace was renamed, are
  * only reported.
  */
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { getAllTaskspaces, updateTaskspace } from "../../db/api/taskspace.js";
@@ -19,7 +19,7 @@ import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants.js";
 import { errorMessage } from "../../lib/error-message.js";
 import { isPlainObject } from "../../lib/plain-object.js";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
-import { isStrictlyInside } from "../../lib/server/fs-paths.js";
+import { isStrictlyInside, isWithin, sameEntry } from "../../lib/server/fs-paths.js";
 import { TaskspaceFilesError } from "../../lib/server/taskspace-files.js";
 import { MIN_SHORT_ID_LENGTH, shortIdKey } from "../../lib/short-id-key.js";
 import {
@@ -34,6 +34,7 @@ import {
 } from "../../lib/server/taskspace-directory.js";
 import {
   AmbiguousNamespacePathError,
+  folderKey,
   namespaceFolders,
   taskspaceParentDir,
 } from "../../lib/taskspace-location.js";
@@ -163,6 +164,9 @@ export async function planTaskspaceLayout(
     }
     const target = resolve(workspaceRoot, parentDir, basename(path));
     if (target === resolve(workspaceRoot, path)) continue;
+    // A case-insensitive disk finds `taskspaces/Work/x` at `taskspaces/work/x`, such as after
+    // a namespace "Work" was renamed "work", so there is nothing to move.
+    if (sameDirectoryByCase(target, resolve(workspaceRoot, path))) continue;
     const inside = isStrictlyInside(workspaceRoot, target);
     const move: LayoutMove = {
       taskspaceId: id,
@@ -189,6 +193,17 @@ export async function planTaskspaceLayout(
   }
   const nested = withoutNesting(workspaceRoot, moves);
   return { legacyDefaultDir, moves: nested.kept, skipped: [...skipped, ...nested.dropped] };
+}
+
+/** Whether two paths differ only in case and name the same entry on this disk. */
+function sameDirectoryByCase(a: string, b: string): boolean {
+  if (folderKey(a) !== folderKey(b)) return false;
+  try {
+    return sameEntry(lstatSync(a), lstatSync(b));
+  } catch {
+    // Either one is missing, so the disk tells them apart.
+    return false;
+  }
 }
 
 /**
@@ -251,15 +266,22 @@ function withoutNesting(
     if (stuck.length === 0) return { kept: ordered, dropped };
     // Moves that wait on each other in a cycle cannot go, and neither can the moves that wait
     // on them. They stay where they are, which can nest others' targets, so check again.
-    for (const { move, waitingOn } of stuck)
-      dropped.push({ move, reason: `${insideOf(pathsOf(waitingOn).from)}, which cannot move first` });
+    for (const { move, waitingOn } of stuck) {
+      const blocker = pathsOf(waitingOn).from;
+      const where =
+        blocker === pathsOf(move).to
+          ? `its target is where the taskspace at ${relative(workspaceRoot, blocker)} is`
+          : insideOf(blocker);
+      dropped.push({ move, reason: `${where}, which cannot move first` });
+    }
     kept = ordered;
   }
 }
 
 /**
- * Order moves so that a directory leaves before any move whose target lies inside it, at any
- * depth: if C's target is inside B and B's target is inside A, A goes first, then B, then C.
+ * Order moves so that a directory leaves before any move whose target is it or lies inside
+ * it, at any depth: if C's target is inside B and B's target is inside A, A goes first, then
+ * B, then C.
  * Moves with nothing to wait for keep their order in the plan.
  *
  * A move that can never go, because it waits on a cycle of moves, comes back in `stuck` with
@@ -269,13 +291,13 @@ function moveOrder(
   moves: readonly LayoutMove[],
   pathsOf: (move: LayoutMove) => { from: string; to: string },
 ): { ordered: LayoutMove[]; stuck: { move: LayoutMove; waitingOn: LayoutMove }[] } {
-  // A move's own directory is no obstacle: a target inside it is reached in two steps.
+  // A move's own directory is no obstacle: a target inside it is reached in two steps. A
+  // target that is another directory's current path waits for it too, such as after two
+  // namespaces were renamed so one takes the other's old folder.
   const waitsOn = new Map(
     moves.map((move) => [
       move,
-      moves.filter(
-        (other) => other !== move && isStrictlyInside(pathsOf(other).from, pathsOf(move).to),
-      ),
+      moves.filter((other) => other !== move && isWithin(pathsOf(other).from, pathsOf(move).to)),
     ]),
   );
   const ordered: LayoutMove[] = [];

@@ -176,9 +176,7 @@ async function scanWithin(
           try {
             rewriteMarkerNamespace(taskspace.path, taskspace.taskspaceId, placement.namespaceId);
           } catch (e) {
-            console.log(
-              `    ! could not update ${TASKSPACE_MARKER_FILE}: ${errorMessage(e)}`,
-            );
+            console.log(`    ! could not update ${TASKSPACE_MARKER_FILE}: ${errorMessage(e)}`);
           }
         }
         updated++;
@@ -363,8 +361,9 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       }
     }
     // Where Kozane picked a directory inside the workspace, make its folders as the browser
-    // does, refusing a parent that leads outside through a symlink. Otherwise the path would
-    // be stored relative to the workspace while the directory lives elsewhere.
+    // does, refusing a parent that leads outside through a symlink, which would store the
+    // path relative to the workspace while the directory lives elsewhere. A `--dir` path is
+    // taken as given, symlinks included: the user chose it, and Kozane never owns it.
     const checkParents = !options.dir && isStrictlyInside(resolve(root), targetDir);
 
     if (existsSync(targetDir)) {
@@ -405,7 +404,9 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       console.error("Failed to initialize taskspace directory.");
       const outside = e instanceof TaskspaceFilesError && e.reason === "invalid-path";
       console.error(
-        outside ? `${errorMessage(e)}. Use --dir to choose the directory yourself.` : errorMessage(e),
+        outside
+          ? `${errorMessage(e)}. Use --dir to choose the directory yourself.`
+          : errorMessage(e),
       );
       process.exit(1);
     }
