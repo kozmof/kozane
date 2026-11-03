@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
 import {
+  enclosingRecordedTaskspace,
   enclosingTaskspaceDir,
   makeParentsInside,
   missingDirs,
@@ -338,8 +339,11 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       });
       targetDir = resolve(root, parentDir, name);
       // Never inside another taskspace's directory, which deleting that taskspace would
-      // remove. The browser refuses the same.
-      const enclosing = enclosingTaskspaceDir(root, dirname(targetDir));
+      // remove. The browser refuses the same. Inside the workspace the markers on disk
+      // decide; outside it, such as with an absolute defaultDir, the records do.
+      const enclosing = isStrictlyInside(resolve(root), targetDir)
+        ? enclosingTaskspaceDir(root, dirname(targetDir))
+        : enclosingRecordedTaskspace(root, targetDir, await getAllTaskspaces({ db }));
       if (enclosing) {
         console.error(
           `Error: ${targetDir} would be inside the taskspace at ${enclosing}. Move that ` +

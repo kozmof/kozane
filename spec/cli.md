@@ -166,7 +166,11 @@ config. The layout check reports both:
 Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
 namespace, directories outside the workspace, directories that hold another taskspace, or
 ones whose target is outside the workspace, inside another taskspace that stays put, or under
-an ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
+an ambiguous `namespacePaths` key. Owned directories that are out of place but cannot move,
+because they hold another taskspace or their target is outside the workspace or inside another
+taskspace, are listed with the reason under "Taskspace directories Kozane cannot move". They do
+not fail the check, since `--fix` cannot help, and they do not stop `defaultDir` from being
+rewritten. Move them yourself, then run `kozane taskspace scan --apply`. A move whose target already exists is reported and skipped,
 with what to do: move the entry at the target aside, or rename the directory and run
 `kozane taskspace scan --apply`. Running `--fix` again retries it. A directory whose target is
 inside it, such as a taskspace named `taskspaces` at the root, is moved aside first and then
@@ -866,7 +870,9 @@ external paths as absolute.
 
 Without `--dir`, the create is refused when the target would sit inside another taskspace's
 directory, such as a taskspace made with `namespaceDirs` off whose name matches a namespace
-folder, since deleting that taskspace would delete the new one too. It is also refused when a
+folder, since deleting that taskspace would delete the new one too. Inside the workspace this
+is decided by the `.taskspace.json` markers on disk. For a target outside it, such as with an
+absolute `defaultDir`, it is decided by the taskspace records. It is also refused when a
 parent folder inside the workspace is a symlink that leads outside it or nowhere.
 
 ```bash

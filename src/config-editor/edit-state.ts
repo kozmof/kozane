@@ -89,19 +89,23 @@ export function describeValue(field: FieldSpec, value: unknown): string {
 
 /**
  * One `key = value` entry per non-blank line, split at the first `=`. A line without `=`
- * becomes a key with an empty value, and a key given twice comes back as
- * `<key> (duplicate)`, so saving reports either one rather than dropping it.
+ * becomes a key with an empty value, and each repeat of a key comes back as
+ * `<key> (duplicate)`, `<key> (duplicate 2)` and so on, so saving reports it rather than
+ * dropping it.
  */
 export function parseMapInput(text: string): Record<string, string> {
   const entries: [string, string][] = [];
-  const seen = new Set<string>();
+  const repeats = new Map<string, number>();
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const at = line.indexOf("=");
     const key = (at < 0 ? line : line.slice(0, at)).trim();
     const value = at < 0 ? "" : line.slice(at + 1).trim();
-    entries.push([seen.has(key) ? `${key} (duplicate)` : key, value]);
-    seen.add(key);
+    const count = repeats.get(key) ?? 0;
+    repeats.set(key, count + 1);
+    const label =
+      count === 0 ? key : count === 1 ? `${key} (duplicate)` : `${key} (duplicate ${count})`;
+    entries.push([label, value]);
   }
   // `fromEntries` keeps a key such as `__proto__` as a plain key, so saving reports it.
   return Object.fromEntries(entries);

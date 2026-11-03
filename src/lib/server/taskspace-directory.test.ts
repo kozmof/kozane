@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import {
   enclosingTaskspaceDir,
+  enclosingRecordedTaskspace,
   holdsOtherTaskspaces,
   isManagedTaskspaceDirectory,
   makeParentsInside,
@@ -154,6 +155,27 @@ describe("enclosingTaskspaceDir", () => {
     const root = tempDir("kozane-enclosing-");
     writeFileSync(join(root, TASKSPACE_MARKER_FILE), "{}");
     expect(enclosingTaskspaceDir(root, join(root, "taskspaces"))).toBeNull();
+  });
+});
+
+describe("enclosingRecordedTaskspace", () => {
+  it("finds a recorded taskspace around a target outside the workspace", () => {
+    const root = tempDir("kozane-root-");
+    const outside = tempDir("kozane-outside-");
+    const all = [
+      { id: "abs", path: join(outside, "tasks"), pathKind: "absolute" as const },
+      { id: "rel", path: "notes", pathKind: "workspace_relative" as const },
+      { id: "none", path: null, pathKind: "workspace_relative" as const },
+    ];
+    expect(enclosingRecordedTaskspace(root, join(outside, "tasks", "Work", "a"), all)).toBe(
+      join(outside, "tasks"),
+    );
+    expect(enclosingRecordedTaskspace(root, join(root, "notes", "a"), all)).toBe(
+      join(root, "notes"),
+    );
+    // The taskspace's own directory, or a sibling, is not inside it.
+    expect(enclosingRecordedTaskspace(root, join(outside, "tasks"), all)).toBeNull();
+    expect(enclosingRecordedTaskspace(root, join(outside, "tasks-2", "a"), all)).toBeNull();
   });
 });
 

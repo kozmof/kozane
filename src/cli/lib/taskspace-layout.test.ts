@@ -15,7 +15,12 @@ import { addTaskspace } from "../../db/api/taskspace.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../../lib/taskspace-marker.js";
 import { createTestDB } from "../../test-utils/db.js";
 import { readConfig } from "./config.js";
-import { applyTaskspaceLayout, layoutIsOld, planTaskspaceLayout } from "./taskspace-layout.js";
+import {
+  applyTaskspaceLayout,
+  describeSkips,
+  layoutIsOld,
+  planTaskspaceLayout,
+} from "./taskspace-layout.js";
 
 /** Make the next record update fail, after running `before`, to test the undo. */
 const updateFailure = vi.hoisted(() => ({
@@ -106,7 +111,7 @@ describe("planTaskspaceLayout", () => {
     const { owned, plan } = await workspace({ defaultDir: ".", namespaceDirs: false });
     await owned("notes");
 
-    expect(await plan()).toEqual({ legacyDefaultDir: false, moves: [] });
+    expect(await plan()).toEqual({ legacyDefaultDir: false, moves: [], skipped: [] });
   });
 });
 
@@ -243,7 +248,14 @@ describe("nested taskspaces", () => {
     );
     await owned(join("elsewhere", "notes"));
 
-    expect((await plan()).moves).toEqual([]);
+    const { moves, skipped } = await plan();
+    expect(moves).toEqual([]);
+    expect(skipped).toMatchObject([
+      {
+        move: { from: join("elsewhere", "notes") },
+        reason: `its target would be inside the taskspace at ${join("taskspaces", "main")}`,
+      },
+    ]);
   });
 
   it("skips a move whose target is inside where another move puts a taskspace", async () => {
@@ -275,7 +287,14 @@ describe("nested taskspaces", () => {
     );
 
     // Only `foo` moves; `bar` would land inside it.
-    expect((await plan()).moves.map(({ from }) => from)).toEqual([join("elsewhere", "foo")]);
+    const { moves, skipped } = await plan();
+    expect(moves.map(({ from }) => from)).toEqual([join("elsewhere", "foo")]);
+    expect(skipped).toMatchObject([
+      {
+        move: { from: join("elsewhere", "bar") },
+        reason: `its target would be inside the taskspace at ${join("taskspaces", "main", "foo")}`,
+      },
+    ]);
   });
 
   it("does not move a directory that holds another taskspace", async () => {
@@ -284,8 +303,46 @@ describe("nested taskspaces", () => {
     await owned(join("elsewhere", "outer", "inner"));
 
     // Only the inner one moves; the outer one would carry it along.
-    expect((await plan()).moves.map(({ from }) => from)).toEqual([
-      join("elsewhere", "outer", "inner"),
+    const { moves, skipped } = await plan();
+    expect(moves.map(({ from }) => from)).toEqual([join("elsewhere", "outer", "inner")]);
+    expect(skipped).toMatchObject([
+      { move: { from: join("elsewhere", "outer") }, reason: "it holds another taskspace" },
     ]);
+  });
+
+  it("lists an owned directory whose target is outside the workspace", async () => {
+    const outside = mkdtempSync(join(tmpdir(), "kozane-outside-"));
+    roots.push(outside);
+    const { owned, plan } = await workspace({ defaultDir: outside, namespaceDirs: false });
+    await owned(join("taskspaces", "notes"));
+
+    const { moves, skipped } = await plan();
+    expect(moves).toEqual([]);
+    expect(skipped).toMatchObject([
+      {
+        move: { from: join("taskspaces", "notes"), to: join(outside, "notes") },
+        reason: "its target is outside the workspace",
+      },
+    ]);
+    expect(describeSkips(skipped)).toEqual([
+      `  ${join("taskspaces", "notes")} stays: its target is outside the workspace`,
+    ]);
+  });
+
+  it("still reports a directory it could not move after the legacy config is rewritten", async () => {
+    const { root, db, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("outer");
+    await owned(join("outer", "inner"));
+
+    const planned = await plan();
+    expect(planned.skipped).toMatchObject([
+      { move: { from: "outer", oldLayout: true }, reason: "it holds another taskspace" },
+    ]);
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.config).toBe("updated");
+    // With `inner` moved out, `outer` holds nothing, so it is now a move a second --fix makes.
+    const again = await plan();
+    expect(again.skipped).toEqual([]);
+    expect(again.moves.map(({ from }) => from)).toEqual(["outer"]);
   });
 });

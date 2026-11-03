@@ -260,6 +260,28 @@ export function holdsOtherTaskspaces(
 }
 
 /**
+ * The recorded taskspace whose directory `dir` would sit strictly inside, as an absolute path,
+ * or null. {@link enclosingTaskspaceDir} only looks inside the workspace, so this covers a
+ * target outside it, such as an absolute `taskspace.defaultDir`. It reads the records rather
+ * than walking up the disk, so it never mistakes an unrelated folder above the workspace for
+ * a taskspace.
+ */
+export function enclosingRecordedTaskspace(
+  workspaceRoot: string,
+  dir: string,
+  all: readonly StoredTaskspacePath[],
+): string | null {
+  const target = resolve(dir);
+  for (const { path } of all) {
+    if (!path) continue;
+    // `resolve` keeps an absolute stored path as it is.
+    const taskspaceDir = resolve(workspaceRoot, path);
+    if (isStrictlyInside(taskspaceDir, target)) return taskspaceDir;
+  }
+  return null;
+}
+
+/**
  * The directories missing on the way to `dir`, deepest first. Stops at the first entry that
  * exists, including a dangling symlink, which {@link makeParentsInside} then refuses.
  */

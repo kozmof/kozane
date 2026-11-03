@@ -108,6 +108,14 @@ describe("input helpers", () => {
     });
   });
 
+  it("keeps every repeat of a map key, not only the second", () => {
+    expect(parseMapInput("019a = one\n019a = two\n019a = three\n")).toEqual({
+      "019a": "one",
+      "019a (duplicate)": "two",
+      "019a (duplicate 2)": "three",
+    });
+  });
+
   it("describes values the way the page prints them", () => {
     expect(describeValue(vim, true)).toBe("on");
     expect(describeValue({ ...zoom, kind: "shortcut" }, " ")).toBe("Space");

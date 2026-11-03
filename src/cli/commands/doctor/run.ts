@@ -8,9 +8,11 @@ import type { DB } from "../../../db/tx.js";
 import { idMatches } from "../../../lib/short-id-key.js";
 import { activeServerProcess } from "../../../lib/server/runtime-state.js";
 import {
+  type LayoutPlan,
   type LayoutResult,
   applyTaskspaceLayout,
   describeMoves,
+  describeSkips,
   layoutIsOld,
   layoutNeedsFix,
   planTaskspaceLayout,
@@ -311,17 +313,30 @@ async function taskspaceLayoutCheck(
       printLayoutFix(result);
       plan = await planTaskspaceLayout(db, root, readConfig(root));
     }
-    if (!layoutNeedsFix(plan)) return check(label, true);
+    // Directories --fix cannot move pass the check, since running it again would not help,
+    // but they are listed so they are not left behind without a word.
+    printSkips(plan.skipped);
+    const skippedNote =
+      plan.skipped.length > 0
+        ? `${directories(plan.skipped.length)} cannot move, listed above`
+        : "";
+    if (!layoutNeedsFix(plan)) return check(label, true, skippedNote || undefined);
     if (!layoutIsOld(plan))
       // Such as after a namespace was renamed. The directories keep working, so this passes.
       return check(
         label,
         true,
-        `${directories(plan.moves.length)} not where new ones go; kozane doctor --fix moves them`,
+        [
+          `${directories(plan.moves.length)} not where new ones go; kozane doctor --fix moves them`,
+          skippedNote,
+        ]
+          .filter(Boolean)
+          .join("; "),
       );
     const parts: string[] = [];
     if (plan.legacyDefaultDir) parts.push('config.json still has the old "defaultDir": "."');
     if (plan.moves.length > 0) parts.push(`${directories(plan.moves.length)} to move`);
+    if (skippedNote) parts.push(skippedNote);
     return check(label, false, `${parts.join("; ")}; run kozane doctor --fix`);
   } catch (e) {
     return check(label, false, e instanceof Error ? e.message : String(e));
@@ -357,6 +372,14 @@ function printLayoutFix({ config, moved, failed }: LayoutResult): void {
     for (const line of describeMoves(moved, "    ")) console.log(line);
   }
   for (const { move, reason } of failed) console.log(`  ! could not move ${move.from}: ${reason}`);
+  console.log("");
+}
+
+function printSkips(skipped: LayoutPlan["skipped"]): void {
+  if (skipped.length === 0) return;
+  console.log("Taskspace directories Kozane cannot move:");
+  for (const line of describeSkips(skipped)) console.log(line);
+  console.log("  Move them yourself, then run kozane taskspace scan --apply.");
   console.log("");
 }
 

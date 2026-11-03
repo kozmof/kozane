@@ -52,10 +52,21 @@ export type LayoutMove = {
   oldLayout: boolean;
 };
 
+/**
+ * An owned directory that is not where the layout puts it, but that Kozane cannot move.
+ * `move.to` is where it would go, absolute when that is outside the workspace.
+ */
+export type LayoutSkip = { move: LayoutMove; reason: string };
+
 export type LayoutPlan = {
   /** config.json still has the `"defaultDir": "."` an older `kozane init` wrote. */
   legacyDefaultDir: boolean;
   moves: LayoutMove[];
+  /**
+   * Reported so they are not left behind without a word. Once a legacy config is rewritten,
+   * the browser no longer manages them: rename changes only the label and delete keeps them.
+   */
+  skipped: LayoutSkip[];
 };
 
 export type LayoutResult = {
@@ -100,10 +111,11 @@ export function usesLegacyDefaultDir(root: string): boolean {
  * Work out which owned taskspace directories are not where the layout puts them. A legacy
  * `defaultDir` counts as `taskspaces`, since `--fix` rewrites it to that.
  *
- * A taskspace is left out when Kozane could not move it anyway: no namespace, a path outside
- * the workspace, a directory it did not create, a directory that holds another taskspace, or a
- * target outside the workspace, inside another taskspace, or under an ambiguous
- * `namespacePaths` key, which `kozane taskspace create` reports on its own.
+ * A taskspace is left out when Kozane would never move it: no namespace, a path outside the
+ * workspace, a directory it did not create, or an ambiguous `namespacePaths` key, which
+ * `kozane doctor` reports on its own. An owned directory that is out of place but cannot move,
+ * because it holds another taskspace or its target is outside the workspace or inside another
+ * taskspace, is listed in `skipped`.
  */
 export async function planTaskspaceLayout(
   db: DB,
@@ -118,6 +130,7 @@ export async function planTaskspaceLayout(
   const workspaceRoot = resolve(root);
   const namespaces = await getAllNamespaces({ db });
   const moves: LayoutMove[] = [];
+  const skipped: LayoutSkip[] = [];
   // Where the legacy config put directories: the browser's own rule for `"defaultDir": "."`,
   // directly at the root or in a current namespace's folder there.
   const folders = namespaceFolders(namespaces);
@@ -137,8 +150,6 @@ export async function planTaskspaceLayout(
   for (const taskspace of taskspaces) {
     const { id, name, path, pathKind, namespaceId } = taskspace;
     if (!path || pathKind !== "workspace_relative" || !namespaceId) continue;
-    // Moving it would carry another taskspace along and break that one's record.
-    if (holdsOtherTaskspaces(workspaceRoot, taskspace, taskspaces)) continue;
     let parentDir: string;
     try {
       parentDir = taskspaceParentDir({ ...placement, namespaceId, namespaces, folders });
@@ -148,7 +159,6 @@ export async function planTaskspaceLayout(
       throw e;
     }
     const target = resolve(workspaceRoot, parentDir, basename(path));
-    if (!isStrictlyInside(workspaceRoot, target)) continue;
     if (target === resolve(workspaceRoot, path)) continue;
     let claim;
     try {
@@ -157,15 +167,22 @@ export async function planTaskspaceLayout(
       continue;
     }
     if (claim !== "owned") continue;
-    moves.push({
+    const inside = isStrictlyInside(workspaceRoot, target);
+    const move: LayoutMove = {
       taskspaceId: id,
       name,
       from: path,
-      to: relative(workspaceRoot, target),
+      to: inside ? relative(workspaceRoot, target) : target,
       oldLayout: inOldLayout(path),
-    });
+    };
+    if (!inside) skipped.push({ move, reason: "its target is outside the workspace" });
+    // Moving it would carry another taskspace along and break that one's record.
+    else if (holdsOtherTaskspaces(workspaceRoot, taskspace, taskspaces))
+      skipped.push({ move, reason: "it holds another taskspace" });
+    else moves.push(move);
   }
-  return { legacyDefaultDir, moves: withoutNesting(workspaceRoot, moves) };
+  const nested = withoutNesting(workspaceRoot, moves);
+  return { legacyDefaultDir, moves: nested.kept, skipped: [...skipped, ...nested.dropped] };
 }
 
 /**
@@ -175,7 +192,10 @@ export async function planTaskspaceLayout(
  * as a legacy taskspace named `taskspaces` at the root: it is moved first, so the folders
  * under it are plain folders by the time the others arrive.
  */
-function withoutNesting(workspaceRoot: string, moves: LayoutMove[]): LayoutMove[] {
+function withoutNesting(
+  workspaceRoot: string,
+  moves: LayoutMove[],
+): { kept: LayoutMove[]; dropped: LayoutSkip[] } {
   const enclosingOf = new Map(
     moves.map((move) => [
       move,
@@ -185,17 +205,28 @@ function withoutNesting(workspaceRoot: string, moves: LayoutMove[]): LayoutMove[
   // Repeat until nothing changes: dropping a move keeps its directory in place, which can
   // make another move's target nested after all.
   let kept = moves;
+  const dropped: LayoutSkip[] = [];
+  const insideOf = (dir: string) =>
+    `its target would be inside the taskspace at ${relative(workspaceRoot, dir)}`;
   for (;;) {
     const leaving = new Set(kept.map(({ from }) => resolve(workspaceRoot, from)));
     const next = kept.filter((move) => {
       const enclosing = enclosingOf.get(move);
-      if (enclosing != null && !leaving.has(enclosing)) return false;
+      if (enclosing != null && !leaving.has(enclosing)) {
+        dropped.push({ move, reason: insideOf(enclosing) });
+        return false;
+      }
       // The disk check above cannot see where other moves land, such as a `namespacePaths`
       // entry pointing inside another taskspace's new directory.
       const target = resolve(workspaceRoot, move.to);
-      return !kept.some(
+      const host = kept.find(
         (other) => other !== move && isStrictlyInside(resolve(workspaceRoot, other.to), target),
       );
+      if (host) {
+        dropped.push({ move, reason: insideOf(resolve(workspaceRoot, host.to)) });
+        return false;
+      }
+      return true;
     });
     if (next.length === kept.length) break;
     kept = next;
@@ -205,7 +236,10 @@ function withoutNesting(workspaceRoot: string, moves: LayoutMove[]): LayoutMove[
     kept.some(({ to }) =>
       isStrictlyInside(resolve(workspaceRoot, from), resolve(workspaceRoot, to)),
     );
-  return [...kept.filter(enclosesTarget), ...kept.filter((move) => !enclosesTarget(move))];
+  return {
+    kept: [...kept.filter(enclosesTarget), ...kept.filter((move) => !enclosesTarget(move))],
+    dropped,
+  };
 }
 
 /** Whether `kozane doctor --fix` has anything to do. */
@@ -341,6 +375,16 @@ function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutM
 
 /** Most moves to list before summing up the rest. */
 const LISTED_MOVES = 5;
+
+/** One line per skipped directory, such as `notes stays: it holds another taskspace`, capped. */
+export function describeSkips(skipped: readonly LayoutSkip[], indent = "  "): string[] {
+  const lines = skipped
+    .slice(0, LISTED_MOVES)
+    .map(({ move, reason }) => `${indent}${move.from} stays: ${reason}`);
+  if (skipped.length > LISTED_MOVES)
+    lines.push(`${indent}…and ${skipped.length - LISTED_MOVES} more`);
+  return lines;
+}
 
 /** One line per move, such as `notes → taskspaces/Work/notes`, capped at a few. */
 export function describeMoves(moves: readonly LayoutMove[], indent = "  "): string[] {
