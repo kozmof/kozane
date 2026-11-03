@@ -124,7 +124,8 @@ test.beforeAll(async () => {
   const scopeOut = cli("scope", "add", "Work");
   const scopeId = scopeOut.match(/id\s*:\s*(\S+)/)?.[1];
   if (!scopeId) throw new Error(`No scope id in:\n${scopeOut}`);
-  cli("taskspace", "create", "demo", "--scope", scopeId);
+  // Keep editor fixtures at a fixed path regardless of the default taskspace layout.
+  cli("taskspace", "create", "demo", "--scope", scopeId, "--dir", taskspaceDir);
 
   mkdirSync(join(taskspaceDir, "src"), { recursive: true });
   writeFileSync(join(taskspaceDir, "notes.md"), "alpha\nbravo\ncharlie\n");
