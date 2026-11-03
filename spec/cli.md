@@ -44,7 +44,7 @@ Migrations must be current. `--memory` instead creates a temporary database with
 namespace. Workspace commands use that database while the server runs, and changes disappear
 when it stops.
 
-Refuse to start with a legacy taskspace layout config. The error lists the owned
+`kozane open` refuses to start with a legacy taskspace layout config. The error lists the owned
 directories in the old layout that `kozane doctor --fix` would move. Run that command
 before starting the browser. Other misplaced directories, such as those left after a
 namespace rename, do not prevent startup. See [old taskspace layout](#old-taskspace-layout).
@@ -807,9 +807,12 @@ insert orphan records and `--cleanup` to delete records whose markers are missin
 A reattached taskspace joins the namespace its marker names. When that namespace has been
 deleted, it joins the workspace default instead, and the marker is updated to match.
 `--namespace <id>` puts every reattached taskspace in that namespace instead. The directory
-stays where it is. An orphan that cannot be reattached, such as one whose namespace is gone
-when no namespace is left, is reported and skipped, the rest are still reattached, and the
-command exits 1. A marker without a namespace stays unassigned unless `--namespace` is given.
+stays where it is.
+
+If an orphan cannot be reattached, the command reports it and skips it. It reattaches
+the remaining orphans, then exits 1. This can happen when the marker names a deleted
+namespace and no default namespace is available. A marker without a namespace stays
+unassigned unless `--namespace` is given.
 
 ```bash
 kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--cleanup]
@@ -837,17 +840,17 @@ are. A legacy `"defaultDir": "."` config requires the
 [layout fix](#old-taskspace-layout) before browser startup. Set `"namespaceDirs": false`
 to retain the old layout.
 
-In the folder name, the namespace name is put in Unicode NFC form, and characters not
+Namespace folder names use Unicode NFC form. Characters not
 allowed in file names (`/ \ : * ? " < > |` and control characters) become `-`. Leading dots
 and trailing dots and spaces are dropped. Each run of spaces inside the name becomes one `-`,
-so `My Project` becomes `My-Project`. Names are cut to 60 characters, and to 221 UTF-8
-bytes so a short-ID suffix still fits in 255. A name Windows
+so `My Project` becomes `My-Project`. Names are limited to 60 visible characters and 221 UTF-8
+bytes, leaving room for an ID suffix within 255 bytes. A name Windows
 reserves, such as `CON` or `con.txt`, gets a `-` after its base name, giving `CON-` or `con-.txt`. A
 name with nothing left uses the namespace ID. When two namespaces would get the same folder,
 ignoring case, the oldest keeps it and the others get their short ID added, such as
 `work-5c3d9e1`.
 
-Folder names are worked out from the current namespaces each time. Renaming a namespace, or
+Folder names are calculated from the current namespaces each time. Renaming a namespace, or
 deleting the older of two whose names clashed, changes the folder that later taskspaces go
 in. Directories made in the old folder are not moved. They keep working, but rename and
 delete from the browser leave them on disk.
@@ -990,6 +993,6 @@ to update its recorded path.
 
 `ownsDirectory` is present only when Kozane created the directory in
 `taskspace.defaultDir` or a `taskspace.namespacePaths` directory, either from the browser
-or with `taskspace create`
-without `--dir`. The browser renames and deletes only such directories along
-with their taskspace.
+or with `taskspace create` without `--dir`. The browser renames and deletes these
+directories only while they remain in a managed location and contain no other taskspace.
+See the [HTTP reference](http.md#patch-namespaceidapitaskspacestaskspaceid) for the conditions.

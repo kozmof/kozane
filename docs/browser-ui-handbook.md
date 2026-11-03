@@ -275,8 +275,9 @@ Each delete asks first.
   with `kozane taskspace create --dir` or ones that already existed, stay on
   disk.
 - A taskspace directory stays on disk if it holds another taskspace or sits in a
-  former namespace folder after a namespace rename. Renaming changes only its label.
-  Run `kozane doctor --fix` to move eligible directories into the current layout.
+  former namespace folder after a namespace rename. Renaming such a taskspace changes
+  only its label. See the [CLI layout recovery guide](../spec/cli.md#old-taskspace-layout)
+  to move eligible directories into the current layout.
 - Deleting a folder deletes everything in it. These deletes cannot be undone.
 - Renaming a taskspace renames its directory under the same rule. Other
   taskspaces change only their name.

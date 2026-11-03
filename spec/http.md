@@ -395,7 +395,8 @@ On failure, remove only entries created by this request.
 
 Return `{ id, path, pathKind: "workspace_relative" }`.
 Names must be one path segment, contain no `/`, `\`, or NUL, and not start
-with a dot. External taskspaces require CLI `taskspace create --dir`.
+with a dot. Create external taskspaces with the CLI. Use `taskspace create --dir`
+or configure an external `taskspace.defaultDir` or `taskspace.namespacePaths` entry.
 
 | Status | Reason |
 | ------ | ------ |
