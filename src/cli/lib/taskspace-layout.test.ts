@@ -279,6 +279,25 @@ describe("nested taskspaces", () => {
     expect(existsSync(join(root, "taskspaces", TASKSPACE_MARKER_FILE))).toBe(false);
   });
 
+  it("does not move into a taskspace whose own move failed", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+    await owned("taskspaces");
+    const planned = await plan();
+    const { taskspaceId } = planned.moves.find(({ from }) => from === "taskspaces")!;
+    // Block the path the `taskspaces` move goes through, so it fails.
+    const aside = `taskspaces.kozane-move-${taskspaceId.replaceAll("-", "").slice(-12, -5)}`;
+    mkdirSync(join(root, aside, "inner"), { recursive: true });
+
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.moved).toEqual([]);
+    expect(result.failed.map(({ move }) => move.from)).toEqual(["taskspaces", "notes"]);
+    expect(result.failed[1].reason).toContain("inside the taskspace at taskspaces");
+    expect(result.config).toBe("kept");
+    expect(existsSync(join(root, "notes", TASKSPACE_MARKER_FILE))).toBe(true);
+    expect(existsSync(join(root, "taskspaces", "main", "notes"))).toBe(false);
+  });
+
   it("skips a move whose target is inside a taskspace that stays", async () => {
     const { db, root, namespaceId, owned, plan } = await workspace({ defaultDir: "taskspaces" });
     // The user's own directory, adopted as a taskspace, where the namespace folder would go.

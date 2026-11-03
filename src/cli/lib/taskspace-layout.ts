@@ -283,6 +283,23 @@ export async function applyTaskspaceLayout(
   const result: LayoutResult = { config: "unchanged", moved: [], failed: [] };
   const workspaceRoot = resolve(root);
   for (const move of plan.moves) {
+    // The plan let this target sit under a taskspace that was going to move away first. If
+    // that move failed, the taskspace is still there, so check the disk as it is now. The
+    // directory itself is no obstacle: a target inside it is reached in two steps.
+    const from = resolve(workspaceRoot, move.from);
+    const enclosing = enclosingTaskspaceDirs(
+      workspaceRoot,
+      dirname(resolve(workspaceRoot, move.to)),
+    ).find((dir) => dir !== from);
+    if (enclosing !== undefined) {
+      result.failed.push({
+        move,
+        reason:
+          `its target would be inside the taskspace at ${relative(workspaceRoot, enclosing)}, ` +
+          "which did not move",
+      });
+      continue;
+    }
     let undo: () => void;
     try {
       undo = moveDirectory(workspaceRoot, move);
