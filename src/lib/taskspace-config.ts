@@ -60,6 +60,11 @@ export function namespacePathsIssue(value: unknown): string | null {
   return null;
 }
 
+/** True when {@link namespacePathsIssue} finds nothing wrong, narrowing the type to match. */
+function isValidNamespacePaths(value: unknown): value is Record<string, string> {
+  return namespacePathsIssue(value) === null;
+}
+
 /**
  * Read the placement settings from a parsed `taskspace` section. A field that is left out
  * uses its default. A field that is present but invalid is returned as an issue instead of
@@ -85,10 +90,7 @@ export function readTaskspacePlacement(
       defaultDir: typeof defaultDir === "string" ? defaultDir : DEFAULT_TASKSPACE_DIR,
       namespaceDirs:
         typeof namespaceDirs === "boolean" ? namespaceDirs : DEFAULT_TASKSPACE_NAMESPACE_DIRS,
-      // namespacePathsIssue has checked every value is a string.
-      namespacePaths: isPlainObject(namespacePaths)
-        ? (namespacePaths as Record<string, string>)
-        : {},
+      namespacePaths: isValidNamespacePaths(namespacePaths) ? namespacePaths : {},
     },
   };
 }

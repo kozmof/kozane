@@ -144,6 +144,24 @@ describe("applyTaskspaceLayout", () => {
     expect(existsSync(join(root, "taskspaces", "main", "notes", TASKSPACE_MARKER_FILE))).toBe(true);
   });
 
+  it("leaves a config the user changed while the fix ran", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+    const planned = await plan();
+    // The user opts out of namespace folders after the plan was made.
+    writeFileSync(
+      join(root, ".kozane", "config.json"),
+      JSON.stringify({
+        name: "demo",
+        taskspace: { searchRoots: ["."], defaultDir: ".", namespaceDirs: false },
+      }),
+    );
+
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.config).toBe("unchanged");
+    expect(defaultDir(root)).toBe(".");
+  });
+
   it("keeps the legacy config while a move fails, so open still refuses", async () => {
     const { db, root, owned, plan } = await workspace({ defaultDir: "." });
     await owned("notes");
@@ -310,6 +328,48 @@ describe("nested taskspaces", () => {
         reason: `its target would be inside the taskspace at ${join("taskspaces", "main", "foo")}`,
       },
     ]);
+  });
+
+  it("skips a move whose target is inside a moving taskspace that sits in one that stays", async () => {
+    const { db, root, owned, plan } = await workspace({
+      defaultDir: "taskspaces",
+      namespaceDirs: false,
+    });
+    // `outer` stays because it holds `outer/b`, which moves away.
+    await owned("outer");
+    await owned(join("outer", "b"));
+    // A second namespace whose path points inside `outer/b`, so its nearest marker is one
+    // that leaves, while `outer` above it stays.
+    const otherId = await createNamespace({ db, name: "other" });
+    const cId = await addTaskspace({ db, namespaceId: otherId, name: "c", path: "c" });
+    mkdirSync(join(root, "c"));
+    writeFileSync(
+      join(root, "c", TASKSPACE_MARKER_FILE),
+      JSON.stringify({ kind: TASKSPACE_MARKER_KIND, taskspaceId: cId, ownsDirectory: true }),
+    );
+    writeFileSync(
+      join(root, ".kozane", "config.json"),
+      JSON.stringify({
+        name: "demo",
+        taskspace: {
+          searchRoots: ["."],
+          defaultDir: "taskspaces",
+          namespaceDirs: false,
+          namespacePaths: { [otherId]: join("outer", "b", "x") },
+        },
+      }),
+    );
+
+    const { moves, skipped } = await plan();
+    expect(moves.map(({ from }) => from)).toEqual([join("outer", "b")]);
+    expect(skipped).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          move: expect.objectContaining({ from: "c" }),
+          reason: "its target would be inside the taskspace at outer",
+        }),
+      ]),
+    );
   });
 
   it("does not move a directory that holds another taskspace", async () => {

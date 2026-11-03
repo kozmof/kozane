@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
+import { isPlainObject } from "../../lib/plain-object.js";
 import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
 import {
   enclosingRecordedTaskspace,
@@ -185,7 +186,11 @@ async function scanWithin(
           // Keep the marker in step with the record, so a later reattach lands in the same
           // namespace. The record is already in, so a failed write is only a warning.
           try {
-            rewriteMarkerNamespace(taskspace.path, placement.namespaceId);
+            rewriteMarkerNamespace(
+              taskspace.path,
+              taskspace.taskspaceId,
+              placement.namespaceId,
+            );
           } catch (e) {
             console.log(
               `    ! could not update ${TASKSPACE_MARKER_FILE}: ${e instanceof Error ? e.message : String(e)}`,
@@ -285,10 +290,19 @@ function reattachNamespace(
   }
 }
 
-/** Point a taskspace's `.taskspace.json` at another namespace, keeping its other fields. */
-function rewriteMarkerNamespace(dir: string, namespaceId: string): void {
+/**
+ * Point a taskspace's `.taskspace.json` at another namespace, keeping its other fields. A file
+ * that is not this taskspace's marker, such as one replaced since the scan, is left alone.
+ */
+function rewriteMarkerNamespace(dir: string, taskspaceId: string, namespaceId: string): void {
   const markerPath = join(dir, TASKSPACE_MARKER_FILE);
-  const marker = JSON.parse(readFileSync(markerPath, "utf-8"));
+  const marker: unknown = JSON.parse(readFileSync(markerPath, "utf-8"));
+  if (
+    !isPlainObject(marker) ||
+    marker.kind !== TASKSPACE_MARKER_KIND ||
+    marker.taskspaceId !== taskspaceId
+  )
+    throw new Error("it is not this taskspace's marker");
   marker.namespaceId = namespaceId;
   writeFileAtomic(markerPath, JSON.stringify(marker, null, 2) + "\n");
 }

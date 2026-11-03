@@ -33,8 +33,8 @@ type ManagedCheck = {
   pathKind: PathKind;
   /** `taskspace.defaultDir` from the workspace config, relative to the root or absolute. */
   defaultDir: string;
-  /** The directories in `taskspace.namespacePaths`, relative to the root or absolute. */
-  namespacePaths: readonly string[];
+  /** The directories in `taskspace.namespacePaths`, without the namespaces they belong to. */
+  namespacePathDirs: readonly string[];
   /** Every current namespace's folder name, as `namespaceFolders()` in taskspace-location.ts gives it. */
   namespaceFolders: readonly string[];
 };
@@ -51,7 +51,7 @@ export function isManagedTaskspaceDirectory({
   storedPath,
   pathKind,
   defaultDir,
-  namespacePaths,
+  namespacePathDirs,
   namespaceFolders,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
@@ -71,7 +71,7 @@ export function isManagedTaskspaceDirectory({
     return true;
   // Any configured namespace path is accepted, not only the one for this taskspace's
   // namespace, so moving a taskspace to another namespace keeps it manageable.
-  return namespacePaths.some((dir) => parent === resolve(workspaceRoot, dir));
+  return namespacePathDirs.some((dir) => parent === resolve(workspaceRoot, dir));
 }
 
 /**
@@ -226,17 +226,28 @@ export function moveTaskspaceDirectory({
  * would delete it too. Paths are compared as text, and missing folders are skipped.
  */
 export function enclosingTaskspaceDir(workspaceRoot: string, dir: string): string | null {
+  return enclosingTaskspaceDirs(workspaceRoot, dir)[0] ?? null;
+}
+
+/**
+ * Every folder at or above `dir`, strictly inside the workspace, that holds a taskspace
+ * marker, nearest first. {@link enclosingTaskspaceDir} is enough to refuse a target. This is
+ * for callers that excuse some of them, such as a taskspace that is about to move away: one
+ * further up that stays still encloses the target.
+ */
+export function enclosingTaskspaceDirs(workspaceRoot: string, dir: string): string[] {
   const root = resolve(workspaceRoot);
+  const found: string[] = [];
   for (let current = resolve(dir); isStrictlyInside(root, current); current = dirname(current)) {
     try {
       lstatSync(join(current, TASKSPACE_MARKER_FILE));
-      return current;
+      found.push(current);
     } catch (e) {
       const code = errorCode(e);
       if (code !== "ENOENT" && code !== "ENOTDIR") throw e;
     }
   }
-  return null;
+  return found;
 }
 
 /** A taskspace record's stored path, as {@link holdsOtherTaskspaces} reads it. */

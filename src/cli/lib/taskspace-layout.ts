@@ -22,7 +22,7 @@ import { isStrictlyInside } from "../../lib/server/fs-paths.js";
 import { TaskspaceFilesError } from "../../lib/server/taskspace-files.js";
 import { MIN_SHORT_ID_LENGTH, shortIdKey } from "../../lib/short-id-key.js";
 import {
-  enclosingTaskspaceDir,
+  enclosingTaskspaceDirs,
   holdsOtherTaskspaces,
   isManagedTaskspaceDirectory,
   missingDirs,
@@ -72,7 +72,8 @@ export type LayoutPlan = {
 export type LayoutResult = {
   /**
    * `updated`: the legacy `defaultDir` was rewritten. `kept`: it was left because a move
-   * failed, and running the fix again retries. `unchanged`: the config was not legacy.
+   * failed, and running the fix again retries. `unchanged`: the config was not legacy, or
+   * was edited while the fix ran so it no longer is.
    */
   config: "updated" | "kept" | "unchanged";
   moved: LayoutMove[];
@@ -142,7 +143,7 @@ export async function planTaskspaceLayout(
       storedPath,
       pathKind: "workspace_relative",
       defaultDir: config.taskspace.defaultDir,
-      namespacePaths: [],
+      namespacePathDirs: [],
       namespaceFolders: legacyFolders,
     });
 
@@ -196,12 +197,22 @@ function withoutNesting(
   workspaceRoot: string,
   moves: LayoutMove[],
 ): { kept: LayoutMove[]; dropped: LayoutSkip[] } {
-  const enclosingOf = new Map(
-    moves.map((move) => [
-      move,
-      enclosingTaskspaceDir(workspaceRoot, dirname(resolve(workspaceRoot, move.to))),
-    ]),
+  // Absolute paths, worked out once. Every marker above a target counts, not only the
+  // nearest: a moving taskspace inside one that stays leaves the target nested all the same.
+  const paths = new Map(
+    moves.map((move) => {
+      const to = resolve(workspaceRoot, move.to);
+      return [
+        move,
+        {
+          from: resolve(workspaceRoot, move.from),
+          to,
+          enclosing: enclosingTaskspaceDirs(workspaceRoot, dirname(to)),
+        },
+      ];
+    }),
   );
+  const pathsOf = (move: LayoutMove) => paths.get(move)!;
   // Repeat until nothing changes: dropping a move keeps its directory in place, which can
   // make another move's target nested after all.
   let kept = moves;
@@ -209,21 +220,19 @@ function withoutNesting(
   const insideOf = (dir: string) =>
     `its target would be inside the taskspace at ${relative(workspaceRoot, dir)}`;
   for (;;) {
-    const leaving = new Set(kept.map(({ from }) => resolve(workspaceRoot, from)));
+    const leaving = new Set(kept.map((move) => pathsOf(move).from));
     const next = kept.filter((move) => {
-      const enclosing = enclosingOf.get(move);
-      if (enclosing != null && !leaving.has(enclosing)) {
-        dropped.push({ move, reason: insideOf(enclosing) });
+      const { to, enclosing } = pathsOf(move);
+      const staying = enclosing.find((dir) => !leaving.has(dir));
+      if (staying !== undefined) {
+        dropped.push({ move, reason: insideOf(staying) });
         return false;
       }
       // The disk check above cannot see where other moves land, such as a `namespacePaths`
       // entry pointing inside another taskspace's new directory.
-      const target = resolve(workspaceRoot, move.to);
-      const host = kept.find(
-        (other) => other !== move && isStrictlyInside(resolve(workspaceRoot, other.to), target),
-      );
+      const host = kept.find((other) => other !== move && isStrictlyInside(pathsOf(other).to, to));
       if (host) {
-        dropped.push({ move, reason: insideOf(resolve(workspaceRoot, host.to)) });
+        dropped.push({ move, reason: insideOf(pathsOf(host).to) });
         return false;
       }
       return true;
@@ -232,10 +241,8 @@ function withoutNesting(
     kept = next;
   }
   // Move a directory that others' targets sit under before those others.
-  const enclosesTarget = ({ from }: LayoutMove) =>
-    kept.some(({ to }) =>
-      isStrictlyInside(resolve(workspaceRoot, from), resolve(workspaceRoot, to)),
-    );
+  const enclosesTarget = (move: LayoutMove) =>
+    kept.some((other) => isStrictlyInside(pathsOf(move).from, pathsOf(other).to));
   return {
     kept: [...kept.filter(enclosesTarget), ...kept.filter((move) => !enclosesTarget(move))],
     dropped,
@@ -304,7 +311,9 @@ export async function applyTaskspaceLayout(
     const raw = readRawConfig(root);
     if (result.failed.length > 0) {
       result.config = "kept";
-    } else if (isPlainObject(raw.taskspace)) {
+    } else if (hasLegacyDefaultDir(raw) && isPlainObject(raw.taskspace)) {
+      // Checked again on the file as it is now, so a layout the user chose while the moves
+      // ran is not overwritten.
       raw.taskspace.defaultDir = DEFAULT_TASKSPACE_DIR;
       writeFileAtomic(configPath(root), JSON.stringify(raw, null, 2) + "\n");
       result.config = "updated";

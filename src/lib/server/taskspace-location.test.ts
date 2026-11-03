@@ -67,6 +67,22 @@ describe("namespaceDirName", () => {
     expect([...namespaceDirName("😀".repeat(100), "id")]).toHaveLength(55);
     expect(namespaceDirName(`${"a".repeat(59)}. b`, "id")).toBe("a".repeat(59));
   });
+
+  it("never cuts a character made of several code points", () => {
+    // A family emoji is 7 code points joined by zero-width joiners: 25 bytes.
+    const family = "👨‍👩‍👧‍👦";
+    expect(namespaceDirName(`${"a".repeat(59)}${family}`, "id")).toBe(
+      `${"a".repeat(59)}${family}`,
+    );
+    expect(namespaceDirName(`${"a".repeat(60)}${family}`, "id")).toBe("a".repeat(60));
+    // 8 families are 200 bytes; a ninth would pass the byte cap, so it is dropped whole.
+    expect(namespaceDirName(family.repeat(20), "id")).toBe(family.repeat(8));
+    // A `q` with a combining accent has no composed form in NFC, but stays together.
+    const accented = "q́";
+    expect(namespaceDirName(`${"a".repeat(59)}${accented}`, "id")).toBe(
+      `${"a".repeat(59)}${accented}`,
+    );
+  });
 });
 
 describe("namespacePathFor", () => {
@@ -195,7 +211,7 @@ describe("isManagedTaskspaceDirectory", () => {
       storedPath,
       pathKind: "workspace_relative",
       defaultDir,
-      namespacePaths: ["clients/acme", "/work/abs"],
+      namespacePathDirs: ["clients/acme", "/work/abs"],
       namespaceFolders: ["Work"],
     });
 

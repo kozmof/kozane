@@ -59,7 +59,7 @@ async function managedDirectory(db: App.Locals["db"], taskspace: TaskspaceRow) {
     storedPath,
     pathKind,
     defaultDir: placement.value.defaultDir,
-    namespacePaths: Object.values(placement.value.namespacePaths),
+    namespacePathDirs: Object.values(placement.value.namespacePaths),
     namespaceFolders: [...namespaceFolders(namespaces).values()],
   });
   if (!managed) return null;

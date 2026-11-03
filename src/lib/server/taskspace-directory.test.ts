@@ -128,7 +128,7 @@ describe("isManagedTaskspaceDirectory", () => {
       storedPath,
       pathKind: "workspace_relative",
       defaultDir: "taskspaces",
-      namespacePaths: [],
+      namespacePathDirs: [],
       namespaceFolders: ["work"],
     });
 

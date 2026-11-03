@@ -18,7 +18,7 @@ import type { TaskspacePlacement } from "../taskspace-config.js";
  */
 const RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
-/** Longest folder name, in characters, to keep paths readable. */
+/** Longest folder name, in characters as the user sees them, to keep paths readable. */
 const MAX_DIR_NAME_LENGTH = 60;
 
 /**
@@ -29,12 +29,19 @@ const MAX_DIR_NAME_LENGTH = 60;
 const MAX_DIR_NAME_BYTES = 221;
 
 const utf8 = new TextEncoder();
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-/** The leading characters of `text` within both limits, never splitting a character. */
+/**
+ * The leading characters of `text` within both limits. Characters are counted as the user
+ * sees them, so an emoji made of several code points or a letter with a combining accent is
+ * kept whole or dropped whole.
+ */
 function capName(text: string): string {
   let bytes = 0;
   let out = "";
-  for (const char of [...text].slice(0, MAX_DIR_NAME_LENGTH)) {
+  let count = 0;
+  for (const { segment: char } of graphemes.segment(text)) {
+    if (++count > MAX_DIR_NAME_LENGTH) break;
     bytes += utf8.encode(char).length;
     if (bytes > MAX_DIR_NAME_BYTES) break;
     out += char;
