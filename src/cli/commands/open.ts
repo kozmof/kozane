@@ -61,11 +61,12 @@ export function openBrowser(url: string): void {
 }
 
 /**
- * Print why the UI will not start and return true when taskspace directories Kozane created
- * still sit where a legacy `"defaultDir": "."` put them. The browser only renames and deletes
- * directories in the current layout, so it would leave these alone without saying so. Other
- * out-of-place directories, such as after a namespace was renamed, do not block; `kozane
- * doctor` reports them.
+ * Print why the UI will not start and return true while the config still has the legacy
+ * `"defaultDir": "."`, the same rule `kozane doctor` fails on. The browser would create new
+ * taskspaces in the old layout, and it only renames and deletes directories in the current
+ * one, so it would leave the old ones alone without saying so. Other out-of-place
+ * directories, such as after a namespace was renamed, do not block; `kozane doctor` reports
+ * them.
  */
 async function refuseOldLayout(
   url: string,
@@ -81,10 +82,14 @@ async function refuseOldLayout(
   } finally {
     close();
   }
-  if (moves.length === 0) return false;
-  console.error("Some taskspace directories are in an old layout:");
-  for (const line of describeMoves(moves)) console.error(line);
-  console.error('Run "kozane doctor --fix" to move them, then open Kozane again.');
+  if (moves.length > 0) {
+    console.error("Some taskspace directories are in an old layout:");
+    for (const line of describeMoves(moves)) console.error(line);
+    console.error('Run "kozane doctor --fix" to move them, then open Kozane again.');
+  } else {
+    console.error('.kozane/config.json still has the old "defaultDir": ".".');
+    console.error('Run "kozane doctor --fix" to update it, then open Kozane again.');
+  }
   return true;
 }
 

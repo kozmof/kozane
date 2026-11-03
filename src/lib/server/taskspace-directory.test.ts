@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import {
+  isManagedTaskspaceDirectory,
   makeParentsInside,
   missingDirs,
   moveTaskspaceDirectory,
@@ -114,5 +115,25 @@ describe("moveTaskspaceDirectory", () => {
     ).toThrow();
     expect(existsSync(join(root, "notes", "Work"))).toBe(false);
     expect(existsSync(join(root, "notes", TASKSPACE_MARKER_FILE))).toBe(true);
+  });
+});
+
+describe("isManagedTaskspaceDirectory", () => {
+  const check = (storedPath: string) =>
+    isManagedTaskspaceDirectory({
+      workspaceRoot: "/ws",
+      storedPath,
+      pathKind: "workspace_relative",
+      defaultDir: "taskspaces",
+      namespacePaths: [],
+      namespaceFolders: ["work"],
+    });
+
+  it("matches a namespace folder whatever its case", () => {
+    // Such as after renaming "Work" to "work", which is the same folder on a
+    // case-insensitive disk.
+    expect(check(join("taskspaces", "Work", "notes"))).toBe(true);
+    expect(check(join("taskspaces", "work", "notes"))).toBe(true);
+    expect(check(join("taskspaces", "other", "notes"))).toBe(false);
   });
 });

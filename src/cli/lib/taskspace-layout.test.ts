@@ -1,7 +1,15 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createNamespace } from "../../db/api/namespace.js";
 import { addTaskspace } from "../../db/api/taskspace.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../../lib/taskspace-marker.js";
@@ -9,8 +17,29 @@ import { createTestDB } from "../../test-utils/db.js";
 import { readConfig } from "./config.js";
 import { applyTaskspaceLayout, layoutIsOld, planTaskspaceLayout } from "./taskspace-layout.js";
 
+/** Make the next record update fail, after running `before`, to test the undo. */
+const updateFailure = vi.hoisted(() => ({
+  next: undefined as { before?: () => void } | undefined,
+}));
+vi.mock("../../db/api/taskspace.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../db/api/taskspace.js")>();
+  return {
+    ...actual,
+    updateTaskspace: async (args: Parameters<typeof actual.updateTaskspace>[0]) => {
+      const failure = updateFailure.next;
+      if (failure) {
+        updateFailure.next = undefined;
+        failure.before?.();
+        throw new Error("database is locked");
+      }
+      return actual.updateTaskspace(args);
+    },
+  };
+});
+
 const roots: string[] = [];
 afterEach(() => {
+  updateFailure.next = undefined;
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -105,7 +134,7 @@ describe("applyTaskspaceLayout", () => {
     await owned("notes");
 
     const result = await applyTaskspaceLayout(db, root, await plan());
-    expect(result).toMatchObject({ configUpdated: true, configKept: false, failed: [] });
+    expect(result).toMatchObject({ config: "updated", failed: [] });
     expect(defaultDir(root)).toBe("taskspaces");
     expect(existsSync(join(root, "taskspaces", "main", "notes", TASKSPACE_MARKER_FILE))).toBe(true);
   });
@@ -119,7 +148,10 @@ describe("applyTaskspaceLayout", () => {
     const result = await applyTaskspaceLayout(db, root, await plan());
     expect(result.moved.map(({ from }) => from)).toEqual(["notes"]);
     expect(result.failed.map(({ move }) => move.from)).toEqual(["draft"]);
-    expect(result).toMatchObject({ configUpdated: false, configKept: true });
+    expect(result).toMatchObject({ config: "kept" });
+    expect(result.failed[0].reason).toContain(
+      `${join("taskspaces", "main", "draft")} already exists. Move it aside, or rename draft`,
+    );
     expect(defaultDir(root)).toBe(".");
 
     // The moved one counts as in place, and only the failed one is still to move.
@@ -127,5 +159,52 @@ describe("applyTaskspaceLayout", () => {
     expect(again.moves.map(({ from, oldLayout }) => ({ from, oldLayout }))).toEqual([
       { from: "draft", oldLayout: true },
     ]);
+  });
+
+  it("moves a directory whose target is inside it, such as one named taskspaces", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("taskspaces");
+
+    const planned = await plan();
+    expect(planned.moves).toMatchObject([
+      { from: "taskspaces", to: join("taskspaces", "main", "taskspaces") },
+    ]);
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result).toMatchObject({ config: "updated", failed: [] });
+    const moved = join(root, "taskspaces", "main", "taskspaces");
+    expect(existsSync(join(moved, TASKSPACE_MARKER_FILE))).toBe(true);
+    // Nothing is left beside it from moving it aside.
+    expect(readdirSync(root).sort()).toEqual([".kozane", "taskspaces"]);
+    expect((await plan()).moves).toEqual([]);
+  });
+
+  it("puts the directory back when its record cannot be updated", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+    updateFailure.next = {};
+
+    const result = await applyTaskspaceLayout(db, root, await plan());
+    expect(result.failed).toMatchObject([{ reason: "database is locked" }]);
+    expect(result.config).toBe("kept");
+    expect(existsSync(join(root, "notes", TASKSPACE_MARKER_FILE))).toBe(true);
+    // The folders the move made are gone too.
+    expect(existsSync(join(root, "taskspaces"))).toBe(false);
+  });
+
+  it("goes on with the other moves when putting a directory back fails", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("draft");
+    await owned("notes");
+    // Something takes the old path while the record update is running.
+    updateFailure.next = {
+      before: () => mkdirSync(join(root, "draft", "taken"), { recursive: true }),
+    };
+
+    const result = await applyTaskspaceLayout(db, root, await plan());
+    expect(result.failed.map(({ move }) => move.from)).toEqual(["draft"]);
+    expect(result.failed[0].reason).toContain("Could not move it back");
+    expect(result.failed[0].reason).toContain("kozane taskspace scan --apply");
+    expect(result.moved.map(({ from }) => from)).toEqual(["notes"]);
+    expect(result.config).toBe("kept");
   });
 });

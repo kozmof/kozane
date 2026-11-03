@@ -19,6 +19,8 @@ import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants.js";
 import { isPlainObject } from "../../lib/plain-object.js";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
+import { TaskspaceFilesError } from "../../lib/server/taskspace-files.js";
+import { MIN_SHORT_ID_LENGTH, shortIdKey } from "../../lib/short-id-key.js";
 import {
   isManagedTaskspaceDirectory,
   missingDirs,
@@ -55,9 +57,11 @@ export type LayoutPlan = {
 };
 
 export type LayoutResult = {
-  configUpdated: boolean;
-  /** The legacy `defaultDir` was kept because a move failed. Running the fix again retries. */
-  configKept: boolean;
+  /**
+   * `updated`: the legacy `defaultDir` was rewritten. `kept`: it was left because a move
+   * failed, and running the fix again retries. `unchanged`: the config was not legacy.
+   */
+  config: "updated" | "kept" | "unchanged";
   moved: LayoutMove[];
   failed: { move: LayoutMove; reason: string }[];
 };
@@ -185,44 +189,108 @@ export async function applyTaskspaceLayout(
   root: string,
   plan: LayoutPlan,
 ): Promise<LayoutResult> {
-  const result: LayoutResult = { configUpdated: false, configKept: false, moved: [], failed: [] };
+  const result: LayoutResult = { config: "unchanged", moved: [], failed: [] };
   const workspaceRoot = resolve(root);
   for (const move of plan.moves) {
-    // Folders this move makes, so a move undone below does not leave them behind.
-    const parents = missingDirs(dirname(resolve(workspaceRoot, move.to)));
+    let undo: () => void;
     try {
-      moveTaskspaceDirectory({
-        workspaceRoot,
-        storedPath: move.from,
-        taskspaceId: move.taskspaceId,
-        nextStored: move.to,
-      });
+      undo = moveDirectory(workspaceRoot, move);
     } catch (e) {
-      result.failed.push({ move, reason: e instanceof Error ? e.message : String(e) });
+      result.failed.push({ move, reason: moveFailure(move, e) });
       continue;
     }
     try {
       await updateTaskspace({ db, taskspaceId: move.taskspaceId, path: move.to });
       result.moved.push(move);
     } catch (e) {
-      // Put the directory back so the record still points at it.
-      restoreTaskspaceDirectory(workspaceRoot, move.to, move.from);
-      removeEmptyDirs(parents);
-      result.failed.push({ move, reason: e instanceof Error ? e.message : String(e) });
+      // Put the directory back so the record still points at it. If that fails too, say so
+      // and go on with the other moves.
+      const reason = message(e);
+      try {
+        undo();
+        result.failed.push({ move, reason });
+      } catch (undoError) {
+        result.failed.push({
+          move,
+          reason:
+            `${reason}. Could not move it back (${message(undoError)}), so its record no ` +
+            `longer matches the directory; run kozane taskspace scan --apply to update it`,
+        });
+      }
     }
   }
 
   if (plan.legacyDefaultDir) {
     const raw = readRawConfig(root);
     if (result.failed.length > 0) {
-      result.configKept = true;
+      result.config = "kept";
     } else if (isPlainObject(raw.taskspace)) {
       raw.taskspace.defaultDir = DEFAULT_TASKSPACE_DIR;
       writeFileAtomic(configPath(root), JSON.stringify(raw, null, 2) + "\n");
-      result.configUpdated = true;
+      result.config = "updated";
     }
   }
   return result;
+}
+
+function message(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Why a move failed, plus what to do when something is in the way. */
+function moveFailure(move: LayoutMove, e: unknown): string {
+  if (!(e instanceof TaskspaceFilesError && e.reason === "exists")) return message(e);
+  return (
+    `${move.to} already exists. Move it aside, or rename ${move.from} and run ` +
+    `kozane taskspace scan --apply, then run kozane doctor --fix again`
+  );
+}
+
+/**
+ * Move one owned directory to its target and return how to undo it. A target inside the
+ * directory itself, such as `taskspaces` → `taskspaces/main/taskspaces` for a taskspace named
+ * after the new default directory, cannot be reached in one rename, so the directory is moved
+ * aside first.
+ */
+function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutMove): () => void {
+  const step = (stepFrom: string, stepTo: string) => {
+    // Folders this step makes, so an undo does not leave them behind.
+    const parents = missingDirs(dirname(resolve(workspaceRoot, stepTo)));
+    moveTaskspaceDirectory({
+      workspaceRoot,
+      storedPath: stepFrom,
+      taskspaceId,
+      nextStored: stepTo,
+    });
+    return () => {
+      restoreTaskspaceDirectory(workspaceRoot, stepTo, stepFrom);
+      removeEmptyDirs(parents);
+    };
+  };
+  if (!isStrictlyInside(resolve(workspaceRoot, from), resolve(workspaceRoot, to)))
+    return step(from, to);
+
+  const aside = `${from}.kozane-move-${shortIdKey(taskspaceId).slice(0, MIN_SHORT_ID_LENGTH)}`;
+  const undoAside = step(from, aside);
+  let undoTarget: () => void;
+  try {
+    undoTarget = step(aside, to);
+  } catch (e) {
+    try {
+      undoAside();
+    } catch (undoError) {
+      throw new Error(
+        `${message(e)}. Could not move it back from ${aside} (${message(undoError)}); ` +
+          `run kozane taskspace scan --apply to update its record`,
+        { cause: undoError },
+      );
+    }
+    throw e;
+  }
+  return () => {
+    undoTarget();
+    undoAside();
+  };
 }
 
 /** Most moves to list before summing up the rest. */

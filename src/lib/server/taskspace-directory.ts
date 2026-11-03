@@ -62,9 +62,13 @@ export function isManagedTaskspaceDirectory({
   // made earlier manageable. Any other folder is refused: with `defaultDir` set to `.`,
   // accepting every grandchild would put the user's own `src/lib` in reach. A namespace that
   // was renamed leaves its old folder unmanaged, which only means rename and delete stop
-  // touching that directory.
+  // touching that directory. Folder names are compared ignoring case, as `namespaceFolders()`
+  // keeps them apart, so renaming "Work" to "work" on a case-insensitive disk, where both
+  // name the same folder, keeps its directories managed. The marker still decides ownership.
   if (parent === base) return true;
-  if (dirname(parent) === base && namespaceFolders.includes(basename(parent))) return true;
+  const folder = basename(parent).toLowerCase();
+  if (dirname(parent) === base && namespaceFolders.some((f) => f.toLowerCase() === folder))
+    return true;
   // Any configured namespace path is accepted, not only the one for this taskspace's
   // namespace, so moving a taskspace to another namespace keeps it manageable.
   return namespacePaths.some((dir) => parent === resolve(workspaceRoot, dir));

@@ -105,6 +105,23 @@ describe("old taskspace layout", () => {
     expect(existsSync(join(root, "notes", ".taskspace.json"))).toBe(true);
   }, 120_000);
 
+  it("blocks open on the legacy config alone, so new taskspaces never go in the old layout", () => {
+    const root = legacyWorkspace();
+    cli(root, "doctor", "--fix");
+    // Back to the legacy config, with no directory left to move.
+    editTaskspaceConfig(root, (section) => {
+      section.defaultDir = ".";
+    });
+
+    const open = runCli(root, "open", "--no-open");
+    expect(open.status).toBe(1);
+    expect(open.stderr).toContain('still has the old "defaultDir": "."');
+    expect(open.stderr).toContain('Run "kozane doctor --fix"');
+
+    cli(root, "doctor", "--fix");
+    expect(readConfig(root).taskspace).toMatchObject({ defaultDir: "taskspaces" });
+  }, 120_000);
+
   it("reports a move it cannot make and keeps the directory", () => {
     const root = legacyWorkspace();
     mkdirSync(join(root, "taskspaces", "main", "notes"), { recursive: true });

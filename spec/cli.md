@@ -44,10 +44,11 @@ Migrations must be current. `--memory` instead creates a temporary database with
 namespace. Workspace commands use that database while the server runs, and changes disappear
 when it stops.
 
-Refuse to start while the config still has the old `"defaultDir": "."` and a taskspace
-directory Kozane created is where that layout put it: at the workspace root, or in a namespace
-folder there. Print the moves `kozane doctor --fix` would make. Other directories out of place,
-such as after a namespace was renamed, do not stop it. See
+Refuse to start while the config still has the old `"defaultDir": "."`, as `kozane doctor`
+fails on it, since the browser would otherwise create new taskspaces in the old layout. Print
+the moves `kozane doctor --fix` would make for taskspace directories Kozane created where that
+layout put them: at the workspace root, or in a namespace folder there. Other directories out
+of place, such as after a namespace was renamed, do not stop it. See
 [old taskspace layout](#old-taskspace-layout). `--memory` skips this check.
 
 `--allow-remote` requires a generated API key. Non-loopback bindings also require
@@ -165,8 +166,13 @@ config. The layout check reports both:
 Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
 namespace, directories outside the workspace, or ones whose target is outside it or under an
 ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
-and running `--fix` again retries it. `--fix` moves the directories first and rewrites
-`defaultDir` only when every move succeeded, so until then `kozane open` keeps refusing.
+with what to do: move the entry at the target aside, or rename the directory and run
+`kozane taskspace scan --apply`. Running `--fix` again retries it. A directory whose target is
+inside it, such as a taskspace named `taskspaces` at the root, is moved aside first and then
+into place. When a record cannot be updated after its directory moved, the directory is moved
+back; if that fails too, the report says to run `kozane taskspace scan --apply`. `--fix` moves
+the directories first and rewrites `defaultDir` only when every move succeeded, so until then
+`kozane open` keeps refusing.
 
 Renaming a namespace, changing `defaultDir` or `namespaceDirs`, or moving a taskspace to
 another namespace also leaves its directory out of place. The check still passes and notes how

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
-import { basename, join, resolve, relative, isAbsolute } from "node:path";
+import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
+import { missingDirs, removeEmptyDirs } from "../../lib/server/taskspace-directory.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
@@ -354,6 +355,9 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     });
 
     const dirCreated = !existsSync(targetDir);
+    // Folders above the taskspace this command makes, such as a new namespace folder, so a
+    // failure below does not leave them behind.
+    const parentsCreated = dirCreated ? missingDirs(dirname(targetDir)) : [];
     try {
       mkdirSync(targetDir, { recursive: true });
       const marker = {
@@ -369,6 +373,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       // Clean up both record and directory before reporting which creation step failed.
       await deleteTaskspace({ db, taskspaceId: id });
       if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
+      removeEmptyDirs(parentsCreated);
       console.error("Failed to initialize taskspace directory.");
       console.error(e instanceof Error ? e.message : String(e));
       process.exit(1);

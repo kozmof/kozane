@@ -53,12 +53,12 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   // `resolve`, not `join`, so a configured absolute path is used as it is.
   const targetDir = resolve(root, parentDir, name);
 
-  // Containment is checked through `relative` rather than a string prefix so the
-  // separator stays platform-correct. The name and namespace folder are one segment each,
-  // but the configured directories come from the config file and may point outside the root.
-  const storedPath = relative(resolve(root), targetDir);
+  // Containment compares whole path segments rather than a string prefix, so the separator
+  // stays platform-correct. The name and namespace folder are one segment each, but the
+  // configured directories come from the config file and may point outside the root.
   if (!isStrictlyInside(resolve(root), targetDir))
     throw error(400, "Taskspace path must be inside the workspace root");
+  const storedPath = relative(resolve(root), targetDir);
 
   // The guard above ensures targetDir is always inside the workspace root,
   // so the path is always stored as workspace_relative. Absolute paths are

@@ -347,10 +347,10 @@ function namespacePathsCheck(keys: readonly string[], namespaces: readonly { id:
   );
 }
 
-function printLayoutFix({ configUpdated, configKept, moved, failed }: LayoutResult): void {
+function printLayoutFix({ config, moved, failed }: LayoutResult): void {
   console.log("Taskspace layout:");
-  if (configUpdated) console.log(`  set taskspace.defaultDir to "${DEFAULT_TASKSPACE_DIR}"`);
-  if (configKept)
+  if (config === "updated") console.log(`  set taskspace.defaultDir to "${DEFAULT_TASKSPACE_DIR}"`);
+  if (config === "kept")
     console.log('  kept "defaultDir": "." until every directory has moved; run --fix again');
   if (moved.length > 0) {
     console.log(`  moved ${directories(moved.length)}:`);
