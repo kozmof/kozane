@@ -2,7 +2,11 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { deleteTaskspace, getTaskspaceInNamespace, updateTaskspace } from "$db/api/taskspace";
 import { getNamespace } from "$db/api/namespace";
-import { getTaskspaceDefaultDir, getWorkspaceRoot } from "$db/internal/config";
+import {
+  getTaskspaceDefaultDir,
+  getTaskspaceNamespacePaths,
+  getWorkspaceRoot,
+} from "$db/internal/config";
 import { taskspaceNameIssue, type PathKind } from "$lib/constants";
 import { taskspacePathIssue } from "$lib/server/taskspace-path";
 import {
@@ -44,6 +48,7 @@ function managedDirectory(taskspace: TaskspaceRow) {
     storedPath,
     pathKind,
     defaultDir: getTaskspaceDefaultDir(root),
+    namespacePaths: Object.values(getTaskspaceNamespacePaths(root)),
   });
   if (!managed) return null;
   const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };

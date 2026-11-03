@@ -7,6 +7,8 @@ import {
   matchesFilter,
   numberChange,
   parseListInput,
+  parseMapInput,
+  controlText,
   usesDefault,
   withChange,
 } from "./edit-state.js";
@@ -84,11 +86,22 @@ describe("input helpers", () => {
     expect(parseListInput(" a \n\n b\n")).toEqual(["a", "b"]);
   });
 
+  it("reads one key = value entry per line, and writes them back the same way", () => {
+    expect(parseMapInput(" 019a = work/acme \n\n019b=a=b\nlonely\n")).toEqual({
+      "019a": "work/acme",
+      "019b": "a=b",
+      lonely: "",
+    });
+    expect(controlText({ ...zoom, kind: "map" }, { "019a": "work/acme" })).toBe("019a = work/acme");
+  });
+
   it("describes values the way the page prints them", () => {
     expect(describeValue(vim, true)).toBe("on");
     expect(describeValue({ ...zoom, kind: "shortcut" }, " ")).toBe("Space");
     expect(describeValue({ ...zoom, kind: "shortcut" }, "")).toBe("(none)");
     expect(describeValue({ ...zoom, kind: "list" }, ["a", "b"])).toBe("a, b");
+    expect(describeValue({ ...zoom, kind: "map" }, { a: "x", b: "y" })).toBe("a = x, b = y");
+    expect(describeValue({ ...zoom, kind: "map" }, {})).toBe("(none)");
   });
 
   it("matches a filter against the label, path, and help", () => {

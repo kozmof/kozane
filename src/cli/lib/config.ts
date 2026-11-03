@@ -27,6 +27,7 @@ export function defaultConfig(name: string): WorkspaceConfig {
     taskspace: {
       defaultDir: DEFAULT_TASKSPACE_DIR,
       namespaceDirs: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+      namespacePaths: {},
       searchRoots: ["."],
     },
     ui: { ...DEFAULT_UI_CONFIG },

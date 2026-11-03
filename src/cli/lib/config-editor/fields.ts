@@ -12,7 +12,7 @@ import {
   type UiConfig,
 } from "../../../lib/ui-config.js";
 
-export type FieldKind = "string" | "number" | "boolean" | "choice" | "list" | "shortcut";
+export type FieldKind = "string" | "number" | "boolean" | "choice" | "list" | "map" | "shortcut";
 
 export type FieldGroup =
   | "General"
@@ -217,6 +217,15 @@ export function configFields(): FieldSpec[] {
       help: "Put new taskspaces in a folder named after their namespace inside the default directory, such as taskspaces/My-namespace/notes. Spaces in the namespace name become dashes. Turn off to put them directly in the default directory.",
       kind: "boolean",
       defaultValue: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+      required: false,
+    },
+    {
+      path: "taskspace.namespacePaths",
+      group: "Taskspace",
+      label: "Paths per namespace",
+      help: "Put a namespace's new taskspaces in a directory of your choosing, one per line as namespace ID = path, such as aa414b7 = work/acme. Use the short ID kozane namespace list shows, or the full ID. Relative paths start at the workspace directory. Other namespaces use the default directory.",
+      kind: "map",
+      defaultValue: {},
       required: false,
     },
     {

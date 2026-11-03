@@ -23,6 +23,8 @@ export type WorkspaceConfig = {
     defaultDir: string;
     /** Put each namespace's new taskspaces in a folder named after it under `defaultDir`. */
     namespaceDirs: boolean;
+    /** Namespace ID, full or short, to the directory its new taskspaces go in. */
+    namespacePaths: Record<string, string>;
     searchRoots: string[];
   };
   ui?: Partial<UiConfig>;
@@ -60,6 +62,22 @@ function stringRule(path: string, key: string, fallback: string): FieldRule {
     fallback,
     check: (value) => (typeof value === "string" ? null : `${path} must be a string`),
   };
+}
+
+/**
+ * `taskspace.namespacePaths` maps a namespace ID, full or short, to a directory. IDs
+ * are hex digits and dashes, so a key with anything else is most likely a namespace name.
+ */
+function namespacePathsIssue(value: unknown): string | null {
+  const path = "taskspace.namespacePaths";
+  if (!isPlainObject(value)) return `${path} must be an object of namespace IDs to directories`;
+  for (const [key, dir] of Object.entries(value)) {
+    if (!/^[0-9a-f-]+$/i.test(key))
+      return `${path} key "${key}" must be a namespace ID, as kozane namespace list shows it`;
+    if (typeof dir !== "string" || !dir.trim())
+      return `${path}.${key} must be a nonempty directory path`;
+  }
+  return null;
 }
 
 /**
@@ -107,6 +125,13 @@ const FIELD_GROUPS: FieldGroup[] = [
           typeof value === "boolean" ? null : "taskspace.namespaceDirs must be true or false",
       },
       {
+        path: "taskspace.namespacePaths",
+        key: "namespacePaths",
+        fallback: {},
+        optional: true,
+        check: namespacePathsIssue,
+      },
+      {
         path: "taskspace.searchRoots",
         key: "searchRoots",
         fallback: ["."],
@@ -123,7 +148,7 @@ export const TOP_LEVEL_KEYS = ["name", "server", "taskspace", "ui"];
 
 export const SECTION_KEYS: Record<SectionName, string[]> = {
   server: ["host", "port"],
-  taskspace: ["defaultDir", "namespaceDirs", "searchRoots"],
+  taskspace: ["defaultDir", "namespaceDirs", "namespacePaths", "searchRoots"],
 };
 
 /** Allowed configuration keys grouped by their parent's dotted path. */
@@ -285,6 +310,7 @@ function buildConfig(
     taskspace: {
       defaultDir: field("taskspace.defaultDir", DEFAULT_TASKSPACE_DIR),
       namespaceDirs: field("taskspace.namespaceDirs", DEFAULT_TASKSPACE_NAMESPACE_DIRS),
+      namespacePaths: field<Record<string, string>>("taskspace.namespacePaths", {}),
       searchRoots: field<string[]>("taskspace.searchRoots", ["."]),
     },
     ...(ui !== undefined && { ui }),

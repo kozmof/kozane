@@ -269,7 +269,8 @@ Each delete asks first.
   taskspaces cannot be deleted.
 - Deleting a taskspace deletes its directory and everything in it, when Kozane
   created that directory in `taskspace.defaultDir` (by default
-  `taskspaces/<namespace>/<name>`). Its `.taskspace.json`
+  `taskspaces/<namespace>/<name>`) or in the namespace's
+  `taskspace.namespacePaths` directory. Its `.taskspace.json`
   records this as `ownsDirectory: true`. Other directories, such as ones chosen
   with `kozane taskspace create --dir` or ones that already existed, stay on
   disk.

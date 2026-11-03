@@ -21,7 +21,7 @@ import {
   getAllTaskspaces,
   getTaskspacesInNamespace,
 } from "../../db/api/taskspace.js";
-import { getAllNamespaces, getNamespace } from "../../db/api/namespace.js";
+import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
@@ -204,12 +204,14 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     if (options.dir) {
       targetDir = resolve(options.dir);
     } else {
-      const namespace = await getNamespace({ db, namespaceId });
+      const namespaces = await getAllNamespaces({ db });
+      const namespace = namespaces.find(({ id }) => id === namespaceId);
       if (!namespace) throw new Error(`Namespace not found: ${namespaceId}`);
+      // An ambiguous `namespacePaths` key throws, and the command wrapper reports it.
       const parentDir = taskspaceParentDir({
-        defaultDir: config.taskspace.defaultDir,
-        namespaceDirs: config.taskspace.namespaceDirs,
+        ...config.taskspace,
         namespace,
+        allNamespaceIds: namespaces.map(({ id }) => id),
       });
       targetDir = resolve(root, parentDir, name);
     }

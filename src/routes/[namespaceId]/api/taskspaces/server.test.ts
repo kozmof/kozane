@@ -11,6 +11,8 @@ import { createTestDB } from "../../../../test-utils/db.js";
 import type { DB } from "$db/tx.js";
 import { TASKSPACE_MARKER_FILE } from "../../../../lib/taskspace-marker.js";
 import { _resetWorkspaceRootForTest } from "$db/internal/config.js";
+import { namespaceTable } from "$db/schema.js";
+import { shortIdKey } from "$lib/short-id-key.js";
 
 function jsonRequest(body: unknown): Request {
   return new Request("http://localhost/namespace-1/api/taskspaces", {
@@ -183,6 +185,60 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     const res = await POST(event(db, namespaceId, jsonRequest({ name: "flat", scopeId })));
     expect((await res.json()).path).toBe(join("taskspaces", "flat"));
     expect(existsSync(join(tmpRoot, "taskspaces", "flat", TASKSPACE_MARKER_FILE))).toBe(true);
+  });
+
+  describe("with taskspace.namespacePaths", () => {
+    const usePaths = (namespacePaths: Record<string, string>) => {
+      writeFileSync(
+        join(tmpRoot, ".kozane", "config.json"),
+        JSON.stringify({ name: "test", taskspace: { namespacePaths } }),
+      );
+      _resetWorkspaceRootForTest();
+    };
+
+    it("puts the namespace's taskspaces in its own path", async () => {
+      // A short ID, as `kozane namespace list` prints it.
+      usePaths({ [shortIdKey(namespaceId).slice(0, 7)]: "clients/acme" });
+      const res = await POST(event(db, namespaceId, jsonRequest({ name: "notes", scopeId })));
+      expect((await res.json()).path).toBe(join("clients", "acme", "notes"));
+      expect(existsSync(join(tmpRoot, "clients", "acme", "notes", TASKSPACE_MARKER_FILE))).toBe(
+        true,
+      );
+    });
+
+    it("uses an absolute path inside the workspace as it is", async () => {
+      usePaths({ [namespaceId]: join(tmpRoot, "abs") });
+      const res = await POST(event(db, namespaceId, jsonRequest({ name: "notes", scopeId })));
+      expect((await res.json()).path).toBe(join("abs", "notes"));
+    });
+
+    it("leaves other namespaces in the default layout", async () => {
+      const other = await addNamespace({ db, name: "Other" });
+      usePaths({ [namespaceId]: "clients/acme" });
+      const res = await POST(event(db, other, jsonRequest({ name: "notes", scopeId })));
+      expect((await res.json()).path).toBe(join("taskspaces", "Other", "notes"));
+    });
+
+    it("refuses a key that matches more than one namespace", async () => {
+      // Fixed IDs whose short IDs both start with `abcdef`.
+      const first = "019dddef-87e3-7000-8000-abcdef000001";
+      await db.insert(namespaceTable).values([
+        { id: first, name: "First" },
+        { id: "019dddef-87e3-7000-8000-abcdef000002", name: "Second" },
+      ]);
+      usePaths({ abcdef: "shared" });
+      await expect(
+        POST(event(db, first, jsonRequest({ name: "notes", scopeId }))),
+      ).rejects.toMatchObject({
+        status: 400,
+        body: {
+          message: expect.stringContaining(
+            'taskspace.namespacePaths key "abcdef" matches 2 namespaces',
+          ),
+        },
+      });
+      expect(await getAllTaskspaces({ db })).toHaveLength(0);
+    });
   });
 
   it("makes a namespace name with a slash into one folder", async () => {

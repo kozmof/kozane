@@ -79,7 +79,30 @@ export function describeValue(field: FieldSpec, value: unknown): string {
   if (field.kind === "boolean") return value ? "on" : "off";
   if (field.kind === "shortcut") return describeKey(String(value));
   if (field.kind === "list") return Array.isArray(value) ? value.join(", ") : String(value);
+  if (field.kind === "map") {
+    const entries = isRecord(value) ? Object.entries(value) : [];
+    return entries.length ? entries.map(([k, v]) => `${k} = ${String(v)}`).join(", ") : "(none)";
+  }
   return String(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * One `key = value` entry per non-blank line, split at the first `=`. A line without `=`
+ * becomes a key with an empty value, so saving reports it rather than dropping it.
+ */
+export function parseMapInput(text: string): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const at = line.indexOf("=");
+    if (at < 0) map[line.trim()] = "";
+    else map[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+  }
+  return map;
 }
 
 /**
@@ -102,6 +125,12 @@ export function parseListInput(text: string): string[] {
 /** Text a field's control starts with. */
 export function controlText(field: FieldSpec, value: unknown): string {
   if (field.kind === "list") return Array.isArray(value) ? value.join("\n") : "";
+  if (field.kind === "map")
+    return isRecord(value)
+      ? Object.entries(value)
+          .map(([k, v]) => `${k} = ${String(v)}`)
+          .join("\n")
+      : "";
   if (field.kind === "shortcut") return typeof value === "string" ? describeKey(value) : "";
   if (field.kind === "number") return typeof value === "number" ? String(value) : "";
   return typeof value === "string" ? value : "";

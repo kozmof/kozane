@@ -771,6 +771,20 @@ and spaces are dropped. Each run of spaces inside the name becomes one `-`, so `
 becomes `My-Project`. A name with nothing left uses the namespace ID. Renaming a namespace
 does not move folders made earlier.
 
+To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
+taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever
+`defaultDir` and `namespaceDirs` say. Keys are namespace IDs, either the short ID
+`kozane namespace list` prints or the full ID, matched as `--namespace` matches them. The
+longest matching key wins. A key that matches more than one namespace stops the create with an error naming
+the full ID to use instead. Paths are relative to the workspace root or absolute.
+
+```json
+"namespacePaths": {
+  "aa414b7": "clients/acme",
+  "5c3d9e1": "/srv/shared/kozane"
+}
+```
+
 The taskspace name must then be one path segment, contain no `/`, `\`, or NUL, not start
 with a dot, and not start or end with whitespace.
 With `--dir`, the name is only a label. Store internal paths relative to the workspace and
@@ -786,7 +800,7 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
 | `--scope <scopeId>` | Attach taskspace to an existing scope                      |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
 | `--namespace <id>`  | Owning namespace (defaults to the workspace default)       |
-| `--dir <path>`      | Target directory (default: under `taskspace.defaultDir`)   |
+| `--dir <path>`      | Target directory (default: see above)                      |
 
 ## Config file
 
@@ -805,6 +819,7 @@ Other keys fall back to built-in defaults individually.
   "taskspace": {
     "defaultDir": "taskspaces",
     "namespaceDirs": true,
+    "namespacePaths": {},
     "searchRoots": ["."]
   },
   "ui": {

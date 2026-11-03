@@ -9,6 +9,7 @@
     describeKey,
     describeValue,
     parseListInput,
+    parseMapInput,
     numberChange,
   } from "./edit-state.js";
 
@@ -160,6 +161,15 @@
         {disabled}
         bind:value={text}
         oninput={() => onchange(parseListInput(text))}
+        class={cx(inputClass, monoClass, css({ minHeight: "64px", resize: "vertical" }))}
+      ></textarea>
+    {:else if field.kind === "map"}
+      <textarea
+        {id}
+        {disabled}
+        bind:value={text}
+        placeholder="namespace ID = path"
+        oninput={() => onchange(parseMapInput(text))}
         class={cx(inputClass, monoClass, css({ minHeight: "64px", resize: "vertical" }))}
       ></textarea>
     {:else if field.kind === "shortcut"}

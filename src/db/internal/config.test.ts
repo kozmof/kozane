@@ -6,6 +6,7 @@ import {
   _resetWorkspaceRootForTest,
   getTaskspaceDefaultDir,
   getTaskspaceNamespaceDirs,
+  getTaskspaceNamespacePaths,
   getUiConfigForRoot,
   getWorkspaceName,
   getWorkspaceUiConfig,
@@ -98,6 +99,25 @@ describe("getTaskspaceNamespaceDirs", () => {
 
     writeConfig({ name: "w", taskspace: { namespaceDirs: "no" } });
     expect(getTaskspaceNamespaceDirs(root)).toBe(true);
+  });
+});
+
+describe("getTaskspaceNamespacePaths", () => {
+  it("defaults to no entries", () => {
+    expect(getTaskspaceNamespacePaths(root)).toEqual({});
+  });
+
+  it("keeps entries with a nonempty path and skips the rest", () => {
+    writeConfig({
+      name: "w",
+      taskspace: { namespacePaths: { "019a": "work/acme", "019b": "", "019c": 7 } },
+    });
+    expect(getTaskspaceNamespacePaths(root)).toEqual({ "019a": "work/acme" });
+  });
+
+  it("ignores a value that is not an object", () => {
+    writeConfig({ name: "w", taskspace: { namespacePaths: ["work"] } });
+    expect(getTaskspaceNamespacePaths(root)).toEqual({});
   });
 });
 

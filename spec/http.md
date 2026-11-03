@@ -389,15 +389,17 @@ Create a taskspace record, directory, and `.taskspace.json` marker.
 Body requires `name` and `scopeId`. The directory is
 `<taskspace.defaultDir>/<namespace>/<name>`, or `<taskspace.defaultDir>/<name>` when
 `taskspace.namespaceDirs` is `false`, with the namespace folder named as for
-`kozane taskspace create`. The directory is claimed atomically.
+`kozane taskspace create`. A namespace listed in `taskspace.namespacePaths` uses
+`<its path>/<name>` instead. The directory is claimed atomically.
 On failure, remove only entries created by this request.
 
 Return `{ id, path, pathKind: "workspace_relative" }`.
 Names must be one path segment, contain no `/`, `\`, or NUL, and not start
 with a dot. External taskspaces require CLI `taskspace create --dir`.
 
-Return 400 for an invalid name, unknown scope, or configured directory outside
-the workspace, 404 for an unknown namespace, 409 for an existing directory,
+Return 400 for an invalid name, unknown scope, configured directory outside
+the workspace, or `taskspace.namespacePaths` key that matches more than one
+namespace, 404 for an unknown namespace, 409 for an existing directory,
 or 503 without a workspace.
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
@@ -406,7 +408,7 @@ Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
 
 A managed directory is renamed on disk too. A directory is managed when Kozane created it:
 its path is workspace-relative and sits in `taskspace.defaultDir`, directly or in a
-namespace folder there, and its
+namespace folder there, or directly in a `taskspace.namespacePaths` directory, and its
 `.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
 follow the creation rules. Other taskspaces, including directories chosen with
 `kozane taskspace create --dir`, change only their label. So does a taskspace whose managed

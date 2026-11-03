@@ -172,6 +172,21 @@ describe("diagnoseConfig", () => {
       ]);
     });
 
+    it("checks taskspace.namespacePaths keys and paths", () => {
+      const withPaths = (namespacePaths: unknown) =>
+        messages({ ...validConfig, taskspace: { ...validConfig.taskspace, namespacePaths } });
+      expect(withPaths({ aa414b7: "work/acme" })).toEqual([]);
+      expect(withPaths(["work"])).toEqual([
+        "taskspace.namespacePaths must be an object of namespace IDs to directories",
+      ]);
+      expect(withPaths({ "My namespace": "work" })).toEqual([
+        'taskspace.namespacePaths key "My namespace" must be a namespace ID, as kozane namespace list shows it',
+      ]);
+      expect(withPaths({ aa414b7: " " })).toEqual([
+        "taskspace.namespacePaths.aa414b7 must be a nonempty directory path",
+      ]);
+    });
+
     it("reports a section that is not an object", () => {
       expect(messages({ ...validConfig, taskspace: [] })).toEqual(["taskspace must be an object"]);
     });

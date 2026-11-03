@@ -155,3 +155,19 @@ export function getTaskspaceNamespaceDirs(root: string): boolean {
   const value = (taskspace as Record<string, unknown>).namespaceDirs;
   return typeof value === "boolean" ? value : DEFAULT_TASKSPACE_NAMESPACE_DIRS;
 }
+
+/**
+ * `taskspace.namespacePaths`, keeping only entries whose value is a nonempty string. Empty
+ * when unset or not an object. `kozane doctor config` reports what is skipped.
+ */
+export function getTaskspaceNamespacePaths(root: string): Record<string, string> {
+  const taskspace = readParsedConfig(root)?.taskspace;
+  if (typeof taskspace !== "object" || taskspace === null) return {};
+  const value = (taskspace as Record<string, unknown>).namespacePaths;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string" && !!entry[1].trim(),
+    ),
+  );
+}
