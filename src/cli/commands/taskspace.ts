@@ -77,6 +77,14 @@ async function scanWithin(
   config: WorkspaceConfig,
   options: ScanOptions,
 ): Promise<void> {
+  // Resolve `--namespace` before any update below, so a typo fails before anything is written.
+  const namespaces = await getAllNamespaces({ db });
+  const namespaceIds = namespaces.map(({ id }) => id);
+  const requestedNamespace =
+    options.reattach && options.namespace
+      ? pickNamespaceId(namespaces, options.namespace)
+      : undefined;
+
   const searchRoots = config.taskspace.searchRoots.map((r) => (isAbsolute(r) ? r : join(root, r)));
 
   const found = scanTaskspaces(searchRoots);
@@ -126,14 +134,6 @@ async function scanWithin(
       updated++;
     }
   }
-
-  // Resolve `--namespace` up front so a typo fails before anything is written.
-  const namespaces = await getAllNamespaces({ db });
-  const namespaceIds = namespaces.map(({ id }) => id);
-  const requestedNamespace =
-    options.reattach && options.namespace
-      ? pickNamespaceId(namespaces, options.namespace)
-      : undefined;
 
   const existingNamespaces = new Set(namespaceIds);
   // Picked from the list above, only when an orphan's namespace has been deleted.

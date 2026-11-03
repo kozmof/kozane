@@ -199,6 +199,28 @@ describe("taskspace CLI flow", () => {
     expect(namespaceOnly.stderr).toContain("--namespace requires --reattach");
   }, 30_000);
 
+  it("writes nothing when --namespace names no namespace", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    const parent = join(root, "taskspaces", "main");
+    renameSync(join(parent, "notes"), join(parent, "moved"));
+
+    const result = runCli(
+      root,
+      "taskspace",
+      "scan",
+      "--apply",
+      "--reattach",
+      "--namespace",
+      "ffff",
+    );
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Namespace not found: ffff");
+    // The moved path was not applied, so a dry run still reports it.
+    expect(cli(root, "taskspace", "scan")).toContain("update 1 moved path");
+  }, 30_000);
+
   describe("reattaching a taskspace whose namespace was deleted", () => {
     /** A workspace with a taskspace in "Client Acme", then that namespace deleted. */
     function orphanedByDelete() {

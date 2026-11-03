@@ -3,7 +3,6 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
-import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants/workspace.js";
 import { readTaskspacePlacement } from "../../lib/taskspace-config.js";
 
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
@@ -137,15 +136,6 @@ export function getDBURL(): string {
   return url;
 }
 
-export function getTaskspaceDefaultDir(root: string): string {
-  const parsed = readParsedConfig(root);
-  if (!parsed) return DEFAULT_TASKSPACE_DIR;
-  const taskspace = parsed.taskspace;
-  if (typeof taskspace !== "object" || taskspace === null) return DEFAULT_TASKSPACE_DIR;
-  const dir = (taskspace as Record<string, unknown>).defaultDir;
-  return typeof dir === "string" && dir ? dir : DEFAULT_TASKSPACE_DIR;
-}
-
 /**
  * The settings that decide where a new taskspace goes, checked by the same rules as the CLI.
  * An invalid one is returned as an issue instead of skipped, since `kozane taskspace create`
@@ -155,20 +145,4 @@ export function getTaskspacePlacementConfig(
   root: string,
 ): ReturnType<typeof readTaskspacePlacement> {
   return readTaskspacePlacement(readParsedConfig(root)?.taskspace);
-}
-
-/**
- * `taskspace.namespacePaths`, keeping only entries whose value is a nonempty string. Empty
- * when unset or not an object. `kozane doctor config` reports what is skipped.
- */
-export function getTaskspaceNamespacePaths(root: string): Record<string, string> {
-  const taskspace = readParsedConfig(root)?.taskspace;
-  if (typeof taskspace !== "object" || taskspace === null) return {};
-  const value = (taskspace as Record<string, unknown>).namespacePaths;
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string" && !!entry[1].trim(),
-    ),
-  );
 }

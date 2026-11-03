@@ -240,6 +240,43 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect(row).toMatchObject({ name: "Renamed label", path: "mine" });
     });
 
+    it("moves a directory created with an empty defaultDir", async () => {
+      // Create puts it at `<root>/<namespace>/<name>`, so rename must treat it as managed.
+      useDefaultDir("");
+      const dir = join(tmpRoot, "Test-Namespace", "solo");
+      mkdirSync(dir, { recursive: true });
+      const id = await addTaskspace({
+        db,
+        namespaceId,
+        name: "solo",
+        path: join("Test-Namespace", "solo"),
+      });
+      writeMarker(dir, id, namespaceId);
+
+      await PATCH(event(db, namespaceId, id, "PATCH", { name: "final" }));
+
+      expect(existsSync(join(tmpRoot, "Test-Namespace", "final"))).toBe(true);
+      expect((await getTaskspace({ db, taskspaceId: id }))?.path).toBe(
+        join("Test-Namespace", "final"),
+      );
+    });
+
+    it("changes only the label when the placement config is invalid", async () => {
+      writeFileSync(
+        join(tmpRoot, ".kozane", "config.json"),
+        JSON.stringify({ name: "test", taskspace: { defaultDir: "tasks", namespaceDirs: "no" } }),
+      );
+      _resetWorkspaceRootForTest();
+
+      await PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" }));
+
+      expect(existsSync(join(tmpRoot, "tasks", "draft", "notes", "a.md"))).toBe(true);
+      expect(await getTaskspace({ db, taskspaceId })).toMatchObject({
+        name: "final",
+        path: join("tasks", "draft"),
+      });
+    });
+
     it("changes only the label of a directory Kozane did not create", async () => {
       // `kozane taskspace create mine --dir src` with `defaultDir` set to `.`.
       useDefaultDir(".");

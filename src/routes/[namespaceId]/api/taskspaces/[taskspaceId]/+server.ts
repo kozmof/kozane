@@ -3,11 +3,7 @@ import { json, error } from "@sveltejs/kit";
 import { deleteTaskspace, getTaskspaceInNamespace, updateTaskspace } from "$db/api/taskspace";
 import { getAllNamespaces, getNamespace } from "$db/api/namespace";
 import { namespaceFolders, type NamespaceRef } from "$lib/server/taskspace-location";
-import {
-  getTaskspaceDefaultDir,
-  getTaskspaceNamespacePaths,
-  getWorkspaceRoot,
-} from "$db/internal/config";
+import { getTaskspacePlacementConfig, getWorkspaceRoot } from "$db/internal/config";
 import { taskspaceNameIssue, type PathKind } from "$lib/constants";
 import { taskspacePathIssue } from "$lib/server/taskspace-path";
 import {
@@ -44,12 +40,16 @@ function managedDirectory(taskspace: TaskspaceRow, namespaces: readonly Namespac
   if (!storedPath || taskspacePathIssue(storedPath, pathKind)) return null;
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
+  // Read the same settings create uses, so a directory Kozane just made is always managed.
+  // An invalid config manages nothing: the label still changes and the directory is kept.
+  const placement = getTaskspacePlacementConfig(root);
+  if (!placement.ok) return null;
   const managed = isManagedTaskspaceDirectory({
     workspaceRoot: root,
     storedPath,
     pathKind,
-    defaultDir: getTaskspaceDefaultDir(root),
-    namespacePaths: Object.values(getTaskspaceNamespacePaths(root)),
+    defaultDir: placement.value.defaultDir,
+    namespacePaths: Object.values(placement.value.namespacePaths),
     namespaceFolders: [...namespaceFolders(namespaces).values()],
   });
   if (!managed) return null;

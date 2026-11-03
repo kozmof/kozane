@@ -4,9 +4,7 @@ import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   _resetWorkspaceRootForTest,
-  getTaskspaceDefaultDir,
   getTaskspacePlacementConfig,
-  getTaskspaceNamespacePaths,
   getUiConfigForRoot,
   getWorkspaceName,
   getWorkspaceUiConfig,
@@ -73,22 +71,18 @@ describe("getWorkspaceUiConfig", () => {
   });
 });
 
-describe("getTaskspaceDefaultDir", () => {
-  it("defaults to the taskspaces directory", () => {
-    expect(getTaskspaceDefaultDir(root)).toBe("taskspaces");
-  });
-
-  it("reads the configured directory, and re-reads it after an edit", () => {
+describe("getTaskspacePlacementConfig", () => {
+  it("re-reads the config after an edit", () => {
+    const defaultDir = () =>
+      (getTaskspacePlacementConfig(root) as { value: { defaultDir: string } }).value.defaultDir;
     writeConfig({ name: "w", taskspace: { defaultDir: "spaces" } });
-    expect(getTaskspaceDefaultDir(root)).toBe("spaces");
+    expect(defaultDir()).toBe("spaces");
 
     writeConfig({ name: "w", taskspace: { defaultDir: "work" } });
 
-    expect(getTaskspaceDefaultDir(root)).toBe("work");
+    expect(defaultDir()).toBe("work");
   });
-});
 
-describe("getTaskspacePlacementConfig", () => {
   it("uses the defaults for fields that are left out", () => {
     expect(getTaskspacePlacementConfig(root)).toEqual({
       ok: true,
@@ -120,25 +114,6 @@ describe("getTaskspacePlacementConfig", () => {
 
     writeConfig({ name: "w", taskspace: { namespacePaths: { "019a": "work", "019b": "" } } });
     expect(getTaskspacePlacementConfig(root)).toMatchObject({ ok: false });
-  });
-});
-
-describe("getTaskspaceNamespacePaths", () => {
-  it("defaults to no entries", () => {
-    expect(getTaskspaceNamespacePaths(root)).toEqual({});
-  });
-
-  it("keeps entries with a nonempty path and skips the rest", () => {
-    writeConfig({
-      name: "w",
-      taskspace: { namespacePaths: { "019a": "work/acme", "019b": "", "019c": 7 } },
-    });
-    expect(getTaskspaceNamespacePaths(root)).toEqual({ "019a": "work/acme" });
-  });
-
-  it("ignores a value that is not an object", () => {
-    writeConfig({ name: "w", taskspace: { namespacePaths: ["work"] } });
-    expect(getTaskspaceNamespacePaths(root)).toEqual({});
   });
 });
 
