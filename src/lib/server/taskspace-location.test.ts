@@ -41,6 +41,22 @@ describe("namespaceDirName", () => {
     expect(namespaceDirName("CON", "id")).toBe("CON-");
     expect(namespaceDirName("lpt1", "id")).toBe("lpt1-");
   });
+
+  it("avoids reserved names that have an extension", () => {
+    expect(namespaceDirName("con.txt", "id")).toBe("con-.txt");
+    expect(namespaceDirName("NUL.tar.gz", "id")).toBe("NUL-.tar.gz");
+    expect(namespaceDirName("console.log", "id")).toBe("console.log");
+  });
+
+  it("gives the same folder for composed and decomposed Unicode", () => {
+    expect(namespaceDirName("Café", "id")).toBe(namespaceDirName("Café", "id"));
+  });
+
+  it("caps long names by character without splitting one", () => {
+    expect(namespaceDirName("a".repeat(100), "id")).toBe("a".repeat(60));
+    expect([...namespaceDirName("😀".repeat(100), "id")]).toHaveLength(60);
+    expect(namespaceDirName(`${"a".repeat(59)}. b`, "id")).toBe("a".repeat(59));
+  });
 });
 
 describe("namespacePathFor", () => {

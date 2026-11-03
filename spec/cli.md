@@ -773,19 +773,35 @@ either `--scope` or `--no-scope`.
 Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<namespace>/<name>`, where
 `<namespace>` is the owning namespace's name. With the defaults, that is
 `<workspaceRoot>/taskspaces/<namespace>/<name>`. Set `taskspace.namespaceDirs` to `false` to
-leave out the namespace folder. In the folder name, characters not allowed in file names
-(`/ \ : * ? " < > |` and control characters) become `-`, and leading dots and trailing dots
-and spaces are dropped. Each run of spaces inside the name becomes one `-`, so `My Project`
-becomes `My-Project`. A name with nothing left uses the namespace ID. When two namespaces would get the same
-folder, ignoring case, the oldest keeps it and the others get their short ID added, such as
-`work-5c3d9e1`. Renaming a namespace does not move folders made earlier.
+leave out the namespace folder.
+
+`namespaceDirs` defaults to `true` even in a config written before the key existed. A
+workspace whose config sets `defaultDir` but not `namespaceDirs` therefore puts its new
+taskspaces in namespace folders from now on. With `"defaultDir": "."`, those folders are
+created at the workspace root. Existing taskspaces stay where they are. Set
+`"namespaceDirs": false` to keep the old layout.
+
+In the folder name, the namespace name is put in Unicode NFC form, and characters not
+allowed in file names (`/ \ : * ? " < > |` and control characters) become `-`. Leading dots
+and trailing dots and spaces are dropped. Each run of spaces inside the name becomes one `-`,
+so `My Project` becomes `My-Project`. Names are cut to 60 characters. A name Windows
+reserves, such as `CON` or `con.txt`, gets a `-` after its base name: `CON-`, `con-.txt`. A
+name with nothing left uses the namespace ID. When two namespaces would get the same folder,
+ignoring case, the oldest keeps it and the others get their short ID added, such as
+`work-5c3d9e1`.
+
+Folder names are worked out from the current namespaces each time. Renaming a namespace, or
+deleting the older of two whose names clashed, changes the folder that later taskspaces go
+in. Directories made in the old folder are not moved. They keep working, but rename and
+delete from the browser leave them on disk.
 
 To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
 taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever
 `defaultDir` and `namespaceDirs` say. Keys are namespace IDs, either the short ID
 `kozane namespace list` prints or the full ID, matched as `--namespace` matches them. The
 longest matching key wins. A key that matches more than one namespace stops the create with an error naming
-the full ID to use instead. Paths are relative to the workspace root or absolute.
+the full ID to use instead. Paths are relative to the workspace root or absolute. A path
+outside the workspace root works here, but the browser refuses to create taskspaces there.
 
 ```json
 "namespacePaths": {

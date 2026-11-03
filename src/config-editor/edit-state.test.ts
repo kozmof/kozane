@@ -95,6 +95,13 @@ describe("input helpers", () => {
     expect(controlText({ ...zoom, kind: "map" }, { "019a": "work/acme" })).toBe("019a = work/acme");
   });
 
+  it("keeps a repeated map key so saving reports it", () => {
+    expect(parseMapInput("019a = one\n019a = two\n")).toEqual({
+      "019a": "one",
+      "019a (duplicate)": "two",
+    });
+  });
+
   it("describes values the way the page prints them", () => {
     expect(describeValue(vim, true)).toBe("on");
     expect(describeValue({ ...zoom, kind: "shortcut" }, " ")).toBe("Space");

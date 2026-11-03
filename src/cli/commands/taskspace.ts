@@ -137,14 +137,14 @@ async function scanWithin(
 
   const existingNamespaces = new Set(namespaceIds);
   // Picked from the list above, only when an orphan's namespace has been deleted.
-  const workspaceDefault = async () => pickNamespaceId(namespaces);
+  const workspaceDefault = () => pickNamespaceId(namespaces);
 
   let failed = 0;
   for (const taskspace of diff.orphans) {
     console.log(`  orphan  ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}`);
     if (options.apply && options.reattach) {
       try {
-        const placement = await reattachNamespace(taskspace.namespaceId, {
+        const placement = reattachNamespace(taskspace.namespaceId, {
           requested: requestedNamespace,
           existing: existingNamespaces,
           workspaceDefault,
@@ -248,7 +248,7 @@ type Placement = {
  * - A marker naming a deleted namespace falls back to the workspace default. Inserting the
  *   deleted ID would break the foreign key and stop the whole scan.
  */
-async function reattachNamespace(
+function reattachNamespace(
   markerNamespaceId: string,
   {
     requested,
@@ -258,14 +258,14 @@ async function reattachNamespace(
     requested: string | undefined;
     existing: ReadonlySet<string>;
     /** The workspace's default namespace. Throws when there is none. */
-    workspaceDefault: () => Promise<string>;
+    workspaceDefault: () => string;
   },
-): Promise<Placement> {
+): Placement {
   if (requested) return { namespaceId: requested, reason: "requested" };
   if (!markerNamespaceId) return { namespaceId: undefined, reason: "none" };
   if (existing.has(markerNamespaceId)) return { namespaceId: markerNamespaceId, reason: "marker" };
   try {
-    return { namespaceId: await workspaceDefault(), reason: "missing" };
+    return { namespaceId: workspaceDefault(), reason: "missing" };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
     throw new Error(
@@ -320,7 +320,14 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       targetDir = resolve(options.dir);
     } else {
       // An ambiguous `namespacePaths` key throws, and the command wrapper reports it.
-      const parentDir = taskspaceParentDir({ ...config.taskspace, namespaceId, namespaces });
+      const { defaultDir, namespaceDirs, namespacePaths } = config.taskspace;
+      const parentDir = taskspaceParentDir({
+        defaultDir,
+        namespaceDirs,
+        namespacePaths,
+        namespaceId,
+        namespaces,
+      });
       targetDir = resolve(root, parentDir, name);
     }
 

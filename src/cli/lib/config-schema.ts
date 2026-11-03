@@ -4,6 +4,7 @@ import {
   DEFAULT_TASKSPACE_DIR,
   DEFAULT_TASKSPACE_NAMESPACE_DIRS,
 } from "../../lib/constants.js";
+import { isPlainObject } from "../../lib/plain-object.js";
 import {
   defaultDirIssue,
   namespaceDirsIssue,
@@ -172,10 +173,6 @@ export function optionalSectionDefaults(): SectionDefaults[] {
 
 function error(path: string, message: string, found?: unknown): ConfigIssue {
   return { path, severity: "error", message, found };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Compute edit distance up to `limit`, stopping early for distant keys. */

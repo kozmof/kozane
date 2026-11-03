@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { isPlainObject } from "../../lib/plain-object.js";
 import { type ConfigIssue, DEFAULT_UI_CONFIG, UI_KNOWN_KEYS } from "../../lib/ui-config.js";
 import { CONFIG_FILE, KOZANE_DIR } from "./config.js";
 import {
@@ -30,10 +31,6 @@ export function configPath(workspaceRoot: string): string {
 
 function fileError(path: string, message: string): ConfigReport {
   return { path, issues: [{ path: "", severity: "error", message }], notes: [] };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function show(value: unknown): string {

@@ -1,5 +1,6 @@
 import type { ConfigSnapshot } from "../cli/lib/config-editor/handler.js";
 import type { FieldSpec } from "../cli/lib/config-editor/fields.js";
+import { isPlainObject } from "../lib/plain-object.js";
 
 /**
  * Pending edits keyed by field path. `null` removes the key from the file so its default
@@ -80,27 +81,25 @@ export function describeValue(field: FieldSpec, value: unknown): string {
   if (field.kind === "shortcut") return describeKey(String(value));
   if (field.kind === "list") return Array.isArray(value) ? value.join(", ") : String(value);
   if (field.kind === "map") {
-    const entries = isRecord(value) ? Object.entries(value) : [];
+    const entries = isPlainObject(value) ? Object.entries(value) : [];
     return entries.length ? entries.map(([k, v]) => `${k} = ${String(v)}`).join(", ") : "(none)";
   }
   return String(value);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * One `key = value` entry per non-blank line, split at the first `=`. A line without `=`
- * becomes a key with an empty value, so saving reports it rather than dropping it.
+ * becomes a key with an empty value, and a key given twice comes back as
+ * `<key> (duplicate)`, so saving reports either one rather than dropping it.
  */
 export function parseMapInput(text: string): Record<string, string> {
   const map: Record<string, string> = {};
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const at = line.indexOf("=");
-    if (at < 0) map[line.trim()] = "";
-    else map[line.slice(0, at).trim()] = line.slice(at + 1).trim();
+    const key = (at < 0 ? line : line.slice(0, at)).trim();
+    const value = at < 0 ? "" : line.slice(at + 1).trim();
+    map[key in map ? `${key} (duplicate)` : key] = value;
   }
   return map;
 }
@@ -126,7 +125,7 @@ export function parseListInput(text: string): string[] {
 export function controlText(field: FieldSpec, value: unknown): string {
   if (field.kind === "list") return Array.isArray(value) ? value.join("\n") : "";
   if (field.kind === "map")
-    return isRecord(value)
+    return isPlainObject(value)
       ? Object.entries(value)
           .map(([k, v]) => `${k} = ${String(v)}`)
           .join("\n")

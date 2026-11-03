@@ -2,7 +2,7 @@ import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { deleteTaskspace, getTaskspaceInNamespace, updateTaskspace } from "$db/api/taskspace";
 import { getAllNamespaces, getNamespace } from "$db/api/namespace";
-import { namespaceFolders, type NamespaceRef } from "$lib/server/taskspace-location";
+import { namespaceFolders } from "$lib/server/taskspace-location";
 import { getTaskspacePlacementConfig, getWorkspaceRoot } from "$db/internal/config";
 import { taskspaceNameIssue, type PathKind } from "$lib/constants";
 import { taskspacePathIssue } from "$lib/server/taskspace-path";
@@ -35,15 +35,19 @@ type TaskspaceRow = { id: string; path: string | null; pathKind: PathKind };
  * Where the browser may change this taskspace's directory on disk, with who owns what is
  * there, or null when the path is not where Kozane creates taskspaces.
  */
-function managedDirectory(taskspace: TaskspaceRow, namespaces: readonly NamespaceRef[]) {
+async function managedDirectory(db: App.Locals["db"], taskspace: TaskspaceRow) {
   const { path: storedPath, pathKind } = taskspace;
   if (!storedPath || taskspacePathIssue(storedPath, pathKind)) return null;
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
+  // Kozane only manages directories it stored relative to the workspace.
+  if (pathKind !== "workspace_relative") return null;
   // Read the same settings create uses, so a directory Kozane just made is always managed.
   // An invalid config manages nothing: the label still changes and the directory is kept.
   const placement = getTaskspacePlacementConfig(root);
   if (!placement.ok) return null;
+  // Loaded only here, after the cheap checks above have passed.
+  const namespaces = await getAllNamespaces({ db });
   const managed = isManagedTaskspaceDirectory({
     workspaceRoot: root,
     storedPath,
@@ -83,7 +87,7 @@ async function rename(locals: App.Locals, params: TaskspaceParams, name: string)
 
   if (name === taskspace.name) return reply(taskspace.path);
 
-  const managed = managedDirectory(taskspace, await getAllNamespaces({ db }));
+  const managed = await managedDirectory(db, taskspace);
   // A missing directory has nothing to move, so only the label changes, as DELETE allows.
   if (managed?.claim !== "owned") {
     await updateTaskspace({ db, taskspaceId: taskspace.id, name });
@@ -135,7 +139,7 @@ export const DELETE: RequestHandler = apiHandler(({ locals, params }) =>
 async function remove(locals: App.Locals, params: TaskspaceParams) {
   const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
-  const managed = managedDirectory(taskspace, await getAllNamespaces({ db }));
+  const managed = await managedDirectory(db, taskspace);
 
   let directory: TaskspaceDirectoryOutcome = "kept";
   if (managed?.claim === "missing") directory = "missing";

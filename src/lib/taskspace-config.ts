@@ -1,19 +1,20 @@
 import { DEFAULT_TASKSPACE_DIR, DEFAULT_TASKSPACE_NAMESPACE_DIRS } from "./constants/workspace.js";
+import { isPlainObject } from "./plain-object.js";
 
 /**
  * The `taskspace` settings that decide where a new taskspace goes. The CLI's config schema
  * and the server both check them with the functions here, so `kozane taskspace create` and
- * the browser always agree on the directory, or both refuse the same config.
+ * the browser always pick the same directory, or both refuse the same config.
+ *
+ * One difference is deliberate: the browser only creates taskspaces inside the workspace
+ * root. A `defaultDir` or `namespacePaths` entry that points outside it works with
+ * `kozane taskspace create`, but the browser refuses it.
  */
 export type TaskspacePlacement = {
   defaultDir: string;
   namespaceDirs: boolean;
   namespacePaths: Record<string, string>;
 };
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 export function defaultDirIssue(value: unknown): string | null {
   return typeof value === "string" ? null : "taskspace.defaultDir must be a string";
@@ -61,9 +62,13 @@ export function readTaskspacePlacement(
   return {
     ok: true,
     value: {
-      defaultDir: (defaultDir as string | undefined) ?? DEFAULT_TASKSPACE_DIR,
-      namespaceDirs: (namespaceDirs as boolean | undefined) ?? DEFAULT_TASKSPACE_NAMESPACE_DIRS,
-      namespacePaths: (namespacePaths as Record<string, string> | undefined) ?? {},
+      defaultDir: typeof defaultDir === "string" ? defaultDir : DEFAULT_TASKSPACE_DIR,
+      namespaceDirs:
+        typeof namespaceDirs === "boolean" ? namespaceDirs : DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+      // namespacePathsIssue has checked every value is a string.
+      namespacePaths: isPlainObject(namespacePaths)
+        ? (namespacePaths as Record<string, string>)
+        : {},
     },
   };
 }
