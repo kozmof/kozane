@@ -3,7 +3,10 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
-import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants/workspace.js";
+import {
+  DEFAULT_TASKSPACE_DIR,
+  DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+} from "../../lib/constants/workspace.js";
 
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
   if (!startDir) return null;
@@ -143,4 +146,12 @@ export function getTaskspaceDefaultDir(root: string): string {
   if (typeof taskspace !== "object" || taskspace === null) return DEFAULT_TASKSPACE_DIR;
   const dir = (taskspace as Record<string, unknown>).defaultDir;
   return typeof dir === "string" && dir ? dir : DEFAULT_TASKSPACE_DIR;
+}
+
+/** `taskspace.namespaceDirs`, or its default when unset or not a boolean. */
+export function getTaskspaceNamespaceDirs(root: string): boolean {
+  const taskspace = readParsedConfig(root)?.taskspace;
+  if (typeof taskspace !== "object" || taskspace === null) return DEFAULT_TASKSPACE_NAMESPACE_DIRS;
+  const value = (taskspace as Record<string, unknown>).namespaceDirs;
+  return typeof value === "boolean" ? value : DEFAULT_TASKSPACE_NAMESPACE_DIRS;
 }

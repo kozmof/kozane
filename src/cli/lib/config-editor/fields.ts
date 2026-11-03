@@ -1,4 +1,8 @@
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../../lib/constants.js";
+import {
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+  DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+} from "../../../lib/constants.js";
 import {
   DEFAULT_UI_CONFIG,
   NEW_CARD_PLACEMENTS,
@@ -202,9 +206,18 @@ export function configFields(): FieldSpec[] {
       path: "taskspace.defaultDir",
       group: "Taskspace",
       label: "Default directory",
-      help: 'Directory for new taskspaces. Each taskspace gets a folder named after it here. Relative paths start at the workspace directory. Defaults to "taskspaces".',
+      help: 'Directory for new taskspaces. Relative paths start at the workspace directory. Defaults to "taskspaces".',
       kind: "string",
       required: true,
+    },
+    {
+      path: "taskspace.namespaceDirs",
+      group: "Taskspace",
+      label: "Folder per namespace",
+      help: "Put new taskspaces in a folder named after their namespace inside the default directory, such as taskspaces/My-namespace/notes. Spaces in the namespace name become dashes. Turn off to put them directly in the default directory.",
+      kind: "boolean",
+      defaultValue: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+      required: false,
     },
     {
       path: "taskspace.searchRoots",

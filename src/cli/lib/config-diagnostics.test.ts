@@ -157,13 +157,14 @@ describe("diagnoseConfig", () => {
         messages({
           name: 7,
           server: { host: 1, port: 70000 },
-          taskspace: { defaultDir: ".", searchRoots: ["a", 2] },
+          taskspace: { defaultDir: ".", namespaceDirs: "yes", searchRoots: ["a", 2] },
           ui: { defaultZoom: 42, defaultShowFooter: "yes", newCardPlacement: "spiral" },
         }),
       ).toEqual([
         "name must be a string",
         "server.host must be a string",
         "server.port must be between 0 and 65535",
+        "taskspace.namespaceDirs must be true or false",
         "taskspace.searchRoots must be an array of strings",
         "ui.defaultZoom must be between 0.1 and 10",
         "ui.defaultShowFooter must be a boolean",

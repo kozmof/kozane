@@ -203,7 +203,7 @@ describe("kozane card list --sort", () => {
     await seedThreeCards(root);
     await addEveryCardToScope(root, scopeId);
     cli(root, "taskspace", "create", "reading", "--scope", scopeId);
-    const taskspaceDir = join(root, "taskspaces", "reading");
+    const taskspaceDir = join(root, "taskspaces", "main", "reading");
 
     expect(listed(taskspaceDir, "--sort", "gap")).toEqual(BY_GAP);
     expect(listed(taskspaceDir, "--sort", "created", "--reverse")).toEqual(
@@ -222,7 +222,7 @@ describe("kozane card list --sort", () => {
     cli(root, "init");
     cli(root, "taskspace", "create", "loose", "--no-scope");
     await seedThreeCards(root, await onlyId(root, "taskspace"));
-    const taskspaceDir = join(root, "taskspaces", "loose");
+    const taskspaceDir = join(root, "taskspaces", "main", "loose");
 
     expect(listed(taskspaceDir, "--sort", "updated")).toEqual(BY_UPDATED);
     expect(listed(taskspaceDir, "--sort", "gap", "--reverse")).toEqual([...BY_GAP].reverse());

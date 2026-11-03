@@ -74,7 +74,7 @@ describe("tag CLI flow", () => {
     cli(root, "card", "add", "caching work :perf:cache");
     cli(root, "taskspace", "create", "notes", "--no-scope");
     writeFileSync(
-      join(root, "taskspaces", "notes", "README.md"),
+      join(root, "taskspaces", "main", "notes", "README.md"),
       "intro\nSee :perf:cache for the plan.\n",
     );
 
@@ -113,7 +113,7 @@ describe("tag CLI flow", () => {
     const root = tempWorkspace();
     cli(root, "init");
     cli(root, "taskspace", "create", "notes", "--no-scope");
-    writeFileSync(join(root, "taskspaces", "notes", "README.md"), "See :perf here.\n");
+    writeFileSync(join(root, "taskspaces", "main", "notes", "README.md"), "See :perf here.\n");
 
     expect(cli(root, "tag", "show", "perf")).toContain("README.md");
     expect(cli(root, "tag", "show", "perf", "--no-files")).toContain("No cards or files");
@@ -125,7 +125,7 @@ describe("tag CLI flow", () => {
     cli(root, "taskspace", "create", "notes", "--no-scope");
     // Past TAG_HITS_SHOWN_MAX, on lines of one file, so each is its own row.
     const lines = Array.from({ length: 205 }, (_, i) => `line ${i} :everywhere`).join("\n");
-    writeFileSync(join(root, "taskspaces", "notes", "README.md"), `${lines}\n`);
+    writeFileSync(join(root, "taskspaces", "main", "notes", "README.md"), `${lines}\n`);
 
     const output = cli(root, "tag", "show", "everywhere");
 
@@ -142,8 +142,8 @@ describe("tag CLI flow", () => {
     cli(root, "init");
     cli(root, "taskspace", "create", "notes", "--no-scope");
     cli(root, "taskspace", "create", "drafts", "--no-scope");
-    writeFileSync(join(root, "taskspaces", "notes", "README.md"), "See :perf here.\n");
-    writeFileSync(join(root, "taskspaces", "drafts", "README.md"), "Also :perf here.\n");
+    writeFileSync(join(root, "taskspaces", "main", "notes", "README.md"), "See :perf here.\n");
+    writeFileSync(join(root, "taskspaces", "main", "drafts", "README.md"), "Also :perf here.\n");
 
     const output = cli(root, "tag", "show", "perf");
 
@@ -162,7 +162,7 @@ describe("tag CLI flow", () => {
     cli(root, "init");
     cli(root, "card", "add", "caching work :perf");
     cli(root, "taskspace", "create", "notes", "--no-scope");
-    rmSync(join(root, "taskspaces", "notes"), { recursive: true, force: true });
+    rmSync(join(root, "taskspaces", "main", "notes"), { recursive: true, force: true });
 
     const output = cli(root, "tag", "list");
 

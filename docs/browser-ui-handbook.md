@@ -268,7 +268,8 @@ Each delete asks first.
 - Deleting a scope removes it from this board. A scope that still has
   taskspaces cannot be deleted.
 - Deleting a taskspace deletes its directory and everything in it, when Kozane
-  created that directory in `taskspace.defaultDir`. Its `.taskspace.json`
+  created that directory in `taskspace.defaultDir` (by default
+  `taskspaces/<namespace>/<name>`). Its `.taskspace.json`
   records this as `ownsDirectory: true`. Other directories, such as ones chosen
   with `kozane taskspace create --dir` or ones that already existed, stay on
   disk.

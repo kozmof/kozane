@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   _resetWorkspaceRootForTest,
   getTaskspaceDefaultDir,
+  getTaskspaceNamespaceDirs,
   getUiConfigForRoot,
   getWorkspaceName,
   getWorkspaceUiConfig,
@@ -83,6 +84,20 @@ describe("getTaskspaceDefaultDir", () => {
     writeConfig({ name: "w", taskspace: { defaultDir: "work" } });
 
     expect(getTaskspaceDefaultDir(root)).toBe("work");
+  });
+});
+
+describe("getTaskspaceNamespaceDirs", () => {
+  it("defaults to on", () => {
+    expect(getTaskspaceNamespaceDirs(root)).toBe(true);
+  });
+
+  it("reads false, and ignores a value that is not a boolean", () => {
+    writeConfig({ name: "w", taskspace: { namespaceDirs: false } });
+    expect(getTaskspaceNamespaceDirs(root)).toBe(false);
+
+    writeConfig({ name: "w", taskspace: { namespaceDirs: "no" } });
+    expect(getTaskspaceNamespaceDirs(root)).toBe(true);
   });
 });
 

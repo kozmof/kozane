@@ -123,7 +123,7 @@ describe("scoped card taskspace CLI flow", () => {
     expect(listed).toContain("Third thought");
 
     cli(root, "taskspace", "create", "squashed", "--scope", scopeId, "--namespace", namespaceId);
-    const scoped = cli(join(root, "taskspaces", "squashed"), "card", "list");
+    const scoped = cli(join(root, "taskspaces", "Squash-namespace", "squashed"), "card", "list");
     expect(scoped).toContain("First thought");
     expect(scoped).toContain("第二の考え");
     expect(scoped).toContain("Third thought");
@@ -150,7 +150,7 @@ describe("scoped card taskspace CLI flow", () => {
       namespaceId,
     );
 
-    const taskspaceDir = join(root, "taskspaces", "scope-taskspace");
+    const taskspaceDir = join(root, "taskspaces", "E2E-namespace", "scope-taskspace");
     expect(existsSync(join(taskspaceDir, ".taskspace.json"))).toBe(true);
     expect(existsSync(join(taskspaceDir, "cards.md"))).toBe(false);
 

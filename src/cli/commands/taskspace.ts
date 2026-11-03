@@ -21,7 +21,8 @@ import {
   getAllTaskspaces,
   getTaskspacesInNamespace,
 } from "../../db/api/taskspace.js";
-import { getAllNamespaces } from "../../db/api/namespace.js";
+import { getAllNamespaces, getNamespace } from "../../db/api/namespace.js";
+import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
 
@@ -197,9 +198,21 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       console.error(`Error: ${nameIssue}. Use --dir to choose the directory yourself.`);
       process.exit(1);
     }
-    const targetDir = options.dir
-      ? resolve(options.dir)
-      : resolve(root, config.taskspace.defaultDir, name);
+    const namespaceId = await resolveNamespaceId(db, options.namespace);
+
+    let targetDir: string;
+    if (options.dir) {
+      targetDir = resolve(options.dir);
+    } else {
+      const namespace = await getNamespace({ db, namespaceId });
+      if (!namespace) throw new Error(`Namespace not found: ${namespaceId}`);
+      const parentDir = taskspaceParentDir({
+        defaultDir: config.taskspace.defaultDir,
+        namespaceDirs: config.taskspace.namespaceDirs,
+        namespace,
+      });
+      targetDir = resolve(root, parentDir, name);
+    }
 
     if (existsSync(targetDir)) {
       const existingMarker = join(targetDir, TASKSPACE_MARKER_FILE);
@@ -219,8 +232,6 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       !isAbsolute(fromRoot);
     const pathKind = insideRoot ? ("workspace_relative" as const) : ("absolute" as const);
     const storedPath = insideRoot ? fromRoot : targetDir;
-
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
 
     const id = await addTaskspace({
       db,

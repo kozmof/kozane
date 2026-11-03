@@ -18,9 +18,9 @@ import { TaskspaceFilesError } from "./taskspace-files.js";
  * Renaming and deleting a taskspace's own directory from the browser.
  *
  * Only a directory Kozane made itself is touched. Its path is stored relative to the
- * workspace and sits directly in the configured `taskspace.defaultDir`, and its
- * `.taskspace.json` names the taskspace and says `ownsDirectory: true`. The path alone is not
- * enough: `defaultDir` can be set to `.`, so `kozane taskspace create --dir src` would
+ * workspace and sits in the configured `taskspace.defaultDir`, directly or in a namespace
+ * folder there, and its `.taskspace.json` names the taskspace and says `ownsDirectory: true`.
+ * The path alone is not enough: `defaultDir` can be set to `.`, so `kozane taskspace create --dir src` would
  * otherwise put the user's own `src` in reach. Any other directory belongs to the user, so
  * renaming changes only the label and deleting keeps the directory.
  */
@@ -47,7 +47,12 @@ export function isManagedTaskspaceDirectory({
   defaultDir,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
-  return dirname(resolve(workspaceRoot, storedPath)) === resolve(workspaceRoot, defaultDir);
+  const parent = dirname(resolve(workspaceRoot, storedPath));
+  const base = resolve(workspaceRoot, defaultDir);
+  // Directly in `defaultDir`, or in a namespace folder inside it. Both are accepted whatever
+  // `taskspace.namespaceDirs` says now, so turning it on or off, or renaming a namespace,
+  // keeps directories made earlier manageable.
+  return parent === base || dirname(parent) === base;
 }
 
 /**

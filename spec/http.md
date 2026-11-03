@@ -386,7 +386,10 @@ not this namespace's, or a card that is not stored in an inventory.
 ### `POST /[namespaceId]/api/taskspaces`
 
 Create a taskspace record, directory, and `.taskspace.json` marker.
-Body requires `name` and `scopeId`. The directory is claimed atomically.
+Body requires `name` and `scopeId`. The directory is
+`<taskspace.defaultDir>/<namespace>/<name>`, or `<taskspace.defaultDir>/<name>` when
+`taskspace.namespaceDirs` is `false`, with the namespace folder named as for
+`kozane taskspace create`. The directory is claimed atomically.
 On failure, remove only entries created by this request.
 
 Return `{ id, path, pathKind: "workspace_relative" }`.
@@ -402,7 +405,8 @@ or 503 without a workspace.
 Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
 
 A managed directory is renamed on disk too. A directory is managed when Kozane created it:
-its path is workspace-relative and sits directly in `taskspace.defaultDir`, and its
+its path is workspace-relative and sits in `taskspace.defaultDir`, directly or in a
+namespace folder there, and its
 `.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
 follow the creation rules. Other taskspaces, including directories chosen with
 `kozane taskspace create --dir`, change only their label. So does a taskspace whose managed

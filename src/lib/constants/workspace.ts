@@ -17,6 +17,12 @@ export type PathKind = (typeof PATH_KINDS)[number];
  */
 export const DEFAULT_TASKSPACE_DIR = "taskspaces";
 
+/**
+ * Default `taskspace.namespaceDirs`. When on, new taskspaces go in a folder named after their
+ * namespace: `<root>/taskspaces/<namespace>/<name>`.
+ */
+export const DEFAULT_TASKSPACE_NAMESPACE_DIRS = true;
+
 /** Name of the default layer every namespace is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
 /** Name of the default partition every namespace is created with. */

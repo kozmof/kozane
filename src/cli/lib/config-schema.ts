@@ -2,6 +2,7 @@ import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
   DEFAULT_TASKSPACE_DIR,
+  DEFAULT_TASKSPACE_NAMESPACE_DIRS,
 } from "../../lib/constants.js";
 import {
   type ConfigIssue,
@@ -20,6 +21,8 @@ export type WorkspaceConfig = {
   };
   taskspace: {
     defaultDir: string;
+    /** Put each namespace's new taskspaces in a folder named after it under `defaultDir`. */
+    namespaceDirs: boolean;
     searchRoots: string[];
   };
   ui?: Partial<UiConfig>;
@@ -38,6 +41,8 @@ type FieldRule = {
   /** Value used when the field is absent, or present but invalid. */
   fallback: unknown;
   check: (value: unknown) => string | null;
+  /** May be left out even in a required section. */
+  optional?: boolean;
 };
 
 type FieldGroup = {
@@ -94,6 +99,14 @@ const FIELD_GROUPS: FieldGroup[] = [
     rules: [
       stringRule("taskspace.defaultDir", "defaultDir", DEFAULT_TASKSPACE_DIR),
       {
+        path: "taskspace.namespaceDirs",
+        key: "namespaceDirs",
+        fallback: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
+        optional: true,
+        check: (value) =>
+          typeof value === "boolean" ? null : "taskspace.namespaceDirs must be true or false",
+      },
+      {
         path: "taskspace.searchRoots",
         key: "searchRoots",
         fallback: ["."],
@@ -110,7 +123,7 @@ export const TOP_LEVEL_KEYS = ["name", "server", "taskspace", "ui"];
 
 export const SECTION_KEYS: Record<SectionName, string[]> = {
   server: ["host", "port"],
-  taskspace: ["defaultDir", "searchRoots"],
+  taskspace: ["defaultDir", "namespaceDirs", "searchRoots"],
 };
 
 /** Allowed configuration keys grouped by their parent's dotted path. */
@@ -229,7 +242,7 @@ export function validateWorkspaceConfig(parsed: unknown): ValidationResult<Works
       if (value === undefined) {
         // Missing optional fields are valid. Missing required fields and sections rejected
         // above still need errors.
-        if (group.required && raw !== undefined) {
+        if (group.required && !rule.optional && raw !== undefined) {
           issues.push(error(rule.path, `${rule.path} is missing`));
         }
         resolved.set(rule.path, rule.fallback);
@@ -271,6 +284,7 @@ function buildConfig(
     },
     taskspace: {
       defaultDir: field("taskspace.defaultDir", DEFAULT_TASKSPACE_DIR),
+      namespaceDirs: field("taskspace.namespaceDirs", DEFAULT_TASKSPACE_NAMESPACE_DIRS),
       searchRoots: field<string[]>("taskspace.searchRoots", ["."]),
     },
     ...(ui !== undefined && { ui }),

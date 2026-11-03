@@ -7,6 +7,7 @@ import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
   DEFAULT_TASKSPACE_DIR,
+  DEFAULT_TASKSPACE_NAMESPACE_DIRS,
 } from "../../lib/constants.js";
 import { type UiConfig, DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
 import { type WorkspaceConfig, validateWorkspaceConfig } from "./config-schema.js";
@@ -25,6 +26,7 @@ export function defaultConfig(name: string): WorkspaceConfig {
     server: { host: DEFAULT_SERVER_HOST, port: DEFAULT_SERVER_PORT },
     taskspace: {
       defaultDir: DEFAULT_TASKSPACE_DIR,
+      namespaceDirs: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
       searchRoots: ["."],
     },
     ui: { ...DEFAULT_UI_CONFIG },

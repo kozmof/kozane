@@ -762,10 +762,17 @@ kozane taskspace scan [--apply] [--reattach] [--cleanup]
 Create a database record, target directory, and `.taskspace.json` identity marker. Require
 either `--scope` or `--no-scope`.
 
-Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<name>`. `defaultDir` is
-`taskspaces` unless configured, so the default is `<workspaceRoot>/taskspaces/<name>`.
-The name must then be one path segment,
-contain no `/`, `\`, or NUL, not start with a dot, and not start or end with whitespace.
+Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<namespace>/<name>`, where
+`<namespace>` is the owning namespace's name. With the defaults, that is
+`<workspaceRoot>/taskspaces/<namespace>/<name>`. Set `taskspace.namespaceDirs` to `false` to
+leave out the namespace folder. In the folder name, characters not allowed in file names
+(`/ \ : * ? " < > |` and control characters) become `-`, and leading dots and trailing dots
+and spaces are dropped. Each run of spaces inside the name becomes one `-`, so `My Project`
+becomes `My-Project`. A name with nothing left uses the namespace ID. Renaming a namespace
+does not move folders made earlier.
+
+The taskspace name must then be one path segment, contain no `/`, `\`, or NUL, not start
+with a dot, and not start or end with whitespace.
 With `--dir`, the name is only a label. Store internal paths relative to the workspace and
 external paths as absolute.
 
@@ -797,6 +804,7 @@ Other keys fall back to built-in defaults individually.
   },
   "taskspace": {
     "defaultDir": "taskspaces",
+    "namespaceDirs": true,
     "searchRoots": ["."]
   },
   "ui": {

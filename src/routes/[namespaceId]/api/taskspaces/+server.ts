@@ -6,7 +6,12 @@ import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
 import { getNamespace } from "$db/api/namespace";
 import { getScope } from "$db/api/scope";
 import { readJsonObject, requireBoundedName, requireTrimmedString } from "../../lib/request.js";
-import { getWorkspaceRoot, getTaskspaceDefaultDir } from "$db/internal/config";
+import {
+  getWorkspaceRoot,
+  getTaskspaceDefaultDir,
+  getTaskspaceNamespaceDirs,
+} from "$db/internal/config";
+import { taskspaceParentDir } from "$lib/server/taskspace-location";
 import { taskspaceNameIssue } from "$lib/constants";
 import {
   TASKSPACE_MARKER_FILE,
@@ -35,19 +40,23 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   if (nameIssue) throw error(400, nameIssue);
   const scopeId = requireTrimmedString(body, "scopeId");
 
-  if (!(await getNamespace({ db, namespaceId: params.namespaceId })))
-    throw error(404, "Namespace not found");
+  const namespace = await getNamespace({ db, namespaceId: params.namespaceId });
+  if (!namespace) throw error(404, "Namespace not found");
   if (!(await getScope({ db, scopeId }))) throw error(400, "Scope not found");
 
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
 
-  const defaultDir = getTaskspaceDefaultDir(root);
-  const targetDir = resolve(join(root, defaultDir, name));
+  const parentDir = taskspaceParentDir({
+    defaultDir: getTaskspaceDefaultDir(root),
+    namespaceDirs: getTaskspaceNamespaceDirs(root),
+    namespace,
+  });
+  const targetDir = resolve(join(root, parentDir, name));
 
   // Containment is checked through `relative` rather than a string prefix so the
-  // separator stays platform-correct. The name is one segment, but `defaultDir` comes from
-  // the config file and may itself point outside the root.
+  // separator stays platform-correct. The name and namespace folder are one segment each,
+  // but `defaultDir` comes from the config file and may itself point outside the root.
   const storedPath = relative(resolve(root), targetDir);
   if (!isInside(storedPath)) throw error(400, "Taskspace path must be inside the workspace root");
 
