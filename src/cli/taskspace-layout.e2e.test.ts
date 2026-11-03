@@ -112,11 +112,61 @@ describe("old taskspace layout", () => {
 
     const fixed = runCli(root, "doctor", "--fix");
     expect(fixed.stdout).toContain("! could not move notes");
-    expect(fixed.stdout).toContain("✗  Taskspace layout current — 1 taskspace directory to move");
+    expect(fixed.stdout).toContain('kept "defaultDir": "." until every directory has moved');
+    expect(fixed.stdout).toContain(
+      '✗  Taskspace layout current — config.json still has the old "defaultDir": "."; ' +
+        "1 taskspace directory to move",
+    );
     expect(fixed.status).toBe(1);
+    // The config is kept, so open still refuses instead of leaving the directory unmanaged.
+    expect(readConfig(root).taskspace).toMatchObject({ defaultDir: "." });
+    expect(runCli(root, "open", "--no-open").status).toBe(1);
     expect(existsSync(join(root, "notes", ".taskspace.json"))).toBe(true);
     expect(readFileSync(join(root, "taskspaces", "main", "notes", "keep.txt"), "utf-8")).toBe(
       "user file",
     );
+  }, 120_000);
+});
+
+describe("current taskspace layout", () => {
+  function currentWorkspace() {
+    const root = mkdtempSync(join(tmpdir(), "kozane-layout-e2e-"));
+    tempRoots.push(root);
+    cli(root, "init");
+    cli(root, "taskspace", "create", "notes", "--no-scope");
+    return root;
+  }
+
+  it("passes doctor for a directory out of place after a layout change, and --fix moves it", () => {
+    const root = currentWorkspace();
+    editTaskspaceConfig(root, (section) => {
+      section.namespaceDirs = false;
+    });
+
+    const doctor = runCli(root, "doctor");
+    expect(doctor.stdout).toContain(
+      "✓  Taskspace layout current — 1 taskspace directory not where new ones go; " +
+        "kozane doctor --fix moves them",
+    );
+
+    const fixed = runCli(root, "doctor", "--fix");
+    expect(fixed.stdout).toContain(
+      `${join("taskspaces", "main", "notes")} → ${join("taskspaces", "notes")}`,
+    );
+    expect(existsSync(join(root, "taskspaces", "notes", ".taskspace.json"))).toBe(true);
+    expect(fixed.stdout).toMatch(/✓ {2}Taskspace layout current\n/);
+  }, 120_000);
+
+  it("fails doctor for a namespacePaths key that matches no namespace", () => {
+    const root = currentWorkspace();
+    editTaskspaceConfig(root, (section) => {
+      section.namespacePaths = { aaaaaaa: "work" };
+    });
+
+    const doctor = runCli(root, "doctor");
+    expect(doctor.stdout).toContain(
+      '✗  taskspace.namespacePaths keys match namespaces — "aaaaaaa" matches no namespace',
+    );
+    expect(doctor.status).toBe(1);
   }, 120_000);
 });

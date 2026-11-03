@@ -93,11 +93,11 @@ describe("getTaskspacePlacementConfig", () => {
   it("reads the configured values", () => {
     writeConfig({
       name: "w",
-      taskspace: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a": "x" } },
+      taskspace: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a7f3": "x" } },
     });
     expect(getTaskspacePlacementConfig(root)).toEqual({
       ok: true,
-      value: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a": "x" } },
+      value: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a7f3": "x" } },
     });
   });
 
@@ -112,7 +112,7 @@ describe("getTaskspacePlacementConfig", () => {
     writeConfig({ name: "w", taskspace: { namespacePaths: { Work: "work" } } });
     expect(getTaskspacePlacementConfig(root)).toMatchObject({ ok: false });
 
-    writeConfig({ name: "w", taskspace: { namespacePaths: { "019a": "work", "019b": "" } } });
+    writeConfig({ name: "w", taskspace: { namespacePaths: { "019a7f3": "work", "019b7f3": "" } } });
     expect(getTaskspacePlacementConfig(root)).toMatchObject({ ok: false });
   });
 });

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,7 +7,7 @@ import { addTaskspace } from "../../db/api/taskspace.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../../lib/taskspace-marker.js";
 import { createTestDB } from "../../test-utils/db.js";
 import { readConfig } from "./config.js";
-import { planTaskspaceLayout } from "./taskspace-layout.js";
+import { applyTaskspaceLayout, layoutIsOld, planTaskspaceLayout } from "./taskspace-layout.js";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -34,7 +34,7 @@ async function workspace(taskspace: Record<string, unknown>) {
     );
   };
   const plan = () => planTaskspaceLayout(db, root, readConfig(root));
-  return { owned, plan };
+  return { db, root, owned, plan };
 }
 
 describe("planTaskspaceLayout", () => {
@@ -78,5 +78,54 @@ describe("planTaskspaceLayout", () => {
     await owned("notes");
 
     expect(await plan()).toEqual({ legacyDefaultDir: false, moves: [] });
+  });
+});
+
+describe("layoutIsOld", () => {
+  it("is true only for the legacy config or a directory where it put one", async () => {
+    const legacy = await workspace({ defaultDir: "." });
+    await legacy.owned("notes");
+    expect(layoutIsOld(await legacy.plan())).toBe(true);
+
+    // Out of place, such as after a rename, but not the old layout.
+    const current = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
+    await current.owned(join("taskspaces", "main", "notes"));
+    const plan = await current.plan();
+    expect(plan.moves).toHaveLength(1);
+    expect(layoutIsOld(plan)).toBe(false);
+  });
+});
+
+describe("applyTaskspaceLayout", () => {
+  const defaultDir = (root: string) =>
+    JSON.parse(readFileSync(join(root, ".kozane", "config.json"), "utf-8")).taskspace.defaultDir;
+
+  it("moves the directories, then updates the config", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+
+    const result = await applyTaskspaceLayout(db, root, await plan());
+    expect(result).toMatchObject({ configUpdated: true, configKept: false, failed: [] });
+    expect(defaultDir(root)).toBe("taskspaces");
+    expect(existsSync(join(root, "taskspaces", "main", "notes", TASKSPACE_MARKER_FILE))).toBe(true);
+  });
+
+  it("keeps the legacy config while a move fails, so open still refuses", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+    await owned("draft");
+    mkdirSync(join(root, "taskspaces", "main", "draft", "inner"), { recursive: true });
+
+    const result = await applyTaskspaceLayout(db, root, await plan());
+    expect(result.moved.map(({ from }) => from)).toEqual(["notes"]);
+    expect(result.failed.map(({ move }) => move.from)).toEqual(["draft"]);
+    expect(result).toMatchObject({ configUpdated: false, configKept: true });
+    expect(defaultDir(root)).toBe(".");
+
+    // The moved one counts as in place, and only the failed one is still to move.
+    const again = await plan();
+    expect(again.moves.map(({ from, oldLayout }) => ({ from, oldLayout }))).toEqual([
+      { from: "draft", oldLayout: true },
+    ]);
   });
 });

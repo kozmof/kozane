@@ -126,6 +126,11 @@ type ParentOptions = TaskspacePlacement & {
   namespaceId: string;
   /** Every namespace, to tell whether a short key is ambiguous and to keep folders apart. */
   namespaces: readonly NamespaceRef[];
+  /**
+   * `namespaceFolders(namespaces)`, when the caller already has it, such as when placing
+   * many taskspaces at once.
+   */
+  folders?: ReadonlyMap<string, string>;
 };
 
 /**
@@ -138,12 +143,13 @@ export function taskspaceParentDir({
   namespacePaths,
   namespaceId,
   namespaces,
+  folders,
 }: ParentOptions): string {
   const allIds = namespaces.map(({ id }) => id);
   const custom = namespacePathFor(namespacePaths, namespaceId, allIds);
   if (custom !== undefined) return custom;
   if (!namespaceDirs) return defaultDir;
-  const folder = namespaceFolders(namespaces).get(namespaceId);
+  const folder = (folders ?? namespaceFolders(namespaces)).get(namespaceId);
   if (folder === undefined) throw new Error(`Namespace not found: ${namespaceId}`);
   return join(defaultDir, folder);
 }

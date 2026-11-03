@@ -75,6 +75,8 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
         "Taskspace path must be inside the workspace root",
       );
       expect(existsSync(join(outside, "draft"))).toBe(false);
+      // Not even the namespace folder is made out there.
+      expect(existsSync(join(outside, "Test-Namespace"))).toBe(false);
       // The row recorded before the directory was attempted is taken back.
       expect(await getAllTaskspaces({ db })).toHaveLength(0);
     } finally {
@@ -220,20 +222,20 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     });
 
     it("refuses a key that matches more than one namespace", async () => {
-      // Fixed IDs whose short IDs both start with `abcdef`.
+      // Fixed IDs whose short IDs both start with `abcdef0`.
       const first = "019dddef-87e3-7000-8000-abcdef000001";
       await db.insert(namespaceTable).values([
         { id: first, name: "First" },
         { id: "019dddef-87e3-7000-8000-abcdef000002", name: "Second" },
       ]);
-      usePaths({ abcdef: "shared" });
+      usePaths({ abcdef0: "shared" });
       await expect(
         POST(event(db, first, jsonRequest({ name: "notes", scopeId }))),
       ).rejects.toMatchObject({
         status: 400,
         body: {
           message: expect.stringContaining(
-            'taskspace.namespacePaths key "abcdef" matches 2 namespaces',
+            'taskspace.namespacePaths key "abcdef0" matches 2 namespaces',
           ),
         },
       });

@@ -6,10 +6,12 @@
  * directories Kozane created itself (`ownsDirectory: true` in the marker) are moved. Any
  * other directory is the user's and stays where it is.
  *
- * `kozane open` refuses to start while a move is pending, and `kozane doctor --fix` makes it.
+ * `kozane open` refuses to start while a move out of the old layout is pending, and
+ * `kozane doctor --fix` makes it. Other moves, such as after a namespace was renamed, are
+ * only reported.
  */
 import { readFileSync } from "node:fs";
-import { basename, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { getAllTaskspaces, updateTaskspace } from "../../db/api/taskspace.js";
 import type { DB } from "../../db/tx.js";
@@ -19,11 +21,17 @@ import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
 import {
   isManagedTaskspaceDirectory,
+  missingDirs,
   moveTaskspaceDirectory,
+  removeEmptyDirs,
   restoreTaskspaceDirectory,
   taskspaceDirectoryClaim,
 } from "../../lib/server/taskspace-directory.js";
-import { namespaceFolders, taskspaceParentDir } from "../../lib/server/taskspace-location.js";
+import {
+  AmbiguousNamespacePathError,
+  namespaceFolders,
+  taskspaceParentDir,
+} from "../../lib/server/taskspace-location.js";
 import { CONFIG_FILE, KOZANE_DIR, type WorkspaceConfig } from "./config.js";
 
 /** One owned taskspace directory to move. Both paths are relative to the workspace root. */
@@ -48,6 +56,8 @@ export type LayoutPlan = {
 
 export type LayoutResult = {
   configUpdated: boolean;
+  /** The legacy `defaultDir` was kept because a move failed. Running the fix again retries. */
+  configKept: boolean;
   moved: LayoutMove[];
   failed: { move: LayoutMove; reason: string }[];
 };
@@ -73,6 +83,14 @@ function hasLegacyDefaultDir(raw: Record<string, unknown>): boolean {
 }
 
 /**
+ * Whether config.json still has the legacy `"defaultDir": "."`. Only then can a directory be
+ * in the old layout, so `kozane open` checks this first and skips reading every marker.
+ */
+export function usesLegacyDefaultDir(root: string): boolean {
+  return hasLegacyDefaultDir(readRawConfig(root));
+}
+
+/**
  * Work out which owned taskspace directories are not where the layout puts them. A legacy
  * `defaultDir` counts as `taskspaces`, since `--fix` rewrites it to that.
  *
@@ -95,7 +113,8 @@ export async function planTaskspaceLayout(
   const moves: LayoutMove[] = [];
   // Where the legacy config put directories: the browser's own rule for `"defaultDir": "."`,
   // directly at the root or in a current namespace's folder there.
-  const legacyFolders = [...namespaceFolders(namespaces).values()];
+  const folders = namespaceFolders(namespaces);
+  const legacyFolders = [...folders.values()];
   const inOldLayout = (storedPath: string) =>
     legacyDefaultDir &&
     isManagedTaskspaceDirectory({
@@ -112,9 +131,11 @@ export async function planTaskspaceLayout(
     if (!path || pathKind !== "workspace_relative" || !namespaceId) continue;
     let parentDir: string;
     try {
-      parentDir = taskspaceParentDir({ ...placement, namespaceId, namespaces });
-    } catch {
-      continue;
+      parentDir = taskspaceParentDir({ ...placement, namespaceId, namespaces, folders });
+    } catch (e) {
+      // `kozane taskspace create` reports an ambiguous key on its own.
+      if (e instanceof AmbiguousNamespacePathError) continue;
+      throw e;
     }
     const target = resolve(workspaceRoot, parentDir, basename(path));
     if (!isStrictlyInside(workspaceRoot, target)) continue;
@@ -137,33 +158,38 @@ export async function planTaskspaceLayout(
   return { legacyDefaultDir, moves };
 }
 
+/** Whether `kozane doctor --fix` has anything to do. */
 export function layoutNeedsFix(plan: LayoutPlan): boolean {
   return plan.legacyDefaultDir || plan.moves.length > 0;
 }
 
 /**
- * Rewrite a legacy `defaultDir` to `taskspaces`, then move each directory and update its
- * record. The config goes first, so a move that fails leaves the moved ones where the config
- * expects them, and running the fix again retries the rest. Other config keys are kept as
- * they are.
+ * Whether the workspace is still in the old layout: the legacy config, or a directory where
+ * it put one. `kozane doctor` fails only on this. Other moves, such as after a namespace was
+ * renamed, are a normal result of editing namespaces, and the directories keep working.
+ */
+export function layoutIsOld(plan: LayoutPlan): boolean {
+  return plan.legacyDefaultDir || plan.moves.some(({ oldLayout }) => oldLayout);
+}
+
+/**
+ * Move each directory and update its record, then rewrite a legacy `defaultDir` to
+ * `taskspaces`. Other config keys are kept as they are.
+ *
+ * The config changes only when every move succeeded. Otherwise it keeps `"defaultDir": "."`,
+ * so `kozane open` still refuses to start and running the fix again retries the rest. The
+ * plan already counts a legacy `defaultDir` as `taskspaces`, so the moved ones stay put.
  */
 export async function applyTaskspaceLayout(
   db: DB,
   root: string,
   plan: LayoutPlan,
 ): Promise<LayoutResult> {
-  const result: LayoutResult = { configUpdated: false, moved: [], failed: [] };
-  if (plan.legacyDefaultDir) {
-    const raw = readRawConfig(root);
-    if (isPlainObject(raw.taskspace)) {
-      raw.taskspace.defaultDir = DEFAULT_TASKSPACE_DIR;
-      writeFileAtomic(configPath(root), JSON.stringify(raw, null, 2) + "\n");
-      result.configUpdated = true;
-    }
-  }
-
+  const result: LayoutResult = { configUpdated: false, configKept: false, moved: [], failed: [] };
   const workspaceRoot = resolve(root);
   for (const move of plan.moves) {
+    // Folders this move makes, so a move undone below does not leave them behind.
+    const parents = missingDirs(dirname(resolve(workspaceRoot, move.to)));
     try {
       moveTaskspaceDirectory({
         workspaceRoot,
@@ -181,7 +207,19 @@ export async function applyTaskspaceLayout(
     } catch (e) {
       // Put the directory back so the record still points at it.
       restoreTaskspaceDirectory(workspaceRoot, move.to, move.from);
+      removeEmptyDirs(parents);
       result.failed.push({ move, reason: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  if (plan.legacyDefaultDir) {
+    const raw = readRawConfig(root);
+    if (result.failed.length > 0) {
+      result.configKept = true;
+    } else if (isPlainObject(raw.taskspace)) {
+      raw.taskspace.defaultDir = DEFAULT_TASKSPACE_DIR;
+      writeFileAtomic(configPath(root), JSON.stringify(raw, null, 2) + "\n");
+      result.configUpdated = true;
     }
   }
   return result;

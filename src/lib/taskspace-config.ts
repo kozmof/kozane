@@ -1,5 +1,6 @@
 import { DEFAULT_TASKSPACE_DIR, DEFAULT_TASKSPACE_NAMESPACE_DIRS } from "./constants/workspace.js";
 import { isPlainObject } from "./plain-object.js";
+import { MIN_SHORT_ID_LENGTH, compactId } from "./short-id-key.js";
 
 /**
  * The `taskspace` settings that decide where a new taskspace goes. The CLI's config schema
@@ -26,14 +27,19 @@ export function namespaceDirsIssue(value: unknown): string | null {
 
 /**
  * `taskspace.namespacePaths` maps a namespace ID, full or short, to a directory. IDs are hex
- * digits and dashes, so a key with anything else is most likely a namespace name.
+ * digits and dashes, so a key with anything else is most likely a namespace name. Short IDs
+ * are at least {@link MIN_SHORT_ID_LENGTH} digits, as `kozane namespace list` prints them,
+ * so a word made of hex letters, such as `cafe`, is refused too.
  */
 export function namespacePathsIssue(value: unknown): string | null {
   const path = "taskspace.namespacePaths";
   if (!isPlainObject(value)) return `${path} must be an object of namespace IDs to directories`;
   for (const [key, dir] of Object.entries(value)) {
-    if (!/^[0-9a-f-]+$/i.test(key) || !/[0-9a-f]/i.test(key))
-      return `${path} key "${key}" must be a namespace ID, as kozane namespace list shows it`;
+    if (!/^[0-9a-f-]+$/i.test(key) || compactId(key).length < MIN_SHORT_ID_LENGTH)
+      return (
+        `${path} key "${key}" must be a namespace ID, as kozane namespace list shows it, ` +
+        `of at least ${MIN_SHORT_ID_LENGTH} characters`
+      );
     if (typeof dir !== "string" || !dir.trim())
       return `${path}.${key} must be a nonempty directory path`;
   }

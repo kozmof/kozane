@@ -7,6 +7,13 @@
  */
 export const SHORT_ID_KEY_LENGTH = 12;
 
+/**
+ * Minimum displayed short-ID length. Extend it to resolve collisions. `resolveShortId`
+ * accepts any unambiguous prefix, including shorter input, but config keys must be at least
+ * this long, so a word made of hex letters such as `cafe` is not taken for an ID.
+ */
+export const MIN_SHORT_ID_LENGTH = 7;
+
 /** The ID without dashes, in lower case. */
 export function compactId(id: string): string {
   return id.replaceAll("-", "").toLowerCase();

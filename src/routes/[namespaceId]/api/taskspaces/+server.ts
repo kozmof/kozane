@@ -1,4 +1,4 @@
-import { mkdir, open, realpath, rmdir, unlink } from "node:fs/promises";
+import { mkdir, open, rmdir, unlink } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
@@ -14,7 +14,8 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
-import { errorCode, isStrictlyInside, isWithin } from "$lib/server/fs-paths";
+import { errorCode, isStrictlyInside } from "$lib/server/fs-paths";
+import { makeParentsInside, removeEmptyDirs } from "$lib/server/taskspace-directory";
 import { apiHandler } from "../../lib/api-handler.js";
 
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
@@ -73,15 +74,15 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   });
 
   let targetCreated = false;
+  let parentsCreated: string[] = [];
   const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
   try {
-    // Shared parents are safe to create, but claim the taskspace directory atomically.
-    await mkdir(dirname(targetDir), { recursive: true });
-    // The textual check above cannot see symlinks. A parent such as `tasks -> /elsewhere`
-    // would place the directory outside the workspace, so check where the parent really is
-    // before claiming anything inside it.
-    const realParent = await realpath(dirname(targetDir));
-    if (!isWithin(await realpath(root), realParent)) throw new OutsideWorkspaceError();
+    // Shared parents are safe to create, but claim the taskspace directory atomically. The
+    // textual check above cannot see symlinks, so this also checks where the parent really is,
+    // and creates nothing when a parent such as `tasks -> /elsewhere` leads outside.
+    const created = makeParentsInside(root, dirname(targetDir));
+    if (!created) throw new OutsideWorkspaceError();
+    parentsCreated = created;
     await mkdir(targetDir);
     targetCreated = true;
     const marker = await open(markerPath, "wx", 0o600);
@@ -111,6 +112,8 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
       await unlink(markerPath).catch(() => undefined);
       await rmdir(targetDir).catch(() => undefined);
     }
+    // Then the folders above it that this request made, such as a new namespace folder.
+    removeEmptyDirs(parentsCreated);
     if (e instanceof OutsideWorkspaceError)
       throw error(400, "Taskspace path must be inside the workspace root");
     const code = errorCode(e);

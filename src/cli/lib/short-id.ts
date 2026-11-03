@@ -1,11 +1,6 @@
-import { compactId, idMatches, shortIdKey } from "../../lib/short-id-key.js";
+import { MIN_SHORT_ID_LENGTH, compactId, idMatches, shortIdKey } from "../../lib/short-id-key.js";
 
-/**
- * Minimum displayed short-ID length. Extend it to resolve collisions. Share the value
- * with callers and tests. `resolveShortId` accepts any unambiguous prefix, including
- * shorter input.
- */
-export const MIN_SHORT_ID_LENGTH = 7;
+export { MIN_SHORT_ID_LENGTH };
 
 export function shortId(id: string, allIds: string[]): string {
   const key = shortIdKey(id);

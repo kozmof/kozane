@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
-import { basename, join, resolve, relative, isAbsolute, sep } from "node:path";
+import { basename, join, resolve, relative, isAbsolute } from "node:path";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
@@ -24,19 +24,21 @@ import {
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
-import { isWithin } from "../../lib/server/fs-paths.js";
+import { isStrictlyInside } from "../../lib/server/fs-paths.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
 
 /**
- * How to store a scanned path: relative when it is inside the workspace root, else absolute.
- * Whole segments are compared, so `/ws-other` is not taken to be inside `/ws`.
+ * How to store a taskspace path: relative when it is strictly inside the workspace root, else
+ * absolute. Whole segments are compared, so `/ws-other` is not taken to be inside `/ws`, and
+ * the root itself is stored absolute rather than as an empty relative path.
  */
 function storedLocation(root: string, path: string) {
-  return isWithin(root, path)
-    ? { pathKind: "workspace_relative" as const, storedPath: relative(root, path) }
+  const base = resolve(root);
+  return isStrictlyInside(base, path)
+    ? { pathKind: "workspace_relative" as const, storedPath: relative(base, path) }
     : { pathKind: "absolute" as const, storedPath: path };
 }
 
@@ -339,16 +341,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       }
     }
 
-    // Compare whole segments. A string prefix would file `/ws2/x` under the root `/ws` as
-    // the workspace-relative path `../ws2/x`.
-    const fromRoot = relative(resolve(root), targetDir);
-    const insideRoot =
-      fromRoot !== "" &&
-      fromRoot !== ".." &&
-      !fromRoot.startsWith(`..${sep}`) &&
-      !isAbsolute(fromRoot);
-    const pathKind = insideRoot ? ("workspace_relative" as const) : ("absolute" as const);
-    const storedPath = insideRoot ? fromRoot : targetDir;
+    const { pathKind, storedPath } = storedLocation(root, targetDir);
 
     const id = await addTaskspace({
       db,

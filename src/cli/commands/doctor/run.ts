@@ -3,11 +3,15 @@ import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { DEFAULT_TASKSPACE_DIR, NAME_MAX } from "../../../lib/constants.js";
 import { openDb } from "../../../db/client.js";
+import { getAllNamespaces } from "../../../db/api/namespace.js";
+import type { DB } from "../../../db/tx.js";
+import { idMatches } from "../../../lib/short-id-key.js";
 import { activeServerProcess } from "../../../lib/server/runtime-state.js";
 import {
   type LayoutResult,
   applyTaskspaceLayout,
   describeMoves,
+  layoutIsOld,
   layoutNeedsFix,
   planTaskspaceLayout,
 } from "../../lib/taskspace-layout.js";
@@ -248,9 +252,12 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
   }
 
   // 12. Report owned taskspace directories outside the current layout, and move them with
-  // `--fix`. `kozane open` refuses to start until they are moved.
+  // `--fix`. Only the old layout fails the check, and `kozane open` refuses to start until
+  // it is moved. Then check that every `namespacePaths` key names exactly one namespace.
   if (dbOk && migrationOk && configOk) {
-    checks.push(await taskspaceLayoutCheck(root, workspaceDbUrl, config, options.fix === true));
+    checks.push(
+      ...(await taskspaceLayoutChecks(root, workspaceDbUrl, config, options.fix === true)),
+    );
   }
 
   // 13. Port available
@@ -265,14 +272,30 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
   if (!allOk) process.exit(1);
 }
 
-async function taskspaceLayoutCheck(
+async function taskspaceLayoutChecks(
   root: string,
   url: string,
   config: WorkspaceConfig,
   fix: boolean,
+): Promise<Check[]> {
+  const { db, close } = await openDb(url);
+  try {
+    const checks = [await taskspaceLayoutCheck(db, root, config, fix)];
+    const keys = Object.keys(config.taskspace.namespacePaths);
+    if (keys.length > 0) checks.push(namespacePathsCheck(keys, await getAllNamespaces({ db })));
+    return checks;
+  } finally {
+    close();
+  }
+}
+
+async function taskspaceLayoutCheck(
+  db: DB,
+  root: string,
+  config: WorkspaceConfig,
+  fix: boolean,
 ): Promise<Check> {
   const label = "Taskspace layout current";
-  const { db, close } = await openDb(url);
   try {
     let plan = await planTaskspaceLayout(db, root, config);
     if (fix && layoutNeedsFix(plan)) {
@@ -289,20 +312,46 @@ async function taskspaceLayoutCheck(
       plan = await planTaskspaceLayout(db, root, readConfig(root));
     }
     if (!layoutNeedsFix(plan)) return check(label, true);
+    if (!layoutIsOld(plan))
+      // Such as after a namespace was renamed. The directories keep working, so this passes.
+      return check(
+        label,
+        true,
+        `${directories(plan.moves.length)} not where new ones go; kozane doctor --fix moves them`,
+      );
     const parts: string[] = [];
     if (plan.legacyDefaultDir) parts.push('config.json still has the old "defaultDir": "."');
     if (plan.moves.length > 0) parts.push(`${directories(plan.moves.length)} to move`);
     return check(label, false, `${parts.join("; ")}; run kozane doctor --fix`);
   } catch (e) {
     return check(label, false, e instanceof Error ? e.message : String(e));
-  } finally {
-    close();
   }
 }
 
-function printLayoutFix({ configUpdated, moved, failed }: LayoutResult): void {
+/**
+ * Every `taskspace.namespacePaths` key must name exactly one namespace. A key that names none,
+ * such as a typo or a deleted namespace, would otherwise be ignored without a word, and one
+ * that names several stops `taskspace create` for those namespaces.
+ */
+function namespacePathsCheck(keys: readonly string[], namespaces: readonly { id: string }[]) {
+  const problems: string[] = [];
+  for (const key of keys) {
+    const count = namespaces.filter(({ id }) => idMatches(key, id)).length;
+    if (count === 0) problems.push(`"${key}" matches no namespace`);
+    else if (count > 1) problems.push(`"${key}" matches ${count} namespaces`);
+  }
+  return check(
+    "taskspace.namespacePaths keys match namespaces",
+    problems.length === 0,
+    problems.length > 0 ? `${problems.join("; ")}; use IDs from kozane namespace list` : undefined,
+  );
+}
+
+function printLayoutFix({ configUpdated, configKept, moved, failed }: LayoutResult): void {
   console.log("Taskspace layout:");
   if (configUpdated) console.log(`  set taskspace.defaultDir to "${DEFAULT_TASKSPACE_DIR}"`);
+  if (configKept)
+    console.log('  kept "defaultDir": "." until every directory has moved; run --fix again');
   if (moved.length > 0) {
     console.log(`  moved ${directories(moved.length)}:`);
     for (const line of describeMoves(moved, "    ")) console.log(line);

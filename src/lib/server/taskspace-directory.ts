@@ -186,30 +186,85 @@ export function moveTaskspaceDirectory({
   const outside = () =>
     new TaskspaceFilesError("invalid-path", "Taskspace path must be inside the workspace root");
   if (!isStrictlyInside(resolve(workspaceRoot), to)) throw outside();
-  // The textual check cannot see symlinks. A parent such as `taskspaces -> /elsewhere` would
-  // move the directory out of the workspace, so check where the parent really is.
-  mkdirSync(dirname(to), { recursive: true });
-  if (!isWithin(realpathSync(workspaceRoot), realpathSync(dirname(to)))) throw outside();
+  const created = makeParentsInside(workspaceRoot, dirname(to));
+  if (!created) throw outside();
 
   try {
-    const existing = lstatSync(to);
-    // A case-only rename on a case-insensitive disk finds the directory itself.
-    if (!sameEntry(existing, lstatSync(from)))
-      throw new TaskspaceFilesError("exists", "A directory with that name already exists");
-  } catch (e) {
-    if (e instanceof TaskspaceFilesError) throw e;
-    if (errorCode(e) !== "ENOENT") throw e;
-  }
+    try {
+      const existing = lstatSync(to);
+      // A case-only rename on a case-insensitive disk finds the directory itself.
+      if (!sameEntry(existing, lstatSync(from)))
+        throw new TaskspaceFilesError("exists", "A directory with that name already exists");
+    } catch (e) {
+      if (e instanceof TaskspaceFilesError) throw e;
+      if (errorCode(e) !== "ENOENT") throw e;
+    }
 
-  try {
-    renameSync(from, to);
+    try {
+      renameSync(from, to);
+    } catch (e) {
+      const code = errorCode(e);
+      if (code === "EEXIST" || code === "ENOTEMPTY" || code === "ENOTDIR")
+        throw new TaskspaceFilesError("exists", "A directory with that name already exists");
+      throw e;
+    }
   } catch (e) {
-    const code = errorCode(e);
-    if (code === "EEXIST" || code === "ENOTEMPTY" || code === "ENOTDIR")
-      throw new TaskspaceFilesError("exists", "A directory with that name already exists");
+    removeEmptyDirs(created);
     throw e;
   }
   return nextStored;
+}
+
+/**
+ * The directories missing on the way to `dir`, deepest first. Stops at the first entry that
+ * exists, including a dangling symlink, which the caller's realpath check then refuses.
+ */
+export function missingDirs(dir: string): string[] {
+  const missing: string[] = [];
+  for (let current = resolve(dir); ; current = dirname(current)) {
+    try {
+      lstatSync(current);
+      return missing;
+    } catch (e) {
+      if (errorCode(e) !== "ENOENT") throw e;
+    }
+    missing.push(current);
+    if (dirname(current) === current) return missing;
+  }
+}
+
+/**
+ * Create `dir` and the folders above it, but only when it really sits inside the workspace.
+ * Return the directories made, deepest first, or null when `dir` is outside.
+ *
+ * The textual containment check cannot see symlinks. A parent such as
+ * `taskspaces -> /elsewhere` would put the directory outside the workspace, so the nearest
+ * existing ancestor is resolved first, and nothing is created when it lies outside.
+ */
+export function makeParentsInside(workspaceRoot: string, dir: string): string[] | null {
+  const created = missingDirs(dir);
+  const existing = created.length > 0 ? dirname(created[created.length - 1]) : resolve(dir);
+  const realRoot = realpathSync(workspaceRoot);
+  if (!isWithin(realRoot, realpathSync(existing))) return null;
+  mkdirSync(dir, { recursive: true });
+  // Checked again in case the path changed while the folders were made.
+  if (!isWithin(realRoot, realpathSync(dir))) {
+    removeEmptyDirs(created);
+    return null;
+  }
+  return created;
+}
+
+/** Remove directories made by {@link makeParentsInside}, deepest first, while they are empty. */
+export function removeEmptyDirs(dirs: readonly string[]): void {
+  for (const dir of dirs) {
+    try {
+      rmdirSync(dir);
+    } catch {
+      // Something was put there meanwhile, so it and everything above it stay.
+      return;
+    }
+  }
 }
 
 /** Undo {@link renameTaskspaceDirectory} after a failed database update. */

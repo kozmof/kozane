@@ -127,8 +127,8 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 ### `kozane doctor`
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
-integrity and references, workspace limits, inventory consistency, taskspace layout, and port
-availability. Exit 0 when all checks pass, otherwise 1.
+integrity and references, workspace limits, inventory consistency, taskspace layout,
+`taskspace.namespacePaths` keys, and port availability. Exit 0 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
 names, out-of-bounds cards, stored cards that overlap or are glued, and cards with only one of
@@ -165,9 +165,13 @@ config. The layout check reports both:
 Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
 namespace, directories outside the workspace, or ones whose target is outside it or under an
 ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
-and running `--fix` again retries it. Renaming a namespace, or moving a taskspace to another
-one, also leaves its directory out of place. The check reports it and `--fix` moves it, but
-`kozane open` still starts.
+and running `--fix` again retries it. `--fix` moves the directories first and rewrites
+`defaultDir` only when every move succeeded, so until then `kozane open` keeps refusing.
+
+Renaming a namespace, changing `defaultDir` or `namespaceDirs`, or moving a taskspace to
+another namespace also leaves its directory out of place. The check still passes and notes how
+many directories `--fix` would move, and `kozane open` still starts. Only the old layout
+fails the check.
 
 To keep the old layout, set `"namespaceDirs": false`. With `"defaultDir": "."`, the
 directories at `<root>/<name>` then count as in place.
@@ -833,7 +837,9 @@ delete from the browser leave them on disk.
 To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
 taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever
 `defaultDir` and `namespaceDirs` say. Keys are namespace IDs, either the short ID
-`kozane namespace list` prints or the full ID, matched as `--namespace` matches them. The
+`kozane namespace list` prints, at least 7 characters, or the full ID, matched as
+`--namespace` matches them. `kozane doctor` fails for a key that matches no namespace, such
+as a typo or a deleted namespace, or more than one. The
 longest matching key wins. A key that matches more than one namespace stops the create with an error naming
 the full ID to use instead. Paths are relative to the workspace root or absolute. A path
 outside the workspace root works here, but the browser refuses to create taskspaces there.

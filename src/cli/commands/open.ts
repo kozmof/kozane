@@ -5,7 +5,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { requireWorkspace } from "../lib/workspace.js";
 import { type WorkspaceConfig, dbUrl } from "../lib/config.js";
-import { type LayoutMove, describeMoves, planTaskspaceLayout } from "../lib/taskspace-layout.js";
+import {
+  type LayoutMove,
+  describeMoves,
+  planTaskspaceLayout,
+  usesLegacyDefaultDir,
+} from "../lib/taskspace-layout.js";
 import { readApiKeyResult } from "../../lib/server/api-key.js";
 import { requireCurrentMigrations, runMigrations } from "../lib/db.js";
 import { openDb } from "../../db/client.js";
@@ -67,6 +72,8 @@ async function refuseOldLayout(
   root: string,
   config: WorkspaceConfig,
 ): Promise<boolean> {
+  // Only the legacy config puts directories in the old layout, so skip reading every marker.
+  if (!usesLegacyDefaultDir(root)) return false;
   const { db, close } = await openDb(url);
   let moves: LayoutMove[];
   try {
