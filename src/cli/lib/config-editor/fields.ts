@@ -202,7 +202,7 @@ export function configFields(): FieldSpec[] {
       path: "taskspace.defaultDir",
       group: "Taskspace",
       label: "Default directory",
-      help: "Directory for new taskspaces. Relative paths start at the workspace directory.",
+      help: 'Directory for new taskspaces. Each taskspace gets a folder named after it here. Relative paths start at the workspace directory. Defaults to "taskspaces".',
       kind: "string",
       required: true,
     },

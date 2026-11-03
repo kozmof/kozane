@@ -762,7 +762,9 @@ kozane taskspace scan [--apply] [--reattach] [--cleanup]
 Create a database record, target directory, and `.taskspace.json` identity marker. Require
 either `--scope` or `--no-scope`.
 
-Without `--dir`, use `<workspaceRoot>/<name>`. The name must then be one path segment,
+Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<name>`. `defaultDir` is
+`taskspaces` unless configured, so the default is `<workspaceRoot>/taskspaces/<name>`.
+The name must then be one path segment,
 contain no `/`, `\`, or NUL, not start with a dot, and not start or end with whitespace.
 With `--dir`, the name is only a label. Store internal paths relative to the workspace and
 external paths as absolute.
@@ -777,7 +779,7 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
 | `--scope <scopeId>` | Attach taskspace to an existing scope                      |
 | `--no-scope`        | Create without a scope (mutually exclusive with `--scope`) |
 | `--namespace <id>`  | Owning namespace (defaults to the workspace default)       |
-| `--dir <path>`      | Target directory (default: `<workspaceRoot>/<name>`)       |
+| `--dir <path>`      | Target directory (default: under `taskspace.defaultDir`)   |
 
 ## Config file
 
@@ -794,7 +796,7 @@ Other keys fall back to built-in defaults individually.
     "port": 17173
   },
   "taskspace": {
-    "defaultDir": ".",
+    "defaultDir": "taskspaces",
     "searchRoots": ["."]
   },
   "ui": {

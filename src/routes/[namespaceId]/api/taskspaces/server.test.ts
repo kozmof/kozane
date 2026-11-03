@@ -118,7 +118,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
       400,
       "Taskspace name cannot contain a path separator",
     );
-    expect(existsSync(join(tmpRoot, "a"))).toBe(false);
+    expect(existsSync(join(tmpRoot, "taskspaces", "a"))).toBe(false);
     expect(await getAllTaskspaces({ db })).toHaveLength(0);
   });
 
@@ -128,13 +128,13 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
       400,
       "Taskspace name cannot start with a dot",
     );
-    expect(existsSync(join(tmpRoot, ".hidden"))).toBe(false);
+    expect(existsSync(join(tmpRoot, "taskspaces", ".hidden"))).toBe(false);
   });
 
   it("accepts a name that merely contains two dots", async () => {
     const res = await POST(event(db, namespaceId, jsonRequest({ name: "notes..v2", scopeId })));
     expect(res.status).toBe(200);
-    expect((await res.json()).path).toBe("notes..v2");
+    expect((await res.json()).path).toBe(join("taskspaces", "notes..v2"));
   });
 
   it("still refuses a configured default directory outside the workspace", async () => {
@@ -156,10 +156,10 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     expect(res.status).toBe(200);
     const { id, path, pathKind } = await res.json();
     expect(id).toBeTruthy();
-    expect(path).toBe("my-draft");
+    expect(path).toBe(join("taskspaces", "my-draft"));
     expect(pathKind).toBe("workspace_relative");
 
-    const markerPath = join(tmpRoot, "my-draft", TASKSPACE_MARKER_FILE);
+    const markerPath = join(tmpRoot, "taskspaces", "my-draft", TASKSPACE_MARKER_FILE);
     expect(existsSync(markerPath)).toBe(true);
     const marker = JSON.parse(readFileSync(markerPath, "utf-8"));
     expect(marker.taskspaceId).toBe(id);
@@ -169,8 +169,8 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
   });
 
   it("rejects an existing directory without changing its contents or creating a DB row", async () => {
-    const target = join(tmpRoot, "existing");
-    mkdirSync(target);
+    const target = join(tmpRoot, "taskspaces", "existing");
+    mkdirSync(target, { recursive: true });
     writeFileSync(join(target, "keep.txt"), "important");
     writeFileSync(join(target, TASKSPACE_MARKER_FILE), "original marker");
 
@@ -191,7 +191,7 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
       404,
       "Namespace not found",
     );
-    expect(existsSync(join(tmpRoot, "missing"))).toBe(false);
+    expect(existsSync(join(tmpRoot, "taskspaces", "missing"))).toBe(false);
   });
 
   it("rejects an unknown scope before touching the filesystem", async () => {
@@ -200,20 +200,21 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
       400,
       "Scope not found",
     );
-    expect(existsSync(join(tmpRoot, "missing"))).toBe(false);
+    expect(existsSync(join(tmpRoot, "taskspaces", "missing"))).toBe(false);
   });
 
   it("treats a file at the target path as a collision", async () => {
     // A regular file at the would-be target makes the directory claim fail with EEXIST. The
     // handler must take back the taskspace row it inserted and leave the file alone.
-    writeFileSync(join(tmpRoot, "blocked"), "not a dir");
+    mkdirSync(join(tmpRoot, "taskspaces"));
+    writeFileSync(join(tmpRoot, "taskspaces", "blocked"), "not a dir");
 
     await expectHttpRejection(
       POST(event(db, namespaceId, jsonRequest({ name: "blocked", scopeId }))),
       409,
       "Taskspace directory already exists",
     );
-    expect(readFileSync(join(tmpRoot, "blocked"), "utf-8")).toBe("not a dir");
+    expect(readFileSync(join(tmpRoot, "taskspaces", "blocked"), "utf-8")).toBe("not a dir");
     expect(await getAllTaskspaces({ db })).toHaveLength(0);
   });
 });

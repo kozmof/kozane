@@ -139,14 +139,14 @@ describe("taskspace CLI flow", () => {
     const root = tempWorkspace();
     cli(root, "init");
     const readMarker = (dir: string) =>
-      JSON.parse(readFileSync(join(root, dir, ".taskspace.json"), "utf-8"));
+      JSON.parse(readFileSync(join(root, "taskspaces", dir, ".taskspace.json"), "utf-8"));
 
     cli(root, "taskspace", "create", "fresh", "--no-scope");
     expect(readMarker("fresh").ownsDirectory).toBe(true);
 
     // A directory that was already there stays the user's, even in the default folder.
-    mkdirSync(join(root, "existing"));
-    writeFileSync(join(root, "existing", "keep.txt"), "mine");
+    mkdirSync(join(root, "taskspaces", "existing"), { recursive: true });
+    writeFileSync(join(root, "taskspaces", "existing", "keep.txt"), "mine");
     cli(root, "taskspace", "create", "existing", "--no-scope");
     expect(readMarker("existing").ownsDirectory).toBeUndefined();
   });
@@ -156,7 +156,7 @@ describe("taskspace CLI flow", () => {
     cli(root, "init");
     const scopeId = outputId(cli(root, "scope", "add", "Scan scope"));
     cli(root, "taskspace", "create", "original", "--scope", scopeId);
-    const original = join(root, "original");
+    const original = join(root, "taskspaces", "original");
     const moved = join(root, "moved");
     const marker = JSON.parse(readFileSync(join(original, ".taskspace.json"), "utf-8"));
     renameSync(original, moved);

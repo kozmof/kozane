@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
 import { activeServerProcess } from "../../lib/server/runtime-state.js";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
+import {
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+  DEFAULT_TASKSPACE_DIR,
+} from "../../lib/constants.js";
 import { type UiConfig, DEFAULT_UI_CONFIG } from "../../lib/ui-config.js";
 import { type WorkspaceConfig, validateWorkspaceConfig } from "./config-schema.js";
 
@@ -20,7 +24,7 @@ export function defaultConfig(name: string): WorkspaceConfig {
     name,
     server: { host: DEFAULT_SERVER_HOST, port: DEFAULT_SERVER_PORT },
     taskspace: {
-      defaultDir: ".",
+      defaultDir: DEFAULT_TASKSPACE_DIR,
       searchRoots: ["."],
     },
     ui: { ...DEFAULT_UI_CONFIG },

@@ -11,6 +11,12 @@
 export const PATH_KINDS = ["workspace_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
+/**
+ * Default `taskspace.defaultDir`, relative to the workspace root. New taskspaces go to
+ * `<root>/taskspaces/<name>` unless the config names another directory.
+ */
+export const DEFAULT_TASKSPACE_DIR = "taskspaces";
+
 /** Name of the default layer every namespace is created with. */
 export const DEFAULT_LAYER_NAME = "Base";
 /** Name of the default partition every namespace is created with. */

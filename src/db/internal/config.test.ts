@@ -72,8 +72,8 @@ describe("getWorkspaceUiConfig", () => {
 });
 
 describe("getTaskspaceDefaultDir", () => {
-  it("defaults to the workspace root", () => {
-    expect(getTaskspaceDefaultDir(root)).toBe(".");
+  it("defaults to the taskspaces directory", () => {
+    expect(getTaskspaceDefaultDir(root)).toBe("taskspaces");
   });
 
   it("reads the configured directory, and re-reads it after an edit", () => {

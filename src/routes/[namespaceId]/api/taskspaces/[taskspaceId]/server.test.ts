@@ -241,7 +241,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
     });
 
     it("changes only the label of a directory Kozane did not create", async () => {
-      // `kozane taskspace create mine --dir src` with the default `defaultDir` of `.`.
+      // `kozane taskspace create mine --dir src` with `defaultDir` set to `.`.
       useDefaultDir(".");
       mkdirSync(join(tmpRoot, "src"));
       const id = await addTaskspace({ db, namespaceId, name: "mine", path: "src" });
@@ -308,7 +308,7 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
     });
 
     it("keeps a directory Kozane did not create, even in the default folder", async () => {
-      // `kozane taskspace create mine --dir src` with the default `defaultDir` of `.`.
+      // `kozane taskspace create mine --dir src` with `defaultDir` set to `.`.
       useDefaultDir(".");
       mkdirSync(join(tmpRoot, "src"));
       writeFileSync(join(tmpRoot, "src", "main.ts"), "code");

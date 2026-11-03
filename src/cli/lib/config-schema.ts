@@ -1,4 +1,8 @@
-import { DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT } from "../../lib/constants.js";
+import {
+  DEFAULT_SERVER_HOST,
+  DEFAULT_SERVER_PORT,
+  DEFAULT_TASKSPACE_DIR,
+} from "../../lib/constants.js";
 import {
   type ConfigIssue,
   type UiConfig,
@@ -88,7 +92,7 @@ const FIELD_GROUPS: FieldGroup[] = [
     section: "taskspace",
     required: true,
     rules: [
-      stringRule("taskspace.defaultDir", "defaultDir", "."),
+      stringRule("taskspace.defaultDir", "defaultDir", DEFAULT_TASKSPACE_DIR),
       {
         path: "taskspace.searchRoots",
         key: "searchRoots",
@@ -266,7 +270,7 @@ function buildConfig(
       port: field("server.port", DEFAULT_SERVER_PORT),
     },
     taskspace: {
-      defaultDir: field("taskspace.defaultDir", "."),
+      defaultDir: field("taskspace.defaultDir", DEFAULT_TASKSPACE_DIR),
       searchRoots: field<string[]>("taskspace.searchRoots", ["."]),
     },
     ...(ui !== undefined && { ui }),

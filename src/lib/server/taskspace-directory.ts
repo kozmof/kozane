@@ -20,7 +20,7 @@ import { TaskspaceFilesError } from "./taskspace-files.js";
  * Only a directory Kozane made itself is touched. Its path is stored relative to the
  * workspace and sits directly in the configured `taskspace.defaultDir`, and its
  * `.taskspace.json` names the taskspace and says `ownsDirectory: true`. The path alone is not
- * enough: `defaultDir` is `.` unless configured, so `kozane taskspace create --dir src` would
+ * enough: `defaultDir` can be set to `.`, so `kozane taskspace create --dir src` would
  * otherwise put the user's own `src` in reach. Any other directory belongs to the user, so
  * renaming changes only the label and deleting keeps the directory.
  */
