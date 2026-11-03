@@ -5,6 +5,7 @@ import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { createRequire } from "node:module";
 import { afterEach, describe, expect, it } from "vitest";
 import { MIN_SHORT_ID_LENGTH } from "./lib/short-id.js";
+import { idMatches } from "../lib/short-id-key.js";
 
 const cliEntry = resolve("src/cli/index.ts");
 const tsxLoader = createRequire(join(process.cwd(), "package.json")).resolve("tsx");
@@ -193,5 +194,65 @@ describe("taskspace CLI flow", () => {
       expect(result.status).not.toBe(0);
       expect(result.stderr).toContain(`${option} requires --apply`);
     }
+    const namespaceOnly = runCli(root, "taskspace", "scan", "--apply", "--namespace", "x");
+    expect(namespaceOnly.status).not.toBe(0);
+    expect(namespaceOnly.stderr).toContain("--namespace requires --reattach");
   }, 30_000);
+
+  describe("reattaching a taskspace whose namespace was deleted", () => {
+    /** A workspace with a taskspace in "Client Acme", then that namespace deleted. */
+    function orphanedByDelete() {
+      const root = tempWorkspace();
+      cli(root, "init");
+      const doomed = outputId(cli(root, "namespace", "create", "Client Acme"));
+      cli(root, "taskspace", "create", "notes", "--no-scope", "--namespace", doomed);
+      const dir = join(root, "taskspaces", "Client-Acme", "notes");
+      cli(root, "namespace", "delete", doomed);
+      const marker = () => JSON.parse(readFileSync(join(dir, ".taskspace.json"), "utf-8"));
+      return { root, dir, marker };
+    }
+
+    it("joins the default namespace and updates the marker", () => {
+      const { root, dir, marker } = orphanedByDelete();
+      const before = marker();
+
+      const output = cli(root, "taskspace", "scan", "--apply", "--reattach");
+      expect(output).toMatch(
+        /reattached to namespace "main" \(its namespace \S+ no longer exists\)/,
+      );
+      expect(output).toContain("1 updated");
+
+      const listed = cli(root, "taskspace", "list");
+      expect(listed).toContain("notes");
+      expect(listed).toContain("main");
+      // The directory stays where it is, and the marker keeps its other fields.
+      expect(marker()).toEqual({ ...before, namespaceId: expect.any(String) });
+      expect(marker().namespaceId).not.toBe(before.namespaceId);
+      expect(cli(root, "taskspace", "scan")).toContain("Nothing to apply");
+      expect(readFileSync(join(dir, ".taskspace.json"), "utf-8")).toContain(marker().namespaceId);
+    }, 60_000);
+
+    it("joins the namespace chosen with --namespace", () => {
+      const { root, marker } = orphanedByDelete();
+      const chosen = outputId(cli(root, "namespace", "create", "Archive"));
+
+      const output = cli(root, "taskspace", "scan", "--apply", "--reattach", "--namespace", chosen);
+      expect(output).toContain('reattached to namespace "Archive"');
+      expect(cli(root, "taskspace", "list", "--namespace", chosen)).toContain("notes");
+      expect(idMatches(chosen, marker().namespaceId)).toBe(true);
+    }, 60_000);
+
+    it("reports the orphan and fails when there is no namespace to fall back to", () => {
+      const { root } = orphanedByDelete();
+      // Deleting the last namespace leaves nothing to fall back to.
+      const main = cli(root, "namespace", "list").trim().split(/\s+/)[0];
+      cli(root, "namespace", "delete", main);
+
+      const result = runCli(root, "taskspace", "scan", "--apply", "--reattach");
+      expect(result.stdout).toContain("not reattached: its namespace no longer exists");
+      expect(result.stdout).toContain("Pass --namespace <id>");
+      expect(result.stdout).toContain("1 failed");
+      expect(result.status).toBe(1);
+    }, 60_000);
+  });
 });

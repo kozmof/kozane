@@ -747,15 +747,23 @@ With `--apply`, update moved paths and matched records' last-seen times. Add `--
 insert orphan records and `--cleanup` to delete records whose markers are missing. Both require
 `--apply`. If duplicate markers share an ID, the last directory found wins.
 
+A reattached taskspace joins the namespace its marker names. When that namespace has been
+deleted, it joins the workspace default instead, and the marker is updated to match.
+`--namespace <id>` puts every reattached taskspace in that namespace instead. The directory
+stays where it is. An orphan that cannot be reattached, such as one whose namespace is gone
+when no namespace is left, is reported and skipped, the rest are still reattached, and the
+command exits 1.
+
 ```bash
-kozane taskspace scan [--apply] [--reattach] [--cleanup]
+kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--cleanup]
 ```
 
-| Flag         | Description                                                                     |
-| ------------ | ------------------------------------------------------------------------------- |
-| `--apply`    | Write changes to the database (required by `--reattach` and `--cleanup`)        |
-| `--reattach` | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
-| `--cleanup`  | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
+| Flag               | Description                                                                     |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `--apply`          | Write changes to the database (required by `--reattach` and `--cleanup`)        |
+| `--reattach`       | Re-link orphan taskspaces found on disk but missing from DB (needs `--apply`)   |
+| `--cleanup`        | Delete DB records for taskspaces whose marker file is missing (needs `--apply`) |
+| `--namespace <id>` | Namespace for reattached taskspaces (needs `--reattach`)                        |
 
 ### `kozane taskspace create <name>`
 

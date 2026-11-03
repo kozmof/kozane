@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { basename, join, resolve, relative, isAbsolute, sep } from "node:path";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
@@ -38,11 +39,15 @@ function formatAge(ms: number): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-type ScanOptions = { apply?: boolean; reattach?: boolean; cleanup?: boolean };
+type ScanOptions = { apply?: boolean; reattach?: boolean; cleanup?: boolean; namespace?: string };
 
 export async function taskspaceScan(options: ScanOptions = {}): Promise<void> {
   if (options.reattach && !options.apply) {
     console.error("Error: --reattach requires --apply");
+    process.exit(1);
+  }
+  if (options.namespace && !options.reattach) {
+    console.error("Error: --namespace requires --reattach");
     process.exit(1);
   }
   if (options.cleanup && !options.apply) {
@@ -115,24 +120,67 @@ async function scanWithin(
     }
   }
 
+  // Resolve `--namespace` up front so a typo fails before anything is written.
+  const namespaces = await getAllNamespaces({ db });
+  const namespaceIds = namespaces.map(({ id }) => id);
+  const requestedNamespace =
+    options.reattach && options.namespace
+      ? await resolveNamespaceId(db, options.namespace)
+      : undefined;
+
+  let failed = 0;
   for (const taskspace of diff.orphans) {
     console.log(`  orphan  ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}`);
     if (options.apply && options.reattach) {
-      const pathKind = taskspace.path.startsWith(root)
-        ? ("workspace_relative" as const)
-        : ("absolute" as const);
-      const storedPath =
-        pathKind === "workspace_relative" ? relative(root, taskspace.path) : taskspace.path;
-      await db.insert(taskspaceTable).values({
-        id: taskspace.taskspaceId,
-        namespaceId: taskspace.namespaceId || undefined,
-        name: basename(taskspace.path),
-        path: storedPath,
-        pathKind,
-        lastSeenAt: new Date(),
-      });
-      console.log(`    → reattached`);
-      updated++;
+      try {
+        const placement = await reattachNamespace(db, taskspace.namespaceId, {
+          requested: requestedNamespace,
+          existing: new Set(namespaceIds),
+        });
+        const pathKind = taskspace.path.startsWith(root)
+          ? ("workspace_relative" as const)
+          : ("absolute" as const);
+        const storedPath =
+          pathKind === "workspace_relative" ? relative(root, taskspace.path) : taskspace.path;
+        await db.insert(taskspaceTable).values({
+          id: taskspace.taskspaceId,
+          namespaceId: placement.namespaceId,
+          name: basename(taskspace.path),
+          path: storedPath,
+          pathKind,
+          lastSeenAt: new Date(),
+        });
+        if (
+          placement.namespaceId === taskspace.namespaceId ||
+          placement.namespaceId === undefined
+        ) {
+          console.log(`    → reattached`);
+        } else {
+          const target = namespaces.find(({ id }) => id === placement.namespaceId);
+          const label = `"${target?.name ?? placement.namespaceId}"`;
+          console.log(
+            placement.reason === "missing"
+              ? `    → reattached to namespace ${label} (its namespace ` +
+                  `${shortId(taskspace.namespaceId, [...namespaceIds, taskspace.namespaceId])} ` +
+                  `no longer exists)`
+              : `    → reattached to namespace ${label}`,
+          );
+          // Keep the marker in step with the record, so a later reattach lands in the same
+          // namespace. The record is already in, so a failed write is only a warning.
+          try {
+            rewriteMarkerNamespace(taskspace.path, placement.namespaceId);
+          } catch (e) {
+            console.log(
+              `    ! could not update ${TASKSPACE_MARKER_FILE}: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }
+        updated++;
+      } catch (e) {
+        // Report it and keep going, so one bad orphan does not block the rest.
+        console.log(`    → not reattached: ${e instanceof Error ? e.message : String(e)}`);
+        failed++;
+      }
     }
   }
 
@@ -167,8 +215,53 @@ async function scanWithin(
   } else {
     const parts = [`${updated} updated`];
     if (options.cleanup) parts.push(`${deleted} deleted`);
+    if (failed > 0) parts.push(`${failed} failed`);
     console.log(`\nScan complete. ${parts.join(", ")}.`);
+    if (failed > 0) process.exitCode = 1;
   }
+}
+
+type Placement = {
+  /** Undefined leaves the taskspace in no namespace, so every board draws it. */
+  namespaceId: string | undefined;
+  reason: "marker" | "requested" | "missing";
+};
+
+/**
+ * Which namespace a reattached taskspace joins.
+ *
+ * - `--namespace` wins when given.
+ * - Otherwise the marker's namespace, when it still exists. An empty one, written for a
+ *   taskspace created with no namespace, stays empty.
+ * - A marker naming a deleted namespace falls back to the workspace default. Inserting the
+ *   deleted ID would break the foreign key and stop the whole scan.
+ */
+async function reattachNamespace(
+  db: DB,
+  markerNamespaceId: string,
+  { requested, existing }: { requested: string | undefined; existing: Set<string> },
+): Promise<Placement> {
+  if (requested) return { namespaceId: requested, reason: "requested" };
+  if (!markerNamespaceId) return { namespaceId: undefined, reason: "marker" };
+  if (existing.has(markerNamespaceId)) return { namespaceId: markerNamespaceId, reason: "marker" };
+  try {
+    return { namespaceId: await resolveNamespaceId(db), reason: "missing" };
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `its namespace no longer exists and no default is set (${why}). ` +
+        `Pass --namespace <id> to choose one.`,
+      { cause: e },
+    );
+  }
+}
+
+/** Point a taskspace's `.taskspace.json` at another namespace, keeping its other fields. */
+function rewriteMarkerNamespace(dir: string, namespaceId: string): void {
+  const markerPath = join(dir, TASKSPACE_MARKER_FILE);
+  const marker = JSON.parse(readFileSync(markerPath, "utf-8"));
+  marker.namespaceId = namespaceId;
+  writeFileAtomic(markerPath, JSON.stringify(marker, null, 2) + "\n");
 }
 
 // ─── taskspace create ──────────────────────────────────────────────────────────────

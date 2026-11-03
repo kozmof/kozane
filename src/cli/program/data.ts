@@ -47,6 +47,10 @@ export function registerDataCommands(program: Command): void {
     .option("--apply", "Write changes to the database")
     .option("--reattach", "Re-link orphan taskspaces found on disk (requires --apply)")
     .option("--cleanup", "Delete DB records for missing taskspaces (requires --apply)")
+    .option(
+      "--namespace <namespaceId>",
+      "Namespace for reattached taskspaces (default: each marker's namespace, or the workspace default if it was deleted; requires --reattach)",
+    )
     .action((opts) => taskspaceScan(opts));
 
   taskspace
@@ -61,6 +65,9 @@ export function registerDataCommands(program: Command): void {
       "--namespace <namespaceId>",
       "Namespace ID or short ID (required when workspace has multiple namespaces)",
     )
-    .option("--dir <path>", "Target directory (default: <workspaceRoot>/<name>)")
+    .option(
+      "--dir <path>",
+      "Target directory (default: <workspaceRoot>/taskspaces/<namespace>/<name>)",
+    )
     .action((name, opts) => taskspaceCreate(name, opts));
 }
