@@ -40,16 +40,16 @@ import {
 } from "../../lib/taskspace-location.js";
 import { CONFIG_FILE, KOZANE_DIR, type WorkspaceConfig } from "./config.js";
 
-/** One owned taskspace directory to move. Both paths are relative to the workspace root. */
+/** One owned taskspace directory to move. `from` is workspace-relative. `to` may be absolute. */
 export type LayoutMove = {
   taskspaceId: string;
   name: string;
   from: string;
   to: string;
   /**
-   * The directory is where a legacy `"defaultDir": "."` put it: at the workspace root, or in
-   * a namespace folder there. Only these stop `kozane open`. Other moves, such as after a
-   * namespace was renamed, are reported by `kozane doctor` alone.
+   * The directory follows the legacy layout at the workspace root or in a namespace
+   * folder there. These moves block `kozane open`. Moves caused by namespace renames
+   * are reported only by `kozane doctor`.
    */
   oldLayout: boolean;
 };
@@ -65,8 +65,9 @@ export type LayoutPlan = {
   legacyDefaultDir: boolean;
   moves: LayoutMove[];
   /**
-   * Reported so they are not left behind without a word. Once a legacy config is rewritten,
-   * the browser no longer manages them: rename changes only the label and delete keeps them.
+   * Directories that need attention but cannot move automatically. After the legacy
+   * config is rewritten, directories outside the new layout are unmanaged. Browser
+   * rename changes only their label, and delete keeps their directory.
    */
   skipped: LayoutSkip[];
 };
@@ -93,8 +94,8 @@ function readRawConfig(root: string): Record<string, unknown> {
 }
 
 /**
- * True for a config written before namespace folders existed: `defaultDir` is the workspace
- * root and `namespaceDirs` is not set. A config that sets `namespaceDirs` chose its layout.
+ * Recognize the legacy layout when `defaultDir` is empty, `.` or `./` and `namespaceDirs`
+ * is absent. An explicit `namespaceDirs` setting preserves the chosen layout.
  */
 function hasLegacyDefaultDir(raw: Record<string, unknown>): boolean {
   const section = raw.taskspace;
@@ -135,8 +136,8 @@ export async function planTaskspaceLayout(
   const namespaces = await getAllNamespaces({ db });
   const moves: LayoutMove[] = [];
   const skipped: LayoutSkip[] = [];
-  // Where the legacy config put directories: the browser's own rule for `"defaultDir": "."`,
-  // directly at the root or in a current namespace's folder there.
+  // Apply the browser's legacy placement rules to directories at the workspace root
+  // or in a current namespace's folder there.
   const folders = namespaceFolders(namespaces);
   const legacyPlacement = { defaultDir: config.taskspace.defaultDir, namespacePaths: {} };
   const inOldLayout = (storedPath: string) =>
@@ -179,8 +180,7 @@ export async function planTaskspaceLayout(
     try {
       claim = taskspaceDirectoryClaim({ workspaceRoot, storedPath: path, taskspaceId: id });
     } catch (e) {
-      // Such as a permission error. Whether Kozane owns it is unknown, so it stays, but it
-      // is listed rather than left behind without a word.
+      // An unreadable directory has unknown ownership. Leave it in place and report it.
       skipped.push({ move, reason: `it could not be read (${errorMessage(e)})` });
       continue;
     }
@@ -201,24 +201,24 @@ function sameDirectoryByCase(a: string, b: string): boolean {
   try {
     return sameEntry(lstatSync(a), lstatSync(b));
   } catch {
-    // Either one is missing, so the disk tells them apart.
+    // A failed lookup cannot establish that both paths name the same directory.
     return false;
   }
 }
 
 /**
- * Drop moves whose target would sit inside another taskspace's directory, where it is now or
- * where another move puts it, since deleting that taskspace would delete it too. A directory
- * that is itself about to move away is no obstacle, such
- * as a legacy taskspace named `taskspaces` at the root: it is moved first, so the folders
- * under it are plain folders by the time the others arrive.
+ * Exclude moves that would nest a taskspace inside another taskspace's current or planned
+ * directory. Deleting the outer taskspace would also delete the inner one.
+ *
+ * A directory that moves away first does not block the target. For example, move a legacy
+ * taskspace named `taskspaces` out of the root before placing other taskspaces under that path.
  */
 function withoutNesting(
   workspaceRoot: string,
   moves: LayoutMove[],
 ): { kept: LayoutMove[]; dropped: LayoutSkip[] } {
-  // Absolute paths, worked out once. Every marker above a target counts, not only the
-  // nearest: a moving taskspace inside one that stays leaves the target nested all the same.
+  // Cache absolute paths and every enclosing marker. Moving the nearest enclosing
+  // taskspace is insufficient if another enclosing taskspace stays in place.
   const paths = new Map(
     moves.map((move) => {
       const to = resolve(workspaceRoot, move.to);
@@ -233,9 +233,8 @@ function withoutNesting(
     }),
   );
   const pathsOf = (move: LayoutMove) => paths.get(move)!;
-  // Repeat until nothing changes: dropping a move keeps its directory in place, which can
-  // make another move's target nested after all. Each round compares every pair of moves,
-  // which is fine for the dozens to hundreds of taskspaces a workspace holds.
+  // Recheck after excluding moves. Each excluded directory stays in place and may block
+  // another target. Each round compares every pair of remaining moves.
   let kept = moves;
   const dropped: LayoutSkip[] = [];
   const insideOf = (dir: string) =>
@@ -279,9 +278,9 @@ function withoutNesting(
 }
 
 /**
- * Order moves so that a directory leaves before any move whose target is it or lies inside
- * it, at any depth: if C's target is inside B and B's target is inside A, A goes first, then
- * B, then C.
+ * Move each directory before placing a taskspace at or inside its old path. Dependencies
+ * apply at every depth. If C targets a path inside B and B targets a path inside A, move
+ * A first, then B, then C.
  * Moves with nothing to wait for keep their order in the plan.
  *
  * A move that can never go, because it waits on a cycle of moves, comes back in `stuck` with
@@ -291,9 +290,8 @@ function moveOrder(
   moves: readonly LayoutMove[],
   pathsOf: (move: LayoutMove) => { from: string; to: string },
 ): { ordered: LayoutMove[]; stuck: { move: LayoutMove; waitingOn: LayoutMove }[] } {
-  // A move's own directory is no obstacle: a target inside it is reached in two steps. A
-  // target that is another directory's current path waits for it too, such as after two
-  // namespaces were renamed so one takes the other's old folder.
+  // A target inside the source directory uses a two-step move and needs no dependency.
+  // A target at another directory's current path waits for that directory to move away.
   const waitsOn = new Map(
     moves.map((move) => [
       move,
@@ -323,9 +321,8 @@ export function layoutNeedsFix(plan: LayoutPlan): boolean {
 }
 
 /**
- * Whether the workspace is still in the old layout: the legacy config, or a directory where
- * it put one. `kozane doctor` fails only on this. Other moves, such as after a namespace was
- * renamed, are a normal result of editing namespaces, and the directories keep working.
+ * Whether the layout check fails because the config is legacy or a planned move leaves
+ * the legacy layout. Moves caused by namespace renames do not fail the layout check.
  */
 export function layoutIsOld(plan: LayoutPlan): boolean {
   return plan.legacyDefaultDir || plan.moves.some(({ oldLayout }) => oldLayout);
@@ -347,9 +344,8 @@ export async function applyTaskspaceLayout(
   const result: LayoutResult = { config: "unchanged", moved: [], failed: [] };
   const workspaceRoot = resolve(root);
   for (const move of plan.moves) {
-    // The plan let this target sit under a taskspace that was going to move away first. If
-    // that move failed, the taskspace is still there, so check the disk as it is now. The
-    // directory itself is no obstacle: a target inside it is reached in two steps.
+    // Recheck enclosing taskspaces in case an earlier move failed. The source directory
+    // itself is allowed because a target inside it uses a two-step move.
     const from = resolve(workspaceRoot, move.from);
     const enclosing = enclosingTaskspaceDirs(
       workspaceRoot,
@@ -422,8 +418,8 @@ function moveFailure(move: LayoutMove, e: unknown): string {
  * after the new default directory, cannot be reached in one rename, so the directory is moved
  * aside first.
  *
- * Each step returns its own undo, which moves the directory back and removes the folders the
- * step made. For two steps:
+ * Each step returns an undo function that restores the directory and removes empty parent
+ * folders created by that step. Undo the second step before the first.
  *
  *   move:  from ──step 1──▶ aside ──step 2──▶ to
  *   undo:  from ◀──undo 1── aside ◀──undo 2── to    (undo 2 runs first)
@@ -483,7 +479,7 @@ function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutM
   };
 }
 
-/** Most moves to list before summing up the rest. */
+/** Maximum entries to list before summarizing the rest. */
 const LISTED_MOVES = 5;
 
 /** One line per skipped directory, such as `notes stays: it holds another taskspace`, capped. */

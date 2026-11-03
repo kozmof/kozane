@@ -24,15 +24,16 @@ import { errorCode, isStrictlyInside, isWithin, sameEntry } from "./fs-paths.js"
 import { TaskspaceFilesError } from "./taskspace-files.js";
 
 /**
- * Renaming and deleting a taskspace's own directory from the browser.
+ * Manage taskspace directories for browser rename and delete operations.
  *
- * Only a directory Kozane made itself is touched. Its path is stored relative to the
- * workspace and sits where Kozane creates taskspaces: in `taskspace.defaultDir`, directly or
- * in a current namespace's folder there, or directly in a `taskspace.namespacePaths` directory. Its
- * `.taskspace.json` names the taskspace and says `ownsDirectory: true`. The path alone is
- * not enough: `defaultDir` can be set to `.`, so `kozane taskspace create --dir src` would
- * otherwise put the user's own `src` in reach. Any other directory belongs to the user, so
- * renaming changes only the label and deleting keeps the directory.
+ * The browser requires a workspace-relative path in the configured layout and a matching
+ * `.taskspace.json` marker with `ownsDirectory: true`. Accepted locations are directly in
+ * `taskspace.defaultDir`, in a current namespace's folder there, or directly in a configured
+ * `taskspace.namespacePaths` directory.
+ *
+ * Checking the marker protects user directories when `defaultDir` is `.`. For example,
+ * `kozane taskspace create --dir src` must not make the user's `src` eligible for deletion.
+ * For unmanaged directories, rename changes only the label and delete keeps the directory.
  */
 
 type ManagedCheck = {
@@ -72,14 +73,11 @@ export function isManagedTaskspaceDirectory({
   const key = (path: string) => folderKey(resolve(workspaceRoot, path));
   const parent = key(dirname(resolve(workspaceRoot, storedPath)));
   const base = key(placement.defaultDir);
-  // Directly in `defaultDir`, or in a current namespace's folder inside it. Both are accepted
-  // whatever `taskspace.namespaceDirs` says now, so turning it on or off keeps directories
-  // made earlier manageable. Any other folder is refused: with `defaultDir` set to `.`,
-  // accepting every grandchild would put the user's own `src/lib` in reach. A namespace that
-  // was renamed leaves its old folder unmanaged, which only means rename and delete stop
-  // touching that directory. Folder names are compared as `namespaceFolders()` keeps them
-  // apart, so renaming "Work" to "work" on a case-insensitive disk, where both name the same
-  // folder, keeps its directories managed.
+  // Accept direct children of `defaultDir` and children of current namespace folders,
+  // regardless of `namespaceDirs`. Toggling that setting preserves management of existing
+  // directories. Accepting arbitrary grandchildren could expose user paths such as `src/lib`.
+  // Namespace renames can leave old folders unmanaged. Case-only renames still match
+  // because folder names use the same comparison as `namespaceFolders()`.
   if (parent === base) return true;
   if (dirname(parent) === base) {
     const folder = basename(parent);
@@ -188,8 +186,9 @@ export function renameTaskspaceDirectory({
 /**
  * Move an owned taskspace directory to `nextStored`, a path relative to the workspace,
  * creating the folders above it. Return `nextStored`. The same rules as
- * {@link renameTaskspaceDirectory} apply: only an owned directory moves, it stays inside the
- * workspace, and an existing entry at the target is never replaced.
+ * {@link renameTaskspaceDirectory} apply. Only owned directories move, and the target must
+ * stay inside the workspace. Refuse a different entry found at the target before renaming.
+ * The concurrent replacement risk described in that function still applies.
  */
 export function moveTaskspaceDirectory({
   workspaceRoot,
@@ -249,8 +248,8 @@ export function enclosingTaskspaceDir(workspaceRoot: string, dir: string): strin
 /**
  * Every folder at or above `dir`, strictly inside the workspace, that holds a taskspace
  * marker, nearest first. {@link enclosingTaskspaceDir} is enough to refuse a target. This is
- * for callers that excuse some of them, such as a taskspace that is about to move away: one
- * further up that stays still encloses the target.
+ * for callers that allow some enclosing taskspaces to move away. An enclosing taskspace
+ * further up may still block the target.
  */
 export function enclosingTaskspaceDirs(workspaceRoot: string, dir: string): string[] {
   const root = resolve(workspaceRoot);
@@ -288,7 +287,7 @@ export function holdsOtherTaskspaces(
 }
 
 /**
- * The recorded taskspace whose directory `dir` would sit strictly inside, as an absolute path,
+ * The absolute path of the first recorded taskspace directory that strictly contains `dir`,
  * or null. {@link enclosingTaskspaceDir} only looks inside the workspace, so this covers a
  * target outside it, such as an absolute `taskspace.defaultDir`. It reads the records rather
  * than walking up the disk, so it never mistakes an unrelated folder above the workspace for
@@ -404,10 +403,10 @@ export type ClaimRequest = {
  * Make a new taskspace's directory and its marker. The browser and `kozane taskspace create`
  * both use this, so they claim directories the same way.
  *
- * The directory and the marker are each claimed atomically, so one that another process makes
- * meanwhile fails the claim rather than being taken over. On a failure, only what this call
- * made is removed: the marker, the directory, and the folders above it, such as a new
- * namespace folder. Nothing is removed recursively.
+ * Create the directory and marker with exclusive operations. A concurrent creation fails
+ * the claim. With `adoptExisting`, an existing directory without a marker can be reused.
+ * On failure, remove only the marker, directory, and empty parent folders created by this
+ * call. Cleanup never removes directories recursively.
  *
  * Throws {@link TaskspaceFilesError} with `invalid-path` when a parent leads outside the
  * workspace, and with `exists` when the directory or its marker is already there. Returns
@@ -437,8 +436,8 @@ export function claimTaskspaceDirectory(request: ClaimRequest): { dirCreated: bo
   try {
     const makeDir = !(adoptExisting && existsSync(targetDir));
     for (let attempt = 1; ; attempt++) {
-      // Deepest first, as removeEmptyDirs expects. A retry remakes the same folders, so add
-      // each once: a repeat would stop removeEmptyDirs at its failed second rmdir.
+      // Keep unique paths, deepest first, for removeEmptyDirs. Retrying a path during
+      // cleanup would fail on the second rmdir and stop cleanup of its parents.
       parentsCreated.unshift(...makeParents().filter((dir) => !parentsCreated.includes(dir)));
       if (!makeDir) break;
       try {
@@ -492,7 +491,7 @@ export function removeEmptyDirs(dirs: readonly string[]): void {
     try {
       rmdirSync(dir);
     } catch {
-      // Something was put there meanwhile, so it and everything above it stay.
+      // Stop on any removal failure to preserve this directory and its parents.
       return;
     }
   }
@@ -500,8 +499,8 @@ export function removeEmptyDirs(dirs: readonly string[]): void {
 
 /**
  * Undo {@link renameTaskspaceDirectory} after a failed database update. Throws `exists` when
- * something took the original path meanwhile: `rename` would silently replace an empty
- * directory there, so it is refused, as the forward move refuses it.
+ * a different entry is found at the original path. Check before renaming to avoid replacing
+ * an empty directory. The concurrent replacement risk of the forward move also applies.
  */
 export function restoreTaskspaceDirectory(
   workspaceRoot: string,
@@ -522,8 +521,8 @@ export function restoreTaskspaceDirectory(
 
 /**
  * Delete an owned taskspace directory and everything in it. Check the marker again right
- * before deleting, so a directory that took the path over is never removed. Return whether
- * there was anything to delete.
+ * before deleting and check directory identity between removals to detect replacement.
+ * These checks reduce the race window described below. Return `deleted` or `missing`.
  *
  * The marker goes last. A delete that stops partway, such as on a file it may not remove,
  * leaves the marker in place, so the directory is still recognized and the delete can be

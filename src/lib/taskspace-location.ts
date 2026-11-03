@@ -24,7 +24,7 @@ const MAX_DIR_NAME_LENGTH = 60;
 /**
  * Longest folder name, in UTF-8 bytes. Most file systems allow 255 bytes per name. This leaves
  * room for the `-` a reserved name gets and for the longest suffix `namespaceFolders` adds, a
- * `-` and the 32-digit full ID: 255 - 1 - 33.
+ * `-` and the 32-digit full ID. The byte budget is 255 - 1 - 33.
  */
 const MAX_DIR_NAME_BYTES = 221;
 
@@ -129,10 +129,10 @@ export function folderKey(name: string): string {
  * keeps the plain name and the others get their short ID added. IDs are UUIDv7, so the
  * oldest sorts first, and a namespace created later never moves an existing one's folder.
  *
- * Folders are worked out from the current namespaces each time, not stored. Renaming a
- * namespace, or deleting the older of two that clashed, changes the folder new taskspaces
- * go in. Directories made in the old folder stay on disk, but rename and delete from the
- * browser no longer touch them, see `isManagedTaskspaceDirectory`.
+ * Recompute folders from the current namespaces each time. Renaming a namespace or
+ * deleting an older namespace with a conflicting name can change the target folder.
+ * Existing directories stay on disk. The browser manages them only while their parent
+ * matches a configured location or current namespace folder. See `isManagedTaskspaceDirectory`.
  */
 export function namespaceFolders(namespaces: readonly NamespaceRef[]): Map<string, string> {
   const folders = new Map<string, string>();

@@ -47,7 +47,7 @@ import {
 } from "./checks.js";
 
 export type DoctorOptions = {
-  /** Fix what can be fixed safely before checking. Today that is the taskspace layout. */
+  /** Apply taskspace layout fixes before reporting the checks. */
   fix?: boolean;
 };
 
@@ -314,8 +314,8 @@ async function taskspaceLayoutCheck(
       printLayoutFix(result);
       plan = await planTaskspaceLayout(db, root, readConfig(root));
     }
-    // Directories --fix cannot move pass the check, since running it again would not help,
-    // but they are listed so they are not left behind without a word.
+    // Report skipped directories without failing the check. Retrying --fix cannot resolve
+    // the conditions that excluded them from the plan.
     printSkips(plan.skipped);
     const skippedNote =
       plan.skipped.length > 0

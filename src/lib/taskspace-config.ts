@@ -8,20 +8,18 @@ import {
 } from "./short-id-key.js";
 
 /**
- * The `taskspace` settings that decide where a new taskspace goes. The CLI's config schema
- * and the server both check them with the functions here, so `kozane taskspace create` and
- * the browser always pick the same directory, or both refuse the same config.
+ * Settings that choose a new taskspace's directory. The CLI config schema and server share
+ * these checks so both use the same placement rules and reject invalid settings.
  *
- * One difference is deliberate: the browser only creates taskspaces inside the workspace
- * root. A `defaultDir` or `namespacePaths` entry that points outside it works with
- * `kozane taskspace create`, but the browser refuses it.
+ * The browser also requires the target to be inside the workspace. The CLI accepts
+ * `defaultDir` and `namespacePaths` entries that point outside it.
  */
 export type TaskspacePlacement = {
   /** Directory for new taskspaces, relative to the workspace root or absolute. */
   defaultDir: string;
   /** Put each namespace's new taskspaces in a folder named after it under `defaultDir`. */
   namespaceDirs: boolean;
-  /** Namespace ID, full or short, to the directory its new taskspaces go in. */
+  /** Map full or short namespace IDs to directories for new taskspaces. */
   namespacePaths: Record<string, string>;
 };
 
@@ -75,8 +73,8 @@ function isValidNamespacePaths(value: unknown): value is Record<string, string> 
 /**
  * Read the placement settings from a parsed `taskspace` section. A field that is left out
  * uses its default. A field that is present but invalid is returned as an issue instead of
- * being skipped, because the CLI refuses it too: skipping it would put the taskspace in a
- * different directory than `kozane taskspace create` would.
+ * being skipped. This matches CLI validation and prevents invalid settings from silently
+ * changing the target directory.
  */
 export function readTaskspacePlacement(
   section: unknown,

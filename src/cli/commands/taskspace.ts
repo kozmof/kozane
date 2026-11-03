@@ -171,8 +171,8 @@ async function scanWithin(
                   `no longer exists)`
               : `    → reattached to namespace ${label}`,
           );
-          // Keep the marker in step with the record, so a later reattach lands in the same
-          // namespace. The record is already in, so a failed write is only a warning.
+          // Match the marker to the saved record so a later reattach uses the same namespace.
+          // Report marker write failures as warnings because the record is already saved.
           try {
             rewriteMarkerNamespace(taskspace.path, taskspace.taskspaceId, placement.namespaceId);
           } catch (e) {
