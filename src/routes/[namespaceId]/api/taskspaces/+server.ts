@@ -15,11 +15,18 @@ import {
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
 import { errorCode, isStrictlyInside } from "$lib/server/fs-paths";
-import { makeParentsInside, removeEmptyDirs } from "$lib/server/taskspace-directory";
+import {
+  enclosingTaskspaceDir,
+  makeParentsInside,
+  removeEmptyDirs,
+} from "$lib/server/taskspace-directory";
 import { apiHandler } from "../../lib/api-handler.js";
 
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
 class OutsideWorkspaceError extends Error {}
+
+/** How many times to make the parent folders when a concurrent create removes them. */
+const MAX_PARENT_ATTEMPTS = 3;
 
 export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
@@ -60,6 +67,15 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     throw error(400, "Taskspace path must be inside the workspace root");
   const storedPath = relative(resolve(root), targetDir);
 
+  // Never inside another taskspace's directory, which deleting that taskspace would remove.
+  const enclosing = enclosingTaskspaceDir(root, dirname(targetDir));
+  if (enclosing)
+    throw error(
+      409,
+      `Taskspace directory would be inside the taskspace at ${relative(resolve(root), enclosing)}. ` +
+        "Move that taskspace or change taskspace.defaultDir or taskspace.namespacePaths.",
+    );
+
   // The guard above ensures targetDir is always inside the workspace root,
   // so the path is always stored as workspace_relative. Absolute paths are
   // only produced by the CLI (kozane taskspace create --dir <outside-root>).
@@ -80,10 +96,20 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     // Shared parents are safe to create, but claim the taskspace directory atomically. The
     // textual check above cannot see symlinks, so this also checks where the parent really is,
     // and creates nothing when a parent such as `tasks -> /elsewhere` leads outside.
-    const created = makeParentsInside(root, dirname(targetDir));
-    if (!created) throw new OutsideWorkspaceError();
-    parentsCreated = created;
-    await mkdir(targetDir);
+    for (let attempt = 1; ; attempt++) {
+      const created = makeParentsInside(root, dirname(targetDir));
+      if (!created) throw new OutsideWorkspaceError();
+      // Deepest first, as removeEmptyDirs expects.
+      parentsCreated.unshift(...created);
+      try {
+        await mkdir(targetDir);
+        break;
+      } catch (e) {
+        // A concurrent create that failed can remove a new namespace folder this one was
+        // about to use. Make it again, a few times at most.
+        if (errorCode(e) !== "ENOENT" || attempt >= MAX_PARENT_ATTEMPTS) throw e;
+      }
+    }
     targetCreated = true;
     const marker = await open(markerPath, "wx", 0o600);
     try {

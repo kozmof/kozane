@@ -1,7 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
-import { missingDirs, removeEmptyDirs } from "../../lib/server/taskspace-directory.js";
+import {
+  enclosingTaskspaceDir,
+  makeParentsInside,
+  missingDirs,
+  removeEmptyDirs,
+} from "../../lib/server/taskspace-directory.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
@@ -332,7 +337,21 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
         namespaces,
       });
       targetDir = resolve(root, parentDir, name);
+      // Never inside another taskspace's directory, which deleting that taskspace would
+      // remove. The browser refuses the same.
+      const enclosing = enclosingTaskspaceDir(root, dirname(targetDir));
+      if (enclosing) {
+        console.error(
+          `Error: ${targetDir} would be inside the taskspace at ${enclosing}. Move that ` +
+            "taskspace, change taskspace.defaultDir or taskspace.namespacePaths, or use --dir.",
+        );
+        process.exit(1);
+      }
     }
+    // Where Kozane picked a directory inside the workspace, make its folders as the browser
+    // does, refusing a parent that leads outside through a symlink. Otherwise the path would
+    // be stored relative to the workspace while the directory lives elsewhere.
+    const checkParents = !options.dir && isStrictlyInside(resolve(root), targetDir);
 
     if (existsSync(targetDir)) {
       const existingMarker = join(targetDir, TASKSPACE_MARKER_FILE);
@@ -357,8 +376,19 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     const dirCreated = !existsSync(targetDir);
     // Folders above the taskspace this command makes, such as a new namespace folder, so a
     // failure below does not leave them behind.
-    const parentsCreated = dirCreated ? missingDirs(dirname(targetDir)) : [];
+    let parentsCreated: string[] = [];
     try {
+      if (checkParents) {
+        const made = makeParentsInside(root, dirname(targetDir));
+        if (!made)
+          throw new Error(
+            `${dirname(targetDir)} leads outside the workspace through a symlink. ` +
+              "Use --dir to choose the directory yourself.",
+          );
+        parentsCreated = made;
+      } else if (dirCreated) {
+        parentsCreated = missingDirs(dirname(targetDir));
+      }
       mkdirSync(targetDir, { recursive: true });
       const marker = {
         kind: TASKSPACE_MARKER_KIND,

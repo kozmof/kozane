@@ -266,6 +266,32 @@ describe("POST /[namespaceId]/api/taskspaces", () => {
     expect(await getAllTaskspaces({ db })).toHaveLength(0);
   });
 
+  it("refuses to create a taskspace inside another taskspace's directory", async () => {
+    // A taskspace made while namespaceDirs was off, named like the namespace folder.
+    const outer = join(tmpRoot, "taskspaces", "Test-Namespace");
+    mkdirSync(outer, { recursive: true });
+    writeFileSync(join(outer, TASKSPACE_MARKER_FILE), "{}");
+
+    await expect(
+      POST(event(db, namespaceId, jsonRequest({ name: "notes", scopeId }))),
+    ).rejects.toMatchObject({
+      status: 409,
+      body: { message: expect.stringContaining("would be inside the taskspace at") },
+    });
+    expect(existsSync(join(outer, "notes"))).toBe(false);
+    expect(await getAllTaskspaces({ db })).toHaveLength(0);
+  });
+
+  it("refuses a parent folder that is a dangling symlink with 400", async () => {
+    symlinkSync(join(tmpRoot, "gone"), join(tmpRoot, "taskspaces"));
+    await expectHttpRejection(
+      POST(event(db, namespaceId, jsonRequest({ name: "notes", scopeId }))),
+      400,
+      "Taskspace path must be inside the workspace root",
+    );
+    expect(await getAllTaskspaces({ db })).toHaveLength(0);
+  });
+
   it("rejects an unknown namespace before touching the filesystem", async () => {
     await expectHttpRejection(
       POST(event(db, "missing-namespace", jsonRequest({ name: "missing", scopeId }))),

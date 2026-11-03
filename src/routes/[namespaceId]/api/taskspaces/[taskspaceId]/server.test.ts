@@ -277,6 +277,18 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       });
     });
 
+    it("changes only the label of a directory that holds another taskspace", async () => {
+      await addTaskspace({ db, namespaceId, name: "inner", path: join("tasks", "draft", "inner") });
+
+      await PATCH(event(db, namespaceId, taskspaceId, "PATCH", { name: "final" }));
+
+      expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(true);
+      expect(await getTaskspace({ db, taskspaceId })).toMatchObject({
+        name: "final",
+        path: join("tasks", "draft"),
+      });
+    });
+
     it("changes only the label of a directory Kozane did not create", async () => {
       // `kozane taskspace create mine --dir src` with `defaultDir` set to `.`.
       useDefaultDir(".");
@@ -321,6 +333,26 @@ describe("/[namespaceId]/api/taskspaces/[taskspaceId]", () => {
       expect(existsSync(join(tmpRoot, "tasks", "draft"))).toBe(false);
       expect(existsSync(join(tmpRoot, "tasks"))).toBe(true);
       expect(await getTaskspace({ db, taskspaceId })).toBeUndefined();
+    });
+
+    it("keeps a directory that holds another taskspace", async () => {
+      const inner = await addTaskspace({
+        db,
+        namespaceId,
+        name: "inner",
+        path: join("tasks", "draft", "inner"),
+      });
+      mkdirSync(join(tmpRoot, "tasks", "draft", "inner"));
+      writeMarker(join(tmpRoot, "tasks", "draft", "inner"), inner, namespaceId);
+
+      const res = await DELETE(event(db, namespaceId, taskspaceId, "DELETE"));
+
+      expect(await res.json()).toEqual({ ok: true, directory: "kept" });
+      expect(existsSync(join(tmpRoot, "tasks", "draft", "inner", TASKSPACE_MARKER_FILE))).toBe(
+        true,
+      );
+      expect(await getTaskspace({ db, taskspaceId })).toBeUndefined();
+      expect(await getTaskspace({ db, taskspaceId: inner })).toBeDefined();
     });
 
     it("deletes the record when the directory is already gone", async () => {

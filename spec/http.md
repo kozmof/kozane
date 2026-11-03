@@ -400,8 +400,9 @@ with a dot. External taskspaces require CLI `taskspace create --dir`.
 Return 400 for an invalid name, unknown scope, configured directory outside
 the workspace, invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths`
 value (refused as `kozane taskspace create` refuses it, rather than skipped), or
-`taskspace.namespacePaths` key that matches more than one namespace, 404 for an unknown namespace, 409 for an existing directory,
-or 503 without a workspace.
+`taskspace.namespacePaths` key that matches more than one namespace, 404 for an unknown namespace, 409 for an existing directory
+or a target inside another taskspace's directory, or 503 without a workspace. A parent folder
+that is a symlink leading outside the workspace, or nowhere, is refused with 400.
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
 
@@ -415,7 +416,8 @@ follow the creation rules. Other taskspaces, including directories chosen with
 `kozane taskspace create --dir`, change only their label. So does a taskspace whose managed
 directory is no longer on disk, or whose path holds something Kozane never makes, such as a
 symlink or a file. A folder left behind by a renamed namespace is no longer a namespace
-folder, so its taskspaces change only their label too.
+folder, so its taskspaces change only their label too. So does a directory that holds another
+taskspace, which would otherwise move with it.
 
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
@@ -424,7 +426,7 @@ directory name is taken.
 
 Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
 Other directories stay on disk, and so does a symlink or file at a managed path, which is
-`kept`. The directory goes first, with its `.taskspace.json` last, so a failure keeps the
+`kept`, and a directory that holds another taskspace, which would otherwise be deleted too. The directory goes first, with its `.taskspace.json` last, so a failure keeps the
 record and a retry still recognizes the directory. Cards linked to the taskspace keep their
 text and lose the link.
 

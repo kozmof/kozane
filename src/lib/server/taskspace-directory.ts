@@ -220,8 +220,48 @@ export function moveTaskspaceDirectory({
 }
 
 /**
+ * The nearest folder at or above `dir`, strictly inside the workspace, that holds a taskspace
+ * marker, or null when there is none. Kozane checks this before placing a new taskspace, so it
+ * never puts one inside another taskspace's directory, where deleting the outer taskspace
+ * would delete it too. Paths are compared as text, and missing folders are skipped.
+ */
+export function enclosingTaskspaceDir(workspaceRoot: string, dir: string): string | null {
+  const root = resolve(workspaceRoot);
+  for (let current = resolve(dir); isStrictlyInside(root, current); current = dirname(current)) {
+    try {
+      lstatSync(join(current, TASKSPACE_MARKER_FILE));
+      return current;
+    } catch (e) {
+      const code = errorCode(e);
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw e;
+    }
+  }
+  return null;
+}
+
+/** A taskspace record's stored path, as {@link holdsOtherTaskspaces} reads it. */
+export type StoredTaskspacePath = { id: string; path: string | null; pathKind: PathKind };
+
+/**
+ * Whether another taskspace's directory sits inside this one's. Moving or deleting the outer
+ * directory would then break or delete the inner taskspace, so Kozane leaves it where it is.
+ */
+export function holdsOtherTaskspaces(
+  workspaceRoot: string,
+  taskspace: StoredTaskspacePath,
+  all: readonly StoredTaskspacePath[],
+): boolean {
+  if (!taskspace.path) return false;
+  const dir = resolve(workspaceRoot, taskspace.path);
+  return all.some(
+    ({ id, path }) =>
+      id !== taskspace.id && !!path && isStrictlyInside(dir, resolve(workspaceRoot, path)),
+  );
+}
+
+/**
  * The directories missing on the way to `dir`, deepest first. Stops at the first entry that
- * exists, including a dangling symlink, which the caller's realpath check then refuses.
+ * exists, including a dangling symlink, which {@link makeParentsInside} then refuses.
  */
 export function missingDirs(dir: string): string[] {
   const missing: string[] = [];
@@ -239,7 +279,8 @@ export function missingDirs(dir: string): string[] {
 
 /**
  * Create `dir` and the folders above it, but only when it really sits inside the workspace.
- * Return the directories made, deepest first, or null when `dir` is outside.
+ * Return the directories made, deepest first, or null when `dir` is outside or a parent is a
+ * dangling symlink.
  *
  * The textual containment check cannot see symlinks. A parent such as
  * `taskspaces -> /elsewhere` would put the directory outside the workspace, so the nearest
@@ -249,8 +290,23 @@ export function makeParentsInside(workspaceRoot: string, dir: string): string[] 
   const created = missingDirs(dir);
   const existing = created.length > 0 ? dirname(created[created.length - 1]) : resolve(dir);
   const realRoot = realpathSync(workspaceRoot);
-  if (!isWithin(realRoot, realpathSync(existing))) return null;
-  mkdirSync(dir, { recursive: true });
+  let realExisting: string;
+  try {
+    realExisting = realpathSync(existing);
+  } catch (e) {
+    // A dangling symlink, or a loop of them, leads nowhere inside the workspace.
+    const code = errorCode(e);
+    if (code === "ENOENT" || code === "ELOOP") return null;
+    throw e;
+  }
+  if (!isWithin(realRoot, realExisting)) return null;
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    // Take back the folders made before the failure.
+    removeEmptyDirs(created);
+    throw e;
+  }
   // Checked again in case the path changed while the folders were made.
   if (!isWithin(realRoot, realpathSync(dir))) {
     removeEmptyDirs(created);

@@ -1,12 +1,18 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
-import { deleteTaskspace, getTaskspaceInNamespace, updateTaskspace } from "$db/api/taskspace";
+import {
+  deleteTaskspace,
+  getAllTaskspaces,
+  getTaskspaceInNamespace,
+  updateTaskspace,
+} from "$db/api/taskspace";
 import { getAllNamespaces, getNamespace } from "$db/api/namespace";
 import { namespaceFolders } from "$lib/server/taskspace-location";
 import { getTaskspacePlacementConfig, getWorkspaceRoot } from "$db/internal/config";
 import { taskspaceNameIssue, type PathKind } from "$lib/constants";
 import { taskspacePathIssue } from "$lib/server/taskspace-path";
 import {
+  holdsOtherTaskspaces,
   isManagedTaskspaceDirectory,
   removeTaskspaceDirectory,
   renameTaskspaceDirectory,
@@ -57,6 +63,9 @@ async function managedDirectory(db: App.Locals["db"], taskspace: TaskspaceRow) {
     namespaceFolders: [...namespaceFolders(namespaces).values()],
   });
   if (!managed) return null;
+  // Another taskspace inside this directory would move or be deleted with it, so leave the
+  // directory alone: rename changes only the label, and delete keeps it.
+  if (holdsOtherTaskspaces(root, taskspace, await getAllTaskspaces({ db }))) return null;
   const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };
   let claim: DirectoryClaim;
   try {

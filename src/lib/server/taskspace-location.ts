@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { compactId, idMatches, shortIdKey } from "../short-id-key.js";
+import { MIN_SHORT_ID_LENGTH, compactId, idMatches, shortIdKey } from "../short-id-key.js";
 import type { TaskspacePlacement } from "../taskspace-config.js";
 
 /**
@@ -18,11 +18,29 @@ import type { TaskspacePlacement } from "../taskspace-config.js";
  */
 const RESERVED_NAMES = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i;
 
-/**
- * Longest folder name, in characters. Most file systems allow 255 bytes per name. At up to
- * 4 bytes per character, 60 leaves room for the short ID `namespaceFolders` may add.
- */
+/** Longest folder name, in characters, to keep paths readable. */
 const MAX_DIR_NAME_LENGTH = 60;
+
+/**
+ * Longest folder name, in UTF-8 bytes. Most file systems allow 255 bytes per name. This leaves
+ * room for the `-` a reserved name gets and for the longest suffix `namespaceFolders` adds, a
+ * `-` and the 32-digit full ID: 255 - 1 - 33.
+ */
+const MAX_DIR_NAME_BYTES = 221;
+
+const utf8 = new TextEncoder();
+
+/** The leading characters of `text` within both limits, never splitting a character. */
+function capName(text: string): string {
+  let bytes = 0;
+  let out = "";
+  for (const char of [...text].slice(0, MAX_DIR_NAME_LENGTH)) {
+    bytes += utf8.encode(char).length;
+    if (bytes > MAX_DIR_NAME_BYTES) break;
+    out += char;
+  }
+  return out;
+}
 
 /**
  * Turn a namespace name into one plain folder name. The name is put in Unicode NFC form,
@@ -30,8 +48,8 @@ const MAX_DIR_NAME_LENGTH = 60;
  * allowed in folder names on common systems become `-`, and so does each run of whitespace
  * inside the name. Leading dots are dropped so the folder is not hidden, and trailing dots
  * and spaces are dropped because Windows strips them. Long names are cut to
- * {@link MAX_DIR_NAME_LENGTH} characters. Use `fallback`, such as the namespace ID, when
- * nothing usable is left.
+ * {@link MAX_DIR_NAME_LENGTH} characters and {@link MAX_DIR_NAME_BYTES} bytes. Use
+ * `fallback`, such as the namespace ID, when nothing usable is left.
  */
 export function namespaceDirName(name: string, fallback: string): string {
   const stripEnds = (text: string) =>
@@ -46,8 +64,7 @@ export function namespaceDirName(name: string, fallback: string): string {
       // oxlint-disable-next-line no-control-regex
       .replace(/[/\\:*?"<>|\x00-\x1f]/g, "-"),
   ).replace(/\s+/g, "-");
-  // Cut by code point so a character outside the BMP is never split in half.
-  const short = stripEnds([...cleaned].slice(0, MAX_DIR_NAME_LENGTH).join(""));
+  const short = stripEnds(capName(cleaned));
   if (!short) return fallback;
   const base = short.split(".")[0];
   return RESERVED_NAMES.test(base) ? `${base}-${short.slice(base.length)}` : short;
@@ -111,7 +128,7 @@ export function namespaceFolders(namespaces: readonly NamespaceRef[]): Map<strin
     let folder = plain;
     // Lengthen the suffix while it still clashes, such as with a namespace literally named
     // `<name>-<hex>`. The full ID is the last resort.
-    for (let length = 7; taken.has(folder.toLowerCase()); length++)
+    for (let length = MIN_SHORT_ID_LENGTH; taken.has(folder.toLowerCase()); length++)
       folder =
         length <= key.length ? `${plain}-${key.slice(0, length)}` : `${plain}-${compactId(id)}`;
     taken.add(folder.toLowerCase());

@@ -52,9 +52,19 @@ describe("namespaceDirName", () => {
     expect(namespaceDirName("Café", "id")).toBe(namespaceDirName("Café", "id"));
   });
 
+  it("keeps the longest folder name with a full-ID suffix within 255 bytes", () => {
+    const folders = namespaceFolders([
+      { id: "019dddef-87e3-7000-8000-abcdef000001", name: "😀".repeat(100) },
+      { id: "019dddef-87e3-7000-8000-abcdef000002", name: "😀".repeat(100) },
+    ]);
+    for (const folder of folders.values())
+      expect(new TextEncoder().encode(folder).length).toBeLessThanOrEqual(255);
+  });
+
   it("caps long names by character without splitting one", () => {
     expect(namespaceDirName("a".repeat(100), "id")).toBe("a".repeat(60));
-    expect([...namespaceDirName("😀".repeat(100), "id")]).toHaveLength(60);
+    // 4 bytes each, so the byte cap applies first: 55 × 4 = 220 ≤ 221.
+    expect([...namespaceDirName("😀".repeat(100), "id")]).toHaveLength(55);
     expect(namespaceDirName(`${"a".repeat(59)}. b`, "id")).toBe("a".repeat(59));
   });
 });

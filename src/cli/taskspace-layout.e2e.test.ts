@@ -187,3 +187,25 @@ describe("current taskspace layout", () => {
     expect(doctor.status).toBe(1);
   }, 120_000);
 });
+
+describe("taskspace create inside another taskspace", () => {
+  it("refuses, and leaves the outer taskspace untouched", () => {
+    const root = mkdtempSync(join(tmpdir(), "kozane-nested-e2e-"));
+    tempRoots.push(root);
+    cli(root, "init");
+    editTaskspaceConfig(root, (section) => {
+      section.namespaceDirs = false;
+    });
+    cli(root, "taskspace", "create", "outer", "--no-scope");
+    // Point new taskspaces into the one just made.
+    editTaskspaceConfig(root, (section) => {
+      section.defaultDir = join("taskspaces", "outer");
+    });
+
+    const result = runCli(root, "taskspace", "create", "inner", "--no-scope");
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("would be inside the taskspace at");
+    expect(existsSync(join(root, "taskspaces", "outer", "inner"))).toBe(false);
+    expect(cli(root, "taskspace", "list")).not.toContain("inner");
+  });
+});

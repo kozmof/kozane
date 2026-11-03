@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import {
+  enclosingTaskspaceDir,
+  holdsOtherTaskspaces,
   isManagedTaskspaceDirectory,
   makeParentsInside,
   missingDirs,
@@ -135,5 +137,48 @@ describe("isManagedTaskspaceDirectory", () => {
     expect(check(join("taskspaces", "Work", "notes"))).toBe(true);
     expect(check(join("taskspaces", "work", "notes"))).toBe(true);
     expect(check(join("taskspaces", "other", "notes"))).toBe(false);
+  });
+});
+
+describe("enclosingTaskspaceDir", () => {
+  it("finds the nearest folder above that holds a taskspace marker", () => {
+    const root = tempDir("kozane-enclosing-");
+    ownedDirectory(root, join("taskspaces", "Work"), "outer");
+    expect(enclosingTaskspaceDir(root, join(root, "taskspaces", "Work", "deeper"))).toBe(
+      join(root, "taskspaces", "Work"),
+    );
+    expect(enclosingTaskspaceDir(root, join(root, "taskspaces", "Other"))).toBeNull();
+  });
+
+  it("never looks at the workspace root or above it", () => {
+    const root = tempDir("kozane-enclosing-");
+    writeFileSync(join(root, TASKSPACE_MARKER_FILE), "{}");
+    expect(enclosingTaskspaceDir(root, join(root, "taskspaces"))).toBeNull();
+  });
+});
+
+describe("holdsOtherTaskspaces", () => {
+  const row = (id: string, path: string | null) => ({
+    id,
+    path,
+    pathKind: "workspace_relative" as const,
+  });
+
+  it("is true only when another taskspace sits strictly inside", () => {
+    const root = tempDir("kozane-holds-");
+    const outer = row("outer", join("taskspaces", "Work"));
+    const inner = row("inner", join("taskspaces", "Work", "notes"));
+    const sibling = row("sibling", join("taskspaces", "Work-2"));
+    expect(holdsOtherTaskspaces(root, outer, [outer, inner, sibling])).toBe(true);
+    expect(holdsOtherTaskspaces(root, outer, [outer, sibling, row("none", null)])).toBe(false);
+    expect(holdsOtherTaskspaces(root, inner, [outer, inner])).toBe(false);
+  });
+});
+
+describe("makeParentsInside with a dangling symlink", () => {
+  it("returns null instead of throwing", () => {
+    const root = tempDir("kozane-dangling-");
+    symlinkSync(join(root, "gone"), join(root, "taskspaces"));
+    expect(makeParentsInside(root, join(root, "taskspaces", "Work"))).toBeNull();
   });
 });

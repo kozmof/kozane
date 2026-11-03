@@ -63,7 +63,7 @@ async function workspace(taskspace: Record<string, unknown>) {
     );
   };
   const plan = () => planTaskspaceLayout(db, root, readConfig(root));
-  return { db, root, owned, plan };
+  return { db, root, namespaceId, owned, plan };
 }
 
 describe("planTaskspaceLayout", () => {
@@ -206,5 +206,54 @@ describe("applyTaskspaceLayout", () => {
     expect(result.failed[0].reason).toContain("kozane taskspace scan --apply");
     expect(result.moved.map(({ from }) => from)).toEqual(["notes"]);
     expect(result.config).toBe("kept");
+  });
+});
+
+describe("nested taskspaces", () => {
+  it("moves a legacy taskspace named taskspaces before the ones going under it", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("notes");
+    await owned("taskspaces");
+
+    const planned = await plan();
+    expect(planned.moves.map(({ from }) => from)).toEqual(["taskspaces", "notes"]);
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result).toMatchObject({ config: "updated", failed: [] });
+    expect(existsSync(join(root, "taskspaces", "main", "notes", TASKSPACE_MARKER_FILE))).toBe(true);
+    expect(existsSync(join(root, "taskspaces", "main", "taskspaces", TASKSPACE_MARKER_FILE))).toBe(
+      true,
+    );
+    // The old `taskspaces` taskspace no longer holds the new folders.
+    expect(existsSync(join(root, "taskspaces", TASKSPACE_MARKER_FILE))).toBe(false);
+  });
+
+  it("skips a move whose target is inside a taskspace that stays", async () => {
+    const { db, root, namespaceId, owned, plan } = await workspace({ defaultDir: "taskspaces" });
+    // The user's own directory, adopted as a taskspace, where the namespace folder would go.
+    const id = await addTaskspace({
+      db,
+      namespaceId,
+      name: "main",
+      path: join("taskspaces", "main"),
+    });
+    mkdirSync(join(root, "taskspaces", "main"), { recursive: true });
+    writeFileSync(
+      join(root, "taskspaces", "main", TASKSPACE_MARKER_FILE),
+      JSON.stringify({ kind: TASKSPACE_MARKER_KIND, taskspaceId: id }),
+    );
+    await owned(join("elsewhere", "notes"));
+
+    expect((await plan()).moves).toEqual([]);
+  });
+
+  it("does not move a directory that holds another taskspace", async () => {
+    const { owned, plan } = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
+    await owned(join("elsewhere", "outer"));
+    await owned(join("elsewhere", "outer", "inner"));
+
+    // Only the inner one moves; the outer one would carry it along.
+    expect((await plan()).moves.map(({ from }) => from)).toEqual([
+      join("elsewhere", "outer", "inner"),
+    ]);
   });
 });

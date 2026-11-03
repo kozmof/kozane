@@ -164,8 +164,9 @@ config. The layout check reports both:
   updates the record.
 
 Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
-namespace, directories outside the workspace, or ones whose target is outside it or under an
-ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
+namespace, directories outside the workspace, directories that hold another taskspace, or
+ones whose target is outside the workspace, inside another taskspace that stays put, or under
+an ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
 with what to do: move the entry at the target aside, or rename the directory and run
 `kozane taskspace scan --apply`. Running `--fix` again retries it. A directory whose target is
 inside it, such as a taskspace named `taskspaces` at the root, is moved aside first and then
@@ -829,7 +830,8 @@ created at the workspace root. Existing taskspaces stay where they are. Set
 In the folder name, the namespace name is put in Unicode NFC form, and characters not
 allowed in file names (`/ \ : * ? " < > |` and control characters) become `-`. Leading dots
 and trailing dots and spaces are dropped. Each run of spaces inside the name becomes one `-`,
-so `My Project` becomes `My-Project`. Names are cut to 60 characters. A name Windows
+so `My Project` becomes `My-Project`. Names are cut to 60 characters, and to 221 UTF-8
+bytes so a short-ID suffix still fits in 255. A name Windows
 reserves, such as `CON` or `con.txt`, gets a `-` after its base name: `CON-`, `con-.txt`. A
 name with nothing left uses the namespace ID. When two namespaces would get the same folder,
 ignoring case, the oldest keeps it and the others get their short ID added, such as
@@ -861,6 +863,11 @@ The taskspace name must then be one path segment, contain no `/`, `\`, or NUL, n
 with a dot, and not start or end with whitespace.
 With `--dir`, the name is only a label. Store internal paths relative to the workspace and
 external paths as absolute.
+
+Without `--dir`, the create is refused when the target would sit inside another taskspace's
+directory, such as a taskspace made with `namespaceDirs` off whose name matches a namespace
+folder, since deleting that taskspace would delete the new one too. It is also refused when a
+parent folder inside the workspace is a symlink that leads outside it or nowhere.
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]

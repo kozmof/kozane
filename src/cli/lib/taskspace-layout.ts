@@ -22,6 +22,8 @@ import { isStrictlyInside } from "../../lib/server/fs-paths.js";
 import { TaskspaceFilesError } from "../../lib/server/taskspace-files.js";
 import { MIN_SHORT_ID_LENGTH, shortIdKey } from "../../lib/short-id-key.js";
 import {
+  enclosingTaskspaceDir,
+  holdsOtherTaskspaces,
   isManagedTaskspaceDirectory,
   missingDirs,
   moveTaskspaceDirectory,
@@ -99,8 +101,9 @@ export function usesLegacyDefaultDir(root: string): boolean {
  * `defaultDir` counts as `taskspaces`, since `--fix` rewrites it to that.
  *
  * A taskspace is left out when Kozane could not move it anyway: no namespace, a path outside
- * the workspace, a directory it did not create, or a target outside the workspace or under an
- * ambiguous `namespacePaths` key, which `kozane taskspace create` reports on its own.
+ * the workspace, a directory it did not create, a directory that holds another taskspace, or a
+ * target outside the workspace, inside another taskspace, or under an ambiguous
+ * `namespacePaths` key, which `kozane taskspace create` reports on its own.
  */
 export async function planTaskspaceLayout(
   db: DB,
@@ -130,9 +133,12 @@ export async function planTaskspaceLayout(
       namespaceFolders: legacyFolders,
     });
 
-  for (const taskspace of await getAllTaskspaces({ db })) {
+  const taskspaces = await getAllTaskspaces({ db });
+  for (const taskspace of taskspaces) {
     const { id, name, path, pathKind, namespaceId } = taskspace;
     if (!path || pathKind !== "workspace_relative" || !namespaceId) continue;
+    // Moving it would carry another taskspace along and break that one's record.
+    if (holdsOtherTaskspaces(workspaceRoot, taskspace, taskspaces)) continue;
     let parentDir: string;
     try {
       parentDir = taskspaceParentDir({ ...placement, namespaceId, namespaces, folders });
@@ -159,7 +165,40 @@ export async function planTaskspaceLayout(
       oldLayout: inOldLayout(path),
     });
   }
-  return { legacyDefaultDir, moves };
+  return { legacyDefaultDir, moves: withoutNesting(workspaceRoot, moves) };
+}
+
+/**
+ * Drop moves whose target would sit inside another taskspace's directory, where deleting that
+ * taskspace would delete it too. A directory that is itself about to move is no obstacle, such
+ * as a legacy taskspace named `taskspaces` at the root: it is moved first, so the folders
+ * under it are plain folders by the time the others arrive.
+ */
+function withoutNesting(workspaceRoot: string, moves: LayoutMove[]): LayoutMove[] {
+  const enclosingOf = new Map(
+    moves.map((move) => [
+      move,
+      enclosingTaskspaceDir(workspaceRoot, dirname(resolve(workspaceRoot, move.to))),
+    ]),
+  );
+  // Repeat until nothing changes: dropping a move keeps its directory in place, which can
+  // make another move's target nested after all.
+  let kept = moves;
+  for (;;) {
+    const leaving = new Set(kept.map(({ from }) => resolve(workspaceRoot, from)));
+    const next = kept.filter((move) => {
+      const enclosing = enclosingOf.get(move);
+      return enclosing == null || leaving.has(enclosing);
+    });
+    if (next.length === kept.length) break;
+    kept = next;
+  }
+  // Move a directory that others' targets sit under before those others.
+  const enclosesTarget = ({ from }: LayoutMove) =>
+    kept.some(({ to }) =>
+      isStrictlyInside(resolve(workspaceRoot, from), resolve(workspaceRoot, to)),
+    );
+  return [...kept.filter(enclosesTarget), ...kept.filter((move) => !enclosesTarget(move))];
 }
 
 /** Whether `kozane doctor --fix` has anything to do. */
