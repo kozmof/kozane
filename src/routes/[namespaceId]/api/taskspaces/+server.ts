@@ -1,5 +1,5 @@
 import { mkdir, open, realpath, rmdir, unlink } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
@@ -14,19 +14,11 @@ import {
   TASKSPACE_MARKER_KIND,
   TASKSPACE_MARKER_VERSION,
 } from "../../../../lib/taskspace-marker.js";
-import { errorCode } from "$lib/server/fs-paths";
+import { errorCode, isStrictlyInside, isWithin } from "$lib/server/fs-paths";
 import { apiHandler } from "../../lib/api-handler.js";
 
 /** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
 class OutsideWorkspaceError extends Error {}
-
-/**
- * True when a nonempty `relative()` result stays below its base. Compare whole segments so a
- * name such as `..notes` is not mistaken for a parent reference.
- */
-function isInside(rel: string): boolean {
-  return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
-}
 
 export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
@@ -64,7 +56,8 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   // separator stays platform-correct. The name and namespace folder are one segment each,
   // but the configured directories come from the config file and may point outside the root.
   const storedPath = relative(resolve(root), targetDir);
-  if (!isInside(storedPath)) throw error(400, "Taskspace path must be inside the workspace root");
+  if (!isStrictlyInside(resolve(root), targetDir))
+    throw error(400, "Taskspace path must be inside the workspace root");
 
   // The guard above ensures targetDir is always inside the workspace root,
   // so the path is always stored as workspace_relative. Absolute paths are
@@ -88,8 +81,7 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     // would place the directory outside the workspace, so check where the parent really is
     // before claiming anything inside it.
     const realParent = await realpath(dirname(targetDir));
-    const parentRel = relative(await realpath(root), realParent);
-    if (parentRel !== "" && !isInside(parentRel)) throw new OutsideWorkspaceError();
+    if (!isWithin(await realpath(root), realParent)) throw new OutsideWorkspaceError();
     await mkdir(targetDir);
     targetCreated = true;
     const marker = await open(markerPath, "wx", 0o600);

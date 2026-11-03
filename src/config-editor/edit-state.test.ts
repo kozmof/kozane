@@ -95,6 +95,12 @@ describe("input helpers", () => {
     expect(controlText({ ...zoom, kind: "map" }, { "019a": "work/acme" })).toBe("019a = work/acme");
   });
 
+  it("keeps keys named like Object properties as plain keys", () => {
+    const map = parseMapInput("constructor = a\n__proto__ = b\n");
+    expect(Object.keys(map)).toEqual(["constructor", "__proto__"]);
+    expect(Object.getPrototypeOf(map)).toBe(Object.prototype);
+  });
+
   it("keeps a repeated map key so saving reports it", () => {
     expect(parseMapInput("019a = one\n019a = two\n")).toEqual({
       "019a": "one",

@@ -143,7 +143,7 @@ Report all config problems together. Errors include unreadable files, invalid JS
 required keys, and invalid values. Warnings include unknown keys and duplicate shortcuts. Notes
 list defaults for unset optional keys.
 
-Required keys are `name`, `taskspace.defaultDir`, and `taskspace.searchRoots`. Exit 1 for
+Required keys are `name` and `taskspace.searchRoots`. Exit 1 for
 errors, otherwise 0. `--strict` also fails on warnings.
 
 ```bash
@@ -831,7 +831,7 @@ kozane taskspace create <name> [--scope <scopeId>] [--no-scope]
 
 Edit `.kozane/config.json` with `kozane config open`, or edit it by hand and run
 `kozane doctor config`.
-Only `name`, `taskspace.defaultDir`, and `taskspace.searchRoots` are required.
+Only `name` and `taskspace.searchRoots` are required.
 Other keys fall back to built-in defaults individually.
 
 ```json

@@ -93,15 +93,18 @@ export function describeValue(field: FieldSpec, value: unknown): string {
  * `<key> (duplicate)`, so saving reports either one rather than dropping it.
  */
 export function parseMapInput(text: string): Record<string, string> {
-  const map: Record<string, string> = {};
+  const entries: [string, string][] = [];
+  const seen = new Set<string>();
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     const at = line.indexOf("=");
     const key = (at < 0 ? line : line.slice(0, at)).trim();
     const value = at < 0 ? "" : line.slice(at + 1).trim();
-    map[key in map ? `${key} (duplicate)` : key] = value;
+    entries.push([seen.has(key) ? `${key} (duplicate)` : key, value]);
+    seen.add(key);
   }
-  return map;
+  // `fromEntries` keeps a key such as `__proto__` as a plain key, so saving reports it.
+  return Object.fromEntries(entries);
 }
 
 /**

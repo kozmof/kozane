@@ -121,6 +121,20 @@ describe("namespaceFolders", () => {
     expect(folders.get(older)).toBe("My-ns");
     expect(folders.get(newer)).toBe("my-ns-5c3d9e1");
   });
+
+  it("lengthens the suffix when the suffixed name is taken too", () => {
+    const oldest = "019dddee-0000-7000-8000-000000000001";
+    const older = "019dddef-87e3-7000-ac4d-aa414b7e75d7";
+    const newer = "019dddf0-0000-7000-8b2e-5c3d9e1f2a3b";
+    const folders = namespaceFolders([
+      { id: oldest, name: "ns-5c3d9e1" },
+      { id: older, name: "ns" },
+      { id: newer, name: "ns" },
+    ]);
+    expect(folders.get(oldest)).toBe("ns-5c3d9e1");
+    expect(folders.get(older)).toBe("ns");
+    expect(folders.get(newer)).toBe("ns-5c3d9e1f");
+  });
 });
 
 describe("taskspaceParentDir", () => {

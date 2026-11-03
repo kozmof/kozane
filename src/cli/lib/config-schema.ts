@@ -110,6 +110,8 @@ const FIELD_GROUPS: FieldGroup[] = [
         path: "taskspace.defaultDir",
         key: "defaultDir",
         fallback: DEFAULT_TASKSPACE_DIR,
+        // Optional, as the server treats it, so both pick the same directory.
+        optional: true,
         check: defaultDirIssue,
       },
       {

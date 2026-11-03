@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_HOST,
   DEFAULT_SERVER_PORT,
+  DEFAULT_TASKSPACE_DIR,
   DEFAULT_TASKSPACE_NAMESPACE_DIRS,
 } from "../../../lib/constants.js";
 import {
@@ -208,7 +209,8 @@ export function configFields(): FieldSpec[] {
       label: "Default directory",
       help: 'Directory for new taskspaces. Relative paths start at the workspace directory. Defaults to "taskspaces".',
       kind: "string",
-      required: true,
+      defaultValue: DEFAULT_TASKSPACE_DIR,
+      required: false,
     },
     {
       path: "taskspace.namespaceDirs",

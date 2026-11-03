@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { compactId, idMatches, shortIdKey } from "../short-id-key.js";
+import type { TaskspacePlacement } from "../taskspace-config.js";
 
 /**
  * Where Kozane creates a new taskspace when no directory is given. Shared by the browser
@@ -105,21 +106,22 @@ export function namespaceFolders(namespaces: readonly NamespaceRef[]): Map<strin
   const taken = new Set<string>();
   const oldestFirst = [...namespaces].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const { id, name } of oldestFirst) {
-    let folder = namespaceDirName(name, id);
-    if (taken.has(folder.toLowerCase())) folder = `${folder}-${shortIdKey(id).slice(0, 7)}`;
+    const plain = namespaceDirName(name, id);
+    const key = shortIdKey(id);
+    let folder = plain;
+    // Lengthen the suffix while it still clashes, such as with a namespace literally named
+    // `<name>-<hex>`. The full ID is the last resort.
+    for (let length = 7; taken.has(folder.toLowerCase()); length++)
+      folder =
+        length <= key.length ? `${plain}-${key.slice(0, length)}` : `${plain}-${compactId(id)}`;
     taken.add(folder.toLowerCase());
     folders.set(id, folder);
   }
   return folders;
 }
 
-type ParentOptions = {
-  /** `taskspace.defaultDir` from the workspace config. */
-  defaultDir: string;
-  /** `taskspace.namespaceDirs` from the workspace config. */
-  namespaceDirs: boolean;
-  /** `taskspace.namespacePaths` from the workspace config. */
-  namespacePaths: Record<string, string>;
+/** The workspace's `taskspace` placement settings, plus the namespace being placed. */
+type ParentOptions = TaskspacePlacement & {
   /** The namespace the new taskspace joins. */
   namespaceId: string;
   /** Every namespace, to tell whether a short key is ambiguous and to keep folders apart. */

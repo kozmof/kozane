@@ -73,6 +73,11 @@ describe("diagnoseConfig", () => {
       ]);
     });
 
+    // The server falls back to the default too, so both put new taskspaces in the same place.
+    it("accepts a taskspace section without defaultDir", () => {
+      expect(messages({ name: "demo", taskspace: { searchRoots: ["."] } })).toEqual([]);
+    });
+
     it("treats an omitted server section as a note, not a problem", () => {
       writeRawConfig({ name: "demo", taskspace: validConfig.taskspace });
       const report = diagnoseConfig(root);

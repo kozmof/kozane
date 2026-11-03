@@ -67,7 +67,8 @@ export function registerDataCommands(program: Command): void {
     )
     .option(
       "--dir <path>",
-      "Target directory (default: <workspaceRoot>/taskspaces/<namespace>/<name>)",
+      "Target directory (default: set by taskspace.defaultDir, namespaceDirs and namespacePaths; " +
+        "with the defaults, <workspaceRoot>/taskspaces/<namespace>/<name>)",
     )
     .action((name, opts) => taskspaceCreate(name, opts));
 }
