@@ -15,7 +15,7 @@ import {
 } from "../lib/taskspace-scan.js";
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
-import { resolveNamespaceId } from "../lib/namespace-selection.js";
+import { pickNamespaceId, resolveNamespaceId } from "../lib/namespace-selection.js";
 import {
   addTaskspace,
   deleteTaskspace,
@@ -24,10 +24,21 @@ import {
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
+import { isWithin } from "../../lib/server/fs-paths.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
+
+/**
+ * How to store a scanned path: relative when it is inside the workspace root, else absolute.
+ * Whole segments are compared, so `/ws-other` is not taken to be inside `/ws`.
+ */
+function storedLocation(root: string, path: string) {
+  return isWithin(root, path)
+    ? { pathKind: "workspace_relative" as const, storedPath: relative(root, path) }
+    : { pathKind: "absolute" as const, storedPath: path };
+}
 
 function formatAge(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -107,11 +118,7 @@ async function scanWithin(
     console.log(`    old: ${oldAbsolute}`);
     console.log(`    new: ${scanned.path}`);
     if (options.apply) {
-      const pathKind = scanned.path.startsWith(root)
-        ? ("workspace_relative" as const)
-        : ("absolute" as const);
-      const storedPath =
-        pathKind === "workspace_relative" ? relative(root, scanned.path) : scanned.path;
+      const { pathKind, storedPath } = storedLocation(root, scanned.path);
       await db
         .update(taskspaceTable)
         .set({ path: storedPath, pathKind, lastSeenAt: new Date(), updatedAt: new Date() })
@@ -125,23 +132,24 @@ async function scanWithin(
   const namespaceIds = namespaces.map(({ id }) => id);
   const requestedNamespace =
     options.reattach && options.namespace
-      ? await resolveNamespaceId(db, options.namespace)
+      ? pickNamespaceId(namespaces, options.namespace)
       : undefined;
+
+  const existingNamespaces = new Set(namespaceIds);
+  // Picked from the list above, only when an orphan's namespace has been deleted.
+  const workspaceDefault = async () => pickNamespaceId(namespaces);
 
   let failed = 0;
   for (const taskspace of diff.orphans) {
     console.log(`  orphan  ${shortId(taskspace.taskspaceId, taskspaceIds)}  ${taskspace.path}`);
     if (options.apply && options.reattach) {
       try {
-        const placement = await reattachNamespace(db, taskspace.namespaceId, {
+        const placement = await reattachNamespace(taskspace.namespaceId, {
           requested: requestedNamespace,
-          existing: new Set(namespaceIds),
+          existing: existingNamespaces,
+          workspaceDefault,
         });
-        const pathKind = taskspace.path.startsWith(root)
-          ? ("workspace_relative" as const)
-          : ("absolute" as const);
-        const storedPath =
-          pathKind === "workspace_relative" ? relative(root, taskspace.path) : taskspace.path;
+        const { pathKind, storedPath } = storedLocation(root, taskspace.path);
         await db.insert(taskspaceTable).values({
           id: taskspace.taskspaceId,
           namespaceId: placement.namespaceId,
@@ -224,7 +232,11 @@ async function scanWithin(
 type Placement = {
   /** Undefined leaves the taskspace in no namespace, so every board draws it. */
   namespaceId: string | undefined;
-  reason: "marker" | "requested" | "missing";
+  /**
+   * `marker`: the marker's namespace, which still exists. `none`: the marker names no
+   * namespace. `requested`: `--namespace`. `missing`: the marker's namespace was deleted.
+   */
+  reason: "marker" | "none" | "requested" | "missing";
 };
 
 /**
@@ -237,15 +249,23 @@ type Placement = {
  *   deleted ID would break the foreign key and stop the whole scan.
  */
 async function reattachNamespace(
-  db: DB,
   markerNamespaceId: string,
-  { requested, existing }: { requested: string | undefined; existing: Set<string> },
+  {
+    requested,
+    existing,
+    workspaceDefault,
+  }: {
+    requested: string | undefined;
+    existing: ReadonlySet<string>;
+    /** The workspace's default namespace. Throws when there is none. */
+    workspaceDefault: () => Promise<string>;
+  },
 ): Promise<Placement> {
   if (requested) return { namespaceId: requested, reason: "requested" };
-  if (!markerNamespaceId) return { namespaceId: undefined, reason: "marker" };
+  if (!markerNamespaceId) return { namespaceId: undefined, reason: "none" };
   if (existing.has(markerNamespaceId)) return { namespaceId: markerNamespaceId, reason: "marker" };
   try {
-    return { namespaceId: await resolveNamespaceId(db), reason: "missing" };
+    return { namespaceId: await workspaceDefault(), reason: "missing" };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
     throw new Error(
@@ -291,21 +311,16 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       console.error(`Error: ${nameIssue}. Use --dir to choose the directory yourself.`);
       process.exit(1);
     }
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
+    // Loaded once: to pick the namespace, and to name and keep apart its folder.
+    const namespaces = await getAllNamespaces({ db });
+    const namespaceId = pickNamespaceId(namespaces, options.namespace);
 
     let targetDir: string;
     if (options.dir) {
       targetDir = resolve(options.dir);
     } else {
-      const namespaces = await getAllNamespaces({ db });
-      const namespace = namespaces.find(({ id }) => id === namespaceId);
-      if (!namespace) throw new Error(`Namespace not found: ${namespaceId}`);
       // An ambiguous `namespacePaths` key throws, and the command wrapper reports it.
-      const parentDir = taskspaceParentDir({
-        ...config.taskspace,
-        namespace,
-        allNamespaceIds: namespaces.map(({ id }) => id),
-      });
+      const parentDir = taskspaceParentDir({ ...config.taskspace, namespaceId, namespaces });
       targetDir = resolve(root, parentDir, name);
     }
 

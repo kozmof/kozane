@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { compactId, idMatches } from "../short-id-key.js";
+import { compactId, idMatches, shortIdKey } from "../short-id-key.js";
 
 /**
  * Where Kozane creates a new taskspace when no directory is given. Shared by the browser
@@ -66,6 +66,30 @@ export function namespacePathFor(
   return namespacePaths[best];
 }
 
+export type NamespaceRef = { id: string; name: string };
+
+/**
+ * The folder each namespace's taskspaces go in when `taskspace.namespaceDirs` is on, by
+ * namespace ID.
+ *
+ * Two namespaces whose names give the same folder, such as "My ns" and "My-ns", or "Work"
+ * and "work" on a case-insensitive disk, would otherwise share it. The oldest namespace
+ * keeps the plain name and the others get their short ID added. IDs are UUIDv7, so the
+ * oldest sorts first, and a namespace created later never moves an existing one's folder.
+ */
+export function namespaceFolders(namespaces: readonly NamespaceRef[]): Map<string, string> {
+  const folders = new Map<string, string>();
+  const taken = new Set<string>();
+  const oldestFirst = [...namespaces].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const { id, name } of oldestFirst) {
+    let folder = namespaceDirName(name, id);
+    if (taken.has(folder.toLowerCase())) folder = `${folder}-${shortIdKey(id).slice(0, 7)}`;
+    taken.add(folder.toLowerCase());
+    folders.set(id, folder);
+  }
+  return folders;
+}
+
 type ParentOptions = {
   /** `taskspace.defaultDir` from the workspace config. */
   defaultDir: string;
@@ -73,9 +97,10 @@ type ParentOptions = {
   namespaceDirs: boolean;
   /** `taskspace.namespacePaths` from the workspace config. */
   namespacePaths: Record<string, string>;
-  namespace: { id: string; name: string };
-  /** Every namespace ID, to tell whether a short key is ambiguous. */
-  allNamespaceIds: readonly string[];
+  /** The namespace the new taskspace joins. */
+  namespaceId: string;
+  /** Every namespace, to tell whether a short key is ambiguous and to keep folders apart. */
+  namespaces: readonly NamespaceRef[];
 };
 
 /**
@@ -86,12 +111,14 @@ export function taskspaceParentDir({
   defaultDir,
   namespaceDirs,
   namespacePaths,
-  namespace,
-  allNamespaceIds,
+  namespaceId,
+  namespaces,
 }: ParentOptions): string {
-  const custom = namespacePathFor(namespacePaths, namespace.id, allNamespaceIds);
+  const allIds = namespaces.map(({ id }) => id);
+  const custom = namespacePathFor(namespacePaths, namespaceId, allIds);
   if (custom !== undefined) return custom;
-  return namespaceDirs
-    ? join(defaultDir, namespaceDirName(namespace.name, namespace.id))
-    : defaultDir;
+  if (!namespaceDirs) return defaultDir;
+  const folder = namespaceFolders(namespaces).get(namespaceId);
+  if (folder === undefined) throw new Error(`Namespace not found: ${namespaceId}`);
+  return join(defaultDir, folder);
 }

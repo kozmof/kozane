@@ -6,6 +6,18 @@ export async function resolveNamespaceId(db: AnyDB, requestedId?: string): Promi
   const namespaces = await db
     .select({ id: namespaceTable.id, isDefault: namespaceTable.isDefault })
     .from(namespaceTable);
+  return pickNamespaceId(namespaces, requestedId);
+}
+
+/**
+ * {@link resolveNamespaceId} over namespaces already loaded, for callers that need the list
+ * for something else too: the requested ID or short ID, else the default namespace, else
+ * the only one.
+ */
+export function pickNamespaceId(
+  namespaces: readonly { id: string; isDefault: boolean }[],
+  requestedId?: string,
+): string {
   if (requestedId) {
     return resolveShortId(
       requestedId,

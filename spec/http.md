@@ -398,8 +398,9 @@ Names must be one path segment, contain no `/`, `\`, or NUL, and not start
 with a dot. External taskspaces require CLI `taskspace create --dir`.
 
 Return 400 for an invalid name, unknown scope, configured directory outside
-the workspace, or `taskspace.namespacePaths` key that matches more than one
-namespace, 404 for an unknown namespace, 409 for an existing directory,
+the workspace, invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths`
+value (refused as `kozane taskspace create` refuses it, rather than skipped), or
+`taskspace.namespacePaths` key that matches more than one namespace, 404 for an unknown namespace, 409 for an existing directory,
 or 503 without a workspace.
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
@@ -408,12 +409,13 @@ Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
 
 A managed directory is renamed on disk too. A directory is managed when Kozane created it:
 its path is workspace-relative and sits in `taskspace.defaultDir`, directly or in a
-namespace folder there, or directly in a `taskspace.namespacePaths` directory, and its
+current namespace's folder there, or directly in a `taskspace.namespacePaths` directory, and its
 `.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
 follow the creation rules. Other taskspaces, including directories chosen with
 `kozane taskspace create --dir`, change only their label. So does a taskspace whose managed
 directory is no longer on disk, or whose path holds something Kozane never makes, such as a
-symlink or a file.
+symlink or a file. A folder left behind by a renamed namespace is no longer a namespace
+folder, so its taskspaces change only their label too.
 
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.

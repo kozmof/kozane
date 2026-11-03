@@ -776,8 +776,9 @@ Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<namespace>/<name>`
 leave out the namespace folder. In the folder name, characters not allowed in file names
 (`/ \ : * ? " < > |` and control characters) become `-`, and leading dots and trailing dots
 and spaces are dropped. Each run of spaces inside the name becomes one `-`, so `My Project`
-becomes `My-Project`. A name with nothing left uses the namespace ID. Renaming a namespace
-does not move folders made earlier.
+becomes `My-Project`. A name with nothing left uses the namespace ID. When two namespaces would get the same
+folder, ignoring case, the oldest keeps it and the others get their short ID added, such as
+`work-5c3d9e1`. Renaming a namespace does not move folders made earlier.
 
 To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
 taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever

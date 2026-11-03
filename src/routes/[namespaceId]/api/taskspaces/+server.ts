@@ -6,12 +6,7 @@ import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
 import { getAllNamespaces, getNamespace } from "$db/api/namespace";
 import { getScope } from "$db/api/scope";
 import { readJsonObject, requireBoundedName, requireTrimmedString } from "../../lib/request.js";
-import {
-  getWorkspaceRoot,
-  getTaskspaceDefaultDir,
-  getTaskspaceNamespaceDirs,
-  getTaskspaceNamespacePaths,
-} from "$db/internal/config";
+import { getWorkspaceRoot, getTaskspacePlacementConfig } from "$db/internal/config";
 import { AmbiguousNamespacePathError, taskspaceParentDir } from "$lib/server/taskspace-location";
 import { taskspaceNameIssue } from "$lib/constants";
 import {
@@ -48,14 +43,15 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   const root = getWorkspaceRoot();
   if (!root) throw error(503, "No Kozane workspace found. Run 'kozane init' first.");
 
+  const placement = getTaskspacePlacementConfig(root);
+  if (!placement.ok) throw error(400, `Fix .kozane/config.json: ${placement.issue}`);
+
   let parentDir: string;
   try {
     parentDir = taskspaceParentDir({
-      defaultDir: getTaskspaceDefaultDir(root),
-      namespaceDirs: getTaskspaceNamespaceDirs(root),
-      namespacePaths: getTaskspaceNamespacePaths(root),
-      namespace,
-      allNamespaceIds: (await getAllNamespaces({ db })).map(({ id }) => id),
+      ...placement.value,
+      namespaceId: namespace.id,
+      namespaces: await getAllNamespaces({ db }),
     });
   } catch (e) {
     if (e instanceof AmbiguousNamespacePathError) throw error(400, e.message);

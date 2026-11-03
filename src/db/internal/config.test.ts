@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   _resetWorkspaceRootForTest,
   getTaskspaceDefaultDir,
-  getTaskspaceNamespaceDirs,
+  getTaskspacePlacementConfig,
   getTaskspaceNamespacePaths,
   getUiConfigForRoot,
   getWorkspaceName,
@@ -88,17 +88,38 @@ describe("getTaskspaceDefaultDir", () => {
   });
 });
 
-describe("getTaskspaceNamespaceDirs", () => {
-  it("defaults to on", () => {
-    expect(getTaskspaceNamespaceDirs(root)).toBe(true);
+describe("getTaskspacePlacementConfig", () => {
+  it("uses the defaults for fields that are left out", () => {
+    expect(getTaskspacePlacementConfig(root)).toEqual({
+      ok: true,
+      value: { defaultDir: "taskspaces", namespaceDirs: true, namespacePaths: {} },
+    });
   });
 
-  it("reads false, and ignores a value that is not a boolean", () => {
-    writeConfig({ name: "w", taskspace: { namespaceDirs: false } });
-    expect(getTaskspaceNamespaceDirs(root)).toBe(false);
+  it("reads the configured values", () => {
+    writeConfig({
+      name: "w",
+      taskspace: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a": "x" } },
+    });
+    expect(getTaskspacePlacementConfig(root)).toEqual({
+      ok: true,
+      value: { defaultDir: "spaces", namespaceDirs: false, namespacePaths: { "019a": "x" } },
+    });
+  });
 
+  // The CLI refuses these, so skipping them would put the taskspace somewhere else.
+  it("reports an invalid field instead of skipping it", () => {
     writeConfig({ name: "w", taskspace: { namespaceDirs: "no" } });
-    expect(getTaskspaceNamespaceDirs(root)).toBe(true);
+    expect(getTaskspacePlacementConfig(root)).toEqual({
+      ok: false,
+      issue: "taskspace.namespaceDirs must be true or false",
+    });
+
+    writeConfig({ name: "w", taskspace: { namespacePaths: { Work: "work" } } });
+    expect(getTaskspacePlacementConfig(root)).toMatchObject({ ok: false });
+
+    writeConfig({ name: "w", taskspace: { namespacePaths: { "019a": "work", "019b": "" } } });
+    expect(getTaskspacePlacementConfig(root)).toMatchObject({ ok: false });
   });
 });
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AmbiguousNamespacePathError,
   namespaceDirName,
+  namespaceFolders,
   namespacePathFor,
   taskspaceParentDir,
 } from "./taskspace-location.js";
@@ -79,14 +80,43 @@ describe("namespacePathFor", () => {
   });
 });
 
+describe("namespaceFolders", () => {
+  it("gives each namespace its cleaned name", () => {
+    const folders = namespaceFolders([
+      { id: "a1", name: "Work" },
+      { id: "b2", name: "My notes" },
+    ]);
+    expect(folders).toEqual(
+      new Map([
+        ["a1", "Work"],
+        ["b2", "My-notes"],
+      ]),
+    );
+  });
+
+  it("keeps the plain name for the oldest namespace and suffixes the rest", () => {
+    const older = "019dddef-87e3-7000-ac4d-aa414b7e75d7";
+    const newer = "019dddf0-0000-7000-8b2e-5c3d9e1f2a3b";
+    // Listed newest first, to show the order comes from the IDs.
+    const folders = namespaceFolders([
+      { id: newer, name: "my ns" },
+      { id: older, name: "My-ns" },
+    ]);
+    expect(folders.get(older)).toBe("My-ns");
+    expect(folders.get(newer)).toBe("my-ns-5c3d9e1");
+  });
+});
+
 describe("taskspaceParentDir", () => {
-  const namespace = { id: "ns-1", name: "Work" };
   const base = {
     defaultDir: "taskspaces",
     namespaceDirs: true,
     namespacePaths: {},
-    namespace,
-    allNamespaceIds: ["ns-1", "ns-2"],
+    namespaceId: "ns-1",
+    namespaces: [
+      { id: "ns-1", name: "Work" },
+      { id: "ns-2", name: "Home" },
+    ],
   };
 
   it("adds the namespace folder when namespaceDirs is on", () => {
@@ -105,17 +135,36 @@ describe("taskspaceParentDir", () => {
       join("taskspaces", "Work"),
     );
   });
+
+  it("keeps two namespaces whose names clean to the same folder apart", () => {
+    const namespaces = [
+      { id: "ns-1", name: "Work" },
+      { id: "ns-2", name: "work" },
+    ];
+    expect(taskspaceParentDir({ ...base, namespaces })).toBe(join("taskspaces", "Work"));
+    expect(taskspaceParentDir({ ...base, namespaces, namespaceId: "ns-2" })).toBe(
+      join("taskspaces", "work-ns2"),
+    );
+  });
 });
 
 describe("isManagedTaskspaceDirectory", () => {
-  const check = (storedPath: string) =>
+  const check = (storedPath: string, defaultDir = "taskspaces") =>
     isManagedTaskspaceDirectory({
       workspaceRoot: "/work",
       storedPath,
       pathKind: "workspace_relative",
-      defaultDir: "taskspaces",
+      defaultDir,
       namespacePaths: ["clients/acme", "/work/abs"],
+      namespaceFolders: ["Work"],
     });
+
+  it("rejects a folder in defaultDir that is no current namespace's folder", () => {
+    expect(check(join("taskspaces", "Other", "notes"))).toBe(false);
+    // With defaultDir at the root, the user's own src/lib must stay out of reach.
+    expect(check(join("src", "lib"), ".")).toBe(false);
+    expect(check(join("Work", "notes"), ".")).toBe(true);
+  });
 
   it("accepts a directory directly in defaultDir or in a namespace folder there", () => {
     expect(check(join("taskspaces", "notes"))).toBe(true);

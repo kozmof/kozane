@@ -3,10 +3,8 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
 import { DEFAULT_UI_CONFIG, type UiConfig, parseUiOverrides } from "../../lib/ui-config.js";
 import { fileSignature } from "../../lib/server/file-signature.js";
-import {
-  DEFAULT_TASKSPACE_DIR,
-  DEFAULT_TASKSPACE_NAMESPACE_DIRS,
-} from "../../lib/constants/workspace.js";
+import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants/workspace.js";
+import { readTaskspacePlacement } from "../../lib/taskspace-config.js";
 
 export function findWorkspaceRoot(startDir: string | undefined): string | null {
   if (!startDir) return null;
@@ -148,12 +146,15 @@ export function getTaskspaceDefaultDir(root: string): string {
   return typeof dir === "string" && dir ? dir : DEFAULT_TASKSPACE_DIR;
 }
 
-/** `taskspace.namespaceDirs`, or its default when unset or not a boolean. */
-export function getTaskspaceNamespaceDirs(root: string): boolean {
-  const taskspace = readParsedConfig(root)?.taskspace;
-  if (typeof taskspace !== "object" || taskspace === null) return DEFAULT_TASKSPACE_NAMESPACE_DIRS;
-  const value = (taskspace as Record<string, unknown>).namespaceDirs;
-  return typeof value === "boolean" ? value : DEFAULT_TASKSPACE_NAMESPACE_DIRS;
+/**
+ * The settings that decide where a new taskspace goes, checked by the same rules as the CLI.
+ * An invalid one is returned as an issue instead of skipped, since `kozane taskspace create`
+ * refuses it too, so the browser never picks a different directory than the CLI would.
+ */
+export function getTaskspacePlacementConfig(
+  root: string,
+): ReturnType<typeof readTaskspacePlacement> {
+  return readTaskspacePlacement(readParsedConfig(root)?.taskspace);
 }
 
 /**

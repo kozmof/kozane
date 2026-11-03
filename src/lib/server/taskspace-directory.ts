@@ -7,7 +7,7 @@ import {
   rmSync,
   rmdirSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import type { TaskspaceDirectoryOutcome } from "../types.js";
@@ -19,7 +19,7 @@ import { TaskspaceFilesError } from "./taskspace-files.js";
  *
  * Only a directory Kozane made itself is touched. Its path is stored relative to the
  * workspace and sits where Kozane creates taskspaces: in `taskspace.defaultDir`, directly or
- * in a namespace folder there, or directly in a `taskspace.namespacePaths` directory. Its
+ * in a current namespace's folder there, or directly in a `taskspace.namespacePaths` directory. Its
  * `.taskspace.json` names the taskspace and says `ownsDirectory: true`. The path alone is
  * not enough: `defaultDir` can be set to `.`, so `kozane taskspace create --dir src` would
  * otherwise put the user's own `src` in reach. Any other directory belongs to the user, so
@@ -33,7 +33,9 @@ type ManagedCheck = {
   /** `taskspace.defaultDir` from the workspace config, relative to the root or absolute. */
   defaultDir: string;
   /** The directories in `taskspace.namespacePaths`, relative to the root or absolute. */
-  namespacePaths?: readonly string[];
+  namespacePaths: readonly string[];
+  /** Every current namespace's folder name, as `namespaceFolders()` in taskspace-location.ts gives it. */
+  namespaceFolders: readonly string[];
 };
 
 /**
@@ -48,15 +50,20 @@ export function isManagedTaskspaceDirectory({
   storedPath,
   pathKind,
   defaultDir,
-  namespacePaths = [],
+  namespacePaths,
+  namespaceFolders,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
   const parent = dirname(resolve(workspaceRoot, storedPath));
   const base = resolve(workspaceRoot, defaultDir);
-  // Directly in `defaultDir`, or in a namespace folder inside it. Both are accepted whatever
-  // `taskspace.namespaceDirs` says now, so turning it on or off, or renaming a namespace,
-  // keeps directories made earlier manageable.
-  if (parent === base || dirname(parent) === base) return true;
+  // Directly in `defaultDir`, or in a current namespace's folder inside it. Both are accepted
+  // whatever `taskspace.namespaceDirs` says now, so turning it on or off keeps directories
+  // made earlier manageable. Any other folder is refused: with `defaultDir` set to `.`,
+  // accepting every grandchild would put the user's own `src/lib` in reach. A namespace that
+  // was renamed leaves its old folder unmanaged, which only means rename and delete stop
+  // touching that directory.
+  if (parent === base) return true;
+  if (dirname(parent) === base && namespaceFolders.includes(basename(parent))) return true;
   // Any configured namespace path is accepted, not only the one for this taskspace's
   // namespace, so moving a taskspace to another namespace keeps it manageable.
   return namespacePaths.some((dir) => parent === resolve(workspaceRoot, dir));

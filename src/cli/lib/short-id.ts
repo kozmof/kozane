@@ -1,4 +1,4 @@
-import { SHORT_ID_KEY_LENGTH, compactId, shortIdKey } from "../../lib/short-id-key.js";
+import { compactId, idMatches, shortIdKey } from "../../lib/short-id-key.js";
 
 /**
  * Minimum displayed short-ID length. Extend it to resolve collisions. Share the value
@@ -6,7 +6,6 @@ import { SHORT_ID_KEY_LENGTH, compactId, shortIdKey } from "../../lib/short-id-k
  * shorter input.
  */
 export const MIN_SHORT_ID_LENGTH = 7;
-const compact = compactId;
 
 export function shortId(id: string, allIds: string[]): string {
   const key = shortIdKey(id);
@@ -15,7 +14,7 @@ export function shortId(id: string, allIds: string[]): string {
     if (allIds.filter((candidate) => shortIdKey(candidate).startsWith(prefix)).length === 1)
       return prefix;
   }
-  return compact(id);
+  return compactId(id);
 }
 
 /**
@@ -35,7 +34,7 @@ export function shortIdMap(allIds: string[]): Map<string, string> {
 
   const shortIds = new Map<string, string>();
   for (const [id, key] of keyed) {
-    let resolved = compact(id);
+    let resolved = compactId(id);
     for (let length = Math.min(MIN_SHORT_ID_LENGTH, key.length); length <= key.length; length++) {
       const prefix = key.slice(0, length);
       if (prefixCounts.get(prefix) === 1) {
@@ -49,14 +48,12 @@ export function shortIdMap(allIds: string[]): Map<string, string> {
 }
 
 export function resolveShortId(input: string, allIds: string[], label: string): string {
-  const normalized = compact(input);
-  const exact = allIds.find((id) => compact(id) === normalized);
+  const normalized = compactId(input);
+  const exact = allIds.find((id) => compactId(id) === normalized);
   if (exact) return exact;
 
-  const matches =
-    normalized.length <= SHORT_ID_KEY_LENGTH
-      ? allIds.filter((id) => shortIdKey(id).startsWith(normalized))
-      : [];
+  // Same matching rule as config lookups such as `taskspace.namespacePaths`.
+  const matches = allIds.filter((id) => idMatches(input, id));
   if (matches.length === 1) return matches[0];
   if (matches.length === 0) throw new Error(`${label} not found: ${input}`);
   throw new Error(`Ambiguous ${label.toLowerCase()} ID: ${input}. Use more characters.`);

@@ -5,6 +5,11 @@ import {
   DEFAULT_TASKSPACE_NAMESPACE_DIRS,
 } from "../../lib/constants.js";
 import {
+  defaultDirIssue,
+  namespaceDirsIssue,
+  namespacePathsIssue,
+} from "../../lib/taskspace-config.js";
+import {
   type ConfigIssue,
   type UiConfig,
   type ValidationResult,
@@ -65,22 +70,6 @@ function stringRule(path: string, key: string, fallback: string): FieldRule {
 }
 
 /**
- * `taskspace.namespacePaths` maps a namespace ID, full or short, to a directory. IDs
- * are hex digits and dashes, so a key with anything else is most likely a namespace name.
- */
-function namespacePathsIssue(value: unknown): string | null {
-  const path = "taskspace.namespacePaths";
-  if (!isPlainObject(value)) return `${path} must be an object of namespace IDs to directories`;
-  for (const [key, dir] of Object.entries(value)) {
-    if (!/^[0-9a-f-]+$/i.test(key))
-      return `${path} key "${key}" must be a namespace ID, as kozane namespace list shows it`;
-    if (typeof dir !== "string" || !dir.trim())
-      return `${path}.${key} must be a nonempty directory path`;
-  }
-  return null;
-}
-
-/**
  * Shared schema for reading configuration and reporting configuration problems.
  *
  * Declaration order determines diagnostic order and the first error thrown by `readConfig`.
@@ -115,14 +104,19 @@ const FIELD_GROUPS: FieldGroup[] = [
     section: "taskspace",
     required: true,
     rules: [
-      stringRule("taskspace.defaultDir", "defaultDir", DEFAULT_TASKSPACE_DIR),
+      // The placement fields share their checks with the server, see lib/taskspace-config.
+      {
+        path: "taskspace.defaultDir",
+        key: "defaultDir",
+        fallback: DEFAULT_TASKSPACE_DIR,
+        check: defaultDirIssue,
+      },
       {
         path: "taskspace.namespaceDirs",
         key: "namespaceDirs",
         fallback: DEFAULT_TASKSPACE_NAMESPACE_DIRS,
         optional: true,
-        check: (value) =>
-          typeof value === "boolean" ? null : "taskspace.namespaceDirs must be true or false",
+        check: namespaceDirsIssue,
       },
       {
         path: "taskspace.namespacePaths",

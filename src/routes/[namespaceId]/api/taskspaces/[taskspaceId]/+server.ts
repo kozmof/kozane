@@ -1,7 +1,8 @@
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { deleteTaskspace, getTaskspaceInNamespace, updateTaskspace } from "$db/api/taskspace";
-import { getNamespace } from "$db/api/namespace";
+import { getAllNamespaces, getNamespace } from "$db/api/namespace";
+import { namespaceFolders, type NamespaceRef } from "$lib/server/taskspace-location";
 import {
   getTaskspaceDefaultDir,
   getTaskspaceNamespacePaths,
@@ -38,7 +39,7 @@ type TaskspaceRow = { id: string; path: string | null; pathKind: PathKind };
  * Where the browser may change this taskspace's directory on disk, with who owns what is
  * there, or null when the path is not where Kozane creates taskspaces.
  */
-function managedDirectory(taskspace: TaskspaceRow) {
+function managedDirectory(taskspace: TaskspaceRow, namespaces: readonly NamespaceRef[]) {
   const { path: storedPath, pathKind } = taskspace;
   if (!storedPath || taskspacePathIssue(storedPath, pathKind)) return null;
   const root = getWorkspaceRoot();
@@ -49,6 +50,7 @@ function managedDirectory(taskspace: TaskspaceRow) {
     pathKind,
     defaultDir: getTaskspaceDefaultDir(root),
     namespacePaths: Object.values(getTaskspaceNamespacePaths(root)),
+    namespaceFolders: [...namespaceFolders(namespaces).values()],
   });
   if (!managed) return null;
   const target = { workspaceRoot: root, storedPath, taskspaceId: taskspace.id };
@@ -81,7 +83,7 @@ async function rename(locals: App.Locals, params: TaskspaceParams, name: string)
 
   if (name === taskspace.name) return reply(taskspace.path);
 
-  const managed = managedDirectory(taskspace);
+  const managed = managedDirectory(taskspace, await getAllNamespaces({ db }));
   // A missing directory has nothing to move, so only the label changes, as DELETE allows.
   if (managed?.claim !== "owned") {
     await updateTaskspace({ db, taskspaceId: taskspace.id, name });
@@ -133,7 +135,7 @@ export const DELETE: RequestHandler = apiHandler(({ locals, params }) =>
 async function remove(locals: App.Locals, params: TaskspaceParams) {
   const { db } = locals;
   const taskspace = await visibleTaskspace(locals, params.namespaceId, params.taskspaceId);
-  const managed = managedDirectory(taskspace);
+  const managed = managedDirectory(taskspace, await getAllNamespaces({ db }));
 
   let directory: TaskspaceDirectoryOutcome = "kept";
   if (managed?.claim === "missing") directory = "missing";
