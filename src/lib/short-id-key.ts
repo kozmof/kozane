@@ -3,7 +3,7 @@
  * and by config lookups that accept them, such as `taskspace.namespacePaths`.
  *
  * UUIDv7 IDs made close together share their leading timestamp, so short IDs are taken from
- * the random tail instead: a prefix of the last {@link SHORT_ID_KEY_LENGTH} hex digits.
+ * the random tail. Each short ID is a prefix of the last {@link SHORT_ID_KEY_LENGTH} hex digits.
  */
 export const SHORT_ID_KEY_LENGTH = 12;
 
@@ -28,8 +28,8 @@ export function shortIdKey(id: string): string {
 }
 
 /**
- * Whether `input` names `id`: the full ID, with or without dashes, or a short ID as the CLI
- * prints it. An empty input matches nothing.
+ * Match `input` against the full ID or a prefix of its short-ID key. Ignore case and
+ * dashes. An empty input matches nothing.
  */
 export function idMatches(input: string, id: string): boolean {
   const normalized = compactId(input);

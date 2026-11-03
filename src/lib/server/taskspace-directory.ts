@@ -69,7 +69,7 @@ export function isManagedTaskspaceDirectory({
   if (!storedPath || pathKind !== "workspace_relative") return false;
   // Paths are compared ignoring case, as a case-insensitive disk does, so a config naming
   // `Taskspaces` still manages directories in `taskspaces`. That only widens this first
-  // check: the marker still decides ownership.
+  // check. The marker still decides ownership.
   const key = (path: string) => folderKey(resolve(workspaceRoot, path));
   const parent = key(dirname(resolve(workspaceRoot, storedPath)));
   const base = key(placement.defaultDir);
@@ -166,8 +166,8 @@ export function taskspaceDirectoryClaim({
 }
 
 /**
- * Move an owned taskspace directory to `newName` beside it. Return the new stored path. Never
- * replaces an existing entry that was there when checked.
+ * Move an owned taskspace directory to `newName` beside it. Return the new stored path.
+ * Refuse a different entry found at the target before renaming.
  *
  * Node has no rename that refuses to replace its target, so another process that creates
  * `newName` between the check and the move can still lose an empty directory to it. A

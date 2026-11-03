@@ -1,14 +1,14 @@
 /**
- * Finding and fixing taskspace directories that are not where Kozane now puts them.
+ * Find and move taskspace directories outside the configured layout.
  *
  * Older workspaces put new taskspaces at `<root>/<name>`, and their config says
- * `"defaultDir": "."`. The current layout is `<root>/taskspaces/<namespace>/<name>`. Only
+ * `"defaultDir": "."`. The default layout is now `<root>/taskspaces/<namespace>/<name>`. Only
  * directories Kozane created itself (`ownsDirectory: true` in the marker) are moved. Any
  * other directory is the user's and stays where it is.
  *
  * `kozane open` refuses to start while a move out of the old layout is pending, and
- * `kozane doctor --fix` makes it. Other moves, such as after a namespace was renamed, are
- * only reported.
+ * `kozane doctor --fix` moves the directories. Other moves, such as after a namespace
+ * rename, are reported by `kozane doctor` and applied with `--fix` without blocking open.
  */
 import { lstatSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -424,7 +424,8 @@ function moveFailure(move: LayoutMove, e: unknown): string {
  *   move:  from ──step 1──▶ aside ──step 2──▶ to
  *   undo:  from ◀──undo 1── aside ◀──undo 2── to    (undo 2 runs first)
  *
- * If step 2 fails, undo 1 runs at once, so a failed move leaves the directory at `from`.
+ * If step 2 fails, attempt undo 1 immediately. If that also fails, report the temporary
+ * path and the scan command needed to repair the stored path.
  */
 function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutMove): () => void {
   const step = (stepFrom: string, stepTo: string) => {

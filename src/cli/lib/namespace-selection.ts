@@ -10,9 +10,8 @@ export async function resolveNamespaceId(db: AnyDB, requestedId?: string): Promi
 }
 
 /**
- * {@link resolveNamespaceId} over namespaces already loaded, for callers that need the list
- * for something else too: the requested ID or short ID, else the default namespace, else
- * the only one.
+ * Resolve a namespace from an already loaded list. Use the requested full or short ID,
+ * otherwise the default namespace, otherwise the only namespace. Throw if none can be chosen.
  */
 export function pickNamespaceId(
   namespaces: readonly { id: string; isDefault: boolean }[],

@@ -65,8 +65,8 @@ export function openBrowser(url: string): void {
  * `"defaultDir": "."`, the same rule `kozane doctor` fails on. The browser would create new
  * taskspaces in the old layout, and it only renames and deletes directories in the current
  * one, so it would leave the old ones alone without saying so. Other out-of-place
- * directories, such as after a namespace was renamed, do not block; `kozane doctor` reports
- * them.
+ * directories, such as after a namespace rename, do not block startup. `kozane doctor`
+ * reports them.
  */
 async function refuseOldLayout(
   url: string,

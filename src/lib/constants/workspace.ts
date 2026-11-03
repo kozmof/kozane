@@ -12,14 +12,14 @@ export const PATH_KINDS = ["workspace_relative", "absolute"] as const;
 export type PathKind = (typeof PATH_KINDS)[number];
 
 /**
- * Default `taskspace.defaultDir`, relative to the workspace root. New taskspaces go to
- * `<root>/taskspaces/<name>` unless the config names another directory.
+ * Default base directory for new taskspaces, relative to the workspace root.
+ * `namespaceDirs` adds a namespace folder unless `namespacePaths` overrides the location.
  */
 export const DEFAULT_TASKSPACE_DIR = "taskspaces";
 
 /**
  * Default `taskspace.namespaceDirs`. When on, new taskspaces go in a folder named after their
- * namespace: `<root>/taskspaces/<namespace>/<name>`.
+ * namespace under `defaultDir`, unless `namespacePaths` overrides the location.
  */
 export const DEFAULT_TASKSPACE_NAMESPACE_DIRS = true;
 
