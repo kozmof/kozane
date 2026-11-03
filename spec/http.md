@@ -397,27 +397,32 @@ Return `{ id, path, pathKind: "workspace_relative" }`.
 Names must be one path segment, contain no `/`, `\`, or NUL, and not start
 with a dot. External taskspaces require CLI `taskspace create --dir`.
 
-Return 400 for an invalid name, unknown scope, configured directory outside
-the workspace, invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths`
-value (refused as `kozane taskspace create` refuses it, rather than skipped), or
-`taskspace.namespacePaths` key that matches more than one namespace, 404 for an unknown namespace, 409 for an existing directory
-or a target inside another taskspace's directory, or 503 without a workspace. A parent folder
-that is a symlink leading outside the workspace, or nowhere, is refused with 400.
+| Status | Reason |
+| ------ | ------ |
+| 400 | Invalid name, unknown scope, or configured directory outside the workspace |
+| 400 | Invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths` value |
+| 400 | Selected `namespacePaths` key matches multiple namespaces |
+| 400 | Parent symlink points outside the workspace or has no target |
+| 404 | Unknown namespace |
+| 409 | Directory already exists or target is inside another taskspace |
+| 503 | No workspace |
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
 
 Rename a taskspace. Body requires `name`. Return `{ id, name, path, pathKind }`.
 
-A managed directory is renamed on disk too. A directory is managed when Kozane created it:
-its path is workspace-relative and sits in `taskspace.defaultDir`, directly or in a
-current namespace's folder there, or directly in a `taskspace.namespacePaths` directory, and its
-`.taskspace.json` names this taskspace with `ownsDirectory: true`. The name must then
-follow the creation rules. Other taskspaces, including directories chosen with
-`kozane taskspace create --dir`, change only their label. So does a taskspace whose managed
-directory is no longer on disk, or whose path holds something Kozane never makes, such as a
-symlink or a file. A folder left behind by a renamed namespace is no longer a namespace
-folder, so its taskspaces change only their label too. So does a directory that holds another
-taskspace, which would otherwise move with it.
+A managed directory is renamed on disk too. It must meet all these conditions.
+
+- Its path is workspace-relative.
+- It sits directly in `taskspace.defaultDir`, in a current namespace folder there,
+  or directly in a `taskspace.namespacePaths` directory.
+- Its `.taskspace.json` identifies this taskspace with `ownsDirectory: true`.
+- It contains no other taskspace.
+
+Managed directory names follow the creation rules. Other taskspaces change only their
+label. These include directories chosen with `kozane taskspace create --dir`, missing
+directories, symlinks, files, and directories holding another taskspace. Directories in
+a former namespace folder also change only their label after a namespace rename.
 
 Return 400 for an invalid name, 404 for a taskspace not on this board, and 409 when the new
 directory name is taken.
@@ -425,10 +430,10 @@ directory name is taken.
 ### `DELETE /[namespaceId]/api/taskspaces/[taskspaceId]`
 
 Delete a taskspace. A managed directory, as for PATCH, is deleted with everything in it.
-Other directories stay on disk, and so does a symlink or file at a managed path, which is
-`kept`, and a directory that holds another taskspace, which would otherwise be deleted too. The directory goes first, with its `.taskspace.json` last, so a failure keeps the
-record and a retry still recognizes the directory. Cards linked to the taskspace keep their
-text and lose the link.
+Other directories stay on disk with a `kept` result. This also applies to symlinks,
+files, and directories holding another taskspace. Directory contents are deleted before the
+`.taskspace.json` marker so a failure preserves the record and allows a retry.
+Cards linked to the taskspace keep their text and lose the link.
 
 Return `{ ok: true, directory }`, where `directory` is `deleted`, `missing`, or `kept`.
 Return 404 for a taskspace not on this board, and 409 when the directory at a managed path

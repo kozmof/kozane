@@ -44,12 +44,11 @@ Migrations must be current. `--memory` instead creates a temporary database with
 namespace. Workspace commands use that database while the server runs, and changes disappear
 when it stops.
 
-Refuse to start while the config still has the old `"defaultDir": "."`, as `kozane doctor`
-fails on it, since the browser would otherwise create new taskspaces in the old layout. Print
-the moves `kozane doctor --fix` would make for taskspace directories Kozane created where that
-layout put them: at the workspace root, or in a namespace folder there. Other directories out
-of place, such as after a namespace was renamed, do not stop it. See
-[old taskspace layout](#old-taskspace-layout). `--memory` skips this check.
+Refuse to start with a legacy taskspace layout config. The error lists the owned
+directories in the old layout that `kozane doctor --fix` would move. Run that command
+before starting the browser. Other misplaced directories, such as those left after a
+namespace rename, do not prevent startup. See [old taskspace layout](#old-taskspace-layout).
+`--memory` skips this check.
 
 `--allow-remote` requires a generated API key. Non-loopback bindings also require
 `--no-open` and HTTPS through a reverse proxy.
@@ -154,36 +153,37 @@ kozane doctor [--fix]
 #### Old taskspace layout
 
 Older versions put new taskspaces at `<root>/<name>` and wrote `"defaultDir": "."` to the
-config. The layout check reports both:
+config. The layout check reports the following.
 
-- A config whose `taskspace.defaultDir` is `.` and that does not set `namespaceDirs`.
+- A config whose `taskspace.defaultDir` is `.`, `./`, or an empty string and that does not
+  set `namespaceDirs`.
   `--fix` sets `defaultDir` to `taskspaces` and keeps the other keys.
 - A taskspace directory whose marker says `ownsDirectory: true`, stored relative to the
   workspace, that is not where `taskspace create` would now put it. A legacy `defaultDir`
   counts as `taskspaces` here. `--fix` moves the directory, keeping its folder name, and
   updates the record.
 
-Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
-namespace, directories outside the workspace, directories that hold another taskspace, or
-ones whose target is outside the workspace, inside another taskspace that stays put, or under
-an ambiguous `namespacePaths` key. Owned directories that are out of place but cannot move,
-because they hold another taskspace or their target is outside the workspace or inside another
-taskspace, are listed with the reason under "Taskspace directories Kozane cannot move". They do
-not fail the check, since `--fix` cannot help, and they do not stop `defaultDir` from being
-rewritten. Move them yourself, then run `kozane taskspace scan --apply`. A move whose target already exists is reported and skipped,
-with what to do: move the entry at the target aside, or rename the directory and run
-`kozane taskspace scan --apply`. Running `--fix` again retries it. A directory whose target is
-inside it, such as a taskspace named `taskspaces` at the root, is moved aside first and then
-into place. When a record cannot be updated after its directory moved, the directory is moved
-back; if that fails too, the report says to run `kozane taskspace scan --apply`. `--fix` moves
-the directories first and rewrites `defaultDir` only when every move succeeded, so until then
-`kozane open` keeps refusing.
+Directories chosen with `--dir`, taskspaces without a namespace, and directories outside
+the workspace are never moved. An ambiguous `namespacePaths` key also prevents a move.
+Owned directories that cannot move appear under "Taskspace directories Kozane cannot move"
+with a reason. These include directories holding another taskspace and targets outside
+the workspace or inside a taskspace that stays put. These skipped directories do not fail
+the layout check or prevent the config update. Move them yourself, then run
+`kozane taskspace scan --apply`.
 
-When a move's target is inside another directory that is also moving, that directory moves
-first, at any depth: if `c` goes into `b` and `b` goes into `a`, `a` moves, then `b`, then
-`c`. Moves that wait on each other in a cycle, such as `a` going into `b` while `b` goes into
-`a`, cannot be ordered. They are listed as unable to move, with the taskspace each one waits
-on.
+If a target already exists, the move fails. Move the entry at the target aside, or rename
+the source directory and run `kozane taskspace scan --apply`. Run `--fix` again to retry.
+The fix updates a legacy config only after all planned moves succeed. Until then,
+`kozane open` continues to refuse startup.
+
+A directory whose target is inside itself, such as a taskspace named `taskspaces` at the
+root, moves to a temporary location first. If updating a record fails after a move,
+Kozane tries to restore the directory. If restoration also fails, the report directs you
+to run `kozane taskspace scan --apply`.
+
+Moves run in dependency order. If `c` goes into `b` and `b` goes into `a`, `a` moves
+first, followed by `b` and `c`. Circular dependencies, such as `a` going into `b` while
+`b` goes into `a`, appear as unable to move. Each report names the taskspace blocking it.
 
 Renaming a namespace, changing `defaultDir` or `namespaceDirs`, or moving a taskspace to
 another namespace also leaves its directory out of place. The check still passes and notes how
@@ -809,7 +809,7 @@ deleted, it joins the workspace default instead, and the marker is updated to ma
 `--namespace <id>` puts every reattached taskspace in that namespace instead. The directory
 stays where it is. An orphan that cannot be reattached, such as one whose namespace is gone
 when no namespace is left, is reported and skipped, the rest are still reattached, and the
-command exits 1.
+command exits 1. A marker without a namespace stays unassigned unless `--namespace` is given.
 
 ```bash
 kozane taskspace scan [--apply] [--reattach [--namespace <namespaceId>]] [--cleanup]
@@ -832,18 +832,17 @@ Without `--dir`, use `<workspaceRoot>/<taskspace.defaultDir>/<namespace>/<name>`
 `<workspaceRoot>/taskspaces/<namespace>/<name>`. Set `taskspace.namespaceDirs` to `false` to
 leave out the namespace folder.
 
-`namespaceDirs` defaults to `true` even in a config written before the key existed. A
-workspace whose config sets `defaultDir` but not `namespaceDirs` therefore puts its new
-taskspaces in namespace folders from now on. With `"defaultDir": "."`, those folders are
-created at the workspace root. Existing taskspaces stay where they are. Set
-`"namespaceDirs": false` to keep the old layout.
+`namespaceDirs` defaults to `true` when omitted. Existing directories stay where they
+are. A legacy `"defaultDir": "."` config requires the
+[layout fix](#old-taskspace-layout) before browser startup. Set `"namespaceDirs": false`
+to retain the old layout.
 
 In the folder name, the namespace name is put in Unicode NFC form, and characters not
 allowed in file names (`/ \ : * ? " < > |` and control characters) become `-`. Leading dots
 and trailing dots and spaces are dropped. Each run of spaces inside the name becomes one `-`,
 so `My Project` becomes `My-Project`. Names are cut to 60 characters, and to 221 UTF-8
 bytes so a short-ID suffix still fits in 255. A name Windows
-reserves, such as `CON` or `con.txt`, gets a `-` after its base name: `CON-`, `con-.txt`. A
+reserves, such as `CON` or `con.txt`, gets a `-` after its base name, giving `CON-` or `con-.txt`. A
 name with nothing left uses the namespace ID. When two namespaces would get the same folder,
 ignoring case, the oldest keeps it and the others get their short ID added, such as
 `work-5c3d9e1`.
@@ -853,16 +852,15 @@ deleting the older of two whose names clashed, changes the folder that later tas
 in. Directories made in the old folder are not moved. They keep working, but rename and
 delete from the browser leave them on disk.
 
-To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
-taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever
-`defaultDir` and `namespaceDirs` say. Keys are namespace IDs, either the short ID
-`kozane namespace list` prints, 7 to 12 characters, or the full ID, matched as
-`--namespace` matches them. Any other length, such as the start of a full ID, is refused,
-since it would match no namespace. `kozane doctor` fails for a key that matches no namespace, such
-as a typo or a deleted namespace, or more than one. The
-longest matching key wins. A key that matches more than one namespace stops the create with an error naming
-the full ID to use instead. Paths are relative to the workspace root or absolute. A path
-outside the workspace root works here, but the browser refuses to create taskspaces there.
+Set `taskspace.namespacePaths` to choose directories for individual namespaces. Each
+entry puts new taskspaces at `<configured path>/<name>`, overriding `defaultDir` and
+`namespaceDirs` for that namespace. Paths may be workspace-relative or absolute.
+The CLI supports external paths. The browser requires paths inside the workspace.
+
+Use full namespace IDs or the 7 to 12 character short IDs printed by
+`kozane namespace list` as keys. Other ID lengths are refused. The longest matching
+key wins. If that key matches multiple namespaces, creation fails and names the full
+ID to use instead. `kozane doctor` fails for keys matching zero or multiple namespaces.
 
 ```json
 "namespacePaths": {
@@ -871,7 +869,7 @@ outside the workspace root works here, but the browser refuses to create taskspa
 }
 ```
 
-The taskspace name must then be one path segment, contain no `/`, `\`, or NUL, not start
+Without `--dir`, the taskspace name must be one path segment, contain no `/`, `\`, or NUL, not start
 with a dot, and not start or end with whitespace.
 With `--dir`, the name is only a label. Store internal paths relative to the workspace and
 external paths as absolute.
@@ -991,6 +989,7 @@ to update its recorded path.
 ```
 
 `ownsDirectory` is present only when Kozane created the directory in
-`taskspace.defaultDir`, either from the browser or with `taskspace create`
+`taskspace.defaultDir` or a `taskspace.namespacePaths` directory, either from the browser
+or with `taskspace create`
 without `--dir`. The browser renames and deletes only such directories along
 with their taskspace.
