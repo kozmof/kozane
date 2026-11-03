@@ -398,15 +398,15 @@ Names must be one path segment, contain no `/`, `\`, or NUL, and not start
 with a dot. Create external taskspaces with the CLI. Use `taskspace create --dir`
 or configure an external `taskspace.defaultDir` or `taskspace.namespacePaths` entry.
 
-| Status | Reason |
-| ------ | ------ |
-| 400 | Invalid name, unknown scope, or configured directory outside the workspace |
-| 400 | Invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths` value |
-| 400 | Selected `namespacePaths` key matches multiple namespaces |
-| 400 | Parent symlink points outside the workspace or has no target |
-| 404 | Unknown namespace |
-| 409 | Directory already exists or target is inside another taskspace |
-| 503 | No workspace |
+| Status | Reason                                                                     |
+| ------ | -------------------------------------------------------------------------- |
+| 400    | Invalid name, unknown scope, or configured directory outside the workspace |
+| 400    | Invalid `taskspace.defaultDir`, `namespaceDirs`, or `namespacePaths` value |
+| 400    | Selected `namespacePaths` key matches multiple namespaces                  |
+| 400    | Parent symlink points outside the workspace or has no target               |
+| 404    | Unknown namespace                                                          |
+| 409    | Directory already exists or target is inside another taskspace             |
+| 503    | No workspace                                                               |
 
 ### `PATCH /[namespaceId]/api/taskspaces/[taskspaceId]`
 

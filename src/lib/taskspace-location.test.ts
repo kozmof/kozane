@@ -70,9 +70,7 @@ describe("namespaceDirName", () => {
   it("never cuts a character made of several code points", () => {
     // A family emoji is 7 code points joined by zero-width joiners: 25 bytes.
     const family = "👨‍👩‍👧‍👦";
-    expect(namespaceDirName(`${"a".repeat(59)}${family}`, "id")).toBe(
-      `${"a".repeat(59)}${family}`,
-    );
+    expect(namespaceDirName(`${"a".repeat(59)}${family}`, "id")).toBe(`${"a".repeat(59)}${family}`);
     expect(namespaceDirName(`${"a".repeat(60)}${family}`, "id")).toBe("a".repeat(60));
     // 8 families are 200 bytes; a ninth would pass the byte cap, so it is dropped whole.
     expect(namespaceDirName(family.repeat(20), "id")).toBe(family.repeat(8));
