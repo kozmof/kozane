@@ -200,6 +200,16 @@ describe("diagnoseConfig", () => {
       expect(withPaths({ aa414b7: " " })).toEqual([
         "taskspace.namespacePaths.aa414b7 must be a nonempty directory path",
       ]);
+      // Keys that differ only in case or dashes name the same namespace.
+      expect(withPaths({ aa414b7: "work", AA414B7: "other" })).toEqual([
+        'taskspace.namespacePaths keys "aa414b7" and "AA414B7" name the same namespace; keep one of them',
+      ]);
+      expect(
+        withPaths({
+          "019a7f3c-1b2d-7e4f-8a9b-0c1d2e3f4a5b": "work",
+          "019a7f3c1b2d7e4f8a9b0c1d2e3f4a5b": "other",
+        }),
+      ).toHaveLength(1);
     });
 
     it("reports a section that is not an object", () => {

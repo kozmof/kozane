@@ -116,7 +116,8 @@ export function usesLegacyDefaultDir(root: string): boolean {
  * workspace, a directory it did not create, or an ambiguous `namespacePaths` key, which
  * `kozane doctor` reports on its own. An owned directory that is out of place but cannot move,
  * because it holds another taskspace or its target is outside the workspace or inside another
- * taskspace, is listed in `skipped`.
+ * taskspace, is listed in `skipped`, and so is an out-of-place one whose marker could not be
+ * read.
  */
 export async function planTaskspaceLayout(
   db: DB,
@@ -161,13 +162,6 @@ export async function planTaskspaceLayout(
     }
     const target = resolve(workspaceRoot, parentDir, basename(path));
     if (target === resolve(workspaceRoot, path)) continue;
-    let claim;
-    try {
-      claim = taskspaceDirectoryClaim({ workspaceRoot, storedPath: path, taskspaceId: id });
-    } catch {
-      continue;
-    }
-    if (claim !== "owned") continue;
     const inside = isStrictlyInside(workspaceRoot, target);
     const move: LayoutMove = {
       taskspaceId: id,
@@ -176,6 +170,16 @@ export async function planTaskspaceLayout(
       to: inside ? relative(workspaceRoot, target) : target,
       oldLayout: inOldLayout(path),
     };
+    let claim;
+    try {
+      claim = taskspaceDirectoryClaim({ workspaceRoot, storedPath: path, taskspaceId: id });
+    } catch (e) {
+      // Such as a permission error. Whether Kozane owns it is unknown, so it stays, but it
+      // is listed rather than left behind without a word.
+      skipped.push({ move, reason: `it could not be read (${message(e)})` });
+      continue;
+    }
+    if (claim !== "owned") continue;
     if (!inside) skipped.push({ move, reason: "its target is outside the workspace" });
     // Moving it would carry another taskspace along and break that one's record.
     else if (holdsOtherTaskspaces(workspaceRoot, taskspace, taskspaces))

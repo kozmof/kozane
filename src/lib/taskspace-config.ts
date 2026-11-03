@@ -39,16 +39,19 @@ export function namespaceDirsIssue(value: unknown): string | null {
  * lengths `idMatches` can match are accepted: a short ID of
  * {@link MIN_SHORT_ID_LENGTH} to {@link SHORT_ID_KEY_LENGTH} digits, as `kozane namespace
  * list` prints it, or the full ID. A word made of hex letters, such as `cafe`, is refused,
- * and so is a longer prefix, such as the start of a UUID, which would match nothing.
+ * and so is a longer prefix, such as the start of a UUID, which would match nothing. Two
+ * keys that differ only in case or dashes are refused too, since they name the same ID.
  */
 export function namespacePathsIssue(value: unknown): string | null {
   const path = "taskspace.namespacePaths";
   if (!isPlainObject(value)) return `${path} must be an object of namespace IDs to directories`;
+  // Keys by their compact form. `ABCDEF1` and `abcdef1`, or a full ID with and without
+  // dashes, name the same namespace, and nothing would decide which directory wins.
+  const seen = new Map<string, string>();
   for (const [key, dir] of Object.entries(value)) {
     const digits = compactId(key).length;
     const matchable =
-      (digits >= MIN_SHORT_ID_LENGTH && digits <= SHORT_ID_KEY_LENGTH) ||
-      digits === FULL_ID_LENGTH;
+      (digits >= MIN_SHORT_ID_LENGTH && digits <= SHORT_ID_KEY_LENGTH) || digits === FULL_ID_LENGTH;
     if (!/^[0-9a-f-]+$/i.test(key) || !matchable)
       return (
         `${path} key "${key}" must be a namespace ID as kozane namespace list shows it ` +
@@ -56,6 +59,10 @@ export function namespacePathsIssue(value: unknown): string | null {
       );
     if (typeof dir !== "string" || !dir.trim())
       return `${path}.${key} must be a nonempty directory path`;
+    const same = seen.get(compactId(key));
+    if (same !== undefined)
+      return `${path} keys "${same}" and "${key}" name the same namespace; keep one of them`;
+    seen.set(compactId(key), key);
   }
   return null;
 }

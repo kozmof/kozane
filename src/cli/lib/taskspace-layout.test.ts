@@ -107,6 +107,20 @@ describe("planTaskspaceLayout", () => {
     ]);
   });
 
+  it("lists an out-of-place directory it cannot read instead of dropping it", async () => {
+    const { db, root, namespaceId, plan } = await workspace({ defaultDir: "." });
+    // A file where a folder on the path should be makes reading the marker fail with
+    // ENOTDIR, which is neither "missing" nor "unmanaged".
+    writeFileSync(join(root, "blocked"), "");
+    await addTaskspace({ db, namespaceId, name: "notes", path: join("blocked", "notes") });
+
+    const { moves, skipped } = await plan();
+    expect(moves).toEqual([]);
+    expect(skipped).toHaveLength(1);
+    expect(skipped[0].move.from).toBe(join("blocked", "notes"));
+    expect(skipped[0].reason).toMatch(/^it could not be read \(.*ENOTDIR/);
+  });
+
   it("treats a legacy defaultDir with namespaceDirs set as a chosen layout", async () => {
     const { owned, plan } = await workspace({ defaultDir: ".", namespaceDirs: false });
     await owned("notes");

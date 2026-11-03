@@ -152,6 +152,19 @@ describe("taskspace CLI flow", () => {
     expect(readMarker("existing").ownsDirectory).toBeUndefined();
   });
 
+  it("warns, but creates, when --dir is inside another taskspace", () => {
+    const root = tempWorkspace();
+    cli(root, "init");
+    cli(root, "taskspace", "create", "outer", "--no-scope");
+    const inner = join(root, "taskspaces", "main", "outer", "inner");
+
+    const result = runCli(root, "taskspace", "create", "inner", "--no-scope", "--dir", inner);
+    expect(result.status).toBe(0);
+    expect(result.stderr).toContain("Warning:");
+    expect(result.stderr).toContain(join(root, "taskspaces", "main", "outer"));
+    expect(readFileSync(join(inner, ".taskspace.json"), "utf-8")).toContain("taskspaceId");
+  });
+
   it("detects and applies moved, missing, and orphan taskspace changes", () => {
     const root = tempWorkspace();
     cli(root, "init");

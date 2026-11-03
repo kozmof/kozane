@@ -32,7 +32,7 @@ import {
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
-import { isStrictlyInside } from "../../lib/server/fs-paths.js";
+import { errorCode, isStrictlyInside } from "../../lib/server/fs-paths.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
 
@@ -186,11 +186,7 @@ async function scanWithin(
           // Keep the marker in step with the record, so a later reattach lands in the same
           // namespace. The record is already in, so a failed write is only a warning.
           try {
-            rewriteMarkerNamespace(
-              taskspace.path,
-              taskspace.taskspaceId,
-              placement.namespaceId,
-            );
+            rewriteMarkerNamespace(taskspace.path, taskspace.taskspaceId, placement.namespaceId);
           } catch (e) {
             console.log(
               `    ! could not update ${TASKSPACE_MARKER_FILE}: ${e instanceof Error ? e.message : String(e)}`,
@@ -338,9 +334,24 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
     const namespaces = await getAllNamespaces({ db });
     const namespaceId = pickNamespaceId(namespaces, options.namespace);
 
+    // Inside the workspace the markers on disk decide; outside it, such as with an absolute
+    // defaultDir, the records do.
+    const enclosingOf = async (dir: string) =>
+      isStrictlyInside(resolve(root), dir)
+        ? enclosingTaskspaceDir(root, dirname(dir))
+        : enclosingRecordedTaskspace(root, dir, await getAllTaskspaces({ db }));
+
     let targetDir: string;
     if (options.dir) {
       targetDir = resolve(options.dir);
+      // The user chose the directory, so it is allowed, but say so. Neither directory is lost:
+      // Kozane never moves or deletes a directory that holds another taskspace.
+      const enclosing = await enclosingOf(targetDir);
+      if (enclosing)
+        console.error(
+          `Warning: ${targetDir} is inside the taskspace at ${enclosing}. Kozane will not ` +
+            "move or delete that taskspace's directory while this one is in it.",
+        );
     } else {
       // An ambiguous `namespacePaths` key throws, and the command wrapper reports it.
       const { defaultDir, namespaceDirs, namespacePaths } = config.taskspace;
@@ -353,11 +364,8 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       });
       targetDir = resolve(root, parentDir, name);
       // Never inside another taskspace's directory, which deleting that taskspace would
-      // remove. The browser refuses the same. Inside the workspace the markers on disk
-      // decide; outside it, such as with an absolute defaultDir, the records do.
-      const enclosing = isStrictlyInside(resolve(root), targetDir)
-        ? enclosingTaskspaceDir(root, dirname(targetDir))
-        : enclosingRecordedTaskspace(root, targetDir, await getAllTaskspaces({ db }));
+      // remove. The browser refuses the same.
+      const enclosing = await enclosingOf(targetDir);
       if (enclosing) {
         console.error(
           `Error: ${targetDir} would be inside the taskspace at ${enclosing}. Move that ` +
@@ -391,10 +399,17 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       lastSeenAt: new Date(),
     });
 
-    const dirCreated = !existsSync(targetDir);
-    // Folders above the taskspace this command makes, such as a new namespace folder, so a
-    // failure below does not leave them behind.
+    // Whether to make the directory. It is claimed atomically below, so a directory another
+    // process makes meanwhile, such as the browser creating the same taskspace, fails the
+    // create rather than being taken over.
+    const makeDir = !existsSync(targetDir);
+    // What this command made, so a failure removes exactly that and nothing someone else made:
+    // the folders above the taskspace, such as a new namespace folder, the directory, and the
+    // marker.
     let parentsCreated: string[] = [];
+    let dirCreated = false;
+    let markerWritten = false;
+    const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
     try {
       if (checkParents) {
         const made = makeParentsInside(root, dirname(targetDir));
@@ -404,10 +419,22 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
               "Use --dir to choose the directory yourself.",
           );
         parentsCreated = made;
-      } else if (dirCreated) {
+      } else if (makeDir) {
         parentsCreated = missingDirs(dirname(targetDir));
+        mkdirSync(dirname(targetDir), { recursive: true });
       }
-      mkdirSync(targetDir, { recursive: true });
+      if (makeDir) {
+        try {
+          mkdirSync(targetDir);
+        } catch (e) {
+          if (errorCode(e) === "EEXIST")
+            throw new Error(`${targetDir} was created by another process meanwhile`, {
+              cause: e,
+            });
+          throw e;
+        }
+        dirCreated = true;
+      }
       const marker = {
         kind: TASKSPACE_MARKER_KIND,
         version: TASKSPACE_MARKER_VERSION,
@@ -416,11 +443,15 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
         // Only a directory made here under `defaultDir` is Kozane's to rename or delete.
         ...(!options.dir && dirCreated && { ownsDirectory: true }),
       };
-      writeFileSync(join(targetDir, TASKSPACE_MARKER_FILE), JSON.stringify(marker, null, 2) + "\n");
+      // `wx` refuses a marker another process wrote since the check above.
+      writeFileSync(markerPath, JSON.stringify(marker, null, 2) + "\n", { flag: "wx" });
+      markerWritten = true;
     } catch (e) {
-      // Clean up both record and directory before reporting which creation step failed.
+      // Clean up the record and what this command made before reporting which step failed.
+      // Never recurse: anything else in the directory is not this command's to remove.
       await deleteTaskspace({ db, taskspaceId: id });
-      if (dirCreated && existsSync(targetDir)) rmSync(targetDir, { recursive: true, force: true });
+      if (markerWritten) rmSync(markerPath, { force: true });
+      if (dirCreated) removeEmptyDirs([targetDir]);
       removeEmptyDirs(parentsCreated);
       console.error("Failed to initialize taskspace directory.");
       console.error(e instanceof Error ? e.message : String(e));

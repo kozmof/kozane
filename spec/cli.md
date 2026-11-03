@@ -875,6 +875,8 @@ folder, since deleting that taskspace would delete the new one too. Inside the w
 is decided by the `.taskspace.json` markers on disk. For a target outside it, such as with an
 absolute `defaultDir`, it is decided by the taskspace records. It is also refused when a
 parent folder inside the workspace is a symlink that leads outside it or nowhere.
+With `--dir` the create goes ahead, since the user chose the directory, but prints a warning.
+Kozane then never moves or deletes the outer directory, because it holds another taskspace.
 
 ```bash
 kozane taskspace create <name> [--scope <scopeId>] [--no-scope]

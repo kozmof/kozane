@@ -340,8 +340,18 @@ export function makeParentsInside(workspaceRoot: string, dir: string): string[] 
     removeEmptyDirs(created);
     throw e;
   }
-  // Checked again in case the path changed while the folders were made.
-  if (!isWithin(realRoot, realpathSync(dir))) {
+  // Checked again in case the path changed while the folders were made. A folder that was
+  // removed or swapped for a dangling symlink meanwhile cannot be shown to be inside.
+  let realDir: string;
+  try {
+    realDir = realpathSync(dir);
+  } catch (e) {
+    const code = errorCode(e);
+    if (code !== "ENOENT" && code !== "ELOOP") throw e;
+    removeEmptyDirs(created);
+    return null;
+  }
+  if (!isWithin(realRoot, realDir)) {
     removeEmptyDirs(created);
     return null;
   }
