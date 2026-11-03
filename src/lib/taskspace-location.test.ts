@@ -7,7 +7,6 @@ import {
   namespacePathFor,
   taskspaceParentDir,
 } from "./taskspace-location.js";
-import { isManagedTaskspaceDirectory } from "./taskspace-directory.js";
 
 describe("namespaceDirName", () => {
   it("keeps an ordinary name", () => {
@@ -201,40 +200,5 @@ describe("taskspaceParentDir", () => {
     expect(taskspaceParentDir({ ...base, namespaces, namespaceId: "ns-2" })).toBe(
       join("taskspaces", "work-ns2"),
     );
-  });
-});
-
-describe("isManagedTaskspaceDirectory", () => {
-  const check = (storedPath: string, defaultDir = "taskspaces") =>
-    isManagedTaskspaceDirectory({
-      workspaceRoot: "/work",
-      storedPath,
-      pathKind: "workspace_relative",
-      defaultDir,
-      namespacePathDirs: ["clients/acme", "/work/abs"],
-      namespaceFolders: ["Work"],
-    });
-
-  it("rejects a folder in defaultDir that is no current namespace's folder", () => {
-    expect(check(join("taskspaces", "Other", "notes"))).toBe(false);
-    // With defaultDir at the root, the user's own src/lib must stay out of reach.
-    expect(check(join("src", "lib"), ".")).toBe(false);
-    expect(check(join("Work", "notes"), ".")).toBe(true);
-  });
-
-  it("accepts a directory directly in defaultDir or in a namespace folder there", () => {
-    expect(check(join("taskspaces", "notes"))).toBe(true);
-    expect(check(join("taskspaces", "Work", "notes"))).toBe(true);
-  });
-
-  it("accepts a directory directly in a configured namespace path", () => {
-    expect(check(join("clients", "acme", "notes"))).toBe(true);
-    expect(check(join("abs", "notes"))).toBe(true);
-  });
-
-  it("rejects a directory elsewhere or nested deeper", () => {
-    expect(check(join("src", "notes"))).toBe(false);
-    expect(check(join("taskspaces", "Work", "deep", "notes"))).toBe(false);
-    expect(check(join("clients", "acme", "deep", "notes"))).toBe(false);
   });
 });

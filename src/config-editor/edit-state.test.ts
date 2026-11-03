@@ -8,6 +8,7 @@ import {
   numberChange,
   parseListInput,
   parseMapInput,
+  mapInputIssues,
   controlText,
   usesDefault,
   withChange,
@@ -131,5 +132,17 @@ describe("input helpers", () => {
     expect(matchesFilter(zoom, "board opens")).toBe(true);
     expect(matchesFilter(zoom, "warp")).toBe(false);
     expect(matchesFilter(zoom, "  ")).toBe(true);
+  });
+});
+
+describe("mapInputIssues", () => {
+  it("names a repeated key instead of leaving saving to report a malformed one", () => {
+    expect(mapInputIssues("019a = one\n019a = two\nabcd = x\n019a = three\n")).toEqual([
+      '"019a" is listed 3 times; keep one line for it',
+    ]);
+  });
+
+  it("finds nothing in distinct keys or blank lines", () => {
+    expect(mapInputIssues("019a = one\n\n  \nabcd = two")).toEqual([]);
   });
 });

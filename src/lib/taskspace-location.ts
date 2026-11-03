@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { MIN_SHORT_ID_LENGTH, compactId, idMatches, shortIdKey } from "../short-id-key.js";
-import type { TaskspacePlacement } from "../taskspace-config.js";
+import { MIN_SHORT_ID_LENGTH, compactId, idMatches, shortIdKey } from "./short-id-key.js";
+import type { TaskspacePlacement } from "./taskspace-config.js";
 
 /**
  * Where Kozane creates a new taskspace when no directory is given. Shared by the browser

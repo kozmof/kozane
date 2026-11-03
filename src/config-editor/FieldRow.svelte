@@ -10,6 +10,7 @@
     describeValue,
     parseListInput,
     parseMapInput,
+    mapInputIssues,
     numberChange,
   } from "./edit-state.js";
 
@@ -41,6 +42,13 @@
   let checked = $state(untrack(() => value === true));
   let choice = $state(untrack(() => (typeof value === "string" ? value : "")));
   let number = $state<number | null>(untrack(() => (typeof value === "number" ? value : null)));
+
+  // Shown while typing, ahead of the issues saving reports.
+  const inputIssues = $derived<ConfigIssue[]>(
+    field.kind === "map"
+      ? mapInputIssues(text).map((message) => ({ path: field.path, severity: "error", message }))
+      : [],
+  );
 
   function useDefault() {
     text = controlText(field, field.defaultValue);
@@ -215,7 +223,7 @@
     {/if}
   </div>
 
-  {#each issues as issue, index (index)}
+  {#each [...inputIssues, ...issues] as issue, index (index)}
     <div
       data-issue={issue.severity}
       class={cx(

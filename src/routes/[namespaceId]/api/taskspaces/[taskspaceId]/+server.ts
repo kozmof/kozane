@@ -7,7 +7,6 @@ import {
   updateTaskspace,
 } from "$db/api/taskspace";
 import { getAllNamespaces, getNamespace } from "$db/api/namespace";
-import { namespaceFolders } from "$lib/server/taskspace-location";
 import { getTaskspacePlacementConfig, getWorkspaceRoot } from "$db/internal/config";
 import { taskspaceNameIssue, type PathKind } from "$lib/constants";
 import { taskspacePathIssue } from "$lib/server/taskspace-path";
@@ -58,9 +57,8 @@ async function managedDirectory(db: App.Locals["db"], taskspace: TaskspaceRow) {
     workspaceRoot: root,
     storedPath,
     pathKind,
-    defaultDir: placement.value.defaultDir,
-    namespacePathDirs: Object.values(placement.value.namespacePaths),
-    namespaceFolders: [...namespaceFolders(namespaces).values()],
+    placement: placement.value,
+    namespaces,
   });
   if (!managed) return null;
   // Another taskspace inside this directory would move or be deleted with it, so leave the

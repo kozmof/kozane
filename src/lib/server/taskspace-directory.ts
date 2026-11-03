@@ -1,4 +1,5 @@
 import {
+  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -7,10 +8,17 @@ import {
   renameSync,
   rmSync,
   rmdirSync,
+  writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
-import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
+import type { TaskspacePlacement } from "../taskspace-config.js";
+import { type NamespaceRef, namespaceFolders } from "../taskspace-location.js";
+import {
+  TASKSPACE_MARKER_FILE,
+  TASKSPACE_MARKER_KIND,
+  TASKSPACE_MARKER_VERSION,
+} from "../taskspace-marker.js";
 import type { TaskspaceDirectoryOutcome } from "../types.js";
 import { errorCode, isStrictlyInside, isWithin, sameEntry } from "./fs-paths.js";
 import { TaskspaceFilesError } from "./taskspace-files.js";
@@ -31,12 +39,15 @@ type ManagedCheck = {
   workspaceRoot: string;
   storedPath: string | null;
   pathKind: PathKind;
-  /** `taskspace.defaultDir` from the workspace config, relative to the root or absolute. */
-  defaultDir: string;
-  /** The directories in `taskspace.namespacePaths`, without the namespaces they belong to. */
-  namespacePathDirs: readonly string[];
-  /** Every current namespace's folder name, as `namespaceFolders()` in taskspace-location.ts gives it. */
-  namespaceFolders: readonly string[];
+  /**
+   * The workspace's placement settings. `defaultDir` and the directories in `namespacePaths`
+   * count. `namespaceDirs` does not, see below.
+   */
+  placement: Pick<TaskspacePlacement, "defaultDir" | "namespacePaths">;
+  /** Every current namespace. Their folders in `defaultDir` count too. */
+  namespaces: readonly NamespaceRef[];
+  /** `namespaceFolders(namespaces)`, when the caller already has it. */
+  folders?: ReadonlyMap<string, string>;
 };
 
 /**
@@ -50,13 +61,13 @@ export function isManagedTaskspaceDirectory({
   workspaceRoot,
   storedPath,
   pathKind,
-  defaultDir,
-  namespacePathDirs,
-  namespaceFolders,
+  placement,
+  namespaces,
+  folders,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
   const parent = dirname(resolve(workspaceRoot, storedPath));
-  const base = resolve(workspaceRoot, defaultDir);
+  const base = resolve(workspaceRoot, placement.defaultDir);
   // Directly in `defaultDir`, or in a current namespace's folder inside it. Both are accepted
   // whatever `taskspace.namespaceDirs` says now, so turning it on or off keeps directories
   // made earlier manageable. Any other folder is refused: with `defaultDir` set to `.`,
@@ -66,12 +77,16 @@ export function isManagedTaskspaceDirectory({
   // keeps them apart, so renaming "Work" to "work" on a case-insensitive disk, where both
   // name the same folder, keeps its directories managed. The marker still decides ownership.
   if (parent === base) return true;
-  const folder = basename(parent).toLowerCase();
-  if (dirname(parent) === base && namespaceFolders.some((f) => f.toLowerCase() === folder))
-    return true;
+  if (dirname(parent) === base) {
+    const folder = basename(parent).toLowerCase();
+    const current = [...(folders ?? namespaceFolders(namespaces)).values()];
+    if (current.some((f) => f.toLowerCase() === folder)) return true;
+  }
   // Any configured namespace path is accepted, not only the one for this taskspace's
   // namespace, so moving a taskspace to another namespace keeps it manageable.
-  return namespacePathDirs.some((dir) => parent === resolve(workspaceRoot, dir));
+  return Object.values(placement.namespacePaths).some(
+    (dir) => parent === resolve(workspaceRoot, dir),
+  );
 }
 
 /**
@@ -356,6 +371,117 @@ export function makeParentsInside(workspaceRoot: string, dir: string): string[] 
     return null;
   }
   return created;
+}
+
+/** How many times to make the parent folders when a concurrent create removes them. */
+const MAX_PARENT_ATTEMPTS = 3;
+
+export type ClaimRequest = {
+  workspaceRoot: string;
+  /** The new taskspace's directory, absolute. */
+  targetDir: string;
+  taskspaceId: string;
+  /** Empty for a taskspace in no namespace. */
+  namespaceId: string;
+  /**
+   * Use a directory already at `targetDir` that has no marker, rather than refusing it. Only
+   * `kozane taskspace create` does this. The browser always makes a new directory.
+   */
+  adoptExisting: boolean;
+  /**
+   * Make the parent folders only when they really lie inside the workspace, refusing a parent
+   * that leads outside through a symlink. Set it whenever the path is stored relative to the
+   * workspace.
+   */
+  parentsInside: boolean;
+  /** Mark the directory as Kozane's to rename and delete, when this call made it. */
+  ownIfCreated: boolean;
+};
+
+/**
+ * Make a new taskspace's directory and its marker. The browser and `kozane taskspace create`
+ * both use this, so they claim directories the same way.
+ *
+ * The directory and the marker are each claimed atomically, so one that another process makes
+ * meanwhile fails the claim rather than being taken over. On a failure, only what this call
+ * made is removed: the marker, the directory, and the folders above it, such as a new
+ * namespace folder. Nothing is removed recursively.
+ *
+ * Throws {@link TaskspaceFilesError} with `invalid-path` when a parent leads outside the
+ * workspace, and with `exists` when the directory or its marker is already there. Returns
+ * whether this call made the directory.
+ */
+export function claimTaskspaceDirectory(request: ClaimRequest): { dirCreated: boolean } {
+  const { workspaceRoot, targetDir, adoptExisting, parentsInside } = request;
+  const parent = dirname(targetDir);
+  const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
+  const makeParents = (): string[] => {
+    if (!parentsInside) {
+      const missing = missingDirs(parent);
+      mkdirSync(parent, { recursive: true });
+      return missing;
+    }
+    const made = makeParentsInside(workspaceRoot, parent);
+    if (!made)
+      throw new TaskspaceFilesError(
+        "invalid-path",
+        `${parent} leads outside the workspace through a symlink`,
+      );
+    return made;
+  };
+
+  const parentsCreated: string[] = [];
+  let dirCreated = false;
+  try {
+    const makeDir = !(adoptExisting && existsSync(targetDir));
+    for (let attempt = 1; ; attempt++) {
+      // Deepest first, as removeEmptyDirs expects. A retry remakes the same folders, so add
+      // each once: a repeat would stop removeEmptyDirs at its failed second rmdir.
+      parentsCreated.unshift(...makeParents().filter((dir) => !parentsCreated.includes(dir)));
+      if (!makeDir) break;
+      try {
+        mkdirSync(targetDir);
+        dirCreated = true;
+        break;
+      } catch (e) {
+        const code = errorCode(e);
+        if (code === "EEXIST")
+          throw new TaskspaceFilesError("exists", "Taskspace directory already exists");
+        // A concurrent create that failed can remove a new namespace folder this one was
+        // about to use. Make it again, a few times at most.
+        if (code !== "ENOENT" || attempt >= MAX_PARENT_ATTEMPTS) throw e;
+      }
+    }
+    const marker = {
+      kind: TASKSPACE_MARKER_KIND,
+      version: TASKSPACE_MARKER_VERSION,
+      taskspaceId: request.taskspaceId,
+      namespaceId: request.namespaceId,
+      ...(request.ownIfCreated && dirCreated && { ownsDirectory: true }),
+    };
+    try {
+      // `wx` refuses a marker another process wrote since the directory was checked.
+      writeFileSync(markerPath, JSON.stringify(marker, null, 2) + "\n", {
+        flag: "wx",
+        mode: 0o600,
+      });
+    } catch (e) {
+      if (errorCode(e) === "EEXIST")
+        throw new TaskspaceFilesError("exists", "Directory already contains a Kozane taskspace");
+      // The file may have been made before the write failed, so it is this call's to take back.
+      try {
+        rmSync(markerPath, { force: true });
+      } catch {
+        // Such as ENOTDIR when the target is a file. Report the write's own error.
+      }
+      throw e;
+    }
+  } catch (e) {
+    if (dirCreated) removeEmptyDirs([targetDir]);
+    removeEmptyDirs(parentsCreated);
+    throw e;
+  }
+  return { dirCreated };
 }
 
 /** Remove directories made by {@link makeParentsInside}, deepest first, while they are empty. */

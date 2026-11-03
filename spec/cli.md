@@ -179,12 +179,19 @@ back; if that fails too, the report says to run `kozane taskspace scan --apply`.
 the directories first and rewrites `defaultDir` only when every move succeeded, so until then
 `kozane open` keeps refusing.
 
+When a move's target is inside another directory that is also moving, that directory moves
+first, at any depth: if `c` goes into `b` and `b` goes into `a`, `a` moves, then `b`, then
+`c`. Moves that wait on each other in a cycle, such as `a` going into `b` while `b` goes into
+`a`, cannot be ordered. They are listed as unable to move, with the taskspace each one waits
+on.
+
 Renaming a namespace, changing `defaultDir` or `namespaceDirs`, or moving a taskspace to
 another namespace also leaves its directory out of place. The check still passes and notes how
 many directories `--fix` would move, and `kozane open` still starts. Only the old layout
 fails the check.
 
-To keep the old layout, set `"namespaceDirs": false`. With `"defaultDir": "."`, the
+A config that sets `namespaceDirs` to either value has chosen its layout and is never treated
+as the old one. To keep the old layout, set `"namespaceDirs": false`. With `"defaultDir": "."`, the
 directories at `<root>/<name>` then count as in place.
 
 ### `kozane doctor config`

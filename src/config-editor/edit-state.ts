@@ -112,6 +112,24 @@ export function parseMapInput(text: string): Record<string, string> {
 }
 
 /**
+ * Problems with map text that saving would report less clearly. Saving sees a repeated key
+ * only as the `<key> (duplicate)` label {@link parseMapInput} gives it, which reads as a
+ * malformed key, so the row names the repeat itself.
+ */
+export function mapInputIssues(text: string): string[] {
+  const counts = new Map<string, number>();
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    const at = line.indexOf("=");
+    const key = (at < 0 ? line : line.slice(0, at)).trim();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => `"${key}" is listed ${count} times; keep one line for it`);
+}
+
+/**
  * The change a number input stands for. A blank input, which Svelte binds as `null`, means
  * "use the default".
  */

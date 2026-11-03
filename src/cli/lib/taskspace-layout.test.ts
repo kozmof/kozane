@@ -405,6 +405,68 @@ describe("nested taskspaces", () => {
     );
   });
 
+  /**
+   * A workspace with `namespaceDirs` off and one owned taskspace per entry, each in its own
+   * namespace. `pathInto` maps a taskspace to the one whose current directory its namespace
+   * path points at, so its target lands inside that directory.
+   */
+  async function chained(paths: string[], pathInto: Record<string, string>) {
+    const ws = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
+    const namespacePaths: Record<string, string> = {};
+    for (const path of paths) {
+      const nsId = await createNamespace({ db: ws.db, name: `ns-${path}` });
+      const id = await addTaskspace({ db: ws.db, namespaceId: nsId, name: path, path });
+      mkdirSync(join(ws.root, path));
+      writeFileSync(
+        join(ws.root, path, TASKSPACE_MARKER_FILE),
+        JSON.stringify({ kind: TASKSPACE_MARKER_KIND, taskspaceId: id, ownsDirectory: true }),
+      );
+      if (pathInto[path]) namespacePaths[nsId] = pathInto[path];
+    }
+    writeFileSync(
+      join(ws.root, ".kozane", "config.json"),
+      JSON.stringify({
+        name: "demo",
+        taskspace: {
+          searchRoots: ["."],
+          defaultDir: "taskspaces",
+          namespaceDirs: false,
+          namespacePaths,
+        },
+      }),
+    );
+    return ws;
+  }
+
+  it("orders a chain of moves so each directory leaves before one lands in it", async () => {
+    // `c` goes into `b`, and `b` into `a`, listed so the plan order is the wrong way round.
+    const { db, root, plan } = await chained(["c", "b", "a"], { c: "b", b: "a" });
+
+    const planned = await plan();
+    expect(planned.moves.map(({ from }) => from)).toEqual(["a", "b", "c"]);
+    expect(planned.skipped).toEqual([]);
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.failed).toEqual([]);
+    expect(existsSync(join(root, "taskspaces", "a", TASKSPACE_MARKER_FILE))).toBe(true);
+    expect(existsSync(join(root, "a", "b", TASKSPACE_MARKER_FILE))).toBe(true);
+    expect(existsSync(join(root, "b", "c", TASKSPACE_MARKER_FILE))).toBe(true);
+    // Nothing landed inside a directory that then moved away with it.
+    expect(existsSync(join(root, "taskspaces", "a", "b"))).toBe(false);
+  });
+
+  it("skips moves that wait on each other in a cycle", async () => {
+    const { plan } = await chained(["a", "b"], { a: "b", b: "a" });
+
+    const { moves, skipped } = await plan();
+    expect(moves).toEqual([]);
+    expect(skipped.map(({ move, reason }) => [move.from, reason])).toEqual(
+      expect.arrayContaining([
+        ["a", "its target would be inside the taskspace at b, which cannot move first"],
+        ["b", "its target would be inside the taskspace at a, which cannot move first"],
+      ]),
+    );
+  });
+
   it("does not move a directory that holds another taskspace", async () => {
     const { owned, plan } = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
     await owned(join("elsewhere", "outer"));

@@ -16,6 +16,7 @@ import { getAllNamespaces } from "../../db/api/namespace.js";
 import { getAllTaskspaces, updateTaskspace } from "../../db/api/taskspace.js";
 import type { DB } from "../../db/tx.js";
 import { DEFAULT_TASKSPACE_DIR } from "../../lib/constants.js";
+import { errorMessage } from "../../lib/error-message.js";
 import { isPlainObject } from "../../lib/plain-object.js";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
 import { isStrictlyInside } from "../../lib/server/fs-paths.js";
@@ -35,7 +36,7 @@ import {
   AmbiguousNamespacePathError,
   namespaceFolders,
   taskspaceParentDir,
-} from "../../lib/server/taskspace-location.js";
+} from "../../lib/taskspace-location.js";
 import { CONFIG_FILE, KOZANE_DIR, type WorkspaceConfig } from "./config.js";
 
 /** One owned taskspace directory to move. Both paths are relative to the workspace root. */
@@ -136,16 +137,16 @@ export async function planTaskspaceLayout(
   // Where the legacy config put directories: the browser's own rule for `"defaultDir": "."`,
   // directly at the root or in a current namespace's folder there.
   const folders = namespaceFolders(namespaces);
-  const legacyFolders = [...folders.values()];
+  const legacyPlacement = { defaultDir: config.taskspace.defaultDir, namespacePaths: {} };
   const inOldLayout = (storedPath: string) =>
     legacyDefaultDir &&
     isManagedTaskspaceDirectory({
       workspaceRoot,
       storedPath,
       pathKind: "workspace_relative",
-      defaultDir: config.taskspace.defaultDir,
-      namespacePathDirs: [],
-      namespaceFolders: legacyFolders,
+      placement: legacyPlacement,
+      namespaces,
+      folders,
     });
 
   const taskspaces = await getAllTaskspaces({ db });
@@ -176,7 +177,7 @@ export async function planTaskspaceLayout(
     } catch (e) {
       // Such as a permission error. Whether Kozane owns it is unknown, so it stays, but it
       // is listed rather than left behind without a word.
-      skipped.push({ move, reason: `it could not be read (${message(e)})` });
+      skipped.push({ move, reason: `it could not be read (${errorMessage(e)})` });
       continue;
     }
     if (claim !== "owned") continue;
@@ -218,7 +219,8 @@ function withoutNesting(
   );
   const pathsOf = (move: LayoutMove) => paths.get(move)!;
   // Repeat until nothing changes: dropping a move keeps its directory in place, which can
-  // make another move's target nested after all.
+  // make another move's target nested after all. Each round compares every pair of moves,
+  // which is fine for the dozens to hundreds of taskspaces a workspace holds.
   let kept = moves;
   const dropped: LayoutSkip[] = [];
   const insideOf = (dir: string) =>
@@ -241,16 +243,56 @@ function withoutNesting(
       }
       return true;
     });
-    if (next.length === kept.length) break;
-    kept = next;
+    if (next.length !== kept.length) {
+      kept = next;
+      continue;
+    }
+    const { ordered, stuck } = moveOrder(kept, pathsOf);
+    if (stuck.length === 0) return { kept: ordered, dropped };
+    // Moves that wait on each other in a cycle cannot go, and neither can the moves that wait
+    // on them. They stay where they are, which can nest others' targets, so check again.
+    for (const { move, waitingOn } of stuck)
+      dropped.push({ move, reason: `${insideOf(pathsOf(waitingOn).from)}, which cannot move first` });
+    kept = ordered;
   }
-  // Move a directory that others' targets sit under before those others.
-  const enclosesTarget = (move: LayoutMove) =>
-    kept.some((other) => isStrictlyInside(pathsOf(move).from, pathsOf(other).to));
-  return {
-    kept: [...kept.filter(enclosesTarget), ...kept.filter((move) => !enclosesTarget(move))],
-    dropped,
-  };
+}
+
+/**
+ * Order moves so that a directory leaves before any move whose target lies inside it, at any
+ * depth: if C's target is inside B and B's target is inside A, A goes first, then B, then C.
+ * Moves with nothing to wait for keep their order in the plan.
+ *
+ * A move that can never go, because it waits on a cycle of moves, comes back in `stuck` with
+ * the move it is waiting on.
+ */
+function moveOrder(
+  moves: readonly LayoutMove[],
+  pathsOf: (move: LayoutMove) => { from: string; to: string },
+): { ordered: LayoutMove[]; stuck: { move: LayoutMove; waitingOn: LayoutMove }[] } {
+  // A move's own directory is no obstacle: a target inside it is reached in two steps.
+  const waitsOn = new Map(
+    moves.map((move) => [
+      move,
+      moves.filter(
+        (other) => other !== move && isStrictlyInside(pathsOf(other).from, pathsOf(move).to),
+      ),
+    ]),
+  );
+  const ordered: LayoutMove[] = [];
+  const done = new Set<LayoutMove>();
+  for (let progress = true; progress; ) {
+    progress = false;
+    for (const move of moves) {
+      if (done.has(move) || !waitsOn.get(move)!.every((other) => done.has(other))) continue;
+      ordered.push(move);
+      done.add(move);
+      progress = true;
+    }
+  }
+  const stuck = moves
+    .filter((move) => !done.has(move))
+    .map((move) => ({ move, waitingOn: waitsOn.get(move)!.find((other) => !done.has(other))! }));
+  return { ordered, stuck };
 }
 
 /** Whether `kozane doctor --fix` has anything to do. */
@@ -313,7 +355,7 @@ export async function applyTaskspaceLayout(
     } catch (e) {
       // Put the directory back so the record still points at it. If that fails too, say so
       // and go on with the other moves.
-      const reason = message(e);
+      const reason = errorMessage(e);
       try {
         undo();
         result.failed.push({ move, reason });
@@ -321,7 +363,7 @@ export async function applyTaskspaceLayout(
         result.failed.push({
           move,
           reason:
-            `${reason}. Could not move it back (${message(undoError)}), so its record no ` +
+            `${reason}. Could not move it back (${errorMessage(undoError)}), so its record no ` +
             `longer matches the directory; run kozane taskspace scan --apply to update it`,
         });
       }
@@ -343,13 +385,9 @@ export async function applyTaskspaceLayout(
   return result;
 }
 
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
 /** Why a move failed, plus what to do when something is in the way. */
 function moveFailure(move: LayoutMove, e: unknown): string {
-  if (!(e instanceof TaskspaceFilesError && e.reason === "exists")) return message(e);
+  if (!(e instanceof TaskspaceFilesError && e.reason === "exists")) return errorMessage(e);
   return (
     `${move.to} already exists. Move it aside, or rename ${move.from} and run ` +
     `kozane taskspace scan --apply, then run kozane doctor --fix again`
@@ -361,6 +399,14 @@ function moveFailure(move: LayoutMove, e: unknown): string {
  * directory itself, such as `taskspaces` → `taskspaces/main/taskspaces` for a taskspace named
  * after the new default directory, cannot be reached in one rename, so the directory is moved
  * aside first.
+ *
+ * Each step returns its own undo, which moves the directory back and removes the folders the
+ * step made. For two steps:
+ *
+ *   move:  from ──step 1──▶ aside ──step 2──▶ to
+ *   undo:  from ◀──undo 1── aside ◀──undo 2── to    (undo 2 runs first)
+ *
+ * If step 2 fails, undo 1 runs at once, so a failed move leaves the directory at `from`.
  */
 function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutMove): () => void {
   const step = (stepFrom: string, stepTo: string) => {
@@ -402,7 +448,7 @@ function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutM
       undoAside();
     } catch (undoError) {
       throw new Error(
-        `${message(e)}. Could not move it back from ${aside} (${message(undoError)}); ` +
+        `${errorMessage(e)}. Could not move it back from ${aside} (${errorMessage(undoError)}); ` +
           `run kozane taskspace scan --apply to update its record`,
         { cause: undoError },
       );

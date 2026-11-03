@@ -1,14 +1,15 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { writeFileAtomic } from "../../lib/server/atomic-write.js";
+import { errorMessage } from "../../lib/error-message.js";
 import { isPlainObject } from "../../lib/plain-object.js";
-import { basename, dirname, join, resolve, relative, isAbsolute } from "node:path";
+import { basename, dirname, join, resolve, isAbsolute } from "node:path";
 import {
+  claimTaskspaceDirectory,
   enclosingRecordedTaskspace,
   enclosingTaskspaceDir,
-  makeParentsInside,
-  missingDirs,
-  removeEmptyDirs,
 } from "../../lib/server/taskspace-directory.js";
+import { TaskspaceFilesError } from "../../lib/server/taskspace-files.js";
+import { storedLocation } from "../../lib/server/taskspace-path.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
 import type { WorkspaceConfig } from "../lib/config.js";
@@ -19,7 +20,6 @@ import {
   resolveTaskspacePath,
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
-  TASKSPACE_MARKER_VERSION,
 } from "../lib/taskspace-scan.js";
 import { taskspaceTable, scopeTable } from "../../db/schema.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
@@ -31,24 +31,12 @@ import {
   getTaskspacesInNamespace,
 } from "../../db/api/taskspace.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
-import { taskspaceParentDir } from "../../lib/server/taskspace-location.js";
-import { errorCode, isStrictlyInside } from "../../lib/server/fs-paths.js";
+import { taskspaceParentDir } from "../../lib/taskspace-location.js";
+import { isStrictlyInside } from "../../lib/server/fs-paths.js";
 import { getAllScopes } from "../../db/api/scope.js";
 import { taskspaceNameIssue } from "../../lib/constants.js";
 
 // ─── taskspace scan ────────────────────────────────────────────────────────────────
-
-/**
- * How to store a taskspace path: relative when it is strictly inside the workspace root, else
- * absolute. Whole segments are compared, so `/ws-other` is not taken to be inside `/ws`, and
- * the root itself is stored absolute rather than as an empty relative path.
- */
-function storedLocation(root: string, path: string) {
-  const base = resolve(root);
-  return isStrictlyInside(base, path)
-    ? { pathKind: "workspace_relative" as const, storedPath: relative(base, path) }
-    : { pathKind: "absolute" as const, storedPath: path };
-}
 
 function formatAge(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -189,14 +177,14 @@ async function scanWithin(
             rewriteMarkerNamespace(taskspace.path, taskspace.taskspaceId, placement.namespaceId);
           } catch (e) {
             console.log(
-              `    ! could not update ${TASKSPACE_MARKER_FILE}: ${e instanceof Error ? e.message : String(e)}`,
+              `    ! could not update ${TASKSPACE_MARKER_FILE}: ${errorMessage(e)}`,
             );
           }
         }
         updated++;
       } catch (e) {
         // Report it and keep going, so one bad orphan does not block the rest.
-        console.log(`    → not reattached: ${e instanceof Error ? e.message : String(e)}`);
+        console.log(`    → not reattached: ${errorMessage(e)}`);
         failed++;
       }
     }
@@ -277,7 +265,7 @@ function reattachNamespace(
   try {
     return { namespaceId: workspaceDefault(), reason: "missing" };
   } catch (e) {
-    const why = e instanceof Error ? e.message : String(e);
+    const why = errorMessage(e);
     throw new Error(
       `its namespace no longer exists and no default is set (${why}). ` +
         `Pass --namespace <id> to choose one.`,
@@ -399,62 +387,26 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
       lastSeenAt: new Date(),
     });
 
-    // Whether to make the directory. It is claimed atomically below, so a directory another
-    // process makes meanwhile, such as the browser creating the same taskspace, fails the
-    // create rather than being taken over.
-    const makeDir = !existsSync(targetDir);
-    // What this command made, so a failure removes exactly that and nothing someone else made:
-    // the folders above the taskspace, such as a new namespace folder, the directory, and the
-    // marker.
-    let parentsCreated: string[] = [];
-    let dirCreated = false;
-    let markerWritten = false;
-    const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
     try {
-      if (checkParents) {
-        const made = makeParentsInside(root, dirname(targetDir));
-        if (!made)
-          throw new Error(
-            `${dirname(targetDir)} leads outside the workspace through a symlink. ` +
-              "Use --dir to choose the directory yourself.",
-          );
-        parentsCreated = made;
-      } else if (makeDir) {
-        parentsCreated = missingDirs(dirname(targetDir));
-        mkdirSync(dirname(targetDir), { recursive: true });
-      }
-      if (makeDir) {
-        try {
-          mkdirSync(targetDir);
-        } catch (e) {
-          if (errorCode(e) === "EEXIST")
-            throw new Error(`${targetDir} was created by another process meanwhile`, {
-              cause: e,
-            });
-          throw e;
-        }
-        dirCreated = true;
-      }
-      const marker = {
-        kind: TASKSPACE_MARKER_KIND,
-        version: TASKSPACE_MARKER_VERSION,
+      // A directory already there without a marker is adopted, but stays the user's. The
+      // claim removes only what it made if it fails.
+      claimTaskspaceDirectory({
+        workspaceRoot: root,
+        targetDir,
         taskspaceId: id,
         namespaceId: namespaceId ?? "",
+        adoptExisting: true,
+        parentsInside: checkParents,
         // Only a directory made here under `defaultDir` is Kozane's to rename or delete.
-        ...(!options.dir && dirCreated && { ownsDirectory: true }),
-      };
-      // `wx` refuses a marker another process wrote since the check above.
-      writeFileSync(markerPath, JSON.stringify(marker, null, 2) + "\n", { flag: "wx" });
-      markerWritten = true;
+        ownIfCreated: !options.dir,
+      });
     } catch (e) {
-      // Clean up the record and what this command made before reporting which step failed.
-      // Never recurse: anything else in the directory is not this command's to remove.
       await deleteTaskspace({ db, taskspaceId: id });
-      if (markerWritten) rmSync(markerPath, { force: true });
-      if (dirCreated) removeEmptyDirs([targetDir]);
-      removeEmptyDirs(parentsCreated);
       console.error("Failed to initialize taskspace directory.");
-      console.error(e instanceof Error ? e.message : String(e));
+      const outside = e instanceof TaskspaceFilesError && e.reason === "invalid-path";
+      console.error(
+        outside ? `${errorMessage(e)}. Use --dir to choose the directory yourself.` : errorMessage(e),
+      );
       process.exit(1);
     }
 

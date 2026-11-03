@@ -5,6 +5,7 @@ import { DEFAULT_TASKSPACE_DIR, NAME_MAX } from "../../../lib/constants.js";
 import { openDb } from "../../../db/client.js";
 import { getAllNamespaces } from "../../../db/api/namespace.js";
 import type { DB } from "../../../db/tx.js";
+import { errorMessage } from "../../../lib/error-message.js";
 import { idMatches } from "../../../lib/short-id-key.js";
 import { activeServerProcess } from "../../../lib/server/runtime-state.js";
 import {
@@ -133,7 +134,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
       }
     } catch (e) {
       migrationOk = false;
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("DB migrations current", migrationOk, detail));
   }
@@ -152,7 +153,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
           `inserted by hand: ${nameSome(stale)}; kozane card list --sort reports them as ` +
           "1970 or invalid";
     } catch (e) {
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("Card timestamps valid", stampOk, detail));
   }
@@ -167,7 +168,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
       integrityOk = integrity.ok;
       detail = integrity.detail;
     } catch (e) {
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("Database integrity", integrityOk, detail));
   }
@@ -195,7 +196,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
         );
       if (parts.length > 0) detail = `${parts.join("; ")}; editing one will refuse it`;
     } catch (e) {
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("Rows within workspace limits", withinLimits, detail));
   }
@@ -222,7 +223,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
         );
       if (parts.length > 0) detail = `${parts.join("; ")}; run kozane inventory repair`;
     } catch (e) {
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("Inventories consistent", consistent, detail));
   }
@@ -248,7 +249,7 @@ export async function doctor(options: DoctorOptions = {}): Promise<void> {
       }
       if (parts.length > 0) detail = `${parts.join("; ")}; restore a backup with kozane db restore`;
     } catch (e) {
-      detail = e instanceof Error ? e.message : String(e);
+      detail = errorMessage(e);
     }
     checks.push(check("Namespace defaults present", complete, detail));
   }
@@ -339,7 +340,7 @@ async function taskspaceLayoutCheck(
     if (skippedNote) parts.push(skippedNote);
     return check(label, false, `${parts.join("; ")}; run kozane doctor --fix`);
   } catch (e) {
-    return check(label, false, e instanceof Error ? e.message : String(e));
+    return check(label, false, errorMessage(e));
   }
 }
 

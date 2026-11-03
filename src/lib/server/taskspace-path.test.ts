@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { join } from "node:path";
-import { resolveTaskspacePath, taskspacePathIssue } from "./taskspace-path.js";
+import { resolveTaskspacePath, storedLocation, taskspacePathIssue } from "./taskspace-path.js";
 
 describe("resolveTaskspacePath", () => {
   it("joins a workspace-relative path to the workspace root", () => {
@@ -43,5 +43,22 @@ describe("taskspacePathIssue", () => {
 
   it("refuses a NUL byte", () => {
     expect(taskspacePathIssue("do\0cs", "workspace_relative")).toMatch(/NUL/);
+  });
+});
+
+describe("storedLocation", () => {
+  it("stores a path inside the root relative to it", () => {
+    expect(storedLocation("/ws", "/ws/taskspaces/notes")).toEqual({
+      pathKind: "workspace_relative",
+      storedPath: join("taskspaces", "notes"),
+    });
+  });
+
+  it("stores the root itself and a sibling sharing its prefix as absolute", () => {
+    expect(storedLocation("/ws", "/ws")).toEqual({ pathKind: "absolute", storedPath: "/ws" });
+    expect(storedLocation("/ws", "/ws-other/x")).toEqual({
+      pathKind: "absolute",
+      storedPath: "/ws-other/x",
+    });
   });
 });

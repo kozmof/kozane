@@ -1,5 +1,4 @@
-import { mkdir, open, rmdir, unlink } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import type { RequestHandler } from "./$types";
 import { json, error } from "@sveltejs/kit";
 import { addTaskspace, deleteTaskspace } from "$db/api/taskspace";
@@ -7,26 +6,13 @@ import { getAllNamespaces, getNamespace } from "$db/api/namespace";
 import { getScope } from "$db/api/scope";
 import { readJsonObject, requireBoundedName, requireTrimmedString } from "../../lib/request.js";
 import { getWorkspaceRoot, getTaskspacePlacementConfig } from "$db/internal/config";
-import { AmbiguousNamespacePathError, taskspaceParentDir } from "$lib/server/taskspace-location";
+import { AmbiguousNamespacePathError, taskspaceParentDir } from "$lib/taskspace-location";
 import { taskspaceNameIssue } from "$lib/constants";
-import {
-  TASKSPACE_MARKER_FILE,
-  TASKSPACE_MARKER_KIND,
-  TASKSPACE_MARKER_VERSION,
-} from "../../../../lib/taskspace-marker.js";
-import { errorCode, isStrictlyInside } from "$lib/server/fs-paths";
-import {
-  enclosingTaskspaceDir,
-  makeParentsInside,
-  removeEmptyDirs,
-} from "$lib/server/taskspace-directory";
+import { errorCode } from "$lib/server/fs-paths";
+import { claimTaskspaceDirectory, enclosingTaskspaceDir } from "$lib/server/taskspace-directory";
+import { TaskspaceFilesError } from "$lib/server/taskspace-files";
+import { storedLocation } from "$lib/server/taskspace-path";
 import { apiHandler } from "../../lib/api-handler.js";
-
-/** The taskspace's parent resolves, through a symlink, to somewhere outside the workspace. */
-class OutsideWorkspaceError extends Error {}
-
-/** How many times to make the parent folders when a concurrent create removes them. */
-const MAX_PARENT_ATTEMPTS = 3;
 
 export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
   const { db } = locals;
@@ -60,12 +46,11 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
   // `resolve`, not `join`, so a configured absolute path is used as it is.
   const targetDir = resolve(root, parentDir, name);
 
-  // Containment compares whole path segments rather than a string prefix, so the separator
-  // stays platform-correct. The name and namespace folder are one segment each, but the
-  // configured directories come from the config file and may point outside the root.
-  if (!isStrictlyInside(resolve(root), targetDir))
+  // The configured directories come from the config file and may point outside the root.
+  // Absolute paths are only stored by the CLI, such as `kozane taskspace create --dir`.
+  const { pathKind, storedPath } = storedLocation(root, targetDir);
+  if (pathKind !== "workspace_relative")
     throw error(400, "Taskspace path must be inside the workspace root");
-  const storedPath = relative(resolve(root), targetDir);
 
   // Never inside another taskspace's directory, which deleting that taskspace would remove.
   const enclosing = enclosingTaskspaceDir(root, dirname(targetDir));
@@ -76,77 +61,36 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
         "Move that taskspace or change taskspace.defaultDir or taskspace.namespacePaths.",
     );
 
-  // The guard above ensures targetDir is always inside the workspace root,
-  // so the path is always stored as workspace_relative. Absolute paths are
-  // only produced by the CLI (kozane taskspace create --dir <outside-root>).
-
   const id = await addTaskspace({
     db,
     namespaceId: params.namespaceId,
     scopeId,
     name,
     path: storedPath,
-    pathKind: "workspace_relative",
+    pathKind,
   });
 
-  let targetCreated = false;
-  let parentsCreated: string[] = [];
-  const markerPath = join(targetDir, TASKSPACE_MARKER_FILE);
   try {
-    // Shared parents are safe to create, but claim the taskspace directory atomically. The
-    // textual check above cannot see symlinks, so this also checks where the parent really is,
-    // and creates nothing when a parent such as `tasks -> /elsewhere` leads outside.
-    for (let attempt = 1; ; attempt++) {
-      const created = makeParentsInside(root, dirname(targetDir));
-      if (!created) throw new OutsideWorkspaceError();
-      // Deepest first, as removeEmptyDirs expects. A retry remakes the same folders, so add
-      // each once: a repeat would stop removeEmptyDirs at its failed second rmdir.
-      parentsCreated.unshift(...created.filter((dir) => !parentsCreated.includes(dir)));
-      try {
-        await mkdir(targetDir);
-        break;
-      } catch (e) {
-        // A concurrent create that failed can remove a new namespace folder this one was
-        // about to use. Make it again, a few times at most.
-        if (errorCode(e) !== "ENOENT" || attempt >= MAX_PARENT_ATTEMPTS) throw e;
-      }
-    }
-    targetCreated = true;
-    const marker = await open(markerPath, "wx", 0o600);
-    try {
-      await marker.writeFile(
-        JSON.stringify(
-          {
-            kind: TASKSPACE_MARKER_KIND,
-            version: TASKSPACE_MARKER_VERSION,
-            taskspaceId: id,
-            namespaceId: params.namespaceId,
-            // This route always makes the directory itself, so the browser may manage it.
-            ownsDirectory: true,
-          },
-          null,
-          2,
-        ) + "\n",
-      );
-    } finally {
-      await marker.close();
-    }
+    // The path is stored relative, so its parents must really be inside the workspace. The
+    // browser always makes the directory itself, so it may manage it.
+    claimTaskspaceDirectory({
+      workspaceRoot: root,
+      targetDir,
+      taskspaceId: id,
+      namespaceId: params.namespaceId,
+      adoptExisting: false,
+      parentsInside: true,
+      ownIfCreated: true,
+    });
   } catch (e) {
     console.error("Failed to initialize taskspace directory:", e);
     await deleteTaskspace({ db, taskspaceId: id });
-    // Remove only artifacts created by this request. Never recurse into the target.
-    if (targetCreated) {
-      await unlink(markerPath).catch(() => undefined);
-      await rmdir(targetDir).catch(() => undefined);
-    }
-    // Then the folders above it that this request made, such as a new namespace folder.
-    removeEmptyDirs(parentsCreated);
-    if (e instanceof OutsideWorkspaceError)
+    if (e instanceof TaskspaceFilesError && e.reason === "invalid-path")
       throw error(400, "Taskspace path must be inside the workspace root");
-    const code = errorCode(e);
-    if (code === "EEXIST") throw error(409, "Taskspace directory already exists");
+    if ((e instanceof TaskspaceFilesError && e.reason === "exists") || errorCode(e) === "EEXIST")
+      throw error(409, "Taskspace directory already exists");
     throw error(500, "Failed to initialize taskspace directory");
   }
 
-  return json({ id, path: storedPath, pathKind: "workspace_relative" });
+  return json({ id, path: storedPath, pathKind });
 });

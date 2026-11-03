@@ -1,4 +1,13 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,11 +16,13 @@ import {
   enclosingTaskspaceDir,
   enclosingRecordedTaskspace,
   holdsOtherTaskspaces,
+  claimTaskspaceDirectory,
   isManagedTaskspaceDirectory,
   makeParentsInside,
   missingDirs,
   moveTaskspaceDirectory,
   removeEmptyDirs,
+  type ClaimRequest,
 } from "./taskspace-directory.js";
 
 const dirs: string[] = [];
@@ -127,9 +138,8 @@ describe("isManagedTaskspaceDirectory", () => {
       workspaceRoot: "/ws",
       storedPath,
       pathKind: "workspace_relative",
-      defaultDir: "taskspaces",
-      namespacePathDirs: [],
-      namespaceFolders: ["work"],
+      placement: { defaultDir: "taskspaces", namespacePaths: {} },
+      namespaces: [{ id: "019a0000-0000-7000-8000-000000000001", name: "work" }],
     });
 
   it("matches a namespace folder whatever its case", () => {
@@ -202,5 +212,112 @@ describe("makeParentsInside with a dangling symlink", () => {
     const root = tempDir("kozane-dangling-");
     symlinkSync(join(root, "gone"), join(root, "taskspaces"));
     expect(makeParentsInside(root, join(root, "taskspaces", "Work"))).toBeNull();
+  });
+});
+
+describe("isManagedTaskspaceDirectory with namespacePaths", () => {
+  const check = (storedPath: string, defaultDir = "taskspaces") =>
+    isManagedTaskspaceDirectory({
+      workspaceRoot: "/work",
+      storedPath,
+      pathKind: "workspace_relative",
+      placement: { defaultDir, namespacePaths: { aaaaaaa: "clients/acme", bbbbbbb: "/work/abs" } },
+      namespaces: [{ id: "019a0000-0000-7000-8000-000000000001", name: "Work" }],
+    });
+
+  it("rejects a folder in defaultDir that is no current namespace's folder", () => {
+    expect(check(join("taskspaces", "Other", "notes"))).toBe(false);
+    // With defaultDir at the root, the user's own src/lib must stay out of reach.
+    expect(check(join("src", "lib"), ".")).toBe(false);
+    expect(check(join("Work", "notes"), ".")).toBe(true);
+  });
+
+  it("accepts a directory directly in defaultDir or in a namespace folder there", () => {
+    expect(check(join("taskspaces", "notes"))).toBe(true);
+    expect(check(join("taskspaces", "Work", "notes"))).toBe(true);
+  });
+
+  it("accepts a directory directly in a configured namespace path", () => {
+    expect(check(join("clients", "acme", "notes"))).toBe(true);
+    expect(check(join("abs", "notes"))).toBe(true);
+  });
+
+  it("rejects a directory elsewhere or nested deeper", () => {
+    expect(check(join("src", "notes"))).toBe(false);
+    expect(check(join("taskspaces", "Work", "deep", "notes"))).toBe(false);
+    expect(check(join("clients", "acme", "deep", "notes"))).toBe(false);
+  });
+});
+
+describe("claimTaskspaceDirectory", () => {
+  const claim = (root: string, path: string, more: Partial<ClaimRequest> = {}) =>
+    claimTaskspaceDirectory({
+      workspaceRoot: root,
+      targetDir: join(root, path),
+      taskspaceId: "t1",
+      namespaceId: "n1",
+      adoptExisting: false,
+      parentsInside: true,
+      ownIfCreated: true,
+      ...more,
+    });
+  const marker = (root: string, path: string) =>
+    JSON.parse(readFileSync(join(root, path, TASKSPACE_MARKER_FILE), "utf-8"));
+
+  it("makes the directory, its parents and an owning marker", () => {
+    const root = tempDir("kozane-claim-");
+    expect(claim(root, join("taskspaces", "main", "notes"))).toEqual({ dirCreated: true });
+    expect(marker(root, join("taskspaces", "main", "notes"))).toMatchObject({
+      kind: TASKSPACE_MARKER_KIND,
+      taskspaceId: "t1",
+      namespaceId: "n1",
+      ownsDirectory: true,
+    });
+  });
+
+  it("adopts an existing directory without claiming to own it", () => {
+    const root = tempDir("kozane-claim-");
+    mkdirSync(join(root, "mine"));
+    writeFileSync(join(root, "mine", "keep.txt"), "x");
+    expect(claim(root, "mine", { adoptExisting: true })).toEqual({ dirCreated: false });
+    expect(marker(root, "mine").ownsDirectory).toBeUndefined();
+  });
+
+  it("refuses an existing directory unless adopting, and leaves it alone", () => {
+    const root = tempDir("kozane-claim-");
+    mkdirSync(join(root, "taken"));
+    expect(() => claim(root, "taken")).toThrow(
+      expect.objectContaining({ reason: "exists", message: "Taskspace directory already exists" }),
+    );
+    expect(readdirSync(join(root, "taken"))).toEqual([]);
+  });
+
+  it("refuses a directory that already holds a marker", () => {
+    const root = tempDir("kozane-claim-");
+    mkdirSync(join(root, "taken"));
+    writeFileSync(join(root, "taken", TASKSPACE_MARKER_FILE), "original");
+    expect(() => claim(root, "taken", { adoptExisting: true })).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+    expect(readFileSync(join(root, "taken", TASKSPACE_MARKER_FILE), "utf-8")).toBe("original");
+  });
+
+  it("refuses a parent that leads outside and leaves nothing behind", () => {
+    const root = tempDir("kozane-claim-");
+    const outside = tempDir("kozane-outside-");
+    symlinkSync(outside, join(root, "taskspaces"));
+    expect(() => claim(root, join("taskspaces", "main", "notes"))).toThrow(
+      expect.objectContaining({ reason: "invalid-path" }),
+    );
+    expect(readdirSync(outside)).toEqual([]);
+  });
+
+  it("leaves a file at the target alone when the marker cannot be written", () => {
+    const root = tempDir("kozane-claim-");
+    // Adopting a file gets as far as the marker, which cannot go inside it.
+    mkdirSync(join(root, "taskspaces"));
+    writeFileSync(join(root, "taskspaces", "notes"), "not a dir");
+    expect(() => claim(root, join("taskspaces", "notes"), { adoptExisting: true })).toThrow();
+    expect(readFileSync(join(root, "taskspaces", "notes"), "utf-8")).toBe("not a dir");
   });
 });

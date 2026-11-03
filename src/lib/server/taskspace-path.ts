@@ -1,5 +1,22 @@
-import { isAbsolute, join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { PATH_KINDS, type PathKind } from "../constants.js";
+import { isStrictlyInside } from "./fs-paths.js";
+
+/**
+ * How to store a taskspace directory's path: relative when it is strictly inside the
+ * workspace root, else absolute. Whole segments are compared, so `/ws-other` is not taken to
+ * be inside `/ws`, and the root itself is stored absolute rather than as an empty path.
+ */
+export function storedLocation(
+  workspaceRoot: string,
+  dir: string,
+): { pathKind: PathKind; storedPath: string } {
+  const base = resolve(workspaceRoot);
+  const target = resolve(dir);
+  return isStrictlyInside(base, target)
+    ? { pathKind: "workspace_relative", storedPath: relative(base, target) }
+    : { pathKind: "absolute", storedPath: target };
+}
 
 /**
  * Why a stored taskspace path cannot be used, or null when it can. A `workspace_relative`
