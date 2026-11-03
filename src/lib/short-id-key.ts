@@ -14,6 +14,9 @@ export const SHORT_ID_KEY_LENGTH = 12;
  */
 export const MIN_SHORT_ID_LENGTH = 7;
 
+/** Hex digits in a full UUID, without dashes. */
+export const FULL_ID_LENGTH = 32;
+
 /** The ID without dashes, in lower case. */
 export function compactId(id: string): string {
   return id.replaceAll("-", "").toLowerCase();

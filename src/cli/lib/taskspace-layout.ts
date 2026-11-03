@@ -351,7 +351,19 @@ function moveDirectory(workspaceRoot: string, { taskspaceId, from, to }: LayoutM
     return step(from, to);
 
   const aside = `${from}.kozane-move-${shortIdKey(taskspaceId).slice(0, MIN_SHORT_ID_LENGTH)}`;
-  const undoAside = step(from, aside);
+  let undoAside: () => void;
+  try {
+    undoAside = step(from, aside);
+  } catch (e) {
+    // Name the path in the way. `moveFailure` would otherwise blame the final target.
+    if (e instanceof TaskspaceFilesError && e.reason === "exists")
+      throw new Error(
+        `${aside} already exists, and the move goes through it. Move it aside, then run ` +
+          "kozane doctor --fix again",
+        { cause: e },
+      );
+    throw e;
+  }
   let undoTarget: () => void;
   try {
     undoTarget = step(aside, to);

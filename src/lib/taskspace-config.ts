@@ -1,6 +1,11 @@
 import { DEFAULT_TASKSPACE_DIR, DEFAULT_TASKSPACE_NAMESPACE_DIRS } from "./constants/workspace.js";
 import { isPlainObject } from "./plain-object.js";
-import { MIN_SHORT_ID_LENGTH, compactId } from "./short-id-key.js";
+import {
+  FULL_ID_LENGTH,
+  MIN_SHORT_ID_LENGTH,
+  SHORT_ID_KEY_LENGTH,
+  compactId,
+} from "./short-id-key.js";
 
 /**
  * The `taskspace` settings that decide where a new taskspace goes. The CLI's config schema
@@ -30,18 +35,24 @@ export function namespaceDirsIssue(value: unknown): string | null {
 
 /**
  * `taskspace.namespacePaths` maps a namespace ID, full or short, to a directory. IDs are hex
- * digits and dashes, so a key with anything else is most likely a namespace name. Short IDs
- * are at least {@link MIN_SHORT_ID_LENGTH} digits, as `kozane namespace list` prints them,
- * so a word made of hex letters, such as `cafe`, is refused too.
+ * digits and dashes, so a key with anything else is most likely a namespace name. Only key
+ * lengths `idMatches` can match are accepted: a short ID of
+ * {@link MIN_SHORT_ID_LENGTH} to {@link SHORT_ID_KEY_LENGTH} digits, as `kozane namespace
+ * list` prints it, or the full ID. A word made of hex letters, such as `cafe`, is refused,
+ * and so is a longer prefix, such as the start of a UUID, which would match nothing.
  */
 export function namespacePathsIssue(value: unknown): string | null {
   const path = "taskspace.namespacePaths";
   if (!isPlainObject(value)) return `${path} must be an object of namespace IDs to directories`;
   for (const [key, dir] of Object.entries(value)) {
-    if (!/^[0-9a-f-]+$/i.test(key) || compactId(key).length < MIN_SHORT_ID_LENGTH)
+    const digits = compactId(key).length;
+    const matchable =
+      (digits >= MIN_SHORT_ID_LENGTH && digits <= SHORT_ID_KEY_LENGTH) ||
+      digits === FULL_ID_LENGTH;
+    if (!/^[0-9a-f-]+$/i.test(key) || !matchable)
       return (
-        `${path} key "${key}" must be a namespace ID, as kozane namespace list shows it, ` +
-        `of at least ${MIN_SHORT_ID_LENGTH} characters`
+        `${path} key "${key}" must be a namespace ID as kozane namespace list shows it ` +
+        `(${MIN_SHORT_ID_LENGTH} to ${SHORT_ID_KEY_LENGTH} characters) or the full ID`
       );
     if (typeof dir !== "string" || !dir.trim())
       return `${path}.${key} must be a nonempty directory path`;

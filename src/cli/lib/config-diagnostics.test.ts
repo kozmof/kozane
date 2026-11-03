@@ -185,12 +185,18 @@ describe("diagnoseConfig", () => {
         "taskspace.namespacePaths must be an object of namespace IDs to directories",
       ]);
       expect(withPaths({ "My namespace": "work" })).toEqual([
-        'taskspace.namespacePaths key "My namespace" must be a namespace ID, as kozane namespace list shows it, of at least 7 characters',
+        'taskspace.namespacePaths key "My namespace" must be a namespace ID as kozane namespace list shows it (7 to 12 characters) or the full ID',
       ]);
       // Hex letters alone, but too short to be a short ID.
       expect(withPaths({ cafe: "work" })).toEqual([
-        'taskspace.namespacePaths key "cafe" must be a namespace ID, as kozane namespace list shows it, of at least 7 characters',
+        'taskspace.namespacePaths key "cafe" must be a namespace ID as kozane namespace list shows it (7 to 12 characters) or the full ID',
       ]);
+      // Longer than a short ID but not a full ID, such as the start of a UUID: matches nothing.
+      expect(withPaths({ "019a7f3c-1b2d-7": "work" })).toEqual([
+        'taskspace.namespacePaths key "019a7f3c-1b2d-7" must be a namespace ID as kozane namespace list shows it (7 to 12 characters) or the full ID',
+      ]);
+      expect(withPaths({ aa414b7c9d0e: "work" })).toEqual([]);
+      expect(withPaths({ "019a7f3c-1b2d-7e4f-8a9b-0c1d2e3f4a5b": "work" })).toEqual([]);
       expect(withPaths({ aa414b7: " " })).toEqual([
         "taskspace.namespacePaths.aa414b7 must be a nonempty directory path",
       ]);

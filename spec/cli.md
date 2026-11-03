@@ -849,8 +849,9 @@ delete from the browser leave them on disk.
 To choose the directory for one namespace, add it to `taskspace.namespacePaths`. Its new
 taskspaces then go to `<that path>/<name>`, with no namespace folder added, whatever
 `defaultDir` and `namespaceDirs` say. Keys are namespace IDs, either the short ID
-`kozane namespace list` prints, at least 7 characters, or the full ID, matched as
-`--namespace` matches them. `kozane doctor` fails for a key that matches no namespace, such
+`kozane namespace list` prints, 7 to 12 characters, or the full ID, matched as
+`--namespace` matches them. Any other length, such as the start of a full ID, is refused,
+since it would match no namespace. `kozane doctor` fails for a key that matches no namespace, such
 as a typo or a deleted namespace, or more than one. The
 longest matching key wins. A key that matches more than one namespace stops the create with an error naming
 the full ID to use instead. Paths are relative to the workspace root or absolute. A path

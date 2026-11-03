@@ -183,6 +183,21 @@ describe("applyTaskspaceLayout", () => {
     expect((await plan()).moves).toEqual([]);
   });
 
+  it("names the in-between path when it is what blocks a move through it", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "." });
+    await owned("taskspaces");
+    const planned = await plan();
+    const [{ taskspaceId }] = planned.moves;
+    const aside = `taskspaces.kozane-move-${taskspaceId.replaceAll("-", "").slice(-12, -5)}`;
+    mkdirSync(join(root, aside, "inner"), { recursive: true });
+
+    const result = await applyTaskspaceLayout(db, root, planned);
+    expect(result.failed).toHaveLength(1);
+    expect(result.failed[0].reason).toContain(`${aside} already exists`);
+    expect(result.failed[0].reason).not.toContain(join("taskspaces", "main", "taskspaces"));
+    expect(existsSync(join(root, "taskspaces", TASKSPACE_MARKER_FILE))).toBe(true);
+  });
+
   it("puts the directory back when its record cannot be updated", async () => {
     const { db, root, owned, plan } = await workspace({ defaultDir: "." });
     await owned("notes");
