@@ -112,6 +112,15 @@ export function namespacePathFor(
 export type NamespaceRef = { id: string; name: string };
 
 /**
+ * A folder name as a case-insensitive disk compares it. Upper-casing first folds letters
+ * that lower-casing alone keeps apart, such as `ß` and `SS`. Disks differ in the details,
+ * so this errs toward calling two names the same, which only adds a suffix.
+ */
+export function folderKey(name: string): string {
+  return name.normalize("NFC").toUpperCase().toLowerCase();
+}
+
+/**
  * The folder each namespace's taskspaces go in when `taskspace.namespaceDirs` is on, by
  * namespace ID.
  *
@@ -135,10 +144,10 @@ export function namespaceFolders(namespaces: readonly NamespaceRef[]): Map<strin
     let folder = plain;
     // Lengthen the suffix while it still clashes, such as with a namespace literally named
     // `<name>-<hex>`. The full ID is the last resort.
-    for (let length = MIN_SHORT_ID_LENGTH; taken.has(folder.toLowerCase()); length++)
+    for (let length = MIN_SHORT_ID_LENGTH; taken.has(folderKey(folder)); length++)
       folder =
         length <= key.length ? `${plain}-${key.slice(0, length)}` : `${plain}-${compactId(id)}`;
-    taken.add(folder.toLowerCase());
+    taken.add(folderKey(folder));
     folders.set(id, folder);
   }
   return folders;

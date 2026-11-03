@@ -22,6 +22,7 @@ import {
   missingDirs,
   moveTaskspaceDirectory,
   removeEmptyDirs,
+  restoreTaskspaceDirectory,
   type ClaimRequest,
 } from "./taskspace-directory.js";
 
@@ -319,5 +320,43 @@ describe("claimTaskspaceDirectory", () => {
     writeFileSync(join(root, "taskspaces", "notes"), "not a dir");
     expect(() => claim(root, join("taskspaces", "notes"), { adoptExisting: true })).toThrow();
     expect(readFileSync(join(root, "taskspaces", "notes"), "utf-8")).toBe("not a dir");
+  });
+});
+
+describe("isManagedTaskspaceDirectory ignores case in configured directories", () => {
+  const check = (storedPath: string) =>
+    isManagedTaskspaceDirectory({
+      workspaceRoot: "/ws",
+      storedPath,
+      pathKind: "workspace_relative",
+      placement: { defaultDir: "Taskspaces", namespacePaths: { "000000000001": "Notes/Here" } },
+      namespaces: [{ id: "019a0000-0000-7000-8000-000000000001", name: "work" }],
+    });
+
+  it("matches defaultDir and namespacePaths whatever their case", () => {
+    expect(check(join("taskspaces", "notes"))).toBe(true);
+    expect(check(join("taskspaces", "WORK", "notes"))).toBe(true);
+    expect(check(join("notes", "here", "a"))).toBe(true);
+    expect(check(join("other", "notes"))).toBe(false);
+  });
+});
+
+describe("restoreTaskspaceDirectory", () => {
+  it("moves the directory back", () => {
+    const root = tempDir("kozane-restore-");
+    mkdirSync(join(root, "new"));
+    restoreTaskspaceDirectory(root, "new", "old");
+    expect(existsSync(join(root, "old"))).toBe(true);
+    expect(existsSync(join(root, "new"))).toBe(false);
+  });
+
+  it("refuses to replace an empty directory that took the original path", () => {
+    const root = tempDir("kozane-restore-");
+    mkdirSync(join(root, "new"));
+    mkdirSync(join(root, "old"));
+    expect(() => restoreTaskspaceDirectory(root, "new", "old")).toThrow(
+      expect.objectContaining({ reason: "exists" }),
+    );
+    expect(existsSync(join(root, "new"))).toBe(true);
   });
 });

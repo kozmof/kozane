@@ -13,7 +13,7 @@ import {
 import { basename, dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import type { TaskspacePlacement } from "../taskspace-config.js";
-import { type NamespaceRef, namespaceFolders } from "../taskspace-location.js";
+import { type NamespaceRef, folderKey, namespaceFolders } from "../taskspace-location.js";
 import {
   TASKSPACE_MARKER_FILE,
   TASKSPACE_MARKER_KIND,
@@ -66,27 +66,29 @@ export function isManagedTaskspaceDirectory({
   folders,
 }: ManagedCheck): boolean {
   if (!storedPath || pathKind !== "workspace_relative") return false;
-  const parent = dirname(resolve(workspaceRoot, storedPath));
-  const base = resolve(workspaceRoot, placement.defaultDir);
+  // Paths are compared ignoring case, as a case-insensitive disk does, so a config naming
+  // `Taskspaces` still manages directories in `taskspaces`. That only widens this first
+  // check: the marker still decides ownership.
+  const key = (path: string) => folderKey(resolve(workspaceRoot, path));
+  const parent = key(dirname(resolve(workspaceRoot, storedPath)));
+  const base = key(placement.defaultDir);
   // Directly in `defaultDir`, or in a current namespace's folder inside it. Both are accepted
   // whatever `taskspace.namespaceDirs` says now, so turning it on or off keeps directories
   // made earlier manageable. Any other folder is refused: with `defaultDir` set to `.`,
   // accepting every grandchild would put the user's own `src/lib` in reach. A namespace that
   // was renamed leaves its old folder unmanaged, which only means rename and delete stop
-  // touching that directory. Folder names are compared ignoring case, as `namespaceFolders()`
-  // keeps them apart, so renaming "Work" to "work" on a case-insensitive disk, where both
-  // name the same folder, keeps its directories managed. The marker still decides ownership.
+  // touching that directory. Folder names are compared as `namespaceFolders()` keeps them
+  // apart, so renaming "Work" to "work" on a case-insensitive disk, where both name the same
+  // folder, keeps its directories managed.
   if (parent === base) return true;
   if (dirname(parent) === base) {
-    const folder = basename(parent).toLowerCase();
+    const folder = basename(parent);
     const current = [...(folders ?? namespaceFolders(namespaces)).values()];
-    if (current.some((f) => f.toLowerCase() === folder)) return true;
+    if (current.some((f) => folderKey(f) === folder)) return true;
   }
   // Any configured namespace path is accepted, not only the one for this taskspace's
   // namespace, so moving a taskspace to another namespace keeps it manageable.
-  return Object.values(placement.namespacePaths).some(
-    (dir) => parent === resolve(workspaceRoot, dir),
-  );
+  return Object.values(placement.namespacePaths).some((dir) => parent === key(dir));
 }
 
 /**
@@ -496,13 +498,26 @@ export function removeEmptyDirs(dirs: readonly string[]): void {
   }
 }
 
-/** Undo {@link renameTaskspaceDirectory} after a failed database update. */
+/**
+ * Undo {@link renameTaskspaceDirectory} after a failed database update. Throws `exists` when
+ * something took the original path meanwhile: `rename` would silently replace an empty
+ * directory there, so it is refused, as the forward move refuses it.
+ */
 export function restoreTaskspaceDirectory(
   workspaceRoot: string,
   renamedTo: string,
   originalPath: string,
 ): void {
-  renameSync(resolve(workspaceRoot, renamedTo), resolve(workspaceRoot, originalPath));
+  const from = resolve(workspaceRoot, renamedTo);
+  const to = resolve(workspaceRoot, originalPath);
+  try {
+    // A case-only rename on a case-insensitive disk finds the directory itself.
+    if (!sameEntry(lstatSync(to), lstatSync(from)))
+      throw new TaskspaceFilesError("exists", `${originalPath} was taken while moving back`);
+  } catch (e) {
+    if (errorCode(e) !== "ENOENT") throw e;
+  }
+  renameSync(from, to);
 }
 
 /**

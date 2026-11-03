@@ -394,7 +394,7 @@ export async function taskspaceCreate(name: string, options: CreateOptions = {})
         workspaceRoot: root,
         targetDir,
         taskspaceId: id,
-        namespaceId: namespaceId ?? "",
+        namespaceId,
         adoptExisting: true,
         parentsInside: checkParents,
         // Only a directory made here under `defaultDir` is Kozane's to rename or delete.

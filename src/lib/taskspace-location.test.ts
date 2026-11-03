@@ -147,6 +147,17 @@ describe("namespaceFolders", () => {
     expect(folders.get(newer)).toBe("my-ns-5c3d9e1");
   });
 
+  it("keeps apart names a case-insensitive disk folds together beyond lower case", () => {
+    const older = "019dddef-87e3-7000-ac4d-aa414b7e75d7";
+    const newer = "019dddf0-0000-7000-8b2e-5c3d9e1f2a3b";
+    const folders = namespaceFolders([
+      { id: older, name: "Straße" },
+      { id: newer, name: "STRASSE" },
+    ]);
+    expect(folders.get(older)).toBe("Straße");
+    expect(folders.get(newer)).toBe("STRASSE-5c3d9e1");
+  });
+
   it("lengthens the suffix when the suffixed name is taken too", () => {
     const oldest = "019dddee-0000-7000-8000-000000000001";
     const older = "019dddef-87e3-7000-ac4d-aa414b7e75d7";
