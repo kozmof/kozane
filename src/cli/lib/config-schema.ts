@@ -6,6 +6,7 @@ import {
 } from "../../lib/constants.js";
 import { isPlainObject } from "../../lib/plain-object.js";
 import {
+  type TaskspacePlacement,
   defaultDirIssue,
   namespaceDirsIssue,
   namespacePathsIssue,
@@ -25,12 +26,8 @@ export type WorkspaceConfig = {
     host: string;
     port: number;
   };
-  taskspace: {
-    defaultDir: string;
-    /** Put each namespace's new taskspaces in a folder named after it under `defaultDir`. */
-    namespaceDirs: boolean;
-    /** Namespace ID, full or short, to the directory its new taskspaces go in. */
-    namespacePaths: Record<string, string>;
+  /** The placement fields are the ones the server reads too, see {@link TaskspacePlacement}. */
+  taskspace: TaskspacePlacement & {
     searchRoots: string[];
   };
   ui?: Partial<UiConfig>;

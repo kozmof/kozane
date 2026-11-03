@@ -99,8 +99,9 @@ export const POST: RequestHandler = apiHandler(async ({ locals, params, request 
     for (let attempt = 1; ; attempt++) {
       const created = makeParentsInside(root, dirname(targetDir));
       if (!created) throw new OutsideWorkspaceError();
-      // Deepest first, as removeEmptyDirs expects.
-      parentsCreated.unshift(...created);
+      // Deepest first, as removeEmptyDirs expects. A retry remakes the same folders, so add
+      // each once: a repeat would stop removeEmptyDirs at its failed second rmdir.
+      parentsCreated.unshift(...created.filter((dir) => !parentsCreated.includes(dir)));
       try {
         await mkdir(targetDir);
         break;

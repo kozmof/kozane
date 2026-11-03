@@ -12,8 +12,11 @@ import { MIN_SHORT_ID_LENGTH, compactId } from "./short-id-key.js";
  * `kozane taskspace create`, but the browser refuses it.
  */
 export type TaskspacePlacement = {
+  /** Directory for new taskspaces, relative to the workspace root or absolute. */
   defaultDir: string;
+  /** Put each namespace's new taskspaces in a folder named after it under `defaultDir`. */
   namespaceDirs: boolean;
+  /** Namespace ID, full or short, to the directory its new taskspaces go in. */
   namespacePaths: Record<string, string>;
 };
 

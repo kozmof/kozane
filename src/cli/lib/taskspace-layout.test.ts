@@ -246,6 +246,38 @@ describe("nested taskspaces", () => {
     expect((await plan()).moves).toEqual([]);
   });
 
+  it("skips a move whose target is inside where another move puts a taskspace", async () => {
+    const { db, root, owned, plan } = await workspace({ defaultDir: "taskspaces" });
+    await owned(join("elsewhere", "foo"));
+    // A second namespace whose path points inside `foo`'s new directory.
+    const otherId = await createNamespace({ db, name: "other" });
+    const barId = await addTaskspace({
+      db,
+      namespaceId: otherId,
+      name: "bar",
+      path: join("elsewhere", "bar"),
+    });
+    mkdirSync(join(root, "elsewhere", "bar"), { recursive: true });
+    writeFileSync(
+      join(root, "elsewhere", "bar", TASKSPACE_MARKER_FILE),
+      JSON.stringify({ kind: TASKSPACE_MARKER_KIND, taskspaceId: barId, ownsDirectory: true }),
+    );
+    writeFileSync(
+      join(root, ".kozane", "config.json"),
+      JSON.stringify({
+        name: "demo",
+        taskspace: {
+          searchRoots: ["."],
+          defaultDir: "taskspaces",
+          namespacePaths: { [otherId]: join("taskspaces", "main", "foo") },
+        },
+      }),
+    );
+
+    // Only `foo` moves; `bar` would land inside it.
+    expect((await plan()).moves.map(({ from }) => from)).toEqual([join("elsewhere", "foo")]);
+  });
+
   it("does not move a directory that holds another taskspace", async () => {
     const { owned, plan } = await workspace({ defaultDir: "taskspaces", namespaceDirs: false });
     await owned(join("elsewhere", "outer"));

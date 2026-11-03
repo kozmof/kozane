@@ -117,6 +117,7 @@ describe("old taskspace layout", () => {
     expect(open.status).toBe(1);
     expect(open.stderr).toContain('still has the old "defaultDir": "."');
     expect(open.stderr).toContain('Run "kozane doctor --fix"');
+    expect(open.stderr).toContain('"namespaceDirs": false');
 
     cli(root, "doctor", "--fix");
     expect(readConfig(root).taskspace).toMatchObject({ defaultDir: "taskspaces" });

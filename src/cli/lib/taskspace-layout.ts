@@ -169,8 +169,9 @@ export async function planTaskspaceLayout(
 }
 
 /**
- * Drop moves whose target would sit inside another taskspace's directory, where deleting that
- * taskspace would delete it too. A directory that is itself about to move is no obstacle, such
+ * Drop moves whose target would sit inside another taskspace's directory, where it is now or
+ * where another move puts it, since deleting that taskspace would delete it too. A directory
+ * that is itself about to move away is no obstacle, such
  * as a legacy taskspace named `taskspaces` at the root: it is moved first, so the folders
  * under it are plain folders by the time the others arrive.
  */
@@ -188,7 +189,13 @@ function withoutNesting(workspaceRoot: string, moves: LayoutMove[]): LayoutMove[
     const leaving = new Set(kept.map(({ from }) => resolve(workspaceRoot, from)));
     const next = kept.filter((move) => {
       const enclosing = enclosingOf.get(move);
-      return enclosing == null || leaving.has(enclosing);
+      if (enclosing != null && !leaving.has(enclosing)) return false;
+      // The disk check above cannot see where other moves land, such as a `namespacePaths`
+      // entry pointing inside another taskspace's new directory.
+      const target = resolve(workspaceRoot, move.to);
+      return !kept.some(
+        (other) => other !== move && isStrictlyInside(resolve(workspaceRoot, other.to), target),
+      );
     });
     if (next.length === kept.length) break;
     kept = next;

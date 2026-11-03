@@ -90,6 +90,10 @@ async function refuseOldLayout(
     console.error('.kozane/config.json still has the old "defaultDir": ".".');
     console.error('Run "kozane doctor --fix" to update it, then open Kozane again.');
   }
+  console.error(
+    'To keep new taskspaces at the workspace root instead, set "namespaceDirs": false ' +
+      "in the taskspace section of .kozane/config.json.",
+  );
   return true;
 }
 
