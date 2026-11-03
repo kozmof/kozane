@@ -65,7 +65,11 @@ export function registerWorkspaceCommands(program: Command): void {
   const doctorCommand = program
     .command("doctor")
     .description("Check Kozane workspace health")
-    .action(() => doctor());
+    .option(
+      "--fix",
+      "Move taskspace directories Kozane created into the current layout before checking",
+    )
+    .action((opts) => doctor(opts));
 
   doctorCommand
     .command("config")

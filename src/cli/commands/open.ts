@@ -4,7 +4,8 @@ import { dirname, resolve, join } from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { requireWorkspace } from "../lib/workspace.js";
-import { dbUrl } from "../lib/config.js";
+import { type WorkspaceConfig, dbUrl } from "../lib/config.js";
+import { type LayoutMove, describeMoves, planTaskspaceLayout } from "../lib/taskspace-layout.js";
 import { readApiKeyResult } from "../../lib/server/api-key.js";
 import { requireCurrentMigrations, runMigrations } from "../lib/db.js";
 import { openDb } from "../../db/client.js";
@@ -52,6 +53,32 @@ export function openBrowser(url: string): void {
   } else {
     execFile("xdg-open", [url], onFailure);
   }
+}
+
+/**
+ * Print why the UI will not start and return true when taskspace directories Kozane created
+ * still sit where a legacy `"defaultDir": "."` put them. The browser only renames and deletes
+ * directories in the current layout, so it would leave these alone without saying so. Other
+ * out-of-place directories, such as after a namespace was renamed, do not block; `kozane
+ * doctor` reports them.
+ */
+async function refuseOldLayout(
+  url: string,
+  root: string,
+  config: WorkspaceConfig,
+): Promise<boolean> {
+  const { db, close } = await openDb(url);
+  let moves: LayoutMove[];
+  try {
+    moves = (await planTaskspaceLayout(db, root, config)).moves.filter((m) => m.oldLayout);
+  } finally {
+    close();
+  }
+  if (moves.length === 0) return false;
+  console.error("Some taskspace directories are in an old layout:");
+  for (const line of describeMoves(moves)) console.error(line);
+  console.error('Run "kozane doctor --fix" to move them, then open Kozane again.');
+  return true;
 }
 
 export async function open(options: OpenOptions): Promise<void> {
@@ -139,8 +166,14 @@ export async function open(options: OpenOptions): Promise<void> {
     rmSync(memoryDir, { recursive: true, force: true });
     memoryDir = undefined;
   };
-  // Skip the persistent migration check for memory sessions, whose database was just migrated.
-  if (!options.memory) await requireCurrentMigrations(dbURL, "the UI can start");
+  // Skip the persistent checks for memory sessions, whose database was just made.
+  if (!options.memory) {
+    await requireCurrentMigrations(dbURL, "the UI can start");
+    if (await refuseOldLayout(dbURL, root, config)) {
+      process.exitCode = 1;
+      return;
+    }
+  }
 
   // Start `bin/server.js`, which explicitly controls the bind address. See its entrypoint
   // comment.

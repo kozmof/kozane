@@ -44,6 +44,12 @@ Migrations must be current. `--memory` instead creates a temporary database with
 namespace. Workspace commands use that database while the server runs, and changes disappear
 when it stops.
 
+Refuse to start while the config still has the old `"defaultDir": "."` and a taskspace
+directory Kozane created is where that layout put it: at the workspace root, or in a namespace
+folder there. Print the moves `kozane doctor --fix` would make. Other directories out of place,
+such as after a namespace was renamed, do not stop it. See
+[old taskspace layout](#old-taskspace-layout). `--memory` skips this check.
+
 `--allow-remote` requires a generated API key. Non-loopback bindings also require
 `--no-open` and HTTPS through a reverse proxy.
 See the [Security matrix](../docs/security-matrix.md).
@@ -121,8 +127,8 @@ kozane net ssg preview [--out <dir>] [--base <path>] [--host <host>] [--port <po
 ### `kozane doctor`
 
 Check workspace detection, config, database permissions, migrations, card timestamps, SQLite
-integrity and references, workspace limits, inventory consistency, and port availability. Exit 0
-when all checks pass, otherwise 1.
+integrity and references, workspace limits, inventory consistency, taskspace layout, and port
+availability. Exit 0 when all checks pass, otherwise 1.
 
 Database content checks require current migrations. Invalid timestamps, oversized text or
 names, out-of-bounds cards, stored cards that overlap or are glued, and cards with only one of
@@ -133,9 +139,38 @@ the UTF-16 limit through astral characters.
 For broken config, run `doctor config`. For database corruption, export readable data before
 restoring a backup.
 
+`--fix` first fixes the taskspace layout, then runs the checks. It refuses while Kozane is
+running for the workspace.
+
 ```bash
-kozane doctor
+kozane doctor [--fix]
 ```
+
+| Flag    | Description                                                       |
+| ------- | ----------------------------------------------------------------- |
+| `--fix` | Move taskspace directories Kozane created into the current layout |
+
+#### Old taskspace layout
+
+Older versions put new taskspaces at `<root>/<name>` and wrote `"defaultDir": "."` to the
+config. The layout check reports both:
+
+- A config whose `taskspace.defaultDir` is `.` and that does not set `namespaceDirs`.
+  `--fix` sets `defaultDir` to `taskspaces` and keeps the other keys.
+- A taskspace directory whose marker says `ownsDirectory: true`, stored relative to the
+  workspace, that is not where `taskspace create` would now put it. A legacy `defaultDir`
+  counts as `taskspaces` here. `--fix` moves the directory, keeping its folder name, and
+  updates the record.
+
+Directories the user chose with `--dir` are never moved. Neither are taskspaces with no
+namespace, directories outside the workspace, or ones whose target is outside it or under an
+ambiguous `namespacePaths` key. A move whose target already exists is reported and skipped,
+and running `--fix` again retries it. Renaming a namespace, or moving a taskspace to another
+one, also leaves its directory out of place. The check reports it and `--fix` moves it, but
+`kozane open` still starts.
+
+To keep the old layout, set `"namespaceDirs": false`. With `"defaultDir": "."`, the
+directories at `<root>/<name>` then count as in place.
 
 ### `kozane doctor config`
 

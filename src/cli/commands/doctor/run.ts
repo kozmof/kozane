@@ -1,7 +1,16 @@
 /** `kozane doctor`: run every check and report the results. */
 import { existsSync, accessSync, constants } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { NAME_MAX } from "../../../lib/constants.js";
+import { DEFAULT_TASKSPACE_DIR, NAME_MAX } from "../../../lib/constants.js";
+import { openDb } from "../../../db/client.js";
+import { activeServerProcess } from "../../../lib/server/runtime-state.js";
+import {
+  type LayoutResult,
+  applyTaskspaceLayout,
+  describeMoves,
+  layoutNeedsFix,
+  planTaskspaceLayout,
+} from "../../lib/taskspace-layout.js";
 import { canvasBoundsForRoot } from "../../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../../lib/server/content-limit.js";
 import { plural } from "../../lib/plural.js";
@@ -30,7 +39,12 @@ import {
   isPortAvailable,
 } from "./checks.js";
 
-export async function doctor(): Promise<void> {
+export type DoctorOptions = {
+  /** Fix what can be fixed safely before checking. Today that is the taskspace layout. */
+  fix?: boolean;
+};
+
+export async function doctor(options: DoctorOptions = {}): Promise<void> {
   const cwd = process.cwd();
   const checks: Check[] = [];
 
@@ -233,7 +247,13 @@ export async function doctor(): Promise<void> {
     checks.push(check("Namespace defaults present", complete, detail));
   }
 
-  // 12. Port available
+  // 12. Report owned taskspace directories outside the current layout, and move them with
+  // `--fix`. `kozane open` refuses to start until they are moved.
+  if (dbOk && migrationOk && configOk) {
+    checks.push(await taskspaceLayoutCheck(root, workspaceDbUrl, config, options.fix === true));
+  }
+
+  // 13. Port available
   const host = config.server.host;
   const port = config.server.port;
   const portFree = await isPortAvailable(host, port);
@@ -245,10 +265,61 @@ export async function doctor(): Promise<void> {
   if (!allOk) process.exit(1);
 }
 
+async function taskspaceLayoutCheck(
+  root: string,
+  url: string,
+  config: WorkspaceConfig,
+  fix: boolean,
+): Promise<Check> {
+  const label = "Taskspace layout current";
+  const { db, close } = await openDb(url);
+  try {
+    let plan = await planTaskspaceLayout(db, root, config);
+    if (fix && layoutNeedsFix(plan)) {
+      // A running server would keep serving the old paths and could race the moves.
+      const server = activeServerProcess(root);
+      if (server)
+        return check(
+          label,
+          false,
+          `stop Kozane (process ${server.pid}) before kozane doctor --fix`,
+        );
+      const result = await applyTaskspaceLayout(db, root, plan);
+      printLayoutFix(result);
+      plan = await planTaskspaceLayout(db, root, readConfig(root));
+    }
+    if (!layoutNeedsFix(plan)) return check(label, true);
+    const parts: string[] = [];
+    if (plan.legacyDefaultDir) parts.push('config.json still has the old "defaultDir": "."');
+    if (plan.moves.length > 0) parts.push(`${directories(plan.moves.length)} to move`);
+    return check(label, false, `${parts.join("; ")}; run kozane doctor --fix`);
+  } catch (e) {
+    return check(label, false, e instanceof Error ? e.message : String(e));
+  } finally {
+    close();
+  }
+}
+
+function printLayoutFix({ configUpdated, moved, failed }: LayoutResult): void {
+  console.log("Taskspace layout:");
+  if (configUpdated) console.log(`  set taskspace.defaultDir to "${DEFAULT_TASKSPACE_DIR}"`);
+  if (moved.length > 0) {
+    console.log(`  moved ${directories(moved.length)}:`);
+    for (const line of describeMoves(moved, "    ")) console.log(line);
+  }
+  for (const { move, reason } of failed) console.log(`  ! could not move ${move.from}: ${reason}`);
+  console.log("");
+}
+
 function printChecks(checks: Check[]): void {
   for (const { label, ok, detail } of checks) {
     const icon = ok ? "✓" : "✗";
     const line = detail ? `${label} — ${detail}` : label;
     console.log(`  ${icon}  ${line}`);
   }
+}
+
+/** `1 taskspace directory`, `2 taskspace directories`. */
+function directories(count: number): string {
+  return `${count} taskspace ${count === 1 ? "directory" : "directories"}`;
 }

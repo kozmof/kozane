@@ -1,5 +1,6 @@
 import {
   lstatSync,
+  mkdirSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -11,7 +12,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import type { PathKind } from "../constants.js";
 import { TASKSPACE_MARKER_FILE, TASKSPACE_MARKER_KIND } from "../taskspace-marker.js";
 import type { TaskspaceDirectoryOutcome } from "../types.js";
-import { errorCode, isStrictlyInside, sameEntry } from "./fs-paths.js";
+import { errorCode, isStrictlyInside, isWithin, sameEntry } from "./fs-paths.js";
 import { TaskspaceFilesError } from "./taskspace-files.js";
 
 /**
@@ -154,24 +155,41 @@ export function taskspaceDirectoryClaim({
  * nonempty one makes the move fail instead.
  */
 export function renameTaskspaceDirectory({
+  newName,
+  ...target
+}: DirectoryTarget & { newName: string }): string {
+  return moveTaskspaceDirectory({
+    ...target,
+    nextStored: join(dirname(target.storedPath), newName),
+  });
+}
+
+/**
+ * Move an owned taskspace directory to `nextStored`, a path relative to the workspace,
+ * creating the folders above it. Return `nextStored`. The same rules as
+ * {@link renameTaskspaceDirectory} apply: only an owned directory moves, it stays inside the
+ * workspace, and an existing entry at the target is never replaced.
+ */
+export function moveTaskspaceDirectory({
   workspaceRoot,
   storedPath,
   taskspaceId,
-  newName,
-}: DirectoryTarget & { newName: string }): string {
+  nextStored,
+}: DirectoryTarget & { nextStored: string }): string {
   const from = resolve(workspaceRoot, storedPath);
   if (!assertOwnDirectory(from, workspaceRoot))
     throw new TaskspaceFilesError("not-found", "Taskspace directory not found");
   if (readClaim(from, taskspaceId) !== "owned")
     throw new TaskspaceFilesError("forbidden", "Kozane did not create this directory");
 
-  const nextStored = join(dirname(storedPath), newName);
   const to = resolve(workspaceRoot, nextStored);
-  if (!isStrictlyInside(resolve(workspaceRoot), to))
-    throw new TaskspaceFilesError(
-      "invalid-path",
-      "Taskspace path must be inside the workspace root",
-    );
+  const outside = () =>
+    new TaskspaceFilesError("invalid-path", "Taskspace path must be inside the workspace root");
+  if (!isStrictlyInside(resolve(workspaceRoot), to)) throw outside();
+  // The textual check cannot see symlinks. A parent such as `taskspaces -> /elsewhere` would
+  // move the directory out of the workspace, so check where the parent really is.
+  mkdirSync(dirname(to), { recursive: true });
+  if (!isWithin(realpathSync(workspaceRoot), realpathSync(dirname(to)))) throw outside();
 
   try {
     const existing = lstatSync(to);
