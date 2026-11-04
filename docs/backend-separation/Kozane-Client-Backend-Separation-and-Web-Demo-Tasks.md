@@ -41,6 +41,8 @@ P0-02/P0-03 progress: disposable worker/proxy spike builds with Vite. A dedicate
 
 P0-07/P0-08/P0-09 progress: the spike hashes worker bytes before Blob execution, checks a generated build ID before initialization, and compiles/hashes cloned wasm response streams from one fetch. SQLite instantiates the supplied compiled module. The build and lint pass. CI cases cover altered worker/wasm bytes and mismatched build IDs. Browser execution, deadlines, cleanup failure cases and full loader acceptance remain pending.
 
+P0-10 progress: prototype asset/compilation/RPC deadlines and worker failure cleanup are implemented. Five queue/deadline unit tests pass, and the spike builds. CI cases now include missing assets and an unanswered handshake. Timers still use wall time. Suspension-aware accounting, complete cleanup coverage and browser execution remain pending.
+
 ### Schema comparison
 
 - [ ] P0-11 Generate a prototype canonical schema manifest from existing migrations and compare fresh libsql and browser databases without modifying either.

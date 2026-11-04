@@ -31,3 +31,26 @@ test("rejects a mismatched worker build identity", async ({ page }) => {
   await page.goto("http://127.0.0.1:4179/");
   await expect(page.locator("body")).toHaveText("FAIL: Worker build mismatch");
 });
+
+for (const asset of ["worker.js", "sqlite3.wasm"]) {
+  test(`reports missing ${asset}`, async ({ page }) => {
+    await page.route(`**/${asset}`, (route) => route.fulfill({ status: 404, body: "missing" }));
+    await page.goto("http://127.0.0.1:4179/");
+    await expect(page.locator("body")).toHaveText("FAIL: Asset fetch failed");
+  });
+}
+
+test("bounds an unanswered worker handshake", async ({ page }) => {
+  test.setTimeout(20_000);
+  await page.addInitScript(() => {
+    // A worker that accepts messages but never replies models a stalled bootstrap.
+    const OriginalWorker = Worker;
+    window.Worker = class extends OriginalWorker {
+      postMessage() {}
+    };
+  });
+  await page.goto("http://127.0.0.1:4179/");
+  await expect(page.locator("body")).toHaveText("FAIL: Stage deadline exceeded", {
+    timeout: 15_000,
+  });
+});

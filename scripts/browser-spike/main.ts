@@ -1,3 +1,4 @@
+import { deadline } from "./deadline";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
@@ -10,7 +11,15 @@ const pending = new Map<
   number,
   { resolve: (value: any) => void; reject: (error: Error) => void }
 >();
+function failWorker(error: Error) {
+  queue.dispose();
+  worker?.terminate();
+  for (const request of pending.values()) request.reject(error);
+  pending.clear();
+}
 function attachWorker() {
+  worker.onerror = () => failWorker(new Error("Worker execution failed"));
+  worker.onmessageerror = () => failWorker(new Error("Worker response decoding failed"));
   worker.onmessage = ({ data }) => {
     const request = pending.get(data.id);
     if (!request) return;
@@ -20,11 +29,20 @@ function attachWorker() {
   };
 }
 function rpc(method: string, extra = {}): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const id = ++sequence;
-    pending.set(id, { resolve, reject });
-    worker.postMessage({ id, method, ...extra });
-  });
+  return deadline(
+    new Promise((resolve, reject) => {
+      const id = ++sequence;
+      pending.set(id, { resolve, reject });
+      try {
+        worker.postMessage({ id, method, ...extra });
+      } catch (error) {
+        pending.delete(id);
+        reject(error);
+      }
+    }),
+    method === "probe" ? 10_000 : 30_000,
+    () => failWorker(new Error("Worker deadline exceeded")),
+  );
 }
 const queue = new OperationQueue();
 const db = drizzle((query, params, method) => rpc(method, { sql: query, params }), { schema });
@@ -78,4 +96,4 @@ run()
   .catch((error) => {
     document.body.textContent = `FAIL: ${error.message}`;
   })
-  .finally(() => worker?.terminate());
+  .finally(() => failWorker(new Error("Spike finished")));
