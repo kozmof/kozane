@@ -112,8 +112,11 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 
 - [ ] P2-01 Define every resource API and re-export its input/result types. Complete the operation matrix, including reads, Node-only methods, keepalive behavior and adapter-only test classifications.
 - [ ] P2-02 Define `KozaneBackend`, capabilities, backend errors, lifecycle states and immediate state subscriptions.
+  - Added backend error/code, capability, lifecycle and snapshot-result foundation types in `src/lib/backend/contract.ts`, plus immediate state subscriptions and disposal-safe signals. Complete resource API declarations and `KozaneBackend` composition remain pending.
 - [ ] P2-03 Define immutable backend generation/revision stamps and invalidation events. Specify namespace-scoped and workspace-wide effects and update stamps before notifications.
+  - `BackendSignals` publishes frozen stamps and copied/frozen dataset/namespace arrays, updating the getter before listeners. Tests cover lifecycle independence, immediate delivery, generation changes, empty-target rejection, unsubscribe/disposal and listener isolation. Backend integration and effect-matrix coverage remain pending.
 - [ ] P2-04 Define conditional snapshots and opaque validators bound to instance, namespace and generation. Cover eviction and missing namespaces.
+  - Bounded `SnapshotValidators` bookkeeping rejects unknown/evicted, cross-instance, cross-namespace and prior-generation validators. Its contract requires namespace validation and consistent successful data reads before comparison. All 28 local backend foundation tests pass; CLI compilation, lint and application typing pass. Actual backend snapshot/read integration and missing-namespace tests remain pending.
 - [ ] P2-05 Define public navigation, route, lifecycle and preference-storage adapters that work without SvelteKit in shared runtime modules.
 - [ ] P2-06 Implement `HttpBackend`, typed error normalization and existing ETag/304 translation. Preserve the 60 KiB UTF-8 keepalive guard.
 - [ ] P2-07 Add internal service-backed endpoints for namespace creation, discovery, tags, map, warp-directory data and workspace change tokens as needed.
