@@ -11,7 +11,7 @@ export function normalizeSchemaSql(sql: string): string[] {
       continue;
     }
     const token =
-      /^(?:'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|[\p{L}\p{N}_$]+|->>|->|\|\||<=|>=|<>|!=|==|.)/u.exec(
+      /^(?:'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`|\[[^\]]*\]|(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?|[\p{L}\p{N}_$]+|->>|->|\|\||<=|>=|<>|!=|==|.)/u.exec(
         rest,
       );
     if (!token) throw new Error("Unsupported schema SQL");
@@ -56,7 +56,9 @@ export async function schemaManifest(query: SchemaQuery) {
             columns: await query(`PRAGMA index_xinfo(${quote(String(index[1]))})`),
           })),
         )
-      ).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      ).sort((a, b) =>
+        JSON.stringify(a) < JSON.stringify(b) ? -1 : JSON.stringify(a) > JSON.stringify(b) ? 1 : 0,
+      );
     }
     manifest.push(entry);
   }
