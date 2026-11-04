@@ -1,3 +1,4 @@
+import { schemaManifest } from "./schema-manifest";
 import { deadline } from "./deadline";
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { sql } from "drizzle-orm";
@@ -55,6 +56,28 @@ async function run() {
   if ((await rpc("probe")) !== manifest.buildId) throw new Error("Worker build mismatch");
   const module = await verifiedModule(manifest);
   await rpc("initialize", { module });
+  const fixtureResponse = await fetch("./parity-fixture.json");
+  if (!fixtureResponse.ok) throw new Error("Parity fixture fetch failed");
+  const fixture = await fixtureResponse.json();
+  await queue.run(() =>
+    db.transaction(async (tx) => {
+      await tx.run(sql.raw(fixture.historyTableSql));
+      for (const migration of fixture.migrations) {
+        for (const statement of migration.sql) await tx.run(sql.raw(statement));
+        await tx.run(
+          sql`INSERT INTO __drizzle_migrations(hash, created_at) VALUES(${migration.hash}, ${migration.folderMillis})`,
+        );
+      }
+    }),
+  );
+  const actual = await schemaManifest((query) => db.values(sql.raw(query)));
+  if (JSON.stringify(actual) !== JSON.stringify(fixture.manifest))
+    throw new Error("Browser/libsql schema mismatch");
+  const history = await db.values(
+    sql`SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at`,
+  );
+  if (JSON.stringify(history) !== JSON.stringify(fixture.history))
+    throw new Error("Browser/libsql migration history mismatch");
   await db.run(sql`create table spike_parent (id integer primary key)`);
   await db.run(sql`create table spike_child (parent integer references spike_parent(id))`);
   await queue.run(() =>

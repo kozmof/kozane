@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { build } from "vite";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, copyFile, writeFile, readFile } from "node:fs/promises";
@@ -39,3 +40,7 @@ await writeFile(
     wasmHash: await hash("sqlite3.wasm"),
   }),
 );
+
+execFileSync("pnpm", ["exec", "tsx", "scripts/browser-spike/generate-manifest.ts"], {
+  stdio: "inherit",
+});

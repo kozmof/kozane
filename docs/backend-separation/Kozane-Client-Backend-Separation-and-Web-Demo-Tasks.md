@@ -4,7 +4,7 @@ Use this checklist to implement the [specification](Kozane-Client-Backend-Separa
 
 Check a task only when its implementation and required verification are complete. Record the PR or commit, check results and artifact locations beside the task or in the gate evidence table. Work may be split into smaller PRs without changing phase dependencies.
 
-Browser end-to-end (E2E) tests are not available in this environment. Run them in CI and record the CI results as gate evidence. Keep tasks that require browser E2E verification unchecked until the required CI checks pass.
+The user will run browser end-to-end (E2E) tests after implementation is finished. Browser E2E tests are not available in this environment. Run them in CI and record the CI results as gate evidence. Keep tasks that require browser E2E verification unchecked until the required CI checks pass.
 
 ## Preparation
 
@@ -45,7 +45,7 @@ P0-10 progress: prototype asset/compilation/RPC deadlines and worker failure cle
 
 ### Schema comparison
 
-Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, column, foreign-key and index introspection. Two unit tests pass with disposable constraint/index/trigger/view fixtures. `pnpm exec tsx scripts/browser-spike/generate-manifest.ts` generates `tmp/browser-spike/schema-manifest.json` from all bundled migrations. Browser/libsql parity, broader semantic-defect cases and full normalization remain pending.
+Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, column, foreign-key and index introspection. Two unit tests pass with disposable constraint/index/trigger/view fixtures. `pnpm exec tsx scripts/browser-spike/generate-manifest.ts` generates `tmp/browser-spike/schema-manifest.json` from all bundled migrations. The browser spike now applies every bundled migration and compares schema objects and history hashes/timestamps against a fresh libsql fixture. Seven local queue/deadline/schema tests pass, and the production spike builds. Broader semantic-defect cases, full normalization and browser execution remain pending.
 
 - [ ] P0-11 Generate a prototype canonical schema manifest from existing migrations and compare fresh libsql and browser databases without modifying either.
 - [ ] P0-12 Cover columns, types, defaults, primary and foreign keys, check and unique constraints, ordered and partial indexes, triggers and views. Add disposable fixtures for features absent from current migrations.
