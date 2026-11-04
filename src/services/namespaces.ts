@@ -15,7 +15,7 @@ export async function create(db: DB, _context: ServiceContext, input: Record<str
   input = prepareInput(input);
   const name = requireBoundedName(input);
   const id = await createNamespace({ db, name });
-  return { id, name };
+  return { id, name, isDefault: false };
 }
 export async function list(db: DB, _context: ServiceContext) {
   return getAllNamespaces({ db });
