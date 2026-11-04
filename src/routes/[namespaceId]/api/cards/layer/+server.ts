@@ -1,19 +1,16 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
-import { reassignCardsToLayer } from "$db/api/card";
-import { readJsonObject, requireString, requireStringArray } from "../../../lib/request.js";
-import { rejectBatch } from "../../../lib/rejection.js";
+import { setLayer } from "../../../../../services/cards.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
+import { readJsonObject } from "../../../lib/request.js";
 import { apiHandler } from "../../../lib/api-handler.js";
-
-export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) => {
-  const { db } = locals;
-  const { namespaceId } = params;
-  const body = await readJsonObject(request);
-  const layerId = requireString(body, "layerId");
-  const cardIds = requireStringArray(body, "cardIds");
-  // Let the transaction validate the destination layer, as in the partition handler.
-  const result = await reassignCardsToLayer({ db, namespaceId, cardIds, layerId });
-  if (!result.ok) rejectBatch(result.reason);
-  // Return the new stacking values assigned above the destination layer's existing cards.
-  return json({ ok: true, stacking: result.stacking });
-});
+export const PATCH: RequestHandler = apiHandler(async ({ locals, params, request }) =>
+  json(
+    await setLayer(
+      locals.db,
+      workspaceServiceContext(),
+      params.namespaceId,
+      await readJsonObject(request),
+    ),
+  ),
+);

@@ -1,3 +1,15 @@
+import { reassignCardsStackOrder } from "../db/api/card.js";
+import { reassignCardsToPartition } from "../db/api/card.js";
+import { reassignCardsToLayer } from "../db/api/card.js";
+import { moveCardsToNamespace } from "../db/api/composite.js";
+import {
+  requireObjectArray,
+  requireFiniteNumber,
+  requireUniqueStrings,
+  requireStringArray,
+} from "./validation.js";
+import { updateNamespaceCardPositions } from "../db/api/card.js";
+import { deleteNamespaceCards } from "../db/api/composite.js";
 import type { CardWithGlue } from "../lib/types.js";
 
 import { getPartition } from "../db/api/partition.js";
@@ -107,4 +119,107 @@ export async function create(
     inventory,
   } satisfies CardWithGlue;
   return { ...card, placements };
+}
+
+export async function updatePositions(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const positions = requireObjectArray(
+    body,
+    "positions",
+    (row) => ({
+      cardId: requireString(row, "cardId"),
+      posX: Math.round(clamp(requireFiniteNumber(row, "posX"), 0, context.canvasWidth)),
+      posY: Math.round(clamp(requireFiniteNumber(row, "posY"), 0, context.canvasHeight)),
+    }),
+    { message: "positions is required" },
+  );
+  requireUniqueStrings(
+    positions.map((p) => p.cardId),
+    "cardId",
+  );
+  const result = await updateNamespaceCardPositions({ db, namespaceId, positions });
+  if (!result.ok) rejectBatch(result.reason);
+  return { ok: true as const };
+}
+export async function remove(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const cardIds = requireStringArray(body, "cardIds");
+  const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
+  if (!result.ok) rejectBatch(result.reason);
+  return { ok: true as const };
+}
+
+export async function move(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const targetNamespaceId = requireString(body, "targetNamespaceId");
+  const cardIds = requireStringArray(body, "cardIds");
+  if (targetNamespaceId === namespaceId)
+    throw new ValidationError("Target namespace must differ from source");
+  const result = await moveCardsToNamespace({
+    db,
+    sourceNamespaceId: namespaceId,
+    targetNamespaceId,
+    cardIds,
+  });
+  if (!result.ok) rejectBatch(result.reason);
+  return { ok: true as const };
+}
+
+export async function setLayer(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const layerId = requireString(body, "layerId");
+  const cardIds = requireStringArray(body, "cardIds");
+  // Let the transaction validate the destination layer, as in the partition handler.
+  const result = await reassignCardsToLayer({ db, namespaceId, cardIds, layerId });
+  if (!result.ok) rejectBatch(result.reason);
+  // Return the new stacking values assigned above the destination layer's existing cards.
+  return { ok: true as const, stacking: result.stacking };
+}
+
+export async function setPartition(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const partitionId = requireString(body, "partitionId");
+  const cardIds = requireStringArray(body, "cardIds");
+  // Validate the partition inside the write transaction so the reported result cannot become
+  // stale between a precheck and the update.
+  const result = await reassignCardsToPartition({ db, namespaceId, cardIds, partitionId });
+  if (!result.ok) rejectBatch(result.reason);
+  return { ok: true as const };
+}
+
+export async function setStacking(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const cardIds = requireStringArray(body, "cardIds");
+  const direction = requireString(body, "direction");
+  if (direction !== "front" && direction !== "back")
+    throw new ValidationError('direction must be "front" or "back"');
+  const result = await reassignCardsStackOrder({ db, namespaceId, cardIds, direction });
+  if (!result.ok) rejectBatch(result.reason);
+  // Return each moved card's final stacking value because a glue group may span multiple
+  // layers.
+  return { ok: true as const, stacking: result.stacking };
 }
