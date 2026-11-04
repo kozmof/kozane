@@ -1,27 +1,18 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
-import { addWarp } from "$db/api/warp";
-import { readJsonObject, optionalNumber } from "../../lib/request.js";
-import { clampToCanvas } from "$lib/server/canvas";
+import { json } from "@sveltejs/kit";
+import * as service from "../../../../services/warps.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { apiHandler } from "../../lib/api-handler.js";
-
+import { readJsonObject } from "../../lib/request.js";
 export const POST: RequestHandler = apiHandler(
-  async ({ locals, params, request }) => {
-    const { db } = locals;
-    const { namespaceId } = params;
-    const body = await readJsonObject(request);
-    const posX = optionalNumber(body, "posX");
-    const posY = optionalNumber(body, "posY");
-    if (posX === undefined || posY === undefined) throw error(400, "posX and posY are required");
-
-    // Round coordinates to integers and clamp them to the configured canvas so warps remain
-    // reachable.
-    const clamped = clampToCanvas(posX, posY);
-    const stored = { posX: Math.round(clamped.posX), posY: Math.round(clamped.posY) };
-
-    // The whole stored row, so a client that echoed back what it sent cannot draw the
-    // marker off the clamped position until the next snapshot poll corrects it.
-    return json(await addWarp({ db, namespaceId, ...stored }));
-  },
+  async ({ locals, params, request }) =>
+    json(
+      await service.create(
+        locals.db,
+        workspaceServiceContext(),
+        params.namespaceId,
+        await readJsonObject(request),
+      ),
+    ),
   { foreignKey: "Namespace not found" },
 );

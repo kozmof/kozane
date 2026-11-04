@@ -1,22 +1,18 @@
 import type { RequestHandler } from "./$types";
-import { json, error } from "@sveltejs/kit";
-import { addInventory } from "$db/api/inventory";
-import { optionalBoundedName, optionalNumber, readJsonObject } from "../../lib/request.js";
-import { clampToCanvas } from "$lib/server/canvas";
+import { json } from "@sveltejs/kit";
+import * as service from "../../../../services/inventories.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { apiHandler } from "../../lib/api-handler.js";
-
+import { readJsonObject } from "../../lib/request.js";
 export const POST: RequestHandler = apiHandler(
-  async ({ locals, params, request }) => {
-    const { db } = locals;
-    const { namespaceId } = params;
-    const body = await readJsonObject(request);
-    const posX = optionalNumber(body, "posX");
-    const posY = optionalNumber(body, "posY");
-    if (posX === undefined || posY === undefined) throw error(400, "posX and posY are required");
-    const name = optionalBoundedName(body);
-
-    // The whole stored row, with the position clamped to the canvas as a warp's is.
-    return json(await addInventory({ db, namespaceId, name, ...clampToCanvas(posX, posY) }));
-  },
+  async ({ locals, params, request }) =>
+    json(
+      await service.create(
+        locals.db,
+        workspaceServiceContext(),
+        params.namespaceId,
+        await readJsonObject(request),
+      ),
+    ),
   { foreignKey: "Namespace not found" },
 );

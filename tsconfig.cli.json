@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2024"],
+    "lib": [
+      "ES2024"
+    ],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "rewriteRelativeImportExtensions": true,
@@ -13,8 +15,19 @@
     "skipLibCheck": true,
     "sourceMap": true,
     "declaration": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/cli/**/*", "src/db/**/*", "src/lib/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  "include": [
+    "src/cli/**/*",
+    "src/db/**/*",
+    "src/lib/**/*",
+    "src/services/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts"
+  ]
 }
