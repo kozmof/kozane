@@ -1,5 +1,5 @@
 /** Moving cards to another namespace, remapping their partitions and layers by name. */
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import {
   cardsBelongToNamespace,
   getCardPartitionNames,
@@ -74,17 +74,20 @@ async function remapCardsByName({
  * A card whose taskspace is placed in another namespace loses that link, because a placed
  * taskspace only links cards in its own namespace (see `addCardInTx`).
  */
-export async function moveCardsToNamespace({
-  db,
+export async function moveCardsToNamespace(args: MoveCardsToNamespace): Promise<MoveCardsResult> {
+  return withTx(args.db, (tx) => moveCardsToNamespaceInTx({ ...args, db: tx }));
+}
+export async function moveCardsToNamespaceInTx({
+  db: tx,
   sourceNamespaceId,
   targetNamespaceId,
   cardIds: requestedIds,
-}: MoveCardsToNamespace): Promise<MoveCardsResult> {
+}: Omit<MoveCardsToNamespace, "db"> & { db: Tx }): Promise<MoveCardsResult> {
   if (sourceNamespaceId === targetNamespaceId)
     throw new Error("Target namespace must differ from source");
   if (requestedIds.length === 0) return { ok: true };
   const cardIds = [...new Set(requestedIds)];
-  return withTx(db, async (tx) => {
+  return (async () => {
     // Check the target inside the transaction. Otherwise creating its partitions would fail
     // on the foreign key and surface as a server error instead of a refusal.
     const target = await tx
@@ -151,5 +154,5 @@ export async function moveCardsToNamespace({
     await releaseCardsInTx({ db: tx, cardIds });
 
     return { ok: true };
-  });
+  })();
 }

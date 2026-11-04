@@ -259,15 +259,20 @@ type ReassignCardsToPartition = {
 /** Shared ownership and destination failures from {@link ReassignLayerResult}. */
 export type ReassignPartitionResult = BatchResult<"foreign-cards" | "foreign-partition">;
 
-export async function reassignCardsToPartition({
-  db,
+export async function reassignCardsToPartition(
+  args: ReassignCardsToPartition,
+): Promise<ReassignPartitionResult> {
+  return withTx(args.db, (tx) => reassignCardsToPartitionInTx({ ...args, db: tx }));
+}
+export async function reassignCardsToPartitionInTx({
+  db: tx,
   namespaceId,
   cardIds,
   partitionId,
-}: ReassignCardsToPartition): Promise<ReassignPartitionResult> {
+}: Omit<ReassignCardsToPartition, "db"> & { db: Tx }): Promise<ReassignPartitionResult> {
   if (cardIds.length === 0) return { ok: true };
 
-  return withTx(db, async (tx) => {
+  return (async () => {
     // Check the destination first, as in `reassignCardsToLayer`.
     const partition = await tx
       .select({ id: partitionTable.id })
@@ -283,5 +288,5 @@ export async function reassignCardsToPartition({
       await tx.update(cardTable).set({ partitionId }).where(inArray(cardTable.id, batch));
 
     return { ok: true };
-  });
+  })();
 }

@@ -1,4 +1,11 @@
-import { updateInTx, updatePositionsInTx, setLayerInTx } from "../../../services/cards.js";
+import {
+  updateInTx,
+  updatePositionsInTx,
+  setLayerInTx,
+  removeInTx,
+  setPartitionInTx,
+  moveInTx,
+} from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
 import { composeWrite } from "../../../db/database.js";
 import { ValidationError } from "../../../services/errors.js";
@@ -6,14 +13,12 @@ import { ValidationError } from "../../../services/errors.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../../lib/workspace-command.js";
 import { partitionTable, cardTable } from "../../../db/schema.js";
-import { reassignCardsToPartition } from "../../../db/api/card.js";
 import { getAllLayers } from "../../../db/api/layer.js";
 import { findById, resolveShortId, shortId } from "../../lib/short-id.js";
 import { loadCards, movedCoordinate, resolveCardGroup } from "../../lib/card-refs.js";
 import { resolveLayerRef } from "../../lib/layer-ref.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../../lib/server/content-limit.js";
-import { deleteNamespaceCards, moveCardsToNamespace } from "../../../db/api/composite.js";
 import { getAllNamespaces } from "../../../db/api/namespace.js";
 import { getAllPartitions } from "../../../db/api/partition.js";
 import { type CardMoveOptions } from "./options.js";
@@ -127,10 +132,22 @@ export async function cardEdit(requestedCardId: string, rawContent: string): Pro
 }
 
 export async function cardDelete(requestedIds: string[]): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, requestedIds);
-    const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
-    if (!result.ok) throw new Error("Cards must belong to the same namespace.");
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
+    });
+    const { allIds, cardIds } = await composeWrite(db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedIds);
+      try {
+        await removeInTx(tx, context, namespaceId, { cardIds });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error("Cards must belong to the same namespace.", { cause: error });
+        throw error;
+      }
+      return { allIds, cardIds };
+    });
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} deleted.`);
     for (const cardId of cardIds) console.log(`  card: ${shortId(cardId, allIds)}`);
   });
@@ -140,21 +157,33 @@ export async function cardSetPartition(
   requestedPartitionId: string,
   requestedCardIds: string[],
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const { cardIds, namespaceId } = await resolveCardGroup(db, requestedCardIds);
-    const partitions = await getAllPartitions({ db, namespaceId });
-    const partitionId = resolveShortId(
-      requestedPartitionId,
-      partitions.map(({ id }) => id),
-      "Partition",
-    );
-    const result = await reassignCardsToPartition({ db, namespaceId, cardIds, partitionId });
-    if (!result.ok)
-      throw new Error(
-        result.reason === "foreign-cards"
-          ? "Cards must belong to the same namespace."
-          : "Partition does not belong to the cards' namespace.",
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
+    });
+    const { cardIds, partitions, partitionId } = await composeWrite(db, async (tx) => {
+      const { cardIds, namespaceId } = await resolveCardGroup(tx, requestedCardIds);
+      const partitions = await getAllPartitions({ db: tx, namespaceId });
+      const partitionId = resolveShortId(
+        requestedPartitionId,
+        partitions.map(({ id }) => id),
+        "Partition",
       );
+      try {
+        await setPartitionInTx(tx, context, namespaceId, { cardIds, partitionId });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error(
+            error.message === "Some cards do not belong to this namespace"
+              ? "Cards must belong to the same namespace."
+              : "Partition does not belong to the cards' namespace.",
+            { cause: error },
+          );
+        throw error;
+      }
+      return { cardIds, partitions, partitionId };
+    });
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to partition.`);
     console.log(
       `  partition: ${shortId(
@@ -169,29 +198,38 @@ export async function cardSetNamespace(
   requestedNamespaceId: string,
   requestedCardIds: string[],
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const { cardIds, namespaceId: sourceNamespaceId } = await resolveCardGroup(
-      db,
-      requestedCardIds,
-    );
-    const namespaces = await getAllNamespaces({ db });
-    const targetNamespaceId = resolveShortId(
-      requestedNamespaceId,
-      namespaces.map(({ id }) => id),
-      "Namespace",
-    );
-    const result = await moveCardsToNamespace({
-      db,
-      sourceNamespaceId,
-      targetNamespaceId,
-      cardIds,
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
     });
-    if (!result.ok)
-      throw new Error(
-        result.reason === "missing-namespace"
-          ? "Target namespace not found."
-          : "Cards must belong to the same source namespace.",
+    const { cardIds, namespaces, targetNamespaceId } = await composeWrite(db, async (tx) => {
+      const { cardIds, namespaceId: sourceNamespaceId } = await resolveCardGroup(
+        tx,
+        requestedCardIds,
       );
+      const namespaces = await getAllNamespaces({ db: tx });
+      const targetNamespaceId = resolveShortId(
+        requestedNamespaceId,
+        namespaces.map(({ id }) => id),
+        "Namespace",
+      );
+      try {
+        await moveInTx(tx, context, sourceNamespaceId, { cardIds, targetNamespaceId });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error(
+            error.message === "Target namespace not found"
+              ? "Target namespace not found."
+              : error.message === "Target namespace must differ from source"
+                ? error.message
+                : "Cards must belong to the same source namespace.",
+            { cause: error },
+          );
+        throw error;
+      }
+      return { cardIds, namespaces, targetNamespaceId };
+    });
     console.log(`${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} moved to namespace.`);
     console.log(
       `  namespace: ${shortId(

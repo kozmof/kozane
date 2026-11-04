@@ -1,3 +1,5 @@
+import { deleteNamespaceCardsInTx, moveCardsToNamespaceInTx } from "../db/api/composite.js";
+import { reassignCardsToPartitionInTx } from "../db/api/card.js";
 import { prepareInput } from "./prepare-input.js";
 import { optionalNullableNumber, optionalString } from "./validation.js";
 import {
@@ -13,8 +15,6 @@ import { BATCH_MAX } from "../lib/constants.js";
 import { requireCardInNamespace } from "./guards.js";
 import { NotFoundError } from "./errors.js";
 import { reassignCardsStackOrder } from "../db/api/card.js";
-import { reassignCardsToPartition } from "../db/api/card.js";
-import { moveCardsToNamespace } from "../db/api/composite.js";
 import {
   requireObjectArray,
   requireFiniteNumber,
@@ -170,21 +170,21 @@ export async function updatePositionsInTx(
   if (!result.ok) rejectBatch(result.reason);
   return { ok: true as const };
 }
-export async function remove(
-  db: DB,
+export async function removeInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
   body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
-  const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
+  const result = await deleteNamespaceCardsInTx({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
   return { ok: true as const };
 }
 
-export async function move(
-  db: DB,
+export async function moveInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -194,7 +194,7 @@ export async function move(
   const cardIds = requireStringArray(body, "cardIds");
   if (targetNamespaceId === namespaceId)
     throw new ValidationError("Target namespace must differ from source");
-  const result = await moveCardsToNamespace({
+  const result = await moveCardsToNamespaceInTx({
     db,
     sourceNamespaceId: namespaceId,
     targetNamespaceId,
@@ -220,8 +220,8 @@ export async function setLayerInTx(
   return { ok: true as const, stacking: result.stacking };
 }
 
-export async function setPartition(
-  db: DB,
+export async function setPartitionInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -231,7 +231,7 @@ export async function setPartition(
   const cardIds = requireStringArray(body, "cardIds");
   // Validate the partition inside the write transaction so the reported result cannot become
   // stale between a precheck and the update.
-  const result = await reassignCardsToPartition({ db, namespaceId, cardIds, partitionId });
+  const result = await reassignCardsToPartitionInTx({ db, namespaceId, cardIds, partitionId });
   if (!result.ok) rejectBatch(result.reason);
   return { ok: true as const };
 }
@@ -446,4 +446,34 @@ export async function setLayer(
 ) {
   const prepared = prepareInput(body);
   return withTx(db, (tx) => setLayerInTx(tx, context, namespaceId, prepared));
+}
+
+export async function remove(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, prepared));
+}
+
+export async function move(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => moveInTx(tx, context, namespaceId, prepared));
+}
+
+export async function setPartition(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => setPartitionInTx(tx, context, namespaceId, prepared));
 }
