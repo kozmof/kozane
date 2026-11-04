@@ -35,3 +35,11 @@ export function withReadTx<T>(db: DB, operation: (tx: ReadTx) => Promise<T>): Pr
 }
 
 export { createServiceContext, type ServiceContext } from "../services/context.js";
+
+export {
+  normalizeDatabaseFailure,
+  databaseFailureKind,
+  type DatabaseFailureKind,
+  type DatabaseFailure,
+  type DatabaseConstraint,
+} from "./failures.js";
