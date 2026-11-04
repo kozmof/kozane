@@ -29,6 +29,8 @@ Preparation progress: `source-inventory.md` records route/loader, CLI and client
 
 P0-05 progress: `src/lib/backend/operation-queue.ts` implements whole-operation serialization. Three unit tests pass for ordering, rollback completion, rejection recovery and disposal. Formatting and lint pass. Database-backed concurrency and browser verification remain pending.
 
+P0-02/P0-03 progress: disposable worker/proxy spike builds with Vite. A dedicated CI browser test checks in-memory initialization without isolation headers, write transactions, rollback, foreign keys, RETURNING and export. Browser results, existing database API coverage, verified loading and failure recovery remain pending. No additional Phase 0 tasks are checked.
+
 ### Verified loading
 
 - [ ] P0-06 Build a minimal production static spike under the specified demo CSP.
