@@ -1,9 +1,9 @@
+import { createInTx as createBatchInTx } from "../../../services/card-batch.js";
 import { createInTx } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
 import { composeWrite } from "../../../db/database.js";
 /** `kozane card add` and `kozane card squash`. */
 import { readFileSync } from "node:fs";
-import { and, eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../../lib/workspace-command.js";
 import {
   partitionTable,
@@ -12,21 +12,12 @@ import {
   namespaceTable,
   scopeTable,
 } from "../../../db/schema.js";
-import { addCardsInTx, onCanvas } from "../../../db/api/card.js";
 import { getAllLayers } from "../../../db/api/layer.js";
-import { addScopeRels } from "../../../db/api/scope-rel.js";
 import { shortId, shortIdMap } from "../../lib/short-id.js";
 import { resolvePartitionId, resolveLayerId, resolveScopeId } from "../../lib/card-refs.js";
-import { withTx } from "../../../db/tx.js";
-import { addSquashInventoryInTx } from "../../../db/api/inventory.js";
-import {
-  splitCardContent,
-  squashCardPositions,
-  squashInventorySlots,
-} from "../../../lib/squash.js";
+import { splitCardContent } from "../../../lib/squash.js";
 import { resolveNamespaceId } from "../../lib/namespace-selection.js";
-import { contentLimitIssue } from "../../../lib/constants.js";
-import { canvasBoundsForRoot, clampToBounds } from "../../../lib/server/canvas.js";
+import { canvasBoundsForRoot } from "../../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../../lib/server/content-limit.js";
 import { type CardAddOptions, type CardSquashOptions } from "./options.js";
 
@@ -105,57 +96,23 @@ export async function cardSquash(
 ): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
     const contents = splitCardContent(content ?? readFileSync(0, "utf8"), options.pattern);
-    if (contents.length === 0) throw new Error("Content must contain at least one non-empty card.");
-
-    // Check every segment against the workspace's `ui.contentMax` before writing any cards.
-    // Report failures by segment position so they can be found in the input.
-    const limit = contentMaxForRoot(root);
-    for (const [index, segment] of contents.entries()) {
-      const issue = contentLimitIssue(segment, limit);
-      if (issue) throw new Error(`Card ${index + 1} of ${contents.length}: ${issue}`);
-    }
-
-    const slots = squashInventorySlots(contents);
-    if (!slots)
-      throw new Error(
-        `${contents.length} cards do not fit in one inventory. Split the text more coarsely.`,
-      );
-
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const partitionId = await resolvePartitionId(db, namespaceId, options.partition);
-    const layerId = await resolveLayerId(db, namespaceId, options.layer);
-    const scopeId = options.scope ? await resolveScopeId(db, options.scope) : undefined;
-    const bounds = canvasBoundsForRoot(root);
-    const origin = clampToBounds(options.x ?? 0, options.y ?? 0, bounds);
-    const { inventory, ids } = await withTx(db, async (tx) => {
-      // Read occupied positions in the same transaction as the inserts, so a card the board
-      // places in between cannot end up under the new cards.
-      const occupied = await tx
-        .select({ posX: cardTable.posX, posY: cardTable.posY })
-        .from(cardTable)
-        .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id))
-        // A stored card's position is where it goes back to, not space it takes up now.
-        .where(and(eq(partitionTable.namespaceId, namespaceId), onCanvas));
-      // The cards go into a new inventory at the origin. Lay out the positions they go back
-      // to from there, using the workspace's `ui.canvasWidth`, and clamp them to the board.
-      // `squashNamespaceCard` uses the same steps.
-      const positions = squashCardPositions(occupied, contents.length, {
-        origin,
-        canvasWidth: bounds.canvasWidth,
-      });
-      const inventory = await addSquashInventoryInTx({ db: tx, namespaceId, ...origin });
-      const cardIds = await addCardsInTx({
-        db: tx,
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
+    });
+    const { inventory, ids } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const partitionId = await resolvePartitionId(tx, namespaceId, options.partition);
+      const layerId = await resolveLayerId(tx, namespaceId, options.layer);
+      const scopeId = options.scope ? await resolveScopeId(tx, options.scope) : undefined;
+      return createBatchInTx(tx, context, namespaceId, {
         partitionId,
         layerId,
-        cards: contents.map((cardContent, index) => ({
-          content: cardContent,
-          ...clampToBounds(positions[index].posX, positions[index].posY, bounds),
-          inventory: { id: inventory.id, slot: slots[index] },
-        })),
+        scopeId,
+        contents,
+        posX: options.x ?? 0,
+        posY: options.y ?? 0,
       });
-      if (scopeId) await addScopeRels({ db: tx, scopeId, cardIds });
-      return { inventory, ids: cardIds };
     });
 
     const [allCards, allInventories] = await Promise.all([

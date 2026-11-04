@@ -13,7 +13,7 @@ it("rolls back glue creation when composed alignment fails", async () => {
   const context = createServiceContext();
   const namespaceId = await createNamespace({ db, name: "Glue rollback" });
   const partition = await getDefaultPartition({ db, namespaceId });
-  const cards = [];
+  const cards: Awaited<ReturnType<typeof create>>[] = [];
   for (const content of ["one", "two"])
     cards.push(await create(db, context, namespaceId, { partitionId: partition!.id, content }));
   await expect(
