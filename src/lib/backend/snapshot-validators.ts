@@ -35,6 +35,12 @@ export class SnapshotValidators {
       this.bindings.delete(this.bindings.keys().next().value!);
     return { status: "changed", validator: next, data };
   }
+  signature(namespaceId: string, generation: number, validator?: string): string | undefined {
+    const binding = validator ? this.bindings.get(validator) : undefined;
+    return binding?.namespaceId === namespaceId && binding.generation === generation
+      ? binding.signature
+      : undefined;
+  }
   clear(): void {
     this.bindings.clear();
   }
