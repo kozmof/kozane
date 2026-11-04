@@ -262,6 +262,16 @@ export async function update(
   cardId: string,
   body: Record<string, unknown>,
 ) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => updateInTx(tx, context, namespaceId, cardId, prepared));
+}
+export async function updateInTx(
+  tx: Tx,
+  context: ServiceContext,
+  namespaceId: string,
+  cardId: string,
+  body: Record<string, unknown>,
+) {
   body = prepareInput(body);
   // Validate the body before opening the transaction. None of these checks reads the
   // database, so running them inside it would only hold the write lock longer against CLI
@@ -310,61 +320,59 @@ export async function update(
   // Every lookup runs inside the transaction that writes, as in the collection POST, so a
   // card, partition, or layer removed by another writer in between is a 404 or 400 here
   // rather than a foreign-key or not-found 500.
-  const { stacking, refit } = await withTx(
-    db,
-    async (tx): Promise<{ stacking: CardStacking[]; refit: Refit | null }> => {
-      const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
+  const { stacking, refit } = await (async (): Promise<{
+    stacking: CardStacking[];
+    refit: Refit | null;
+  }> => {
+    const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
 
-      if (
-        requestedPartitionId !== undefined &&
-        !(await getPartition({ db: tx, namespaceId, partitionId: requestedPartitionId }))
-      )
-        throw new ValidationError("New partition not found in namespace");
-      const newPartitionId = requestedPartitionId;
+    if (
+      requestedPartitionId !== undefined &&
+      !(await getPartition({ db: tx, namespaceId, partitionId: requestedPartitionId }))
+    )
+      throw new ValidationError("New partition not found in namespace");
+    const newPartitionId = requestedPartitionId;
 
-      if (
-        requestedLayerId !== undefined &&
-        !(await getLayer({ db: tx, namespaceId, layerId: requestedLayerId }))
-      )
-        throw new ValidationError("New layer not found in namespace");
-      const newLayerId = requestedLayerId;
+    if (
+      requestedLayerId !== undefined &&
+      !(await getLayer({ db: tx, namespaceId, layerId: requestedLayerId }))
+    )
+      throw new ValidationError("New layer not found in namespace");
+    const newLayerId = requestedLayerId;
 
-      // A layer change restacks the card above the destination's cards, as the batch layer
-      // route does, so it does not keep a zIndex from the layer it left. An explicit zIndex in
-      // the same body is applied afterwards and wins.
-      let stacking: CardStacking[] = [];
-      if (newLayerId !== undefined) {
-        const moved = await reassignCardsToLayerInTx({
-          db: tx,
-          namespaceId,
-          cardIds: [cardId],
-          layerId: newLayerId,
-        });
-        // Both were checked above inside this transaction, so a refusal here is a bug.
-        if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
-        // Report the value that ends up stored, so the board does not apply the restack an
-        // explicit zIndex replaces below.
-        stacking =
-          zIndex === undefined
-            ? moved.stacking
-            : moved.stacking.map((entry) =>
-                entry.cardId === cardId ? { ...entry, zIndex } : entry,
-              );
-      }
+    // A layer change restacks the card above the destination's cards, as the batch layer
+    // route does, so it does not keep a zIndex from the layer it left. An explicit zIndex in
+    // the same body is applied afterwards and wins.
+    let stacking: CardStacking[] = [];
+    if (newLayerId !== undefined) {
+      const moved = await reassignCardsToLayerInTx({
+        db: tx,
+        namespaceId,
+        cardIds: [cardId],
+        layerId: newLayerId,
+      });
+      // Both were checked above inside this transaction, so a refusal here is a bug.
+      if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
+      // Report the value that ends up stored, so the board does not apply the restack an
+      // explicit zIndex replaces below.
+      stacking =
+        zIndex === undefined
+          ? moved.stacking
+          : moved.stacking.map((entry) => (entry.cardId === cardId ? { ...entry, zIndex } : entry));
+    }
 
-      const rest = { newPartitionId, content, posX, posY, zIndex, width };
-      if (Object.values(rest).some((value) => value !== undefined))
-        await updateCardInTx({ db: tx, cardId, partitionId, ...rest });
-      // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
-      // the first free slot and return every changed position, including repaired neighbours,
-      // so the board can update immediately.
-      if (content === undefined) return { stacking, refit: null };
-      const refit = await refitStoredCardInTx({ db: tx, cardId });
-      // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
-      if (!refit.ok) rejectBatch(refit.reason);
-      return { stacking, refit };
-    },
-  );
+    const rest = { newPartitionId, content, posX, posY, zIndex, width };
+    if (Object.values(rest).some((value) => value !== undefined))
+      await updateCardInTx({ db: tx, cardId, partitionId, ...rest });
+    // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
+    // the first free slot and return every changed position, including repaired neighbours,
+    // so the board can update immediately.
+    if (content === undefined) return { stacking, refit: null };
+    const refit = await refitStoredCardInTx({ db: tx, cardId });
+    // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
+    if (!refit.ok) rejectBatch(refit.reason);
+    return { stacking, refit };
+  })();
 
   return {
     ok: true,

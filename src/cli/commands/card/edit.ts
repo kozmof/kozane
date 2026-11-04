@@ -1,3 +1,7 @@
+import { updateInTx } from "../../../services/cards.js";
+import { createServiceContext } from "../../../services/context.js";
+import { composeWrite } from "../../../db/database.js";
+import { ValidationError } from "../../../services/errors.js";
 /** Card edits: text, position, layer, partition, namespace, and deletion. */
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../../lib/workspace-command.js";
@@ -5,16 +9,12 @@ import { partitionTable, cardTable } from "../../../db/schema.js";
 import {
   reassignCardsToPartition,
   reassignCardsToLayer,
-  updateCardInTx,
   updateNamespaceCardPositions,
 } from "../../../db/api/card.js";
 import { getAllLayers } from "../../../db/api/layer.js";
 import { findById, resolveShortId, shortId } from "../../lib/short-id.js";
 import { loadCards, movedCoordinate, resolveCardGroup } from "../../lib/card-refs.js";
 import { resolveLayerRef } from "../../lib/layer-ref.js";
-import { withTx } from "../../../db/tx.js";
-import { refitStoredCardInTx } from "../../../db/api/inventory.js";
-import { checkCardContent } from "../../../lib/constants.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../../lib/server/canvas.js";
 import { contentMaxForRoot } from "../../../lib/server/content-limit.js";
 import { deleteNamespaceCards, moveCardsToNamespace } from "../../../db/api/composite.js";
@@ -82,32 +82,31 @@ export async function cardMove(requestedCardId: string, { x, y }: CardMoveOption
 
 export async function cardEdit(requestedCardId: string, rawContent: string): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    const checked = checkCardContent(rawContent, contentMaxForRoot(root));
-    if (!checked.ok) throw new Error(checked.issue);
-    const { content } = checked;
-    const { allIds, cardIds } = await resolveCardGroup(db, [requestedCardId]);
-    // `resolveShortId` already verified the card ID. Read only the partition needed for the
-    // update.
-    const cardId = cardIds[0];
-    const row = await db
-      .select({ partitionId: cardTable.partitionId })
-      .from(cardTable)
-      .where(eq(cardTable.id, cardId))
-      .get();
-    if (!row) throw new Error(`Card not found: ${requestedCardId}`);
-    // Longer text can make a stored card cover a neighbour's cells, which moves it, so the
-    // two writes share one transaction.
-    const refit = await withTx(db, async (tx) => {
-      await updateCardInTx({ db: tx, cardId, partitionId: row.partitionId, content });
-      const result = await refitStoredCardInTx({ db: tx, cardId });
-      // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
-      if (!result.ok)
-        throw new Error("The longer text does not fit anywhere in the card's inventory.");
-      return result;
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
+    });
+    const { allIds, cardId, updated } = await composeWrite(db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, [requestedCardId]);
+      const cardId = cardIds[0];
+      try {
+        const updated = await updateInTx(tx, context, namespaceId, cardId, { content: rawContent });
+        return { allIds, cardId, updated };
+      } catch (error) {
+        if (
+          error instanceof ValidationError &&
+          error.message === "Inventory has no free slot there"
+        )
+          throw new Error("The longer text does not fit anywhere in the card's inventory.", {
+            cause: error,
+          });
+        throw error;
+      }
     });
     console.log("Card updated.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
-    if (refit.moved) console.log(`  moved to inventory slot ${refit.moved.slot} to fit its text`);
+    if (updated.inventory)
+      console.log(`  moved to inventory slot ${updated.inventory.slot} to fit its text`);
   });
 }
 
