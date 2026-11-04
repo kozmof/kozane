@@ -69,11 +69,14 @@ Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, 
 
 P1-02/P1-03 progress: `src/db/database.ts` now owns generic async SQLite database/transaction brands and the public adapter factory with read/write hooks. `src/db/tx.ts` retains libsql immediate-write/deferred-read hooks and Node-only migration access. Existing database API and transaction tests pass unchanged (386 tests across 16 files), CLI compilation passes, and Svelte/type checks report zero errors or warnings. Driver failure normalization and browser adapter verification remain pending.
 
+Service context extension: `canvasWidth` defaults to 5600 and `canvasHeight` defaults to 4000. Both are finite numbers within the existing workspace range of 400–20000, including fractional values. Node adapters pass resolved workspace bounds. Services round clamped card coordinates using these explicit bounds.
+
 Additional P1 progress: shared domain error classes are introduced, preserving existing database error identities. Database API transaction imports now use the transport-free adapter. Error normalization, resource extraction and HTTP integration remain pending.
 
 ### Resource extraction
 
 - [ ] P1-09 Extract card services first, including creation, updates, removal, movement, squash, partition/layer changes and stacking.
+  - Card creation is extracted into `src/services/cards.ts`, with transport-free validation and batch rejection helpers. The POST route delegates to it and preserves HTTP 400 validation behavior. Existing route/context tests pass (32 tests), lint passes and application type/Svelte checks report zero errors or warnings. Remaining card operations, CLI composition, error normalization and public declarations remain pending.
 - [ ] P1-10 Extract glue, layer and partition services.
 - [ ] P1-11 Extract scope services, including membership and areas.
 - [ ] P1-12 Extract warp and inventory services, including inventory take.

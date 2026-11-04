@@ -2,7 +2,11 @@ import { expect, it } from "vitest";
 import { createServiceContext } from "./context";
 import { ValidationError } from "./errors";
 it("creates an immutable independent context with workspace defaults", () => {
-  expect(createServiceContext()).toEqual({ contentMax: 200_000 });
+  expect(createServiceContext()).toEqual({
+    contentMax: 200_000,
+    canvasWidth: 5600,
+    canvasHeight: 4000,
+  });
   expect(Object.isFrozen(createServiceContext())).toBe(true);
   const overrides = { contentMax: 280 };
   const context = createServiceContext(overrides);

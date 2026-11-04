@@ -1,3 +1,4 @@
+import { ValidationError } from "../../../services/errors.js";
 import { error } from "@sveltejs/kit";
 import {
   DefaultLayerError,
@@ -32,6 +33,7 @@ export type DbErrorMessages = {
  */
 export function httpErrorFromDb(e: unknown, messages: DbErrorMessages = {}): unknown {
   try {
+    if (e instanceof ValidationError) error(400, e.message);
     if (e instanceof NotFoundError) error(404, messages.notFound ?? e.message);
     if (e instanceof DefaultPartitionError || e instanceof DefaultLayerError) error(400, e.message);
     if (isForeignKeyError(e))
