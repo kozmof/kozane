@@ -3,7 +3,7 @@ import { partitionTable, cardTable, glueRelTable, scopeRelTable, scopeTable } fr
 import type { NeedsDB, ReadsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound, columnCount, type BatchResult } from "./utils.js";
 import { cardsBelongToNamespace } from "./card.js";
-import { withTx, type DB } from "../database.js";
+import { withTx, type DB, type Tx } from "../database.js";
 import { chunked } from "../../lib/constants.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };
@@ -71,13 +71,16 @@ type AddScopeMembers = { db: DB; scopeId: string; namespaceId: string; cardIds: 
 export type ScopeMemberResult = BatchResult<"foreign-cards" | "foreign-scope">;
 
 /** Add cards to an existing scope after verifying that every card belongs to the namespace. */
-export async function addScopeMembers({
-  db,
+export async function addScopeMembers(args: AddScopeMembers): Promise<ScopeMemberResult> {
+  return withTx(args.db, (tx) => addScopeMembersInTx({ ...args, db: tx }));
+}
+export async function addScopeMembersInTx({
+  db: tx,
   scopeId,
   namespaceId,
   cardIds,
-}: AddScopeMembers): Promise<ScopeMemberResult> {
-  return withTx(db, async (tx) => {
+}: Omit<AddScopeMembers, "db"> & { db: Tx }): Promise<ScopeMemberResult> {
+  return (async () => {
     const scope = await tx
       .select({ id: scopeTable.id })
       .from(scopeTable)
@@ -98,7 +101,7 @@ export async function addScopeMembers({
         .onConflictDoNothing();
 
     return { ok: true };
-  });
+  })();
 }
 
 type RemoveScopeMembers = NeedsScope & { cardIds: string[] };
@@ -119,13 +122,18 @@ type RemoveScopeMembersFromNamespace = {
   namespaceId: string;
 };
 /** Remove cards from an existing scope after verifying card ownership in the namespace. */
-export async function removeScopeMembersFromNamespace({
-  db,
+export async function removeScopeMembersFromNamespace(
+  args: RemoveScopeMembersFromNamespace,
+): Promise<ScopeMemberResult> {
+  return withTx(args.db, (tx) => removeScopeMembersFromNamespaceInTx({ ...args, db: tx }));
+}
+export async function removeScopeMembersFromNamespaceInTx({
+  db: tx,
   scopeId,
   namespaceId,
   cardIds,
-}: RemoveScopeMembersFromNamespace): Promise<ScopeMemberResult> {
-  return withTx(db, async (tx) => {
+}: Omit<RemoveScopeMembersFromNamespace, "db"> & { db: Tx }): Promise<ScopeMemberResult> {
+  return (async () => {
     const scope = await tx
       .select({ id: scopeTable.id })
       .from(scopeTable)
@@ -138,7 +146,7 @@ export async function removeScopeMembersFromNamespace({
 
     await removeScopeMembers({ db: tx, scopeId, cardIds });
     return { ok: true };
-  });
+  })();
 }
 
 type GetScopeRelsByCards = NeedsDB & { cardIds: string[] };

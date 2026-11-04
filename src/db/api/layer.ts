@@ -8,7 +8,7 @@ import type {
   Layer,
 } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
-import { withTx, type DB } from "../database.js";
+import { withTx, type DB, type Tx } from "../database.js";
 
 /** Choose the lowest position, using the ID to break ties. */
 export async function getAllLayers({ db, namespaceId }: ReadsNamespace): Promise<Layer[]> {
@@ -96,12 +96,15 @@ export type ReorderResult = { ok: true } | { ok: false; reason: ReorderRejection
  * Reorder layers from bottom to top. Require every namespace layer exactly once in
  * `layerIds`. Reject mismatched lists with a reason and leave the order unchanged.
  */
-export async function reorderLayers({
-  db,
+export async function reorderLayers(args: ReorderLayers): Promise<ReorderResult> {
+  return withTx(args.db, (tx) => reorderLayersInTx({ ...args, db: tx }));
+}
+export async function reorderLayersInTx({
+  db: tx,
   namespaceId,
   layerIds,
-}: ReorderLayers): Promise<ReorderResult> {
-  return withTx(db, async (tx) => {
+}: Omit<ReorderLayers, "db"> & { db: Tx }): Promise<ReorderResult> {
+  return (async () => {
     const existing = await getAllLayers({ db: tx, namespaceId });
     const requested = new Set(layerIds);
     if (requested.size !== layerIds.length) return { ok: false, reason: "duplicate" };
@@ -118,7 +121,7 @@ export async function reorderLayers({
       })
       .where(and(eq(layerTable.namespaceId, namespaceId), inArray(layerTable.id, layerIds)));
     return { ok: true };
-  });
+  })();
 }
 
 type UpdateLayerName = NeedsNamespaceLayer & { name: string };

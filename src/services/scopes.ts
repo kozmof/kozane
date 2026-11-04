@@ -1,8 +1,9 @@
+import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
-import type { DB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { addScope, getScope, updateScopeName, deleteScopeFromNamespace } from "../db/api/scope.js";
-import { addScopeMembers, removeScopeMembersFromNamespace } from "../db/api/scope-rel.js";
+import { addScopeMembersInTx, removeScopeMembersFromNamespaceInTx } from "../db/api/scope-rel.js";
 import { addScopeArea, moveScopeArea, deleteScopeArea } from "../db/api/scope-area.js";
 import { isUniqueConstraintError } from "../db/api/utils.js";
 import { requireBoundedName, requireStringArray, optionalNumber } from "./validation.js";
@@ -80,8 +81,8 @@ export async function remove(
   return { ok: true };
 }
 
-export async function addMembers(
-  db: DB,
+export async function addMembersInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
@@ -90,14 +91,14 @@ export async function addMembers(
   body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
 
-  const result = await addScopeMembers({ db, scopeId, namespaceId, cardIds });
+  const result = await addScopeMembersInTx({ db, scopeId, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
 
   return { ok: true };
 }
 
-export async function removeMembers(
-  db: DB,
+export async function removeMembersInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   scopeId: string,
@@ -106,7 +107,7 @@ export async function removeMembers(
   body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
 
-  const result = await removeScopeMembersFromNamespace({ db, scopeId, namespaceId, cardIds });
+  const result = await removeScopeMembersFromNamespaceInTx({ db, scopeId, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
 
   return { ok: true };
@@ -150,4 +151,26 @@ export async function removeArea(
 ) {
   await deleteScopeArea({ db, namespaceId, scopeId, areaId });
   return { ok: true };
+}
+
+export async function addMembers(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => addMembersInTx(tx, context, namespaceId, scopeId, prepared));
+}
+
+export async function removeMembers(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  scopeId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => removeMembersInTx(tx, context, namespaceId, scopeId, prepared));
 }

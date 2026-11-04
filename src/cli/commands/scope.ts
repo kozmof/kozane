@@ -1,5 +1,9 @@
+import * as service from "../../services/scopes.js";
+import { composeWrite } from "../../db/database.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { ValidationError } from "../../services/errors.js";
 import {
-  addScope,
   deleteScope,
   getAllScopes,
   getScopeNamespaceUsage,
@@ -9,15 +13,18 @@ import { getAllNamespaces } from "../../db/api/namespace.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
-import { addScopeMembers, removeScopeMembersFromNamespace } from "../../db/api/scope-rel.js";
 import { partitionTable, cardTable } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 
 export async function scopeAdd(name: string): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Scope name cannot be empty.");
-    const scopeId = await addScope({ db, name: trimmedName });
+    const { id: scopeId } = await service.create(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      { name: trimmedName },
+    );
     const scopeIds = (await getAllScopes({ db })).map((scope) => scope.id);
     console.log("Scope added.");
     console.log(`  id  : ${shortId(scopeId, scopeIds)}`);
@@ -84,30 +91,42 @@ async function changeScopeMembers(
   options: ScopeMembersOptions,
   action: "add" | "remove",
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const scopes = await getAllScopes({ db });
-    const scopeId = resolveShortId(
-      requestedScopeId,
-      scopes.map(({ id }) => id),
-      "Scope",
-    );
-    const cards = await db
-      .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
-      .from(cardTable)
-      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
-    const allCardIds = cards.map(({ id }) => id);
-    const cardIds = requestedCardIds.map((id) => resolveShortId(id, allCardIds, "Card"));
-    const result =
-      action === "add"
-        ? await addScopeMembers({ db, scopeId, namespaceId, cardIds })
-        : await removeScopeMembersFromNamespace({ db, scopeId, namespaceId, cardIds });
-    if (!result.ok)
-      throw new Error(
-        result.reason === "foreign-cards"
-          ? "Cards must belong to the selected namespace."
-          : "Scope not found.",
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { cardIds, scopeId, scopes } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const scopes = await getAllScopes({ db: tx });
+      const scopeId = resolveShortId(
+        requestedScopeId,
+        scopes.map(({ id }) => id),
+        "Scope",
       );
+      const cards = await tx
+        .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
+        .from(cardTable)
+        .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
+      const allCardIds = cards.map(({ id }) => id);
+      const cardIds = requestedCardIds.map((id) => resolveShortId(id, allCardIds, "Card"));
+      try {
+        await (action === "add" ? service.addMembersInTx : service.removeMembersInTx)(
+          tx,
+          context,
+          namespaceId,
+          scopeId,
+          { cardIds },
+        );
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error(
+            error.message === "Some cards do not belong to this namespace"
+              ? "Cards must belong to the selected namespace."
+              : "Scope not found.",
+            { cause: error },
+          );
+        throw error;
+      }
+      return { cardIds, scopeId, scopes };
+    });
     console.log(
       `${cardIds.length} ${cardIds.length === 1 ? "card" : "cards"} ${action === "add" ? "added to" : "removed from"} scope.`,
     );

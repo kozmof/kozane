@@ -1,8 +1,10 @@
+import { composeWrite } from "../../db/database.js";
+import { ValidationError } from "../../services/errors.js";
 import * as service from "../../services/layers.js";
 import { createServiceContext } from "../../services/context.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
 import { cardTable } from "../../db/schema.js";
-import { getAllLayers, reorderLayers } from "../../db/api/layer.js";
+import { getAllLayers } from "../../db/api/layer.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { shortId } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
@@ -88,24 +90,33 @@ export async function layerMove(
   direction: string,
   options: LayerOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     if (direction !== "up" && direction !== "down") {
       throw new Error(`Direction must be "up" or "down", not "${direction}".`);
     }
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const layers = await getAllLayers({ db, namespaceId });
-    const resolvedId = resolveLayerRef(layers, layerId);
-    // getAllLayers is bottom to top, so "up" is one step later in the list.
-    const ids = layers.map((layer) => layer.id);
-    const index = ids.indexOf(resolvedId);
-    const target = index + (direction === "up" ? 1 : -1);
-    if (target < 0 || target >= ids.length) {
-      throw new Error(`Layer is already at the ${direction === "up" ? "top" : "bottom"}.`);
-    }
-    const reordered = [...ids];
-    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
-    const result = await reorderLayers({ db, namespaceId, layerIds: reordered });
-    if (!result.ok) throw new Error(`Failed to reorder layers (${result.reason}).`);
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { resolvedId, ids, target } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const layers = await getAllLayers({ db: tx, namespaceId });
+      const resolvedId = resolveLayerRef(layers, layerId);
+      // getAllLayers is bottom to top, so "up" is one step later in the list.
+      const ids = layers.map((layer) => layer.id);
+      const index = ids.indexOf(resolvedId);
+      const target = index + (direction === "up" ? 1 : -1);
+      if (target < 0 || target >= ids.length) {
+        throw new Error(`Layer is already at the ${direction === "up" ? "top" : "bottom"}.`);
+      }
+      const reordered = [...ids];
+      [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+      try {
+        await service.reorderInTx(tx, context, namespaceId, { layerIds: reordered });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error("Failed to reorder layers (stale).", { cause: error });
+        throw error;
+      }
+      return { resolvedId, ids, target };
+    });
     console.log(`Layer moved ${direction}.`);
     console.log(`  id      : ${shortId(resolvedId, ids)}`);
     console.log(`  position: ${target}`);

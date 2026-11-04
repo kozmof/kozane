@@ -1,5 +1,6 @@
+import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
-import type { DB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
 import { ConflictError } from "./errors.js";
@@ -51,7 +52,7 @@ export async function remove(
   return { ok: true as const, ...result };
 }
 
-import { reorderLayers, type ReorderRejection } from "../db/api/layer.js";
+import { reorderLayersInTx, type ReorderRejection } from "../db/api/layer.js";
 import { requireStringArray } from "./validation.js";
 import { ValidationError } from "./errors.js";
 const REORDER_REJECTION_MESSAGE: Record<ReorderRejection, string> = {
@@ -59,15 +60,25 @@ const REORDER_REJECTION_MESSAGE: Record<ReorderRejection, string> = {
   stale: "The namespace's layers changed elsewhere. Reload to see the current order.",
   foreign: "layerIds must only name layers of this namespace",
 };
-export async function reorder(
-  db: DB,
+export async function reorderInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
   body = prepareInput(body);
   const layerIds = requireStringArray(body, "layerIds");
-  const result = await reorderLayers({ db, namespaceId, layerIds });
+  const result = await reorderLayersInTx({ db, namespaceId, layerIds });
   if (!result.ok) throw new ValidationError(REORDER_REJECTION_MESSAGE[result.reason]);
   return { ok: true as const };
+}
+
+export async function reorder(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => reorderInTx(tx, context, namespaceId, prepared));
 }
