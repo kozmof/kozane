@@ -6,7 +6,7 @@ import { cardTable, layerTable, partitionTable } from "../../schema.js";
 import type { NeedsPartition, NeedsTx } from "../types.js";
 import { BATCH_MAX, chunked } from "../../../lib/constants.js";
 import { NotFoundError, assertFound, type BatchResult, type CardBatchResult } from "../utils.js";
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { cardsBelongToNamespace } from "./read.js";
 import { caseUpdateBatches } from "./case-update.js";
 

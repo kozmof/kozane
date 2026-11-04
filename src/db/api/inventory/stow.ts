@@ -13,7 +13,7 @@ import {
 import { cardsBelongToNamespace, isStored, writeCardPositionsInTx } from "../card.js";
 import { unglueCardsInTx } from "../glue.js";
 import { readByIds, type BatchResult } from "../utils.js";
-import { withTx, type DB, type Tx } from "../../tx.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import {
   heldFootprints,
   mergedPlans,

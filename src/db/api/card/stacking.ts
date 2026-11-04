@@ -6,7 +6,7 @@ import { cardTable, layerTable } from "../../schema.js";
 import type { NeedsTx } from "../types.js";
 import { compareIds } from "../../../lib/order.js";
 import { readByIds, type BatchResult } from "../utils.js";
-import { withTx, type DB, type Tx } from "../../tx.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { cardsBelongToNamespace } from "./read.js";
 import { caseUpdateBatches } from "./case-update.js";
 

@@ -16,7 +16,7 @@ import {
 import { caseUpdateBatches } from "../card/case-update.js";
 import { inventoryColumns } from "../card/placement.js";
 import { readByIds } from "../utils.js";
-import { type Tx } from "../../tx.js";
+import { type Tx } from "../../database.js";
 
 /**
  * The opening of a card's text, which is all {@link cardSpan} reads. Bounded so sizing a full

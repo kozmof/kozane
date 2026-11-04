@@ -1,5 +1,5 @@
 /** Deleting a partition or layer after moving its cards to the default one. */
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { reassignPartitionCards, reassignCardsToLayerInTx, type CardStacking } from "../card.js";
 import { deletePartitionCascadingInTx, getPartition, getDefaultPartition } from "../partition.js";
 import { deleteLayerCascadingInTx, getLayer, getDefaultLayer } from "../layer.js";

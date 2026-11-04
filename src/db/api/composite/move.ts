@@ -1,5 +1,5 @@
 /** Moving cards to another namespace, remapping their partitions and layers by name. */
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import {
   cardsBelongToNamespace,
   getCardPartitionNames,

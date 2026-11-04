@@ -11,7 +11,7 @@ import type {
 } from "../types.js";
 import { nextSquashInventoryName } from "../../../lib/squash.js";
 import { assertFound, assertNameWithinLimit } from "../utils.js";
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { releaseCardsInTx } from "./slots.js";
 
 /** A namespace's inventories in creation order, which their UUIDv7 IDs sort in. */

@@ -1,5 +1,5 @@
 /** Card deletion with glue cleanup. */
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { cardsBelongToNamespace } from "../card.js";
 import { unglueCardsInTx } from "../glue.js";
 import type { CardBatchResult } from "../utils.js";

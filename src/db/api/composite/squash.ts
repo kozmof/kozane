@@ -1,5 +1,5 @@
 /** Replace a canvas card with text segments stored in a new inventory. */
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import {
   newCardStamps,
   onCanvas,

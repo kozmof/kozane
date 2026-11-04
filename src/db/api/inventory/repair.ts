@@ -10,7 +10,7 @@ import {
 } from "../../../lib/inventory.js";
 import { halfPlaced, inventoryColumns, isStored } from "../card.js";
 import { unglueCardsInTx } from "../glue.js";
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { SPAN_TEXT, settledFootprints, writePlacements } from "./slots.js";
 
 /** What {@link repairInventories} changed. */

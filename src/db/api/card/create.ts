@@ -13,7 +13,7 @@ import type { CardData } from "../../../lib/types.js";
 import { INVENTORY_SLOT_MAX, chunked } from "../../../lib/constants.js";
 import { cardSpan, lastCell, overlappingCards, type Footprint } from "../../../lib/inventory.js";
 import { NotFoundError, columnCount, readByIds } from "../utils.js";
-import { withTx, type DB } from "../../tx.js";
+import { withTx, type DB } from "../../database.js";
 import { heldFootprints } from "../inventory/slots.js";
 import { defaultLayerIdForPartition } from "./read.js";
 import { inventoryColumns } from "./placement.js";

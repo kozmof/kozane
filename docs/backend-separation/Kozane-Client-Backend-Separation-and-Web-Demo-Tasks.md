@@ -100,6 +100,7 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 - [ ] P1-17 Convert CLI commands to shared services while preserving argument parsing, reference resolution, flags and output. Verify concurrent reference changes cannot produce partial card creation or membership.
 - [ ] P1-18 Keep filesystem rules in Node services and document infrastructure exemptions.
 - [ ] P1-19 Add import and boundary lint checks. Build the prospective core for the browser without Node shims, environment access or SvelteKit imports.
+  - `src/services/index.ts` supplies a complete prospective services entry. `pnpm check:core-browser` bundles it with an early resolver rejecting Node builtins and SvelteKit imports and is included in `pnpm verify`. Service lint rejects Node/SvelteKit/server/CLI imports and Node globals. The browser build exposed and removed eleven nested API imports of the Node transaction adapter. The corrected build completes without Node externalization warnings. All 415 database/service tests, CLI compilation and lint pass. Package-level boundaries and final extraction audit remain pending.
 - [ ] P1-20 Run existing tests unchanged and add meaningful parity cases for validation, configured limits, clamping, errors, transaction composition and rollback.
 - [ ] G2 Record complete route/loader/CLI classification, adapter-only boundaries and passing compatibility checks.
 

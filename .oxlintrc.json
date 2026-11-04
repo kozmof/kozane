@@ -43,6 +43,13 @@
   },
 
   "overrides": [
+    {
+      "files": ["src/services/**"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", {"patterns": [{"group": ["node:*", "@sveltejs/kit", "@sveltejs/kit/**", "$app/**", "**/lib/server/**", "**/db/internal/**", "**/routes/**", "**/cli/**"], "message": "Shared services must stay transport-free and browser-safe."}]}],
+        "eslint/no-restricted-globals": ["error", "process", "Buffer", "require", "__dirname", "__filename"]
+      }
+    },
     // ── Layer boundaries ────────────────────────────────────────────────────────────
     //
     // The dependency direction was upheld by convention and by the comments that state it,
