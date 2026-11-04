@@ -1,18 +1,10 @@
+import { readRows } from "../../../services/snapshot.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import type { DB } from "$db/client";
-import { withReadTx } from "$db/tx";
+
 import type { Namespace } from "$db/api/types";
 import type { NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceSummary } from "$lib/types";
-import { getNamespace } from "$db/api/namespace";
-import { getAllPartitions } from "$db/api/partition";
-import { getAllLayers } from "$db/api/layer";
-import { getAllWarps } from "$db/api/warp";
-import { getAllInventories } from "$db/api/inventory";
-import { getScopesInNamespace } from "$db/api/scope";
-import { getScopeAreasInNamespace } from "$db/api/scope-area";
-import { getCardDataByPartitions } from "$db/api/card";
-import { getGlueRelsByNamespace } from "$db/api/glue";
-import { getScopeRelsByNamespace } from "$db/api/scope-rel";
-import { getTaskspacesInNamespace } from "$db/api/taskspace";
+
 import { getWorkspaceRoot } from "$db/internal/config";
 import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import { buildTaskspaceFileTreeOnce } from "$lib/server/taskspace-snapshot";
@@ -58,39 +50,7 @@ export async function loadNamespaceSnapshot({
   // state. In WAL mode it sees one consistent view without taking the write lock. The
   // transaction holds one connection, which runs statements one at a time, so the reads
   // below are awaited in turn rather than through `Promise.all`.
-  const rows = await withReadTx(db, async (tx) => {
-    const namespace = await getNamespace({ db: tx, namespaceId });
-    if (!namespace) return null;
-
-    const partitions = await getAllPartitions({ db: tx, namespaceId });
-    const layers = await getAllLayers({ db: tx, namespaceId });
-    const warps = await getAllWarps({ db: tx, namespaceId });
-    const inventories = await getAllInventories({ db: tx, namespaceId });
-    const scopes = includeScopes ? await getScopesInNamespace({ db: tx, namespaceId }) : [];
-    // Gate frames with `includeScopes` because their geometry also exposes scope
-    // organization in published exports.
-    const scopeAreas = includeScopes ? await getScopeAreasInNamespace({ db: tx, namespaceId }) : [];
-    const taskspaces = includeScopes ? await getTaskspacesInNamespace({ db: tx, namespaceId }) : [];
-    const cardRows = await getCardDataByPartitions({
-      db: tx,
-      partitionIds: partitions.map(({ id }) => id),
-    });
-    const glueRels = await getGlueRelsByNamespace({ db: tx, namespaceId });
-    const scopeRels = includeScopes ? await getScopeRelsByNamespace({ db: tx, namespaceId }) : [];
-    return {
-      namespace,
-      partitions,
-      layers,
-      warps,
-      inventories,
-      scopes,
-      scopeAreas,
-      taskspaces,
-      cardRows,
-      glueRels,
-      scopeRels,
-    };
-  });
+  const rows = await readRows(db, workspaceServiceContext(), namespaceId, { includeScopes });
   if (!rows) return null;
   const {
     namespace,
