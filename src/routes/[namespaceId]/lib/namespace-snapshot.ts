@@ -1,4 +1,4 @@
-import { readRows } from "../../../services/snapshot.js";
+import { readRows, assemble } from "../../../services/snapshot.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
 import type { DB } from "$db/client";
 
@@ -8,7 +8,6 @@ import type { NamespaceDataSnapshot, TaskspaceFileTree, TaskspaceSummary } from 
 import { getWorkspaceRoot } from "$db/internal/config";
 import { resolveTaskspacePath } from "$lib/server/taskspace-path";
 import { buildTaskspaceFileTreeOnce } from "$lib/server/taskspace-snapshot";
-import { cardsWithGlueIds } from "./namespace-page.js";
 
 type LoadNamespaceSnapshot = {
   db: DB;
@@ -52,26 +51,7 @@ export async function loadNamespaceSnapshot({
   // below are awaited in turn rather than through `Promise.all`.
   const rows = await readRows(db, workspaceServiceContext(), namespaceId, { includeScopes });
   if (!rows) return null;
-  const {
-    namespace,
-    partitions,
-    layers,
-    warps,
-    inventories,
-    scopes,
-    scopeAreas,
-    taskspaces,
-    cardRows,
-    glueRels,
-    scopeRels,
-  } = rows;
-
-  // Show cards whose inventory is absent at their saved canvas positions. The reads share one
-  // transaction, so this only guards against rows a repair has not yet cleaned up.
-  const inventoryIds = new Set(inventories.map(({ id }) => id));
-  const cards = cardRows.map((card) =>
-    card.inventory && !inventoryIds.has(card.inventory.id) ? { ...card, inventory: null } : card,
-  );
+  const { scopes, taskspaces } = rows;
 
   // For static export, include only taskspaces whose scopes appear in this snapshot. The
   // exported panel cannot reach other taskspaces, so publishing their names and files would
@@ -100,17 +80,7 @@ export async function loadNamespaceSnapshot({
     }
   }
 
-  const snapshot = {
-    namespace: { id: namespace.id },
-    cards: cardsWithGlueIds(cards, glueRels),
-    partitions,
-    layers,
-    warps,
-    inventories,
-    scopes,
-    scopeRels,
-    scopeAreas,
-    glueRels,
+  return assemble(rows, {
     taskspaces: namedTaskspaces.map(
       ({ id, name, scopeId, path, pathKind }) =>
         ({
@@ -121,10 +91,6 @@ export async function loadNamespaceSnapshot({
           pathKind,
         }) satisfies TaskspaceSummary,
     ),
-    ...(taskspaceFiles ? { taskspaceFiles } : {}),
-  } satisfies NamespaceDataSnapshot;
-
-  // Return the full namespace row for the page title alongside the snapshot, which carries
-  // only its ID.
-  return { namespace, snapshot };
+    taskspaceFiles,
+  });
 }

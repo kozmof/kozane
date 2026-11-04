@@ -1,5 +1,7 @@
-import { getAllPartitions, addPartition } from "../../db/api/partition.js";
-import { deletePartitionWithReassign } from "../../db/api/composite.js";
+import * as service from "../../services/partitions.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { getAllPartitions } from "../../db/api/partition.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
@@ -23,11 +25,16 @@ export async function partitionList(options: PartitionOptions = {}): Promise<voi
 }
 
 export async function partitionAdd(name: string, options: PartitionOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Partition name cannot be empty.");
     const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const id = await addPartition({ db, namespaceId, name: trimmed });
+    const { id } = await service.create(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      namespaceId,
+      { name: trimmed },
+    );
     const ids = (await getAllPartitions({ db, namespaceId })).map((partition) => partition.id);
     console.log("Partition added.");
     console.log(`  id  : ${shortId(id, ids)}`);
@@ -39,12 +46,17 @@ export async function partitionDelete(
   requestedId: string,
   options: PartitionOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const namespaceId = await resolveNamespaceId(db, options.namespace);
     const partitions = await getAllPartitions({ db, namespaceId });
     const ids = partitions.map(({ id }) => id);
     const partitionId = resolveShortId(requestedId, ids, "Partition");
-    await deletePartitionWithReassign({ db, namespaceId, partitionId });
+    await service.remove(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      namespaceId,
+      partitionId,
+    );
     console.log("Partition deleted.");
     console.log(`  id: ${shortId(partitionId, ids)}`);
     console.log("Cards in this partition moved to the namespace's default partition.");

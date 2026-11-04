@@ -1,6 +1,8 @@
+import * as service from "../../services/layers.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
 import { cardTable } from "../../db/schema.js";
-import { addLayer, getAllLayers, reorderLayers, updateLayerName } from "../../db/api/layer.js";
-import { deleteLayerWithReassign } from "../../db/api/composite.js";
+import { getAllLayers, reorderLayers } from "../../db/api/layer.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { shortId } from "../lib/short-id.js";
 import { resolveLayerRef } from "../lib/layer-ref.js";
@@ -10,11 +12,16 @@ import { inArray } from "drizzle-orm";
 type LayerOptions = { namespace?: string };
 
 export async function layerAdd(name: string, options: LayerOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Layer name cannot be empty.");
     const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const { id, position } = await addLayer({ db, namespaceId, name: trimmedName });
+    const { id, position } = await service.create(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      namespaceId,
+      { name: trimmedName },
+    );
     const layerIds = (await getAllLayers({ db, namespaceId })).map((layer) => layer.id);
     console.log("Layer added.");
     console.log(`  id      : ${shortId(id, layerIds)}`);
@@ -52,13 +59,19 @@ export async function layerRename(
   name: string,
   options: LayerOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Layer name cannot be empty.");
     const namespaceId = await resolveNamespaceId(db, options.namespace);
     const layers = await getAllLayers({ db, namespaceId });
     const resolvedId = resolveLayerRef(layers, layerId);
-    await updateLayerName({ db, namespaceId, layerId: resolvedId, name: trimmedName });
+    await service.rename(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      namespaceId,
+      resolvedId,
+      { name: trimmedName },
+    );
     console.log("Layer renamed.");
     console.log(
       `  id  : ${shortId(
@@ -100,12 +113,17 @@ export async function layerMove(
 }
 
 export async function layerDelete(layerId: string, options: LayerOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
+  await runWorkspaceCommand(async ({ db, root }) => {
     const namespaceId = await resolveNamespaceId(db, options.namespace);
     const layers = await getAllLayers({ db, namespaceId });
     const layerIds = layers.map((layer) => layer.id);
     const resolvedId = resolveLayerRef(layers, layerId);
-    await deleteLayerWithReassign({ db, namespaceId, layerId: resolvedId });
+    await service.remove(
+      db,
+      createServiceContext(getUiConfigForRoot(root)),
+      namespaceId,
+      resolvedId,
+    );
     console.log("Layer deleted.");
     console.log(`  id: ${shortId(resolvedId, layerIds)}`);
     console.log("Cards on this layer moved to the namespace's default layer.");

@@ -54,10 +54,16 @@ export async function readRows(
   });
 }
 
-/** Browser snapshot data excludes Node taskspace features and paths. */
-export async function get(db: DB, context: ServiceContext, namespaceId: string) {
-  const rows = await readRows(db, context, namespaceId);
-  if (!rows) return null;
+export type SnapshotRows = NonNullable<Awaited<ReturnType<typeof readRows>>>;
+export interface SnapshotEnrichment {
+  taskspaces?: import("../lib/types.js").TaskspaceSummary[];
+  taskspaceFiles?: Record<string, import("../lib/types.js").TaskspaceFileTree>;
+}
+/** Assemble shared board rules once; adapters may supply already-resolved Node data. */
+export function assemble(
+  rows: SnapshotRows,
+  { taskspaces = [], taskspaceFiles }: SnapshotEnrichment = {},
+) {
   const {
     namespace,
     partitions,
@@ -87,7 +93,14 @@ export async function get(db: DB, context: ServiceContext, namespaceId: string) 
     scopeAreas,
     scopeRels,
     glueRels,
-    taskspaces: [],
+    taskspaces,
+    ...(taskspaceFiles ? { taskspaceFiles } : {}),
   } satisfies import("../lib/types.js").NamespaceDataSnapshot;
   return { namespace, snapshot };
+}
+
+/** Browser snapshot data excludes Node taskspace features and paths. */
+export async function get(db: DB, context: ServiceContext, namespaceId: string) {
+  const rows = await readRows(db, context, namespaceId);
+  return rows ? assemble(rows) : null;
 }
