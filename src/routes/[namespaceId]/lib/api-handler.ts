@@ -1,4 +1,4 @@
-import { ValidationError } from "../../../services/errors.js";
+import { ConflictError, ValidationError } from "../../../services/errors.js";
 import { error } from "@sveltejs/kit";
 import {
   DefaultLayerError,
@@ -13,6 +13,7 @@ import {
  * kind of failure. The status stays the same.
  */
 export type DbErrorMessages = {
+  conflictStatus?: 400 | 409;
   /** For a `NotFoundError`. Defaults to the error's own message. */
   notFound?: string;
   /** For a foreign-key failure, such as a namespace deleted while the request ran. */
@@ -33,6 +34,7 @@ export type DbErrorMessages = {
  */
 export function httpErrorFromDb(e: unknown, messages: DbErrorMessages = {}): unknown {
   try {
+    if (e instanceof ConflictError) error(messages.conflictStatus ?? 409, e.message);
     if (e instanceof ValidationError) error(400, e.message);
     if (e instanceof NotFoundError) error(404, messages.notFound ?? e.message);
     if (e instanceof DefaultPartitionError || e instanceof DefaultLayerError) error(400, e.message);
