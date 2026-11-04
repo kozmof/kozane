@@ -119,8 +119,10 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
   - Bounded `SnapshotValidators` bookkeeping rejects unknown/evicted, cross-instance, cross-namespace and prior-generation validators. Its contract requires namespace validation and consistent successful data reads before comparison. All 28 local backend foundation tests pass; CLI compilation, lint and application typing pass. Actual backend snapshot/read integration and missing-namespace tests remain pending.
 - [ ] P2-05 Define public navigation, route, lifecycle and preference-storage adapters that work without SvelteKit in shared runtime modules.
 - [ ] P2-06 Implement `HttpBackend`, typed error normalization and existing ETag/304 translation. Preserve the 60 KiB UTF-8 keepalive guard.
+  - Internal `HttpTransport` prepares inputs before dispatch, normalizes domain-code headers/legacy statuses, preserves safe JSON messages, and guards keepalive by UTF-8 body size. Twelve tests cover legacy statuses, authoritative 401/403/429, malformed bodies, invalid input without dispatch, network failures, Retry-After and overlapping monotonic throttling. CLI compilation, lint and application typing pass. Typed resource methods, snapshot ETag bindings and backend integration remain pending.
 - [ ] P2-07 Add internal service-backed endpoints for namespace creation, discovery, tags, map, warp-directory data and workspace change tokens as needed.
 - [ ] P2-08 Implement 401/403/429 handling, safe malformed-body fallbacks and one shared monotonic throttle deadline. Coalesce automatic refreshes and require new user action for rejected mutations.
+  - HTTP transport implements one monotonic deadline across all requests, never shortens it for later in-flight 429 replies, and rejects throttled mutations without dispatch or retention. Automatic refresh coalescing and backend/view integration remain pending.
 - [ ] P2-09 Implement `StaticBackend` over prerendered snapshots and equivalent view datasets. Reject writes with `read_only` and retain static filesystem results.
 
 ### Refresh and UI migration
