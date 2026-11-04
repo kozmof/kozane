@@ -180,17 +180,18 @@ async function anyStored(tx: Tx, cardIds: string[]): Promise<boolean> {
  * Glue cards after verifying that all belong to `namespaceId` and none is stored.
  * Storing a card removes it from its glue group.
  */
-export async function glueNamespaceCards({
-  db,
+export async function glueNamespaceCards(args: GlueNamespaceCards): Promise<GlueResult> {
+  return withTx(args.db, (tx) => glueNamespaceCardsInTx({ ...args, db: tx }));
+}
+export async function glueNamespaceCardsInTx({
+  db: tx,
   namespaceId,
   cardIds,
-}: GlueNamespaceCards): Promise<GlueResult> {
-  return withTx(db, async (tx) => {
-    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
-    if (!owned.ok) return owned;
-    if (await anyStored(tx, cardIds)) return { ok: false, reason: "stored-cards" };
-    return { ok: true, ...(await glueCardsCore(tx, cardIds)) };
-  });
+}: Omit<GlueNamespaceCards, "db"> & { db: Tx }): Promise<GlueResult> {
+  const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+  if (!owned.ok) return owned;
+  if (await anyStored(tx, cardIds)) return { ok: false, reason: "stored-cards" };
+  return { ok: true, ...(await glueCardsCore(tx, cardIds)) };
 }
 
 type UnglueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
@@ -199,15 +200,16 @@ type UnglueNamespaceCards = { db: DB; namespaceId: string; cardIds: string[] };
 export type UnglueResult = BatchResult<"foreign-cards", { clearedCardIds: string[] }>;
 
 /** Unglue cards after verifying that all belong to `namespaceId`. */
-export async function unglueNamespaceCards({
-  db,
+export async function unglueNamespaceCards(args: UnglueNamespaceCards): Promise<UnglueResult> {
+  if (args.cardIds.length === 0) return { ok: true, clearedCardIds: [] };
+  return withTx(args.db, (tx) => unglueNamespaceCardsInTx({ ...args, db: tx }));
+}
+export async function unglueNamespaceCardsInTx({
+  db: tx,
   namespaceId,
   cardIds,
-}: UnglueNamespaceCards): Promise<UnglueResult> {
-  if (cardIds.length === 0) return { ok: true, clearedCardIds: [] };
-  return withTx(db, async (tx) => {
-    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
-    if (!owned.ok) return owned;
-    return { ok: true, clearedCardIds: await unglueCardsCore(tx, cardIds) };
-  });
+}: Omit<UnglueNamespaceCards, "db"> & { db: Tx }): Promise<UnglueResult> {
+  const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+  if (!owned.ok) return owned;
+  return { ok: true, clearedCardIds: await unglueCardsCore(tx, cardIds) };
 }

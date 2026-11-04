@@ -6,7 +6,7 @@ import { cardTable, layerTable, partitionTable } from "../../schema.js";
 import type { NeedsPartition, NeedsTx } from "../types.js";
 import { BATCH_MAX, chunked } from "../../../lib/constants.js";
 import { NotFoundError, assertFound, type BatchResult, type CardBatchResult } from "../utils.js";
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { cardsBelongToNamespace } from "./read.js";
 import { caseUpdateBatches } from "./case-update.js";
 
@@ -202,22 +202,24 @@ type UpdateNamespaceCardPositions = {
   positions: CardPositionUpdate[];
 };
 
-export async function updateNamespaceCardPositions({
-  db,
+export async function updateNamespaceCardPositions(
+  args: UpdateNamespaceCardPositions,
+): Promise<CardBatchResult> {
+  return withTx(args.db, (tx) => updateNamespaceCardPositionsInTx({ ...args, db: tx }));
+}
+export async function updateNamespaceCardPositionsInTx({
+  db: tx,
   namespaceId,
   positions,
-}: UpdateNamespaceCardPositions): Promise<CardBatchResult> {
+}: Omit<UpdateNamespaceCardPositions, "db"> & { db: Tx }): Promise<CardBatchResult> {
   if (positions.length === 0) return { ok: true };
   const unique = dedupePositions(positions);
+  const cardIds = unique.map((p) => p.cardId);
+  const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
+  if (!owned.ok) return owned;
 
-  return withTx(db, async (tx) => {
-    const cardIds = unique.map((p) => p.cardId);
-    const owned = await cardsBelongToNamespace({ db: tx, namespaceId, cardIds });
-    if (!owned.ok) return owned;
-
-    await writeCardPositionsInTx({ db: tx, positions: unique });
-    return { ok: true };
-  });
+  await writeCardPositionsInTx({ db: tx, positions: unique });
+  return { ok: true };
 }
 
 /**

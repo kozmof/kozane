@@ -11,3 +11,5 @@ export * from "./card/case-update.js";
 export * from "./card/create.js";
 export * from "./card/update.js";
 export * from "./card/stacking.js";
+
+export { updateNamespaceCardPositionsInTx } from "./card/update.js";

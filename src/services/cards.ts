@@ -22,7 +22,7 @@ import {
   requireUniqueStrings,
   requireStringArray,
 } from "./validation.js";
-import { updateNamespaceCardPositions } from "../db/api/card.js";
+import { updateNamespaceCardPositionsInTx } from "../db/api/card.js";
 import { deleteNamespaceCards } from "../db/api/composite.js";
 import type { CardWithGlue } from "../lib/types.js";
 
@@ -146,8 +146,8 @@ export async function createInTx(
   return { ...card, placements };
 }
 
-export async function updatePositions(
-  db: DB,
+export async function updatePositionsInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -167,7 +167,7 @@ export async function updatePositions(
     positions.map((p) => p.cardId),
     "cardId",
   );
-  const result = await updateNamespaceCardPositions({ db, namespaceId, positions });
+  const result = await updateNamespaceCardPositionsInTx({ db, namespaceId, positions });
   if (!result.ok) rejectBatch(result.reason);
   return { ok: true as const };
 }
@@ -427,4 +427,14 @@ export async function squash(
     ),
     stacking: result.stacking,
   };
+}
+
+export async function updatePositions(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => updatePositionsInTx(tx, context, namespaceId, prepared));
 }
