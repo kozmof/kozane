@@ -1,5 +1,7 @@
+import { get as getTags } from "../../services/tags.js";
+import { workspaceServiceContext } from "./service-context.js";
 import type { AnyDB } from "../../db/client.js";
-import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
+import { type CardTagHits } from "../../db/api/tag.js";
 import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
 import { getWorkspaceRoot } from "../../db/internal/config.js";
 import type { TagHit, TagScanTruncation } from "../types.js";
@@ -119,7 +121,7 @@ export async function loadTagIndex({
       : null;
 
   const stored = store?.cards();
-  const cards = stored ?? (await getCardTagHits({ db, namespaceId }));
+  const cards = stored ?? (await getTags(db, workspaceServiceContext(), namespaceId));
   // A card set that had to be queried is a card set the stored file does not hold.
   let changed = !stored;
   const hits = [...cards.hits];

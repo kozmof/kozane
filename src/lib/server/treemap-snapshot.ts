@@ -1,24 +1,16 @@
+import { get as getMap } from "../../services/map.js";
+import { workspaceServiceContext } from "./service-context.js";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AnyDB } from "../../db/client.js";
-import { getAllNamespaces } from "../../db/api/namespace.js";
-import {
-  getAllPartitions,
-  getPartitionCardCounts,
-  type PartitionCardCount,
-} from "../../db/api/partition.js";
-import { getCardChangeCounts, type CardChangeCount } from "../../db/api/card.js";
-import {
-  getAllScopes,
-  getScopePartitionUsage,
-  getScopeNamespaceUsage,
-  type ScopePartitionUsage,
-  type ScopeNamespaceUsage,
-} from "../../db/api/scope.js";
-import { getCardTagHits, type CardTagHits } from "../../db/api/tag.js";
+
+import { type PartitionCardCount } from "../../db/api/partition.js";
+import { type CardChangeCount } from "../../db/api/card.js";
+import { type ScopePartitionUsage, type ScopeNamespaceUsage } from "../../db/api/scope.js";
+import { type CardTagHits } from "../../db/api/tag.js";
 import type { Namespace, Scope } from "../../db/api/types.js";
 import { TREEMAP_CACHE_BYTES_MAX } from "../constants.js";
-import { applyPalette } from "../palette.js";
+
 import { writeFileAtomic } from "./atomic-write.js";
 import { databaseSignature } from "./tag-cache.js";
 
@@ -137,21 +129,6 @@ function writeTreemapCache(root: string, value: TreemapCache): void {
   }
 }
 
-async function paletteByPartition(
-  db: AnyDB,
-  namespaceIds: string[],
-): Promise<Record<string, { bg: string; dot: string }>> {
-  const palettes = await Promise.all(
-    namespaceIds.map(async (namespaceId) =>
-      applyPalette(await getAllPartitions({ db, namespaceId })),
-    ),
-  );
-  const colours: Record<string, { bg: string; dot: string }> = {};
-  for (const partitions of palettes)
-    for (const { id, bg, dot } of partitions) colours[id] = { bg, dot };
-  return colours;
-}
-
 export async function loadTreemapSnapshot({
   db,
   includeScopes,
@@ -166,32 +143,7 @@ export async function loadTreemapSnapshot({
   if (signature && stored?.db === signature && stored.includeScopes === includeScopes)
     return stored.snapshot;
 
-  const [namespaces, counts, activity, tags, scopes, partitionUsage, namespaceUsage] =
-    await Promise.all([
-      getAllNamespaces({ db }),
-      getPartitionCardCounts({ db }),
-      getCardChangeCounts({ db }),
-      getCardTagHits({ db }),
-      includeScopes ? getAllScopes({ db }) : Promise.resolve([]),
-      includeScopes ? getScopePartitionUsage({ db }) : Promise.resolve([]),
-      includeScopes ? getScopeNamespaceUsage({ db }) : Promise.resolve([]),
-    ]);
-  const colours = await paletteByPartition(
-    db,
-    namespaces.map(({ id }) => id),
-  );
-  const snapshot: TreemapSnapshot = {
-    namespaces,
-    partitions: counts.map((partition) => ({
-      ...partition,
-      ...(colours[partition.id] ?? { bg: "transparent", dot: "currentColor" }),
-    })),
-    activity,
-    scopes,
-    partitionUsage,
-    namespaceUsage,
-    tags,
-  };
+  const snapshot = await getMap(db, workspaceServiceContext(), { includeScopes });
 
   if (signature && cache)
     writeTreemapCache(cache.root, {

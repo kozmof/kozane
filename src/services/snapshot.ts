@@ -53,3 +53,41 @@ export async function readRows(
     };
   });
 }
+
+/** Browser snapshot data excludes Node taskspace features and paths. */
+export async function get(db: DB, context: ServiceContext, namespaceId: string) {
+  const rows = await readRows(db, context, namespaceId);
+  if (!rows) return null;
+  const {
+    namespace,
+    partitions,
+    layers,
+    warps,
+    inventories,
+    scopes,
+    scopeAreas,
+    scopeRels,
+    glueRels,
+  } = rows;
+  const inventoryIds = new Set(inventories.map(({ id }) => id));
+  const glueByCard = new Map(glueRels.map(({ cardId, glueId }) => [cardId, glueId]));
+  const cards = rows.cardRows.map((card) => ({
+    ...card,
+    inventory: card.inventory && inventoryIds.has(card.inventory.id) ? card.inventory : null,
+    glueId: glueByCard.get(card.id) ?? null,
+  }));
+  const snapshot = {
+    namespace: { id: namespace.id },
+    cards,
+    partitions,
+    layers,
+    warps,
+    inventories,
+    scopes,
+    scopeAreas,
+    scopeRels,
+    glueRels,
+    taskspaces: [],
+  } satisfies import("../lib/types.js").NamespaceDataSnapshot;
+  return { namespace, snapshot };
+}

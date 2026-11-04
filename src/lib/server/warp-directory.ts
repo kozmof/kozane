@@ -1,7 +1,7 @@
+import { readRows } from "../../services/warp-directory.js";
+import { workspaceServiceContext } from "./service-context.js";
 import type { AnyDB } from "../../db/client.js";
-import { getAllNamespaces } from "../../db/api/namespace.js";
-import { getAllWorkspaceWarps } from "../../db/api/warp.js";
-import { getCardMarkersByNamespaces } from "../../db/api/card.js";
+
 import { buildWarpDirectory, cardMetrics, type WarpListEntry } from "../warp-list.js";
 import { getWorkspaceUiConfig } from "../../db/internal/config.js";
 
@@ -15,14 +15,7 @@ export async function loadWarpDirectory({
   db,
   namespaceId,
 }: LoadWarpDirectory): Promise<WarpListEntry[]> {
-  const [namespaces, warps] = await Promise.all([
-    getAllNamespaces({ db }),
-    getAllWorkspaceWarps({ db }),
-  ]);
-  const namespaceIds = [
-    ...new Set(warps.map((warp) => warp.namespaceId).filter((id) => id !== namespaceId)),
-  ];
-  const cards = await getCardMarkersByNamespaces({ db, namespaceIds });
+  const { namespaces, warps, cards } = await readRows(db, workspaceServiceContext(), namespaceId);
   // Use the board's geometry settings to identify nearby cards consistently.
   return buildWarpDirectory({
     namespaces,
