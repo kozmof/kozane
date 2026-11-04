@@ -45,6 +45,8 @@ P0-10 progress: prototype asset/compilation/RPC deadlines and worker failure cle
 
 ### Schema comparison
 
+Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, column, foreign-key and index introspection. Two unit tests pass with disposable constraint/index/trigger/view fixtures. `pnpm exec tsx scripts/browser-spike/generate-manifest.ts` generates `tmp/browser-spike/schema-manifest.json` from all bundled migrations. Browser/libsql parity, broader semantic-defect cases and full normalization remain pending.
+
 - [ ] P0-11 Generate a prototype canonical schema manifest from existing migrations and compare fresh libsql and browser databases without modifying either.
 - [ ] P0-12 Cover columns, types, defaults, primary and foreign keys, check and unique constraints, ordered and partial indexes, triggers and views. Add disposable fixtures for features absent from current migrations.
 - [ ] P0-13 Define deterministic ordering and SQL normalization. Verify formatting-only differences pass and semantic changes fail while SQLite-owned objects are excluded.
