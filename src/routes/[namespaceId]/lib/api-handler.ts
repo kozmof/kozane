@@ -1,4 +1,10 @@
-import { ConflictError, ValidationError } from "../../../services/errors.js";
+import { domainErrorCode } from "../../../services/error-code.js";
+import {
+  ConflictError,
+  ValidationError,
+  LimitError,
+  UnavailableError,
+} from "../../../services/errors.js";
 import { error } from "@sveltejs/kit";
 import {
   DefaultLayerError,
@@ -34,7 +40,10 @@ export type DbErrorMessages = {
  */
 export function httpErrorFromDb(e: unknown, messages: DbErrorMessages = {}): unknown {
   try {
-    if (e instanceof ConflictError) error(messages.conflictStatus ?? 409, e.message);
+    if (e instanceof ConflictError)
+      error(messages.conflictStatus ?? 409, messages.unique ?? e.message);
+    if (e instanceof LimitError) error(413, e.message);
+    if (e instanceof UnavailableError) error(500, e.message);
     if (e instanceof ValidationError) error(400, e.message);
     if (e instanceof NotFoundError) error(404, messages.notFound ?? e.message);
     if (e instanceof DefaultPartitionError || e instanceof DefaultLayerError) error(400, e.message);
@@ -62,6 +71,18 @@ export function apiHandler<E>(
     try {
       return await handler(event);
     } catch (e) {
+      const code =
+        domainErrorCode(e) ??
+        (isForeignKeyError(e) ? "not_found" : isUniqueConstraintError(e) ? "conflict" : undefined);
+      if (
+        code &&
+        typeof event === "object" &&
+        event !== null &&
+        "setHeaders" in event &&
+        typeof event.setHeaders === "function"
+      ) {
+        event.setHeaders({ "X-Kozane-Error-Code": code });
+      }
       throw httpErrorFromDb(e, messages);
     }
   };

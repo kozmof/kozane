@@ -101,3 +101,58 @@ describe("namespace API routes", () => {
     }
   });
 });
+
+import {
+  ConflictError,
+  LimitError,
+  UnavailableError,
+  ValidationError,
+} from "../../../services/errors.js";
+import { vi } from "vitest";
+
+it.each([
+  [new ValidationError("invalid"), "validation", 400],
+  [new NotFoundError("Card"), "not_found", 404],
+  [new ConflictError("duplicate"), "conflict", 409],
+  [new LimitError("too large"), "limit", 413],
+  [new UnavailableError("unavailable"), "unavailable", 500],
+  [new DefaultLayerError(), "validation", 400],
+  [new DefaultPartitionError(), "validation", 400],
+] as const)(
+  "emits a domain header for %s while preserving the body",
+  async (failure, code, status) => {
+    const setHeaders = vi.fn();
+    const handler = apiHandler(async (_event: { setHeaders: typeof setHeaders }) => {
+      throw failure;
+    });
+    await expect(handler({ setHeaders })).rejects.toMatchObject({
+      status,
+      body: { message: failure.message },
+    });
+    expect(setHeaders).toHaveBeenCalledWith({ "X-Kozane-Error-Code": code });
+  },
+);
+it("preserves duplicate-name 400 compatibility with a conflict code", async () => {
+  const setHeaders = vi.fn();
+  const handler = apiHandler(
+    async (_event: { setHeaders: typeof setHeaders }) => {
+      throw new ConflictError('A layer named "x" already exists');
+    },
+    { conflictStatus: 400 },
+  );
+  await expect(handler({ setHeaders })).rejects.toMatchObject({
+    status: 400,
+    body: { message: 'A layer named "x" already exists' },
+  });
+  expect(setHeaders).toHaveBeenCalledWith({ "X-Kozane-Error-Code": "conflict" });
+});
+it("leaves authentication and throttling errors authoritative", async () => {
+  for (const status of [401, 403, 429]) {
+    const setHeaders = vi.fn();
+    const handler = apiHandler(async (_event: { setHeaders: typeof setHeaders }) => {
+      error(status, "access denied");
+    });
+    await expect(handler({ setHeaders })).rejects.toMatchObject({ status });
+    expect(setHeaders).not.toHaveBeenCalled();
+  }
+});

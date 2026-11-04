@@ -94,6 +94,7 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 ### Compatibility and boundaries
 
 - [ ] P1-16 Convert HTTP handlers to parsing, authentication, service calls and error mapping. Add explicit operation-specific compatibility mappings and `X-Kozane-Error-Code` without changing existing bodies or statuses.
+  - Shared domain-code mapping and SvelteKit header assignment are implemented. Adapter tests cover validation/default rows, missing resources, conflicts, limits, unavailable errors, duplicate-name 400 compatibility and authoritative 401/403/429 errors. All 333 API/adapter tests pass, along with CLI compilation, lint and application typing. See `http-error-compatibility.md`. Remaining non-service handlers, complete boundary classification and actual response-header E2E verification are pending.
 - [ ] P1-17 Convert CLI commands to shared services while preserving argument parsing, reference resolution, flags and output. Verify concurrent reference changes cannot produce partial card creation or membership.
 - [ ] P1-18 Keep filesystem rules in Node services and document infrastructure exemptions.
 - [ ] P1-19 Add import and boundary lint checks. Build the prospective core for the browser without Node shims, environment access or SvelteKit imports.
