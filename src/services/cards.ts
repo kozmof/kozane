@@ -1,3 +1,16 @@
+import { optionalNullableNumber, optionalString } from "./validation.js";
+import {
+  reassignCardsToLayerInTx,
+  updateCardInTx,
+  withCardInventory,
+  type CardStacking,
+} from "../db/api/card.js";
+import { refitStoredCardInTx, type Refit } from "../db/api/inventory.js";
+import { squashNamespaceCard, type SquashCardResult } from "../db/api/composite.js";
+import { CARD_WIDTH_RANGE } from "../lib/ui-config.js";
+import { BATCH_MAX } from "../lib/constants.js";
+import { requireCardInNamespace } from "./guards.js";
+import { NotFoundError } from "./errors.js";
 import { reassignCardsStackOrder } from "../db/api/card.js";
 import { reassignCardsToPartition } from "../db/api/card.js";
 import { reassignCardsToLayer } from "../db/api/card.js";
@@ -222,4 +235,168 @@ export async function setStacking(
   // Return each moved card's final stacking value because a glue group may span multiple
   // layers.
   return { ok: true as const, stacking: result.stacking };
+}
+
+export async function update(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  cardId: string,
+  body: Record<string, unknown>,
+) {
+  // Validate the body before opening the transaction. None of these checks reads the
+  // database, so running them inside it would only hold the write lock longer against CLI
+  // writers.
+  const rawContent = optionalString(body, "content");
+  let content: string | undefined;
+  if (rawContent !== undefined) {
+    const checked = checkCardContent(rawContent, context.contentMax);
+    if (!checked.ok) throw new ValidationError(checked.issue);
+    content = checked.content;
+  }
+
+  const requestedPartitionId =
+    body.partitionId === undefined ? undefined : requireString(body, "partitionId");
+  const requestedLayerId = body.layerId === undefined ? undefined : requireString(body, "layerId");
+
+  const rawPosX = optionalNumber(body, "posX");
+  const rawPosY = optionalNumber(body, "posY");
+  const { canvasWidth, canvasHeight } = context;
+  const posX = rawPosX === undefined ? undefined : Math.round(clamp(rawPosX, 0, canvasWidth));
+  const posY = rawPosY === undefined ? undefined : Math.round(clamp(rawPosY, 0, canvasHeight));
+  const zIndex = optionalNumber(body, "zIndex");
+  if (zIndex !== undefined && !Number.isSafeInteger(zIndex))
+    throw new ValidationError("zIndex must be an integer");
+
+  // Null clears the pinned width and restores `ui.defaultCardWidth`. Reject out-of-range
+  // widths rather than clamping them.
+  const width = optionalNullableNumber(body, "width");
+  const [widthMin, widthMax] = CARD_WIDTH_RANGE;
+  if (typeof width === "number" && !Number.isInteger(width))
+    throw new ValidationError("width must be an integer");
+  if (typeof width === "number" && (width < widthMin || width > widthMax))
+    throw new ValidationError(`width must be between ${widthMin} and ${widthMax}`);
+
+  if (
+    content === undefined &&
+    requestedPartitionId === undefined &&
+    requestedLayerId === undefined &&
+    posX === undefined &&
+    posY === undefined &&
+    zIndex === undefined &&
+    width === undefined
+  )
+    throw new ValidationError("No fields to update");
+
+  // Every lookup runs inside the transaction that writes, as in the collection POST, so a
+  // card, partition, or layer removed by another writer in between is a 404 or 400 here
+  // rather than a foreign-key or not-found 500.
+  const { stacking, refit } = await withTx(
+    db,
+    async (tx): Promise<{ stacking: CardStacking[]; refit: Refit | null }> => {
+      const { partitionId } = await requireCardInNamespace(tx, namespaceId, cardId);
+
+      if (
+        requestedPartitionId !== undefined &&
+        !(await getPartition({ db: tx, namespaceId, partitionId: requestedPartitionId }))
+      )
+        throw new ValidationError("New partition not found in namespace");
+      const newPartitionId = requestedPartitionId;
+
+      if (
+        requestedLayerId !== undefined &&
+        !(await getLayer({ db: tx, namespaceId, layerId: requestedLayerId }))
+      )
+        throw new ValidationError("New layer not found in namespace");
+      const newLayerId = requestedLayerId;
+
+      // A layer change restacks the card above the destination's cards, as the batch layer
+      // route does, so it does not keep a zIndex from the layer it left. An explicit zIndex in
+      // the same body is applied afterwards and wins.
+      let stacking: CardStacking[] = [];
+      if (newLayerId !== undefined) {
+        const moved = await reassignCardsToLayerInTx({
+          db: tx,
+          namespaceId,
+          cardIds: [cardId],
+          layerId: newLayerId,
+        });
+        // Both were checked above inside this transaction, so a refusal here is a bug.
+        if (!moved.ok) throw new Error(`reassignCardsToLayerInTx refused: ${moved.reason}`);
+        // Report the value that ends up stored, so the board does not apply the restack an
+        // explicit zIndex replaces below.
+        stacking =
+          zIndex === undefined
+            ? moved.stacking
+            : moved.stacking.map((entry) =>
+                entry.cardId === cardId ? { ...entry, zIndex } : entry,
+              );
+      }
+
+      const rest = { newPartitionId, content, posX, posY, zIndex, width };
+      if (Object.values(rest).some((value) => value !== undefined))
+        await updateCardInTx({ db: tx, cardId, partitionId, ...rest });
+      // Longer text can overlap neighbouring cards in an inventory. Move the edited card to
+      // the first free slot and return every changed position, including repaired neighbours,
+      // so the board can update immediately.
+      if (content === undefined) return { stacking, refit: null };
+      const refit = await refitStoredCardInTx({ db: tx, cardId });
+      // Throwing rolls the text change back, so a card that no longer fits keeps its old text.
+      if (!refit.ok) rejectBatch(refit.reason);
+      return { stacking, refit };
+    },
+  );
+
+  return {
+    ok: true,
+    stacking,
+    // The stored text after normalization, so the board can show exactly what was saved.
+    ...(content !== undefined && { content }),
+    ...(refit?.moved && { inventory: { id: refit.moved.inventoryId, slot: refit.moved.slot } }),
+    ...(refit && refit.placements.length > 0 && { placements: refit.placements }),
+  };
+}
+
+export async function removeOne(
+  db: DB,
+  _context: ServiceContext,
+  namespaceId: string,
+  cardId: string,
+) {
+  const result = await deleteNamespaceCards({ db, namespaceId, cardIds: [cardId] });
+  if (!result.ok) throw new NotFoundError("Card");
+  return { ok: true as const };
+}
+
+type SquashFailure = Extract<SquashCardResult, { ok: false }>["reason"];
+
+// Return actionable messages for problems with the selected card.
+const FAILURE_MESSAGE: Record<SquashFailure, string> = {
+  "not-found": "Card not found in namespace",
+  stored: "Stored cards cannot be squashed. Take the card out of its inventory first",
+  indivisible: "Card text does not split into more than one card",
+  "too-many": `Card text splits into more than ${BATCH_MAX} cards`,
+  "inventory-full": "Card text splits into more pieces than one inventory holds",
+};
+
+export async function squash(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const cardId = requireString(body, "cardId");
+
+  const result = await squashNamespaceCard({ db, namespaceId, cardId, ...context });
+  if (!result.ok) throw new ValidationError(FAILURE_MESSAGE[result.reason]);
+
+  // Return full stored rows so clients use the slots and return positions planned here. The
+  // pieces start unglued. `stacking` names the cards raised above them.
+  return {
+    inventory: result.inventory,
+    cards: result.cards.map(
+      (card) => ({ ...withCardInventory(card), glueId: null }) satisfies CardWithGlue,
+    ),
+    stacking: result.stacking,
+  };
 }
