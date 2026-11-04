@@ -43,3 +43,18 @@ it("rolls back card creation when inventory placement fails", async () => {
   ).rejects.toThrow("Inventory not found in namespace");
   expect(await db.select().from(cardTable)).toHaveLength(0);
 });
+
+import { composeWrite } from "../db/database.js";
+import { addNamespace, getAllNamespaces } from "../db/api/namespace.js";
+import { createInTx } from "./cards.js";
+it("rolls back reference-resolution work with a failed composed mutation", async () => {
+  const db = await createTestDB();
+  await expect(composeWrite(db, async (tx) => {
+    const namespaceId = await addNamespace({ db: tx, name: "Uncommitted reference" });
+    await createInTx(tx, createServiceContext(), namespaceId, {
+      partitionId: "missing", content: "must roll back",
+    });
+  })).rejects.toThrow("Partition not found in namespace");
+  expect(await getAllNamespaces({ db })).toEqual([]);
+  expect(await db.select().from(cardTable)).toEqual([]);
+});

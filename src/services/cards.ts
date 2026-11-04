@@ -38,11 +38,21 @@ import { checkCardContent, clamp } from "../lib/constants.js";
 import { optionalNumber, optionalId, requireString } from "./validation.js";
 import { rejectBatch } from "./rejection.js";
 
-import type { DB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
 export async function create(
   db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+
+export async function createInTx(
+  tx: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -66,7 +76,7 @@ export async function create(
 
   // The lookups run inside the transaction that writes, so a partition, layer, or scope
   // removed by another writer in between is a 400 here rather than a foreign-key 500.
-  const { id, stored, inventory, placements } = await withTx(db, async (tx) => {
+  const { id, stored, inventory, placements } = await (async () => {
     const partition = await getPartition({ db: tx, namespaceId, partitionId });
     if (!partition) throw new ValidationError("Partition not found in namespace");
     if (scopeId && !(await getScope({ db: tx, scopeId })))
@@ -119,7 +129,7 @@ export async function create(
       inventory: { id: inventoryId, slot: placed.slot },
       placements: stowed.placements,
     };
-  });
+  })();
 
   // Return stored coordinates after clamping so the client renders the saved position
   // immediately. New cards use the configured default width. `placements` lists every slot

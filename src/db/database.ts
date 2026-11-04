@@ -43,3 +43,8 @@ export {
   type DatabaseFailure,
   type DatabaseConstraint,
 } from "./failures.js";
+
+/** Resolve adapter references and invoke transaction-bound services on one write handle. */
+export function composeWrite<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T> {
+  return withTx(db, operation);
+}
