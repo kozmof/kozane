@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import {
@@ -11,6 +12,7 @@ import { requireBoundedName } from "./validation.js";
 import { NotFoundError } from "./errors.js";
 
 export async function create(db: DB, _context: ServiceContext, input: Record<string, unknown>) {
+  input = prepareInput(input);
   const name = requireBoundedName(input);
   const id = await createNamespace({ db, name });
   return { id, name };

@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
@@ -11,6 +12,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
   try {
     const { id, position } = await addLayer({ db, namespaceId, name });
@@ -28,6 +30,7 @@ export async function rename(
   layerId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
   try {
     await updateLayerName({ db, namespaceId, layerId, name });
@@ -62,6 +65,7 @@ export async function reorder(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const layerIds = requireStringArray(body, "layerIds");
   const result = await reorderLayers({ db, namespaceId, layerIds });
   if (!result.ok) throw new ValidationError(REORDER_REJECTION_MESSAGE[result.reason]);

@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { glueNamespaceCards, unglueNamespaceCards } from "../db/api/glue.js";
@@ -10,6 +11,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds", 2);
   const result = await glueNamespaceCards({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
@@ -21,6 +23,7 @@ export async function remove(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
   const result = await unglueNamespaceCards({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);

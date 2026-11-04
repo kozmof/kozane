@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { requireBoundedName } from "./validation.js";
@@ -11,6 +12,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
   try {
     const id = await addPartition({ db, namespaceId, name });
@@ -28,6 +30,7 @@ export async function rename(
   partitionId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
   try {
     await updatePartitionName({ db, namespaceId, partitionId, name });

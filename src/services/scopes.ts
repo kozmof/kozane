@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { addScope, getScope, updateScopeName, deleteScopeFromNamespace } from "../db/api/scope.js";
@@ -34,6 +35,7 @@ function clampRect(rect: BoardRect, context: ServiceContext): BoardRect {
 }
 
 export async function create(db: DB, _context: ServiceContext, body: Record<string, unknown>) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
 
   try {
@@ -53,6 +55,7 @@ export async function rename(
   scopeId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const name = requireBoundedName(body);
 
   if (!(await getScope({ db, scopeId: scopeId }))) throw missing("Scope not found");
@@ -84,6 +87,7 @@ export async function addMembers(
   scopeId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
 
   const result = await addScopeMembers({ db, scopeId, namespaceId, cardIds });
@@ -99,6 +103,7 @@ export async function removeMembers(
   scopeId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
 
   const result = await removeScopeMembersFromNamespace({ db, scopeId, namespaceId, cardIds });
@@ -114,6 +119,7 @@ export async function createArea(
   scopeId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const rect = readAreaRect(body);
 
   // The whole stored row, so a client that drew the frame where the pointer let go cannot
@@ -129,6 +135,7 @@ export async function updateArea(
   areaId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const rect = readAreaRect(body);
 
   return await moveScopeArea({ db, namespaceId, scopeId, areaId, ...clampRect(rect, context) });

@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import { optionalNullableNumber, optionalString } from "./validation.js";
 import {
   reassignCardsToLayerInTx,
@@ -46,6 +47,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const partitionId = requireString(body, "partitionId");
   const checked = checkCardContent(requireString(body, "content"), context.contentMax);
   if (!checked.ok) throw new ValidationError(checked.issue);
@@ -140,6 +142,7 @@ export async function updatePositions(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const positions = requireObjectArray(
     body,
     "positions",
@@ -164,6 +167,7 @@ export async function remove(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
   const result = await deleteNamespaceCards({ db, namespaceId, cardIds });
   if (!result.ok) rejectBatch(result.reason);
@@ -176,6 +180,7 @@ export async function move(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const targetNamespaceId = requireString(body, "targetNamespaceId");
   const cardIds = requireStringArray(body, "cardIds");
   if (targetNamespaceId === namespaceId)
@@ -196,6 +201,7 @@ export async function setLayer(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const layerId = requireString(body, "layerId");
   const cardIds = requireStringArray(body, "cardIds");
   // Let the transaction validate the destination layer, as in the partition handler.
@@ -211,6 +217,7 @@ export async function setPartition(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const partitionId = requireString(body, "partitionId");
   const cardIds = requireStringArray(body, "cardIds");
   // Validate the partition inside the write transaction so the reported result cannot become
@@ -226,6 +233,7 @@ export async function setStacking(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
   const direction = requireString(body, "direction");
   if (direction !== "front" && direction !== "back")
@@ -244,6 +252,7 @@ export async function update(
   cardId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   // Validate the body before opening the transaction. None of these checks reads the
   // database, so running them inside it would only hold the write lock longer against CLI
   // writers.
@@ -385,6 +394,7 @@ export async function squash(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardId = requireString(body, "cardId");
 
   const result = await squashNamespaceCard({ db, namespaceId, cardId, ...context });

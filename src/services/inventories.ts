@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
@@ -33,6 +34,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const posX = optionalNumber(body, "posX");
   const posY = optionalNumber(body, "posY");
   if (posX === undefined || posY === undefined)
@@ -49,6 +51,7 @@ export async function update(
   inventoryId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const posX = optionalNumber(body, "posX");
   const posY = optionalNumber(body, "posY");
   if ((posX === undefined) !== (posY === undefined))
@@ -84,6 +87,7 @@ export async function stow(
   inventoryId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cardIds = requireStringArray(body, "cardIds");
   const slot = optionalNumber(body, "slot");
   if (slot !== undefined && (!Number.isInteger(slot) || slot < 0 || slot > INVENTORY_SLOT_MAX))
@@ -99,6 +103,7 @@ export async function take(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const cards = requireObjectArray(body, "cards", (item): TakenCard => {
     const cardId = requireString(item, "cardId");
     const posX = optionalNumber(item, "posX");

@@ -1,3 +1,4 @@
+import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
@@ -17,6 +18,7 @@ export async function create(
   namespaceId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const posX = optionalNumber(body, "posX");
   const posY = optionalNumber(body, "posY");
   if (posX === undefined || posY === undefined)
@@ -37,6 +39,7 @@ export async function update(
   warpId: string,
   body: Record<string, unknown>,
 ) {
+  body = prepareInput(body);
   const posX = optionalNumber(body, "posX");
   const posY = optionalNumber(body, "posY");
   if (posX === undefined || posY === undefined)
