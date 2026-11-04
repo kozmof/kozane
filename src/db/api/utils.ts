@@ -1,3 +1,4 @@
+import { ConflictError } from "../../services/errors.js";
 import { getTableColumns, type Table } from "drizzle-orm";
 import { BATCH_MAX, NAME_MAX, chunked } from "../../lib/constants.js";
 
@@ -117,7 +118,9 @@ const UNIQUE_CODES = ["SQLITE_CONSTRAINT_UNIQUE", "SQLITE_CONSTRAINT_PRIMARYKEY"
 const FOREIGN_KEY_CODES = ["SQLITE_CONSTRAINT_FOREIGNKEY"] as const;
 
 export function isUniqueConstraintError(e: unknown): boolean {
-  return constraintInChain(e, UNIQUE_CODES, "UNIQUE constraint failed");
+  return (
+    e instanceof ConflictError || constraintInChain(e, UNIQUE_CODES, "UNIQUE constraint failed")
+  );
 }
 
 export function isForeignKeyError(e: unknown): boolean {

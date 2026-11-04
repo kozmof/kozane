@@ -1,3 +1,6 @@
+import { runNodeTransaction } from "./internal/transaction.js";
+import { UnavailableError } from "../services/errors.js";
+import type { DatabaseHandle } from "./database.js";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import type { Client } from "@libsql/client";
 import { drizzle, type LibSQLDatabase } from "drizzle-orm/libsql";
@@ -15,22 +18,40 @@ export function migrateNodeDatabase(db: DB, config: Parameters<typeof migrate>[1
 
 /** Preserve libsql immediate writes and deferred snapshot reads. */
 export function brandDb(db: LibSQLDatabase<typeof schema> & { $client: Client }): DB {
-  const reader = drizzle({ client: readTransactionClient(db.$client), schema });
+  let invalid = false;
+  const run = <T>(
+    mode: "write" | "deferred",
+    operation: (handle: DatabaseHandle) => Promise<T>,
+  ) => {
+    if (invalid) return Promise.reject(new UnavailableError("Database connection is unavailable"));
+    return runNodeTransaction(
+      async () => {
+        const transaction = await db.$client.transaction(mode);
+        const client = new Proxy(db.$client, {
+          get(target, prop) {
+            if (prop === "execute" || prop === "batch") return transaction[prop].bind(transaction);
+            const value = Reflect.get(target, prop, target);
+            return typeof value === "function" ? value.bind(target) : value;
+          },
+        });
+        return {
+          handle: drizzle({ client, schema }),
+          commit: () => transaction.commit(),
+          rollback: () => transaction.rollback(),
+          close: () => transaction.close(),
+        };
+      },
+      operation,
+      () => {
+        invalid = true;
+        db.$client.close();
+      },
+    );
+  };
   const branded = createDatabaseAdapter(db, {
-    write: (operation) => db.transaction(operation),
-    read: (operation) => reader.transaction(operation),
+    write: (operation) => run("write", operation),
+    read: (operation) => run("deferred", operation),
   });
   nodeHandles.set(branded, db);
   return branded;
-}
-
-function readTransactionClient(client: Client): Client {
-  return new Proxy(client, {
-    get(target, prop) {
-      if (prop === "transaction") return () => target.transaction("deferred");
-      const value: unknown = Reflect.get(target, prop, target);
-      // Bind to the real client, whose methods use private fields a proxy cannot reach.
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
 }
