@@ -1,5 +1,5 @@
 import type { InferSelectModel } from "drizzle-orm";
-import type { AnyDB, DB, Tx } from "../tx.js";
+import type { AnyDB, DB, Tx } from "../database.js";
 import type {
   namespaceTable,
   partitionTable,

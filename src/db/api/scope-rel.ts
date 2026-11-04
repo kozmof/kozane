@@ -3,7 +3,7 @@ import { partitionTable, cardTable, glueRelTable, scopeRelTable, scopeTable } fr
 import type { NeedsDB, ReadsNamespace, NeedsScope, Card, ScopeRel } from "./types.js";
 import { assertFound, columnCount, type BatchResult } from "./utils.js";
 import { cardsBelongToNamespace } from "./card.js";
-import { withTx, type DB } from "../tx.js";
+import { withTx, type DB } from "../database.js";
 import { chunked } from "../../lib/constants.js";
 
 type ScopeRelKey = NeedsScope & { cardId: string };

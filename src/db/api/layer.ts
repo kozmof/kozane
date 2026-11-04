@@ -8,7 +8,7 @@ import type {
   Layer,
 } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
-import { withTx, type DB } from "../tx.js";
+import { withTx, type DB } from "../database.js";
 
 /** Choose the lowest position, using the ID to break ties. */
 export async function getAllLayers({ db, namespaceId }: ReadsNamespace): Promise<Layer[]> {

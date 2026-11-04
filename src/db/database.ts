@@ -33,3 +33,5 @@ export function withTx<T>(db: DB, operation: (tx: Tx) => Promise<T>): Promise<T>
 export function withReadTx<T>(db: DB, operation: (tx: ReadTx) => Promise<T>): Promise<T> {
   return adapter(db).read((handle) => operation(handle as ReadTx));
 }
+
+export { createServiceContext, type ServiceContext } from "../services/context.js";

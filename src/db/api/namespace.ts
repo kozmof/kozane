@@ -2,7 +2,7 @@ import { partitionTable, cardTable, glueRelTable, namespaceTable } from "../sche
 import { and, asc, eq } from "drizzle-orm";
 import type { ReadsNamespace, NeedsDB, Namespace, NeedsReader } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
-import { withTx, type DB, type Tx } from "../tx.js";
+import { withTx, type DB, type Tx } from "../database.js";
 import { addPartition } from "./partition.js";
 import { addLayer } from "./layer.js";
 import { DEFAULT_PARTITION_NAME, DEFAULT_LAYER_NAME } from "../../lib/constants.js";

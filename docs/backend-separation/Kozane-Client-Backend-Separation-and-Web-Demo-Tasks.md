@@ -60,13 +60,16 @@ Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, 
 - [ ] P1-01 Define typed service inputs and results in the modules that will become core services. Start the operation matrix with identifiers, omission/null semantics, transactions, capabilities, invalidations and errors.
 - [ ] P1-02 Widen branded database types to the shared async SQLite type. Implement the public adapter factory, read/write hooks and transaction helpers with branding casts confined to core.
 - [ ] P1-03 Preserve libsql write and deferred-read behavior in the Node adapter. Isolate libsql-only operations behind adapter hooks.
-- [ ] P1-04 Implement immutable `ServiceContext` and its factory, preserving existing configuration validation and the 200,000-character default content limit.
+- [x] P1-04 Implement immutable `ServiceContext` and its factory, preserving existing configuration validation and the 200,000-character default content limit.
+  - `src/services/context.ts` exports a frozen context and uses workspace numeric bounds. Nine context tests cover defaults, immutable copies, boundaries, fractional values and invalid numeric values. CLI compilation and 395 focused tests pass. Node caller integration remains part of resource extraction.
 - [ ] P1-05 Implement shared JSON-compatible input preparation without invoking getters or `toJSON`. Copy inputs and reject all unsupported values listed in the specification before dispatch.
 - [ ] P1-06 Add domain errors and driver normalization after rollback, including commit failures. Invalidate unusable connections and retain safe diagnostic causes.
 - [ ] P1-07 Add typed `database_content`, `transient` and `unknown` classifications. Keep ordinary mutation constraint failures distinct from confirmed stored-data defects.
 - [ ] P1-08 Add a public transaction composition helper and transaction-bound service variants so CLI reference resolution and mutation use the same transaction without nesting.
 
 P1-02/P1-03 progress: `src/db/database.ts` now owns generic async SQLite database/transaction brands and the public adapter factory with read/write hooks. `src/db/tx.ts` retains libsql immediate-write/deferred-read hooks and Node-only migration access. Existing database API and transaction tests pass unchanged (386 tests across 16 files), CLI compilation passes, and Svelte/type checks report zero errors or warnings. Driver failure normalization and browser adapter verification remain pending.
+
+Additional P1 progress: shared domain error classes are introduced, preserving existing database error identities. Database API transaction imports now use the transport-free adapter. Error normalization, resource extraction and HTTP integration remain pending.
 
 ### Resource extraction
 

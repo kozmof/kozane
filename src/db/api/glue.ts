@@ -1,7 +1,7 @@
 import { partitionTable, cardTable, glueTable, glueRelTable } from "../schema.js";
 import { and, count, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { NeedsDB, ReadsNamespace, NeedsTx, GlueRel } from "./types.js";
-import { withTx, type DB, type Tx } from "../tx.js";
+import { withTx, type DB, type Tx } from "../database.js";
 import { cardsBelongToNamespace, isStored } from "./card.js";
 import { BATCH_MAX, chunked } from "../../lib/constants.js";
 import { columnCount, readByIds, type BatchResult } from "./utils.js";

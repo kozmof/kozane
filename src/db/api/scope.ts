@@ -21,7 +21,7 @@ import {
 import { union } from "drizzle-orm/sqlite-core";
 import type { NeedsDB, NeedsReader, ReadsNamespace, NeedsScope, Scope } from "./types.js";
 import { assertFound, assertNameWithinLimit } from "./utils.js";
-import { withTx, type DB } from "../tx.js";
+import { withTx, type DB } from "../database.js";
 
 /**
  * List all workspace scopes for the CLI. Use {@link getScopesInNamespace} for a board's
