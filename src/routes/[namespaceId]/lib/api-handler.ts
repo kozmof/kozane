@@ -1,3 +1,4 @@
+import { TaskspaceServiceError } from "$lib/server/taskspace-service/errors";
 import { domainErrorCode } from "../../../services/error-code.js";
 import {
   ConflictError,
@@ -40,6 +41,7 @@ export type DbErrorMessages = {
  */
 export function httpErrorFromDb(e: unknown, messages: DbErrorMessages = {}): unknown {
   try {
+    if (e instanceof TaskspaceServiceError) error(e.status, e.message);
     if (e instanceof ConflictError)
       error(messages.conflictStatus ?? 409, messages.unique ?? e.message);
     if (e instanceof LimitError) error(413, e.message);
