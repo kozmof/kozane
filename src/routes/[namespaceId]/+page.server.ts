@@ -1,7 +1,8 @@
 import type { EntryGenerator, PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
 import { getDb } from "$db/client";
-import { getAllNamespaces } from "$db/api/namespace";
+import { list as listNamespaces } from "../../services/namespaces.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { loadNamespaceSnapshot } from "./lib/namespace-snapshot.js";
 import { getWorkspaceUiConfig } from "$db/internal/config";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
@@ -20,7 +21,7 @@ export const entries: EntryGenerator = async () => {
   // (adapter-node) build still evaluates this generator but has no workspace.
   if (!prerender) return [];
   const db = await getDb();
-  const namespaces = await getAllNamespaces({ db });
+  const namespaces = await listNamespaces(db, workspaceServiceContext());
   return namespaces.map((p) => ({ namespaceId: p.id }));
 };
 
@@ -39,7 +40,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
       includeScopes: !prerender || includeScopedFiles,
       includeScopedFiles: prerender && includeScopedFiles,
     }),
-    getAllNamespaces({ db }),
+    listNamespaces(db, workspaceServiceContext()),
     // Load other namespaces' warps alongside the board for the Shift+arrow palette.
     // Include them in static exports so the palette works without a server endpoint.
     loadWarpDirectory({ db, namespaceId }),

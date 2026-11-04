@@ -1,6 +1,8 @@
 import type { Actions, PageServerLoad, RequestEvent } from "./$types";
 import { fail } from "@sveltejs/kit";
-import { createNamespace, getAllNamespaces } from "../db/api/namespace.js";
+import * as namespacesService from "../services/namespaces.js";
+import { ValidationError } from "../services/errors.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { getWorkspaceName, getWorkspaceRoot } from "../db/internal/config.js";
 import { NAME_MAX } from "$lib/constants";
 import { isSsgBuild } from "$lib/server/ssg";
@@ -10,7 +12,7 @@ export const prerender = isSsgBuild();
 const readonly = process.env.KOZANE_READONLY === "1";
 
 export const load: PageServerLoad = async ({ locals }) => {
-  const namespaces = await getAllNamespaces({ db: locals.db });
+  const namespaces = await namespacesService.list(locals.db, workspaceServiceContext());
   return {
     namespaces,
     workspaceRoot: readonly ? null : getWorkspaceRoot(),
@@ -25,12 +27,18 @@ const namespaceActions = {
     const submitted = form.get("name");
     const name = typeof submitted === "string" ? submitted.trim() : "";
 
-    if (!name) return fail(400, { error: "Namespace name is required." });
-    if (name.length > NAME_MAX) {
-      return fail(400, { error: `Namespace name must be ${NAME_MAX} characters or fewer.` });
+    try {
+      await namespacesService.create(locals.db, workspaceServiceContext(), { name });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        const compatible: Record<string, string> = {
+          "name is required": "Namespace name is required.",
+          [`name must be ${NAME_MAX} characters or fewer`]: `Namespace name must be ${NAME_MAX} characters or fewer.`,
+        };
+        return fail(400, { error: compatible[error.message] ?? error.message });
+      }
+      throw error;
     }
-
-    await createNamespace({ db: locals.db, name });
     return { success: true };
   },
 } satisfies Actions;

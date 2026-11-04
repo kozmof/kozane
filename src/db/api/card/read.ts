@@ -208,7 +208,7 @@ export async function defaultLayerIdForPartition({
   return row.id;
 }
 
-type GetCardPartitionNames = NeedsDB & { cardIds: string[] };
+type GetCardPartitionNames = NeedsReader & { cardIds: string[] };
 /**
  * Find each card's partition using {@link readByIds} to stay within SQLite's parameter
  * budget. Static tag export can request every tagged card at once.

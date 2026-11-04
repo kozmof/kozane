@@ -42,3 +42,49 @@ for (const [title, paths, pattern] of sections) {
   }
 }
 await writeFile("docs/backend-separation/source-inventory.md", output);
+
+const domainCommands = new Set([
+  "card",
+  "inventory",
+  "layer",
+  "namespace",
+  "partition",
+  "scope",
+  "tag",
+  "warp",
+]);
+let audit =
+  "\n## Adapter classification\n\nClassification describes the adapter's responsibility. Transaction signals identify review candidates and do not prove complete service delegation.\n\n| Adapter | Class | Transaction signal |\n| --- | --- | --- |\n";
+for (const path of sources
+  .filter(
+    (path) =>
+      /src\/routes\/.*\+(server|page\.server)\.ts$/.test(path) ||
+      /src\/cli\/commands\/.*\.ts$/.test(path),
+  )
+  .sort()) {
+  const source = await readFile(path, "utf8");
+  let classification;
+  if (path.startsWith("src/routes/")) {
+    classification = path.includes("/health/")
+      ? "infrastructure"
+      : /\/(login|taskspaces)\//.test(path)
+        ? "Node feature"
+        : "core-backed";
+  } else {
+    const command = path.slice("src/cli/commands/".length).split(/[/.]/)[0];
+    classification = domainCommands.has(command)
+      ? "core-backed"
+      : ["init", "db", "open", "status"].includes(command)
+        ? "infrastructure"
+        : "Node feature";
+  }
+  const transaction = /composeWrite/.test(source)
+    ? "core composition"
+    : /withTx|\.transaction\(/.test(source)
+      ? "adapter transaction, review required"
+      : /services\//.test(source)
+        ? "delegated service calls"
+        : "no explicit transaction, review required";
+  audit += `| \`${path}\` | ${classification} | ${transaction} |\n`;
+}
+await writeFile("docs/backend-separation/source-inventory.md", output + audit);

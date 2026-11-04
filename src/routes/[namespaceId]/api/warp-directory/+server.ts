@@ -1,6 +1,7 @@
-import { error, json } from "@sveltejs/kit";
+import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
-import { getNamespace } from "$db/api/namespace";
+import { get as getNamespace } from "../../../../services/namespaces.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { loadWarpDirectory } from "$lib/server/warp-directory";
 import { apiHandler } from "../../lib/api-handler.js";
 
@@ -9,8 +10,7 @@ import { apiHandler } from "../../lib/api-handler.js";
  * snapshot poll.
  */
 export const GET: RequestHandler = apiHandler(async ({ locals, params }) => {
-  const namespace = await getNamespace({ db: locals.db, namespaceId: params.namespaceId });
-  if (!namespace) throw error(404, "Namespace not found");
+  await getNamespace(locals.db, workspaceServiceContext(), params.namespaceId);
 
   return json(await loadWarpDirectory({ db: locals.db, namespaceId: params.namespaceId }));
 });

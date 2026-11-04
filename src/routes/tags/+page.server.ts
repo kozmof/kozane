@@ -1,14 +1,12 @@
+import { httpErrorFromDb } from "../[namespaceId]/lib/api-handler.js";
 import type { PageServerLoad } from "./$types";
-import { error } from "@sveltejs/kit";
-import { getAllNamespaces, getNamespace } from "$db/api/namespace";
-import { getAllPartitions } from "$db/api/partition";
-import { getCardPartitionNames } from "$db/api/card";
-import type { AnyDB } from "$db/client";
+import * as namespacesService from "../../services/namespaces.js";
+import { displayMetadata } from "../../services/tags.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "$lib/tag";
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
-import { applyPalette } from "$lib/palette";
 import type { TagHit } from "$lib/types";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
@@ -74,24 +72,6 @@ function narrow<T>(record: Record<string, T>, keys: Iterable<string>): Record<st
  * Read partition names and colors for displayed cards. Assign each namespace's palette in the
  * same order as its board, and read only namespaces used by the results.
  */
-async function partitionsForNamespaces(
-  db: AnyDB,
-  namespaceIds: string[],
-): Promise<Record<string, { name: string; dot: string }>> {
-  // Load independent namespace palettes concurrently.
-  const palettes = await Promise.all(
-    namespaceIds.map(async (namespaceId) =>
-      applyPalette(await getAllPartitions({ db, namespaceId })),
-    ),
-  );
-
-  const byPartition: Record<string, { name: string; dot: string }> = {};
-  for (const partitions of palettes) {
-    for (const partition of partitions)
-      byPartition[partition.id] = { name: partition.name, dot: partition.dot };
-  }
-  return byPartition;
-}
 
 export const load: PageServerLoad = async ({ locals, url }) => {
   const { db } = locals;
@@ -106,8 +86,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
   const includeFiles = prerender ? includeScopedFiles : true;
 
   // Reject unknown namespaces instead of presenting an empty tag index as a valid result.
-  if (requestedNamespace && !(await getNamespace({ db, namespaceId: requestedNamespace })))
-    throw error(404, "Namespace not found");
+  if (requestedNamespace) {
+    try {
+      await namespacesService.get(db, workspaceServiceContext(), requestedNamespace);
+    } catch (failure) {
+      throw httpErrorFromDb(failure);
+    }
+  }
 
   const [index, namespaces] = await Promise.all([
     loadTagIndex({
@@ -118,7 +103,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       // Static prerendering skips persistent caching.
       ...cacheLocation(),
     }),
-    getAllNamespaces({ db }),
+    namespacesService.list(db, workspaceServiceContext()),
   ]);
 
   const { hits, cardTotal, fileTotal } = selectHits(index.hits, tag);
@@ -136,10 +121,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     ),
   ];
   // Read independent card metadata concurrently.
-  const [cardPartitions, partitions] = await Promise.all([
-    getCardPartitionNames({ db, cardIds: shownCardIds }),
-    partitionsForNamespaces(db, shownNamespaces),
-  ]);
+  const { cardPartitions, partitions } = await displayMetadata(
+    db,
+    workspaceServiceContext(),
+    shownCardIds,
+    shownNamespaces,
+  );
 
   // Retain metadata for displayed hits and taskspaces named in warnings. Exports retain
   // complete lookup data for browser-side filtering.
