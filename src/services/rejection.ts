@@ -18,7 +18,13 @@ const BATCH_REJECTION_MESSAGE: Record<BatchRejection, string> = {
   "unstored-cards": "Card is not stored in an inventory",
 };
 
+export class BatchValidationError extends ValidationError {
+  constructor(readonly reason: BatchRejection) {
+    super(BATCH_REJECTION_MESSAGE[reason]);
+  }
+}
+
 /** Ends the request with the wording for `reason`. */
 export function rejectBatch(reason: BatchRejection): never {
-  throw new ValidationError(BATCH_REJECTION_MESSAGE[reason]);
+  throw new BatchValidationError(reason);
 }

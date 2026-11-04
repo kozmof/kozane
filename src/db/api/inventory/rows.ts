@@ -11,7 +11,7 @@ import type {
 } from "../types.js";
 import { nextSquashInventoryName } from "../../../lib/squash.js";
 import { assertFound, assertNameWithinLimit } from "../utils.js";
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { releaseCardsInTx } from "./slots.js";
 
 /** A namespace's inventories in creation order, which their UUIDv7 IDs sort in. */
@@ -120,12 +120,17 @@ export async function updateInventory({
  * Delete an inventory and return its cards to their previous canvas positions.
  * Return the card IDs so callers can update the board.
  */
-export async function deleteInventory({
-  db,
+export async function deleteInventory(
+  args: NeedsNamespaceInventory & { db: DB },
+): Promise<{ releasedCardIds: string[] }> {
+  return withTx(args.db, (tx) => deleteInventoryInTx({ ...args, db: tx }));
+}
+export async function deleteInventoryInTx({
+  db: tx,
   namespaceId,
   inventoryId,
-}: NeedsNamespaceInventory & { db: DB }): Promise<{ releasedCardIds: string[] }> {
-  return withTx(db, async (tx) => {
+}: NeedsNamespaceInventory & { db: Tx }): Promise<{ releasedCardIds: string[] }> {
+  return (async () => {
     const held = await tx
       .select({ id: cardTable.id })
       .from(cardTable)
@@ -140,5 +145,5 @@ export async function deleteInventory({
     const releasedCardIds = held.map(({ id }) => id);
     await releaseCardsInTx({ db: tx, cardIds: releasedCardIds });
     return { releasedCardIds };
-  });
+  })();
 }

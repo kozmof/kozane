@@ -158,15 +158,20 @@ export type TakeResult = BatchResult<"foreign-cards" | "unstored-cards">;
  * Reject cards already on the canvas because this path bypasses grid snapping and glue-group
  * movement.
  */
-export async function takeCards({
-  db,
+export async function takeCards(
+  args: NeedsNamespace & { db: DB; cards: TakenCard[] },
+): Promise<TakeResult> {
+  return withTx(args.db, (tx) => takeCardsInTx({ ...args, db: tx }));
+}
+export async function takeCardsInTx({
+  db: tx,
   namespaceId,
   cards,
-}: NeedsNamespace & { db: DB; cards: TakenCard[] }): Promise<TakeResult> {
+}: NeedsNamespace & { db: Tx; cards: TakenCard[] }): Promise<TakeResult> {
   if (cards.length === 0) return { ok: true };
   // Last entry wins for a repeated card, as position updates do.
   const unique = [...new Map(cards.map((card) => [card.cardId, card])).values()];
-  return withTx(db, async (tx) => {
+  return (async () => {
     const owned = await cardsBelongToNamespace({
       db: tx,
       namespaceId,
@@ -189,5 +194,5 @@ export async function takeCards({
       ),
     });
     return { ok: true };
-  });
+  })();
 }

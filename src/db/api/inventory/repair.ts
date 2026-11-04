@@ -10,7 +10,7 @@ import {
 } from "../../../lib/inventory.js";
 import { halfPlaced, inventoryColumns, isStored } from "../card.js";
 import { unglueCardsInTx } from "../glue.js";
-import { withTx, type DB } from "../../database.js";
+import { withTx, type DB, type Tx } from "../../database.js";
 import { SPAN_TEXT, settledFootprints, writePlacements } from "./slots.js";
 
 /** What {@link repairInventories} changed. */
@@ -29,8 +29,11 @@ export type InventoryRepair = {
  * board already draws them. Return what changed.
  * After repair, {@link findInventoryConflicts} should find no conflicts.
  */
-export async function repairInventories({ db }: { db: DB }): Promise<InventoryRepair> {
-  return withTx(db, async (tx) => {
+export async function repairInventories(args: { db: DB }): Promise<InventoryRepair> {
+  return withTx(args.db, (tx) => repairInventoriesInTx({ ...args, db: tx }));
+}
+export async function repairInventoriesInTx({ db: tx }: { db: Tx }): Promise<InventoryRepair> {
+  return (async () => {
     const cleared = (
       await tx
         .update(cardTable)
@@ -55,7 +58,7 @@ export async function repairInventories({ db }: { db: DB }): Promise<InventoryRe
     // stored cards are reported, since those are what was wrong.
     await unglueCardsInTx({ db: tx, cardIds: stored });
     return { moved, unglued: stored, cleared };
-  });
+  })();
 }
 
 /** Stored cards that break an inventory rule, for `kozane doctor`. */

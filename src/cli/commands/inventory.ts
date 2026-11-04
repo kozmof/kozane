@@ -1,19 +1,17 @@
+import * as service from "../../services/inventories.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { composeWrite, type AnyDB } from "../../db/database.js";
+import { BatchValidationError } from "../../services/rejection.js";
 import {
-  addInventory,
-  deleteInventory,
   getAllInventories,
   getInventoryCardCounts,
   getInventoryCards,
-  repairInventories,
-  stowCards,
-  takeCards,
-  updateInventory,
   type InventoryRepair,
   type StowResult,
   type TakeResult,
 } from "../../db/api/inventory.js";
 import type { Inventory } from "../../db/api/types.js";
-import type { DB } from "../../db/tx.js";
 import { INVENTORY_COLUMNS, NAME_MAX } from "../../lib/constants.js";
 import { cardSpan, slotCell } from "../../lib/inventory.js";
 import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
@@ -46,7 +44,7 @@ const TAKE_REFUSAL: Record<Extract<TakeResult, { ok: false }>["reason"], string>
 
 /** A namespace's inventories and the requested one among them, by full or short ID. */
 async function resolveInventory(
-  db: DB,
+  db: AnyDB,
   namespaceId: string,
   requestedId: string,
 ): Promise<{ inventory: Inventory; ids: string[] }> {
@@ -94,13 +92,15 @@ export async function inventoryList(options: InventoryOptions = {}): Promise<voi
 
 export async function inventoryAdd({ namespace, name, x, y }: InventoryAddOptions): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    const namespaceId = await resolveNamespaceId(db, namespace);
-    const position = clampToBounds(x, y, canvasBoundsForRoot(root));
-    const inventory = await addInventory({
-      db,
-      namespaceId,
-      name: name === undefined ? undefined : checkedName(name),
-      ...position,
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { namespaceId, inventory } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, namespace);
+      const inventory = await service.createInTx(tx, context, namespaceId, {
+        name: name === undefined ? undefined : checkedName(name),
+        posX: x,
+        posY: y,
+      });
+      return { namespaceId, inventory };
     });
     const ids = (await getAllInventories({ db, namespaceId })).map(({ id }) => id);
     console.log("Inventory added.");
@@ -115,14 +115,15 @@ export async function inventoryRename(
   name: string,
   options: InventoryOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const { inventory, ids } = await resolveInventory(db, namespaceId, requestedId);
-    const renamed = await updateInventory({
-      db,
-      namespaceId,
-      inventoryId: inventory.id,
-      name: checkedName(name),
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { renamed, ids } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const { inventory, ids } = await resolveInventory(tx, namespaceId, requestedId);
+      const renamed = await service.updateInTx(tx, context, namespaceId, inventory.id, {
+        name: checkedName(name),
+      });
+      return { renamed, ids };
     });
     console.log("Inventory renamed.");
     console.log(`  id  : ${shortId(renamed.id, ids)}`);
@@ -134,13 +135,13 @@ export async function inventoryDelete(
   requestedId: string,
   options: InventoryOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const { inventory, ids } = await resolveInventory(db, namespaceId, requestedId);
-    const { releasedCardIds } = await deleteInventory({
-      db,
-      namespaceId,
-      inventoryId: inventory.id,
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { inventory, ids, releasedCardIds } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const { inventory, ids } = await resolveInventory(tx, namespaceId, requestedId);
+      const { releasedCardIds } = await service.removeInTx(tx, context, namespaceId, inventory.id);
+      return { inventory, ids, releasedCardIds };
     });
     console.log("Inventory deleted.");
     console.log(`  id: ${shortId(inventory.id, ids)}`);
@@ -180,17 +181,23 @@ export async function inventoryPut(
   requestedCardIds: string[],
   { slot }: InventoryPutOptions = {},
 ): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, requestedCardIds);
-    const { inventory, ids } = await resolveInventory(db, namespaceId, requestedId);
-    const result = await stowCards({
-      db,
-      namespaceId,
-      inventoryId: inventory.id,
-      cardIds,
-      slot: slot ?? null,
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { allIds, cardIds, inventory, ids, result } = await composeWrite(db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedCardIds);
+      const { inventory, ids } = await resolveInventory(tx, namespaceId, requestedId);
+      try {
+        const result = await service.stowInTx(tx, context, namespaceId, inventory.id, {
+          cardIds,
+          slot,
+        });
+        return { allIds, cardIds, inventory, ids, result };
+      } catch (error) {
+        if (error instanceof BatchValidationError && error.reason in PUT_REFUSAL)
+          throw new Error(PUT_REFUSAL[error.reason as keyof typeof PUT_REFUSAL], { cause: error });
+        throw error;
+      }
     });
-    if (!result.ok) throw new Error(PUT_REFUSAL[result.reason]);
     console.log(`${plural(cardIds.length, "card")} stored.`);
     console.log(`  inventory: ${shortId(inventory.id, ids)}`);
     for (const { cardId, slot: at } of result.placements) {
@@ -223,7 +230,7 @@ export function printInventoryRepair(repair: InventoryRepair, allIds: string[]):
  */
 export async function inventoryRepair(): Promise<void> {
   await runWorkspaceCommand(async ({ db }) => {
-    const repair = await repairInventories({ db });
+    const repair = await service.repair(db, createServiceContext());
     if (!repairChanged(repair)) {
       console.log("Inventories already consistent.");
       return;
@@ -242,17 +249,26 @@ export async function inventoryTake(
       throw new Error("inventory take needs both --x and --y, or neither.");
     if (x !== undefined && requestedCardIds.length > 1)
       throw new Error("--x and --y place one card. Take several without them.");
-    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, requestedCardIds);
-    const position =
-      x === undefined || y === undefined
-        ? undefined
-        : clampToBounds(x, y, canvasBoundsForRoot(root));
-    const result = await takeCards({
-      db,
-      namespaceId,
-      cards: cardIds.map((cardId) => ({ cardId, position })),
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { allIds, cardIds, position } = await composeWrite(db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, requestedCardIds);
+      const position =
+        x === undefined || y === undefined
+          ? undefined
+          : clampToBounds(x, y, canvasBoundsForRoot(root));
+      try {
+        await service.takeInTx(tx, context, namespaceId, {
+          cards: cardIds.map((cardId) => ({ cardId, ...position })),
+        });
+      } catch (error) {
+        if (error instanceof BatchValidationError && error.reason in TAKE_REFUSAL)
+          throw new Error(TAKE_REFUSAL[error.reason as keyof typeof TAKE_REFUSAL], {
+            cause: error,
+          });
+        throw error;
+      }
+      return { allIds, cardIds, position };
     });
-    if (!result.ok) throw new Error(TAKE_REFUSAL[result.reason]);
     console.log(`${plural(cardIds.length, "card")} returned to the canvas.`);
     for (const cardId of cardIds) console.log(`  id: ${shortId(cardId, allIds)}`);
     if (position) console.log(`  position: (${position.posX}, ${position.posY})`);

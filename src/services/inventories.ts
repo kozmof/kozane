@@ -1,5 +1,6 @@
+import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
-import type { DB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
 import { clamp } from "../lib/constants.js";
@@ -12,9 +13,9 @@ function clampPosition(posX: number, posY: number, context: ServiceContext) {
 import {
   addInventory,
   updateInventory,
-  deleteInventory,
-  stowCards,
-  takeCards,
+  deleteInventoryInTx,
+  stowCardsInTx,
+  takeCardsInTx,
 } from "../db/api/inventory.js";
 import {
   optionalBoundedName,
@@ -28,8 +29,8 @@ import { INVENTORY_SLOT_MAX } from "../lib/constants.js";
 import type { TakenCard } from "../lib/inventory.js";
 import { rejectBatch } from "./rejection.js";
 
-export async function create(
-  db: DB,
+export async function createInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -44,8 +45,8 @@ export async function create(
   return await addInventory({ db, namespaceId, name, ...clampPosition(posX, posY, context) });
 }
 
-export async function update(
-  db: DB,
+export async function updateInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   inventoryId: string,
@@ -69,19 +70,19 @@ export async function update(
   });
 }
 
-export async function remove(
-  db: DB,
+export async function removeInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   inventoryId: string,
 ) {
   // Its cards go back where they were on the canvas. Their IDs let the board draw them
   // there without waiting for the next poll.
-  return await deleteInventory({ db, namespaceId, inventoryId });
+  return await deleteInventoryInTx({ db, namespaceId, inventoryId });
 }
 
-export async function stow(
-  db: DB,
+export async function stowInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   inventoryId: string,
@@ -92,13 +93,13 @@ export async function stow(
   const slot = optionalNumber(body, "slot");
   if (slot !== undefined && (!Number.isInteger(slot) || slot < 0 || slot > INVENTORY_SLOT_MAX))
     throw new ValidationError(`slot must be an integer from 0 to ${INVENTORY_SLOT_MAX}`);
-  const result = await stowCards({ db, namespaceId, inventoryId, cardIds, slot: slot ?? null });
+  const result = await stowCardsInTx({ db, namespaceId, inventoryId, cardIds, slot: slot ?? null });
   if (!result.ok) rejectBatch(result.reason);
   return { placements: result.placements, clearedCardIds: result.clearedCardIds };
 }
 
-export async function take(
-  db: DB,
+export async function takeInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -118,8 +119,67 @@ export async function take(
     cards.map(({ cardId }) => cardId),
     "cards",
   );
-  const result = await takeCards({ db, namespaceId, cards });
+  const result = await takeCardsInTx({ db, namespaceId, cards });
   if (!result.ok) rejectBatch(result.reason);
   // The stored positions, so a board that sent a fractional drop point can draw what was kept.
   return { cards: cards.map(({ cardId, position }) => ({ cardId, ...position })) };
+}
+
+export async function create(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+
+export async function update(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  inventoryId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => updateInTx(tx, context, namespaceId, inventoryId, prepared));
+}
+
+export async function remove(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  inventoryId: string,
+) {
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, inventoryId));
+}
+
+export async function stow(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  inventoryId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => stowInTx(tx, context, namespaceId, inventoryId, prepared));
+}
+
+export async function take(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => takeInTx(tx, context, namespaceId, prepared));
+}
+
+import { repairInventoriesInTx } from "../db/api/inventory.js";
+export function repairInTx(tx: Tx, _context: ServiceContext) {
+  return repairInventoriesInTx({ db: tx });
+}
+export function repair(db: DB, context: ServiceContext) {
+  return withTx(db, (tx) => repairInTx(tx, context));
 }
