@@ -1,3 +1,4 @@
+import { deleteScope } from "../db/api/scope.js";
 import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../db/database.js";
@@ -173,4 +174,13 @@ export async function removeMembers(
 ) {
   const prepared = prepareInput(body);
   return withTx(db, (tx) => removeMembersInTx(tx, context, namespaceId, scopeId, prepared));
+}
+
+/** Workspace deletion differs from removing one board's scope placement. */
+export async function removeWorkspaceInTx(tx: Tx, _context: ServiceContext, scopeId: string) {
+  await deleteScope({ db: tx, scopeId });
+  return { ok: true as const };
+}
+export async function removeWorkspace(db: DB, context: ServiceContext, scopeId: string) {
+  return withTx(db, (tx) => removeWorkspaceInTx(tx, context, scopeId));
 }

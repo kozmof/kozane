@@ -1,5 +1,6 @@
+import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
-import type { DB } from "../db/database.js";
+import type { DB, Tx } from "../db/database.js";
 import type { ServiceContext } from "./context.js";
 import { ValidationError } from "./errors.js";
 import { clamp } from "../lib/constants.js";
@@ -12,8 +13,8 @@ function clampPosition(posX: number, posY: number, context: ServiceContext) {
 import { addWarp, moveWarp, deleteWarp } from "../db/api/warp.js";
 import { optionalNumber } from "./validation.js";
 
-export async function create(
-  db: DB,
+export async function createInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -32,8 +33,8 @@ export async function create(
   return await addWarp({ db, namespaceId, ...stored });
 }
 
-export async function update(
-  db: DB,
+export async function updateInTx(
+  db: Tx,
   context: ServiceContext,
   namespaceId: string,
   warpId: string,
@@ -50,7 +51,35 @@ export async function update(
   return await moveWarp({ db, namespaceId, warpId, ...stored });
 }
 
-export async function remove(db: DB, context: ServiceContext, namespaceId: string, warpId: string) {
+export async function removeInTx(
+  db: Tx,
+  context: ServiceContext,
+  namespaceId: string,
+  warpId: string,
+) {
   await deleteWarp({ db, namespaceId, warpId });
   return { ok: true };
+}
+
+export async function create(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => createInTx(tx, context, namespaceId, prepared));
+}
+export async function update(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  warpId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => updateInTx(tx, context, namespaceId, warpId, prepared));
+}
+export async function remove(db: DB, context: ServiceContext, namespaceId: string, warpId: string) {
+  return withTx(db, (tx) => removeInTx(tx, context, namespaceId, warpId));
 }

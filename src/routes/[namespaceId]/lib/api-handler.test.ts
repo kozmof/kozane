@@ -156,3 +156,18 @@ it("leaves authentication and throttling errors authoritative", async () => {
     expect(setHeaders).not.toHaveBeenCalled();
   }
 });
+
+import { normalizeDatabaseFailure } from "../../../db/failures.js";
+it("preserves foreign-key compatibility wording after domain normalization", () => {
+  const cause = sqliteError("FOREIGN KEY constraint failed");
+  const normalized = normalizeDatabaseFailure(cause, {
+    kind: "unknown",
+    constraint: "foreign_key",
+  });
+  expectHttp(
+    httpErrorFromDb(normalized, { foreignKey: "Namespace not found" }),
+    404,
+    "Namespace not found",
+  );
+  expectHttp(httpErrorFromDb(normalized), 404, "A referenced record was not found");
+});

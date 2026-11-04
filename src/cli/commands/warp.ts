@@ -1,5 +1,8 @@
-import { addWarp, deleteWarp, getAllWarps } from "../../db/api/warp.js";
-import { canvasBoundsForRoot, clampToBounds } from "../../lib/server/canvas.js";
+import * as service from "../../services/warps.js";
+import { createServiceContext } from "../../services/context.js";
+import { getUiConfigForRoot } from "../../db/internal/config.js";
+import { composeWrite } from "../../db/database.js";
+import { getAllWarps } from "../../db/api/warp.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
 import { runWorkspaceCommand } from "../lib/workspace-command.js";
@@ -23,9 +26,12 @@ export async function warpList(options: WarpOptions = {}): Promise<void> {
 
 export async function warpAdd({ namespace, x, y }: WarpAddOptions): Promise<void> {
   await runWorkspaceCommand(async ({ db, root }) => {
-    const namespaceId = await resolveNamespaceId(db, namespace);
-    const position = clampToBounds(x, y, canvasBoundsForRoot(root));
-    const warp = await addWarp({ db, namespaceId, ...position });
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { namespaceId, warp } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, namespace);
+      const warp = await service.createInTx(tx, context, namespaceId, { posX: x, posY: y });
+      return { namespaceId, warp };
+    });
     const ids = (await getAllWarps({ db, namespaceId })).map(({ id }) => id);
     console.log("Warp added.");
     console.log(`  id      : ${shortId(warp.id, ids)}`);
@@ -34,12 +40,16 @@ export async function warpAdd({ namespace, x, y }: WarpAddOptions): Promise<void
 }
 
 export async function warpDelete(requestedId: string, options: WarpOptions = {}): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const namespaceId = await resolveNamespaceId(db, options.namespace);
-    const warps = await getAllWarps({ db, namespaceId });
-    const ids = warps.map(({ id }) => id);
-    const warpId = resolveShortId(requestedId, ids, "Warp");
-    await deleteWarp({ db, namespaceId, warpId });
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { warpId, ids } = await composeWrite(db, async (tx) => {
+      const namespaceId = await resolveNamespaceId(tx, options.namespace);
+      const warps = await getAllWarps({ db: tx, namespaceId });
+      const ids = warps.map((warp) => warp.id);
+      const warpId = resolveShortId(requestedId, ids, "Warp");
+      await service.removeInTx(tx, context, namespaceId, warpId);
+      return { warpId, ids };
+    });
     console.log("Warp deleted.");
     console.log(`  id: ${shortId(warpId, ids)}`);
   });

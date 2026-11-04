@@ -3,12 +3,7 @@ import { composeWrite } from "../../db/database.js";
 import { createServiceContext } from "../../services/context.js";
 import { getUiConfigForRoot } from "../../db/internal/config.js";
 import { ValidationError } from "../../services/errors.js";
-import {
-  deleteScope,
-  getAllScopes,
-  getScopeNamespaceUsage,
-  getScopesInNamespace,
-} from "../../db/api/scope.js";
+import { getAllScopes, getScopeNamespaceUsage, getScopesInNamespace } from "../../db/api/scope.js";
 import { getAllNamespaces } from "../../db/api/namespace.js";
 import { resolveNamespaceId } from "../lib/namespace-selection.js";
 import { resolveShortId, shortId } from "../lib/short-id.js";
@@ -72,11 +67,15 @@ export async function scopeList(options: ScopeListOptions = {}): Promise<void> {
 }
 
 export async function scopeDelete(scopeId: string): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const scopes = await getAllScopes({ db });
-    const scopeIds = scopes.map((scope) => scope.id);
-    const resolvedId = resolveShortId(scopeId, scopeIds, "Scope");
-    await deleteScope({ db, scopeId: resolvedId });
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext(getUiConfigForRoot(root));
+    const { resolvedId, scopeIds } = await composeWrite(db, async (tx) => {
+      const scopes = await getAllScopes({ db: tx });
+      const scopeIds = scopes.map((scope) => scope.id);
+      const resolvedId = resolveShortId(scopeId, scopeIds, "Scope");
+      await service.removeWorkspaceInTx(tx, context, resolvedId);
+      return { resolvedId, scopeIds };
+    });
     console.log("Scope deleted.");
     console.log(`  id: ${shortId(resolvedId, scopeIds)}`);
     console.log("Taskspaces attached to this scope are now unscoped.");

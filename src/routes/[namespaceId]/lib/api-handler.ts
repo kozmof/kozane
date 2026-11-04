@@ -45,7 +45,13 @@ export function httpErrorFromDb(e: unknown, messages: DbErrorMessages = {}): unk
     if (e instanceof LimitError) error(413, e.message);
     if (e instanceof UnavailableError) error(500, e.message);
     if (e instanceof ValidationError) error(400, e.message);
-    if (e instanceof NotFoundError) error(404, messages.notFound ?? e.message);
+    if (e instanceof NotFoundError)
+      error(
+        404,
+        isForeignKeyError(e)
+          ? (messages.foreignKey ?? "A referenced record was not found")
+          : (messages.notFound ?? e.message),
+      );
     if (e instanceof DefaultPartitionError || e instanceof DefaultLayerError) error(400, e.message);
     if (isForeignKeyError(e))
       error(404, messages.foreignKey ?? "A referenced record was not found");
