@@ -15,6 +15,8 @@ Browser end-to-end (E2E) tests are not available in this environment. Run them i
 - [ ] PRE-05 Estimate the verified loader and schema comparison work separately. Record Phase 0 blockers and the decision to proceed or postpone the demo.
 - [ ] PRE-06 Mark JSON export, hosted taskspace sessions and changes to `kozane open --memory` as future decisions outside launch scope. Choose the release sample authoring approach before Phase 4 sample generation.
 
+Preparation progress: `source-inventory.md` records route/loader, CLI and client dependency matches. Regenerate with `node scripts/browser-spike/inventory.mjs`. PRE-01 and PRE-02 remain unchecked until each candidate is classified and reviewed.
+
 ## Phase 0 — Browser database and loader spike
 
 ### Database feasibility
