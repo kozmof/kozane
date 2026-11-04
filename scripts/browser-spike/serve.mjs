@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 const allowed = new Map([
+  ["/manifest.json", ["manifest.json", "application/json"]],
   ["/", ["index.html", "text/html"]],
   ["/main.js", ["main.js", "text/javascript"]],
   ["/worker.js", ["worker.js", "text/javascript"]],

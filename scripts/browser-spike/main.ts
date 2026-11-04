@@ -3,19 +3,22 @@ import { sql } from "drizzle-orm";
 import * as schema from "../../src/db/schema";
 import { OperationQueue } from "../../src/lib/backend/operation-queue";
 
-const worker = new Worker(new URL("./worker.js", location.href), { type: "module" });
+import { verifiedWorker, verifiedModule, type AssetManifest } from "./verified-loader";
+let worker: Worker;
 let sequence = 0;
 const pending = new Map<
   number,
   { resolve: (value: any) => void; reject: (error: Error) => void }
 >();
-worker.onmessage = ({ data }) => {
-  const request = pending.get(data.id);
-  if (!request) return;
-  pending.delete(data.id);
-  if (data.error) request.reject(new Error(data.error));
-  else request.resolve(data.result);
-};
+function attachWorker() {
+  worker.onmessage = ({ data }) => {
+    const request = pending.get(data.id);
+    if (!request) return;
+    pending.delete(data.id);
+    if (data.error) request.reject(new Error(data.error));
+    else request.resolve(data.result);
+  };
+}
 function rpc(method: string, extra = {}): Promise<any> {
   return new Promise((resolve, reject) => {
     const id = ++sequence;
@@ -26,8 +29,14 @@ function rpc(method: string, extra = {}): Promise<any> {
 const queue = new OperationQueue();
 const db = drizzle((query, params, method) => rpc(method, { sql: query, params }), { schema });
 async function run() {
-  await rpc("probe");
-  await rpc("initialize", { wasmUrl: new URL("./sqlite3.wasm", location.href).href });
+  const response = await fetch("./manifest.json");
+  if (!response.ok) throw new Error("Manifest fetch failed");
+  const manifest: AssetManifest = await response.json();
+  worker = await verifiedWorker(manifest);
+  attachWorker();
+  if ((await rpc("probe")) !== manifest.buildId) throw new Error("Worker build mismatch");
+  const module = await verifiedModule(manifest);
+  await rpc("initialize", { module });
   await db.run(sql`create table spike_parent (id integer primary key)`);
   await db.run(sql`create table spike_child (parent integer references spike_parent(id))`);
   await queue.run(() =>
@@ -69,4 +78,4 @@ run()
   .catch((error) => {
     document.body.textContent = `FAIL: ${error.message}`;
   })
-  .finally(() => worker.terminate());
+  .finally(() => worker?.terminate());

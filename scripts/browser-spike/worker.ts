@@ -1,16 +1,26 @@
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm";
 
+declare const __SPIKE_BUILD_ID__: string;
 let database: any;
 let sqlite: any;
 self.onmessage = async ({ data }) => {
   const { id, method, sql, params } = data;
   try {
     if (method === "probe") {
-      self.postMessage({ id, result: "responsive" });
+      self.postMessage({ id, result: __SPIKE_BUILD_ID__ });
       return;
     }
     if (method === "initialize") {
-      sqlite = await sqlite3InitModule({ locateFile: () => data.wasmUrl });
+      sqlite = await sqlite3InitModule({
+        instantiateWasm(
+          imports: WebAssembly.Imports,
+          receive: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void,
+        ) {
+          const instance = new WebAssembly.Instance(data.module, imports);
+          receive(instance, data.module);
+          return instance.exports;
+        },
+      });
       database = new sqlite.oo1.DB(":memory:", "c");
       database.exec("PRAGMA foreign_keys = ON");
       self.postMessage({ id, result: true });
