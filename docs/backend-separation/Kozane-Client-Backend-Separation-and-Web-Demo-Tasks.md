@@ -80,6 +80,7 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 - [ ] P1-10 Extract glue, layer and partition services.
   - HTTP handlers now delegate to `src/services/glues.ts`, `layers.ts` and `partitions.ts`. Services own input validation and layer reorder refusal messages. Duplicate layer/partition names throw `ConflictError`; explicit HTTP compatibility mapping retains status 400 and existing wording. All 31 existing resource route tests pass, lint passes and application type/Svelte checks report zero errors or warnings. Driver normalization, public contract and CLI integration remain pending.
 - [ ] P1-11 Extract scope services, including membership and areas.
+  - Scope create/rename/removal, membership changes and area create/update/removal now delegate to `src/services/scopes.ts`. Services own input validation and configured rectangle clamping. Existing scope conflict, missing-resource and area error mappings are retained. All 27 existing route tests pass; application type/Svelte checks report zero errors or warnings. Driver normalization, CLI integration and public contracts remain pending.
 - [ ] P1-12 Extract warp and inventory services, including inventory take.
 - [ ] P1-13 Extract snapshot and namespace services. Make namespace creation and default partition/layer initialization atomic without changing the default namespace.
 - [ ] P1-14 Extract database-backed tags, map and warp-directory services. Keep filesystem enrichment and caches in Node services.

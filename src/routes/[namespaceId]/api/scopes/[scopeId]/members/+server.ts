@@ -1,30 +1,28 @@
 import type { RequestHandler } from "./$types";
 import { json } from "@sveltejs/kit";
-import { addScopeMembers, removeScopeMembersFromNamespace } from "$db/api/scope-rel";
-import { readJsonObject, requireStringArray } from "../../../../lib/request.js";
-import { rejectBatch } from "../../../../lib/rejection.js";
+import * as service from "../../../../../../services/scopes.js";
+import { workspaceServiceContext } from "$lib/server/service-context";
+import { readJsonObject } from "../../../../lib/request.js";
 import { apiHandler } from "../../../../lib/api-handler.js";
-
-export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) => {
-  const { db } = locals;
-  const { namespaceId, scopeId } = params;
-  const body = await readJsonObject(request);
-  const cardIds = requireStringArray(body, "cardIds");
-
-  const result = await addScopeMembers({ db, scopeId, namespaceId, cardIds });
-  if (!result.ok) rejectBatch(result.reason);
-
-  return json({ ok: true });
-});
-
-export const DELETE: RequestHandler = apiHandler(async ({ locals, params, request }) => {
-  const { db } = locals;
-  const { namespaceId, scopeId } = params;
-  const body = await readJsonObject(request);
-  const cardIds = requireStringArray(body, "cardIds");
-
-  const result = await removeScopeMembersFromNamespace({ db, scopeId, namespaceId, cardIds });
-  if (!result.ok) rejectBatch(result.reason);
-
-  return json({ ok: true });
-});
+export const POST: RequestHandler = apiHandler(async ({ locals, params, request }) =>
+  json(
+    await service.addMembers(
+      locals.db,
+      workspaceServiceContext(),
+      params.namespaceId,
+      params.scopeId,
+      await readJsonObject(request),
+    ),
+  ),
+);
+export const DELETE: RequestHandler = apiHandler(async ({ locals, params, request }) =>
+  json(
+    await service.removeMembers(
+      locals.db,
+      workspaceServiceContext(),
+      params.namespaceId,
+      params.scopeId,
+      await readJsonObject(request),
+    ),
+  ),
+);
