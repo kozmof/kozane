@@ -66,6 +66,8 @@ Schema comparison progress: `schema-manifest.ts` provides read-only schema SQL, 
 - [ ] P1-07 Add typed `database_content`, `transient` and `unknown` classifications. Keep ordinary mutation constraint failures distinct from confirmed stored-data defects.
 - [ ] P1-08 Add a public transaction composition helper and transaction-bound service variants so CLI reference resolution and mutation use the same transaction without nesting.
 
+P1-02/P1-03 progress: `src/db/database.ts` now owns generic async SQLite database/transaction brands and the public adapter factory with read/write hooks. `src/db/tx.ts` retains libsql immediate-write/deferred-read hooks and Node-only migration access. Existing database API and transaction tests pass unchanged (386 tests across 16 files), CLI compilation passes, and Svelte/type checks report zero errors or warnings. Driver failure normalization and browser adapter verification remain pending.
+
 ### Resource extraction
 
 - [ ] P1-09 Extract card services first, including creation, updates, removal, movement, squash, partition/layer changes and stacking.

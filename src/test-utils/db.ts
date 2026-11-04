@@ -1,6 +1,6 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrateNodeDatabase as migrate } from "../db/tx.js";
 import { sql } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import { brandDb, type AnyDB, type DB } from "../db/tx.js";

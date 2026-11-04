@@ -1,6 +1,6 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { migrateNodeDatabase as migrate } from "./tx.js";
 import { getDBURL } from "./internal/config.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
