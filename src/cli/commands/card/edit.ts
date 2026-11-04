@@ -1,4 +1,4 @@
-import { updateInTx } from "../../../services/cards.js";
+import { updateInTx, updatePositionsInTx, setLayerInTx } from "../../../services/cards.js";
 import { createServiceContext } from "../../../services/context.js";
 import { composeWrite } from "../../../db/database.js";
 import { ValidationError } from "../../../services/errors.js";
@@ -6,11 +6,7 @@ import { ValidationError } from "../../../services/errors.js";
 import { eq } from "drizzle-orm";
 import { runWorkspaceCommand } from "../../lib/workspace-command.js";
 import { partitionTable, cardTable } from "../../../db/schema.js";
-import {
-  reassignCardsToPartition,
-  reassignCardsToLayer,
-  updateNamespaceCardPositions,
-} from "../../../db/api/card.js";
+import { reassignCardsToPartition } from "../../../db/api/card.js";
 import { getAllLayers } from "../../../db/api/layer.js";
 import { findById, resolveShortId, shortId } from "../../lib/short-id.js";
 import { loadCards, movedCoordinate, resolveCardGroup } from "../../lib/card-refs.js";
@@ -27,24 +23,35 @@ import { type CardMoveOptions } from "./options.js";
  * namespace, regardless of `--namespace`.
  */
 export async function cardSetLayer(requestedCardId: string, requestedLayer: string): Promise<void> {
-  await runWorkspaceCommand(async ({ db }) => {
-    const cards = await db
-      .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
-      .from(cardTable)
-      .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
-    const cardId = resolveShortId(
-      requestedCardId,
-      cards.map(({ id }) => id),
-      "Card",
-    );
-    const { namespaceId } = findById(cards, cardId, "Card");
-    const layers = await getAllLayers({ db, namespaceId });
-    const layerId = resolveLayerRef(layers, requestedLayer);
+  await runWorkspaceCommand(async ({ db, root }) => {
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
+    });
+    const { cards, cardId, layer } = await composeWrite(db, async (tx) => {
+      const cards = await tx
+        .select({ id: cardTable.id, namespaceId: partitionTable.namespaceId })
+        .from(cardTable)
+        .innerJoin(partitionTable, eq(cardTable.partitionId, partitionTable.id));
+      const cardId = resolveShortId(
+        requestedCardId,
+        cards.map(({ id }) => id),
+        "Card",
+      );
+      const { namespaceId } = findById(cards, cardId, "Card");
+      const layers = await getAllLayers({ db: tx, namespaceId });
+      const layerId = resolveLayerRef(layers, requestedLayer);
 
-    if (!(await reassignCardsToLayer({ db, namespaceId, cardIds: [cardId], layerId })).ok)
-      throw new Error("Card and layer do not belong to the same namespace.");
-
-    const layer = findById(layers, layerId, "Layer");
+      try {
+        await setLayerInTx(tx, context, namespaceId, { cardIds: [cardId], layerId });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error("Card and layer do not belong to the same namespace.", { cause: error });
+        throw error;
+      }
+      const layer = findById(layers, layerId, "Layer");
+      return { cards, cardId, layer };
+    });
     console.log("Card moved to another layer.");
     console.log(
       `  id   : ${shortId(
@@ -59,21 +66,30 @@ export async function cardSetLayer(requestedCardId: string, requestedLayer: stri
 export async function cardMove(requestedCardId: string, { x, y }: CardMoveOptions): Promise<void> {
   if (x === undefined && y === undefined) throw new Error("card move requires --x or --y.");
   await runWorkspaceCommand(async ({ db, root }) => {
-    const { allIds, cardIds, namespaceId } = await resolveCardGroup(db, [requestedCardId]);
-    const cardId = cardIds[0];
-    const card = findById(await loadCards(db, cardIds), cardId, "Card");
-    const position = clampToBounds(
-      x === undefined ? card.posX : movedCoordinate(x, card.posX),
-      y === undefined ? card.posY : movedCoordinate(y, card.posY),
-      canvasBoundsForRoot(root),
-    );
-    const result = await updateNamespaceCardPositions({
-      db,
-      namespaceId,
-      positions: [{ cardId, ...position }],
+    const context = createServiceContext({
+      contentMax: contentMaxForRoot(root),
+      ...canvasBoundsForRoot(root),
     });
-    if (!result.ok) throw new Error("Card does not belong to the namespace.");
-
+    const { allIds, cardId, position } = await composeWrite(db, async (tx) => {
+      const { allIds, cardIds, namespaceId } = await resolveCardGroup(tx, [requestedCardId]);
+      const cardId = cardIds[0];
+      const card = findById(await loadCards(tx, cardIds), cardId, "Card");
+      const position = clampToBounds(
+        x === undefined ? card.posX : movedCoordinate(x, card.posX),
+        y === undefined ? card.posY : movedCoordinate(y, card.posY),
+        canvasBoundsForRoot(root),
+      );
+      try {
+        await updatePositionsInTx(tx, context, namespaceId, {
+          positions: [{ cardId, ...position }],
+        });
+      } catch (error) {
+        if (error instanceof ValidationError)
+          throw new Error("Card does not belong to the namespace.", { cause: error });
+        throw error;
+      }
+      return { allIds, cardId, position };
+    });
     console.log("Card moved.");
     console.log(`  id: ${shortId(cardId, allIds)}`);
     console.log(`  position: (${position.posX}, ${position.posY})`);

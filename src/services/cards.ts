@@ -14,7 +14,6 @@ import { requireCardInNamespace } from "./guards.js";
 import { NotFoundError } from "./errors.js";
 import { reassignCardsStackOrder } from "../db/api/card.js";
 import { reassignCardsToPartition } from "../db/api/card.js";
-import { reassignCardsToLayer } from "../db/api/card.js";
 import { moveCardsToNamespace } from "../db/api/composite.js";
 import {
   requireObjectArray,
@@ -205,8 +204,8 @@ export async function move(
   return { ok: true as const };
 }
 
-export async function setLayer(
-  db: DB,
+export async function setLayerInTx(
+  db: Tx,
   _context: ServiceContext,
   namespaceId: string,
   body: Record<string, unknown>,
@@ -215,7 +214,7 @@ export async function setLayer(
   const layerId = requireString(body, "layerId");
   const cardIds = requireStringArray(body, "cardIds");
   // Let the transaction validate the destination layer, as in the partition handler.
-  const result = await reassignCardsToLayer({ db, namespaceId, cardIds, layerId });
+  const result = await reassignCardsToLayerInTx({ db, namespaceId, cardIds, layerId });
   if (!result.ok) rejectBatch(result.reason);
   // Return the new stacking values assigned above the destination layer's existing cards.
   return { ok: true as const, stacking: result.stacking };
@@ -437,4 +436,14 @@ export async function updatePositions(
 ) {
   const prepared = prepareInput(body);
   return withTx(db, (tx) => updatePositionsInTx(tx, context, namespaceId, prepared));
+}
+
+export async function setLayer(
+  db: DB,
+  context: ServiceContext,
+  namespaceId: string,
+  body: Record<string, unknown>,
+) {
+  const prepared = prepareInput(body);
+  return withTx(db, (tx) => setLayerInTx(tx, context, namespaceId, prepared));
 }
