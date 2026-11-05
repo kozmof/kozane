@@ -177,6 +177,23 @@
       }
     },
     {
+      // Board action composition and mutations depend on injected backend resources.
+      "files": ["src/routes/*/namespace-actions.svelte.ts", "src/routes/*/lib/actions/*.ts"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/cli/**"], "message": "routes and cli are siblings; share through db/api or lib/server." },
+          { "group": ["**/namespace-api", "**/namespace-api.*", "**/lib/api/**", "../api/**"], "message": "Board actions use injected KozaneBackend resources instead of HTTP helpers." }
+        ] }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Board actions use the injected backend." }],
+        "eslint/no-restricted-properties": ["error",
+          { "property": "fetch", "message": "Board actions use the injected backend." },
+          { "property": "mutationFetcher", "message": "Board actions use the injected backend." },
+          { "property": "fetcher", "message": "Board actions use the injected backend." }
+        ]
+      }
+    },
+    {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
       // exactly what the route guards in `lib/request.ts` exist to reject.
       "files": ["**/*.test.ts", "**/*.spec.ts", "src/test-utils/**"],

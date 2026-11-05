@@ -1,63 +1,49 @@
 import { describe, expect, it } from "vitest";
-import { createScopeActions } from "./scope-actions.js";
-
-/** Just enough board state for requests that never get an answer. */
-function offlineState() {
-  return {
-    namespaceId: "namespace-1",
-    mutationFetcher: async () => {
-      throw new TypeError("Failed to fetch");
-    },
-  } as never;
+import { HttpBackend } from "$lib/backend/http-backend.js";
+import { NamespaceState } from "../../namespace-state.svelte.js";
+import { createBackendScopeActions } from "./backend-scope-actions.js";
+const capabilities = {
+  writable: true,
+  persistent: true,
+  taskspaces: true,
+  externalWrites: false,
+  auth: false,
+};
+function setup(fetcher: typeof fetch) {
+  const state = new NamespaceState();
+  state.namespaceId = "namespace-1";
+  state.taskspaces = [
+    { id: "t1", name: "draft", scopeId: "s1", path: "tasks/draft", pathKind: "workspace_relative" },
+  ];
+  const backend = new HttpBackend({ capabilities, fetcher });
+  return { state, actions: createBackendScopeActions(state, backend) };
 }
-
 describe("scope actions used by the file browser", () => {
-  it("answer a reason instead of throwing when the network is down", async () => {
-    const actions = createScopeActions(offlineState());
-
-    expect(await actions.createScope("Notes")).toEqual({ error: "Failed to create scope" });
-    expect(await actions.renameScope("s1", "Notes")).toEqual({ error: "Failed to rename scope" });
-    expect(await actions.removeScope("s1")).toEqual({ error: "Failed to delete scope" });
-    expect(await actions.createTaskspace("s1", "draft")).toEqual({
-      error: "Failed to create taskspace",
+  it("answers a backend network reason instead of throwing", async () => {
+    const { state, actions } = setup(async () => {
+      throw new TypeError("Failed to fetch");
     });
-    expect(await actions.renameTaskspace("t1", "final")).toEqual({
-      error: "Failed to rename taskspace",
-    });
-    expect(await actions.deleteTaskspace("t1")).toEqual({ error: "Failed to delete taskspace" });
+    const failure = { error: "Unable to reach the backend" };
+    expect(await actions.createScope("Notes")).toEqual(failure);
+    expect(await actions.renameScope("s1", "Notes")).toEqual(failure);
+    expect(await actions.removeScope("s1")).toEqual(failure);
+    expect(await actions.createTaskspace("s1", "draft")).toEqual(failure);
+    expect(await actions.renameTaskspace("t1", "final")).toEqual(failure);
+    expect(await actions.deleteTaskspace("t1")).toEqual(failure);
+    expect(state.taskspaces).toHaveLength(1);
+    expect(state.mutations.idle).toBe(true);
   });
 });
-
 describe("deleteTaskspace", () => {
-  /** Board state holding one taskspace, answered by `body`. */
-  function stateAnswering(body: unknown) {
-    return {
-      namespaceId: "namespace-1",
-      mutationFetcher: async () => Response.json(body),
-      taskspaces: [
-        {
-          id: "t1",
-          name: "draft",
-          scopeId: "s1",
-          path: "tasks/draft",
-          pathKind: "workspace_relative",
-        },
-      ],
-      taskspaceTree: { prune: () => {} },
-    };
-  }
-
-  it("passes on what the server did to the directory", async () => {
-    const state = stateAnswering({ ok: true, directory: "kept" });
-    const actions = createScopeActions(state as never);
-
+  it("passes on the validated directory outcome", async () => {
+    const { state, actions } = setup(async () => Response.json({ ok: true, directory: "kept" }));
     expect(await actions.deleteTaskspace("t1")).toEqual({ directory: "kept" });
     expect(state.taskspaces).toEqual([]);
   });
-
-  it("claims no outcome when the answer names none", async () => {
-    const actions = createScopeActions(stateAnswering({ ok: true }) as never);
-
-    expect(await actions.deleteTaskspace("t1")).toEqual({ directory: null });
+  it("keeps the taskspace when the backend cannot validate its directory outcome", async () => {
+    const { state, actions } = setup(async () => Response.json({ ok: true }));
+    expect(await actions.deleteTaskspace("t1")).toEqual({ error: "Invalid taskspace response" });
+    expect(state.taskspaces).toHaveLength(1);
+    expect(state.mutations.idle).toBe(true);
   });
 });

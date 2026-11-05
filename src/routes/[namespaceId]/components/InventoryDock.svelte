@@ -4,7 +4,7 @@
   import { INVENTORY_CELL } from "$lib/constants";
   import type { Inventory } from "$lib/types";
   import type { NamespaceState } from "../namespace-state.svelte.js";
-  import type { createInventoryActions } from "../lib/inventory-actions.js";
+  import type { createBackendInventoryActions } from "../lib/backend-inventory-actions.js";
   import type { InventoryDrag } from "../lib/inventory-drop.js";
   import { STOWED_GRAB_INSET } from "../lib/board-gestures.svelte.js";
   import { selectStoredCard } from "../lib/stored-card-selection.js";
@@ -17,7 +17,7 @@
    */
   type Props = {
     s: NamespaceState;
-    inventoryActions: ReturnType<typeof createInventoryActions>;
+    inventoryActions: ReturnType<typeof createBackendInventoryActions>;
     inventoryLabel: (inventory: Inventory) => string;
     /** The drag the canvas reports, for slot highlighting and the carried card's preview. */
     inventoryDrag: InventoryDrag;

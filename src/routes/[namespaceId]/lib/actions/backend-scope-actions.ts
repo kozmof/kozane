@@ -159,8 +159,8 @@ export function createBackendScopeActions(
       );
       // Remove the scope created for this failed taskspace. If cleanup also fails, leave it
       // available for deletion in the sidebar.
-      await attempt(() => backend.scopes.remove(state.namespaceId, scopeId));
-      state.scopes = state.scopes.filter((existing) => existing.id !== scopeId);
+      const cleanup = await attempt(() => backend.scopes.remove(state.namespaceId, scopeId));
+      if (cleanup.ok) state.scopes = state.scopes.filter((existing) => existing.id !== scopeId);
       state.setError(message);
       return null;
     }
