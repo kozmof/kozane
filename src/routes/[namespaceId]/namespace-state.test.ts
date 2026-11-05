@@ -1,3 +1,5 @@
+import { HttpBackend } from "$lib/backend/http-backend.js";
+import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";
 import { createMemoryPreferences } from "$lib/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
@@ -360,7 +362,20 @@ describe("the snapshot prune helpers", () => {
   });
 });
 
-describe("NamespaceState.mutationFetcher", () => {
+describe("backend mutation activity", () => {
+  function persistence(s: NamespaceState, fetcher: typeof fetch) {
+    const backend = new HttpBackend({
+      fetcher,
+      capabilities: {
+        writable: true,
+        persistent: true,
+        taskspaces: false,
+        externalWrites: false,
+        auth: false,
+      },
+    });
+    return { backend, persist: createBackendBoardPersistence(s, backend) };
+  }
   /** A response whose body arrives only when `finish` is called. */
   function slowResponse(text: string) {
     let finish!: () => void;
@@ -375,42 +390,40 @@ describe("NamespaceState.mutationFetcher", () => {
     return { response: new Response(body, { status: 200 }), finish: () => finish() };
   }
 
-  it("stays in flight until the response body has arrived", async () => {
+  it("stays in flight until the backend response body has been decoded", async () => {
     const s = new NamespaceState();
-    const { response, finish } = slowResponse('{"id":"c1"}');
-    s.fetcher = async () => response;
-
-    const pending = s.mutationFetcher("/x", { method: "POST" });
-    // Headers are in, but the body is not, so a poll must still wait.
+    s.namespaceId = "ns";
+    const { response, finish } = slowResponse('{"ok":true,"stacking":[]}');
+    const { backend, persist } = persistence(s, async () => response);
+    const pending = persist.persistWidth("c1", 300);
+    // The committed response headers do not end the view's mutation activity.
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(backend.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(false);
-
     finish();
-    const res = await pending;
+    expect(await pending).toBe(true);
     expect(s.mutations.idle).toBe(true);
-    // The caller can still read the body it was handed.
-    expect(await res.json()).toEqual({ id: "c1" });
   });
 
-  it("passes through a response without a body", async () => {
+  it("ends tracking when a successful response has no required result body", async () => {
     const s = new NamespaceState();
-    s.fetcher = async () => new Response(null, { status: 204 });
-    const res = await s.mutationFetcher("/x");
-    expect(res.status).toBe(204);
+    const { backend, persist } = persistence(s, async () => new Response(null, { status: 204 }));
+    expect(await persist.persistWidth("c1", 300)).toBe(false);
+    expect(backend.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(true);
   });
 
-  it("ends tracking when the body fails to arrive, leaving the error to the caller", async () => {
+  it("ends tracking and reports failure when the response body fails", async () => {
     const s = new NamespaceState();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.error(new Error("connection reset"));
       },
     });
-    s.fetcher = async () => new Response(body);
-    const res = await s.mutationFetcher("/x");
+    const { backend, persist } = persistence(s, async () => new Response(body));
+    expect(await persist.persistWidth("c1", 300)).toBe(false);
+    expect(backend.version.revision).toBe(1);
     expect(s.mutations.idle).toBe(true);
-    await expect(res.json()).rejects.toThrow();
   });
 });
 

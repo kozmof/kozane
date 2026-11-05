@@ -1,23 +1,38 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { CardWithGlue, ScopeArea, Warp } from "$lib/types";
+import { BackendError, type KozaneBackend, type CardCreateResult } from "$lib/backend/contract.js";
 import { NamespaceState } from "../namespace-state.svelte.js";
-import { createBoardPersistence } from "./board-persistence.js";
+import { createBackendBoardPersistence } from "./board-backend-persistence.js";
 
-vi.mock("./namespace-api", () => ({
-  createCard: vi.fn(),
-  updateCard: vi.fn(),
-  patchCardPositions: vi.fn(),
-  moveWarp: vi.fn(),
-  moveScopeArea: vi.fn(),
-  parseCard: vi.fn(),
-  parsePlacements: vi.fn(),
-  parseWarp: vi.fn(),
-  parseScopeArea: vi.fn(),
-  failureMessage: vi.fn(),
-}));
-
-import * as api from "./namespace-api.js";
-
+const backend = {
+  cards: {
+    create: vi.fn<KozaneBackend["cards"]["create"]>(),
+    update: vi.fn<KozaneBackend["cards"]["update"]>(),
+    updatePositions: vi.fn<KozaneBackend["cards"]["updatePositions"]>(),
+    remove: vi.fn<KozaneBackend["cards"]["remove"]>(),
+    removeOne: vi.fn<KozaneBackend["cards"]["removeOne"]>(),
+    move: vi.fn<KozaneBackend["cards"]["move"]>(),
+    setLayer: vi.fn<KozaneBackend["cards"]["setLayer"]>(),
+    setPartition: vi.fn<KozaneBackend["cards"]["setPartition"]>(),
+    setStacking: vi.fn<KozaneBackend["cards"]["setStacking"]>(),
+    squash: vi.fn<KozaneBackend["cards"]["squash"]>(),
+  },
+  warps: {
+    create: vi.fn<KozaneBackend["warps"]["create"]>(),
+    update: vi.fn<KozaneBackend["warps"]["update"]>(),
+    remove: vi.fn<KozaneBackend["warps"]["remove"]>(),
+  },
+  scopes: {
+    create: vi.fn<KozaneBackend["scopes"]["create"]>(),
+    rename: vi.fn<KozaneBackend["scopes"]["rename"]>(),
+    remove: vi.fn<KozaneBackend["scopes"]["remove"]>(),
+    addMembers: vi.fn<KozaneBackend["scopes"]["addMembers"]>(),
+    removeMembers: vi.fn<KozaneBackend["scopes"]["removeMembers"]>(),
+    createArea: vi.fn<KozaneBackend["scopes"]["createArea"]>(),
+    updateArea: vi.fn<KozaneBackend["scopes"]["updateArea"]>(),
+    removeArea: vi.fn<KozaneBackend["scopes"]["removeArea"]>(),
+  },
+} satisfies Parameters<typeof createBackendBoardPersistence>[1];
 function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
   return {
     id,
@@ -34,48 +49,46 @@ function card(id: string, overrides: Partial<CardWithGlue> = {}): CardWithGlue {
     ...overrides,
   };
 }
-
-const failed = { ok: false } as Response;
-const succeeded = { ok: true, json: async () => ({}) } as unknown as Response;
-
+function creationResult(value: CardWithGlue): CardCreateResult {
+  return { ...value, taskspaceId: null, glueId: null, width: null, placements: [] };
+}
+const refused = new BackendError("validation", "Refused");
+const succeeded = { ok: true as const, stacking: [] };
 function state(): NamespaceState {
   const s = new NamespaceState();
   s.namespaceId = "ns-1";
   return s;
 }
+function persistence(s: NamespaceState) {
+  return createBackendBoardPersistence(s, backend);
+}
+beforeEach(() => vi.resetAllMocks());
 
-beforeEach(() => vi.clearAllMocks());
-
-describe("createBoardPersistence", () => {
+describe("createBackendBoardPersistence", () => {
   it("answers whether positions and widths were saved", async () => {
     const s = state();
-    const persist = createBoardPersistence(s);
-    vi.mocked(api.patchCardPositions).mockResolvedValueOnce(succeeded);
-    vi.mocked(api.updateCard).mockResolvedValueOnce(failed);
-
+    const persist = persistence(s);
+    backend.cards.updatePositions.mockResolvedValueOnce({ ok: true });
+    backend.cards.update.mockRejectedValueOnce(refused);
     await expect(persist.persistPositions([{ cardId: "c1", posX: 1, posY: 2 }])).resolves.toBe(
       true,
     );
     await expect(persist.persistWidth("c1", 300)).resolves.toBe(false);
-    expect(api.patchCardPositions).toHaveBeenCalledWith(s.mutationFetcher, "ns-1", [
-      { cardId: "c1", posX: 1, posY: 2 },
-    ]);
-    expect(api.updateCard).toHaveBeenCalledWith(s.mutationFetcher, "ns-1", "c1", { width: 300 });
+    expect(backend.cards.updatePositions).toHaveBeenCalledWith("ns-1", {
+      positions: [{ cardId: "c1", posX: 1, posY: 2 }],
+    });
+    expect(backend.cards.update).toHaveBeenCalledWith("ns-1", "c1", { width: 300 });
   });
-
   it("writes back the stored warp after a move", async () => {
     const s = state();
     s.warps = [{ id: "w1", namespaceId: "ns-1", posX: 0, posY: 0 }];
     const stored: Warp = { id: "w1", namespaceId: "ns-1", posX: 1000, posY: 800 };
-    vi.mocked(api.moveWarp).mockResolvedValueOnce(succeeded);
-    vi.mocked(api.parseWarp).mockReturnValueOnce(stored);
-
-    await expect(
-      createBoardPersistence(s).persistWarpPosition("w1", { posX: 1005, posY: 801 }),
-    ).resolves.toBe(true);
+    backend.warps.update.mockResolvedValueOnce(stored);
+    await expect(persistence(s).persistWarpPosition("w1", { posX: 1005, posY: 801 })).resolves.toBe(
+      true,
+    );
     expect(s.warps).toEqual([stored]);
   });
-
   it("writes back only the frame that moved", async () => {
     const s = state();
     const frame = (id: string, posX: number): ScopeArea => ({
@@ -88,102 +101,89 @@ describe("createBoardPersistence", () => {
       height: 200,
     });
     s.scopeAreas = [frame("a1", 0), frame("a2", 500)];
-    vi.mocked(api.moveScopeArea).mockResolvedValueOnce(succeeded);
-    vi.mocked(api.parseScopeArea).mockReturnValueOnce(frame("a2", 600));
-
-    const rect = { posX: 600, posY: 0, width: 200, height: 200 };
-    await createBoardPersistence(s).persistScopeArea("s1", "a2", rect);
+    backend.scopes.updateArea.mockResolvedValueOnce(frame("a2", 600));
+    await persistence(s).persistScopeArea("s1", "a2", {
+      posX: 600,
+      posY: 0,
+      width: 200,
+      height: 200,
+    });
     expect(s.scopeAreas.map((a) => a.posX)).toEqual([0, 600]);
   });
-
   it("does not touch the board when a frame save is refused", async () => {
     const s = state();
-    vi.mocked(api.moveScopeArea).mockResolvedValueOnce(failed);
-    const rect = { posX: 0, posY: 0, width: 200, height: 200 };
-    await expect(createBoardPersistence(s).persistScopeArea("s1", "a1", rect)).resolves.toBe(false);
-    expect(api.parseScopeArea).not.toHaveBeenCalled();
+    const previous = s.scopeAreas;
+    backend.scopes.updateArea.mockRejectedValueOnce(refused);
+    await expect(
+      persistence(s).persistScopeArea("s1", "a1", { posX: 0, posY: 0, width: 200, height: 200 }),
+    ).resolves.toBe(false);
+    expect(s.scopeAreas).toBe(previous);
+    expect(s.mutations.idle).toBe(true);
   });
-
   describe("submitComposer", () => {
     it("saves an edit and closes the composer", async () => {
       const s = state();
       s.cards = [card("c1")];
       s.selection.composerCard = s.cards[0];
-      vi.mocked(api.updateCard).mockResolvedValueOnce(succeeded);
+      backend.cards.update.mockResolvedValueOnce({ ...succeeded, content: "new text" });
       const placeNew = vi.fn();
-
-      await createBoardPersistence(s).submitComposer("c1", "new text", "p2", placeNew);
+      await persistence(s).submitComposer("c1", "new text", "p2", placeNew);
       expect(s.cards[0]).toMatchObject({ content: "new text", partitionId: "p2" });
       expect(s.selection.composerCard).toBeNull();
       expect(placeNew).not.toHaveBeenCalled();
     });
-
-    it("holds the edited text trimmed, as the server stores it", async () => {
+    it("falls back to trimmed text when a backend omits normalized content", async () => {
       const s = state();
       s.cards = [card("c1")];
-      vi.mocked(api.updateCard).mockResolvedValueOnce(succeeded);
-
-      await createBoardPersistence(s).submitComposer("c1", "  new text \n", "p1", vi.fn());
+      backend.cards.update.mockResolvedValueOnce(succeeded);
+      await persistence(s).submitComposer("c1", "  new text \n", "p1", vi.fn());
       expect(s.cards[0].content).toBe("new text");
     });
-
-    it("holds the text the server says it stored", async () => {
+    it("holds the text the backend says it stored", async () => {
       const s = state();
       s.cards = [card("c1")];
-      vi.mocked(api.updateCard).mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ ok: true, content: "normalized" }),
-      } as unknown as Response);
-
-      await createBoardPersistence(s).submitComposer("c1", "  typed  ", "p1", vi.fn());
+      backend.cards.update.mockResolvedValueOnce({ ...succeeded, content: "normalized" });
+      await persistence(s).submitComposer("c1", "  typed  ", "p1", vi.fn());
       expect(s.cards[0].content).toBe("normalized");
     });
-
     it("draws every card a refit moved, a repaired neighbour included", async () => {
       const s = state();
       const stored = (slot: number) => ({ inventory: { id: "i1", slot } });
       s.cards = [card("c1", stored(0)), card("c2", stored(6)), card("c3", stored(2))];
-      vi.mocked(api.updateCard).mockResolvedValueOnce(succeeded);
-      vi.mocked(api.parsePlacements).mockReturnValueOnce([
-        { cardId: "c2", inventoryId: "i1", slot: 1 },
-        { cardId: "c1", inventoryId: "i1", slot: 3 },
-      ]);
+      backend.cards.update.mockResolvedValueOnce({
+        ...succeeded,
+        content: "longer text",
+        placements: [
+          { cardId: "c2", inventoryId: "i1", slot: 1 },
+          { cardId: "c1", inventoryId: "i1", slot: 3 },
+        ],
+      });
       const untouched = s.cards[2];
-
-      await createBoardPersistence(s).submitComposer("c1", "longer text", "p1", vi.fn());
+      await persistence(s).submitComposer("c1", "longer text", "p1", vi.fn());
       expect(s.cards.map((c) => c.inventory?.slot)).toEqual([3, 1, 2]);
       expect(s.cards[0].content).toBe("longer text");
       expect(s.cards[2]).toBe(untouched);
     });
-
-    it("reports the server's reason when an edit is refused", async () => {
+    it("reports the backend reason and retains the composer when an edit is refused", async () => {
       const s = state();
       s.cards = [card("c1")];
-      vi.mocked(api.updateCard).mockResolvedValueOnce(failed);
-      vi.mocked(api.failureMessage).mockResolvedValueOnce("Too long");
-
-      await createBoardPersistence(s).submitComposer("c1", "x", "p1", () => ({
-        posX: 0,
-        posY: 0,
-      }));
+      s.selection.composerCard = s.cards[0];
+      backend.cards.update.mockRejectedValueOnce(new BackendError("validation", "Too long"));
+      await persistence(s).submitComposer("c1", "x", "p1", () => ({ posX: 0, posY: 0 }));
       expect(s.lastError).toBe("Too long");
       expect(s.cards[0].content).toBe("c1");
+      expect(s.selection.composerCard).toEqual(s.cards[0]);
+      expect(s.mutations.idle).toBe(true);
     });
-
-    it("creates a card in the active scope from the stored row, leaving stacking to the server", async () => {
+    it("creates a card in the active scope from the stored row, leaving stacking to the backend", async () => {
       const s = state();
       s.cards = [card("c1", { zIndex: 4 }), card("c2", { layerId: "l2", zIndex: 9 })];
       s.activeLayerId = "l1";
       s.sidebar.activeScope = "s1";
       const created = card("c3", { posX: 10, posY: 20, zIndex: 5 });
-      vi.mocked(api.createCard).mockResolvedValueOnce(succeeded);
-      vi.mocked(api.parseCard).mockReturnValueOnce(created);
-
-      await createBoardPersistence(s).submitComposer(null, "c3", "p1", () => ({
-        posX: 10,
-        posY: 20,
-      }));
-      expect(api.createCard).toHaveBeenCalledWith(s.mutationFetcher, "ns-1", {
+      backend.cards.create.mockResolvedValueOnce(creationResult(created));
+      await persistence(s).submitComposer(null, "c3", "p1", () => ({ posX: 10, posY: 20 }));
+      expect(backend.cards.create).toHaveBeenCalledWith("ns-1", {
         partitionId: "p1",
         content: "c3",
         posX: 10,
@@ -194,42 +194,44 @@ describe("createBoardPersistence", () => {
       expect(s.cards.at(-1)).toEqual(created);
       expect(s.scopeRels).toContainEqual({ scopeId: "s1", cardId: "c3" });
     });
-
     it("lists a created card once when a snapshot poll already brought it in", async () => {
       const s = state();
       s.sidebar.activeScope = "s1";
       const created = card("c3", { posX: 10, posY: 20, zIndex: 5 });
-      // The poll lands while the create's answer is being read.
-      vi.mocked(api.createCard).mockResolvedValueOnce({
-        ok: true,
-        json: async () => {
-          s.cards = [card("c1"), card("c3")];
-          s.scopeRels = [{ scopeId: "s1", cardId: "c3" }];
-          return {};
-        },
-      } as unknown as Response);
-      vi.mocked(api.parseCard).mockReturnValueOnce(created);
-
-      await createBoardPersistence(s).submitComposer(null, "c3", "p1", () => ({
-        posX: 10,
-        posY: 20,
-      }));
+      backend.cards.create.mockImplementationOnce(async () => {
+        await Promise.resolve();
+        s.cards = [card("c1"), card("c3")];
+        s.scopeRels = [{ scopeId: "s1", cardId: "c3" }];
+        return creationResult(created);
+      });
+      await persistence(s).submitComposer(null, "c3", "p1", () => ({ posX: 10, posY: 20 }));
       expect(s.cards.map((c) => c.id)).toEqual(["c1", "c3"]);
       expect(s.cards.at(-1)).toEqual(created);
       expect(s.scopeRels).toEqual([{ scopeId: "s1", cardId: "c3" }]);
     });
-
     it("refuses a created card whose answer is not a row", async () => {
       const s = state();
-      vi.mocked(api.createCard).mockResolvedValueOnce(succeeded);
-      vi.mocked(api.parseCard).mockReturnValueOnce(null);
-
-      await createBoardPersistence(s).submitComposer(null, "x", "p1", () => ({
-        posX: 0,
-        posY: 0,
-      }));
+      // @ts-expect-error Exercise a noncompliant custom backend's malformed result.
+      backend.cards.create.mockResolvedValueOnce({});
+      await persistence(s).submitComposer(null, "x", "p1", () => ({ posX: 0, posY: 0 }));
       expect(s.lastError).toBe("Failed to create card");
       expect(s.cards).toEqual([]);
+    });
+    it("holds mutation activity until the save and local reconciliation finish", async () => {
+      const s = state();
+      s.cards = [card("c1")];
+      let finish!: (value: Awaited<ReturnType<KozaneBackend["cards"]["update"]>>) => void;
+      backend.cards.update.mockReturnValueOnce(
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+      );
+      const pending = persistence(s).submitComposer("c1", "saved", "p1", vi.fn());
+      expect(s.mutations.idle).toBe(false);
+      finish({ ...succeeded, content: "saved" });
+      await pending;
+      expect(s.cards[0].content).toBe("saved");
+      expect(s.mutations.idle).toBe(true);
     });
   });
 });

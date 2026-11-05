@@ -178,7 +178,7 @@
     },
     {
       // Board action composition and mutations depend on injected backend resources.
-      "files": ["src/routes/*/namespace-actions.svelte.ts", "src/routes/*/lib/actions/*.ts"],
+      "files": ["src/routes/*/namespace-actions.svelte.ts", "src/routes/*/lib/actions/*.ts", "src/routes/*/lib/*persistence*.ts", "src/routes/*/lib/*inventory-actions.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
         "eslint/no-restricted-imports": ["error", { "patterns": [

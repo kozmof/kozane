@@ -101,25 +101,6 @@ export class NamespaceState {
    */
   readonly mutations = new InFlight();
 
-  /**
-   * Keep the mutation in flight until its response body has arrived, not just its headers.
-   * Otherwise a poll could apply a snapshot that already holds the new row while the action
-   * is still reading its answer, and the action would then add the row a second time.
-   * Reading a clone leaves the returned response unread, and once the bytes are buffered the
-   * caller's `json()` settles before any poll response can be handled.
-   */
-  mutationFetcher: typeof fetch = (input, init) =>
-    this.mutations.track(async () => {
-      const response = await this.fetcher(input, init);
-      // A failed read is reported again by the caller's own read, which handles it.
-      if (response instanceof Response && response.body)
-        await response
-          .clone()
-          .arrayBuffer()
-          .catch(() => undefined);
-      return response;
-    });
-
   cards = $state<CardWithGlue[]>([]);
   partitions = $state<Partition[]>([]);
   layers = $state<Layer[]>([]);
