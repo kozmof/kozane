@@ -1,3 +1,9 @@
+import type {
+  TaskspaceLifecycleApi,
+  TaskspaceCreated,
+  TaskspaceRenamed,
+  TaskspaceFileData,
+} from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
 import type { TagsViewData } from "../../services/tags.js";
 import type { TreemapSnapshot } from "../../services/map.js";
@@ -426,4 +432,28 @@ export class HttpBackend {
     get: (namespaceId: string) =>
       this.read<WarpListEntry[]>(this.ns(namespaceId, "/warp-directory")),
   };
+
+  private readonly taskspaceApi: TaskspaceLifecycleApi = {
+    create: (ns, input) => this.write<TaskspaceCreated>(this.ns(ns, "/taskspaces"), "POST", input),
+    rename: (ns, id, input) =>
+      this.write<TaskspaceRenamed>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
+        "PATCH",
+        input,
+      ),
+    remove: (ns, id) =>
+      this.write<{ ok: boolean; directory: import("../types.js").TaskspaceDirectoryOutcome }>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
+        "DELETE",
+      ),
+    createFile: (ns, id, input) =>
+      this.write<TaskspaceFileData>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
+        "POST",
+        input,
+      ),
+  };
+  get taskspaces(): TaskspaceLifecycleApi | undefined {
+    return this.capabilities.taskspaces ? this.taskspaceApi : undefined;
+  }
 }

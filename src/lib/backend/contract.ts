@@ -50,3 +50,37 @@ export type SnapshotData = NamespaceDataSnapshot;
 export type SnapshotResult =
   | { status: "changed"; validator: string; data: SnapshotData }
   | { status: "unchanged"; validator: string };
+
+export interface TaskspaceCreated {
+  id: string;
+  path: string;
+  pathKind: import("../constants.js").PathKind;
+}
+export interface TaskspaceRenamed {
+  id: string;
+  name: string;
+  path: string | null;
+  pathKind: import("../constants.js").PathKind;
+}
+export interface TaskspaceFileData {
+  path: string;
+  content: string;
+  signature: string | null;
+}
+export interface TaskspaceLifecycleApi {
+  create(namespaceId: string, input: { name: string; scopeId: string }): Promise<TaskspaceCreated>;
+  rename(
+    namespaceId: string,
+    taskspaceId: string,
+    input: { name: string },
+  ): Promise<TaskspaceRenamed>;
+  remove(
+    namespaceId: string,
+    taskspaceId: string,
+  ): Promise<{ ok: boolean; directory: import("../types.js").TaskspaceDirectoryOutcome }>;
+  createFile(
+    namespaceId: string,
+    taskspaceId: string,
+    input: { path: string },
+  ): Promise<TaskspaceFileData>;
+}
