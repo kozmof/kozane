@@ -278,7 +278,6 @@
 
   const editorContext = $derived({
     backend,
-    fetcher: s.fetcher,
     namespaceId: s.namespaceId,
     staticFiles,
   });

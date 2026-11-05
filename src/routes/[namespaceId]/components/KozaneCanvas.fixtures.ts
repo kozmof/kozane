@@ -1,3 +1,4 @@
+import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { vi } from "vitest";
 import { SelectionState } from "../namespace-state.svelte.js";
 import { TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
@@ -78,7 +79,7 @@ export function makeProps(overrides: Overrides = {}) {
     activeScopeId: null,
     taskspaces: [],
     taskspaceTree: new TaskspaceTreeState(),
-    treeContext: { fetcher: notFetched, namespaceId: "p1" },
+    treeContext: httpEditorContext(notFetched, "p1"),
     pendingScopeAreaRect: null,
     onRemoveScopeArea: vi.fn(),
     onPersistScopeArea: vi.fn(

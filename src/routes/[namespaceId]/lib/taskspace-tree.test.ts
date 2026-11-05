@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { httpEditorContext, staticEditorContext } from "../../../test-utils/editor-context.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "$lib/types";
 import { TaskspaceTreeState, nodeKey } from "./taskspace-tree.svelte.js";
+
+afterEach(() => vi.unstubAllGlobals());
 
 const TS = "taskspace-1";
 
@@ -23,14 +26,21 @@ function fetcherFor(body: unknown, status = 200) {
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
+  return new Response(
+    JSON.stringify(
+      typeof body === "object" && body !== null && "content" in body
+        ? { signature: null, ...body }
+        : body,
+    ),
+    {
+      status,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
 }
 
 function context(fetcher: typeof fetch) {
-  return { fetcher, namespaceId: "namespace-1" };
+  return httpEditorContext(fetcher, "namespace-1");
 }
 
 describe("TaskspaceTreeState", () => {
@@ -42,7 +52,10 @@ describe("TaskspaceTreeState", () => {
     expect(tree.isExpanded(TS, "")).toBe(true);
     expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["src", "app.ts"]);
     expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(fetcher).toHaveBeenCalledWith(`/namespace-1/api/taskspaces/${TS}/files`);
+    expect(fetcher).toHaveBeenCalledWith(
+      `/namespace-1/api/taskspaces/${TS}/files?path=`,
+      expect.objectContaining({ method: "GET" }),
+    );
 
     await tree.toggle(context(fetcher as never), TS, "");
     expect(tree.isExpanded(TS, "")).toBe(false);
@@ -58,7 +71,10 @@ describe("TaskspaceTreeState", () => {
 
     await tree.toggle(context(fetcher as never), TS, "src/lib");
 
-    expect(fetcher).toHaveBeenCalledWith(`/namespace-1/api/taskspaces/${TS}/files?path=src%2Flib`);
+    expect(fetcher).toHaveBeenCalledWith(
+      `/namespace-1/api/taskspaces/${TS}/files?path=src%2Flib`,
+      expect.objectContaining({ method: "GET" }),
+    );
   });
 
   it("keeps the truncation flag", async () => {
@@ -167,7 +183,7 @@ describe("TaskspaceTreeState", () => {
 
     await tree.toggle(context(fetcher as never), TS, "");
 
-    expect(tree.node(TS, "").error).toBe("Failed to list files");
+    expect(tree.node(TS, "").error).toBe("Unable to reach the backend");
   });
 
   it("forgets taskspaces that are gone and keeps the ones that are not", async () => {
@@ -200,22 +216,18 @@ describe("TaskspaceTreeState", () => {
       staticFiles: Record<string, TaskspaceFileTree>,
       fetcher = fetcherFor(listing(["should-not-be-fetched"])),
     ) {
-      return {
-        fetcher,
-        ctx: { fetcher: fetcher as never, namespaceId: "namespace-1", staticFiles },
-      };
+      vi.stubGlobal("fetch", fetcher);
+      return { fetcher, ctx: staticEditorContext(staticFiles, "namespace-1") };
     }
 
-    // Request live data when a taskspace has no embedded tree. Do not infer an empty
-    // directory.
-    it("still fetches when the context carries no static tree at all", async () => {
+    it("reports missing taskspaces without HTTP when the export has no trees", async () => {
       const { fetcher, ctx } = staticContext({});
       const tree = new TaskspaceTreeState();
 
       await tree.toggle(ctx, TS, "");
 
-      expect(fetcher).toHaveBeenCalledTimes(1);
-      expect(tree.node(TS, "").entries?.map(({ name }) => name)).toEqual(["should-not-be-fetched"]);
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(tree.node(TS, "").error).toBe("Taskspace not found");
     });
 
     it("reads a directory from the embedded tree instead of fetching, once it has one for this taskspace", async () => {
@@ -271,8 +283,7 @@ describe("TaskspaceTreeState", () => {
       expect(tree.node(TS, "src").entries?.map(({ name }) => name)).toEqual(["app.ts"]);
     });
 
-    // Handle a missing embedded tree entry through the normal fallback path.
-    it("falls back to fetching for a taskspace absent from the static map", async () => {
+    it("reports a taskspace absent from the static backend without HTTP", async () => {
       const { fetcher, ctx } = staticContext({
         "other-taskspace": { root: { kind: "directory", name: "", children: [], truncated: null } },
       });
@@ -280,7 +291,8 @@ describe("TaskspaceTreeState", () => {
 
       await tree.toggle(ctx, TS, "");
 
-      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(tree.node(TS, "").error).toBe("Taskspace not found");
     });
   });
 });
@@ -304,7 +316,8 @@ describe("TaskspaceTreeState creation", () => {
     expect(made).toEqual({ taskspaceId: TS, kind: "file", path: "src/new.ts" });
     expect(fetcher).toHaveBeenNthCalledWith(1, `/namespace-1/api/taskspaces/${TS}/file`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: expect.any(Headers),
+      keepalive: false,
       body: JSON.stringify({ path: "src/new.ts" }),
     });
     // The field closes only once the file is actually there.
@@ -411,7 +424,7 @@ describe("TaskspaceTreeState creation", () => {
     tree.beginCreate(TS, "", "file");
 
     expect(await tree.submitCreate(context(fetcher as never), "notes.md")).toBeNull();
-    expect(tree.createError).toBe("Failed to create file");
+    expect(tree.createError).toBe("Unable to reach the backend");
     expect(tree.createBusy).toBe(false);
   });
 
@@ -503,7 +516,11 @@ describe("TaskspaceTreeState rename and remove while listings are in flight", ()
         const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
         return jsonResponse({ path: parent ? `${parent}/${name}` : name, kind: "directory" });
       }
-      if (init?.method === "DELETE") return jsonResponse({ path: "", kind: "directory" });
+      if (init?.method === "DELETE")
+        return jsonResponse({
+          path: new URL(url, "http://x").searchParams.get("path"),
+          kind: "directory",
+        });
       const path = new URL(url, "http://x").searchParams.get("path") ?? "";
       const hold = held[path];
       if (hold) {
@@ -712,11 +729,7 @@ it("keeps static backend directory truncation reasons without falling back to HT
   });
   const fetcher = vi.fn();
   const tree = new TaskspaceTreeState();
-  await tree.toggle(
-    { namespaceId: "namespace-1", fetcher: fetcher as typeof fetch, backend },
-    TS,
-    "",
-  );
+  await tree.toggle({ namespaceId: "namespace-1", backend }, TS, "");
   expect(tree.node(TS, "").truncated).toBe("depth");
   expect(tree.node(TS, "").entries?.[0].name).toBe("hello.md");
   expect(fetcher).not.toHaveBeenCalled();

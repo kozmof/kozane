@@ -1,3 +1,4 @@
+import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
@@ -48,7 +49,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
     taskspaces: [taskspace({ id: "t1", name: "drafts", scopeId: "s1" })],
     selectedCards: new Set(["c1"]),
     tree: new TaskspaceTreeState(),
-    ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" },
+    ctx: httpEditorContext(fetcher as never, "namespace-1"),
     onOpenFile: vi.fn(),
     onLinkScope: vi.fn(),
     onCreate: vi.fn(),

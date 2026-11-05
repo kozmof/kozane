@@ -2,16 +2,6 @@ import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
 import { entryNameIssue } from "$lib/entry-name";
-import {
-  createTaskspaceFile,
-  createTaskspaceFolder,
-  deleteTaskspaceEntry,
-  failureMessage,
-  renameTaskspaceEntry,
-  fetchTaskspaceFiles,
-} from "./namespace-api.js";
-import { findStaticNode, staticDirectoryEntries } from "./taskspace-static.js";
-
 /** What is known about one directory of one taskspace. */
 export type TaskspaceNode = {
   /** Null until the directory has been read once. */
@@ -43,18 +33,14 @@ export type TaskspaceCreated = {
 };
 
 export type TaskspaceTreeContext = {
-  fetcher: typeof fetch;
-  backend?: Pick<KozaneBackend, "taskspaces">;
+  backend: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
-  /**
-   * Embedded taskspace trees keyed by taskspace ID. Use them instead of live directory
-   * endpoints when available.
-   */
+  /** Export metadata used by views to choose browsable taskspaces. */
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
 function taskspaceApi(ctx: TaskspaceTreeContext) {
-  const api = ctx.backend?.taskspaces;
+  const api = ctx.backend.taskspaces;
   if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
   return api;
 }
@@ -246,23 +232,10 @@ export class TaskspaceTreeState {
 
     let next: string;
     try {
-      let body;
-      if (ctx.backend) {
-        body = await taskspaceApi(ctx).renameEntry(ctx.namespaceId, taskspaceId, {
-          path,
-          name: trimmed,
-        });
-      } else {
-        const res = await renameTaskspaceEntry(
-          ctx.fetcher,
-          ctx.namespaceId,
-          taskspaceId,
-          path,
-          trimmed,
-        );
-        if (!res.ok) return { error: await failureMessage(res, "Failed to rename") };
-        body = await res.json().catch(() => null);
-      }
+      const body = await taskspaceApi(ctx).renameEntry(ctx.namespaceId, taskspaceId, {
+        path,
+        name: trimmed,
+      });
       next = typeof body?.path === "string" ? body.path : siblingPath(path, trimmed);
     } catch (error) {
       return { error: error instanceof BackendError ? error.message : "Failed to rename" };
@@ -334,11 +307,7 @@ export class TaskspaceTreeState {
     path: string,
   ): Promise<{ error: string } | null> {
     try {
-      if (ctx.backend) await taskspaceApi(ctx).removeEntry(ctx.namespaceId, taskspaceId, path);
-      else {
-        const res = await deleteTaskspaceEntry(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
-        if (!res.ok) return { error: await failureMessage(res, "Failed to delete") };
-      }
+      await taskspaceApi(ctx).removeEntry(ctx.namespaceId, taskspaceId, path);
     } catch (error) {
       return { error: error instanceof BackendError ? error.message : "Failed to delete" };
     }
@@ -361,18 +330,12 @@ export class TaskspaceTreeState {
     const what = target.kind === "file" ? "file" : "folder";
     const path = target.path ? `${target.path}/${trimmed}` : trimmed;
     try {
-      if (ctx.backend) {
-        const api = taskspaceApi(ctx);
-        await (target.kind === "file" ? api.createFile : api.createDirectory)(
-          ctx.namespaceId,
-          target.taskspaceId,
-          { path },
-        );
-      } else {
-        const create = target.kind === "file" ? createTaskspaceFile : createTaskspaceFolder;
-        const res = await create(ctx.fetcher, ctx.namespaceId, target.taskspaceId, path);
-        if (!res.ok) return { error: await failureMessage(res, `Failed to create ${what}`) };
-      }
+      const api = taskspaceApi(ctx);
+      await (target.kind === "file" ? api.createFile : api.createDirectory)(
+        ctx.namespaceId,
+        target.taskspaceId,
+        { path },
+      );
     } catch (error) {
       return { error: error instanceof BackendError ? error.message : `Failed to create ${what}` };
     }
@@ -391,16 +354,6 @@ export class TaskspaceTreeState {
     // forced read replaces one in flight, which may predate the change it has to show.
     if (!force && (current?.loading || current?.entries)) return;
 
-    const staticTree = ctx.backend ? undefined : ctx.staticFiles?.[taskspaceId];
-    if (staticTree) {
-      const node = findStaticNode(staticTree, path);
-      this.nodes[key] =
-        node?.kind === "directory"
-          ? { ...staticDirectoryEntries(node), loading: false, error: null }
-          : { entries: [], truncated: null, loading: false, error: "Directory not found" };
-      return;
-    }
-
     // The rows already on screen are left in place while the re-read is in flight, so a
     // refresh does not blank the tree out and reflow everything under it.
     this.nodes[key] = { ...(current ?? EMPTY_NODE), loading: true, error: null };
@@ -410,20 +363,7 @@ export class TaskspaceTreeState {
     const superseded = () => this.#pending.get(key) !== request;
 
     try {
-      let body;
-      if (ctx.backend) {
-        body = await taskspaceApi(ctx).list(ctx.namespaceId, taskspaceId, path);
-      } else {
-        const res = await fetchTaskspaceFiles(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
-        if (!res.ok) {
-          const message = await failureMessage(res, "Failed to list files");
-          if (superseded()) return;
-          this.#pending.delete(key);
-          this.nodes[key] = { ...(this.nodes[key] ?? EMPTY_NODE), loading: false, error: message };
-          return;
-        }
-        body = await res.json();
-      }
+      const body = await taskspaceApi(ctx).list(ctx.namespaceId, taskspaceId, path);
       if (superseded()) return;
       this.#pending.delete(key);
       this.nodes[key] = {

@@ -1,3 +1,4 @@
+import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
 import KozaneCanvas from "./KozaneCanvas.svelte";
@@ -61,7 +62,7 @@ describe("KozaneCanvas scope area files", () => {
       scopeNameById: new Map([["s1", "Now"]]),
       taskspaces: [taskspace("t1", "work", "s1")],
       taskspaceTree: new TaskspaceTreeState(),
-      treeContext: { fetcher: fetcher as never, namespaceId: "p1" },
+      treeContext: httpEditorContext(fetcher as never, "p1"),
       onOpenFile: vi.fn(),
       ...overrides,
     });
@@ -84,10 +85,7 @@ describe("KozaneCanvas scope area files", () => {
 
   it("asks only for the taskspace root, not for the tree under it", async () => {
     const { fetcher, asked } = listings({ "": ["src", "app.ts"], src: ["util.ts"] });
-    render(
-      KozaneCanvas,
-      fileProps({ treeContext: { fetcher: fetcher as never, namespaceId: "p1" } }),
-    );
+    render(KozaneCanvas, fileProps({ treeContext: httpEditorContext(fetcher as never, "p1") }));
     await settle();
 
     expect(asked).toEqual(["/p1/api/taskspaces/t1/files?"]);
@@ -116,7 +114,7 @@ describe("KozaneCanvas scope area files", () => {
       KozaneCanvas,
       fileProps({
         scopeAreas: [scopeArea(), scopeArea({ id: "a2", posX: 1200 })],
-        treeContext: { fetcher: fetcher as never, namespaceId: "p1" },
+        treeContext: httpEditorContext(fetcher as never, "p1"),
       }),
     );
     await settle();
@@ -209,7 +207,7 @@ describe("KozaneCanvas scope area files", () => {
 
   it("stops asking about a taskspace once it is gone", async () => {
     const { fetcher, asked } = listings({ "": ["app.ts"] });
-    const props = fileProps({ treeContext: { fetcher: fetcher as never, namespaceId: "p1" } });
+    const props = fileProps({ treeContext: httpEditorContext(fetcher as never, "p1") });
     const { container, rerender } = render(KozaneCanvas, props);
     await settle();
 

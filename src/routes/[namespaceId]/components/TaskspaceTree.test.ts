@@ -1,3 +1,4 @@
+import { httpEditorContext, staticEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
@@ -19,8 +20,7 @@ function fetcherFor(byPath: Record<string, { entries: Entry[]; truncated?: boole
   return vi.fn(async (url: string) => {
     const path = new URL(url, "http://localhost").searchParams.get("path") ?? "";
     const listing = byPath[path];
-    if (!listing)
-      return new Response(JSON.stringify({ message: "Directory not found" }), { status: 404 });
+    if (!listing) return Response.json({ message: "Directory not found" }, { status: 404 });
     return new Response(
       JSON.stringify({
         path,
@@ -38,7 +38,7 @@ async function mount(
   props: { canCreate?: boolean; onOpenFile?: (taskspacePath: string) => void } = {},
 ) {
   const fetcher = fetcherFor(byPath);
-  const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
+  const ctx = httpEditorContext(fetcher as never, "namespace-1");
   const tree = new TaskspaceTreeState();
   await tree.toggle(ctx, TS, path);
   render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path, ...props } });
@@ -106,11 +106,7 @@ describe("TaskspaceTree", () => {
    */
   describe("a directory of a static export cut off by a limit", () => {
     async function mountStatic(root: TaskspaceFileTree["root"]) {
-      const ctx = {
-        fetcher: vi.fn() as never,
-        namespaceId: "namespace-1",
-        staticFiles: { [TS]: { root } },
-      };
+      const ctx = staticEditorContext({ [TS]: { root } }, "namespace-1");
       const tree = new TaskspaceTreeState();
       await tree.toggle(ctx, TS, "");
       render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "" } });
@@ -149,7 +145,7 @@ describe("TaskspaceTree opening a file", () => {
     onOpenFile?: (taskspacePath: string) => void,
   ) {
     const fetcher = fetcherFor(byPath);
-    const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
+    const ctx = httpEditorContext(fetcher as never, "namespace-1");
     const tree = new TaskspaceTreeState();
     await tree.toggle(ctx, TS, "");
     render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "", onOpenFile } });
@@ -170,7 +166,7 @@ describe("TaskspaceTree opening a file", () => {
       "": { entries: [{ name: "src", kind: "directory" }] },
       src: { entries: [{ name: "app.ts", kind: "file" }] },
     });
-    const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
+    const ctx = httpEditorContext(fetcher as never, "namespace-1");
     const tree = new TaskspaceTreeState();
     await tree.toggle(ctx, TS, "");
     render(TaskspaceTree, { props: { tree, ctx, taskspaceId: TS, path: "", onOpenFile } });
@@ -205,7 +201,12 @@ describe("TaskspaceTree creation", () => {
     const list = fetcherFor(byPath);
     return vi.fn(async (url: string, init?: RequestInit) =>
       init?.method === "POST"
-        ? new Response(JSON.stringify(created), { status })
+        ? Response.json(
+            typeof created === "object" && created !== null && "content" in created
+              ? { signature: null, ...created }
+              : created,
+            { status },
+          )
         : list(url as never),
     );
   }
@@ -217,7 +218,7 @@ describe("TaskspaceTree creation", () => {
     status = 201,
   ) {
     const fetcher = creatingFetcher(byPath, created, status);
-    const ctx = { fetcher: fetcher as never, namespaceId: "namespace-1" };
+    const ctx = httpEditorContext(fetcher as never, "namespace-1");
     const tree = new TaskspaceTreeState();
     await tree.toggle(ctx, TS, "");
     render(TaskspaceTree, {

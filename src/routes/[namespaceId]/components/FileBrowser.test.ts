@@ -1,3 +1,4 @@
+import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
@@ -52,7 +53,7 @@ function makeProps(overrides: Record<string, unknown> = {}) {
       taskspace({ id: "t2", name: "papers", scopeId: "s2" }),
     ],
     tree: new TaskspaceTreeState(),
-    ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" },
+    ctx: httpEditorContext(fetcher as never, "namespace-1"),
     editorFile: null,
     actions: {
       createScope: vi.fn(async () => ({ id: "s3" })),
@@ -211,16 +212,16 @@ describe("FileBrowser", () => {
 
   it("deletes a folder after confirming, through the files endpoint", async () => {
     vi.spyOn(globalThis, "confirm").mockReturnValue(true);
-    const props = makeProps();
+    const fetcher = fetcherFor(["docs", "notes.md"]);
+    const props = makeProps({ ctx: httpEditorContext(fetcher as never, "namespace-1") });
     render(FileBrowser, { props });
 
     await column("Files").findByText("docs");
     await userEvent.click(screen.getByRole("button", { name: 'Delete "docs"' }));
 
-    const fetcher = props.ctx.fetcher as unknown as ReturnType<typeof vi.fn>;
     const call = fetcher.mock.calls.find(([, init]) => init?.method === "DELETE");
     expect(call?.[0]).toContain("/taskspaces/t1/files?path=docs");
-    expect(call?.[1].body).toBeUndefined();
+    expect(call?.[1]?.body).toBeUndefined();
   });
 
   it("protects the file open in the editor", async () => {
@@ -264,7 +265,7 @@ describe("FileBrowser", () => {
         taskspace({ id: "t1", name: "drafts", scopeId: "s1" }),
         taskspace({ id: "t3", name: "copies", scopeId: "s1" }),
       ],
-      ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" },
+      ctx: httpEditorContext(fetcher as never, "namespace-1"),
     });
     render(FileBrowser, { props });
 
@@ -322,7 +323,7 @@ describe("FileBrowser", () => {
         ),
     );
     render(FileBrowser, {
-      props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
+      props: makeProps({ ctx: httpEditorContext(fetcher as never, "namespace-1") }),
     });
 
     const docs = (await column("Files").findByText("docs")).closest("button")!;
@@ -350,7 +351,7 @@ describe("FileBrowser", () => {
         ),
     );
     render(FileBrowser, {
-      props: makeProps({ ctx: { fetcher: fetcher as never, namespaceId: "namespace-1" } }),
+      props: makeProps({ ctx: httpEditorContext(fetcher as never, "namespace-1") }),
     });
 
     const remove = await screen.findByRole("button", { name: 'Delete "link"' });
