@@ -3,7 +3,7 @@ import { HttpBackend } from "./http-backend";
 const capabilities = {
   writable: true,
   persistent: true,
-  externalWrites: true,
+  externalWrites: false,
   taskspaces: true,
   auth: false,
 };
@@ -154,4 +154,31 @@ it("routes workspace view reads without dispatching content-bearing tag filters"
     "/opaque%20%2Fns/api/warp-directory",
   ]);
   expect(changed).not.toHaveBeenCalled();
+});
+
+it("owns workspace polling without a mounted board and cleans up on final unsubscribe", async () => {
+  vi.useFakeTimers();
+  try {
+    const stop = vi.fn();
+    const fetcher = vi.fn().mockImplementation(async () => new Response('{"token":"baseline"}'));
+    const backend = new HttpBackend({
+      fetcher,
+      capabilities: { ...capabilities, externalWrites: true },
+      lifecycle: { visible: () => true, listen: () => stop },
+    });
+    const listener = vi.fn();
+    const unsubscribe = backend.subscribe(listener);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetcher.mock.calls[0][0]).toBe("/api/changes");
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener.mock.calls[0][0].datasets).toContain("map");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener.mock.calls[1][0].datasets).toEqual(["tags", "snapshot"]);
+    unsubscribe();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(vi.getTimerCount()).toBe(0);
+  } finally {
+    vi.useRealTimers();
+  }
 });

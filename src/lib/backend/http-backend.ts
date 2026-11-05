@@ -1,3 +1,4 @@
+import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
 import type { TagsViewData } from "../../services/tags.js";
 import type { TreemapSnapshot } from "../../services/map.js";
 import type { WarpListEntry } from "../warp-list.js";
@@ -28,11 +29,31 @@ export class HttpBackend {
   readonly capabilities: BackendCapabilities;
   private readonly signals = new BackendSignals({ status: "ready" });
   private readonly transport: HttpTransport;
+  private readonly poller?: WorkspacePoller;
   constructor(
-    options: HttpTransportOptions & { base?: string; capabilities: BackendCapabilities },
+    options: HttpTransportOptions & {
+      base?: string;
+      capabilities: BackendCapabilities;
+      lifecycle?: PollLifecycle;
+    },
   ) {
     this.capabilities = Object.freeze({ ...options.capabilities });
     this.transport = new HttpTransport((path) => `${options.base ?? ""}${path}`, options);
+    if (this.capabilities.externalWrites)
+      this.poller = new WorkspacePoller({
+        lifecycle: options.lifecycle ?? browserPollLifecycle(),
+        throttleMs: () => this.transport.retryAfterMs,
+        token: async () => {
+          const value = await this.read<{ token?: unknown }>("/api/changes");
+          if (typeof value.token !== "string" || !value.token)
+            throw new BackendError("unavailable", "Invalid change token");
+          return value.token;
+        },
+        changed: () => this.signals.publish(ALL),
+        filesystemRefresh: () => {
+          if (this.capabilities.taskspaces) this.signals.publish(["tags", "snapshot"]);
+        },
+      });
   }
   get version() {
     return this.signals.version;
@@ -40,7 +61,14 @@ export class HttpBackend {
   get state() {
     return this.signals.state;
   }
-  subscribe: BackendSignals["subscribe"] = (listener) => this.signals.subscribe(listener);
+  subscribe: BackendSignals["subscribe"] = (listener) => {
+    const unsubscribe = this.signals.subscribe(listener);
+    const release = this.poller?.retain();
+    return () => {
+      unsubscribe();
+      release?.();
+    };
+  };
   subscribeState: BackendSignals["subscribeState"] = (listener) =>
     this.signals.subscribeState(listener);
   private ns(namespaceId: string, path: string) {
