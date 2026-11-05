@@ -17,7 +17,7 @@
   import BoardComposer from "./components/BoardComposer.svelte";
   import WarpPalette from "./components/WarpPalette.svelte";
   import InventoryDock from "./components/InventoryDock.svelte";
-  import { createInventoryActions } from "./lib/inventory-actions.js";
+  import { createBackendInventoryActions } from "./lib/backend-inventory-actions.js";
   import type { InventoryDrag } from "./lib/inventory-drop.js";
   import { arrivalWarp, clearArrivalParams, readArrival } from "./lib/board-arrival.js";
   import { createBoardFiles } from "./lib/board-files.js";
@@ -230,7 +230,7 @@
   // failed saves.
   const persistence = createBackendBoardPersistence(s, backend);
 
-  const inventoryActions = createInventoryActions(s);
+  const inventoryActions = createBackendInventoryActions(s, backend);
 
   /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
   let inventoryDrag = $state<InventoryDrag>({
