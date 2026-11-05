@@ -1,6 +1,6 @@
 # Backend operation matrix
 
-Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented read and taskspace surface. Domain mutation rows and the LocalBackend contract runner remain pending under P2-01. This document does not establish Gate 3 completion.
+Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented domain, read, taskspace and lifecycle surface. The LocalBackend contract runner and isolated packed-consumer verification remain pending. This document does not establish Gate 3 completion.
 
 ## Shared rules
 
@@ -49,3 +49,80 @@ Every write requires writable capability, publishes all datasets on HTTP success
 | `taskspaces.removeEntry` | Namespace, taskspace, path | Nonempty path required. No body. | `TaskspaceRemoveEntryResult` | `DELETE /:namespaceId/api/taskspaces/:taskspaceId/files?path=...` | Node adapter only. Root deletion refusal, missing entry and forbidden access. Directory route tests and `http-backend.test.ts`. |
 
 The compiled [consumer fixture](../../test-utils/backend-inputs.typecheck.ts) calls every current resource method through the backend entry and checks invalid input examples. It runs under the project type check. Isolated packed-consumer verification remains a Phase 3 deliverable.
+
+## Domain mutations
+
+All methods in this section require `capabilities.writable`. HTTP success publishes every dataset through the shared invalidation rule above. StaticBackend rejects every method with `read_only` before looking up identifiers. LocalBackend execution remains pending. Types specify valid caller shapes, while runtime validation also checks numeric finiteness, configured bounds, batch limits and database references.
+
+The table uses `ns`, `card`, `layer`, `partition`, `scope`, `area`, `warp` and `inventory` for required string identifiers. In the endpoint column, paths beginning with `/api` are workspace paths. All other paths are relative to `/:namespaceId/api`. `K` means the declaration accepts `MutationOptions.keepalive`. Methods without `K` do not support it. Bodyless deletes accept the option where declared, but the HTTP transport enables keepalive only when a body exists.
+
+`W` means the entire database mutation runs on one write transaction, owned by the service or the composite database API it calls. Transaction-bound variants reuse their caller's write transaction. `S` means one atomic SQL write without an explicit service transaction. `R+S` means a read followed by a separate SQL write, which is a remaining reference-race audit item in Phase 1. These boundaries describe current implementation.
+
+Names are trimmed, nonblank and bounded, except inventory names, which may be blank. Numeric coordinates are rounded and clamped to the configured canvas. Scope rectangles are also clamped to the minimum frame size and canvas bounds. Batch ID lists require unique nonempty strings, at least one entry and no more than the configured batch limit. Glue creation requires at least two entries. Required fields reject omission and null. Optional fields preserve existing values on update unless the row specifies a different default. Only card width accepts null as a reset value.
+
+Batch refusals retain HTTP 400 with code `validation`, including foreign cards/references, a missing target namespace, full inventories, stored cards in a glue request and unstored cards in a take request. Single-record missing resources generally return 404 with `not_found`. The rows identify exceptions. Existing content, name and batch limits remain 400 validation errors. Driver normalization and remaining direct-write paths stay under Phase 1.
+
+| Method | Required identifiers and input semantics | Result type | Transaction | Endpoint, keepalive and specific errors |
+| --- | --- | --- | --- | --- |
+| `namespaces.create` | `NamespaceCreateInput.name`. Initializes default partition and layer without changing the workspace default namespace. | `NamespaceCreateResult` | W | `POST /api/namespaces`. Invalid name is validation. |
+| `cards.create` | ns, `CardCreateInput.partitionId` and content. Omitted axes default to zero, layer to default, zIndex to layer top, scope/inventory to none. | `CardCreateResult` with stored coordinates and placements | W | `POST /cards`, K. Invalid content or partition/layer/scope is validation. Missing/full inventory refuses the whole creation. |
+| `cards.update` | ns, card, at least one `CardUpdateInput` field. Omitted fields stay unchanged. Width null restores configured default. Each axis can be updated alone. Layer change restacks, with explicit zIndex taking precedence. | `CardUpdateResult` with normalized content and stacking/refit changes when applicable | W | `PATCH /cards/:cardId`, K. Missing card is not_found. Invalid new partition/layer, width/content or inventory refit is validation and rolls back the edit. |
+| `cards.updatePositions` | ns, nonempty `CardUpdatePositionsInput.positions`, each with cardId and both axes. Card IDs must be unique. | `CardUpdatePositionsResult` | W | `PATCH /cards`, K. Foreign cards or malformed coordinates/batches are validation. |
+| `cards.remove` | ns, `CardRemoveInput.cardIds` | `CardRemoveResult` | W | `DELETE /cards`. Foreign cards are validation. Removal cleans related glue, scope and inventory data atomically. |
+| `cards.removeOne` | ns, card. No body. | `CardRemoveOneResult` | W | `DELETE /cards/:cardId`. Missing/foreign card is not_found. |
+| `cards.move` | source ns, `CardMoveInput.cardIds` and targetNamespaceId. Target must differ from source. | `CardMoveResult` | W | `POST /cards/move`. Same source/target, missing target or foreign cards are validation. |
+| `cards.setLayer` | ns, `CardSetLayerInput.cardIds` and layerId | `CardSetLayerResult` with assigned stacking | W | `PATCH /cards/layer`. Foreign cards/layer are validation. |
+| `cards.setPartition` | ns, `CardSetPartitionInput.cardIds` and partitionId | `CardSetPartitionResult` | W | `PATCH /cards/partition`. Foreign cards/partition are validation. |
+| `cards.setStacking` | ns, `CardSetStackingInput.cardIds` and direction, exactly front or back | `CardSetStackingResult` with final stacking | W | `PATCH /cards/stacking`. Invalid direction or foreign cards are validation. |
+| `cards.squash` | ns, `CardSquashInput.cardId` | `CardSquashResult` with inventory, full piece cards and stacking | W | `POST /cards/squash`. Missing/foreign card, stored card, indivisible text, too many pieces or insufficient inventory capacity are validation. |
+| `glues.create` | ns, `GlueCreateInput.cardIds`, at least two | `GlueCreateResult` with glueId and cleared card IDs | W | `POST /glues`, K. Foreign or stored cards are validation. |
+| `glues.remove` | ns, `GlueRemoveInput.cardIds` | `GlueRemoveResult` with cleared card IDs | W | `DELETE /glues`, K. Foreign cards are validation. |
+| `layers.create` | ns, `LayerCreateInput.name` | `LayerCreateResult` with position and isDefault false | S | `POST /layers`, K. Duplicate name is conflict with retained HTTP 400. Missing namespace is not_found. |
+| `layers.rename` | ns, layer, `LayerRenameInput.name` | `LayerRenameResult` | S | `PATCH /layers/:layerId`, K. Missing layer is not_found. Duplicate name is conflict with HTTP 400. |
+| `layers.remove` | ns, layer. No body. Reassigns cards to the default layer. | `LayerRemoveResult` with reassignment data | W | `DELETE /layers/:layerId`, K. Missing layer is not_found. Default-layer removal is validation. |
+| `layers.reorder` | ns, `LayerReorderInput.layerIds` naming every current layer exactly once | `LayerReorderResult` | W | `PATCH /layers`, K. Duplicate, stale or foreign layer list is validation. |
+| `partitions.create` | ns, `PartitionCreateInput.name` | `PartitionCreateResult` with id | S | `POST /partitions`, K. Duplicate name is conflict with retained HTTP 400. Missing namespace is not_found. |
+| `partitions.rename` | ns, partition, `PartitionRenameInput.name` | `PartitionRenameResult` | S | `PATCH /partitions/:partitionId`, K. Missing partition is not_found. Duplicate name is conflict with HTTP 400. |
+| `partitions.remove` | ns, partition. No body. Reassigns cards to the default partition. | `PartitionRemoveResult` with reassignment data | W | `DELETE /partitions/:partitionId`, K. Missing partition is not_found. Default-partition removal is validation. |
+| `scopes.create` | ns is required by the backend route. `ScopeCreateInput.name` creates a workspace scope without adding members or an area. | `ScopeCreateResult` with id | S | `POST /scopes`, K. Invalid name is validation. Duplicate workspace name is conflict with HTTP 409. |
+| `scopes.rename` | ns, scope, `ScopeRenameInput.name`. Scope identity and name are workspace-wide. | `ScopeRenameResult` with id and name | R+S | `PATCH /scopes/:scopeId`, K. Missing scope is not_found. Duplicate name is conflict with HTTP 409. |
+| `scopes.remove` | ns, scope. No body. Removes this board's placement, preserving usage elsewhere. | `ScopeRemoveResult` | W | `DELETE /scopes/:scopeId`, K. Missing scope/placement is not_found. |
+| `scopes.addMembers` | ns, scope, `ScopeAddMembersInput.cardIds` | `ScopeAddMembersResult` | W | `POST /scopes/:scopeId/members`, K. Foreign scope/cards are validation. |
+| `scopes.removeMembers` | ns, scope, `ScopeRemoveMembersInput.cardIds` | `ScopeRemoveMembersResult` | W | `DELETE /scopes/:scopeId/members`, K. Foreign scope/cards are validation. |
+| `scopes.createArea` | ns, scope, `ScopeCreateAreaInput` with posX, posY, width and height | `ScopeCreateAreaResult` with stored rectangle | S | `POST /scopes/:scopeId/areas`, K. Incomplete/nonfinite rectangle is validation. Missing referenced row is not_found with retained scope wording. |
+| `scopes.updateArea` | ns, scope, area, complete `ScopeUpdateAreaInput` rectangle | `ScopeUpdateAreaResult` with stored rectangle | S | `PATCH /scopes/:scopeId/areas/:areaId`, K. Missing/foreign area is not_found with `Scope area not found`. Invalid rectangle is validation. |
+| `scopes.removeArea` | ns, scope, area. No body. Preserves membership and other frames. | `ScopeRemoveAreaResult` | S | `DELETE /scopes/:scopeId/areas/:areaId`, K. Missing/foreign area is not_found with `Scope area not found`. |
+| `warps.create` | ns, `WarpCreateInput` with both axes | `WarpCreateResult` with stored coordinates | W | `POST /warps`, K. Missing namespace is not_found. Missing/nonfinite axes are validation. |
+| `warps.update` | ns, warp, `WarpUpdateInput` with both axes | `WarpUpdateResult` with stored coordinates | W | `PATCH /warps/:warpId`, K. Missing/foreign warp is not_found. Invalid axes are validation. |
+| `warps.remove` | ns, warp. No body. | `WarpRemoveResult` | W | `DELETE /warps/:warpId`, K. Missing/foreign warp is not_found. |
+| `inventories.create` | ns, `InventoryCreateInput` with both axes. Omitted name defaults to an empty label. | `InventoryCreateResult` with stored row | W | `POST /inventories`, K. Missing namespace is not_found. Invalid axes/name are validation. |
+| `inventories.update` | ns, inventory, `InventoryUpdateInput` with name, position pair or both. Omitted name/position stays unchanged. Empty name clears label. | `InventoryUpdateResult` with stored row | W | `PATCH /inventories/:inventoryId`, K. Missing/foreign inventory is not_found. Empty update or half a position pair is validation. |
+| `inventories.remove` | ns, inventory. No body. Cards return to their canvas positions. | `InventoryRemoveResult` with released card IDs | W | `DELETE /inventories/:inventoryId`, K. Missing/foreign inventory is not_found. |
+| `inventories.stow` | ns, inventory, `InventoryStowInput.cardIds`. Optional slot is an integer in range. Omission selects automatic placement. Null is invalid. | `InventoryStowResult` with placements and cleared card IDs | W | `POST /inventories/:inventoryId/cards`, K. Foreign inventory/cards, invalid slot or insufficient capacity is validation. |
+| `inventories.take` | ns, `InventoryTakeInput.cards`, unique card IDs. Each card has both axes or neither. Omitted axes retain its saved canvas position. | `InventoryTakeResult` with explicitly supplied clamped positions | W | `POST /inventories/take`, K. Half a position pair, foreign or unstored cards are validation. |
+
+## Lifecycle methods
+
+Capabilities, version and state are readonly properties. Captured version stamps remain immutable. Dataset revisions advance only after successful commit or observed external change. HTTP is immediately ready. StaticBackend is ready with a fixed version and no polling. LocalBackend lifecycle transitions remain pending.
+
+| Method | Input and result | Effects and test coverage |
+| --- | --- | --- |
+| `subscribe` | Required invalidation listener. Returns an unsubscribe function. | No initial event. HTTP retains backend-owned polling only when external writes are enabled. Static subscriptions allocate no timers. Listener failures are isolated. `signals.test.ts`, `workspace-poller.test.ts`, `backend-entry.test.ts` and `static-backend.test.ts`. |
+| `subscribeState` | Required state listener. Returns an unsubscribe function. | Immediately emits current immutable state. Listener failures are isolated. Unsubscribe stops later delivery. `signals.test.ts`, `backend-entry.test.ts` and `static-backend.test.ts`. |
+
+## Mutation verification
+
+[mutation-contract.test.ts](mutation-contract.test.ts) has a typed case for every domain mutation. Every case verifies HTTP method, encoded namespace path, body and keepalive behavior, waits for the HTTP response before invalidating, checks that listeners see the new revision, and verifies one request without invalidation on a domain rejection. Every case also runs the shared read-only rejection contract against HTTP and static adapters. The response fixture establishes transport behavior, not stored-data parity. Resource validation and rollback use the existing database, service and route suites below. Their HTTP-specific assertions are adapter-only classifications. They do not replace the future LocalBackend service-parity runner.
+
+| Resource | Existing service/database/HTTP coverage |
+| --- | --- |
+| Cards | `src/services/cards.test.ts`, `src/db/api/card.test.ts` and `src/routes/[namespaceId]/api/cards/**/server.test.ts`, including squash, stacking, batch refusals and refit rollback |
+| Glues | `src/services/glues.test.ts`, `src/db/api/glue.test.ts` and `src/routes/[namespaceId]/api/glues/server.test.ts` |
+| Layers | `src/db/api/layer.test.ts` and `src/routes/[namespaceId]/api/layers/**/server.test.ts`, including default protection and complete reorder |
+| Partitions | `src/db/api/partition.test.ts` and `src/routes/[namespaceId]/api/partitions/**/server.test.ts`, including default protection and reassignment |
+| Scopes | `src/db/api/scope.test.ts`, `src/db/api/scope-rel.test.ts`, `src/db/api/scope-area.test.ts` and `src/routes/[namespaceId]/api/scopes/**/server.test.ts` |
+| Warps | `src/db/api/warp.test.ts` and `src/routes/[namespaceId]/api/warps/**/server.test.ts` |
+| Inventories | `src/db/api/inventory.test.ts` and `src/routes/[namespaceId]/api/inventories/**/server.test.ts`, including paired positions, capacity and all-or-nothing take |
+| Namespaces | `src/db/api/namespace.test.ts` and `src/routes/api/namespaces/server.test.ts`, including atomic default-row initialization |
+
+Run `pnpm check:backend-contract` to compare matrix rows and consumer-fixture calls with the public interfaces. This checks declaration coverage and local links. It does not verify semantic claims or establish the outstanding browser, LocalBackend or package gates.

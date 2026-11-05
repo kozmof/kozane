@@ -50,12 +50,13 @@
     "preflight": "TMPDIR=/tmp npm_config_cache=/tmp/kozane-npm-cache pnpm publish --dry-run",
     "pre-release-check": "pnpm preflight && pnpm pack:check",
     "clean": "node scripts/clean.mjs",
-    "verify": "pnpm check && pnpm check:core-browser && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
+    "verify": "pnpm check && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
     "publish:npm": "NPM_CONFIG_USERCONFIG=$(mktemp /tmp/kozane-npmrc.XXXXXX) && export NPM_CONFIG_USERCONFIG && trap 'rm -f -- \"$NPM_CONFIG_USERCONFIG\"' EXIT && npm login --registry=https://registry.npmjs.org/ && npm whoami --registry=https://registry.npmjs.org/ && npm publish --registry=https://registry.npmjs.org/",
-    "check:core-browser": "node scripts/check-core-browser.mjs"
+    "check:core-browser": "node scripts/check-core-browser.mjs",
+    "check:backend-contract": "node scripts/check-backend-contract.mjs"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",
