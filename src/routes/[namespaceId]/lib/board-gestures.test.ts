@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CardWithGlue, Inventory, ScopeArea, Warp } from "$lib/types";
 import { SCOPE_AREA_MIN_SIZE } from "$lib/constants";
-import { SelectionState } from "../namespace-state.svelte.js";
-import { BoardGestures, type BoardGestureHost } from "./board-gestures.svelte.js";
-import { CanvasViewport } from "./canvas-viewport.js";
-import type { WorldRect } from "./namespace-page.js";
-import type { DropTarget } from "./inventory-drop.js";
+import { SelectionState } from "../../../lib/client/board/namespace-state.svelte.js";
+import {
+  BoardGestures,
+  type BoardGestureHost,
+} from "../../../lib/client/board/lib/board-gestures.svelte.js";
+import { CanvasViewport } from "../../../lib/client/board/lib/canvas-viewport.js";
+import type { WorldRect } from "../../../lib/client/board/lib/namespace-page.js";
+import type { DropTarget } from "../../../lib/client/board/lib/inventory-drop.js";
 
 function card(id: string, posX: number, posY: number): CardWithGlue {
   return {

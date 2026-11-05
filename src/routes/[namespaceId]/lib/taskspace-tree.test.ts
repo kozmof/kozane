@@ -1,7 +1,10 @@
 import { httpEditorContext, staticEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "$lib/types";
-import { TaskspaceTreeState, nodeKey } from "./taskspace-tree.svelte.js";
+import {
+  TaskspaceTreeState,
+  nodeKey,
+} from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
 
 afterEach(() => vi.unstubAllGlobals());
 

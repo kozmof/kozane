@@ -7,6 +7,7 @@ import {
   NamespacesView,
   TagsView,
   MapView,
+  BoardCanvas,
 } from "../lib/client/index.js";
 import type { NavigationDriver } from "../lib/navigation.js";
 
@@ -14,6 +15,7 @@ import { StaticBackend } from "../lib/backend/index.js";
 import { createDemoNavigation } from "../lib/navigation.js";
 import { tagDataset } from "../lib/backend/tags.fixtures.js";
 import { tagsView } from "../lib/backend/views/tags.js";
+import { boardCanvasProps } from "./board-canvas-props.js";
 import { mapDataset } from "./map-dataset.js";
 import { mapView } from "../lib/backend/views/map.js";
 import { staticEditorContext } from "./editor-context.js";
@@ -85,11 +87,13 @@ export async function renderViews() {
       retryIntervalMs: false,
     },
   });
+  const board = render(BoardCanvas, { props: boardCanvasProps() });
   return {
     surface: surface.body,
     panel: panel.body,
     namespaces: namespaces.body,
     tags: tags.body,
     map: map.body,
+    board: board.body,
   };
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import WarpPalette from "./WarpPalette.svelte";
+import WarpPalette from "../../../lib/client/board/components/WarpPalette.svelte";
 import type { WarpListEntry } from "$lib/warp-list";
 
 function entry(overrides: Partial<WarpListEntry> & { id: string }): WarpListEntry {

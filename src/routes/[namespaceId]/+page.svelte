@@ -13,29 +13,27 @@
   import { boardKeyBindings } from "./lib/board-bindings.js";
   import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";
   import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
-  import { NamespaceState } from "./namespace-state.svelte.js";
-  import { createNamespaceActions } from "./namespace-actions.svelte.js";
-  import PartitionSidebar from "./components/PartitionSidebar.svelte";
-  import KozaneCanvas from "./components/KozaneCanvas.svelte";
-  import FloatingControls from "./components/FloatingControls.svelte";
-  import BoardControls from "./components/BoardControls.svelte";
-  import BoardComposer from "./components/BoardComposer.svelte";
-  import WarpPalette from "./components/WarpPalette.svelte";
-  import InventoryDock from "./components/InventoryDock.svelte";
-  import { createBackendInventoryActions } from "./lib/backend-inventory-actions.js";
-  import type { InventoryDrag } from "./lib/inventory-drop.js";
+  import { BoardCanvas as KozaneCanvas, NamespaceState, createNamespaceActions } from "$lib/client/board/index.js";
+  import PartitionSidebar from "../../lib/client/board/components/PartitionSidebar.svelte";
+  import FloatingControls from "../../lib/client/board/components/FloatingControls.svelte";
+  import BoardControls from "../../lib/client/board/components/BoardControls.svelte";
+  import BoardComposer from "../../lib/client/board/components/BoardComposer.svelte";
+  import WarpPalette from "../../lib/client/board/components/WarpPalette.svelte";
+  import InventoryDock from "../../lib/client/board/components/InventoryDock.svelte";
+  import { createBackendInventoryActions } from "../../lib/client/board/lib/backend-inventory-actions.js";
+  import type { InventoryDrag } from "../../lib/client/board/lib/inventory-drop.js";
   import { arrivalWarp, clearArrivalParams, readArrival } from "./lib/board-arrival.js";
   import { createBoardFiles } from "./lib/board-files.js";
   import { BoardWarps } from "./lib/board-warps.svelte.js";
   import { BoardView } from "./lib/board-view.svelte.js";
   import { PendingFrame } from "./lib/pending-frame.svelte.js";
   import { clampZoom } from "$lib/constants";
-  import ErrorBanner from "./components/ErrorBanner.svelte";
+  import ErrorBanner from "../../lib/client/board/components/ErrorBanner.svelte";
   import { FileEditor, EditorSession } from "$lib/client/editor/index.js";
-  import FilePalette from "./components/FilePalette.svelte";
-  import FileBrowser from "./components/FileBrowser.svelte";
-  import type { FileManagementActions } from "./lib/file-management.js";
-  import { InFlight } from "./lib/in-flight.js";
+  import FilePalette from "../../lib/client/board/components/FilePalette.svelte";
+  import FileBrowser from "../../lib/client/board/components/FileBrowser.svelte";
+  import type { FileManagementActions } from "../../lib/client/board/lib/file-management.js";
+  import { InFlight } from "../../lib/client/board/lib/in-flight.js";
   import { startSnapshotView } from "$lib/backend/snapshot-view.js";
   import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
   import { StaticBackend } from "$lib/backend/static-backend.js";
@@ -53,13 +51,12 @@
 
   // ── Reactive namespace state ────────────────────────────────────
   const s = new NamespaceState(untrack(() => preferences));
-  s.fetcher = fetch;
   // Use the same namespace-loading path as later navigation so layer restoration and other
   // initialization stay consistent.
   untrack(() => s.resetFromData(data));
 
   const httpBackend = untrack(() => staticExport ? undefined : new HttpBackend({
-    base, fetcher: s.fetcher, pollingInitialDelayMs: 1000,
+    base, fetcher: fetch, pollingInitialDelayMs: 1000,
     capabilities: data.backendCapabilities ?? { writable: !data.readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
   }));
   const backend = $derived(httpBackend ?? new StaticBackend(data.staticBackendData ?? {

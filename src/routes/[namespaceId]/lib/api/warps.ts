@@ -1,6 +1,6 @@
 /** Warp requests, and the directory of every namespace's warps. */
 import type { Warp } from "$lib/types.js";
-import { readFiniteNumber, readString } from "../response.js";
+import { readFiniteNumber, readString } from "../../../../lib/client/board/lib/response.js";
 import { apiUrl, jsonRequest } from "./request.js";
 
 /** `posX`/`posY` are the world coordinates of the view centre to come back to. */

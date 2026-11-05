@@ -4,7 +4,7 @@ import type {
   TaskspaceEntryKind,
   TaskspaceSummary,
 } from "$lib/types";
-import type { OpenFileRef } from "../../../lib/client/editor/index.js";
+import type { OpenFileRef } from "../../editor/index.js";
 
 /**
  * Rules for renaming and deleting scopes, taskspaces, files, and folders in the file browser:

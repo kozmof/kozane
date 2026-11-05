@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import NamespacePage from "./+page.svelte";
-import { SAFE_AREA_GRACE_MS } from "./lib/namespace-page.js";
+import { SAFE_AREA_GRACE_MS } from "../../lib/client/board/lib/namespace-page.js";
 import { data } from "./page.fixtures.js";
 
 // Stub router behavior for namespace navigation, URL cleanup, and unsaved-file guards.

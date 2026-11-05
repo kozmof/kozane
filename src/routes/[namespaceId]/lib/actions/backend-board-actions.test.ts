@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
-import { NamespaceState } from "../../namespace-state.svelte.js";
+import { NamespaceState } from "../../../../lib/client/board/namespace-state.svelte.js";
 import { HttpBackend } from "$lib/backend/http-backend.js";
-import { createBackendBoardActions } from "./backend-board-actions";
+import { createBackendBoardActions } from "../../../../lib/client/board/lib/actions/backend-board-actions.js";
 import { data } from "../../page.fixtures.js";
 const capabilities = {
   writable: true,

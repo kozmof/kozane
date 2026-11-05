@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { countLinked, scopeLinkState } from "./scope-link.js";
+import { countLinked, scopeLinkState } from "../../../lib/client/board/lib/scope-link.js";
 
 const rels = [
   { scopeId: "s1", cardId: "c1" },

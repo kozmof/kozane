@@ -1,8 +1,12 @@
 /** Inventory requests: create, rename, delete, stow, and take. */
 import type { Inventory } from "$lib/types.js";
 import type { InventoryPlacement, TakenCard } from "$lib/inventory.js";
-import type { BoardPoint } from "../canvas-viewport.js";
-import { readArray, readFiniteNumber, readString } from "../response.js";
+import type { BoardPoint } from "../../../../lib/client/board/lib/canvas-viewport.js";
+import {
+  readArray,
+  readFiniteNumber,
+  readString,
+} from "../../../../lib/client/board/lib/response.js";
 import { readInventory } from "../snapshot-reader.js";
 import { apiUrl, jsonRequest } from "./request.js";
 

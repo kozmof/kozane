@@ -11,8 +11,8 @@ import {
   resolveActiveLayerId,
   readStoredLayerId,
   storeActiveLayerId,
-} from "./namespace-state.svelte.js";
-import { nodeKey } from "./lib/taskspace-tree.svelte.js";
+} from "../../lib/client/board/namespace-state.svelte.js";
+import { nodeKey } from "../../lib/client/board/lib/taskspace-tree.svelte.js";
 import type {
   Partition,
   CardWithGlue,

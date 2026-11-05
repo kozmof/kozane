@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropTargetAt, sameDropTarget } from "./inventory-drop.js";
+import { dropTargetAt, sameDropTarget } from "../../../lib/client/board/lib/inventory-drop.js";
 
 /** A document whose pointer stack is the given elements, topmost first. */
 function docWith(stack: Element[]): Document {

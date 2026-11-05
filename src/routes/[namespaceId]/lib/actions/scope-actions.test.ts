@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { HttpBackend } from "$lib/backend/http-backend.js";
-import { NamespaceState } from "../../namespace-state.svelte.js";
-import { createBackendScopeActions } from "./backend-scope-actions.js";
+import { NamespaceState } from "../../../../lib/client/board/namespace-state.svelte.js";
+import { createBackendScopeActions } from "../../../../lib/client/board/lib/actions/backend-scope-actions.js";
 const capabilities = {
   writable: true,
   persistent: true,

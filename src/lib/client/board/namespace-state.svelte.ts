@@ -94,7 +94,6 @@ export class NamespaceState {
   }
 
   namespaceId = $state("");
-  fetcher: typeof fetch = fetch;
   /**
    * Track outstanding mutations so polling waits for them and discards responses spanning a
    * mutation.

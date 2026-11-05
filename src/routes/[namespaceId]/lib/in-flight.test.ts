@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InFlight } from "./in-flight.js";
+import { InFlight } from "../../../lib/client/board/lib/in-flight.js";
 
 describe("InFlight", () => {
   it("starts idle", () => {

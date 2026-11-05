@@ -86,7 +86,21 @@ async function main() {
     /href="\/demo\/board\/\?namespaceId=p1"/.test(rendered.map),
     "Map SSR must use the supplied board navigation",
   );
-  console.log("Shared client browser bundle and standalone editor/namespace/tags/map SSR passed.");
+  assert.ok(
+    rendered.board.includes("Standalone board"),
+    "Board canvas SSR must include card content",
+  );
+  assert.ok(
+    rendered.board.includes('data-card-id="card"'),
+    "Board canvas SSR must preserve card identity",
+  );
+  assert.ok(
+    rendered.board.includes("/demo/tags/?namespaceId=board#tag=shared"),
+    "Board canvas SSR must use supplied tag navigation",
+  );
+  console.log(
+    "Shared client browser bundle and standalone editor/namespace/tags/map/board-canvas SSR passed.",
+  );
 }
 try {
   await main();

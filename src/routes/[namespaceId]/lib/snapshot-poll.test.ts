@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { InFlight } from "./in-flight.js";
+import { InFlight } from "../../../lib/client/board/lib/in-flight.js";
 import { SNAPSHOT_POLL_MS, startSnapshotPoll } from "./snapshot-poll.js";
 import type { NamespaceDataSnapshot } from "$lib/types.js";
 

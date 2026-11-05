@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { BoardWarps } from "./board-warps.svelte.js";
-import { NamespaceState } from "../namespace-state.svelte.js";
+import { NamespaceState } from "../../../lib/client/board/namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { createDemoNavigation } from "$lib/navigation.js";

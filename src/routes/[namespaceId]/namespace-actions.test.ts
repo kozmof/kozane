@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createNamespaceActions } from "./namespace-actions.svelte.js";
-import { NamespaceState } from "./namespace-state.svelte.js";
+import { createNamespaceActions } from "../../lib/client/board/namespace-actions.svelte.js";
+import { NamespaceState } from "../../lib/client/board/namespace-state.svelte.js";
 import type { CardWithGlue } from "$lib/types";
 import { BackendError, type KozaneBackend } from "$lib/backend/contract.js";
 

@@ -15,8 +15,8 @@ import {
   taskspacesForScope,
   visibleCells,
   type FileCell,
-} from "./scope-area-files.js";
-import type { TaskspaceNode } from "./taskspace-tree.svelte.js";
+} from "../../../lib/client/board/lib/scope-area-files.js";
+import type { TaskspaceNode } from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
 
 const taskspace = (overrides: Partial<TaskspaceSummary> = {}): TaskspaceSummary => ({
   id: "t1",

@@ -2,7 +2,7 @@
   import { css, cx } from "styled-system/css";
   import type { Scope, TaskspaceEntryKind, TaskspaceSummary } from "$lib/types";
   import type { TaskspaceTreeContext, TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
-  import type { OpenFileRef } from "../../../lib/client/editor/index.js";
+  import type { OpenFileRef } from "../../editor/index.js";
   import {
     blockedByEditor,
     deleteEntryFlow,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { tick } from "svelte";
-import CardComposer from "./CardComposer.svelte";
+import CardComposer from "../../../lib/client/board/components/CardComposer.svelte";
 import { DEFAULT_UI_CONFIG } from "$lib/ui-config";
 
 const partitions = [

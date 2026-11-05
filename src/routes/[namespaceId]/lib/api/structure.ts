@@ -1,7 +1,7 @@
 /** Board structure requests: partitions, layers, scopes, and scope frames. */
 import type { ScopeArea } from "$lib/types.js";
 import type { BoardRect } from "$lib/constants";
-import { readFiniteNumber, readString } from "../response.js";
+import { readFiniteNumber, readString } from "../../../../lib/client/board/lib/response.js";
 import { apiUrl, jsonRequest } from "./request.js";
 
 export function createPartition(

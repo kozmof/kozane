@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { CardPlacement, type PlacementRequest } from "./card-placement.js";
-import { GRID, type PositionedCardSize } from "./namespace-page.js";
+import {
+  CardPlacement,
+  type PlacementRequest,
+} from "../../../lib/client/board/lib/card-placement.js";
+import { GRID, type PositionedCardSize } from "../../../lib/client/board/lib/namespace-page.js";
 
 /**
  * A board 800x600 scrolled to the origin at zoom 1, which is the simplest viewport the run

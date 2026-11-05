@@ -1,4 +1,4 @@
-import type { WorldRect } from "./namespace-page.js";
+import type { WorldRect } from "../../../lib/client/board/lib/namespace-page.js";
 
 type ScopeAreaInput = { posX: number; posY: number; width: number; height: number };
 

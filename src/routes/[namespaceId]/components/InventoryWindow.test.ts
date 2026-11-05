@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import InventoryWindow from "./InventoryWindow.svelte";
+import InventoryWindow from "../../../lib/client/board/components/InventoryWindow.svelte";
 
 function mount(props: Record<string, unknown> = {}) {
   const onRename = vi.fn();

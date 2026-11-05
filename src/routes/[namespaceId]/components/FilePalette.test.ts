@@ -2,8 +2,8 @@ import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import FilePalette from "./FilePalette.svelte";
-import { TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
+import FilePalette from "../../../lib/client/board/components/FilePalette.svelte";
+import { TaskspaceTreeState } from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
 import type { TaskspaceSummary } from "$lib/types";
 
 const scopes = [

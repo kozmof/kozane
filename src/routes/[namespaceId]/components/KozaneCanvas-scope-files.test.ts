@@ -1,11 +1,11 @@
 import { httpEditorContext } from "../../../test-utils/editor-context.js";
 import { describe, it, expect, vi } from "vitest";
 import { render, fireEvent } from "@testing-library/svelte";
-import KozaneCanvas from "./KozaneCanvas.svelte";
+import KozaneCanvas from "../../../lib/client/board/components/KozaneCanvas.svelte";
 import CanvasBindingHarness from "./CanvasBindingHarness.svelte";
-import { TaskspaceTreeState } from "../lib/taskspace-tree.svelte.js";
+import { TaskspaceTreeState } from "../../../lib/client/board/lib/taskspace-tree.svelte.js";
 import type { TaskspaceSummary } from "$lib/types";
-import { STRIP_GAP } from "../lib/scope-area-files.js";
+import { STRIP_GAP } from "../../../lib/client/board/lib/scope-area-files.js";
 import {
   makeProps,
   down,

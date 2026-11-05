@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import PartitionDropdown from "./PartitionDropdown.svelte";
+import PartitionDropdown from "../../../lib/client/board/components/PartitionDropdown.svelte";
 
 const partitions = [
   { id: "b1", name: "General", bg: "#fff7ed", dot: "#f59e0b", isDefault: true },

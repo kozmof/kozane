@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import ScopeAreaPrompt from "./ScopeAreaPrompt.svelte";
+import ScopeAreaPrompt from "../../../lib/client/board/components/ScopeAreaPrompt.svelte";
 
 afterEach(cleanup);
 
