@@ -1,12 +1,32 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
   import { base } from "$app/paths";
-  import { enhance } from "$app/forms";
+  import { onMount, untrack } from "svelte";
+  import { HttpBackend } from "$lib/backend/http-backend.js";
+  import { NamespaceIndex } from "$lib/backend/namespace-index.svelte.js";
   import { css } from "styled-system/css";
   import NavIcon from "$lib/components/NavIcon.svelte";
 
   let { data, form }: PageProps = $props();
-  let submitting = $state(false);
+  const backend = untrack(() => new HttpBackend({
+    base,
+    fetcher: fetch,
+    pollingInitialDelayMs: 1000,
+    capabilities: data.backendCapabilities ?? {
+      writable: !data.readonly, persistent: true, externalWrites: true, taskspaces: true, auth: false,
+    },
+  }));
+  const index = new NamespaceIndex(backend, untrack(() => data.namespaces));
+  onMount(() => {
+    if (!data.readonly) return index.start();
+  });
+  async function createNamespace(event: SubmitEvent) {
+    event.preventDefault();
+    if (await index.create(nameInput?.value ?? "")) {
+      if (nameInput) nameInput.value = "";
+    }
+    nameInput?.focus();
+  }
   let nameInput = $state<HTMLInputElement | null>(null);
 
   /**
@@ -52,7 +72,7 @@
     </nav>
   </div>
 
-  {#if data.namespaces.length === 0}
+  {#if index.namespaces.length === 0}
     {#if data.readonly}
       <p class={css({ color: "neutral.subtle", fontSize: "13px" })}>
         No namespaces yet. Run
@@ -66,7 +86,7 @@
     {/if}
   {:else}
     <ul class={css({ listStyle: "none", display: "flex", flexDirection: "column", gap: "8px" })}>
-      {#each data.namespaces as namespace (namespace.id)}
+      {#each index.namespaces as namespace (namespace.id)}
         <li>
           <a
             href="{base}/{namespace.id}"
@@ -117,15 +137,7 @@
   {#if !data.readonly}
     <form
       method="POST"
-      use:enhance={() => {
-        submitting = true;
-        return async ({ update }) => {
-          await update();
-          submitting = false;
-          // Refocus so several namespaces can be created without reaching for the mouse.
-          nameInput?.focus();
-        };
-      }}
+      onsubmit={createNamespace}
       class={css({ display: "flex", flexDirection: "column", gap: "8px", marginTop: "9px" })}
     >
       <div class={css({ display: "flex", alignItems: "center", gap: "8px" })}>
@@ -152,7 +164,7 @@
         />
         <button
           type="submit"
-          disabled={submitting}
+          disabled={index.submitting || !backend.capabilities.writable}
           title="Create namespace"
           aria-label="Create namespace"
           class={css({
@@ -182,9 +194,9 @@
         >+</button>
       </div>
 
-      {#if form?.error}
+      {#if index.error || form?.error}
         <p role="alert" class={css({ margin: "0", fontSize: "12px", color: "state.error" })}>
-          {form.error}
+          {index.error ?? form?.error}
         </p>
       {/if}
     </form>
