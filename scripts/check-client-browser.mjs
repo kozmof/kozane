@@ -77,7 +77,16 @@ async function main() {
   assert.match(rendered.tags, /Standalone tag result/);
   assert.match(rendered.tags, /card=ssr-card/);
   assert.doesNotMatch(rendered.tags, /href="[^"#]*[?&]tag=/);
-  console.log("Shared client browser bundle and standalone editor/namespace/tags SSR passed.");
+  assert.ok(rendered.map.includes("Standalone partition"), "Map SSR must include partition labels");
+  assert.ok(
+    rendered.map.includes('aria-label="Namespaces and partitions by card count'),
+    "Map SSR must include its accessible drawing",
+  );
+  assert.ok(
+    /href="\/demo\/board\/\?namespaceId=p1"/.test(rendered.map),
+    "Map SSR must use the supplied board navigation",
+  );
+  console.log("Shared client browser bundle and standalone editor/namespace/tags/map SSR passed.");
 }
 try {
   await main();

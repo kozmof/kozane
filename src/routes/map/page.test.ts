@@ -2,8 +2,13 @@ import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
-import { DEFAULT_ZOOM, zoomPercent } from "./lib/view.js";
-import { TAG_PANEL_LEFT, TAG_PANEL_TOP, TAG_PANEL_WIDTH, TAG_ROW_HEIGHT } from "./lib/tag-rows.js";
+import { DEFAULT_ZOOM, zoomPercent } from "../../lib/client/map/lib/view.js";
+import {
+  TAG_PANEL_LEFT,
+  TAG_PANEL_TOP,
+  TAG_PANEL_WIDTH,
+  TAG_ROW_HEIGHT,
+} from "../../lib/client/map/lib/tag-rows.js";
 import type { TagHit } from "$lib/types";
 
 /**

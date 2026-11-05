@@ -15,7 +15,7 @@ import { load } from "./+page.server.js";
 import type { MapPartition, MapScope } from "./+page.server.js";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
-import { tagPartitionIndex, type MapTagCard } from "./lib/graph.js";
+import { tagPartitionIndex, type MapTagCard } from "../../lib/client/map/lib/graph.js";
 
 beforeEach(() => vi.stubEnv("DATABASE_URL", "file::memory:"));
 afterEach(() => vi.unstubAllEnvs());
