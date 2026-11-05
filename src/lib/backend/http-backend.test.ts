@@ -153,15 +153,17 @@ it("routes workspace view reads without dispatching content-bearing tag filters"
         JSON.stringify(
           path.startsWith("/api/tags")
             ? tagDataset()
-            : {
-                namespaces: [],
-                partitions: [],
-                activity: [],
-                scopes: [],
-                partitionUsage: [],
-                namespaceUsage: [],
-                tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
-              },
+            : path.endsWith("/warp-directory")
+              ? []
+              : {
+                  namespaces: [],
+                  partitions: [],
+                  activity: [],
+                  scopes: [],
+                  partitionUsage: [],
+                  namespaceUsage: [],
+                  tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+                },
         ),
       ),
   );

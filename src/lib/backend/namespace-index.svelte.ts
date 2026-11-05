@@ -1,26 +1,18 @@
 import { BackendError } from "./contract.js";
-import type { KozaneBackend } from "./contract.js";
+import type { KozaneBackend, NamespaceGetResult } from "./contract.js";
+import { readNamespaceList } from "./decoders/namespaces.js";
 import { NAME_MAX } from "../constants.js";
 
-export type NamespaceRow = { id: string; name: string; isDefault: boolean };
+export type NamespaceRow = NamespaceGetResult;
 type NamespaceBackend = Pick<
   KozaneBackend,
   "version" | "state" | "subscribe" | "subscribeState" | "namespaces"
 >;
 
 function rows(value: unknown): NamespaceRow[] {
-  if (
-    !Array.isArray(value) ||
-    value.some(
-      (row) =>
-        !row ||
-        typeof row.id !== "string" ||
-        typeof row.name !== "string" ||
-        typeof row.isDefault !== "boolean",
-    )
-  )
-    throw new BackendError("unavailable", "Invalid namespace list");
-  return value;
+  const result = readNamespaceList(value);
+  if (!result) throw new BackendError("unavailable", "Invalid namespace list");
+  return result;
 }
 
 /** Keep the namespace index visible while committed changes are re-read. */

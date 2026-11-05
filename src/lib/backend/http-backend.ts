@@ -7,9 +7,10 @@ import type {
   TaskspaceFileData,
 } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
+import { readNamespaceList, readNamespaceMetadata } from "./decoders/namespaces.js";
+import { parseWarpEntries } from "./decoders/warp-directory.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
-import type { WarpListEntry } from "../warp-list.js";
 import type * as inventoriesServices from "../../services/inventories.js";
 import type * as warpsServices from "../../services/warps.js";
 import type * as scopesServices from "../../services/scopes.js";
@@ -28,7 +29,7 @@ import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 type Result<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 const ALL: readonly BackendDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
-/** HTTP resource adapter. External refresh and remaining resource APIs are implemented separately. */
+/** HTTP implementation of the shared backend data and lifecycle contract. */
 export class HttpBackend implements KozaneBackend {
   readonly kind = "http" as const;
   readonly capabilities: BackendCapabilities;
@@ -110,11 +111,19 @@ export class HttpBackend implements KozaneBackend {
     }
   }
   readonly namespaces: KozaneBackend["namespaces"] = {
-    list: () => this.read<Result<typeof NamespaceServices.list>>("/api/namespaces"),
-    get: (namespaceId: string) =>
-      this.read<Result<typeof NamespaceServices.get>>(
-        `/api/namespaces/${encodeURIComponent(namespaceId)}`,
-      ),
+    list: async () => {
+      const result = readNamespaceList(await this.read<unknown>("/api/namespaces"));
+      if (!result) throw new BackendError("unavailable", "Invalid namespace list");
+      return result;
+    },
+    get: async (namespaceId: string) => {
+      const result = readNamespaceMetadata(
+        await this.read<unknown>(`/api/namespaces/${encodeURIComponent(namespaceId)}`),
+      );
+      if (!result || result.id !== namespaceId)
+        throw new BackendError("unavailable", "Invalid namespace metadata");
+      return result;
+    },
     create: (input: { name: string }) =>
       this.write<Result<typeof NamespaceServices.create>>("/api/namespaces", "POST", input),
   };
@@ -422,8 +431,13 @@ export class HttpBackend implements KozaneBackend {
     },
   };
   readonly warpDirectory: KozaneBackend["warpDirectory"] = {
-    get: (namespaceId: string) =>
-      this.read<WarpListEntry[]>(this.ns(namespaceId, "/warp-directory")),
+    get: async (namespaceId: string) => {
+      const result = parseWarpEntries(
+        await this.read<unknown>(this.ns(namespaceId, "/warp-directory")),
+      );
+      if (!result) throw new BackendError("unavailable", "Invalid warp directory");
+      return result;
+    },
   };
 
   private readonly taskspaceApi: TaskspaceLifecycleApi = {
