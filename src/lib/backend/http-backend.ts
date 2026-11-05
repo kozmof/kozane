@@ -119,58 +119,58 @@ export class HttpBackend implements KozaneBackend {
       this.write<Result<typeof NamespaceServices.create>>("/api/namespaces", "POST", input),
   };
   readonly cards: KozaneBackend["cards"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof CardServices.create>>(this.ns(ns, "/cards"), "POST", input, options),
-    update: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    update: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof CardServices.update>>(
         this.ns(ns, `/cards/${encodeURIComponent(id)}`),
         "PATCH",
         input,
         options,
       ),
-    updatePositions: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    updatePositions: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof CardServices.updatePositions>>(
         this.ns(ns, "/cards"),
         "PATCH",
         input,
         options,
       ),
-    remove: (ns: string, input: Record<string, unknown>) =>
+    remove: (ns: string, input) =>
       this.write<Result<typeof CardServices.remove>>(this.ns(ns, "/cards"), "DELETE", input),
     removeOne: (ns: string, id: string) =>
       this.write<Result<typeof CardServices.removeOne>>(
         this.ns(ns, `/cards/${encodeURIComponent(id)}`),
         "DELETE",
       ),
-    move: (ns: string, input: Record<string, unknown>) =>
+    move: (ns: string, input) =>
       this.write<Result<typeof CardServices.move>>(this.ns(ns, "/cards/move"), "POST", input),
-    setLayer: (ns: string, input: Record<string, unknown>) =>
+    setLayer: (ns: string, input) =>
       this.write<Result<typeof CardServices.setLayer>>(this.ns(ns, "/cards/layer"), "PATCH", input),
-    setPartition: (ns: string, input: Record<string, unknown>) =>
+    setPartition: (ns: string, input) =>
       this.write<Result<typeof CardServices.setPartition>>(
         this.ns(ns, "/cards/partition"),
         "PATCH",
         input,
       ),
-    setStacking: (ns: string, input: Record<string, unknown>) =>
+    setStacking: (ns: string, input) =>
       this.write<Result<typeof CardServices.setStacking>>(
         this.ns(ns, "/cards/stacking"),
         "PATCH",
         input,
       ),
-    squash: (ns: string, input: Record<string, unknown>) =>
+    squash: (ns: string, input) =>
       this.write<Result<typeof CardServices.squash>>(this.ns(ns, "/cards/squash"), "POST", input),
   };
 
   readonly glues: KozaneBackend["glues"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof gluesServices.create>>(
         this.ns(ns, "/glues"),
         "POST",
         input,
         options,
       ),
-    remove: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    remove: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof gluesServices.remove>>(
         this.ns(ns, "/glues"),
         "DELETE",
@@ -180,14 +180,14 @@ export class HttpBackend implements KozaneBackend {
   };
 
   readonly layers: KozaneBackend["layers"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof layersServices.create>>(
         this.ns(ns, "/layers"),
         "POST",
         input,
         options,
       ),
-    rename: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    rename: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof layersServices.rename>>(
         this.ns(ns, `/layers/${encodeURIComponent(id)}`),
         "PATCH",
@@ -201,7 +201,7 @@ export class HttpBackend implements KozaneBackend {
         undefined,
         options,
       ),
-    reorder: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    reorder: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof layersServices.reorder>>(
         this.ns(ns, "/layers"),
         "PATCH",
@@ -211,14 +211,14 @@ export class HttpBackend implements KozaneBackend {
   };
 
   readonly partitions: KozaneBackend["partitions"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof partitionsServices.create>>(
         this.ns(ns, "/partitions"),
         "POST",
         input,
         options,
       ),
-    rename: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    rename: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof partitionsServices.rename>>(
         this.ns(ns, `/partitions/${encodeURIComponent(id)}`),
         "PATCH",
@@ -235,14 +235,14 @@ export class HttpBackend implements KozaneBackend {
   };
 
   readonly scopes: KozaneBackend["scopes"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.create>>(
         this.ns(ns, "/scopes"),
         "POST",
         input,
         options,
       ),
-    rename: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    rename: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.rename>>(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}`),
         "PATCH",
@@ -256,49 +256,28 @@ export class HttpBackend implements KozaneBackend {
         undefined,
         options,
       ),
-    addMembers: (
-      ns: string,
-      id: string,
-      input: Record<string, unknown>,
-      options?: MutationOptions,
-    ) =>
+    addMembers: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.addMembers>>(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
         "POST",
         input,
         options,
       ),
-    removeMembers: (
-      ns: string,
-      id: string,
-      input: Record<string, unknown>,
-      options?: MutationOptions,
-    ) =>
+    removeMembers: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.removeMembers>>(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
         "DELETE",
         input,
         options,
       ),
-    createArea: (
-      ns: string,
-      id: string,
-      input: Record<string, unknown>,
-      options?: MutationOptions,
-    ) =>
+    createArea: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.createArea>>(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas`),
         "POST",
         input,
         options,
       ),
-    updateArea: (
-      ns: string,
-      id: string,
-      areaId: string,
-      input: Record<string, unknown>,
-      options?: MutationOptions,
-    ) =>
+    updateArea: (ns: string, id: string, areaId: string, input, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.updateArea>>(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas/${encodeURIComponent(areaId)}`),
         "PATCH",
@@ -315,14 +294,14 @@ export class HttpBackend implements KozaneBackend {
   };
 
   readonly warps: KozaneBackend["warps"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof warpsServices.create>>(
         this.ns(ns, "/warps"),
         "POST",
         input,
         options,
       ),
-    update: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    update: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof warpsServices.update>>(
         this.ns(ns, `/warps/${encodeURIComponent(id)}`),
         "PATCH",
@@ -339,14 +318,14 @@ export class HttpBackend implements KozaneBackend {
   };
 
   readonly inventories: KozaneBackend["inventories"] = {
-    create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    create: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof inventoriesServices.create>>(
         this.ns(ns, "/inventories"),
         "POST",
         input,
         options,
       ),
-    update: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    update: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof inventoriesServices.update>>(
         this.ns(ns, `/inventories/${encodeURIComponent(id)}`),
         "PATCH",
@@ -360,14 +339,14 @@ export class HttpBackend implements KozaneBackend {
         undefined,
         options,
       ),
-    stow: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    stow: (ns: string, id: string, input, options?: MutationOptions) =>
       this.write<Result<typeof inventoriesServices.stow>>(
         this.ns(ns, `/inventories/${encodeURIComponent(id)}/cards`),
         "POST",
         input,
         options,
       ),
-    take: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
+    take: (ns: string, input, options?: MutationOptions) =>
       this.write<Result<typeof inventoriesServices.take>>(
         this.ns(ns, "/inventories/take"),
         "POST",

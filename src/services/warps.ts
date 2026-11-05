@@ -1,3 +1,4 @@
+export type { WarpCreateInput, WarpUpdateInput } from "./inputs.js";
 import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB, Tx } from "../db/database.js";

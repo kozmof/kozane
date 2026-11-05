@@ -1,3 +1,4 @@
+export type * from "./inputs.js";
 export { createServiceContext, type ServiceContext } from "./context.js";
 export { prepareInput, INPUT_VALIDATION_MESSAGE } from "./prepare-input.js";
 export { domainErrorCode, type DomainErrorCode } from "./error-code.js";

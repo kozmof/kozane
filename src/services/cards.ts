@@ -1,3 +1,15 @@
+export type {
+  CardCreateInput,
+  CardUpdateFields,
+  CardUpdateInput,
+  CardUpdatePositionsInput,
+  CardRemoveInput,
+  CardMoveInput,
+  CardSetLayerInput,
+  CardSetPartitionInput,
+  CardSetStackingInput,
+  CardSquashInput,
+} from "./inputs.js";
 import { deleteNamespaceCardsInTx, moveCardsToNamespaceInTx } from "../db/api/composite.js";
 import { reassignCardsToPartitionInTx } from "../db/api/card.js";
 import { prepareInput } from "./prepare-input.js";

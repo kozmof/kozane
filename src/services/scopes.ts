@@ -1,3 +1,11 @@
+export type {
+  ScopeCreateInput,
+  ScopeRenameInput,
+  ScopeAddMembersInput,
+  ScopeRemoveMembersInput,
+  ScopeCreateAreaInput,
+  ScopeUpdateAreaInput,
+} from "./inputs.js";
 import { deleteScope } from "../db/api/scope.js";
 import { withTx } from "../db/database.js";
 import { prepareInput } from "./prepare-input.js";

@@ -1,3 +1,4 @@
+export type { PartitionCreateInput, PartitionRenameInput } from "./inputs.js";
 import { prepareInput } from "./prepare-input.js";
 import type { DB } from "../db/database.js";
 import type { ServiceContext } from "./context.js";

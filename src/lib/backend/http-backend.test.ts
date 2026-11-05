@@ -37,11 +37,16 @@ it("publishes nothing on rejected mutations and enforces read-only capabilities"
   const backend = new HttpBackend({ fetcher, capabilities });
   const listener = vi.fn();
   backend.subscribe(listener);
-  await expect(backend.cards.create("ns", { content: NaN })).rejects.toMatchObject({
+  await expect(
+    // @ts-expect-error Exercise runtime rejection of an untrusted non-string content value.
+    backend.cards.create("ns", { partitionId: "part", content: NaN }),
+  ).rejects.toMatchObject({
     code: "validation",
   });
   expect(fetcher).not.toHaveBeenCalled();
-  await expect(backend.cards.create("ns", { content: "x" })).rejects.toMatchObject({
+  await expect(
+    backend.cards.create("ns", { partitionId: "part", content: "x" }),
+  ).rejects.toMatchObject({
     code: "validation",
   });
   expect(listener).not.toHaveBeenCalled();
