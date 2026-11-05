@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { structureResults } from "../../test-utils/structure-results.js";
 import {
   HttpBackend,
   StaticBackend,
@@ -296,6 +297,7 @@ const capabilities = {
   externalWrites: false,
   auth: false,
 };
+const responses: Partial<Record<MutationName, unknown>> = structureResults;
 const datasets = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 describe.each(entries)("%s mutation contract", (_name, operation) => {
@@ -325,7 +327,7 @@ describe.each(entries)("%s mutation contract", (_name, operation) => {
     expect(request.keepalive).toBe(operation.keepalive);
     expect(events).toEqual([]);
     expect(backend.version).toBe(prior);
-    respond(new Response('{"ok":true}'));
+    respond(Response.json(responses[_name] ?? { ok: true }));
     await pending;
     expect(events).toEqual([{ generation: 0, revision: 1, datasets }]);
     expect(prior).toEqual({ generation: 0, revision: 0 });

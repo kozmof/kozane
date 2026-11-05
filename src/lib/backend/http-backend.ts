@@ -12,19 +12,24 @@ import {
   readTaskspaceEntryResult,
   readTaskspaceListing,
 } from "./decoders/taskspaces.js";
+import {
+  readMutationOk,
+  readCreatedId,
+  readNamespaceCreated,
+  readLayerCreated,
+  readLayerRemoved,
+  readPartitionRemoved,
+} from "./decoders/structure.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
 import type * as inventoriesServices from "../../services/inventories.js";
 import type * as warpsServices from "../../services/warps.js";
 import type * as scopesServices from "../../services/scopes.js";
-import type * as partitionsServices from "../../services/partitions.js";
-import type * as layersServices from "../../services/layers.js";
 import type * as gluesServices from "../../services/glues.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
 import type { SnapshotResult } from "./contract.js";
 import type * as CardServices from "../../services/cards.js";
-import type * as NamespaceServices from "../../services/namespaces.js";
 import { BackendError, type BackendCapabilities, type BackendDataset } from "./contract.js";
 import { BackendSignals } from "./signals.js";
 import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
@@ -113,9 +118,13 @@ export class HttpBackend implements KozaneBackend {
       throw new BackendError("unavailable", "Invalid backend response", { cause });
     }
   }
-  private checked<T>(value: unknown, decode: (value: unknown) => T | null): T {
+  private checked<T>(
+    value: unknown,
+    decode: (value: unknown) => T | null,
+    message = "Invalid taskspace response",
+  ): T {
     const result = decode(value);
-    if (result === null) throw new BackendError("unavailable", "Invalid taskspace response");
+    if (result === null) throw new BackendError("unavailable", message);
     return result;
   }
   private async readTaskspace<T>(
@@ -135,6 +144,19 @@ export class HttpBackend implements KozaneBackend {
     // Preserve committed invalidation even when a successful response has malformed fields.
     return this.checked(await this.write<unknown>(path, method, input, options), decode);
   }
+  private async writeDomain<T>(
+    path: string,
+    method: string,
+    input: unknown,
+    decode: (value: unknown) => T | null,
+    options?: MutationOptions,
+  ): Promise<T> {
+    return this.checked(
+      await this.write<unknown>(path, method, input, options),
+      decode,
+      "Invalid mutation response",
+    );
+  }
   readonly namespaces: KozaneBackend["namespaces"] = {
     list: async () => {
       const result = readNamespaceList(await this.read<unknown>("/api/namespaces"));
@@ -150,7 +172,7 @@ export class HttpBackend implements KozaneBackend {
       return result;
     },
     create: (input: { name: string }) =>
-      this.write<Result<typeof NamespaceServices.create>>("/api/namespaces", "POST", input),
+      this.writeDomain("/api/namespaces", "POST", input, readNamespaceCreated),
   };
   readonly cards: KozaneBackend["cards"] = {
     create: (ns: string, input, options?: MutationOptions) =>
@@ -215,55 +237,44 @@ export class HttpBackend implements KozaneBackend {
 
   readonly layers: KozaneBackend["layers"] = {
     create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof layersServices.create>>(
-        this.ns(ns, "/layers"),
-        "POST",
-        input,
-        options,
-      ),
+      this.writeDomain(this.ns(ns, "/layers"), "POST", input, readLayerCreated, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof layersServices.rename>>(
+      this.writeDomain(
         this.ns(ns, `/layers/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        readMutationOk,
         options,
       ),
     remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.write<Result<typeof layersServices.remove>>(
+      this.writeDomain(
         this.ns(ns, `/layers/${encodeURIComponent(id)}`),
         "DELETE",
         undefined,
+        readLayerRemoved,
         options,
       ),
     reorder: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof layersServices.reorder>>(
-        this.ns(ns, "/layers"),
-        "PATCH",
-        input,
-        options,
-      ),
+      this.writeDomain(this.ns(ns, "/layers"), "PATCH", input, readMutationOk, options),
   };
 
   readonly partitions: KozaneBackend["partitions"] = {
     create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof partitionsServices.create>>(
-        this.ns(ns, "/partitions"),
-        "POST",
-        input,
-        options,
-      ),
+      this.writeDomain(this.ns(ns, "/partitions"), "POST", input, readCreatedId, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof partitionsServices.rename>>(
+      this.writeDomain(
         this.ns(ns, `/partitions/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        readMutationOk,
         options,
       ),
     remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.write<Result<typeof partitionsServices.remove>>(
+      this.writeDomain(
         this.ns(ns, `/partitions/${encodeURIComponent(id)}`),
         "DELETE",
         undefined,
+        readPartitionRemoved,
         options,
       ),
   };
