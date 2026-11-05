@@ -3,14 +3,14 @@
   import { css } from "styled-system/css";
   import { taggedWith, type TagHitOf, type TagHitRow, type TaskspaceHitGroup } from "$lib/tag";
   import type { TagHit } from "$lib/types";
-  import type { PageData } from "../$types";
+  import type { TagsPageData } from "./types.js";
   import {
     cardRowClass,
     excerptClass,
     fileRowClass,
     linkableRowClass,
     taskspaceHeadingClass,
-  } from "../lib/styles.js";
+  } from "./styles.js";
 
   /** The cards and files a selected tag gathers, with the notice when the list is capped. */
   let {
@@ -26,7 +26,7 @@
     cardHref,
     fileHref,
   }: {
-    data: Pick<PageData, "cardPartitionIds" | "partitions" | "cardNamespaces">;
+    data: Pick<TagsPageData, "cardPartitionIds" | "partitions" | "cardNamespaces">;
     selectedTag: string;
     selectedNamespaceId: string | null;
     shownCount: number;

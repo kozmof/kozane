@@ -74,7 +74,10 @@ async function main() {
   assert.match(rendered.namespaces, /Standalone workspace/);
   assert.match(rendered.namespaces, /href="\/demo\/board\/\?namespaceId=n"/);
   assert.doesNotMatch(rendered.namespaces, /<form/);
-  console.log("Shared client browser bundle and standalone editor/namespace SSR passed.");
+  assert.match(rendered.tags, /Standalone tag result/);
+  assert.match(rendered.tags, /card=ssr-card/);
+  assert.doesNotMatch(rendered.tags, /href="[^"#]*[?&]tag=/);
+  console.log("Shared client browser bundle and standalone editor/namespace/tags SSR passed.");
 }
 try {
   await main();
