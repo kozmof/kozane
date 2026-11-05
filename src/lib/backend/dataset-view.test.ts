@@ -84,3 +84,25 @@ it("rejects late results after a selected view is replaced", async () => {
   expect(f.apply).toHaveBeenCalledExactlyOnceWith("current");
   stopNext();
 });
+
+it("reports only current view failures and rejects error callbacks after disposal", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const error = vi.fn();
+  f.read.mockRejectedValueOnce(new Error("offline"));
+  const stop = startDatasetView({ ...f, dataset: "tags", isHidden: () => false, error });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(error).toHaveBeenCalledOnce();
+  let reject!: (error: unknown) => void;
+  f.read.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, rejectPromise) => {
+        reject = rejectPromise;
+      }),
+  );
+  await vi.advanceTimersByTimeAsync(1000);
+  stop();
+  reject(new Error("late failure"));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(error).toHaveBeenCalledOnce();
+});

@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/svelte";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { tagDataset } from "$lib/backend/tags.fixtures.js";
 import TagsPage from "./+page.svelte";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
@@ -258,5 +259,69 @@ describe("tag index page", () => {
     draw([cardHit("c9", "perf", "orphaned")], { cardNamespaces: {} });
 
     expect(hrefOf("orphaned")).toBeNull();
+  });
+});
+
+describe("backend tags refresh", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const capabilities = {
+    writable: true,
+    persistent: true,
+    externalWrites: false,
+    taskspaces: true,
+    auth: false,
+  };
+  it("refreshes card/file results and scan warnings while preserving selected filters", async () => {
+    const dataset = tagDataset([
+      cardHit("fresh", "perf:cache", "New card content"),
+      fileHit("t1", "notes.md", 4, "perf"),
+      cardHit("other", "docs", "Other topic"),
+    ]);
+    dataset.index.taskspaces.missing = { name: "Unavailable", namespaceId: "p1" };
+    dataset.index.missing = ["missing"];
+    dataset.index.truncated = [{ taskspaceId: "t1", reasons: ["budget"], paths: ["notes.md"] }];
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(dataset)));
+    vi.stubGlobal("fetch", fetcher);
+    draw([cardHit("c1", "perf", "Old content")], {
+      namespaceId: "p1",
+      backendCapabilities: capabilities,
+    });
+    await waitFor(() => expect(screen.getByText("New card content")).toBeInTheDocument());
+    expect(screen.queryByText("Old content")).not.toBeInTheDocument();
+    expect(screen.queryByText("Other topic")).not.toBeInTheDocument();
+    expect(hrefOf("New card content")).toBe("/p1?card=fresh");
+    expect(screen.getByText(/Unavailable could not be read/)).toBeInTheDocument();
+    expect(screen.getByText(/Notes was not read in full/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /docs/ })).toHaveAttribute(
+      "href",
+      "/tags?namespaceId=p1&tag=docs",
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/tags?namespaceId=p1",
+      expect.objectContaining({ method: "GET", cache: "no-store" }),
+    );
+  });
+  it("retains current results when a refresh response is malformed", async () => {
+    const fetcher = vi.fn(async () => new Response('{"index":{}}'));
+    vi.stubGlobal("fetch", fetcher);
+    draw([cardHit("c1", "perf", "Retained content")], { backendCapabilities: capabilities });
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Could not refresh tags"),
+    );
+    expect(screen.getByText("Retained content")).toBeInTheDocument();
+    fetcher.mockImplementation(
+      async () =>
+        new Response(JSON.stringify(tagDataset([cardHit("c1", "perf", "Recovered content")]))),
+    );
+    await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Recovered content")).toBeInTheDocument());
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+  it("keeps static exports on embedded results without backend requests", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    draw([cardHit("c1", "perf", "Exported content")]);
+    expect(screen.getByText("Exported content")).toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

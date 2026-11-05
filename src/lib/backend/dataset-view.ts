@@ -17,6 +17,7 @@ export function startDatasetView<T>(options: {
   read: () => Promise<T>;
   apply: (value: T) => void;
   isHidden: () => boolean;
+  error?: (error: unknown) => void;
 }): () => void {
   const { backend } = options;
   let disposed = false,
@@ -43,8 +44,17 @@ export function startDatasetView<T>(options: {
         return;
       }
       options.apply(result);
-    } catch {
-      if (!disposed) dirty = true;
+    } catch (error) {
+      if (!disposed) {
+        dirty = true;
+        if (
+          sequence === request &&
+          generation === backend.version.generation &&
+          backend.state.status === "ready" &&
+          !options.isHidden()
+        )
+          options.error?.(error);
+      }
     } finally {
       running = false;
     }

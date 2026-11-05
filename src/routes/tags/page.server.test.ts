@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,9 @@ import type { DB } from "$db/tx";
 import { createTestDB } from "../../test-utils/db.js";
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
 import { load } from "./+page.server.js";
+
+beforeEach(() => vi.stubEnv("DATABASE_URL", "file::memory:"));
+afterEach(() => vi.unstubAllEnvs());
 
 /**
  * Test server-side filtering and display caps independently of browser filtering. These

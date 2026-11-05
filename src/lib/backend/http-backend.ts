@@ -5,7 +5,7 @@ import type {
   TaskspaceFileData,
 } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
-import type { TagsViewData } from "../../services/tags.js";
+import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
 import type { WarpListEntry } from "../warp-list.js";
 import type * as inventoriesServices from "../../services/inventories.js";
@@ -424,11 +424,17 @@ export class HttpBackend {
   }
 
   readonly tags = {
-    get: (namespaceId?: string) =>
-      this.read<TagsViewData>(
-        "/api/tags" +
-          (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
-      ),
+    get: async (namespaceId?: string) => {
+      const result = readTagsViewData(
+        await this.read<unknown>(
+          "/api/tags" +
+            (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
+          { cache: "no-store" },
+        ),
+      );
+      if (!result) throw new BackendError("unavailable", "Invalid tags dataset");
+      return result;
+    },
   };
   readonly map = {
     get: async () => {

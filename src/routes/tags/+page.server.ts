@@ -5,9 +5,9 @@ import { displayMetadata } from "../../services/tags.js";
 import { workspaceServiceContext } from "$lib/server/service-context";
 import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
-import { buildTagTree, capHitsByKind, normalizeTag, tagMatcher } from "$lib/tag";
-import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
-import type { TagHit } from "$lib/types";
+import { normalizeTag } from "$lib/tag";
+import { selectTagHits, tagsView } from "$lib/backend/views/tags.js";
+import { httpBackendCapabilities } from "$lib/server/backend-capabilities.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 // Prerender one workspace-wide tag index. Namespace filtering uses query parameters at
@@ -29,43 +29,6 @@ function cacheLocation(): { cache: { dbUrl: string } } | null {
   } catch {
     return null;
   }
-}
-
-/**
- * Static exports embed gathered hits for browser-side filtering. Live pages filter on the
- * server before sending results.
- *
- * Apply display caps after filtering on either path so export does not discard hits before a
- * user chooses a tag.
- */
-function selectHits(
-  hits: TagHit[],
-  tag: string | null,
-): { hits: TagHit[]; cardTotal: number | null; fileTotal: number | null } {
-  // Let the browser report totals after applying export filters and caps.
-  if (prerender) return { hits, cardTotal: null, fileTotal: null };
-  if (!tag) return { hits: [], cardTotal: 0, fileTotal: 0 };
-
-  const matches = tagMatcher(tag);
-  // Cap card and file hits separately so card hits cannot consume the file allowance. Filter
-  // inside `capHitsByKind` to avoid allocating an uncapped intermediate array.
-  const { cards, files, cardTotal, fileTotal } = capHitsByKind(hits, TAG_HITS_SHOWN_MAX, (hit) =>
-    matches(hit.tag),
-  );
-  return { hits: [...cards, ...files], cardTotal, fileTotal };
-}
-
-/**
- * Keep lookup entries needed by the displayed hits and warnings. Static exports retain
- * complete records because the browser filters their embedded results. Omit missing keys.
- */
-function narrow<T>(record: Record<string, T>, keys: Iterable<string>): Record<string, T> {
-  const kept: Record<string, T> = {};
-  for (const key of keys) {
-    const value = record[key];
-    if (value !== undefined) kept[key] = value;
-  }
-  return kept;
 }
 
 /**
@@ -106,7 +69,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     namespacesService.list(db, workspaceServiceContext()),
   ]);
 
-  const { hits, cardTotal, fileTotal } = selectHits(index.hits, tag);
+  const { hits } = selectTagHits(index.hits, tag, prerender);
   const shownCardIds = [
     ...new Set(hits.flatMap((hit) => (hit.source.kind === "card" ? [hit.source.cardId] : []))),
   ];
@@ -128,48 +91,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
     shownNamespaces,
   );
 
-  // Retain metadata for displayed hits and taskspaces named in warnings. Exports retain
-  // complete lookup data for browser-side filtering.
-  const shownTaskspaceIds = new Set([
-    ...hits.flatMap((hit) => (hit.source.kind === "file" ? [hit.source.taskspaceId] : [])),
-    ...index.truncated.map(({ taskspaceId }) => taskspaceId),
-    ...index.missing,
-  ]);
-
   return {
-    namespaceId: requestedNamespace,
-    // Named so the page can title itself and offer the way back to a board.
-    namespaces: namespaces.map(({ id, name, isDefault }) => ({ id, name, isDefault })),
-    // Build the tree from every gathered hit so selecting a tag does not remove other
-    // branches.
-    tree: buildTagTree(index.hits),
-    tag,
-    hits,
-    /**
-     * Total matching hits per kind before display caps. Static exports count after browser
-     * filtering instead.
-     */
-    cardTotal,
-    fileTotal,
-    truncated: index.truncated,
-    /**
-     * Taskspace IDs whose root directories could not be opened. Keep them separate from
-     * partial scans.
-     */
-    missing: index.missing,
-    /**
-     * Whether card scanning reached its limit. Display alongside taskspace truncation
-     * notices. See `TagIndex.cardsTruncated`.
-     */
-    cardsTruncated: index.cardsTruncated,
-    cardNamespaces: prerender ? index.cardNamespaces : narrow(index.cardNamespaces, shownCardIds),
-    // Join partition and taskspace labels for displayed hits rather than duplicating metadata
-    // in `TagSource`.
-    cardPartitionIds: Object.fromEntries(
-      cardPartitions.map((row) => [row.cardId, row.partitionId]),
+    ...tagsView(
+      { index, namespaces, cardPartitions, partitions },
+      { namespaceId: requestedNamespace, tag, staticExport: prerender },
     ),
-    partitions,
-    // Plain exports scan no taskspace files and need no taskspace-name lookup.
-    taskspaces: prerender ? index.taskspaces : narrow(index.taskspaces, shownTaskspaceIds),
+    ...(!prerender ? { backendCapabilities: httpBackendCapabilities() } : {}),
   };
 };

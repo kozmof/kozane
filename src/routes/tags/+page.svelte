@@ -1,5 +1,9 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import { untrack } from "svelte";
+  import { HttpBackend } from "$lib/backend/http-backend.js";
+  import { startDatasetView } from "$lib/backend/dataset-view.js";
+  import { tagsView, type TagsViewPageData } from "$lib/backend/views/tags.js";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
@@ -28,10 +32,37 @@
   import { activeRowClass, countClass, noteClass, rowClass } from "./lib/styles.js";
 
   let { data }: PageProps = $props();
+  const backend = untrack(() => data.backendCapabilities
+    ? new HttpBackend({ base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000 })
+    : undefined);
+  let refreshAttempt = $state(0);
+  let failedSource = $state.raw<PageProps["data"] | null>(null);
+  const refreshFailed = $derived(failedSource === data);
+  let refreshed = $state.raw<{ source: PageProps["data"]; value: TagsViewPageData } | null>(null);
+  const display = $derived(refreshed?.source === data ? { ...data, ...refreshed.value } : data);
+  $effect(() => {
+    const source = data;
+    const attempt = refreshAttempt;
+    if (!backend) return;
+    return untrack(() => startDatasetView({
+      backend,
+      dataset: "tags",
+      read: async () => tagsView(await backend.tags.get(source.namespaceId ?? undefined), {
+        namespaceId: source.namespaceId, tag: source.tag,
+      }),
+      apply: (value) => {
+        if (attempt !== refreshAttempt) return;
+        refreshed = { source, value };
+        failedSource = null;
+      },
+      error: () => { if (attempt === refreshAttempt) failedSource = source; },
+      isHidden: () => document.hidden,
+    }));
+  });
 
   /** Use server query data for live pages and browser URL filters for static exports. */
   const selectedTag = $derived.by(() => {
-    if (data.tag) return data.tag;
+    if (display.tag) return display.tag;
     if (!browser) return null;
     const requested = page.url.searchParams.get("tag");
     return requested ? normalizeTag(requested) : null;
@@ -39,11 +70,11 @@
 
   /** Use null to gather the whole workspace when `?namespaceId=` is absent. */
   const selectedNamespaceId = $derived(
-    data.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
+    display.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
   );
 
   const selectedNamespace = $derived(
-    data.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null,
+    display.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null,
   );
 
   /**
@@ -52,8 +83,8 @@
    */
   function inSelectedNamespace(hit: TagHit): boolean {
     if (!selectedNamespaceId) return true;
-    if (hit.source.kind === "card") return data.cardNamespaces[hit.source.cardId] === selectedNamespaceId;
-    const owner = data.taskspaces[hit.source.taskspaceId]?.namespaceId;
+    if (hit.source.kind === "card") return display.cardNamespaces[hit.source.cardId] === selectedNamespaceId;
+    const owner = display.taskspaces[hit.source.taskspaceId]?.namespaceId;
     return owner === selectedNamespaceId || owner === null;
   }
 
@@ -65,7 +96,7 @@
     if (!selectedTag) return capHitsByKind<TagHit>([], TAG_HITS_SHOWN_MAX);
     const matches = tagMatcher(selectedTag);
     return capHitsByKind(
-      data.hits,
+      display.hits,
       TAG_HITS_SHOWN_MAX,
       (hit) => matches(hit.tag) && inSelectedNamespace(hit),
     );
@@ -73,8 +104,8 @@
   const shownCount = $derived(shown.cards.length + shown.files.length);
 
   /** Use server totals for live results and locally filtered totals for exports. */
-  const cardTotal = $derived(data.cardTotal ?? shown.cardTotal);
-  const fileTotal = $derived(data.fileTotal ?? shown.fileTotal);
+  const cardTotal = $derived(display.cardTotal ?? shown.cardTotal);
+  const fileTotal = $derived(display.fileTotal ?? shown.fileTotal);
 
   /**
    * Report omitted hits separately for cards and files. Count hits rather than grouped rows
@@ -95,9 +126,9 @@
    * Filter the exported tree with the panel so tag counts match selectable results. Live
    * responses are already filtered by namespace.
    */
-  const narrowsNamespace = $derived(selectedNamespaceId !== null && data.namespaceId === null);
+  const narrowsNamespace = $derived(selectedNamespaceId !== null && display.namespaceId === null);
   const tree = $derived(
-    narrowsNamespace ? buildTagTree(data.hits.filter(inSelectedNamespace)) : data.tree,
+    narrowsNamespace ? buildTagTree(display.hits.filter(inSelectedNamespace)) : display.tree,
   );
 
   /**
@@ -113,18 +144,18 @@
    * Index namespace names once for row lookups. Taskspace metadata already arrives keyed by
    * ID.
    */
-  const namespaceNames = $derived(new Map(data.namespaces.map(({ id, name }) => [id, name])));
+  const namespaceNames = $derived(new Map(display.namespaces.map(({ id, name }) => [id, name])));
 
-  const taskspaceName = (id: string) => data.taskspaces[id]?.name || "taskspace";
+  const taskspaceName = (id: string) => display.taskspaces[id]?.name || "taskspace";
   const namespaceName = (id: string | null | undefined) =>
     (id !== null && id !== undefined ? namespaceNames.get(id) : undefined) ?? "";
 
   /** Unavailable taskspaces. Older exports may omit this list. */
-  const missing = $derived(data.missing ?? []);
+  const missing = $derived(display.missing ?? []);
 
   /** Open unplaced taskspace files on the workspace's default board. */
   const defaultNamespaceId = $derived(
-    data.namespaces.find(({ isDefault }) => isDefault)?.id ?? data.namespaces[0]?.id ?? null,
+    display.namespaces.find(({ isDefault }) => isDefault)?.id ?? display.namespaces[0]?.id ?? null,
   );
 
   /**
@@ -151,12 +182,12 @@
    * board can be identified.
    */
   const cardHref = (cardId: string) => {
-    const namespaceId = data.cardNamespaces[cardId];
+    const namespaceId = display.cardNamespaces[cardId];
     return namespaceId ? `${base}/${namespaceId}?card=${cardId}` : null;
   };
   const fileHref = (taskspaceId: string, path: string) => {
     const namespaceId =
-      data.taskspaces[taskspaceId]?.namespaceId ?? selectedNamespaceId ?? defaultNamespaceId;
+      display.taskspaces[taskspaceId]?.namespaceId ?? selectedNamespaceId ?? defaultNamespaceId;
     return namespaceId
       ? `${base}/${namespaceId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
       : null;
@@ -265,7 +296,7 @@
       aria-label="Scope"
       class={css({ display: "flex", flexWrap: "wrap", gap: "10px", marginLeft: "auto" })}
     >
-      {#each data.namespaces as namespace (namespace.id)}
+      {#each display.namespaces as namespace (namespace.id)}
         {@const selected = selectedNamespaceId === namespace.id}
         <a
           href={namespaceHref(selected ? null : namespace.id)}
@@ -282,6 +313,13 @@
       {/each}
     </nav>
   </header>
+
+  {#if refreshFailed}
+    <p role="status" class={css({ fontSize: "12px", color: "state.error", marginBottom: "16px" })}>
+      Could not refresh tags. Showing the last results.
+      <button type="button" onclick={() => refreshAttempt++} class={css({ marginLeft: "8px", fontSize: "12px", cursor: "pointer" })}>Retry</button>
+    </p>
+  {/if}
 
   {#if tree.length !== 0}
     <div
@@ -320,7 +358,7 @@
         {/if}
 
         <!-- Show card truncation before file warnings using the shared CLI label. -->
-        {#if data.cardsTruncated}
+        {#if display.cardsTruncated}
           <p class={noteClass}>
             The cards were not read in full — {CARDS_TRUNCATED_LABEL}, so a tag written on one
             may be missing here.
@@ -328,7 +366,7 @@
         {/if}
 
         <!-- Use gathered taskspace names and shared reader-facing reasons and path samples. -->
-        {#each data.truncated as { taskspaceId, reasons, paths } (taskspaceId)}
+        {#each display.truncated as { taskspaceId, reasons, paths } (taskspaceId)}
           <p class={noteClass}>
             {taskspaceName(taskspaceId)} was not read in full — {truncationReasons(reasons)}{truncationPaths(
               paths,

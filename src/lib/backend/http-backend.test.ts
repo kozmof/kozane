@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { tagDataset } from "./tags.fixtures.js";
 import { HttpBackend } from "./http-backend";
 const capabilities = {
   writable: true,
@@ -141,22 +142,24 @@ it("routes structure membership area and inventory operations to retained endpoi
 });
 
 it("routes workspace view reads without dispatching content-bearing tag filters", async () => {
-  const fetcher = vi
-    .fn()
-    .mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            namespaces: [],
-            partitions: [],
-            activity: [],
-            scopes: [],
-            partitionUsage: [],
-            namespaceUsage: [],
-            tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
-          }),
+  const fetcher = vi.fn().mockImplementation(
+    async (path: string) =>
+      new Response(
+        JSON.stringify(
+          path.startsWith("/api/tags")
+            ? tagDataset()
+            : {
+                namespaces: [],
+                partitions: [],
+                activity: [],
+                scopes: [],
+                partitionUsage: [],
+                namespaceUsage: [],
+                tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+              },
         ),
-    );
+      ),
+  );
   const backend = new HttpBackend({ fetcher, capabilities });
   const changed = vi.fn();
   backend.subscribe(changed);
