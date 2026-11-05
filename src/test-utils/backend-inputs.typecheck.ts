@@ -74,6 +74,7 @@ export function checkBackendInputs(backend: KozaneBackend): void {
   void backend.inventories.remove("n", "i");
   if (backend.taskspaces) {
     const files = backend.taskspaces;
+    void files.access("n", { id: "t", path: "notes" });
     void files.create("n", { name: "Notes", scopeId: "s" });
     void files.rename("n", "t", { name: "Notes" });
     void files.remove("n", "t");

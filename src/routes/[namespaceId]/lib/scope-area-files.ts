@@ -1,5 +1,5 @@
 import type { ScopeArea, TaskspaceEntry, TaskspaceSummary, TaskspaceTruncation } from "$lib/types";
-import type { TaskspaceNode, TaskspaceTreeContext } from "./taskspace-tree.svelte.js";
+import type { TaskspaceNode } from "./taskspace-tree.svelte.js";
 
 /**
  * Calculate scope-frame file groups, ordering, and layout from frame navigation, taskspaces,
@@ -58,19 +58,15 @@ export type FileGroup = {
 };
 
 /**
- * Select taskspaces that can be browsed through a live path or an embedded export tree. Share
+ * Select taskspaces that the backend can browse. Share
  * this rule with the sidebar.
  */
 export function taskspacesForScope(
   taskspaces: TaskspaceSummary[],
   scopeId: string,
-  staticFiles?: TaskspaceTreeContext["staticFiles"],
+  canBrowse: (taskspace: TaskspaceSummary) => boolean,
 ): TaskspaceSummary[] {
-  return taskspaces.filter(
-    (taskspace) =>
-      taskspace.scopeId === scopeId &&
-      (taskspace.path !== null || staticFiles?.[taskspace.id] !== undefined),
-  );
+  return taskspaces.filter((taskspace) => taskspace.scopeId === scopeId && canBrowse(taskspace));
 }
 
 /**

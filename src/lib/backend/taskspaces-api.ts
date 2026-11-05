@@ -1,5 +1,10 @@
 import type { PathKind } from "../constants.js";
-import type { TaskspaceDirectoryOutcome, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
+import type {
+  TaskspaceDirectoryOutcome,
+  TaskspaceEntryKind,
+  TaskspaceListing,
+  TaskspaceSummary,
+} from "../types.js";
 import type { MutationOptions } from "./resources.js";
 
 export interface TaskspaceCreated {
@@ -39,8 +44,17 @@ export type TaskspaceRenameEntryInput = { path: string; name: string };
 export type TaskspaceRenameEntryResult = { path: string; kind: TaskspaceEntryKind };
 export type TaskspaceRemoveEntryResult = TaskspaceRenameEntryResult;
 
+export interface TaskspaceAccess {
+  readonly browse: boolean;
+  readonly read: boolean;
+  readonly write: boolean;
+  readonly refresh: boolean;
+}
+
 /** Filesystem operations require taskspaces capability. Static exports provide embedded reads only. */
 export interface TaskspacesApi {
+  /** Synchronous availability from current metadata. Performs no I/O. */
+  access(namespaceId: string, taskspace: Pick<TaskspaceSummary, "id" | "path">): TaskspaceAccess;
   create(namespaceId: string, input: TaskspaceCreateInput): Promise<TaskspaceCreateResult>;
   rename(
     namespaceId: string,

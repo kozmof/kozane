@@ -76,7 +76,7 @@ const cases = {
     path: prefix + "/files?path=notes.md",
     method: "DELETE",
   },
-} satisfies Record<keyof TaskspacesApi, Case>;
+} satisfies Record<Exclude<keyof TaskspacesApi, "access">, Case>;
 const capabilities = {
   writable: true,
   persistent: true,

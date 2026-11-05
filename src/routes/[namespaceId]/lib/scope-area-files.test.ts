@@ -57,12 +57,15 @@ describe("taskspacesForScope", () => {
   ];
 
   it("keeps the scope's own taskspaces, in the order it was given them", () => {
-    expect(taskspacesForScope(rows, "s1").map(({ id }) => id)).toEqual(["t1", "t3"]);
+    expect(taskspacesForScope(rows, "s1", (row) => row.path !== null).map(({ id }) => id)).toEqual([
+      "t1",
+      "t3",
+    ]);
   });
 
   it("leaves out a taskspace with no path, which this board cannot list", () => {
     const withoutPath = [taskspace({ id: "t9", path: null })];
-    expect(taskspacesForScope(withoutPath, "s1")).toEqual([]);
+    expect(taskspacesForScope(withoutPath, "s1", (row) => row.path !== null)).toEqual([]);
   });
 
   it("keeps a pathless taskspace the export baked a tree in for", () => {
@@ -70,7 +73,11 @@ describe("taskspacesForScope", () => {
     const staticFiles = {
       t9: { root: { kind: "directory" as const, name: "", children: [], truncated: null } },
     };
-    expect(taskspacesForScope(withoutPath, "s1", staticFiles).map(({ id }) => id)).toEqual(["t9"]);
+    expect(
+      taskspacesForScope(withoutPath, "s1", (row) => Object.hasOwn(staticFiles, row.id)).map(
+        ({ id }) => id,
+      ),
+    ).toEqual(["t9"]);
   });
 });
 

@@ -93,7 +93,7 @@
   /** Whether the taskspace's files can be listed: live with a directory, or exported. */
   const browsable = $derived(
     taskspace !== null &&
-      (ctx.staticFiles ? ctx.staticFiles[taskspace.id] !== undefined : taskspace.path !== null),
+      (ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false),
   );
   const openPath = $derived(
     editorFile && taskspace && editorFile.taskspaceId === taskspace.id ? editorFile.path : null,
@@ -589,9 +589,9 @@
           <span class={headerTitleClass} title={taskspace?.path ?? undefined}>
             {taskspace ? taskspace.name : "files"}
           </span>
-          {#if !readonly && taskspace && browsable}
+          {#if !readonly && taskspace && ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).write}
             <TaskspaceCreateButtons where={`"${taskspace.name}"`} onCreate={startCreateEntry} />
-            {#if !ctx.staticFiles}
+            {#if ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).refresh}
               <button
                 class={addBtnClass}
                 title="Refresh from disk"
@@ -614,7 +614,7 @@
                 taskspaceId={taskspace.id}
                 path=""
                 {readonly}
-                canOpen={!readonly || ctx.staticFiles !== undefined}
+                canOpen={ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).read ?? false}
                 {openPath}
                 renaming={editing?.kind === "entry" && editing.taskspaceId === taskspace.id
                   ? editing.path

@@ -51,10 +51,6 @@
 
   // Export pages select embedded data; live pages retain their HTTP backend instance.
   const staticExport = untrack(() => data.staticBackendData !== undefined || (data.readonly && !data.backendCapabilities));
-  // Use embedded file trees when the static export includes them. Derive these from current
-  // page data because namespace navigation reuses the component. Without an embedded tree,
-  // readonly taskspaces remain non-expandable.
-  const staticFiles = $derived(data.taskspaceFiles);
 
   // ── Reactive namespace state ────────────────────────────────────
   const s = new NamespaceState(untrack(() => preferences));
@@ -184,11 +180,10 @@
   function openFromUrl() {
     if (!browser) return;
 
-    // Open static-export files only when their contents are embedded.
     const { card, file, inventory, handled } = readArrival(
       navigation.readBoard(page.url),
       s,
-      !(readonly && !staticFiles),
+      (taskspace) => backend.taskspaces?.access(s.namespaceId, taskspace).read ?? false,
     );
     if (file) {
       const { taskspace, path } = file;
@@ -279,7 +274,6 @@
   const editorContext = $derived({
     backend,
     namespaceId: s.namespaceId,
-    staticFiles,
   });
 
   /** What the file browser changes. */
@@ -402,7 +396,7 @@
       taskspaces={s.taskspaces}
       taskspaceTree={s.taskspaceTree}
       treeContext={editorContext}
-      onOpenFile={!readonly || staticFiles ? files.openFromFrame : undefined}
+      onOpenFile={s.taskspaces.some(taskspace => backend.taskspaces?.access(s.namespaceId, taskspace).read) ? files.openFromFrame : undefined}
       onCreateTaskspace={readonly ? undefined : actions.createTaskspace}
       bind:pendingScopeAreaRect={frame.rect}
       onPersistScopeArea={persistence.persistScopeArea}

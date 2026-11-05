@@ -245,7 +245,7 @@ it("rejects every exposed mutation with read_only and publishes no invalidation"
     ...Object.values(backend.warps),
     ...Object.values(backend.inventories),
     ...Object.entries(backend.taskspaces!)
-      .filter(([name]) => name !== "readFile" && name !== "list")
+      .filter(([name]) => name !== "readFile" && name !== "list" && name !== "access")
       .map(([, method]) => method),
   ];
   for (const method of methods)

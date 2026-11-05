@@ -34,6 +34,11 @@ it("resolves a stored card and file from one arrival before either selector is c
   expect(result.inventory).toEqual(inventory);
   expect(result.file).toEqual({ taskspace, path: "notes.md" });
   expect(result.handled).toEqual(["taskspace", "path", "card"]);
+  expect(readArrival(params, board, (row) => row.id === "t1").file).toEqual({
+    taskspace,
+    path: "notes.md",
+  });
+  expect(readArrival(params, board, () => false).handled).toEqual(["card"]);
   expect(readArrival(params, board, false).file).toBeNull();
   expect(readArrival(params, board, false).handled).toEqual(["card"]);
 });

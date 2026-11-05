@@ -40,11 +40,10 @@ export class ScopeAreaBrowser {
   #framed = $derived.by(() =>
     this.#source.areas().map((area) => ({
       area,
-      taskspaces: taskspacesForScope(
-        this.#source.taskspaces(),
-        area.scopeId,
-        this.#source.context().staticFiles,
-      ),
+      taskspaces: taskspacesForScope(this.#source.taskspaces(), area.scopeId, (taskspace) => {
+        const ctx = this.#source.context();
+        return ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).browse ?? false;
+      }),
     })),
   );
 

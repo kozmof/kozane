@@ -24,7 +24,10 @@ export function createBoardFiles({
   createScopeWithFile,
 }: BoardFilesHost) {
   function open(taskspaceId: string, taskspaceName: string, path: string): void {
-    void editor.open(context(), { taskspaceId, taskspaceName, path });
+    const ctx = context();
+    const taskspace = s.taskspaces.find((row) => row.id === taskspaceId);
+    if (!taskspace || !ctx.backend.taskspaces?.access(ctx.namespaceId, taskspace).read) return;
+    void editor.open(ctx, { taskspaceId, taskspaceName, path });
   }
 
   /**

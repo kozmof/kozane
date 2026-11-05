@@ -32,13 +32,12 @@ type ArrivalBoard = {
  * Read every arrival parameter before any is applied or removed, so asynchronous actions
  * cannot read a partially cleared URL. Names that are not on this board resolve to null.
  *
- * `canOpenFiles` is false on a static export without embedded file contents, where there is
- * no live endpoint to fetch an omitted file from.
+ * `canOpenFiles` checks whether the backend can read the named taskspace.
  */
 export function readArrival(
   destination: BoardDestination,
   board: ArrivalBoard,
-  canOpenFiles: boolean,
+  canOpenFiles: boolean | ((taskspace: TaskspaceSummary) => boolean),
 ): Arrival {
   const cardId = destination.card;
   const card = cardId ? (board.cards.find(({ id }) => id === cardId) ?? null) : null;
@@ -49,8 +48,12 @@ export function readArrival(
       ? (board.taskspaces.find(({ id }) => id === taskspaceId) ?? null)
       : null;
 
+  const allowedTaskspace =
+    taskspace && (typeof canOpenFiles === "function" ? canOpenFiles(taskspace) : canOpenFiles)
+      ? taskspace
+      : null;
   const handled: BoardArrivalParameter[] = [];
-  const file = taskspace && path ? { taskspace, path } : null;
+  const file = allowedTaskspace && path ? { taskspace: allowedTaskspace, path } : null;
   if (file) handled.push("taskspace", "path");
   if (card) handled.push("card");
 

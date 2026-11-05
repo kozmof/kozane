@@ -1,6 +1,6 @@
 import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
-import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
+import type { TaskspaceEntry, TaskspaceTruncation } from "$lib/types";
 import { entryNameIssue } from "$lib/entry-name";
 /** What is known about one directory of one taskspace. */
 export type TaskspaceNode = {
@@ -35,8 +35,6 @@ export type TaskspaceCreated = {
 export type TaskspaceTreeContext = {
   backend: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
-  /** Export metadata used by views to choose browsable taskspaces. */
-  staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
 function taskspaceApi(ctx: TaskspaceTreeContext) {

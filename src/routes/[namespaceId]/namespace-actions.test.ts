@@ -48,6 +48,7 @@ const backend = {
     removeArea: vi.fn<KozaneBackend["scopes"]["removeArea"]>(),
   },
   taskspaces: {
+    access: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["access"]>(),
     create: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["create"]>(),
     rename: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["rename"]>(),
     remove: vi.fn<NonNullable<KozaneBackend["taskspaces"]>["remove"]>(),

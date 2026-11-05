@@ -270,6 +270,12 @@ export class StaticBackend implements KozaneBackend {
     return tree;
   }
   private readonly fileApi: TaskspaceLifecycleApi = Object.freeze<TaskspaceLifecycleApi>({
+    access: (namespaceId, taskspace) => {
+      const browse =
+        this.snapshots.get(namespaceId)?.taskspaces.some((row) => row.id === taskspace.id) ===
+          true && Object.hasOwn(this.data.files ?? {}, taskspace.id);
+      return { browse, read: browse, write: false, refresh: false };
+    },
     create: readOnly,
     rename: readOnly,
     remove: readOnly,

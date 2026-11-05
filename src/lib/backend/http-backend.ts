@@ -489,6 +489,11 @@ export class HttpBackend implements KozaneBackend {
   };
 
   private readonly taskspaceApi: TaskspaceLifecycleApi = {
+    access: (_namespaceId, taskspace) => {
+      const browse = this.capabilities.taskspaces && taskspace.path !== null;
+      const write = browse && this.capabilities.writable;
+      return { browse, read: write, write, refresh: write && this.capabilities.externalWrites };
+    },
     readFile: (ns, id, path, options) =>
       this.readTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`),
