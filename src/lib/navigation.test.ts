@@ -61,3 +61,46 @@ it("reads Node filters from queries and demo filters only from fragments", () =>
     createDemoNavigation().readFilters(new URL("https://example.test/map/?tag=ignored")),
   ).toEqual({ namespaceId: null, tag: null, day: null });
 });
+
+it("reads and clears Node arrival parameters while retaining unrelated queries and fragments", () => {
+  const navigation = createNodeNavigation();
+  const url = new URL(
+    "https://example.test/ns/?card=c1&warp=w1&taskspace=t1&path=notes%2Fmy%20file.md&scope=reading#heading",
+  );
+  expect(navigation.readBoard(url)).toEqual({
+    card: "c1",
+    warp: "w1",
+    taskspace: "t1",
+    path: "notes/my file.md",
+  });
+  expect(navigation.clearBoard(url, ["card", "warp", "taskspace", "path"])).toBe(
+    "/ns/?scope=reading#heading",
+  );
+  expect(url.searchParams.get("card")).toBe("c1");
+});
+it("reads demo file paths only from fragments and clears only handled selectors", () => {
+  const navigation = createDemoNavigation();
+  const url = new URL(
+    "https://example.test/board/?namespaceId=ns&card=c1&taskspace=t1#path=notes%2Fmy+file.md&tag=private%3Atag",
+  );
+  expect(navigation.readBoard(url)).toMatchObject({
+    card: "c1",
+    taskspace: "t1",
+    path: "notes/my file.md",
+  });
+  expect(navigation.clearBoard(url, ["card"])).toBe(
+    "/board/?namespaceId=ns&taskspace=t1#path=notes%2Fmy+file.md&tag=private%3Atag",
+  );
+  expect(navigation.clearBoard(url, ["card", "taskspace", "path"])).toBe(
+    "/board/?namespaceId=ns#tag=private%3Atag",
+  );
+  expect(
+    navigation.clearBoard(
+      new URL("https://example.test/board/?namespaceId=ns&taskspace=t1#path=notes"),
+      ["taskspace", "path"],
+    ),
+  ).toBe("/board/?namespaceId=ns");
+  expect(
+    navigation.readBoard(new URL("https://example.test/board/?namespaceId=ns&path=ignored")).path,
+  ).toBeUndefined();
+});

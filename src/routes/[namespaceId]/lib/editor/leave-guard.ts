@@ -3,7 +3,7 @@
  * document. Panel closing has its own guard.
  */
 
-/** The part of SvelteKit's `BeforeNavigate` this needs, so a test need not build one. */
+/** The part of a host navigation intent needed to protect unsaved edits. */
 export type LeaveIntent = {
   /** Use `"leave"` when the document unloads on tab close or reload. */
   type: string;

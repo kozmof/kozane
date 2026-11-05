@@ -1,6 +1,7 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import { beforeNavigate, goto } from "$app/navigation";
+  import { onDestroy, untrack } from "svelte";
+  import type { NavigationDriver } from "$lib/navigation.js";
   import EditorSurface, { type EditorMode } from "./EditorSurface.svelte";
   import type {
     EditorSession,
@@ -17,6 +18,7 @@
   let {
     session,
     ctx,
+    routing,
     vimMode = false,
     autoSave = false,
     readonly = false,
@@ -26,6 +28,7 @@
   }: {
     session: EditorSession;
     ctx: EditorSessionContext;
+    routing: NavigationDriver;
     /** `ui.editorVimMode`. Off means the surface's own key handling is all there is. */
     vimMode?: boolean;
     /** `ui.editorAutoSave`. Saves once typing pauses, and on close. Ignored when read-only. */
@@ -177,8 +180,9 @@
 
   // Guard navigation and tab closing while a file has unsaved changes. Register once and read
   // the current file state when invoked. Navigation needs an immediate confirmation result.
-  beforeNavigate((nav) => {
-    if (!session.dirty) return;
+  let disposed = false;
+  const releaseNavigationGuard = untrack(() => routing.beforeNavigate((nav) => {
+    if (disposed || !session.dirty) return;
     if (autoSaving) {
       // Within the app, hold a link or `goto` until the edits are saved, then go. Back and
       // forward and form posts cannot be replayed faithfully, so they ask as usual.
@@ -190,6 +194,11 @@
       if (nav.type === "leave") saveOnUnload();
     }
     guardUnsavedLeave(nav, session.dirty, () => globalThis.confirm(UNSAVED_LEAVE_PROMPT));
+  }));
+  onDestroy(() => {
+    disposed = true;
+    heldNavigation = null;
+    releaseNavigationGuard?.();
   });
 
   /**
@@ -207,9 +216,8 @@
    * file was closed or replaced meanwhile, follow it anyway, and the guard looks at whatever
    * file is open now.
    *
-   * SvelteKit does not pass a navigation's options to `beforeNavigate`, so the replay is a
-   * plain `goto`. A link or `goto` asking for `replaceState`, `noScroll`, or `keepFocus`
-   * would lose that here.
+   * The driver replays the destination after saving. Router-specific navigation options
+   * are not part of this shared guard contract.
    */
   async function saveThenGo(url: URL): Promise<void> {
     // One save at a time. A link clicked while it runs replaces the destination, so the last
@@ -218,7 +226,9 @@
     heldNavigation = url;
     if (saving) return;
     try {
-      if ((await session.flush(ctx)) === "unsaved") {
+      const result = await session.flush(ctx);
+      if (disposed) return;
+      if (result === "unsaved") {
         if (!globalThis.confirm(UNSAVED_LEAVE_PROMPT)) return;
         // Discard the edits as confirmed, so the guard lets the replayed navigation through.
         close();
@@ -227,7 +237,7 @@
     } finally {
       heldNavigation = null;
     }
-    await goto(url);
+    if (!disposed) await routing.navigate(url);
   }
 
   function onSurfaceKey(event: KeyboardEvent): boolean {

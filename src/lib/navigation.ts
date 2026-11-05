@@ -9,6 +9,20 @@ export type BoardDestination = {
   taskspace?: string;
   path?: string;
 };
+export type BoardArrivalParameter = keyof BoardDestination;
+export type NavigationIntent = {
+  type: string;
+  cancel(): void;
+  to: { url: URL } | null;
+  willUnload: boolean;
+};
+/** Router operations supplied by the host. Register guards during component initialization. */
+export interface NavigationDriver {
+  /** Return cleanup when the host does not manage the guard's component lifetime. */
+  beforeNavigate(listener: (intent: NavigationIntent) => void): void | (() => void);
+  navigate(url: string | URL): Promise<void>;
+  replace(url: string): void;
+}
 /** Route policy supplied by the host to shared workspace views. */
 export interface NavigationAdapter {
   namespaces(): string;
@@ -16,6 +30,16 @@ export interface NavigationAdapter {
   tags(filters?: Partial<Pick<ViewFilters, "namespaceId" | "tag">>): string;
   map(filters?: Partial<ViewFilters>): string;
   readFilters(url: URL): ViewFilters;
+  readBoard(url: URL): BoardDestination;
+  clearBoard(url: URL, handled: readonly BoardArrivalParameter[]): string;
+}
+function boardParameters(params: URLSearchParams): BoardDestination {
+  return {
+    card: params.get("card") ?? undefined,
+    warp: params.get("warp") ?? undefined,
+    taskspace: params.get("taskspace") ?? undefined,
+    path: params.get("path") ?? undefined,
+  };
 }
 type Pairs = Record<string, string | null | undefined>;
 function query(values: Pairs): string {
@@ -38,6 +62,12 @@ export function createNodeNavigation(
   const base = (options.base ?? "").replace(/\/+$/, "");
   return Object.freeze<NavigationAdapter>({
     namespaces: () => base + "/",
+    readBoard: (url: URL) => boardParameters(url.searchParams),
+    clearBoard(current: URL, handled: readonly BoardArrivalParameter[]) {
+      const url = new URL(current);
+      for (const key of handled) url.searchParams.delete(key);
+      return url.pathname + url.search + url.hash;
+    },
     board(namespaceId: string, destination: BoardDestination = {}) {
       const parts: string[] = [];
       for (const key of ["card", "warp", "taskspace", "path"] as const) {
@@ -66,6 +96,22 @@ export function createDemoNavigation(options: { base?: string } = {}): Navigatio
   const base = (options.base ?? "").replace(/\/+$/, "");
   return Object.freeze<NavigationAdapter>({
     namespaces: () => base + "/namespaces/",
+    readBoard(url: URL) {
+      return {
+        ...boardParameters(url.searchParams),
+        path: new URLSearchParams(url.hash.slice(1)).get("path") ?? undefined,
+      };
+    },
+    clearBoard(current: URL, handled: readonly BoardArrivalParameter[]) {
+      const url = new URL(current);
+      const content = new URLSearchParams(url.hash.slice(1));
+      for (const key of handled) {
+        if (key === "path") content.delete(key);
+        else url.searchParams.delete(key);
+      }
+      if (handled.includes("path")) url.hash = content.toString();
+      return url.pathname + url.search + url.hash;
+    },
     board: (namespaceId: string, destination: BoardDestination = {}) =>
       base +
       "/board/" +

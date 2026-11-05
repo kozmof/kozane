@@ -3,10 +3,12 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import FileEditor from "./FileEditor.svelte";
 import { EditorSession } from "../lib/editor/editor-session.svelte.js";
-import { beforeNavigate, goto } from "$app/navigation";
+import type { NavigationDriver } from "$lib/navigation.js";
 
-// Mock navigation registration so the test can invoke the guard without a router.
-vi.mock("$app/navigation", () => ({ beforeNavigate: vi.fn(), goto: vi.fn(async () => {}) }));
+// Invoke the injected navigation guard without a framework router.
+const beforeNavigate = vi.fn<NavigationDriver["beforeNavigate"]>();
+const goto = vi.fn<NavigationDriver["navigate"]>().mockResolvedValue(undefined);
+const routing: NavigationDriver = { beforeNavigate, navigate: goto, replace: vi.fn() };
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
 
@@ -35,9 +37,9 @@ async function mount(
   const ctx = { fetcher, namespaceId: "p-1" };
   const session = new EditorSession();
   const onClose = vi.fn();
-  render(FileEditor, { props: { session, ctx, onClose, ...props } });
+  const rendered = render(FileEditor, { props: { session, ctx, onClose, routing, ...props } });
   await session.open(ctx, REF);
-  return { session, ctx, calls, onClose };
+  return { session, ctx, calls, onClose, unmount: rendered.unmount };
 }
 
 describe("FileEditor", () => {
@@ -46,6 +48,7 @@ describe("FileEditor", () => {
     render(FileEditor, {
       props: {
         session,
+        routing,
         ctx: { fetcher: vi.fn() as unknown as typeof fetch, namespaceId: "p-1" },
         onClose: vi.fn(),
       },
@@ -641,6 +644,7 @@ describe("FileEditor leaving the page", () => {
     const session = new EditorSession();
     const props = {
       session,
+      routing,
       ctx: { fetcher: vi.fn() as unknown as typeof fetch, namespaceId: "p-1" },
       onClose: vi.fn(),
     };
@@ -850,3 +854,48 @@ describe("FileEditor auto save", () => {
     expect(session.isOpen).toBe(true);
   });
 });
+
+it.each([200, 500])(
+  "releases the injected guard and does not replay navigation after unmount (save status %s)",
+  async (status) => {
+    let listener!: Parameters<NavigationDriver["beforeNavigate"]>[0];
+    const release = vi.fn();
+    const navigate = vi.fn<NavigationDriver["navigate"]>().mockResolvedValue(undefined);
+    const host: NavigationDriver = {
+      beforeNavigate(callback) {
+        listener = callback;
+        return release;
+      },
+      navigate,
+      replace: vi.fn(),
+    };
+    const asked = vi.spyOn(globalThis, "confirm").mockReturnValue(false);
+    try {
+      const { session, calls, unmount } = await mount(
+        [
+          ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
+          new Response(JSON.stringify({ signature: "sig-2" }), { status }),
+        ],
+        { autoSave: true, routing: host },
+      );
+      await screen.findByRole("dialog");
+      session.doc!.insert({ line: 0, column: 0 }, "x");
+      const cancel = vi.fn();
+      listener({
+        type: "link",
+        cancel,
+        to: { url: new URL("http://localhost/next") },
+        willUnload: false,
+      });
+      expect(cancel).toHaveBeenCalledOnce();
+      unmount();
+      expect(release).toHaveBeenCalledOnce();
+      await waitFor(() => expect(calls).toHaveLength(2));
+      await waitFor(() => expect(session.saving).toBe(false));
+      expect(navigate).not.toHaveBeenCalled();
+      expect(asked).not.toHaveBeenCalled();
+    } finally {
+      asked.mockRestore();
+    }
+  },
+);

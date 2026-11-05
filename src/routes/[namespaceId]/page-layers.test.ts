@@ -205,11 +205,17 @@ describe("Layers", () => {
     await fireEvent.keyDown(input, { key: "Enter" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/layers/l2", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Sketches" }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/layers/l2",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ name: "Sketches" }),
+      }),
+    );
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type")).toBe(
+      "application/json",
+    );
     await waitFor(() => expect(layerOption("Sketches")).toBeInTheDocument());
   });
 
@@ -247,12 +253,18 @@ describe("Layers", () => {
     await fireEvent.drop(draft);
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/layers", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      // From bottom to top, Draft is now below Base.
-      body: JSON.stringify({ layerIds: ["l2", "l1"] }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/layers",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.any(Headers),
+        // From bottom to top, Draft is now below Base.
+        body: JSON.stringify({ layerIds: ["l2", "l1"] }),
+      }),
+    );
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type")).toBe(
+      "application/json",
+    );
     // Keep active Base above Draft after reordering.
     expect(layerGroup(container, "l1")).toHaveStyle({ "z-index": "1", opacity: "1" });
     expect(layerGroup(container, "l2")).toHaveStyle({ "z-index": "0", opacity: "0.3" });
@@ -361,11 +373,17 @@ describe("Layers", () => {
     await fireEvent.mouseDown(screen.getByRole("option", { name: /Draft/ }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/cards/layer", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds: ["card-1"], layerId: "l2" }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/cards/layer",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ cardIds: ["card-1"], layerId: "l2" }),
+      }),
+    );
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type")).toBe(
+      "application/json",
+    );
     // Select Draft after moving the card there so its layer appears in front.
     await waitFor(() =>
       expect(layerGroup(container, "l2")).toHaveStyle({ opacity: "1", "z-index": "1" }),
@@ -480,12 +498,20 @@ describe("Layers", () => {
   });
 
   it("shows the reason the server gives for a refused reorder", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({
-        message: "The namespace's layers changed elsewhere. Reload to see the current order.",
-      }),
-    });
+    const fetch = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(
+            JSON.stringify({
+              message: "The namespace's layers changed elsewhere. Reload to see the current order.",
+            }),
+            {
+              status: 409,
+              headers: { "content-type": "application/json", "X-Kozane-Error-Code": "conflict" },
+            },
+          ),
+      );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
@@ -519,11 +545,17 @@ describe("Layers", () => {
     await fireEvent.click(screen.getByLabelText("Add layer"));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/layers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Notes" }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/layers",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ name: "Notes" }),
+      }),
+    );
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("content-type")).toBe(
+      "application/json",
+    );
     await waitFor(() =>
       expect(layerGroup(container, "l3")).toHaveStyle({ opacity: "1", "z-index": "2" }),
     );

@@ -1,4 +1,8 @@
-import { replaceState } from "$app/navigation";
+import type {
+  BoardDestination,
+  BoardArrivalParameter,
+  NavigationAdapter,
+} from "$lib/navigation.js";
 import type { CardWithGlue, Inventory, TaskspaceSummary } from "$lib/types";
 
 /**
@@ -15,7 +19,7 @@ export type Arrival = {
    * last sat on the canvas, so the board lands on this inventory's icon and opens its grid.
    */
   inventory: Inventory | null;
-  handled: string[];
+  handled: BoardArrivalParameter[];
 };
 
 type ArrivalBoard = {
@@ -32,20 +36,20 @@ type ArrivalBoard = {
  * no live endpoint to fetch an omitted file from.
  */
 export function readArrival(
-  params: URLSearchParams,
+  destination: BoardDestination,
   board: ArrivalBoard,
   canOpenFiles: boolean,
 ): Arrival {
-  const cardId = params.get("card");
+  const cardId = destination.card;
   const card = cardId ? (board.cards.find(({ id }) => id === cardId) ?? null) : null;
-  const taskspaceId = params.get("taskspace");
-  const path = params.get("path");
+  const taskspaceId = destination.taskspace;
+  const path = destination.path;
   const taskspace =
     taskspaceId && path && canOpenFiles
       ? (board.taskspaces.find(({ id }) => id === taskspaceId) ?? null)
       : null;
 
-  const handled: string[] = [];
+  const handled: BoardArrivalParameter[] = [];
   const file = taskspace && path ? { taskspace, path } : null;
   if (file) handled.push("taskspace", "path");
   if (card) handled.push("card");
@@ -61,10 +65,10 @@ export function readArrival(
  * headed. Null whenever the id is absent or belongs to a warp this namespace no longer has.
  */
 export function arrivalWarp<W extends { id: string }>(
-  params: URLSearchParams,
+  destination: BoardDestination,
   warps: readonly W[],
 ): W | null {
-  const warpId = params.get("warp");
+  const warpId = destination.warp;
   return warpId ? (warps.find(({ id }) => id === warpId) ?? null) : null;
 }
 
@@ -72,12 +76,15 @@ export function arrivalWarp<W extends { id: string }>(
  * Remove arrival parameters after use so reloading does not repeat the jump. Preserve
  * unrelated parameters and ignore router errors during this cosmetic update.
  */
-export function clearArrivalParams(current: URL, names: string[]): void {
-  const url = new URL(current);
-  for (const name of names) url.searchParams.delete(name);
+export function clearArrivalParams(
+  current: URL,
+  names: readonly BoardArrivalParameter[],
+  navigation: Pick<NavigationAdapter, "clearBoard">,
+  replace: (href: string) => void,
+): void {
   try {
-    replaceState(`${url.pathname}${url.search}`, {});
+    replace(navigation.clearBoard(current, names));
   } catch {
-    // Ignored for the reason given above.
+    // Cosmetic URL cleanup must not prevent opening an arrival target.
   }
 }

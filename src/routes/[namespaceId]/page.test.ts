@@ -634,3 +634,33 @@ it("uses supplied routes for board tag links and the namespace list", async () =
   );
   expect(screen.getByTitle("to namespaces")).toHaveAttribute("href", "/demo/namespaces/");
 });
+
+it("clears handled demo arrivals through supplied history while preserving namespace and fragments", async () => {
+  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { page } = await import("$app/state");
+  const previous = page.url;
+  page.url = new URL(
+    "http://localhost/demo/board/?namespaceId=namespace-1&card=card-1#tag=private",
+  ) as typeof page.url;
+  const replace = vi.fn();
+  try {
+    render(NamespacePage, {
+      props: {
+        data: { ...data, readonly: true },
+        params: { namespaceId: "namespace-1" },
+        form: null,
+        navigation: createDemoNavigation({ base: "/demo" }),
+        routing: {
+          beforeNavigate: vi.fn(),
+          navigate: vi.fn().mockResolvedValue(undefined),
+          replace,
+        },
+      },
+    });
+    await waitFor(() =>
+      expect(replace).toHaveBeenCalledWith("/demo/board/?namespaceId=namespace-1#tag=private"),
+    );
+  } finally {
+    page.url = previous;
+  }
+});

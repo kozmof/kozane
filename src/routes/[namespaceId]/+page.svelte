@@ -3,8 +3,10 @@
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
-  import { goto } from "$app/navigation";
-  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
+  import { createAppNavigationDriver } from "./lib/app-navigation.js";
+  import {
+    createNodeNavigation, type NavigationAdapter, type NavigationDriver, type BoardArrivalParameter,
+  } from "$lib/navigation.js";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
@@ -37,7 +39,11 @@
   import { startSnapshotView } from "$lib/backend/snapshot-view.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
 
-  let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), navigate = goto }: PageProps & { navigation?: NavigationAdapter; navigate?: (href: string) => Promise<void> } = $props();
+  let {
+    data,
+    navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }),
+    routing = createAppNavigationDriver(),
+  }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver } = $props();
 
   // Static exports have no mutation endpoints. Disable editing controls and live polling for
   // the entire build.
@@ -97,7 +103,7 @@
       readonly,
       backend,
       navigation: () => navigation,
-      navigate: (href) => navigate(href),
+      navigate: (href) => routing.navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
       canvas: () => canvasComponent,
     },
@@ -142,10 +148,11 @@
 
   /** The warp named by `?warp=`. Read only in the browser: prerendering has no query. */
   function warpFromUrl() {
-    return browser ? arrivalWarp(page.url.searchParams, s.warps) : null;
+    return browser ? arrivalWarp(navigation.readBoard(page.url), s.warps) : null;
   }
 
-  const clearQuery = (...names: string[]) => clearArrivalParams(page.url, names);
+  const clearQuery = (...names: BoardArrivalParameter[]) =>
+    clearArrivalParams(page.url, names, navigation, (href) => routing.replace(href));
 
   /**
    * Open a namespace at the requested warp or at its center. Do not reuse the previous
@@ -173,7 +180,7 @@
 
     // Open static-export files only when their contents are embedded.
     const { card, file, inventory, handled } = readArrival(
-      page.url.searchParams,
+      navigation.readBoard(page.url),
       s,
       !(readonly && !staticFiles),
     );
@@ -529,6 +536,7 @@
   </div>
 
   <FileEditor
+    {routing}
     session={editor}
     ctx={editorContext}
     vimMode={data.uiConfig.editorVimMode}
