@@ -1,3 +1,4 @@
+import { commitRevision, trackedClient, type CommitRevision } from "./internal/commit-revision.js";
 import { runNodeTransaction } from "./internal/transaction.js";
 import { UnavailableError } from "../services/errors.js";
 import type { DatabaseHandle } from "./database.js";
@@ -9,6 +10,13 @@ import { createDatabaseAdapter, type DB } from "./database.js";
 export { withTx, withReadTx } from "./database.js";
 export type { DB, Tx, ReadTx, AnyDB } from "./database.js";
 
+const revisions = new WeakMap<DB, CommitRevision>();
+export function nodeCommitRevision(db: DB): Readonly<CommitRevision> {
+  const state = revisions.get(db);
+  if (!state) throw new Error("Expected Node database");
+  return Object.freeze({ ...state });
+}
+
 const nodeHandles = new WeakMap<DB, LibSQLDatabase<typeof schema>>();
 export function migrateNodeDatabase(db: DB, config: Parameters<typeof migrate>[1]): Promise<void> {
   const handle = nodeHandles.get(db);
@@ -17,7 +25,12 @@ export function migrateNodeDatabase(db: DB, config: Parameters<typeof migrate>[1
 }
 
 /** Preserve libsql immediate writes and deferred snapshot reads. */
-export function brandDb(db: LibSQLDatabase<typeof schema> & { $client: Client }): DB {
+export function brandDb(
+  original: LibSQLDatabase<typeof schema> & { $client: Client },
+  identity?: string,
+): DB {
+  const state = commitRevision(identity);
+  const db = drizzle({ client: trackedClient(original.$client, state), schema });
   let invalid = false;
   const run = <T>(
     mode: "write" | "deferred",
@@ -53,5 +66,6 @@ export function brandDb(db: LibSQLDatabase<typeof schema> & { $client: Client })
     read: (operation) => run("deferred", operation),
   });
   nodeHandles.set(branded, db);
+  revisions.set(branded, state);
   return branded;
 }

@@ -26,7 +26,7 @@ export async function openDb(url: string): Promise<OpenedDb> {
   // pragma is insufficient.
   const client = createClient({ url, timeout: BUSY_TIMEOUT_MS });
   await applyConnectionPragmas(client, url);
-  return { db: brandDb(drizzle(client, { schema })), close: () => client.close() };
+  return { db: brandDb(drizzle(client, { schema }), url), close: () => client.close() };
 }
 
 /**
