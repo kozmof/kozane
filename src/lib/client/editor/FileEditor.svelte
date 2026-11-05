@@ -6,10 +6,10 @@
   import type {
     EditorSession,
     EditorSessionContext,
-  } from "../lib/editor/editor-session.svelte.js";
-  import type { EditorDocument } from "../lib/editor/document-store.svelte.js";
-  import { createVimState, handleVimKey, type VimState } from "../lib/editor/vim.js";
-  import { guardUnsavedLeave, UNSAVED_LEAVE_PROMPT } from "../lib/editor/leave-guard.js";
+  } from "./editor-session.svelte.js";
+  import type { EditorDocument } from "./document-store.svelte.js";
+  import { createVimState, handleVimKey, type VimState } from "./vim.js";
+  import { guardUnsavedLeave, UNSAVED_LEAVE_PROMPT } from "./leave-guard.js";
   import EditorPanelHeader from "./EditorPanelHeader.svelte";
   import EditorPanelNotices from "./EditorPanelNotices.svelte";
   import EditorStatusBar from "./EditorStatusBar.svelte";

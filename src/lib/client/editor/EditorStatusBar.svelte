@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { EditorSession } from "../lib/editor/editor-session.svelte.js";
-  import type { VimState } from "../lib/editor/vim.js";
+  import type { EditorSession } from "./editor-session.svelte.js";
+  import type { VimState } from "./vim.js";
 
   /** The editor's status bar: the Vim mode and pending keys, line count, and caret place. */
   let { session, vimMode, vim }: { session: EditorSession; vimMode: boolean; vim: VimState } =

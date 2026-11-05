@@ -1,6 +1,6 @@
 import { HttpBackend, StaticBackend, type SnapshotData } from "../lib/backend/index.js";
 import type { TaskspaceFileTree } from "../lib/types.js";
-import type { EditorSessionContext } from "../routes/[namespaceId]/lib/editor/editor-session.svelte.js";
+import type { EditorSessionContext } from "../lib/client/editor/index.js";
 
 export function httpEditorContext(
   fetcher: typeof fetch,

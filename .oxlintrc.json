@@ -194,6 +194,22 @@
       }
     },
     {
+      // Shared client views depend on adapters instead of route or Node runtime modules.
+      "files": ["src/lib/client/**"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "eslint/no-restricted-imports": ["error", { "patterns": [
+          { "group": ["**/routes/**", "**/cli/**", "**/lib/server/**", "$app/**", "$env/**", "@sveltejs/kit", "@sveltejs/kit/**", "node:*"], "message": "Shared client views use injected browser-safe adapters." },
+          { "group": ["**/db/**"], "allowTypeImports": true, "message": "Shared client views may import database types only." }
+        ] }],
+        "eslint/no-restricted-globals": ["error", { "name": "fetch", "message": "Shared client views use the injected backend." }],
+        "eslint/no-restricted-properties": ["error",
+          { "property": "fetch", "message": "Shared client views use the injected backend." },
+          { "property": "fetcher", "message": "Shared client views use the injected backend." }
+        ]
+      }
+    },
+    {
       // A test may reach for `any` to build a malformed payload the types forbid — which is
       // exactly what the route guards in `lib/request.ts` exist to reject.
       "files": ["**/*.test.ts", "**/*.spec.ts", "src/test-utils/**"],

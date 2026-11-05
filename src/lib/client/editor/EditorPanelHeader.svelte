@@ -1,7 +1,7 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { EditorSession } from "../lib/editor/editor-session.svelte.js";
-  import { barButton, iconButton, pinnedButton } from "../lib/editor/panel-styles.js";
+  import type { EditorSession } from "./editor-session.svelte.js";
+  import { barButton, iconButton, pinnedButton } from "./panel-styles.js";
 
   /** The editor panel's header: the file's place, its unsaved marker, and the panel buttons. */
   let {

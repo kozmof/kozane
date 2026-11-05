@@ -1,4 +1,4 @@
-import { httpEditorContext, staticEditorContext } from "../../../../test-utils/editor-context.js";
+import { httpEditorContext, staticEditorContext } from "../../../test-utils/editor-context.js";
 import type { TaskspaceFileData } from "$lib/backend/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "$lib/types";

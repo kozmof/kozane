@@ -1,23 +1,23 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import type { Caret, EditorDocument } from "../lib/editor/document-store.svelte.js";
-  import { orderCarets, sameCaret } from "../lib/editor/document-store.svelte.js";
+  import type { Caret, EditorDocument } from "./document-store.svelte.js";
+  import { orderCarets, sameCaret } from "./document-store.svelte.js";
   import {
     caretPoint,
     domMeasurer,
     pointToCaret,
     selectionRects,
     visibleRange,
-  } from "../lib/editor/geometry.js";
-  import { TAB_SIZE } from "../lib/editor/wrap.js";
-  import { WrapView } from "../lib/editor/wrap-view.svelte.js";
-  import { handleSurfaceKey, type SurfaceKeyHost } from "../lib/editor/surface-keys.js";
+  } from "./geometry.js";
+  import { TAB_SIZE } from "./wrap.js";
+  import { WrapView } from "./wrap-view.svelte.js";
+  import { handleSurfaceKey, type SurfaceKeyHost } from "./surface-keys.js";
   import {
     RowElements,
     caretRowsAway,
     caretWidth as measureCaretWidth,
     drawnRows,
-  } from "../lib/editor/surface-rows.js";
+  } from "./surface-rows.js";
 
   export type EditorMode = "insert" | "normal";
 

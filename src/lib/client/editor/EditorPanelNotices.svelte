@@ -3,8 +3,8 @@
   import type {
     EditorSession,
     EditorSessionContext,
-  } from "../lib/editor/editor-session.svelte.js";
-  import { barButton } from "../lib/editor/panel-styles.js";
+  } from "./editor-session.svelte.js";
+  import { barButton } from "./panel-styles.js";
 
   /**
    * Notices under the editor's header: the unsaved-changes question while closing, then a

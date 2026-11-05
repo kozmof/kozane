@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, fireEvent, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import EditorSurface from "./EditorSurface.svelte";
-import { EditorDocument } from "../lib/editor/document-store.svelte.js";
+import { EditorDocument } from "./document-store.svelte.js";
 
 /**
  * Test input handling in jsdom, which provides no layout measurements. Test geometry with
