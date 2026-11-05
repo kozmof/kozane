@@ -1,3 +1,5 @@
+import type { KozaneBackend, MutationOptions } from "./contract.js";
+export type { MutationOptions } from "./contract.js";
 import type {
   TaskspaceLifecycleApi,
   TaskspaceCreated,
@@ -24,13 +26,10 @@ import { BackendSignals } from "./signals.js";
 import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 
 type Result<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
-export interface MutationOptions {
-  keepalive?: boolean;
-}
 const ALL: readonly BackendDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 /** HTTP resource adapter. External refresh and remaining resource APIs are implemented separately. */
-export class HttpBackend {
+export class HttpBackend implements KozaneBackend {
   readonly kind = "http" as const;
   readonly capabilities: BackendCapabilities;
   private readonly signals = new BackendSignals({ status: "ready" });
@@ -110,7 +109,7 @@ export class HttpBackend {
       throw new BackendError("unavailable", "Invalid backend response", { cause });
     }
   }
-  readonly namespaces = {
+  readonly namespaces: KozaneBackend["namespaces"] = {
     list: () => this.read<Result<typeof NamespaceServices.list>>("/api/namespaces"),
     get: (namespaceId: string) =>
       this.read<Result<typeof NamespaceServices.get>>(
@@ -119,7 +118,7 @@ export class HttpBackend {
     create: (input: { name: string }) =>
       this.write<Result<typeof NamespaceServices.create>>("/api/namespaces", "POST", input),
   };
-  readonly cards = {
+  readonly cards: KozaneBackend["cards"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof CardServices.create>>(this.ns(ns, "/cards"), "POST", input, options),
     update: (ns: string, id: string, input: Record<string, unknown>, options?: MutationOptions) =>
@@ -163,7 +162,7 @@ export class HttpBackend {
       this.write<Result<typeof CardServices.squash>>(this.ns(ns, "/cards/squash"), "POST", input),
   };
 
-  readonly glues = {
+  readonly glues: KozaneBackend["glues"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof gluesServices.create>>(
         this.ns(ns, "/glues"),
@@ -180,7 +179,7 @@ export class HttpBackend {
       ),
   };
 
-  readonly layers = {
+  readonly layers: KozaneBackend["layers"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof layersServices.create>>(
         this.ns(ns, "/layers"),
@@ -211,7 +210,7 @@ export class HttpBackend {
       ),
   };
 
-  readonly partitions = {
+  readonly partitions: KozaneBackend["partitions"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof partitionsServices.create>>(
         this.ns(ns, "/partitions"),
@@ -235,7 +234,7 @@ export class HttpBackend {
       ),
   };
 
-  readonly scopes = {
+  readonly scopes: KozaneBackend["scopes"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof scopesServices.create>>(
         this.ns(ns, "/scopes"),
@@ -315,7 +314,7 @@ export class HttpBackend {
       ),
   };
 
-  readonly warps = {
+  readonly warps: KozaneBackend["warps"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof warpsServices.create>>(
         this.ns(ns, "/warps"),
@@ -339,7 +338,7 @@ export class HttpBackend {
       ),
   };
 
-  readonly inventories = {
+  readonly inventories: KozaneBackend["inventories"] = {
     create: (ns: string, input: Record<string, unknown>, options?: MutationOptions) =>
       this.write<Result<typeof inventoriesServices.create>>(
         this.ns(ns, "/inventories"),
@@ -423,7 +422,7 @@ export class HttpBackend {
     );
   }
 
-  readonly tags = {
+  readonly tags: KozaneBackend["tags"] = {
     get: async (namespaceId?: string) => {
       const result = readTagsViewData(
         await this.read<unknown>(
@@ -436,14 +435,14 @@ export class HttpBackend {
       return result;
     },
   };
-  readonly map = {
+  readonly map: KozaneBackend["map"] = {
     get: async () => {
       const result = readMapSnapshot(await this.read<unknown>("/api/map", { cache: "no-store" }));
       if (!result) throw new BackendError("unavailable", "Invalid map dataset");
       return result;
     },
   };
-  readonly warpDirectory = {
+  readonly warpDirectory: KozaneBackend["warpDirectory"] = {
     get: (namespaceId: string) =>
       this.read<WarpListEntry[]>(this.ns(namespaceId, "/warp-directory")),
   };

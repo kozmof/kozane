@@ -1,3 +1,18 @@
+import type {
+  CardsApi,
+  GluesApi,
+  LayersApi,
+  PartitionsApi,
+  ScopesApi,
+  WarpsApi,
+  InventoriesApi,
+  NamespacesApi,
+  TagsApi,
+  MapApi,
+  WarpDirectoryApi,
+  TaskspacesApi,
+} from "./resources.js";
+export * from "./resources.js";
 import type { NamespaceDataSnapshot } from "../types.js";
 export type BackendErrorCode =
   | "validation"
@@ -51,70 +66,28 @@ export type SnapshotResult =
   | { status: "changed"; validator: string; data: SnapshotData }
   | { status: "unchanged"; validator: string };
 
-export interface TaskspaceCreated {
-  id: string;
-  path: string;
-  pathKind: import("../constants.js").PathKind;
+export interface SnapshotReadOptions {
+  validator?: string;
 }
-export interface TaskspaceRenamed {
-  id: string;
-  name: string;
-  path: string | null;
-  pathKind: import("../constants.js").PathKind;
-}
-export interface TaskspaceFileData {
-  path: string;
-  content: string;
-  signature: string | null;
-}
-export interface TaskspaceLifecycleApi {
-  create(namespaceId: string, input: { name: string; scopeId: string }): Promise<TaskspaceCreated>;
-  rename(
-    namespaceId: string,
-    taskspaceId: string,
-    input: { name: string },
-  ): Promise<TaskspaceRenamed>;
-  remove(
-    namespaceId: string,
-    taskspaceId: string,
-  ): Promise<{ ok: boolean; directory: import("../types.js").TaskspaceDirectoryOutcome }>;
-  createFile(
-    namespaceId: string,
-    taskspaceId: string,
-    input: { path: string },
-  ): Promise<TaskspaceFileData>;
-}
-export interface TaskspaceLifecycleApi {
-  readFile(
-    namespaceId: string,
-    taskspaceId: string,
-    path: string,
-    options?: { signal?: AbortSignal },
-  ): Promise<TaskspaceFileData>;
-  saveFile(
-    namespaceId: string,
-    taskspaceId: string,
-    input: TaskspaceFileData,
-    options?: { keepalive?: boolean },
-  ): Promise<TaskspaceFileData>;
-  list(
-    namespaceId: string,
-    taskspaceId: string,
-    path: string,
-  ): Promise<import("../types.js").TaskspaceListing>;
-  createDirectory(
-    namespaceId: string,
-    taskspaceId: string,
-    input: { path: string },
-  ): Promise<import("../types.js").TaskspaceListing>;
-  renameEntry(
-    namespaceId: string,
-    taskspaceId: string,
-    input: { path: string; name: string },
-  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
-  removeEntry(
-    namespaceId: string,
-    taskspaceId: string,
-    path: string,
-  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
+/** Shared data and lifecycle surface implemented by every deployment adapter. */
+export interface KozaneBackend {
+  readonly kind: "http" | "static" | "local";
+  readonly capabilities: BackendCapabilities;
+  readonly version: BackendVersion;
+  readonly state: BackendState;
+  subscribe(listener: (event: BackendInvalidation) => void): () => void;
+  subscribeState(listener: (state: BackendState) => void): () => void;
+  snapshot(namespaceId: string, options?: SnapshotReadOptions): Promise<SnapshotResult>;
+  readonly namespaces: NamespacesApi;
+  readonly cards: CardsApi;
+  readonly glues: GluesApi;
+  readonly layers: LayersApi;
+  readonly partitions: PartitionsApi;
+  readonly scopes: ScopesApi;
+  readonly warps: WarpsApi;
+  readonly inventories: InventoriesApi;
+  readonly tags: TagsApi;
+  readonly map: MapApi;
+  readonly warpDirectory: WarpDirectoryApi;
+  readonly taskspaces?: TaskspacesApi;
 }

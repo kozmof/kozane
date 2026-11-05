@@ -10,7 +10,7 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readWarp } from "$lib/backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
@@ -19,7 +19,7 @@ import { readStacking } from "./shared.js";
 /** Board structure actions: partitions, layers, and warps. */
 export function createBackendBoardActions(
   state: NamespaceState,
-  backend: Pick<HttpBackend, "layers" | "partitions" | "warps">,
+  backend: Pick<KozaneBackend, "layers" | "partitions" | "warps">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));

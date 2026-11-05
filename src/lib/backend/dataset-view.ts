@@ -1,16 +1,9 @@
 import type { PollLifecycle } from "./workspace-poller.js";
-import type {
-  BackendDataset,
-  BackendInvalidation,
-  BackendState,
-  BackendVersion,
-} from "./contract.js";
-export interface DatasetBackend {
-  readonly version: BackendVersion;
-  readonly state: BackendState;
-  subscribe(listener: (event: BackendInvalidation) => void): () => void;
-  subscribeState(listener: (state: BackendState) => void): () => void;
-}
+import type { BackendDataset, KozaneBackend } from "./contract.js";
+export type DatasetBackend = Pick<
+  KozaneBackend,
+  "version" | "state" | "subscribe" | "subscribeState"
+>;
 /** Subscribe before reading, and retain applied data until a current read succeeds. */
 export function startDatasetView<T>(options: {
   backend: DatasetBackend;

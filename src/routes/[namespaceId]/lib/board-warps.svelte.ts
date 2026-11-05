@@ -1,7 +1,7 @@
 import { withoutWarp, type WarpListEntry } from "$lib/warp-list";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { parseWarpEntries } from "$lib/backend/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
@@ -20,8 +20,8 @@ type BoardWarpsHost = {
   navigation: () => NavigationAdapter;
   navigate: (href: string) => Promise<void>;
   backend: {
-    warpDirectory: Pick<HttpBackend["warpDirectory"], "get">;
-    warps: Pick<HttpBackend["warps"], "remove">;
+    warpDirectory: Pick<KozaneBackend["warpDirectory"], "get">;
+    warps: Pick<KozaneBackend["warps"], "remove">;
   };
   /** A static export has no endpoints, so it neither refreshes nor deletes. */
   readonly: boolean;

@@ -18,7 +18,7 @@ function readCards(value: unknown) {
     ? cards
     : undefined;
 }
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readCard, readInventory } from "$lib/backend/decoders/snapshot-reader.js";
 import { readArray } from "$lib/backend/decoders/response.js";
@@ -36,7 +36,7 @@ import {
 /** Card actions: partition and layer moves, glue, stacking, delete, squash, and namespace moves. */
 export function createBackendCardActions(
   state: NamespaceState,
-  backend: Pick<HttpBackend, "cards" | "glues">,
+  backend: Pick<KozaneBackend, "cards" | "glues">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));

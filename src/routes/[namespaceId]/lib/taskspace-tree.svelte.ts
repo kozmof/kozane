@@ -1,4 +1,4 @@
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
 import { entryNameIssue } from "$lib/entry-name";
@@ -44,7 +44,7 @@ export type TaskspaceCreated = {
 
 export type TaskspaceTreeContext = {
   fetcher: typeof fetch;
-  backend?: Pick<HttpBackend, "taskspaces">;
+  backend?: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
   /**
    * Embedded taskspace trees keyed by taskspace ID. Use them instead of live directory

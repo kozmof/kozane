@@ -1,4 +1,4 @@
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readInventory } from "$lib/backend/decoders/snapshot-reader.js";
 import { readPlacements } from "$lib/backend/decoders/placements.js";
@@ -55,7 +55,7 @@ function placed(cards: CardWithGlue[], placements: InventoryPlacement[]): CardWi
  */
 export function createBackendInventoryActions(
   state: NamespaceState,
-  backend: Pick<HttpBackend, "inventories">,
+  backend: Pick<KozaneBackend, "inventories">,
 ) {
   function track<Args extends unknown[], R>(work: (...args: Args) => Promise<R>) {
     return (...args: Args) => state.mutations.track(() => work(...args));

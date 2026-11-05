@@ -1,10 +1,10 @@
 import { BackendError } from "./contract.js";
-import type { HttpBackend } from "./http-backend.js";
+import type { KozaneBackend } from "./contract.js";
 import { NAME_MAX } from "../constants.js";
 
 export type NamespaceRow = { id: string; name: string; isDefault: boolean };
 type NamespaceBackend = Pick<
-  HttpBackend,
+  KozaneBackend,
   "version" | "state" | "subscribe" | "subscribeState" | "namespaces"
 >;
 

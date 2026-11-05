@@ -1,5 +1,5 @@
 import type { NamespaceState } from "../namespace-state.svelte.js";
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readCard, readWarp, readScopeArea } from "$lib/backend/decoders/snapshot-reader.js";
 import { readPlacements } from "$lib/backend/decoders/placements.js";
@@ -11,7 +11,7 @@ import type { CardWithGlue } from "$lib/types.js";
 /** Optimistic UI persistence through transport-free resource methods. */
 export function createBackendBoardPersistence(
   s: NamespaceState,
-  backend: Pick<HttpBackend, "cards" | "warps" | "scopes">,
+  backend: Pick<KozaneBackend, "cards" | "warps" | "scopes">,
 ) {
   const placements = (cards: CardWithGlue[], value: unknown) => {
     const changes = new Map((readPlacements(value) ?? []).map((row) => [row.cardId, row]));

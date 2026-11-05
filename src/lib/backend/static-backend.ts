@@ -1,4 +1,4 @@
-import type { HttpBackend } from "./http-backend.js";
+import type { KozaneBackend } from "./contract.js";
 import type { TagsViewData } from "../../services/tags.js";
 import type { TreemapSnapshot } from "../../services/map.js";
 import type { WarpListEntry } from "../warp-list.js";
@@ -53,7 +53,7 @@ async function readOnly(..._args: unknown[]): Promise<never> {
 }
 
 /** Read embedded export data without live endpoints, polling, or writable storage. */
-export class StaticBackend {
+export class StaticBackend implements KozaneBackend {
   readonly kind = "static" as const;
   readonly capabilities: BackendCapabilities;
   readonly state: BackendState = Object.freeze({ status: "ready" });
@@ -136,12 +136,12 @@ export class StaticBackend {
     const result = this.validators.result(namespaceId, 0, "static", data, options.validator);
     return result.status === "changed" ? { ...result, data: copy(result.data) } : result;
   }
-  readonly namespaces: HttpBackend["namespaces"] = Object.freeze({
+  readonly namespaces: KozaneBackend["namespaces"] = Object.freeze<KozaneBackend["namespaces"]>({
     list: async () => copy([...this.metadata.values()]),
     get: async (namespaceId) => copy(this.requireNamespace(namespaceId)),
     create: readOnly,
   });
-  readonly cards: HttpBackend["cards"] = Object.freeze({
+  readonly cards: KozaneBackend["cards"] = Object.freeze<KozaneBackend["cards"]>({
     create: readOnly,
     update: readOnly,
     updatePositions: readOnly,
@@ -153,19 +153,22 @@ export class StaticBackend {
     setStacking: readOnly,
     squash: readOnly,
   });
-  readonly glues: HttpBackend["glues"] = Object.freeze({ create: readOnly, remove: readOnly });
-  readonly layers: HttpBackend["layers"] = Object.freeze({
+  readonly glues: KozaneBackend["glues"] = Object.freeze<KozaneBackend["glues"]>({
+    create: readOnly,
+    remove: readOnly,
+  });
+  readonly layers: KozaneBackend["layers"] = Object.freeze<KozaneBackend["layers"]>({
     create: readOnly,
     rename: readOnly,
     remove: readOnly,
     reorder: readOnly,
   });
-  readonly partitions: HttpBackend["partitions"] = Object.freeze({
+  readonly partitions: KozaneBackend["partitions"] = Object.freeze<KozaneBackend["partitions"]>({
     create: readOnly,
     rename: readOnly,
     remove: readOnly,
   });
-  readonly scopes: HttpBackend["scopes"] = Object.freeze({
+  readonly scopes: KozaneBackend["scopes"] = Object.freeze<KozaneBackend["scopes"]>({
     create: readOnly,
     rename: readOnly,
     remove: readOnly,
@@ -175,12 +178,12 @@ export class StaticBackend {
     updateArea: readOnly,
     removeArea: readOnly,
   });
-  readonly warps: HttpBackend["warps"] = Object.freeze({
+  readonly warps: KozaneBackend["warps"] = Object.freeze<KozaneBackend["warps"]>({
     create: readOnly,
     update: readOnly,
     remove: readOnly,
   });
-  readonly inventories: HttpBackend["inventories"] = Object.freeze({
+  readonly inventories: KozaneBackend["inventories"] = Object.freeze<KozaneBackend["inventories"]>({
     create: readOnly,
     update: readOnly,
     remove: readOnly,
@@ -188,7 +191,7 @@ export class StaticBackend {
     take: readOnly,
   });
 
-  readonly tags: HttpBackend["tags"] = Object.freeze({
+  readonly tags: KozaneBackend["tags"] = Object.freeze<KozaneBackend["tags"]>({
     get: async (namespaceId) => {
       if (namespaceId !== undefined) this.requireNamespace(namespaceId);
       if (!this.data.tags)
@@ -233,14 +236,16 @@ export class StaticBackend {
       return data;
     },
   });
-  readonly map: HttpBackend["map"] = Object.freeze({
+  readonly map: KozaneBackend["map"] = Object.freeze<KozaneBackend["map"]>({
     get: async () => {
       if (!this.data.map)
         throw new BackendError("unavailable", "Map data is not included in this export");
       return copy(this.data.map);
     },
   });
-  readonly warpDirectory: HttpBackend["warpDirectory"] = Object.freeze({
+  readonly warpDirectory: KozaneBackend["warpDirectory"] = Object.freeze<
+    KozaneBackend["warpDirectory"]
+  >({
     get: async (namespaceId) => {
       this.requireNamespace(namespaceId);
       const directories = this.data.warpDirectories;

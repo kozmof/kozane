@@ -10,7 +10,7 @@ async function attempt<T>(
     return { ok: false, error };
   }
 }
-import type { HttpBackend } from "$lib/backend/http-backend.js";
+import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readScopeArea } from "$lib/backend/decoders/snapshot-reader.js";
 import type { NamespaceState } from "../../namespace-state.svelte.js";
@@ -37,7 +37,7 @@ async function orFailure<T>(
 
 export function createBackendScopeActions(
   state: NamespaceState,
-  backend: Pick<HttpBackend, "scopes" | "taskspaces">,
+  backend: Pick<KozaneBackend, "scopes" | "taskspaces">,
 ) {
   function taskspaces() {
     const api = backend.taskspaces;

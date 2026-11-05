@@ -1,18 +1,9 @@
 import type { PollLifecycle } from "./workspace-poller.js";
-import type {
-  BackendInvalidation,
-  BackendState,
-  BackendVersion,
-  SnapshotData,
-  SnapshotResult,
-} from "./contract.js";
-export interface SnapshotBackend {
-  readonly version: BackendVersion;
-  readonly state: BackendState;
-  subscribe(listener: (event: BackendInvalidation) => void): () => void;
-  subscribeState(listener: (state: BackendState) => void): () => void;
-  snapshot(namespaceId: string, options?: { validator?: string }): Promise<SnapshotResult>;
-}
+import type { KozaneBackend, SnapshotData } from "./contract.js";
+export type SnapshotBackend = Pick<
+  KozaneBackend,
+  "version" | "state" | "subscribe" | "subscribeState" | "snapshot"
+>;
 export interface ViewActivity {
   readonly idle: boolean;
   readonly version: number;

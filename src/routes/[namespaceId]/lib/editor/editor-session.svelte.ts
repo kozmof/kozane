@@ -1,4 +1,4 @@
-import type { HttpBackend, MutationOptions as SaveOptions } from "$lib/backend/http-backend.js";
+import type { KozaneBackend, MutationOptions as SaveOptions } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceFileTree } from "$lib/types";
 import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../namespace-api.js";
@@ -10,7 +10,7 @@ import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
   fetcher: typeof fetch;
-  backend?: Pick<HttpBackend, "taskspaces">;
+  backend?: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
   /** Embedded taskspace trees for reading files in a static export. */
   staticFiles?: Record<string, TaskspaceFileTree>;
