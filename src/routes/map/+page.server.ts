@@ -4,7 +4,7 @@ import { getDBURL, getWorkspaceRoot, getWorkspaceUiConfig } from "$db/internal/c
 import { normalizeTag } from "$lib/tag";
 import { loadTreemapSnapshot } from "$lib/server/treemap-snapshot";
 import { mapView, validActivityDay } from "$lib/backend/views/map.js";
-import { httpBackendCapabilities } from "$lib/server/backend-capabilities.js";
+import { pageBackendData } from "$lib/server/page-backend.js";
 export type { MapPartition, MapScope, MapSpoke } from "$lib/backend/views/map.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
@@ -56,6 +56,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       day: requestedDay,
       zoomStep: getWorkspaceUiConfig().zoomStep,
     }),
-    ...(!prerender ? { backendCapabilities: httpBackendCapabilities() } : {}),
+    ...pageBackendData(prerender, { namespaces, map: snapshot }),
   };
 };

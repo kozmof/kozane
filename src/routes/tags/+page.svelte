@@ -2,6 +2,8 @@
   import type { PageProps } from "./$types";
   import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { untrack } from "svelte";
+  import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
+  import { StaticBackend } from "$lib/backend/static-backend.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { startDatasetView } from "$lib/backend/dataset-view.js";
   import { tagsView, type TagsViewPageData } from "$lib/backend/views/tags.js";
@@ -33,9 +35,10 @@
   import { activeRowClass, countClass, noteClass, rowClass } from "./lib/styles.js";
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const backend = untrack(() => data.backendCapabilities
+  const httpBackend = untrack(() => data.backendCapabilities
     ? new HttpBackend({ base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000 })
     : undefined);
+  const backend = $derived(data.staticBackendData ? new StaticBackend(data.staticBackendData) : httpBackend);
   let refreshAttempt = $state(0);
   let failedSource = $state.raw<PageProps["data"] | null>(null);
   const refreshFailed = $derived(failedSource === data);
@@ -44,12 +47,16 @@
   $effect(() => {
     const source = data;
     const attempt = refreshAttempt;
-    if (!backend) return;
+    const selection = { namespaceId: selectedNamespaceId, tag: selectedTag };
+    const current = backend;
+    if (!current) return;
     return untrack(() => startDatasetView({
-      backend,
+      backend: current,
+      retryIntervalMs: current.kind === "static" ? false : undefined,
+      lifecycle: current.kind === "static" ? browserPollLifecycle() : undefined,
       dataset: "tags",
-      read: async () => tagsView(await backend.tags.get(source.namespaceId ?? undefined), {
-        namespaceId: source.namespaceId, tag: source.tag,
+      read: async () => tagsView(await current.tags.get(selection.namespaceId ?? undefined), {
+        ...selection, staticExport: current.kind === "static",
       }),
       apply: (value) => {
         if (attempt !== refreshAttempt) return;
@@ -63,7 +70,7 @@
 
   /** Use server query data for live pages and browser URL filters for static exports. */
   const selectedTag = $derived.by(() => {
-    if (display.tag) return display.tag;
+    if (data.tag) return data.tag;
     if (!browser) return null;
     const requested = navigation.readFilters(page.url).tag;
     return requested ? normalizeTag(requested) : null;
@@ -71,7 +78,7 @@
 
   /** Use null to gather the whole workspace when `?namespaceId=` is absent. */
   const selectedNamespaceId = $derived(
-    display.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
+    data.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
   );
 
   const selectedNamespace = $derived(

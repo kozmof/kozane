@@ -2,6 +2,8 @@
   import type { PageProps } from "./$types";
   import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { untrack } from "svelte";
+  import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
+  import { StaticBackend } from "$lib/backend/static-backend.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { startDatasetView } from "$lib/backend/dataset-view.js";
   import { mapView, type MapViewData } from "$lib/backend/views/map.js";
@@ -46,22 +48,25 @@
    */
 
   let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const backend = untrack(() => data.backendCapabilities
+  const httpBackend = untrack(() => data.backendCapabilities
     ? new HttpBackend({
         base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000,
       })
     : undefined);
+  const backend = $derived(data.staticBackendData ? new StaticBackend(data.staticBackendData) : httpBackend);
   let refreshed = $state.raw<{ source: PageProps["data"]; value: MapViewData } | null>(null);
   const display = $derived(refreshed?.source === data ? { ...data, ...refreshed.value } : data);
   $effect(() => {
     const source = data;
-    if (!backend) return;
+    const selection = { namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay, zoomStep: source.zoomStep };
+    const current = backend;
+    if (!current) return;
     return untrack(() => startDatasetView({
-      backend,
+      backend: current,
+      retryIntervalMs: current.kind === "static" ? false : undefined,
+      lifecycle: current.kind === "static" ? browserPollLifecycle() : undefined,
       dataset: "map",
-      read: async () => mapView(await backend.map.get(), {
-        namespaceId: source.namespaceId, tag: source.tag, day: source.day, zoomStep: source.zoomStep,
-      }),
+      read: async () => mapView(await current.map.get(), selection),
       apply: (value) => { refreshed = { source, value }; },
       isHidden: () => document.hidden,
     }));
@@ -73,18 +78,18 @@
    * the browser URL.
    */
   const selectedTag = $derived.by(() => {
-    if (display.tag) return display.tag;
+    if (data.tag) return data.tag;
     if (!browser) return null;
     const requested = navigation.readFilters(page.url).tag;
     return requested ? normalizeTag(requested) : null;
   });
 
   const selectedNamespaceId = $derived(
-    display.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
+    data.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
   );
   const selectedNamespace = $derived(display.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null);
   const selectedDay = $derived(
-    display.day ?? (browser ? navigation.readFilters(page.url).day : null),
+    data.day ?? (browser ? navigation.readFilters(page.url).day : null),
   );
 
   // Keep day filtering of partition sizes and tag hits aligned. See `partitionsForDay`.

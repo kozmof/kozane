@@ -120,3 +120,14 @@ it("creates through the HTTP backend, coalesces duplicate submissions and report
   expect(fetcher.mock.calls[0][0]).toBe("/api/namespaces");
   expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ name: "" });
 });
+
+it("loads a static namespace index without retry timers", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const stop = f.index.start({ retryIntervalMs: false });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.list).toHaveBeenCalledOnce();
+  expect(f.index.namespaces).toEqual(initial);
+  expect(vi.getTimerCount()).toBe(0);
+  stop();
+});

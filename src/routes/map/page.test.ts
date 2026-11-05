@@ -694,3 +694,32 @@ it("uses injected demo routes for map filters, partitions and workspace navigati
     );
   }
 });
+
+it("projects static backend data for the selected namespace without HTTP", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const initial = pageData();
+    const map = {
+      namespaces: initial.namespaces,
+      partitions: [
+        partition("one", "p1", "Embedded partition", 5),
+        partition("two", "p2", "Other partition", 8),
+      ],
+      scopes: [],
+      activity: [],
+      partitionUsage: [],
+      namespaceUsage: [],
+      tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+    };
+    const { container } = draw({
+      namespaceId: "p1",
+      staticBackendData: { namespaces: initial.namespaces, map },
+    });
+    await waitFor(() => expect(rectOf(container, "Embedded partition")).toBeDefined());
+    expect(rectOf(container, "Other partition")).toBeUndefined();
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

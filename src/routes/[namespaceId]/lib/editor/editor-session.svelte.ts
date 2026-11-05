@@ -131,7 +131,7 @@ export class EditorSession {
       if (opening.aborted) return;
     }
 
-    const staticTree = ctx.staticFiles?.[ref.taskspaceId];
+    const staticTree = ctx.backend ? undefined : ctx.staticFiles?.[ref.taskspaceId];
     if (staticTree) {
       const node = findStaticNode(staticTree, ref.path);
       if (node?.kind === "file") this.#adopt(node.content, null);

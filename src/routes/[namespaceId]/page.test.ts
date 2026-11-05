@@ -664,3 +664,101 @@ it("clears handled demo arrivals through supplied history while preserving names
     page.url = previous;
   }
 });
+
+it("reads export snapshots through StaticBackend and refreshes it on namespace navigation", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const one = {
+    ...data,
+    namespace: { id: "namespace-1", name: "One", isDefault: true },
+    cards: [{ ...data.cards[0], content: "Embedded one" }],
+  };
+  const two = {
+    ...data,
+    namespace: { id: "namespace-2", name: "Two", isDefault: false },
+    cards: [{ ...data.cards[0], content: "Embedded two" }],
+  };
+  const namespaces = [one.namespace, two.namespace];
+  const exported = (snapshot: typeof one | typeof two) => ({
+    ...snapshot,
+    readonly: true,
+    staticBackendData: {
+      namespaces,
+      snapshots: [snapshot],
+      warpDirectories: { [snapshot.namespace.id]: [] },
+    },
+  });
+  const { rerender } = render(NamespacePage, {
+    props: {
+      data: { ...exported(one), cards: data.cards },
+      params: { namespaceId: one.namespace.id },
+      form: null,
+    },
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Card: Embedded one" })).toBeInTheDocument(),
+  );
+  await rerender({
+    data: { ...exported(two), cards: data.cards },
+    params: { namespaceId: two.namespace.id },
+    form: null,
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Card: Embedded two" })).toBeInTheDocument(),
+  );
+  expect(screen.queryByRole("button", { name: "Card: Embedded one" })).not.toBeInTheDocument();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("opens scoped export files through the static backend while keeping the editor read-only", async () => {
+  const { page } = await import("$app/state");
+  const previous = page.url;
+  page.url = new URL("http://localhost/namespace-1?taskspace=t1&path=notes.md") as typeof page.url;
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const tree = (content: string) => ({
+    root: {
+      kind: "directory" as const,
+      name: "notes",
+      truncated: null,
+      children: [{ kind: "file" as const, name: "notes.md", content, size: content.length }],
+    },
+  });
+  const snapshot = {
+    ...data,
+    taskspaces: [
+      {
+        id: "t1",
+        name: "Notes",
+        scopeId: "scope-1",
+        path: null,
+        pathKind: "workspace_relative" as const,
+      },
+    ],
+  };
+  try {
+    render(NamespacePage, {
+      props: {
+        data: {
+          ...snapshot,
+          readonly: true,
+          taskspaceFiles: { t1: tree("SSR file") },
+          staticBackendData: {
+            namespaces: [data.namespace],
+            snapshots: [snapshot],
+            files: { t1: tree("Backend file") },
+            warpDirectories: { [data.namespace.id]: [] },
+          },
+        },
+        params: { namespaceId: data.namespace.id },
+        form: null,
+      },
+    });
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveTextContent("Backend file"));
+    expect(screen.getByRole("dialog")).not.toHaveTextContent("SSR file");
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    page.url = previous;
+  }
+});

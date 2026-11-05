@@ -391,7 +391,7 @@ export class TaskspaceTreeState {
     // forced read replaces one in flight, which may predate the change it has to show.
     if (!force && (current?.loading || current?.entries)) return;
 
-    const staticTree = ctx.staticFiles?.[taskspaceId];
+    const staticTree = ctx.backend ? undefined : ctx.staticFiles?.[taskspaceId];
     if (staticTree) {
       const node = findStaticNode(staticTree, path);
       this.nodes[key] =

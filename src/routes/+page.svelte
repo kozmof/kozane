@@ -3,23 +3,26 @@
   import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { base } from "$app/paths";
   import { onMount, untrack } from "svelte";
+  import { StaticBackend } from "$lib/backend/static-backend.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { NamespaceIndex } from "$lib/backend/namespace-index.svelte.js";
   import { css } from "styled-system/css";
   import NavIcon from "$lib/components/NavIcon.svelte";
 
   let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
-  const backend = untrack(() => new HttpBackend({
-    base,
-    fetcher: fetch,
-    pollingInitialDelayMs: 1000,
-    capabilities: data.backendCapabilities ?? {
-      writable: !data.readonly, persistent: true, externalWrites: true, taskspaces: true, auth: false,
-    },
-  }));
+  const backend = untrack(() => data.staticBackendData || (data.readonly && !data.backendCapabilities)
+    ? new StaticBackend(data.staticBackendData ?? { namespaces: data.namespaces })
+    : new HttpBackend({
+        base,
+        fetcher: fetch,
+        pollingInitialDelayMs: 1000,
+        capabilities: data.backendCapabilities ?? {
+          writable: !data.readonly, persistent: true, externalWrites: true, taskspaces: true, auth: false,
+        },
+      }));
   const index = new NamespaceIndex(backend, untrack(() => data.namespaces));
   onMount(() => {
-    if (!data.readonly) return index.start();
+    return index.start({ retryIntervalMs: backend.kind === "static" ? false : undefined });
   });
   async function createNamespace(event: SubmitEvent) {
     event.preventDefault();
@@ -135,7 +138,7 @@
     </ul>
   {/if}
 
-  {#if !data.readonly}
+  {#if backend.capabilities.writable}
     <form
       method="POST"
       onsubmit={createNamespace}

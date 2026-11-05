@@ -120,3 +120,29 @@ it("uses supplied navigation for namespace discovery and workspace views", async
   expect(screen.getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/demo/tags/");
   expect(screen.getByRole("link", { name: "Map" })).toHaveAttribute("href", "/demo/map/");
 });
+
+it("reads namespace metadata through the static export backend and hides creation", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  const namespaces = [{ id: "embedded", name: "Embedded namespace", isDefault: true }];
+  render(WorkspacePage, {
+    props: {
+      data: {
+        namespaces: [],
+        staticBackendData: { namespaces },
+        workspaceRoot: null,
+        workspaceName: "Export",
+        readonly: true,
+      },
+      form: null,
+    } as never,
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: /Embedded namespace/ })).toHaveAttribute(
+      "href",
+      "/embedded",
+    ),
+  );
+  expect(screen.queryByRole("button", { name: "Create namespace" })).not.toBeInTheDocument();
+  expect(fetcher).not.toHaveBeenCalled();
+});

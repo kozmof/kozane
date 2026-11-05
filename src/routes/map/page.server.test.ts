@@ -1,3 +1,4 @@
+import type { StaticBackendData } from "$lib/backend/static-backend.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addNamespace } from "$db/api/namespace";
 import { addPartition } from "$db/api/partition";
@@ -25,6 +26,7 @@ afterEach(() => vi.unstubAllEnvs());
  */
 
 type MapData = {
+  staticBackendData?: StaticBackendData;
   namespaceId: string | null;
   namespaces: { id: string; name: string }[];
   drawn: { id: string; name: string }[];
@@ -326,13 +328,18 @@ describe("as a static export", () => {
   /** Verify that plain exports omit scopes from the map as they do from boards. */
   it("carries no scope at all", async () => {
     const { db } = await withScope();
-    expect((await loadUnderSsg(db)).scopes).toEqual([]);
+    const data = await loadUnderSsg(db);
+    expect(data.scopes).toEqual([]);
+    expect(data.staticBackendData?.map?.scopes).toEqual([]);
+    expect(data.staticBackendData?.map?.partitionUsage).toEqual([]);
+    expect(data.staticBackendData?.map?.namespaceUsage).toEqual([]);
   });
 
   it("carries them once the export was built to carry scoped things", async () => {
     const { db } = await withScope();
     const data = await loadUnderSsg(db, { KOZANE_SSG_INCLUDE_SCOPED_FILES: "1" });
     expect(data.scopes.map(({ name }) => name)).toEqual(["Release plan"]);
+    expect(data.staticBackendData?.map?.scopes.map(({ name }) => name)).toEqual(["Release plan"]);
   });
 
   /** The packing and the tags are card and partition content, which an export publishes by

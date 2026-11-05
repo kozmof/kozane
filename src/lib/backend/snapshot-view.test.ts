@@ -118,3 +118,33 @@ it("rejects superseded generations and waits for ready state before refreshing",
   expect(f.apply).toHaveBeenCalledOnce();
   stop();
 });
+
+it("reads a static snapshot on visibility wake-up without polling", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  let hidden = true;
+  let wake!: () => void;
+  const release = vi.fn();
+  const stop = startSnapshotView({
+    ...f,
+    namespaceId: () => "ns",
+    activities: [],
+    retryIntervalMs: false,
+    isHidden: () => hidden,
+    lifecycle: {
+      listen(callback) {
+        wake = callback;
+        return release;
+      },
+    },
+  });
+  expect(f.snapshot).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+  hidden = false;
+  wake();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.apply).toHaveBeenCalledOnce();
+  stop();
+  expect(release).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});

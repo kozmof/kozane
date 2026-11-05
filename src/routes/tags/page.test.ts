@@ -364,3 +364,20 @@ it("uses injected demo routes and fragment filters for tags and board links", as
     page.url = previous;
   }
 });
+
+it("reads static tag data through the backend while retaining tag result selection", async () => {
+  const fetcher = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    const tags = tagDataset([cardHit("c1", "perf", "Embedded result")]);
+    draw([cardHit("c1", "perf", "SSR result")], {
+      staticBackendData: { namespaces: tags.namespaces, tags },
+    });
+    await waitFor(() => expect(screen.getByText("Embedded result")).toBeInTheDocument());
+    expect(screen.queryByText("SSR result")).not.toBeInTheDocument();
+    expect(hrefOf("Embedded result")).toBe("/p1?card=c1");
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

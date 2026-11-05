@@ -1,3 +1,4 @@
+import type { StaticBackendData } from "$lib/backend/static-backend.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -174,6 +175,7 @@ describe("as a static export", () => {
     return (await load({ locals: { db }, url: new URL("http://localhost/tags") } as never)) as {
       taskspaces: Record<string, { name: string; namespaceId: string | null }>;
       hits: unknown[];
+      staticBackendData?: StaticBackendData;
     };
   }
 
@@ -185,7 +187,12 @@ describe("as a static export", () => {
     const { db, namespaceId } = await setup();
     await addTaskspace({ db, namespaceId, name: "client-work", path: "client-work" });
 
-    expect((await loadUnderSsg(db)).taskspaces).toEqual({});
+    const data = await loadUnderSsg(db);
+    expect(data.taskspaces).toEqual({});
+    expect(data.staticBackendData?.tags?.index.taskspaces).toEqual({});
+    expect(
+      data.staticBackendData?.tags?.index.hits.every((hit) => hit.source.kind === "card"),
+    ).toBe(true);
   });
 
   it("names them once the export was built to carry files", async () => {
@@ -210,6 +217,10 @@ describe("as a static export", () => {
     });
 
     expect(data.taskspaces[taskspaceId]).toEqual({ name: "client-work", namespaceId });
+    expect(data.staticBackendData?.tags?.index.taskspaces[taskspaceId]).toEqual({
+      name: "client-work",
+      namespaceId,
+    });
   });
 
   /** An export has no query string, so it bakes every hit and the browser selects. */

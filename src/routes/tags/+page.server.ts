@@ -7,7 +7,7 @@ import { getDBURL, getWorkspaceRoot } from "$db/internal/config";
 import { loadTagIndex } from "$lib/server/tag-index";
 import { normalizeTag } from "$lib/tag";
 import { selectTagHits, tagsView } from "$lib/backend/views/tags.js";
-import { httpBackendCapabilities } from "$lib/server/backend-capabilities.js";
+import { pageBackendData } from "$lib/server/page-backend.js";
 import { isSsgBuild, ssgIncludesScopedFiles } from "$lib/server/ssg";
 
 // Prerender one workspace-wide tag index. Namespace filtering uses query parameters at
@@ -96,6 +96,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       { index, namespaces, cardPartitions, partitions },
       { namespaceId: requestedNamespace, tag, staticExport: prerender },
     ),
-    ...(!prerender ? { backendCapabilities: httpBackendCapabilities() } : {}),
+    ...pageBackendData(prerender, {
+      namespaces,
+      tags: { index, namespaces, cardPartitions, partitions },
+    }),
   };
 };

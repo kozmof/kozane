@@ -1,4 +1,4 @@
-import { httpBackendCapabilities } from "$lib/server/backend-capabilities";
+import { pageBackendData } from "$lib/server/page-backend.js";
 import type { EntryGenerator, PageServerLoad } from "./$types";
 import { error } from "@sveltejs/kit";
 import { getDb } from "$db/client";
@@ -55,6 +55,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     otherNamespaces: allNamespaces.filter((p) => p.id !== namespaceId),
     uiConfig: getWorkspaceUiConfig(),
     readonly,
-    ...(!prerender ? { backendCapabilities: httpBackendCapabilities() } : {}),
+    ...pageBackendData(prerender, {
+      namespaces: allNamespaces,
+      snapshots: [loaded.snapshot],
+      files: loaded.snapshot.taskspaceFiles,
+      warpDirectories: { [namespaceId]: warpDirectory },
+    }),
   };
 };

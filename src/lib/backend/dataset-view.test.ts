@@ -106,3 +106,32 @@ it("reports only current view failures and rejects error callbacks after disposa
   await vi.advanceTimersByTimeAsync(0);
   expect(error).toHaveBeenCalledOnce();
 });
+
+it("reads static data after a visibility wake-up without starting a retry timer", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  let hidden = true;
+  let wake!: () => void;
+  const release = vi.fn();
+  const stop = startDatasetView({
+    ...f,
+    dataset: "tags",
+    retryIntervalMs: false,
+    isHidden: () => hidden,
+    lifecycle: {
+      listen(callback) {
+        wake = callback;
+        return release;
+      },
+    },
+  });
+  expect(f.read).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+  hidden = false;
+  wake();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.apply).toHaveBeenCalledExactlyOnceWith("current");
+  stop();
+  expect(release).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});

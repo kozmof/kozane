@@ -38,6 +38,8 @@
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
   import { InFlight } from "./lib/in-flight.js";
   import { startSnapshotView } from "$lib/backend/snapshot-view.js";
+  import { browserPollLifecycle } from "$lib/backend/workspace-poller.js";
+  import { StaticBackend } from "$lib/backend/static-backend.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
 
   let {
@@ -47,9 +49,8 @@
     preferences = createSessionPreferences(),
   }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();
 
-  // Static exports have no mutation endpoints. Disable editing controls and live polling for
-  // the entire build.
-  const readonly = untrack(() => data.readonly);
+  // Export pages select embedded data; live pages retain their HTTP backend instance.
+  const staticExport = untrack(() => data.staticBackendData !== undefined || (data.readonly && !data.backendCapabilities));
   // Use embedded file trees when the static export includes them. Derive these from current
   // page data because namespace navigation reuses the component. Without an embedded tree,
   // readonly taskspaces remain non-expandable.
@@ -62,12 +63,15 @@
   // initialization stay consistent.
   untrack(() => s.resetFromData(data));
 
-  const backend = untrack(() => new HttpBackend({
-      base,
-      fetcher: s.fetcher,
-      pollingInitialDelayMs: 1000,
-      capabilities: data.backendCapabilities ?? { writable: !readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
-    }));
+  const httpBackend = untrack(() => staticExport ? undefined : new HttpBackend({
+    base, fetcher: s.fetcher, pollingInitialDelayMs: 1000,
+    capabilities: data.backendCapabilities ?? { writable: !data.readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
+  }));
+  const backend = $derived(httpBackend ?? new StaticBackend(data.staticBackendData ?? {
+    namespaces: [data.namespace, ...data.otherNamespaces], snapshots: [data],
+    files: data.taskspaceFiles, warpDirectories: { [data.namespace.id]: data.warpDirectory ?? [] },
+  }));
+  const readonly = $derived(!backend.capabilities.writable);
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
@@ -102,8 +106,8 @@
   const warps = new BoardWarps(
     {
       s,
-      readonly,
-      backend,
+      readonly: untrack(() => readonly),
+      backend: untrack(() => backend),
       navigation: () => navigation,
       navigate: (href) => routing.navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
@@ -221,30 +225,29 @@
     openFromUrl();
   });
 
-  // Poll for CLI and other-tab writes. Apply snapshots while preserving current filters and
-  // valid selections.
-  onMount(() => {
-    // A static export has no /api/snapshot endpoint and no writers to sync with.
-    if (readonly) return;
-
-    return startSnapshotView({
-      backend,
-      initialDataApplied: true,
+  // Keep live subscriptions stable and read each static export namespace once.
+  $effect(() => {
+    const current = backend;
+    return untrack(() => startSnapshotView({
+      backend: current,
+      initialDataApplied: current.kind !== "static",
+      retryIntervalMs: current.kind === "static" ? false : undefined,
+      lifecycle: current.kind === "static" ? browserPollLifecycle() : undefined,
       namespaceId: () => s.namespaceId,
       activities: [positionActivity, s.mutations],
       apply: (snapshot) => s.refreshFromData(snapshot),
       isHidden: () => document.visibilityState === "hidden",
-    });
+    }));
   });
 
   // ── Domain action handlers ────────────────────────────────────
-  const actions = createNamespaceActions(s, backend);
+  const actions = createNamespaceActions(s, untrack(() => backend));
 
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
-  const persistence = createBackendBoardPersistence(s, backend);
+  const persistence = createBackendBoardPersistence(s, untrack(() => backend));
 
-  const inventoryActions = createBackendInventoryActions(s, backend);
+  const inventoryActions = createBackendInventoryActions(s, untrack(() => backend));
 
   /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
   let inventoryDrag = $state<InventoryDrag>({

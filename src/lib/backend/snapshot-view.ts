@@ -1,3 +1,4 @@
+import type { PollLifecycle } from "./workspace-poller.js";
 import type {
   BackendInvalidation,
   BackendState,
@@ -25,6 +26,9 @@ export function startSnapshotView(options: {
   activities: readonly ViewActivity[];
   apply: (data: SnapshotData) => void;
   isHidden: () => boolean;
+  /** Static data needs no scheduled retries. */
+  retryIntervalMs?: number | false;
+  lifecycle?: Pick<PollLifecycle, "listen">;
   error?: (error: unknown) => void;
 }): () => void {
   const { backend } = options;
@@ -99,22 +103,29 @@ export function startSnapshotView(options: {
       dirty = true;
     } else void refresh();
   });
-  const timer = setInterval(() => {
-    const next = options.namespaceId();
-    if (next !== currentNamespace) {
-      currentNamespace = next;
-      applied = undefined;
-      sequence++;
-      dirty = true;
-    }
+  const releaseWake = options.lifecycle?.listen(() => {
     void refresh();
-  }, 1000);
+  });
+  const timer =
+    options.retryIntervalMs === false
+      ? undefined
+      : setInterval(() => {
+          const next = options.namespaceId();
+          if (next !== currentNamespace) {
+            currentNamespace = next;
+            applied = undefined;
+            sequence++;
+            dirty = true;
+          }
+          void refresh();
+        }, options.retryIntervalMs ?? 1000);
   void refresh();
   return () => {
     disposed = true;
     sequence++;
-    clearInterval(timer);
+    if (timer !== undefined) clearInterval(timer);
     unsubscribe();
     unsubscribeState();
+    releaseWake?.();
   };
 }

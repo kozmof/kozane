@@ -40,7 +40,7 @@ export class NamespaceIndex {
     this.namespaces = initial;
   }
 
-  start(): () => void {
+  start(options: { retryIntervalMs?: number | false } = {}): () => void {
     if (this.#active) throw new Error("Namespace index is already active");
     this.#active = true;
     this.#dirty = true;
@@ -53,14 +53,17 @@ export class NamespaceIndex {
         this.#dirty = true;
       } else void this.#refresh();
     });
-    const timer = setInterval(() => {
-      void this.#refresh();
-    }, 1000);
+    const timer =
+      options.retryIntervalMs === false
+        ? undefined
+        : setInterval(() => {
+            void this.#refresh();
+          }, options.retryIntervalMs ?? 1000);
     void this.#refresh();
     return () => {
       this.#active = false;
       this.#sequence++;
-      clearInterval(timer);
+      if (timer !== undefined) clearInterval(timer);
       unsubscribe();
       unsubscribeState();
     };
