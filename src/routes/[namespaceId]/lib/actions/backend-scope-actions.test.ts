@@ -28,22 +28,20 @@ it("answers unsupported taskspaces without sending a request", async () => {
 it("uses stored scope-area geometry and keeps membership operations on the shared backend", async () => {
   const state = new NamespaceState();
   state.resetFromData(data);
-  const fetcher = vi
-    .fn()
-    .mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            id: "area",
-            scopeId: "scope-1",
-            namespaceId: state.namespaceId,
-            posX: 0,
-            posY: 0,
-            width: 100,
-            height: 100,
-          }),
-        ),
-    );
+  const fetcher = vi.fn().mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          id: "area",
+          scopeId: "scope-1",
+          namespaceId: state.namespaceId,
+          posX: 0,
+          posY: 0,
+          width: 100,
+          height: 100,
+        }),
+      ),
+  );
   await createBackendScopeActions(
     state,
     new HttpBackend({ fetcher, capabilities }),

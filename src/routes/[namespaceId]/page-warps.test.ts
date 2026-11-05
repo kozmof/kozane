@@ -378,14 +378,12 @@ describe("Warps", () => {
 
   describe("palette", () => {
     const directoryResponse = (entries: unknown[]) =>
-      vi
-        .fn()
-        .mockImplementation(
-          async () =>
-            new Response(JSON.stringify(entries), {
-              headers: { "content-type": "application/json" },
-            }),
-        );
+      vi.fn().mockImplementation(
+        async () =>
+          new Response(JSON.stringify(entries), {
+            headers: { "content-type": "application/json" },
+          }),
+      );
 
     function openPalette() {
       return fireEvent.keyDown(window, { key: "ArrowRight", shiftKey: true });
@@ -505,25 +503,23 @@ describe("Warps", () => {
     });
 
     it("puts another namespace's warp back when removing it fails", async () => {
-      const fetch = vi
-        .fn()
-        .mockImplementation((url: string) =>
-          url.includes("warp-directory")
-            ? Promise.resolve(
-                new Response(JSON.stringify(data.warpDirectory), {
-                  headers: { "content-type": "application/json" },
-                }),
-              )
-            : Promise.resolve(
-                new Response(JSON.stringify({ message: "gone wrong" }), {
-                  status: 409,
-                  headers: {
-                    "content-type": "application/json",
-                    "X-Kozane-Error-Code": "conflict",
-                  },
-                }),
-              ),
-        );
+      const fetch = vi.fn().mockImplementation((url: string) =>
+        url.includes("warp-directory")
+          ? Promise.resolve(
+              new Response(JSON.stringify(data.warpDirectory), {
+                headers: { "content-type": "application/json" },
+              }),
+            )
+          : Promise.resolve(
+              new Response(JSON.stringify({ message: "gone wrong" }), {
+                status: 409,
+                headers: {
+                  "content-type": "application/json",
+                  "X-Kozane-Error-Code": "conflict",
+                },
+              }),
+            ),
+      );
       vi.stubGlobal("fetch", fetch);
       renderPage();
 

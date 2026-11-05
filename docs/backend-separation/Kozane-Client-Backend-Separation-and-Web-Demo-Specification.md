@@ -27,17 +27,17 @@ Today the static (SSG) export is read-only, and editing requires `kozane open` w
 
 Kozane is a SvelteKit app with a Node adapter, a Drizzle + libsql database, and a CLI. It is published as one npm package, `kozane` (v0.21.0 in the reviewed checkout).
 
-| Area | Today | Relevance |
-| --- | --- | --- |
-| Client calls | `s.fetcher = fetch` in `[namespaceId]/+page.svelte`, passed to `namespace-api.ts`, `snapshot-poll.ts` and the action modules | One seam for swapping the transport |
-| Handler DB access | `+server.ts` handlers read `const { db } = locals` | Handlers can run against any `DB` |
-| Business logic | Validation (`lib/request.ts`), clamping, transactions and inventory stowing sit inside `+server.ts` | Must move into services to be shared |
-| Error mapping | `httpErrorFromDb` turns domain errors into 404/400/409 | Becomes the HTTP adapter's job |
-| DB types | `DB`/`Tx` are branded `LibSQLDatabase` (`src/db/tx.ts`) | Must widen to Drizzle's generic async SQLite type for the browser |
-| Migrations | `drizzle/*.sql`, applied by `migrate()` reading the filesystem | Demo build needs exported SQL strings |
-| Static export | `kozane net ssg generate`: `adapter-static`, `KOZANE_READONLY=1`, prerendered snapshots | Basis for a read-only backend |
-| CSP | `script-src 'self'` | Blocks WebAssembly until `'wasm-unsafe-eval'` is added |
-| npm package | Ships `bin`, `dist` (compiled `cli`, `db`, `lib`), `build`, `drizzle`; no `exports` field | Routes and Svelte UI are not consumable by another repo |
+| Area              | Today                                                                                                                        | Relevance                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Client calls      | `s.fetcher = fetch` in `[namespaceId]/+page.svelte`, passed to `namespace-api.ts`, `snapshot-poll.ts` and the action modules | One seam for swapping the transport                               |
+| Handler DB access | `+server.ts` handlers read `const { db } = locals`                                                                           | Handlers can run against any `DB`                                 |
+| Business logic    | Validation (`lib/request.ts`), clamping, transactions and inventory stowing sit inside `+server.ts`                          | Must move into services to be shared                              |
+| Error mapping     | `httpErrorFromDb` turns domain errors into 404/400/409                                                                       | Becomes the HTTP adapter's job                                    |
+| DB types          | `DB`/`Tx` are branded `LibSQLDatabase` (`src/db/tx.ts`)                                                                      | Must widen to Drizzle's generic async SQLite type for the browser |
+| Migrations        | `drizzle/*.sql`, applied by `migrate()` reading the filesystem                                                               | Demo build needs exported SQL strings                             |
+| Static export     | `kozane net ssg generate`: `adapter-static`, `KOZANE_READONLY=1`, prerendered snapshots                                      | Basis for a read-only backend                                     |
+| CSP               | `script-src 'self'`                                                                                                          | Blocks WebAssembly until `'wasm-unsafe-eval'` is added            |
+| npm package       | Ships `bin`, `dist` (compiled `cli`, `db`, `lib`), `build`, `drizzle`; no `exports` field                                    | Routes and Svelte UI are not consumable by another repo           |
 
 Server-only modules that import `node:` APIs include `taskspace-path`, `taskspace-files`, `atomic-write`, `tag-cache`, `api-key`, `snapshot-etag`, `file-signature`, `runtime-state` and `db/internal/migrations`. These must stay out of the core and client packages.
 
@@ -64,14 +64,14 @@ flowchart TD
 
 Http and Local backends reach the same services by different routes; Static never writes and reads prerendered data only.
 
-| Layer | Responsibility | Must not |
-| --- | --- | --- |
-| Board UI | Render, gestures, editing; choose features from `capabilities` | Call `fetch`, build API URLs, check `KOZANE_SSG` |
-| `KozaneBackend` | Typed contract between UI and data | Expose HTTP details (statuses, headers, URLs) |
-| Backend implementations | Move calls to where data lives | Contain business rules |
-| HTTP adapter | Parse requests, call services, map errors to statuses | Query the database or validate fields itself |
-| Services | Validation, rules, transactions | Import `node:`, SvelteKit, or read `process.env` |
-| `db/api` + schema | Queries and table definitions | Know about requests or users |
+| Layer                   | Responsibility                                                 | Must not                                         |
+| ----------------------- | -------------------------------------------------------------- | ------------------------------------------------ |
+| Board UI                | Render, gestures, editing; choose features from `capabilities` | Call `fetch`, build API URLs, check `KOZANE_SSG` |
+| `KozaneBackend`         | Typed contract between UI and data                             | Expose HTTP details (statuses, headers, URLs)    |
+| Backend implementations | Move calls to where data lives                                 | Contain business rules                           |
+| HTTP adapter            | Parse requests, call services, map errors to statuses          | Query the database or validate fields itself     |
+| Services                | Validation, rules, transactions                                | Import `node:`, SvelteKit, or read `process.env` |
+| `db/api` + schema       | Queries and table definitions                                  | Know about requests or users                     |
 
 ## Service layer
 
@@ -108,17 +108,17 @@ For domain errors, the HTTP adapter adds an `X-Kozane-Error-Code` response heade
 
 This table defines the recovery action for each failure class. The database classification rules above establish the failure class. [LocalBackend details](#localbackend-details) define queue ordering, generation changes and reset barriers. [Session persistence](#session-persistence) defines validation and storage handling. [Loading strategy](#loading-strategy) defines startup deadlines and cleanup. Acceptance checks and phase gates verify these contracts.
 
-| Failure or outcome | Required action | Saved copy |
-| --- | --- | --- |
-| Confirmed invalid restored data or incompatible saved schema | Close the rejected candidate and validate the sample before fallback | Attempt deletion only after fallback database and initial view-data validation succeed |
-| Confirmed sample database defect | Require explicit reload and prohibit retry or start over against the same assets | Preserve |
-| Confirmed missing asset, hash or build-ID mismatch, or wasm compilation failure | Require explicit reload | Preserve |
-| Worker or connection failure, deadline expiry, transient network failure, or unknown initialization or service-read failure | Enter unavailable state and offer explicit retry with a new attempt and generation | Preserve |
-| Retryable failure during start over | Retain start-over intent and retry sample initialization through a new reset barrier | Preserve until reset validation succeeds |
-| Storage access, write or deletion failure | Continue in memory and disclose unavailable recovery or an older-copy warning as applicable | Best-effort handling under session persistence |
-| Working database exceeds the recovery-copy limit | Continue editing in memory and suspend recovery saves for this generation | Attempt stale-copy deletion and disclose failure |
-| Saved recovery envelope exceeds a decoding limit | Stop before the affected parsing or decoding stage and validate the sample before fallback | Attempt deletion only after fallback database and initial view-data validation succeed |
-| Valid empty workspace, namespace selection required, or explicit unknown destination | Show the corresponding view state after successful validation | Preserve |
+| Failure or outcome                                                                                                          | Required action                                                                             | Saved copy                                                                             |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Confirmed invalid restored data or incompatible saved schema                                                                | Close the rejected candidate and validate the sample before fallback                        | Attempt deletion only after fallback database and initial view-data validation succeed |
+| Confirmed sample database defect                                                                                            | Require explicit reload and prohibit retry or start over against the same assets            | Preserve                                                                               |
+| Confirmed missing asset, hash or build-ID mismatch, or wasm compilation failure                                             | Require explicit reload                                                                     | Preserve                                                                               |
+| Worker or connection failure, deadline expiry, transient network failure, or unknown initialization or service-read failure | Enter unavailable state and offer explicit retry with a new attempt and generation          | Preserve                                                                               |
+| Retryable failure during start over                                                                                         | Retain start-over intent and retry sample initialization through a new reset barrier        | Preserve until reset validation succeeds                                               |
+| Storage access, write or deletion failure                                                                                   | Continue in memory and disclose unavailable recovery or an older-copy warning as applicable | Best-effort handling under session persistence                                         |
+| Working database exceeds the recovery-copy limit                                                                            | Continue editing in memory and suspend recovery saves for this generation                   | Attempt stale-copy deletion and disclose failure                                       |
+| Saved recovery envelope exceeds a decoding limit                                                                            | Stop before the affected parsing or decoding stage and validate the sample before fallback  | Attempt deletion only after fallback database and initial view-data validation succeed |
+| Valid empty workspace, namespace selection required, or explicit unknown destination                                        | Show the corresponding view state after successful validation                               | Preserve                                                                               |
 
 Retry never replays rejected mutations. Reload-required asset and sample failures take precedence over retryable failures. Reset uses the build-time sample namespace and must validate it before activation, deletion or navigation. An ordinary failed mutation or missing requested namespace does not establish corrupt stored data.
 
@@ -148,11 +148,11 @@ One module per resource, matching today's route tree: `cards` (create, update, r
 
 Three implementations of `KozaneBackend` cover every deployment. The UI chooses one at startup and never branches on the deployment mode afterward.
 
-| Backend | Package | Runs where | Data | Writes | Used by |
-| --- | --- | --- | --- | --- | --- |
-| `HttpBackend` | `@kozane/client` | Browser, talking to `kozane open` | Workspace SQLite file | Yes | Normal local use |
-| `LocalBackend` | `kozane-demo` | Browser only | In-memory wasm SQLite | Yes, kept until the tab closes | Web demo |
-| `StaticBackend` | `@kozane/client` | Browser, static hosting | Prerendered snapshot JSON | No (rejects with `BackendError`, code `read_only`) | `kozane net ssg` export |
+| Backend         | Package          | Runs where                        | Data                      | Writes                                             | Used by                 |
+| --------------- | ---------------- | --------------------------------- | ------------------------- | -------------------------------------------------- | ----------------------- |
+| `HttpBackend`   | `@kozane/client` | Browser, talking to `kozane open` | Workspace SQLite file     | Yes                                                | Normal local use        |
+| `LocalBackend`  | `kozane-demo`    | Browser only                      | In-memory wasm SQLite     | Yes, kept until the tab closes                     | Web demo                |
+| `StaticBackend` | `@kozane/client` | Browser, static hosting           | Prerendered snapshot JSON | No (rejects with `BackendError`, code `read_only`) | `kozane net ssg` export |
 
 ### Interface contract
 
@@ -272,13 +272,13 @@ Shared views subscribe before their initial read and unsubscribe on disposal. Ev
 
 ### Capabilities
 
-| Capability | Http | Local | Static | UI effect when false |
-| --- | --- | --- | --- | --- |
-| `writable` | unless server is read-only | yes | no | Editing controls hidden; banner says read-only |
-| `persistent` | unless server uses an in-memory database | no | n/a | Explain data lifetime and show recovery status only when supported |
-| `taskspaces` | yes | no | optional (read-only) | Taskspace panels hidden |
-| `externalWrites` | yes | no | no | Snapshot polling disabled |
-| `auth` | when API key set | no | no | Login route unused |
+| Capability       | Http                                     | Local | Static               | UI effect when false                                               |
+| ---------------- | ---------------------------------------- | ----- | -------------------- | ------------------------------------------------------------------ |
+| `writable`       | unless server is read-only               | yes   | no                   | Editing controls hidden; banner says read-only                     |
+| `persistent`     | unless server uses an in-memory database | no    | n/a                  | Explain data lifetime and show recovery status only when supported |
+| `taskspaces`     | yes                                      | no    | optional (read-only) | Taskspace panels hidden                                            |
+| `externalWrites` | yes                                      | no    | no                   | Snapshot polling disabled                                          |
+| `auth`           | when API key set                         | no    | no                   | Login route unused                                                 |
 
 The Node root loader derives HTTP capabilities from resolved server configuration and passes the typed values to `HttpBackend` and the initial shared-view props. `KOZANE_READONLY=1` sets `writable` to false. `kozane open --memory` or another in-memory database configuration sets `persistent` to false. Determine these values before rendering controls so SSR and hydration agree. Keep configuration and environment access in the Node adapter. Components use the supplied capabilities. Capability metadata does not replace server-side write restrictions.
 
@@ -309,12 +309,12 @@ Scope mutable editor and view state to the active backend generation, including 
 
 The `kozane` repository becomes a pnpm workspace with three published packages. The demo moves to a separate `kozane-demo` repository that consumes two of them from npm.
 
-| Package | Path | Contents | Allowed runtimes | Depends on |
-| --- | --- | --- | --- | --- |
-| `@kozane/core` | `packages/core` | Schema, migrations (as SQL strings), `db/api`, services, domain errors, types | Browser and Node (no `node:` imports) | `drizzle-orm`, `uuid` |
-| `@kozane/client` | `packages/client` | Svelte board UI, `KozaneBackend` interface, `HttpBackend`, `StaticBackend` | Browser and Node SSR/prerendering | `@kozmof/reed`, `@kozane/core` and `svelte` (peers) |
-| `kozane` | `packages/kozane` | SvelteKit app and routes (HTTP adapter), CLI, taskspaces, auth, config editor, SSG | Node 24+ | `@kozane/core`, `@kozane/client`, `@libsql/client` |
-| `kozane-demo` | separate repo | `LocalBackend`, sqlite-wasm worker, prebuilt `demo.db`, sandbox banner, Pages deploy | Browser | `@kozane/core`, `@kozane/client`, `@sqlite.org/sqlite-wasm` |
+| Package          | Path              | Contents                                                                             | Allowed runtimes                      | Depends on                                                  |
+| ---------------- | ----------------- | ------------------------------------------------------------------------------------ | ------------------------------------- | ----------------------------------------------------------- |
+| `@kozane/core`   | `packages/core`   | Schema, migrations (as SQL strings), `db/api`, services, domain errors, types        | Browser and Node (no `node:` imports) | `drizzle-orm`, `uuid`                                       |
+| `@kozane/client` | `packages/client` | Svelte board UI, `KozaneBackend` interface, `HttpBackend`, `StaticBackend`           | Browser and Node SSR/prerendering     | `@kozmof/reed`, `@kozane/core` and `svelte` (peers)         |
+| `kozane`         | `packages/kozane` | SvelteKit app and routes (HTTP adapter), CLI, taskspaces, auth, config editor, SSG   | Node 24+                              | `@kozane/core`, `@kozane/client`, `@libsql/client`          |
+| `kozane-demo`    | separate repo     | `LocalBackend`, sqlite-wasm worker, prebuilt `demo.db`, sandbox banner, Pages deploy | Browser                               | `@kozane/core`, `@kozane/client`, `@sqlite.org/sqlite-wasm` |
 
 The CLI package stays unscoped as `kozane`, so `npm install --global kozane` is unchanged.
 
@@ -384,15 +384,15 @@ Start over resets navigation as well as data. After a successful reset, replace 
 
 The latest completed save can be restored within the tab when sessionStorage is available. Changes since that copy may be lost on reload, navigation or browser termination. The app never uploads the copy.
 
-| Event | Result |
-| --- | --- |
-| Reload, or leave the demo and return in the same tab | Latest completed save restored when available; pending edits may be lost |
-| Navigate within the demo, including back and forward | Same in-memory database and queued operations retained; no recovery save required |
-| Close the tab or window | Session normally ends; browser session restoration may retain the copy |
-| Open the demo in a new tab | Fresh sample when opened independently; an opener may cause sessionStorage to be copied |
-| Duplicate a tab | Browser copies sessionStorage; both start from the same state, then diverge |
-| "Start over" | Fresh `demo.db`; saved copy deleted when storage permits, with failures disclosed |
-| Demo released with a new schema | Saved copy ignored and deletion attempted; fresh `demo.db` |
+| Event                                                | Result                                                                                  |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Reload, or leave the demo and return in the same tab | Latest completed save restored when available; pending edits may be lost                |
+| Navigate within the demo, including back and forward | Same in-memory database and queued operations retained; no recovery save required       |
+| Close the tab or window                              | Session normally ends; browser session restoration may retain the copy                  |
+| Open the demo in a new tab                           | Fresh sample when opened independently; an opener may cause sessionStorage to be copied |
+| Duplicate a tab                                      | Browser copies sessionStorage; both start from the same state, then diverge             |
+| "Start over"                                         | Fresh `demo.db`; saved copy deleted when storage permits, with failures disclosed       |
+| Demo released with a new schema                      | Saved copy ignored and deletion attempted; fresh `demo.db`                              |
 
 1. Save: after each successful write, mark recovery pending and debounce export by 500 ms. Also enforce a maximum scheduling wait of 5 seconds from the earliest committed write not covered by a completed save. Later writes restart the debounce but never extend that maximum wait. When either timer expires, enqueue an export. This bounds scheduling, not export or storage completion. Coalesce timer and lifecycle requests so at most one recovery export is queued or in flight. Maintain a generation-local committed-write revision separate from the public invalidation revision. Advance it after each successful write commit and record its monotonic commit time. When the queued export begins, capture the active generation and latest committed-write revision inside that queue entry. No write may interleave with export. Return those stamps with the bytes, so the copy includes every committed write through that revision, including writes committed after export scheduling but before execution. Track newer committed revisions while export transfer or storage is pending. Only successful storage of a current-generation export covers its captured revision. Then discard commit-time records through that revision and measure follow-up scheduling from the earliest remaining uncovered commit. A failed or stale export covers no revisions. Do not use the scheduling-time revision or storage-completion time as the export boundary. After the export and storage attempt settle, schedule a follow-up for newer unsaved writes using the earliest uncovered commit time, enqueueing immediately if its maximum wait has elapsed. Apply the existing storage-failure and worker-failure policies on failure. Cancel both timers and pending follow-up scheduling when reset, worker failure or disposal suppresses recovery saves. Queue `sqlite3_js_db_export` through the whole-operation queue and post bytes to the page. The page writes them because sessionStorage is unavailable inside workers. Mark recovery saved only after storage succeeds and only for the exported revision. Keep recovery pending when newer committed revisions remain unsaved. Request an earlier export when visibility becomes hidden and on `pagehide`. Neither event nor an asynchronous unload reply guarantees durability.
    Recovery-copy limits are demo constants, separate from domain content limits and browser storage quotas. Set `RECOVERY_DB_MAX_BYTES` to 2,097,152 bytes (2 MiB) and `RECOVERY_ENVELOPE_MAX_CHARS` to 3,145,728 JavaScript string code units. These limits do not guarantee that sessionStorage has enough quota. Inside the queued save operation, check `PRAGMA page_count` multiplied by `PRAGMA page_size` before calling the export API. If the size exceeds the database limit, skip export. Otherwise check the actual exported byte length in the worker before transferring bytes, and check it again on the page before base64 encoding. Check the serialized envelope length before calling `setItem`. If any save-size check exceeds its limit, discard the candidate copy, continue editing in memory and show "Reload recovery unavailable" with a size-limit explanation. Cancel save timers and follow-up work and suspend all further recovery exports for that generation, including exports triggered by later writes, visibility or pagehide. Reset or worker replacement clears this suspension. Apply the stale-copy deletion and older-copy warning rules below. Do not apply the storage-failure rule that permits another attempt after each later write to size-limit failures.
@@ -412,12 +412,12 @@ GitHub Pages does not provide configurable response headers. Emit CSP through a 
 
 ### Performance budget
 
-| Item | Budget | Release requirement |
-| --- | --- | --- |
-| `sqlite3.wasm` transfer (gzip) | 406 KB, measured for v3.54.1 (879 KB raw) | Reference measurement. Record the shipped artifact's actual compressed and raw sizes |
-| First contentful paint (FCP) | At most 100 ms above the static-export baseline at p75 | Required, with no worker or wasm startup before FCP |
-| Editor ready after FCP | Under 1.5 s at p75 | Aspirational. Report results without blocking release |
-| Open prebuilt `demo.db` in the worker | Under 100 ms at p75 | Aspirational. Report results without blocking release |
+| Item                                  | Budget                                                 | Release requirement                                                                  |
+| ------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `sqlite3.wasm` transfer (gzip)        | 406 KB, measured for v3.54.1 (879 KB raw)              | Reference measurement. Record the shipped artifact's actual compressed and raw sizes |
+| First contentful paint (FCP)          | At most 100 ms above the static-export baseline at p75 | Required, with no worker or wasm startup before FCP                                  |
+| Editor ready after FCP                | Under 1.5 s at p75                                     | Aspirational. Report results without blocking release                                |
+| Open prebuilt `demo.db` in the worker | Under 100 ms at p75                                    | Aspirational. Report results without blocking release                                |
 
 Use one versioned benchmark profile in `kozane-demo` for release checks. Run the production static build in the lockfile-pinned Playwright Chromium on a dedicated runner with a recorded CPU model, OS and browser version. Emulate a 390 × 844 viewport at device scale factor 1, apply 4× CPU throttling, and set network latency to 150 ms, download throughput to 1.6 Mbit/s and upload throughput to 750 Kbit/s. This is a reproducible synthetic profile. Record physical-phone measurements separately.
 
@@ -474,13 +474,13 @@ Keep fingerprinted URLs immutable. Apply the [recovery decision contract](#recov
 
 One shared contract suite runs against every writable backend, so `HttpBackend` and `LocalBackend` cannot diverge silently.
 
-| Test layer | Lives in | Runs against | Purpose |
-| --- | --- | --- | --- |
-| Service unit tests | `@kozane/core` | In-memory libsql (Node) | Business rules, validation, error types |
+| Test layer             | Lives in                                   | Runs against                                                 | Purpose                                       |
+| ---------------------- | ------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------- |
+| Service unit tests     | `@kozane/core`                             | In-memory libsql (Node)                                      | Business rules, validation, error types       |
 | Backend contract suite | `@kozane/client` (exported as `./testing`) | `HttpBackend` + test server; `LocalBackend` in `kozane-demo` | Same inputs give same results and error codes |
-| HTTP adapter tests | `kozane` | SvelteKit handlers | Status mapping, JSON parsing, auth, ETags |
-| CLI e2e | `kozane` | Real workspace | Existing `*.e2e.test.ts` files, unchanged |
-| Browser e2e | `kozane` and `kozane-demo` | Playwright | Board flows on each deployment |
+| HTTP adapter tests     | `kozane`                                   | SvelteKit handlers                                           | Status mapping, JSON parsing, auth, ETags     |
+| CLI e2e                | `kozane`                                   | Real workspace                                               | Existing `*.e2e.test.ts` files, unchanged     |
+| Browser e2e            | `kozane` and `kozane-demo`                 | Playwright                                                   | Board flows on each deployment                |
 
 ### Demo acceptance checks
 
@@ -592,16 +592,16 @@ Phases are sequential; dates are not set yet.
 
 ## Risks and open questions
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Drizzle's `sqlite-proxy` driver over sqlite-wasm misses something Kozane relies on (transactions through `withTx`, pragmas, foreign keys, `RETURNING`) | `LocalBackend` blocked | Phase 0 spike runs the real `db/api` tests on it, and Gate 1 is a go/no-go. On failure, fix the `sqlite-proxy` callback or postpone the demo; no second engine is added |
-| SQLite loader or worker bundling cannot satisfy verified execution under the demo CSP | Required browser deployment blocked | Gate 1 includes a production static spike with a verified Blob worker, verified precompiled wasm, no duplicate fetch or instantiation, and no COOP/COEP requirement. Resolve blockers before extraction or postpone the demo |
-| Server (libsql) and browser (sqlite-wasm) differ in SQLite version or behavior | Demo diverges from the product | Contract suite runs on both; keep libsql-only SQL extensions out of `db/api` |
-| Hidden `process.env` or `node:` use inside `db/api` or `lib` | Core package fails to bundle for the browser | Lint rule plus a browser build of `@kozane/core` in CI from phase 1 |
-| Service extraction changes behavior subtly | Regressions in the local app | Extract one resource per PR; existing e2e and route tests must pass unchanged |
-| Shipping Svelte components as a library constrains the app's build (Panda CSS codegen, aliases) | `@kozane/client/ui` hard to consume | Generate `styled-system` inside the package; remove `$db`/`styled-system` aliases from shared code |
-| sqlite-wasm adds 406 KB gzip | Slower editor start on poor networks | Progressive loading (board first, wasm after first paint, cached on return) |
-| `@kozane` npm name unavailable | Package names change | Check early; fall back to `@kozmof/kozane-*` |
+| Risk                                                                                                                                                   | Impact                                       | Mitigation                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Drizzle's `sqlite-proxy` driver over sqlite-wasm misses something Kozane relies on (transactions through `withTx`, pragmas, foreign keys, `RETURNING`) | `LocalBackend` blocked                       | Phase 0 spike runs the real `db/api` tests on it, and Gate 1 is a go/no-go. On failure, fix the `sqlite-proxy` callback or postpone the demo; no second engine is added                                                      |
+| SQLite loader or worker bundling cannot satisfy verified execution under the demo CSP                                                                  | Required browser deployment blocked          | Gate 1 includes a production static spike with a verified Blob worker, verified precompiled wasm, no duplicate fetch or instantiation, and no COOP/COEP requirement. Resolve blockers before extraction or postpone the demo |
+| Server (libsql) and browser (sqlite-wasm) differ in SQLite version or behavior                                                                         | Demo diverges from the product               | Contract suite runs on both; keep libsql-only SQL extensions out of `db/api`                                                                                                                                                 |
+| Hidden `process.env` or `node:` use inside `db/api` or `lib`                                                                                           | Core package fails to bundle for the browser | Lint rule plus a browser build of `@kozane/core` in CI from phase 1                                                                                                                                                          |
+| Service extraction changes behavior subtly                                                                                                             | Regressions in the local app                 | Extract one resource per PR; existing e2e and route tests must pass unchanged                                                                                                                                                |
+| Shipping Svelte components as a library constrains the app's build (Panda CSS codegen, aliases)                                                        | `@kozane/client/ui` hard to consume          | Generate `styled-system` inside the package; remove `$db`/`styled-system` aliases from shared code                                                                                                                           |
+| sqlite-wasm adds 406 KB gzip                                                                                                                           | Slower editor start on poor networks         | Progressive loading (board first, wasm after first paint, cached on return)                                                                                                                                                  |
+| `@kozane` npm name unavailable                                                                                                                         | Package names change                         | Check early; fall back to `@kozmof/kozane-*`                                                                                                                                                                                 |
 
 ### Open questions
 

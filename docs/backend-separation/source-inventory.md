@@ -106,65 +106,65 @@ Matches identify review candidates. Classification and compatibility verificatio
 
 Classification describes the adapter's responsibility. Transaction signals identify review candidates and do not prove complete service delegation.
 
-| Adapter | Class | Transaction signal |
-| --- | --- | --- |
-| `src/cli/commands/api.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/card.ts` | core-backed | no explicit transaction, review required |
-| `src/cli/commands/card/create.ts` | core-backed | core composition |
-| `src/cli/commands/card/edit.ts` | core-backed | core composition |
-| `src/cli/commands/card/glue.ts` | core-backed | core composition |
-| `src/cli/commands/card/options.ts` | core-backed | no explicit transaction, review required |
-| `src/cli/commands/card/read.ts` | core-backed | no explicit transaction, review required |
-| `src/cli/commands/config.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/db.ts` | infrastructure | no explicit transaction, review required |
-| `src/cli/commands/doctor.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/doctor/checks.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/doctor/config.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/doctor/run.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/init.ts` | infrastructure | no explicit transaction, review required |
-| `src/cli/commands/inventory.ts` | core-backed | core composition |
-| `src/cli/commands/layer.ts` | core-backed | core composition |
-| `src/cli/commands/namespace.ts` | core-backed | delegated service calls |
-| `src/cli/commands/open.ts` | infrastructure | no explicit transaction, review required |
-| `src/cli/commands/partition.ts` | core-backed | delegated service calls |
-| `src/cli/commands/scope.ts` | core-backed | core composition |
-| `src/cli/commands/ssg.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/status.ts` | infrastructure | no explicit transaction, review required |
-| `src/cli/commands/tag.ts` | core-backed | no explicit transaction, review required |
-| `src/cli/commands/taskspace.ts` | Node feature | no explicit transaction, review required |
-| `src/cli/commands/warp.ts` | core-backed | core composition |
-| `src/routes/+page.server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/+page.server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/[cardId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/layer/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/move/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/partition/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/squash/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/cards/stacking/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/glues/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/inventories/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/inventories/[inventoryId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/inventories/[inventoryId]/cards/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/inventories/take/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/layers/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/layers/[layerId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/partitions/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/partitions/[partitionId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/scopes/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/scopes/[scopeId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/scopes/[scopeId]/areas/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/scopes/[scopeId]/areas/[areaId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/scopes/[scopeId]/members/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/snapshot/+server.ts` | core-backed | no explicit transaction, review required |
-| `src/routes/[namespaceId]/api/taskspaces/+server.ts` | Node feature | no explicit transaction, review required |
-| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/+server.ts` | Node feature | no explicit transaction, review required |
-| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/file/+server.ts` | Node feature | no explicit transaction, review required |
-| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/files/+server.ts` | Node feature | no explicit transaction, review required |
-| `src/routes/[namespaceId]/api/warp-directory/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/warps/+server.ts` | core-backed | delegated service calls |
-| `src/routes/[namespaceId]/api/warps/[warpId]/+server.ts` | core-backed | delegated service calls |
-| `src/routes/health/+server.ts` | infrastructure | no explicit transaction, review required |
-| `src/routes/login/+page.server.ts` | Node feature | no explicit transaction, review required |
-| `src/routes/map/+page.server.ts` | core-backed | no explicit transaction, review required |
-| `src/routes/tags/+page.server.ts` | core-backed | delegated service calls |
+| Adapter                                                                   | Class          | Transaction signal                       |
+| ------------------------------------------------------------------------- | -------------- | ---------------------------------------- |
+| `src/cli/commands/api.ts`                                                 | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/card.ts`                                                | core-backed    | no explicit transaction, review required |
+| `src/cli/commands/card/create.ts`                                         | core-backed    | core composition                         |
+| `src/cli/commands/card/edit.ts`                                           | core-backed    | core composition                         |
+| `src/cli/commands/card/glue.ts`                                           | core-backed    | core composition                         |
+| `src/cli/commands/card/options.ts`                                        | core-backed    | no explicit transaction, review required |
+| `src/cli/commands/card/read.ts`                                           | core-backed    | no explicit transaction, review required |
+| `src/cli/commands/config.ts`                                              | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/db.ts`                                                  | infrastructure | no explicit transaction, review required |
+| `src/cli/commands/doctor.ts`                                              | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/doctor/checks.ts`                                       | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/doctor/config.ts`                                       | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/doctor/run.ts`                                          | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/init.ts`                                                | infrastructure | no explicit transaction, review required |
+| `src/cli/commands/inventory.ts`                                           | core-backed    | core composition                         |
+| `src/cli/commands/layer.ts`                                               | core-backed    | core composition                         |
+| `src/cli/commands/namespace.ts`                                           | core-backed    | delegated service calls                  |
+| `src/cli/commands/open.ts`                                                | infrastructure | no explicit transaction, review required |
+| `src/cli/commands/partition.ts`                                           | core-backed    | delegated service calls                  |
+| `src/cli/commands/scope.ts`                                               | core-backed    | core composition                         |
+| `src/cli/commands/ssg.ts`                                                 | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/status.ts`                                              | infrastructure | no explicit transaction, review required |
+| `src/cli/commands/tag.ts`                                                 | core-backed    | no explicit transaction, review required |
+| `src/cli/commands/taskspace.ts`                                           | Node feature   | no explicit transaction, review required |
+| `src/cli/commands/warp.ts`                                                | core-backed    | core composition                         |
+| `src/routes/+page.server.ts`                                              | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/+page.server.ts`                                | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/+server.ts`                           | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/[cardId]/+server.ts`                  | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/layer/+server.ts`                     | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/move/+server.ts`                      | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/partition/+server.ts`                 | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/squash/+server.ts`                    | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/cards/stacking/+server.ts`                  | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/glues/+server.ts`                           | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/inventories/+server.ts`                     | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/inventories/[inventoryId]/+server.ts`       | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/inventories/[inventoryId]/cards/+server.ts` | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/inventories/take/+server.ts`                | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/layers/+server.ts`                          | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/layers/[layerId]/+server.ts`                | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/partitions/+server.ts`                      | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/partitions/[partitionId]/+server.ts`        | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/scopes/+server.ts`                          | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/scopes/[scopeId]/+server.ts`                | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/scopes/[scopeId]/areas/+server.ts`          | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/scopes/[scopeId]/areas/[areaId]/+server.ts` | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/scopes/[scopeId]/members/+server.ts`        | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/snapshot/+server.ts`                        | core-backed    | no explicit transaction, review required |
+| `src/routes/[namespaceId]/api/taskspaces/+server.ts`                      | Node feature   | no explicit transaction, review required |
+| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/+server.ts`        | Node feature   | no explicit transaction, review required |
+| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/file/+server.ts`   | Node feature   | no explicit transaction, review required |
+| `src/routes/[namespaceId]/api/taskspaces/[taskspaceId]/files/+server.ts`  | Node feature   | no explicit transaction, review required |
+| `src/routes/[namespaceId]/api/warp-directory/+server.ts`                  | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/warps/+server.ts`                           | core-backed    | delegated service calls                  |
+| `src/routes/[namespaceId]/api/warps/[warpId]/+server.ts`                  | core-backed    | delegated service calls                  |
+| `src/routes/health/+server.ts`                                            | infrastructure | no explicit transaction, review required |
+| `src/routes/login/+page.server.ts`                                        | Node feature   | no explicit transaction, review required |
+| `src/routes/map/+page.server.ts`                                          | core-backed    | no explicit transaction, review required |
+| `src/routes/tags/+page.server.ts`                                         | core-backed    | delegated service calls                  |

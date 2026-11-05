@@ -14,11 +14,13 @@ it("accepts repeated segments and rolls back all batch writes on later failure",
   const partition = await getDefaultPartition({ db, namespaceId });
   const layer = await getDefaultLayer({ db, namespaceId });
   const input = { partitionId: partition!.id, layerId: layer!.id, contents: ["same", "same"] };
-  await expect(composeWrite(db, async tx => {
-    const batch = await createInTx(tx, createServiceContext(), namespaceId, input);
-    expect(batch.ids).toHaveLength(2);
-    throw new Error("reference composition failed");
-  })).rejects.toThrow("reference composition failed");
+  await expect(
+    composeWrite(db, async (tx) => {
+      const batch = await createInTx(tx, createServiceContext(), namespaceId, input);
+      expect(batch.ids).toHaveLength(2);
+      throw new Error("reference composition failed");
+    }),
+  ).rejects.toThrow("reference composition failed");
   expect(await db.select().from(cardTable)).toEqual([]);
   expect(await db.select().from(inventoryTable)).toEqual([]);
 });

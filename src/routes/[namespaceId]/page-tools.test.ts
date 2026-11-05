@@ -121,14 +121,12 @@ describe("Squash", () => {
   });
 
   it("reports the reason the server gave and leaves the card alone", async () => {
-    const fetch = vi
-      .fn()
-      .mockResolvedValue(
-        new Response(JSON.stringify({ message: "Card text splits into more than 2000 cards" }), {
-          status: 400,
-          headers: { "content-type": "application/json" },
-        }),
-      );
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: "Card text splits into more than 2000 cards" }), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
       props: { data: splittable, params: { namespaceId: "namespace-1" }, form: null },

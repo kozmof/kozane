@@ -266,10 +266,10 @@ Run every case in the specification's [demo acceptance checks](Kozane-Client-Bac
 
 ## Gate evidence
 
-| Gate | Required outcome | Evidence | Status |
-| --- | --- | --- | --- |
-| G1 | Browser DB, queue, canonical comparison and verified loader work | Pending | Not started |
-| G2 | Shared services own rules and transactions; compatibility preserved | Pending | Not started |
-| G3 | Complete contracts; UI isolated from transport; SSG preserved | Pending | Not started |
-| G4 | Packed consumers and recovery corpus pass; packages published | Pending | Not started |
-| G5 | Acceptance, privacy, recovery, hosting, release and performance checks pass | Pending | Not started |
+| Gate | Required outcome                                                            | Evidence | Status      |
+| ---- | --------------------------------------------------------------------------- | -------- | ----------- |
+| G1   | Browser DB, queue, canonical comparison and verified loader work            | Pending  | Not started |
+| G2   | Shared services own rules and transactions; compatibility preserved         | Pending  | Not started |
+| G3   | Complete contracts; UI isolated from transport; SSG preserved               | Pending  | Not started |
+| G4   | Packed consumers and recovery corpus pass; packages published               | Pending  | Not started |
+| G5   | Acceptance, privacy, recovery, hosting, release and performance checks pass | Pending  | Not started |

@@ -42,17 +42,15 @@ it("uses backend-assigned slots and clears glue after a successful stow", async 
   const id = state.cards[0].id;
   state.cards = state.cards.map((card) => (card.id === id ? { ...card, glueId: "joined" } : card));
   state.glueRels = [{ cardId: id, glueId: "joined" }];
-  const fetcher = vi
-    .fn()
-    .mockImplementation(
-      async () =>
-        new Response(
-          JSON.stringify({
-            placements: [{ cardId: id, inventoryId: "bag", slot: 10 }],
-            clearedCardIds: [id],
-          }),
-        ),
-    );
+  const fetcher = vi.fn().mockImplementation(
+    async () =>
+      new Response(
+        JSON.stringify({
+          placements: [{ cardId: id, inventoryId: "bag", slot: 10 }],
+          clearedCardIds: [id],
+        }),
+      ),
+  );
   await createBackendInventoryActions(state, new HttpBackend({ fetcher, capabilities })).stow(
     [id],
     "bag",
