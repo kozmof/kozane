@@ -4,12 +4,15 @@ import {
   EditorSession,
   EditorSurface,
   FileEditor,
-} from "../lib/client/editor/index.js";
+  NamespacesView,
+} from "../lib/client/index.js";
 import type { NavigationDriver } from "../lib/navigation.js";
 
+import { StaticBackend } from "../lib/backend/index.js";
+import { createDemoNavigation } from "../lib/navigation.js";
 import { staticEditorContext } from "./editor-context.js";
 
-export async function renderEditor() {
+export async function renderViews() {
   const doc = new EditorDocument("Shared editor SSR\n");
   const surface = render(EditorSurface, {
     props: { doc, caret: { line: 0, column: 0 }, anchor: null },
@@ -43,5 +46,14 @@ export async function renderEditor() {
       onClose: () => {},
     },
   });
-  return { surface: surface.body, panel: panel.body };
+  const namespaces = render(NamespacesView, {
+    props: {
+      backend: new StaticBackend({ namespaces: [{ id: "n", name: "Research", isDefault: true }] }),
+      initialNamespaces: [{ id: "n", name: "Research", isDefault: true }],
+      navigation: createDemoNavigation({ base: "/demo" }),
+      workspaceLabel: "Standalone workspace",
+      retryIntervalMs: false,
+    },
+  });
+  return { surface: surface.body, panel: panel.body, namespaces: namespaces.body };
 }

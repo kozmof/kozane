@@ -33,9 +33,10 @@ it("subscribes before reading and rejects a response superseded by a commit", as
       });
     })
     .mockResolvedValueOnce([]);
-  const stop = index.start();
+  const stop = index.start({ retryIntervalMs: false });
   finish([{ ...initial[0], name: "stale" }]);
-  await vi.advanceTimersByTimeAsync(1000);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(vi.getTimerCount()).toBe(0);
   expect(index.namespaces).toEqual([]);
   expect(list).toHaveBeenCalledTimes(2);
   stop();

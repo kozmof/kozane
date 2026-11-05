@@ -112,6 +112,8 @@ export class NamespaceIndex {
       if (this.#active) this.#dirty = true;
     } finally {
       this.#running = false;
+      // An invalidation during this read must not depend on a retry timer.
+      if (this.#dirty && sequence !== this.#sequence) void this.#refresh();
     }
   }
 }

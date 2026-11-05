@@ -48,9 +48,9 @@ async function main() {
       outDir: "tmp/client-browser",
       emptyOutDir: true,
       lib: {
-        entry: "src/lib/client/editor/index.ts",
+        entry: "src/lib/client/index.ts",
         formats: ["es"],
-        fileName: () => "editor.js",
+        fileName: () => "client.js",
       },
     },
   });
@@ -61,17 +61,20 @@ async function main() {
     build: {
       outDir: "tmp/client-ssr",
       emptyOutDir: true,
-      ssr: "src/test-utils/client-editor-consumer.ts",
-      rollupOptions: { output: { entryFileNames: "editor.js" } },
+      ssr: "src/test-utils/client-view-consumer.ts",
+      rollupOptions: { output: { entryFileNames: "views.js" } },
     },
   });
-  const { renderEditor } = await import(new URL("../tmp/client-ssr/editor.js", import.meta.url));
-  const rendered = await renderEditor();
+  const { renderViews } = await import(new URL("../tmp/client-ssr/views.js", import.meta.url));
+  const rendered = await renderViews();
   assert.match(rendered.surface, /Shared editor SSR/);
   assert.match(rendered.surface, /editor-sink/);
   assert.match(rendered.panel, /role="dialog"/);
   assert.match(rendered.panel, /notes\.md/);
-  console.log("Shared editor browser bundle and standalone SSR passed.");
+  assert.match(rendered.namespaces, /Standalone workspace/);
+  assert.match(rendered.namespaces, /href="\/demo\/board\/\?namespaceId=n"/);
+  assert.doesNotMatch(rendered.namespaces, /<form/);
+  console.log("Shared client browser bundle and standalone editor/namespace SSR passed.");
 }
 try {
   await main();
