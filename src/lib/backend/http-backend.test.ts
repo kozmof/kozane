@@ -119,7 +119,21 @@ it("rejects malformed snapshot data before publishing a validator", async () => 
   });
 });
 it("routes structure membership area and inventory operations to retained endpoints", async () => {
-  const fetcher = vi.fn().mockImplementation(async () => new Response('{"ok":true}'));
+  const fetcher = vi.fn().mockImplementation(async (path: string) =>
+    Response.json(
+      path.endsWith("/areas/area")
+        ? {
+            id: "area",
+            namespaceId: "ns",
+            scopeId: "scope",
+            posX: 0,
+            posY: 0,
+            width: 100,
+            height: 100,
+          }
+        : { ok: true },
+    ),
+  );
   const backend = new HttpBackend({ fetcher, capabilities });
   await backend.glues.create("ns", { cardIds: ["a", "b"] });
   await backend.layers.reorder("ns", { layerIds: ["layer"] });

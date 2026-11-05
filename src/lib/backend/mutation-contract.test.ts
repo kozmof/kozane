@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { geometryResults } from "../../test-utils/geometry-results.js";
 import { structureResults } from "../../test-utils/structure-results.js";
 import {
   HttpBackend,
@@ -297,7 +298,10 @@ const capabilities = {
   externalWrites: false,
   auth: false,
 };
-const responses: Partial<Record<MutationName, unknown>> = structureResults;
+const responses: Partial<Record<MutationName, unknown>> = {
+  ...structureResults,
+  ...geometryResults,
+};
 const datasets = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 describe.each(entries)("%s mutation contract", (_name, operation) => {

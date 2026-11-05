@@ -20,11 +20,10 @@ import {
   readLayerRemoved,
   readPartitionRemoved,
 } from "./decoders/structure.js";
+import { readScopeRenamed, readScopeAreaResult, readWarpResult } from "./decoders/geometry.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
 import type * as inventoriesServices from "../../services/inventories.js";
-import type * as warpsServices from "../../services/warps.js";
-import type * as scopesServices from "../../services/scopes.js";
 import type * as gluesServices from "../../services/glues.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
@@ -281,83 +280,88 @@ export class HttpBackend implements KozaneBackend {
 
   readonly scopes: KozaneBackend["scopes"] = {
     create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.create>>(
-        this.ns(ns, "/scopes"),
-        "POST",
-        input,
-        options,
-      ),
+      this.writeDomain(this.ns(ns, "/scopes"), "POST", input, readCreatedId, options),
     rename: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.rename>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        (value) => readScopeRenamed(value, id),
         options,
       ),
     remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.remove>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}`),
         "DELETE",
         undefined,
+        readMutationOk,
         options,
       ),
     addMembers: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.addMembers>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
         "POST",
         input,
+        readMutationOk,
         options,
       ),
     removeMembers: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.removeMembers>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/members`),
         "DELETE",
         input,
+        readMutationOk,
         options,
       ),
     createArea: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.createArea>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas`),
         "POST",
         input,
+        (value) => readScopeAreaResult(value, ns, id),
         options,
       ),
     updateArea: (ns: string, id: string, areaId: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.updateArea>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas/${encodeURIComponent(areaId)}`),
         "PATCH",
         input,
+        (value) => readScopeAreaResult(value, ns, id, areaId),
         options,
       ),
     removeArea: (ns: string, id: string, areaId: string, options?: MutationOptions) =>
-      this.write<Result<typeof scopesServices.removeArea>>(
+      this.writeDomain(
         this.ns(ns, `/scopes/${encodeURIComponent(id)}/areas/${encodeURIComponent(areaId)}`),
         "DELETE",
         undefined,
+        readMutationOk,
         options,
       ),
   };
 
   readonly warps: KozaneBackend["warps"] = {
     create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof warpsServices.create>>(
+      this.writeDomain(
         this.ns(ns, "/warps"),
         "POST",
         input,
+        (value) => readWarpResult(value, ns),
         options,
       ),
     update: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof warpsServices.update>>(
+      this.writeDomain(
         this.ns(ns, `/warps/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        (value) => readWarpResult(value, ns, id),
         options,
       ),
     remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.write<Result<typeof warpsServices.remove>>(
+      this.writeDomain(
         this.ns(ns, `/warps/${encodeURIComponent(id)}`),
         "DELETE",
         undefined,
+        readMutationOk,
         options,
       ),
   };
