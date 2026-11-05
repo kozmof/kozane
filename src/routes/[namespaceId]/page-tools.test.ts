@@ -72,11 +72,14 @@ describe("Squash", () => {
     );
     await fireEvent.keyDown(window, { key: "s" });
 
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/cards/squash", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardId: "card-1" }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/cards/squash",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ cardId: "card-1" }),
+      }),
+    );
     const opened = await screen.findByRole("region", { name: "Inventory Squash 1" });
     expect(within(opened).getByRole("button", { name: "Card: First thought" })).toBeInTheDocument();
     expect(
@@ -118,10 +121,14 @@ describe("Squash", () => {
   });
 
   it("reports the reason the server gave and leaves the card alone", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ message: "Card text splits into more than 2000 cards" }),
-    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ message: "Card text splits into more than 2000 cards" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        }),
+      );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
       props: { data: splittable, params: { namespaceId: "namespace-1" }, form: null },

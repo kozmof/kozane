@@ -376,11 +376,14 @@ describe("Namespace page", () => {
     await fireEvent.click(screen.getByRole("button", { name: /Glue/ }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/glues", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cardIds: ["card-1", "card-2"] }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/glues",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ cardIds: ["card-1", "card-2"] }),
+      }),
+    );
     await waitFor(() =>
       expect(screen.getByRole("button", { name: /Unglue all/ })).toBeInTheDocument(),
     );

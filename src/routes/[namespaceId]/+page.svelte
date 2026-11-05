@@ -224,7 +224,7 @@
   });
 
   // ── Domain action handlers ────────────────────────────────────
-  const actions = createNamespaceActions(s);
+  const actions = createNamespaceActions(s, backend);
 
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
