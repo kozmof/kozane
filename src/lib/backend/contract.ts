@@ -69,7 +69,9 @@ export type SnapshotResult =
 export interface SnapshotReadOptions {
   validator?: string;
 }
-/** Shared data and lifecycle surface implemented by every deployment adapter. */
+/** Shared data and lifecycle surface implemented by every deployment adapter.
+ * See operation-matrix.md for behavior and verification coverage.
+ */
 export interface KozaneBackend {
   readonly kind: "http" | "static" | "local";
   readonly capabilities: BackendCapabilities;

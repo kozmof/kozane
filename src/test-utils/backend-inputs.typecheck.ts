@@ -3,6 +3,12 @@ import type {
   CardCreateInput,
   CardUpdateInput,
   InventoryTakeInput,
+  TaskspaceSaveFileInput,
+  TaskspaceReadFileResult,
+  SnapshotResult,
+  TagsResult,
+  MapResult,
+  WarpDirectoryResult,
 } from "../lib/backend/index.js";
 
 /** Compiled consumer fixture. Never invoked or included in a runtime entry point. */
@@ -48,6 +54,43 @@ export function checkBackendInputs(backend: KozaneBackend): void {
   const take: InventoryTakeInput = { cards: [{ cardId: "c" }, { cardId: "d", posX: 1, posY: 2 }] };
   void backend.inventories.take("n", take);
   void backend.namespaces.create({ name: "Namespace" });
+
+  const snapshot: Promise<SnapshotResult> = backend.snapshot("n", { validator: "opaque" });
+  const tags: Promise<TagsResult> = backend.tags.get();
+  const map: Promise<MapResult> = backend.map.get();
+  const directory: Promise<WarpDirectoryResult> = backend.warpDirectory.get("n");
+  void [snapshot, tags, map, directory];
+  void backend.namespaces.list();
+  void backend.namespaces.get("n");
+  void backend.tags.get("n");
+  void backend.cards.removeOne("n", "c");
+  void backend.layers.remove("n", "l");
+  void backend.partitions.remove("n", "p");
+  void backend.scopes.remove("n", "s");
+  void backend.scopes.removeArea("n", "s", "a");
+  void backend.warps.remove("n", "w");
+  void backend.inventories.remove("n", "i");
+  if (backend.taskspaces) {
+    const files = backend.taskspaces;
+    void files.create("n", { name: "Notes", scopeId: "s" });
+    void files.rename("n", "t", { name: "Notes" });
+    void files.remove("n", "t");
+    void files.createFile("n", "t", { path: "notes.md" });
+    const read: Promise<TaskspaceReadFileResult> = files.readFile("n", "t", "notes.md", {
+      signal: new AbortController().signal,
+    });
+    void read;
+    const save: TaskspaceSaveFileInput = { path: "notes.md", content: "Text", signature: null };
+    void files.saveFile("n", "t", save, { keepalive: true });
+    void files.list("n", "t", "");
+    void files.createDirectory("n", "t", { path: "folder" });
+    void files.renameEntry("n", "t", { path: "notes.md", name: "renamed.md" });
+    void files.removeEntry("n", "t", "notes.md");
+    // @ts-expect-error Save requires an explicit last-read signature.
+    void files.saveFile("n", "t", { path: "notes.md", content: "Text" });
+    // @ts-expect-error Taskspace creation requires a scope.
+    void files.create("n", { name: "Notes" });
+  }
 
   // @ts-expect-error Card creation requires a partition.
   void backend.cards.create("n", { content: "Text" });

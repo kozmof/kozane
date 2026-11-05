@@ -8,6 +8,7 @@ import {
   type CardCreateInput,
   type MutationOptions,
 } from "./index.js";
+import { tagDataset } from "./tags.fixtures.js";
 const namespace = { id: "ns", name: "Namespace", isDefault: true };
 const data: SnapshotData = {
   namespace: { id: "ns" },
@@ -20,10 +21,50 @@ const data: SnapshotData = {
   scopeRels: [],
   scopeAreas: [],
   glueRels: [],
-  taskspaces: [],
+  taskspaces: [
+    { id: "t", name: "Notes", scopeId: null, path: null, pathKind: "workspace_relative" },
+  ],
+};
+const tags = tagDataset();
+tags.namespaces = [namespace];
+tags.partitions = {};
+const map = {
+  namespaces: [namespace],
+  partitions: [],
+  scopes: [],
+  activity: [],
+  partitionUsage: [],
+  namespaceUsage: [],
+  tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+};
+const file = { path: "notes.md", content: "Notes", signature: null };
+const listing = {
+  path: "",
+  entries: [{ name: "notes.md", kind: "file", size: 5, modifiedAt: null }],
+  truncated: false,
 };
 const adapters: [string, () => KozaneBackend][] = [
-  ["static", () => new StaticBackend({ namespaces: [namespace], snapshots: [data] })],
+  [
+    "static",
+    () =>
+      new StaticBackend({
+        namespaces: [namespace],
+        snapshots: [data],
+        tags,
+        map,
+        warpDirectories: { ns: [] },
+        files: {
+          t: {
+            root: {
+              kind: "directory",
+              name: "Notes",
+              truncated: null,
+              children: [{ kind: "file", name: "notes.md", content: "Notes", size: 5 }],
+            },
+          },
+        },
+      }),
+  ],
   [
     "http",
     () =>
@@ -31,12 +72,20 @@ const adapters: [string, () => KozaneBackend][] = [
         capabilities: {
           writable: false,
           persistent: true,
-          taskspaces: false,
+          taskspaces: true,
           externalWrites: false,
           auth: false,
         },
         fetcher: async (input) => {
           const path = String(input);
+          if (path === "/api/tags" || path === "/api/tags?namespaceId=ns")
+            return new Response(JSON.stringify(tags));
+          if (path === "/api/map") return new Response(JSON.stringify(map));
+          if (path === "/ns/api/warp-directory") return new Response("[]");
+          if (path === "/ns/api/taskspaces/t/file?path=notes.md")
+            return new Response(JSON.stringify(file));
+          if (path === "/ns/api/taskspaces/t/files?path=")
+            return new Response(JSON.stringify(listing));
           if (path === "/api/namespaces") return new Response(JSON.stringify([namespace]));
           if (path === "/api/namespaces/ns") return new Response(JSON.stringify(namespace));
           if (path === "/ns/api/snapshot") return new Response(JSON.stringify(data));
@@ -77,7 +126,18 @@ it.each(adapters)(
     await expect(backend.snapshot("missing")).rejects.toBeInstanceOf(BackendError);
     expect(backend.version).toEqual(version);
     expect(changes).toEqual([]);
-    expect(backend.taskspaces).toBeUndefined();
+    expect(await backend.tags.get()).toEqual(tags);
+    expect(await backend.tags.get("ns")).toEqual(tags);
+    expect(await backend.map.get()).toEqual(map);
+    expect(await backend.warpDirectory.get("ns")).toEqual([]);
+    expect(backend.taskspaces).toBeDefined();
+    expect(await backend.taskspaces!.readFile("ns", "t", "notes.md")).toEqual(file);
+    expect(await backend.taskspaces!.list("ns", "t", "")).toMatchObject(listing);
+    await expect(backend.taskspaces!.saveFile("ns", "t", file)).rejects.toMatchObject({
+      code: "read_only",
+    });
+    expect(backend.version).toEqual(version);
+    expect(changes).toEqual([]);
     unsubscribe();
     release();
   },

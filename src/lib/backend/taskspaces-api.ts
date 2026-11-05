@@ -1,67 +1,86 @@
+import type { PathKind } from "../constants.js";
+import type { TaskspaceDirectoryOutcome, TaskspaceEntryKind, TaskspaceListing } from "../types.js";
+import type { MutationOptions } from "./resources.js";
+
 export interface TaskspaceCreated {
   id: string;
   path: string;
-  pathKind: import("../constants.js").PathKind;
+  pathKind: PathKind;
 }
 export interface TaskspaceRenamed {
   id: string;
   name: string;
   path: string | null;
-  pathKind: import("../constants.js").PathKind;
+  pathKind: PathKind;
 }
 export interface TaskspaceFileData {
   path: string;
   content: string;
   signature: string | null;
 }
+export type TaskspaceCreateInput = { name: string; scopeId: string };
+export type TaskspaceCreateResult = TaskspaceCreated;
+export type TaskspaceRenameInput = { name: string };
+export type TaskspaceRenameResult = TaskspaceRenamed;
+export type TaskspaceRemoveResult = { ok: boolean; directory: TaskspaceDirectoryOutcome };
+export type TaskspaceCreateFileInput = { path: string };
+export type TaskspaceCreateFileResult = TaskspaceFileData;
+export type TaskspaceReadFileResult = TaskspaceFileData;
+export interface TaskspaceReadFileOptions {
+  signal?: AbortSignal;
+}
+/** The last-read signature is required, including null. A mismatch rejects the save. */
+export type TaskspaceSaveFileInput = TaskspaceFileData;
+export type TaskspaceSaveFileResult = TaskspaceFileData;
+export type TaskspaceListResult = TaskspaceListing;
+export type TaskspaceCreateDirectoryInput = { path: string };
+export type TaskspaceCreateDirectoryResult = TaskspaceListing;
+export type TaskspaceRenameEntryInput = { path: string; name: string };
+export type TaskspaceRenameEntryResult = { path: string; kind: TaskspaceEntryKind };
+export type TaskspaceRemoveEntryResult = TaskspaceRenameEntryResult;
+
+/** Filesystem operations require taskspaces capability. Static exports provide embedded reads only. */
 export interface TaskspacesApi {
-  create(namespaceId: string, input: { name: string; scopeId: string }): Promise<TaskspaceCreated>;
+  create(namespaceId: string, input: TaskspaceCreateInput): Promise<TaskspaceCreateResult>;
   rename(
     namespaceId: string,
     taskspaceId: string,
-    input: { name: string },
-  ): Promise<TaskspaceRenamed>;
-  remove(
-    namespaceId: string,
-    taskspaceId: string,
-  ): Promise<{ ok: boolean; directory: import("../types.js").TaskspaceDirectoryOutcome }>;
+    input: TaskspaceRenameInput,
+  ): Promise<TaskspaceRenameResult>;
+  remove(namespaceId: string, taskspaceId: string): Promise<TaskspaceRemoveResult>;
   createFile(
     namespaceId: string,
     taskspaceId: string,
-    input: { path: string },
-  ): Promise<TaskspaceFileData>;
+    input: TaskspaceCreateFileInput,
+  ): Promise<TaskspaceCreateFileResult>;
   readFile(
     namespaceId: string,
     taskspaceId: string,
     path: string,
-    options?: { signal?: AbortSignal },
-  ): Promise<TaskspaceFileData>;
+    options?: TaskspaceReadFileOptions,
+  ): Promise<TaskspaceReadFileResult>;
   saveFile(
     namespaceId: string,
     taskspaceId: string,
-    input: TaskspaceFileData,
-    options?: { keepalive?: boolean },
-  ): Promise<TaskspaceFileData>;
-  list(
-    namespaceId: string,
-    taskspaceId: string,
-    path: string,
-  ): Promise<import("../types.js").TaskspaceListing>;
+    input: TaskspaceSaveFileInput,
+    options?: MutationOptions,
+  ): Promise<TaskspaceSaveFileResult>;
+  list(namespaceId: string, taskspaceId: string, path: string): Promise<TaskspaceListResult>;
   createDirectory(
     namespaceId: string,
     taskspaceId: string,
-    input: { path: string },
-  ): Promise<import("../types.js").TaskspaceListing>;
+    input: TaskspaceCreateDirectoryInput,
+  ): Promise<TaskspaceCreateDirectoryResult>;
   renameEntry(
     namespaceId: string,
     taskspaceId: string,
-    input: { path: string; name: string },
-  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
+    input: TaskspaceRenameEntryInput,
+  ): Promise<TaskspaceRenameEntryResult>;
   removeEntry(
     namespaceId: string,
     taskspaceId: string,
     path: string,
-  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
+  ): Promise<TaskspaceRemoveEntryResult>;
 }
 
 /** Compatibility name retained for existing Node taskspace consumers. */

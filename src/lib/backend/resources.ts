@@ -41,13 +41,7 @@ import type * as NamespaceServices from "../../services/namespaces.js";
 import type { TagsViewData } from "../../services/tags.js";
 import type { TreemapSnapshot } from "../../services/map.js";
 import type { WarpListEntry } from "../warp-list.js";
-export type {
-  TaskspacesApi,
-  TaskspaceLifecycleApi,
-  TaskspaceCreated,
-  TaskspaceRenamed,
-  TaskspaceFileData,
-} from "./taskspaces-api.js";
+export type * from "./taskspaces-api.js";
 
 export interface MutationOptions {
   keepalive?: boolean;
