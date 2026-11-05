@@ -1,15 +1,19 @@
-import { describe, it, expect, vi } from "vitest";
+import { httpEditorContext, staticEditorContext } from "../../../../test-utils/editor-context.js";
+import type { TaskspaceFileData } from "$lib/backend/contract.js";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import type { TaskspaceFileTree } from "$lib/types";
 import { EditorSession } from "./editor-session.svelte.js";
 
+afterEach(() => vi.unstubAllGlobals());
+
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
 
-function ok(body: unknown) {
-  return new Response(JSON.stringify(body), { status: 200 });
+function ok(body: Partial<TaskspaceFileData>) {
+  return Response.json({ path: REF.path, content: "", signature: null, ...body });
 }
 
 function fail(status: number, message: string) {
-  return new Response(JSON.stringify({ message }), { status });
+  return Response.json({ message }, { status });
 }
 
 /** Answers GET with `read` and PUT with `write`, and records what it was sent. */
@@ -55,12 +59,12 @@ function heldSaves() {
     held[n](res);
   }
 
-  return { ctx: { fetcher, namespaceId: "p-1" }, bodies, answer };
+  return { ctx: httpEditorContext(fetcher), bodies, answer, fetcher };
 }
 
 function session() {
   const { fetcher, calls } = fetcherFor();
-  return { s: new EditorSession(), ctx: { fetcher, namespaceId: "p-1" }, calls };
+  return { s: new EditorSession(), ctx: httpEditorContext(fetcher), calls };
 }
 
 describe("EditorSession", () => {
@@ -88,7 +92,7 @@ describe("EditorSession", () => {
   it("reports a file it could not open, and opens nothing", async () => {
     const { fetcher } = fetcherFor({ read: [fail(413, "File is larger than 1048576 bytes")] });
     const s = new EditorSession();
-    await s.open({ fetcher, namespaceId: "p-1" }, REF);
+    await s.open(httpEditorContext(fetcher), REF);
 
     expect(s.error).toBe("File is larger than 1048576 bytes");
     expect(s.doc).toBeNull();
@@ -100,8 +104,8 @@ describe("EditorSession", () => {
       throw new Error("offline");
     }) as unknown as typeof fetch;
     const s = new EditorSession();
-    await s.open({ fetcher, namespaceId: "p-1" }, REF);
-    expect(s.error).toBe("Failed to open file");
+    await s.open(httpEditorContext(fetcher), REF);
+    expect(s.error).toBe("Unable to reach the backend");
   });
 
   it("starts clean and goes dirty on the first edit", async () => {
@@ -132,7 +136,7 @@ describe("EditorSession", () => {
       write: [ok({ signature: "sig-2" }), ok({ signature: "sig-3" })],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, REF);
 
     s.doc!.insert({ line: 0, column: 0 }, "a");
@@ -149,7 +153,7 @@ describe("EditorSession", () => {
       write: [fail(409, "File changed on disk since it was opened")],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
 
@@ -162,7 +166,7 @@ describe("EditorSession", () => {
   it("does not call a failure other than 409 a conflict", async () => {
     const { fetcher } = fetcherFor({ write: [fail(403, "Permission denied")] });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
 
@@ -348,7 +352,7 @@ describe("EditorSession", () => {
         }
         return ok({ path: OTHER.path, content: "other\n", signature: "sig-other" });
       }) as unknown as typeof fetch;
-      return { ctx: { fetcher, namespaceId: "p-1" }, release };
+      return { ctx: httpEditorContext(fetcher), release };
     }
 
     it("keeps the later file when the earlier read lands last", async () => {
@@ -412,7 +416,7 @@ describe("EditorSession", () => {
   });
 
   it("reads a file reopened by way of another file only after its save lands", async () => {
-    const { ctx, answer, bodies } = heldSaves();
+    const { ctx, answer, bodies, fetcher } = heldSaves();
     const s = new EditorSession();
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
@@ -420,8 +424,7 @@ describe("EditorSession", () => {
     await s.open(ctx, { ...REF, path: "other.md" });
 
     const reads = () =>
-      vi.mocked(ctx.fetcher).mock.calls.filter(([, init]) => (init?.method ?? "GET") === "GET")
-        .length;
+      vi.mocked(fetcher).mock.calls.filter(([, init]) => (init?.method ?? "GET") === "GET").length;
     const reopened = s.open(ctx, REF);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(s.loading).toBe(true);
@@ -454,7 +457,7 @@ describe("EditorSession", () => {
       write: [ok({ signature: "sig-3" }), ok({ signature: "sig-4" }), ok({ signature: "sig-5" })],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     const keepalive = () => {
       const calls = vi.mocked(fetcher).mock.calls;
       return (calls.at(-1)?.[1] as RequestInit | undefined)?.keepalive;
@@ -463,7 +466,7 @@ describe("EditorSession", () => {
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
     await s.save(ctx);
-    expect(keepalive()).toBeUndefined();
+    expect(keepalive()).toBe(false);
     s.doc!.insert({ line: 0, column: 0 }, "y");
     await s.save(ctx, { keepalive: true });
     expect(keepalive()).toBe(true);
@@ -471,7 +474,7 @@ describe("EditorSession", () => {
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
     expect(await s.save(ctx, { keepalive: true })).toBe(true);
-    expect(keepalive()).toBeUndefined();
+    expect(keepalive()).toBe(false);
   });
 
   it("counts keepalive's limit in bytes, not characters", async () => {
@@ -485,14 +488,14 @@ describe("EditorSession", () => {
       write: [ok({ signature: "sig-3" }), ok({ signature: "sig-4" })],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     const keepalive = () =>
       (vi.mocked(fetcher).mock.calls.at(-1)?.[1] as RequestInit | undefined)?.keepalive;
 
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
     await s.save(ctx, { keepalive: true });
-    expect(keepalive()).toBeUndefined();
+    expect(keepalive()).toBe(false);
 
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "x");
@@ -508,7 +511,7 @@ describe("EditorSession", () => {
       ],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, REF);
     s.doc!.insert({ line: 0, column: 0 }, "typed ");
 
@@ -543,7 +546,7 @@ describe("EditorSession", () => {
       ],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, { ...REF, path: "a.md" });
     const first = s.doc!;
     const dispose = vi.spyOn(first, "dispose");
@@ -556,22 +559,22 @@ describe("EditorSession", () => {
 
   describe("with an embedded static tree", () => {
     function staticCtx(staticFiles: Record<string, TaskspaceFileTree>, fetcher = fetcherFor()) {
+      vi.stubGlobal("fetch", fetcher.fetcher);
       return {
         fetcher: fetcher.fetcher,
-        ctx: { fetcher: fetcher.fetcher, namespaceId: "p-1", staticFiles },
+        ctx: staticEditorContext(staticFiles),
       };
     }
 
-    // Fall back to the live endpoint when the taskspace has no embedded tree, as in exports
-    // without `--include-scoped-files`.
-    it("still fetches when the context carries no static tree for this taskspace", async () => {
+    it("reports missing static taskspaces without dispatching HTTP", async () => {
       const { fetcher, ctx } = staticCtx({});
       const s = new EditorSession();
 
       await s.open(ctx, REF);
 
-      expect(fetcher).toHaveBeenCalledTimes(1);
-      expect(s.doc?.text()).toBe("hello\n");
+      expect(fetcher).not.toHaveBeenCalled();
+      expect(s.doc).toBeNull();
+      expect(s.error).toBe("Taskspace not found");
     });
 
     it("opens a file's content from the embedded tree without fetching", async () => {
@@ -640,14 +643,11 @@ describe("EditorSession", () => {
       void s.save(held.ctx);
 
       const reopened = s.open(
-        {
-          ...held.ctx,
-          staticFiles: {
-            [REF.taskspaceId]: {
-              root: { kind: "directory", name: "", truncated: null, children: [] },
-            },
+        staticEditorContext({
+          [REF.taskspaceId]: {
+            root: { kind: "directory", name: "", truncated: null, children: [] },
           },
-        },
+        }),
         REF,
       );
       await held.answer(0, ok({ signature: "sig-2" }));
@@ -670,7 +670,7 @@ describe("EditorSession", () => {
     it("stays on the file when the guard declines", async () => {
       const { fetcher, calls } = twoFiles();
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       s.setSwitchGuard(vi.fn(async () => false));
@@ -685,7 +685,7 @@ describe("EditorSession", () => {
     it("opens the other file when the guard agrees", async () => {
       const { fetcher } = twoFiles();
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       s.setSwitchGuard(async () => true);
@@ -703,7 +703,7 @@ describe("EditorSession", () => {
         ],
       });
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       const answers: ((agreed: boolean) => void)[] = [];
@@ -723,7 +723,7 @@ describe("EditorSession", () => {
     it("still opens the other file when the file was closed while the guard ran", async () => {
       const { fetcher } = twoFiles();
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, { ...REF, path: "a.md" });
       s.doc!.insert({ line: 0, column: 0 }, "x");
       s.setSwitchGuard(async () => {
@@ -757,7 +757,7 @@ describe("EditorSession", () => {
         ],
       });
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, REF);
       s.doc!.insert({ line: 0, column: 0 }, "x");
       s.setSwitchGuard(vi.fn(async () => false));
@@ -776,7 +776,7 @@ describe("EditorSession", () => {
       ],
     });
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
     await s.open(ctx, { ...REF, path: "a.md" });
     s.caret = { line: 0, column: 3 };
 
@@ -792,7 +792,7 @@ describe("EditorSession", () => {
       return new Promise<Response>(() => undefined);
     }) as unknown as typeof fetch;
     const s = new EditorSession();
-    const ctx = { fetcher, namespaceId: "p-1" };
+    const ctx = httpEditorContext(fetcher);
 
     void s.open(ctx, { ...REF, path: "a.md" });
     void s.open(ctx, { ...REF, path: "b.md" });
@@ -815,7 +815,7 @@ describe("EditorSession", () => {
     it("reports a refused save unsaved, and does not save again after a conflict", async () => {
       const { fetcher, calls } = fetcherFor({ write: [fail(409, "changed on disk")] });
       const s = new EditorSession();
-      const ctx = { fetcher, namespaceId: "p-1" };
+      const ctx = httpEditorContext(fetcher);
       await s.open(ctx, REF);
       s.doc!.insert({ line: 0, column: 0 }, "x");
 
@@ -895,7 +895,8 @@ it("reads static backend files and skip messages and retains edits after a rejec
     },
   });
   const fetcher = vi.fn();
-  const ctx = { namespaceId: "p-1", fetcher: fetcher as typeof fetch, backend };
+  vi.stubGlobal("fetch", fetcher);
+  const ctx = { namespaceId: "p-1", backend };
   const session = new EditorSession();
   try {
     await session.open(ctx, REF);

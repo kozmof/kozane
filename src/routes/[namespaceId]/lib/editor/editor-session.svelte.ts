@@ -1,19 +1,10 @@
 import type { KozaneBackend, MutationOptions as SaveOptions } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
-import type { TaskspaceFileTree } from "$lib/types";
-import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../namespace-api.js";
-import {
-  findStaticNode,
-  STATIC_FILE_SKIP_MESSAGES as SKIP_REASON_MESSAGE,
-} from "$lib/backend/static-files.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
-  fetcher: typeof fetch;
-  backend?: Pick<KozaneBackend, "taskspaces">;
+  backend: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
-  /** Embedded taskspace trees for reading files in a static export. */
-  staticFiles?: Record<string, TaskspaceFileTree>;
 };
 
 /** Which file an editor is open on. */
@@ -131,42 +122,17 @@ export class EditorSession {
       if (opening.aborted) return;
     }
 
-    const staticTree = ctx.backend ? undefined : ctx.staticFiles?.[ref.taskspaceId];
-    if (staticTree) {
-      const node = findStaticNode(staticTree, ref.path);
-      if (node?.kind === "file") this.#adopt(node.content, null);
-      else if (node?.kind === "file-skipped") this.error = SKIP_REASON_MESSAGE[node.reason];
-      else this.error = "File not found";
-      this.loading = false;
-      return;
-    }
-
     this.loading = true;
 
     // Ignore results after this session ends so a slow read cannot overwrite the next
     // session's document, error, or loading state.
     const current = () => !opening.aborted;
     try {
-      let body;
-      if (ctx.backend) {
-        const api = ctx.backend.taskspaces;
-        if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
-        body = await api.readFile(ctx.namespaceId, ref.taskspaceId, ref.path, { signal: opening });
-      } else {
-        const res = await fetchTaskspaceFile(
-          ctx.fetcher,
-          ctx.namespaceId,
-          ref.taskspaceId,
-          ref.path,
-          opening,
-        );
-        if (!res.ok) {
-          const message = await failureMessage(res, "Failed to open file");
-          if (current()) this.error = message;
-          return;
-        }
-        body = await res.json();
-      }
+      const api = ctx.backend.taskspaces;
+      if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+      const body = await api.readFile(ctx.namespaceId, ref.taskspaceId, ref.path, {
+        signal: opening,
+      });
       if (!current()) return;
       this.#adopt(typeof body?.content === "string" ? body.content : "", body?.signature ?? null);
     } catch (error) {
@@ -262,33 +228,14 @@ export class EditorSession {
     const content = doc.text();
 
     try {
-      let body;
-      if (ctx.backend) {
-        const api = ctx.backend.taskspaces;
-        if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
-        body = await api.saveFile(
-          ctx.namespaceId,
-          ref.taskspaceId,
-          { path: ref.path, content, signature: this.#signature },
-          options,
-        );
-      } else {
-        const res = await saveTaskspaceFile(
-          ctx.fetcher,
-          ctx.namespaceId,
-          ref.taskspaceId,
-          { path: ref.path, content, signature: this.#signature },
-          options,
-        );
-        if (!res.ok) {
-          const message = await failureMessage(res, "Failed to save file");
-          if (this.doc !== doc) return false;
-          this.conflict = res.status === 409;
-          this.error = message;
-          return false;
-        }
-        body = await res.json();
-      }
+      const api = ctx.backend.taskspaces;
+      if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+      const body = await api.saveFile(
+        ctx.namespaceId,
+        ref.taskspaceId,
+        { path: ref.path, content, signature: this.#signature },
+        options,
+      );
       // The file was closed or another opened while this save ran. Its state is no longer
       // the session's, so leave the new file's signature, errors, and saving flag alone.
       if (this.doc !== doc) return true;

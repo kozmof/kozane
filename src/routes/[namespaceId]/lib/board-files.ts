@@ -4,7 +4,7 @@ import type { EditorSession, EditorSessionContext } from "./editor/editor-sessio
 type BoardFilesHost = {
   s: NamespaceState;
   editor: EditorSession;
-  /** Read on use, because namespace navigation changes the namespace and fetcher. */
+  /** Read on use, because namespace navigation changes the namespace and backend. */
   context: () => EditorSessionContext;
   closeFilePalette: () => void;
   /** Create a scope, taskspace, and file, answering where the file is, or null on failure. */

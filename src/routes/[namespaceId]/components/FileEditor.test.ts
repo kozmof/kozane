@@ -1,3 +1,5 @@
+import { httpEditorContext } from "../../../test-utils/editor-context.js";
+import type { TaskspaceFileData } from "$lib/backend/contract.js";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
@@ -12,8 +14,8 @@ const routing: NavigationDriver = { beforeNavigate, navigate: goto, replace: vi.
 
 const REF = { taskspaceId: "ts-1", taskspaceName: "demo", path: "notes.md" };
 
-function ok(body: unknown) {
-  return new Response(JSON.stringify(body), { status: 200 });
+function ok(body: Partial<TaskspaceFileData>) {
+  return Response.json({ path: REF.path, content: "", signature: null, ...body });
 }
 
 function fetcherFor(responses: Response[]) {
@@ -34,7 +36,7 @@ async function mount(
   props: Record<string, unknown> = {},
 ) {
   const { fetcher, calls } = fetcherFor(responses);
-  const ctx = { fetcher, namespaceId: "p-1" };
+  const ctx = httpEditorContext(fetcher);
   const session = new EditorSession();
   const onClose = vi.fn();
   const rendered = render(FileEditor, { props: { session, ctx, onClose, routing, ...props } });
@@ -49,7 +51,7 @@ describe("FileEditor", () => {
       props: {
         session,
         routing,
-        ctx: { fetcher: vi.fn() as unknown as typeof fetch, namespaceId: "p-1" },
+        ctx: httpEditorContext(vi.fn() as unknown as typeof fetch),
         onClose: vi.fn(),
       },
     });
@@ -64,9 +66,7 @@ describe("FileEditor", () => {
   });
 
   it("shows the reason a file could not be opened", async () => {
-    await mount([
-      new Response(JSON.stringify({ message: "File is not UTF-8 text" }), { status: 415 }),
-    ]);
+    await mount([Response.json({ message: "File is not UTF-8 text" }, { status: 415 })]);
     expect(await screen.findByRole("alert")).toHaveTextContent("File is not UTF-8 text");
   });
 
@@ -100,9 +100,12 @@ describe("FileEditor", () => {
   it("offers to reload from disk when a save conflicts", async () => {
     const { session } = await mount([
       ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
-      new Response(JSON.stringify({ message: "File changed on disk since it was opened" }), {
-        status: 409,
-      }),
+      Response.json(
+        { message: "File changed on disk since it was opened" },
+        {
+          status: 409,
+        },
+      ),
       ok({ path: REF.path, content: "from disk\n", signature: "sig-9" }),
     ]);
     session.doc!.insert({ line: 0, column: 0 }, "x");
@@ -645,7 +648,7 @@ describe("FileEditor leaving the page", () => {
     const props = {
       session,
       routing,
-      ctx: { fetcher: vi.fn() as unknown as typeof fetch, namespaceId: "p-1" },
+      ctx: httpEditorContext(vi.fn() as unknown as typeof fetch),
       onClose: vi.fn(),
     };
     const first = render(FileEditor, { props });
@@ -838,7 +841,7 @@ describe("FileEditor auto save", () => {
     await session.open(ctx, { ...REF, path: "other.md" });
     expect(asked).toHaveBeenCalledOnce();
     expect(session.file?.path).toBe(REF.path);
-    expect(session.error).toBe("Failed to save file");
+    expect(session.error).toBe("The backend is unavailable");
     asked.mockRestore();
   });
 
@@ -874,7 +877,7 @@ it.each([200, 500])(
       const { session, calls, unmount } = await mount(
         [
           ok({ path: REF.path, content: "hello\n", signature: "sig-1" }),
-          new Response(JSON.stringify({ signature: "sig-2" }), { status }),
+          Response.json({ path: REF.path, content: "", signature: "sig-2" }, { status }),
         ],
         { autoSave: true, routing: host },
       );
