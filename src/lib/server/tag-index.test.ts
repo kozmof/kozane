@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -393,12 +393,20 @@ describe("loadTagIndex", () => {
       const stamp = readTagCache(root)!.builtAt;
 
       const later = new Date(Date.now() + 60_000);
-      writeFileSync(join(root, "notes", "notes.md"), ":after\n");
-      utimesSync(join(root, "notes", "notes.md"), later, later);
-      await gather(db, cache);
+      // Distinguish cache generations even when both gathers finish in one millisecond.
+      // Leave I/O timers real so filesystem scans can yield normally.
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(later);
+      try {
+        writeFileSync(join(root, "notes", "notes.md"), ":after\n");
+        utimesSync(join(root, "notes", "notes.md"), later, later);
+        await gather(db, cache);
 
-      expect(readTagCache(root)!.builtAt).not.toBe(stamp);
-      expect(tags((await gather(db, cache)).hits)).toEqual(["after"]);
+        expect(readTagCache(root)!.builtAt).not.toBe(stamp);
+        expect(tags((await gather(db, cache)).hits)).toEqual(["after"]);
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     /**

@@ -58,6 +58,9 @@ export default defineConfig({
         "src/cli/commands/**",
         // `spec.test.ts` checks the command tree. Action handlers run in CLI subprocess tests.
         "src/cli/program.ts",
+        // Split command registration retains that subprocess-only wiring exclusion.
+        // Keep program/parsers.ts measured and directly tested.
+        "src/cli/program/{board,cards,data,structure,workspace}.ts",
         // Filesystem discovery and configuration require isolated CLI integration coverage.
         "src/cli/lib/config.ts",
         "src/cli/lib/workspace.ts",
