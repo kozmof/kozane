@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { CardWithGlue, ScopeArea, Warp } from "$lib/types";
 import { BackendError, type KozaneBackend, type CardCreateResult } from "$lib/backend/contract.js";
 import { NamespaceState } from "../../../lib/client/board/namespace-state.svelte.js";
-import { createBackendBoardPersistence } from "./board-backend-persistence.js";
+import { createBackendBoardPersistence } from "../../../lib/client/board/lib/board-backend-persistence.js";
 
 const backend = {
   cards: {

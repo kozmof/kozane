@@ -98,8 +98,16 @@ async function main() {
     rendered.board.includes("/demo/tags/?namespaceId=board#tag=shared"),
     "Board canvas SSR must use supplied tag navigation",
   );
+  assert.ok(
+    rendered.fullBoard.includes("Standalone board"),
+    "Board view SSR must render its seeded card",
+  );
+  assert.ok(
+    rendered.fullBoard.includes('data-card-id="card"'),
+    "Board view SSR must include the canvas",
+  );
   console.log(
-    "Shared client browser bundle and standalone editor/namespace/tags/map/board-canvas SSR passed.",
+    "Shared client browser bundle and standalone editor/namespace/tags/map/board SSR passed.",
   );
 }
 try {

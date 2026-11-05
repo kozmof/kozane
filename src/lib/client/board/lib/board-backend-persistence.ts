@@ -1,11 +1,11 @@
-import type { NamespaceState } from "../../../lib/client/board/namespace-state.svelte.js";
+import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { KozaneBackend } from "$lib/backend/contract.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { readCard, readWarp, readScopeArea } from "$lib/backend/decoders/snapshot-reader.js";
 import { readPlacements } from "$lib/backend/decoders/placements.js";
 import type { BoardRect } from "$lib/constants.js";
-import type { BoardPoint } from "../../../lib/client/board/lib/canvas-viewport.js";
-import type { CardPositionPatch } from "../../../lib/client/board/lib/namespace-page.js";
+import type { BoardPoint } from "./canvas-viewport.js";
+import type { CardPositionPatch } from "./namespace-page.js";
 import type { CardWithGlue } from "$lib/types.js";
 
 /** Optimistic UI persistence through transport-free resource methods. */

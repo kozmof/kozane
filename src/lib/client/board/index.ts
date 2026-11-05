@@ -3,3 +3,5 @@ export { NamespaceState, SelectionState } from "./namespace-state.svelte.js";
 export { createNamespaceActions } from "./namespace-actions.svelte.js";
 export { TaskspaceTreeState, type TaskspaceTreeContext } from "./lib/taskspace-tree.svelte.js";
 export type { KozaneCanvasProps as BoardCanvasProps } from "./lib/kozane-canvas-props.js";
+export { default as BoardView } from "./BoardView.svelte";
+export type { BoardPageData, BoardViewProps } from "./types.js";

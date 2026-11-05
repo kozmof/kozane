@@ -8,13 +8,15 @@ import {
   TagsView,
   MapView,
   BoardCanvas,
+  BoardView,
+  StaticBackend,
+  createDemoNavigation,
+  type NavigationDriver,
 } from "../lib/client/index.js";
-import type { NavigationDriver } from "../lib/navigation.js";
 
-import { StaticBackend } from "../lib/backend/index.js";
-import { createDemoNavigation } from "../lib/navigation.js";
 import { tagDataset } from "../lib/backend/tags.fixtures.js";
 import { tagsView } from "../lib/backend/views/tags.js";
+import { boardViewProps } from "./board-view-props.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 import { mapDataset } from "./map-dataset.js";
 import { mapView } from "../lib/backend/views/map.js";
@@ -88,6 +90,7 @@ export async function renderViews() {
     },
   });
   const board = render(BoardCanvas, { props: boardCanvasProps() });
+  const fullBoard = render(BoardView, { props: boardViewProps() });
   return {
     surface: surface.body,
     panel: panel.body,
@@ -95,5 +98,6 @@ export async function renderViews() {
     tags: tags.body,
     map: map.body,
     board: board.body,
+    fullBoard: fullBoard.body,
   };
 }

@@ -1,5 +1,9 @@
 import { expect, it, vi } from "vitest";
-import { arrivalWarp, clearArrivalParams, readArrival } from "./board-arrival.js";
+import {
+  arrivalWarp,
+  clearArrivalParams,
+  readArrival,
+} from "../../../lib/client/board/lib/board-arrival.js";
 import { createDemoNavigation, createNodeNavigation } from "$lib/navigation.js";
 import { data } from "../page.fixtures.js";
 import type { Inventory, TaskspaceSummary } from "$lib/types.js";

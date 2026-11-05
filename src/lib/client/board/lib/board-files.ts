@@ -1,5 +1,5 @@
-import type { NamespaceState } from "../../../lib/client/board/namespace-state.svelte.js";
-import type { EditorSession, EditorSessionContext } from "../../../lib/client/editor/index.js";
+import type { NamespaceState } from "../namespace-state.svelte.js";
+import type { EditorSession, EditorSessionContext } from "../../editor/index.js";
 
 type BoardFilesHost = {
   s: NamespaceState;

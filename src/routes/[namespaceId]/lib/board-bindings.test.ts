@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { boardKeyBindings, type BoardCommands, type BoardShortcuts } from "./board-bindings.js";
-import { runKeyBindings } from "./board-keymap.js";
+import {
+  boardKeyBindings,
+  type BoardCommands,
+  type BoardShortcuts,
+} from "../../../lib/client/board/lib/board-bindings.js";
+import { runKeyBindings } from "../../../lib/client/board/lib/board-keymap.js";
 
 const shortcuts: BoardShortcuts = {
   focusCardInputShortcut: "n",
