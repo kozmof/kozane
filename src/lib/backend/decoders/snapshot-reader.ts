@@ -141,7 +141,7 @@ function readLayer(row: unknown): Layer | undefined {
   return { id, namespaceId, name, position, isDefault };
 }
 
-function readWarp(row: unknown): Warp | undefined {
+export function readWarp(row: unknown): Warp | undefined {
   const id = readString(row, "id");
   const namespaceId = readString(row, "namespaceId");
   const posX = readFiniteNumber(row, "posX");
@@ -182,7 +182,7 @@ function readScopeRel(row: unknown): ScopeRel | undefined {
   return { scopeId, cardId };
 }
 
-function readScopeArea(row: unknown): ScopeArea | undefined {
+export function readScopeArea(row: unknown): ScopeArea | undefined {
   const id = readString(row, "id");
   const scopeId = readString(row, "scopeId");
   const namespaceId = readString(row, "namespaceId");

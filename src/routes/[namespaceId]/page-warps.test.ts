@@ -136,11 +136,14 @@ describe("Warps", () => {
     await fireEvent.mouseUp(window);
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps/warp-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ posX: 1850, posY: 1050 }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/warps/warp-1",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ posX: 1850, posY: 1050 }),
+      }),
+    );
     // Half the marker's 14px diameter back from the centre it was dropped on.
     await waitFor(() => expect(screen.getByLabelText("Warp 1")).toHaveStyle({ left: "1843px" }));
   });

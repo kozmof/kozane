@@ -452,10 +452,14 @@ describe("Composer failures", () => {
   // left the writer retyping the same card to find out what was wrong with it, while the
   // CLI printed the reason for the same refusal.
   it("reports why the server refused a card, not just that it did", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ message: "content must be a string under 200000 characters" }),
-    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: "content must be a string under 200000 characters" }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
 
@@ -467,20 +471,28 @@ describe("Composer failures", () => {
   });
 
   it("falls back to its own wording when the refusal carries none", async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("{}", { status: 400, headers: { "content-type": "application/json" } }),
+      );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
 
     await compose("a card");
 
-    expect(await screen.findByText("Failed to create card")).toBeInTheDocument();
+    expect(await screen.findByText("The request was not accepted")).toBeInTheDocument();
   });
 
   it("reports why an edit was refused", async () => {
-    const fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ message: "content must be a string under 200000 characters" }),
-    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ message: "content must be a string under 200000 characters" }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        ),
+      );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, { props: { data, params: { namespaceId: "namespace-1" }, form: null } });
 
@@ -535,11 +547,14 @@ describe("Card width", () => {
     expect(card).toHaveStyle({ width: "312px" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/cards/card-1", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ width: 312 }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/cards/card-1",
+      expect.objectContaining({
+        method: "PATCH",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ width: 312 }),
+      }),
+    );
   });
 
   it("saves nothing for a press that never became a drag", async () => {

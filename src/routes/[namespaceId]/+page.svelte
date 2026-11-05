@@ -7,7 +7,7 @@
   import { page } from "$app/state";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
   import { boardKeyBindings } from "./lib/board-bindings.js";
-  import { createBoardPersistence } from "./lib/board-persistence.js";
+  import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";
   import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
@@ -51,6 +51,13 @@
   // Use the same namespace-loading path as later navigation so layer restoration and other
   // initialization stay consistent.
   untrack(() => s.resetFromData(data));
+
+  const backend = untrack(() => new HttpBackend({
+      base,
+      fetcher: s.fetcher,
+      pollingInitialDelayMs: 1000,
+      capabilities: data.backendCapabilities ?? { writable: !readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
+    }));
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
@@ -205,12 +212,7 @@
   onMount(() => {
     // A static export has no /api/snapshot endpoint and no writers to sync with.
     if (readonly) return;
-    const backend = new HttpBackend({
-      base,
-      fetcher: s.fetcher,
-      pollingInitialDelayMs: 1000,
-      capabilities: data.backendCapabilities ?? { writable: !readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
-    });
+
     return startSnapshotView({
       backend,
       initialDataApplied: true,
@@ -226,7 +228,7 @@
 
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
-  const persistence = createBoardPersistence(s);
+  const persistence = createBackendBoardPersistence(s, backend);
 
   const inventoryActions = createInventoryActions(s);
 
