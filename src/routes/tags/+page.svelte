@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { untrack } from "svelte";
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { startDatasetView } from "$lib/backend/dataset-view.js";
@@ -31,7 +32,7 @@
   import TagResults from "./components/TagResults.svelte";
   import { activeRowClass, countClass, noteClass, rowClass } from "./lib/styles.js";
 
-  let { data }: PageProps = $props();
+  let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const backend = untrack(() => data.backendCapabilities
     ? new HttpBackend({ base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000 })
     : undefined);
@@ -64,13 +65,13 @@
   const selectedTag = $derived.by(() => {
     if (display.tag) return display.tag;
     if (!browser) return null;
-    const requested = page.url.searchParams.get("tag");
+    const requested = navigation.readFilters(page.url).tag;
     return requested ? normalizeTag(requested) : null;
   });
 
   /** Use null to gather the whole workspace when `?namespaceId=` is absent. */
   const selectedNamespaceId = $derived(
-    display.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
+    display.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
   );
 
   const selectedNamespace = $derived(
@@ -162,19 +163,8 @@
    * Preserve `?namespaceId=` across tag links. Namespace and tag parameters are independent
    * and optional.
    */
-  const tagHref = (tag: string) => {
-    const params = new URLSearchParams();
-    if (selectedNamespaceId) params.set("namespaceId", selectedNamespaceId);
-    params.set("tag", tag);
-    return `${base}/tags?${params}`;
-  };
-  const namespaceHref = (namespaceId: string | null) => {
-    const params = new URLSearchParams();
-    if (namespaceId) params.set("namespaceId", namespaceId);
-    if (selectedTag) params.set("tag", selectedTag);
-    const query = params.toString();
-    return query ? `${base}/tags?${query}` : `${base}/tags`;
-  };
+  const tagHref = (tag: string) => navigation.tags({ namespaceId: selectedNamespaceId, tag });
+  const namespaceHref = (namespaceId: string | null) => navigation.tags({ namespaceId, tag: selectedTag });
 
   /**
    * Resolve a destination board from a card's namespace or a file's taskspace. For unplaced
@@ -183,13 +173,13 @@
    */
   const cardHref = (cardId: string) => {
     const namespaceId = display.cardNamespaces[cardId];
-    return namespaceId ? `${base}/${namespaceId}?card=${cardId}` : null;
+    return namespaceId ? navigation.board(namespaceId, { card: cardId }) : null;
   };
   const fileHref = (taskspaceId: string, path: string) => {
     const namespaceId =
       display.taskspaces[taskspaceId]?.namespaceId ?? selectedNamespaceId ?? defaultNamespaceId;
     return namespaceId
-      ? `${base}/${namespaceId}?taskspace=${taskspaceId}&path=${encodeURIComponent(path)}`
+      ? navigation.board(namespaceId, { taskspace: taskspaceId, path })
       : null;
   };
 
@@ -263,7 +253,7 @@
   >
     <!-- Label the back destination explicitly, whether it is the namespace list or a selected board. -->
     <a
-      href="{base}/{selectedNamespaceId ?? ''}"
+      href={selectedNamespaceId ? navigation.board(selectedNamespaceId) : navigation.namespaces()}
       title={selectedNamespace ? undefined : "Namespaces"}
       aria-label={selectedNamespace ? `Back to ${selectedNamespace.name}` : "All namespaces"}
       class={css({

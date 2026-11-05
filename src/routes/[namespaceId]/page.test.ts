@@ -617,3 +617,20 @@ describe("Card width", () => {
     expect(screen.queryByLabelText("Drag to resize card width")).not.toBeInTheDocument();
   });
 });
+
+it("uses supplied routes for board tag links and the namespace list", async () => {
+  const { createDemoNavigation } = await import("$lib/navigation.js");
+  render(NamespacePage, {
+    props: {
+      data: { ...data, readonly: true, cards: [{ ...data.cards[0], content: ":private" }] },
+      params: { namespaceId: "namespace-1" },
+      form: null,
+      navigation: createDemoNavigation({ base: "/demo" }),
+    },
+  });
+  expect(screen.getByRole("link", { name: ":private" })).toHaveAttribute(
+    "href",
+    "/demo/tags/?namespaceId=namespace-1#tag=private",
+  );
+  expect(screen.getByTitle("to namespaces")).toHaveAttribute("href", "/demo/namespaces/");
+});

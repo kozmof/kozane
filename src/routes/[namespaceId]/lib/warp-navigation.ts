@@ -1,3 +1,4 @@
+import { createNodeNavigation } from "$lib/navigation.js";
 import type { Warp } from "$lib/types";
 import type { WarpListEntry } from "$lib/warp-list";
 
@@ -27,6 +28,8 @@ export function crossNamespaceWarpHref(
   currentPathname: string,
   entry: Pick<WarpListEntry, "namespaceId" | "id">,
 ): string {
-  const slash = currentPathname.endsWith("/") ? "/" : "";
-  return `${base}/${entry.namespaceId}${slash}?warp=${entry.id}`;
+  return createNodeNavigation({
+    base,
+    boardTrailingSlash: () => currentPathname.endsWith("/"),
+  }).board(entry.namespaceId, { warp: entry.id });
 }

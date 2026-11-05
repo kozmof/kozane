@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { base } from "$app/paths";
   import { onMount, untrack } from "svelte";
   import { HttpBackend } from "$lib/backend/http-backend.js";
@@ -7,7 +8,7 @@
   import { css } from "styled-system/css";
   import NavIcon from "$lib/components/NavIcon.svelte";
 
-  let { data, form }: PageProps = $props();
+  let { data, form, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const backend = untrack(() => new HttpBackend({
     base,
     fetcher: fetch,
@@ -63,10 +64,10 @@
       {data.workspaceRoot ?? "Kozane"}
     </h1>
     <nav aria-label="Across the workspace" class={css({ display: "flex", gap: "4px" })}>
-      <a href="{base}/map" title="Map" aria-label="Map" class={navLinkClass}>
+      <a href={navigation.map()} title="Map" aria-label="Map" class={navLinkClass}>
         <NavIcon kind="map" />
       </a>
-      <a href="{base}/tags" title="Tags" aria-label="Tags" class={navLinkClass}>
+      <a href={navigation.tags()} title="Tags" aria-label="Tags" class={navLinkClass}>
         <NavIcon kind="tags" />
       </a>
     </nav>
@@ -89,7 +90,7 @@
       {#each index.namespaces as namespace (namespace.id)}
         <li>
           <a
-            href="{base}/{namespace.id}"
+            href={navigation.board(namespace.id)}
             class={css({
               color: "ink.black",
               textDecoration: "none",

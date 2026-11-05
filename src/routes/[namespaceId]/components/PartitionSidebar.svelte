@@ -1,10 +1,10 @@
 <script lang="ts">
   import { css, cx } from "styled-system/css";
-  import { base } from "$app/paths";
   import type { CardWithGlue, PartitionWithColor } from "$lib/types";
 
   let {
     visible,
+    namespacesHref,
     panelWidth,
     cards,
     partitions,
@@ -15,6 +15,7 @@
     readonly = false,
   }: {
     visible: boolean;
+    namespacesHref: string;
     panelWidth: number;
     cards: CardWithGlue[];
     partitions: PartitionWithColor[];
@@ -74,7 +75,7 @@
   <div class={css({ padding: "10px 12px", borderBottom: "1px solid token(colors.neutral.dim)" })}>
     <a
       title="to namespaces"
-      href="{base}/"
+      href={namespacesHref}
       class={css({
         display: "flex",
         alignItems: "center",

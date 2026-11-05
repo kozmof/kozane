@@ -325,3 +325,42 @@ describe("backend tags refresh", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+it("uses injected demo routes and fragment filters for tags and board links", async () => {
+  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { page } = await import("$app/state");
+  const previous = page.url;
+  page.url = new URL("http://localhost/demo/tags/?namespaceId=p1#tag=perf") as typeof page.url;
+  try {
+    render(TagsPage, {
+      props: {
+        data: pageData(
+          [
+            cardHit("c1", "perf", "Private card"),
+            fileHit("t1", "private notes/file.md", 2, "perf"),
+          ],
+          { tag: null, cardTotal: null, fileTotal: null },
+        ) as never,
+        params: {},
+        form: null,
+        navigation: createDemoNavigation({ base: "/demo" }),
+      },
+    });
+    expect(hrefOf("Private card")).toBe("/demo/board/?namespaceId=p1&card=c1");
+    expect(screen.getByRole("link", { name: /private notes\/file.md/ })).toHaveAttribute(
+      "href",
+      "/demo/board/?namespaceId=p1&taskspace=t1#path=private+notes%2Ffile.md",
+    );
+    const selected = screen
+      .getAllByRole("link")
+      .find((link) => link.getAttribute("href") === "/demo/tags/?namespaceId=p1#tag=perf");
+    expect(selected).toHaveAttribute("aria-current", "page");
+    for (const link of screen.getAllByRole("link")) {
+      const url = new URL(link.getAttribute("href")!, "http://localhost");
+      expect(url.searchParams.has("tag")).toBe(false);
+      expect(url.searchParams.has("path")).toBe(false);
+    }
+  } finally {
+    page.url = previous;
+  }
+});

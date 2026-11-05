@@ -1,3 +1,4 @@
+import { createNodeNavigation } from "$lib/navigation.js";
 /** Namespace, tag, and day filters. Null omits a filter from the URL. */
 export type MapQuery = {
   namespaceId: string | null;
@@ -7,10 +8,5 @@ export type MapQuery = {
 
 /** Build a map URL from namespace, tag, and day filters in fixed parameter order. */
 export function mapHref(base: string, { namespaceId, tag, day }: MapQuery): string {
-  const params = new URLSearchParams();
-  if (namespaceId) params.set("namespaceId", namespaceId);
-  if (tag) params.set("tag", tag);
-  if (day) params.set("day", day);
-  const query = params.toString();
-  return query ? `${base}/map?${query}` : `${base}/map`;
+  return createNodeNavigation({ base }).map({ namespaceId, tag, day });
 }

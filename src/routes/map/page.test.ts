@@ -671,3 +671,26 @@ describe("backend map data", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+it("uses injected demo routes for map filters, partitions and workspace navigation", async () => {
+  const { createDemoNavigation } = await import("$lib/navigation.js");
+  const { container } = render(MapPage, {
+    props: {
+      data: pageData({ namespaceId: "p1", tag: "perf" }) as never,
+      params: {},
+      form: null,
+      navigation: createDemoNavigation({ base: "/demo" }),
+    },
+  });
+  expect(screen.getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/demo/tags/");
+  expect(container.querySelector('a[aria-label^="General, 8 cards"]')).toHaveAttribute(
+    "href",
+    "/demo/board/?namespaceId=p1",
+  );
+  expect(container.querySelector('a[href="/demo/map/?namespaceId=p2#tag=perf"]')).not.toBeNull();
+  for (const link of screen.getAllByRole("link")) {
+    expect(new URL(link.getAttribute("href")!, "http://localhost").searchParams.has("tag")).toBe(
+      false,
+    );
+  }
+});

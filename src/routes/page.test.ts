@@ -98,3 +98,25 @@ it("keeps static namespace pages free of backend requests and creation controls"
   expect(screen.queryByRole("button", { name: "Create namespace" })).not.toBeInTheDocument();
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("uses supplied navigation for namespace discovery and workspace views", async () => {
+  const { createDemoNavigation } = await import("$lib/navigation.js");
+  render(WorkspacePage, {
+    props: {
+      data: {
+        namespaces: [{ id: "p1", name: "Research", isDefault: false }],
+        workspaceRoot: null,
+        workspaceName: "Demo",
+        readonly: true,
+      },
+      form: null,
+      navigation: createDemoNavigation({ base: "/demo" }),
+    } as never,
+  });
+  expect(screen.getByRole("link", { name: "Research" })).toHaveAttribute(
+    "href",
+    "/demo/board/?namespaceId=p1",
+  );
+  expect(screen.getByRole("link", { name: "Tags" })).toHaveAttribute("href", "/demo/tags/");
+  expect(screen.getByRole("link", { name: "Map" })).toHaveAttribute("href", "/demo/map/");
+});

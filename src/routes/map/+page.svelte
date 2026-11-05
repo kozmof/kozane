@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { untrack } from "svelte";
   import { HttpBackend } from "$lib/backend/http-backend.js";
   import { startDatasetView } from "$lib/backend/dataset-view.js";
@@ -15,7 +16,6 @@
   import ActivityStrip from "./components/ActivityStrip.svelte";
   import MapDescription from "./components/MapDescription.svelte";
   import MapDrawing from "./components/MapDrawing.svelte";
-  import { mapHref } from "./lib/map-href.js";
   import { DRAG_THRESHOLD, MAP_DEFAULT_VIEWPORT } from "$lib/constants";
   import {
     buildMapLayout,
@@ -45,7 +45,7 @@
    * Interactions navigate or change the view without writing workspace data.
    */
 
-  let { data }: PageProps = $props();
+  let { data, navigation = createNodeNavigation({ base }) }: PageProps & { navigation?: NavigationAdapter } = $props();
   const backend = untrack(() => data.backendCapabilities
     ? new HttpBackend({
         base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000,
@@ -75,16 +75,16 @@
   const selectedTag = $derived.by(() => {
     if (display.tag) return display.tag;
     if (!browser) return null;
-    const requested = page.url.searchParams.get("tag");
+    const requested = navigation.readFilters(page.url).tag;
     return requested ? normalizeTag(requested) : null;
   });
 
   const selectedNamespaceId = $derived(
-    display.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
+    display.namespaceId ?? (browser ? navigation.readFilters(page.url).namespaceId : null),
   );
   const selectedNamespace = $derived(display.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null);
   const selectedDay = $derived(
-    display.day ?? (browser ? page.url.searchParams.get("day") : null),
+    display.day ?? (browser ? navigation.readFilters(page.url).day : null),
   );
 
   // Keep day filtering of partition sizes and tag hits aligned. See `partitionsForDay`.
@@ -229,9 +229,9 @@
 
   // Change one map filter while preserving the other two.
   const current = $derived({ namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
-  const tagHref = (tag: string | null) => mapHref(base, { ...current, tag });
-  const namespaceHref = (namespaceId: string | null) => mapHref(base, { ...current, namespaceId });
-  const dayHref = (day: string | null) => mapHref(base, { ...current, day });
+  const tagHref = (tag: string | null) => navigation.map({ ...current, tag });
+  const namespaceHref = (namespaceId: string | null) => navigation.map({ ...current, namespaceId });
+  const dayHref = (day: string | null) => navigation.map({ ...current, day });
 
   /**
    * Keep partitions fully opaque unless an active tag reaches other partitions but not this
@@ -299,7 +299,7 @@
   >
     <!-- Link back to the namespace list or selected namespace board. Label the destination explicitly because the icon alone cannot distinguish them. -->
     <a
-      href="{base}/{selectedNamespaceId ?? ''}"
+      href={selectedNamespaceId ? navigation.board(selectedNamespaceId) : navigation.namespaces()}
       title={selectedNamespace ? undefined : "Namespaces"}
       aria-label={selectedNamespace ? `Back to ${selectedNamespace.name}` : "All namespaces"}
       class={headerLinkClass}
@@ -309,7 +309,7 @@
         <span>{selectedNamespace.name}</span>
       {/if}
     </a>
-    <a href="{base}/tags" title="Tags" aria-label="Tags" class={headerLinkClass}>
+    <a href={navigation.tags()} title="Tags" aria-label="Tags" class={headerLinkClass}>
       <NavIcon kind="tags" />
     </a>
 
@@ -380,7 +380,10 @@
           cursor: dragging ? "grabbing" : "grab",
         })}
       >
-        <MapDrawing {layout} {links} {size} {selectedDay} {lit} />
+        <MapDrawing
+          boardHref={(namespaceId) => navigation.board(namespaceId)}
+          {layout} {links} {size} {selectedDay} {lit}
+        />
 
         <MapZoomControl
           zoom={view.zoom}

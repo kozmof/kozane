@@ -3,6 +3,8 @@
   import type { PageProps } from "./$types";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
+  import { goto } from "$app/navigation";
+  import { createNodeNavigation, type NavigationAdapter } from "$lib/navigation.js";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
@@ -35,7 +37,7 @@
   import { startSnapshotView } from "$lib/backend/snapshot-view.js";
   import { HttpBackend } from "$lib/backend/http-backend.js";
 
-  let { data }: PageProps = $props();
+  let { data, navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }), navigate = goto }: PageProps & { navigation?: NavigationAdapter; navigate?: (href: string) => Promise<void> } = $props();
 
   // Static exports have no mutation endpoints. Disable editing controls and live polling for
   // the entire build.
@@ -94,6 +96,8 @@
       s,
       readonly,
       backend,
+      navigation: () => navigation,
+      navigate: (href) => navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
       canvas: () => canvasComponent,
     },
@@ -358,6 +362,7 @@
 
 <div class={css({ display: "flex", height: "100vh", overflow: "hidden", position: "relative", backgroundColor: "ink.lighter" })}>
   <PartitionSidebar
+    namespacesHref={navigation.namespaces()}
     visible={sidebarsVisible}
     panelWidth={data.uiConfig.leftPanelWidth}
     cards={s.cards}
@@ -421,8 +426,7 @@
       onPositionActivityStart={() => positionActivity.begin()}
       onPositionActivityEnd={() => positionActivity.end()}
       onError={(msg) => (s.lastError = msg)}
-      tagHref={(tag) =>
-        `${base}/tags?namespaceId=${data.namespace.id}&tag=${encodeURIComponent(tag)}`}
+      tagHref={(tag) => navigation.tags({ namespaceId: data.namespace.id, tag })}
       {readonly}
     />
 

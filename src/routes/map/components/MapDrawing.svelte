@@ -1,6 +1,5 @@
 <script lang="ts">
   import { css } from "styled-system/css";
-  import { base } from "$app/paths";
   import {
     HUB_RADIUS,
     LABEL_MIN_HEIGHT,
@@ -15,12 +14,14 @@
    */
   let {
     layout,
+    boardHref,
     links,
     size,
     selectedDay,
     lit,
   }: {
     layout: ReturnType<typeof buildMapLayout>;
+    boardHref: (namespaceId: string) => string;
     /** The active tag's lines. Any at all dim everything they do not reach. */
     links: ReturnType<typeof tagLinks>;
     size: { width: number; height: number };
@@ -75,7 +76,7 @@
 
   {#each layout.partitions as placed (placed.partition.id)}
     {@const rect = placed.rect}
-    <a href="{base}/{placed.partition.namespaceId}" aria-label="{placed.partition.name}, {placed.partition.cards} cards, in the namespace it belongs to">
+    <a href={boardHref(placed.partition.namespaceId)} aria-label="{placed.partition.name}, {placed.partition.cards} cards, in the namespace it belongs to">
       <g opacity={lit(placed.partition.id) ? 1 : 0.25}>
         <rect
           x={rect.x}

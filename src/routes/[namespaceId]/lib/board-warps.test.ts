@@ -3,18 +3,27 @@ import { BoardWarps } from "./board-warps.svelte.js";
 import { NamespaceState } from "../namespace-state.svelte.js";
 import { data } from "../page.fixtures.js";
 import { BackendError } from "$lib/backend/contract.js";
-vi.mock("$app/navigation", () => ({ goto: vi.fn() }));
+import { createDemoNavigation } from "$lib/navigation.js";
 
 function setup(readonly = false) {
   const s = new NamespaceState();
   s.resetFromData(data);
   const backend = { warpDirectory: { get: vi.fn() }, warps: { remove: vi.fn() } };
   const removeWarp = vi.fn();
+  const navigate = vi.fn().mockResolvedValue(undefined);
   const warps = new BoardWarps(
-    { s, backend, readonly, removeWarp, canvas: vi.fn() },
+    {
+      s,
+      backend,
+      readonly,
+      removeWarp,
+      canvas: vi.fn(),
+      navigation: () => createDemoNavigation({ base: "/demo" }),
+      navigate,
+    },
     { visible: true, directory: data.warpDirectory },
   );
-  return { s, backend, warps, removeWarp };
+  return { s, backend, warps, removeWarp, navigate };
 }
 
 it("keeps the newest directory and rejects malformed refreshes", async () => {
@@ -66,4 +75,10 @@ it("does not read or mutate in a static export", async () => {
   expect(backend.warpDirectory.get).not.toHaveBeenCalled();
   expect(backend.warps.remove).not.toHaveBeenCalled();
   expect(removeWarp).not.toHaveBeenCalled();
+});
+
+it("uses supplied navigation for cross-namespace warp jumps", () => {
+  const { warps, navigate } = setup();
+  warps.jump(data.warpDirectory[0]);
+  expect(navigate).toHaveBeenCalledWith("/demo/board/?namespaceId=namespace-2&warp=warp-9");
 });

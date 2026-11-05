@@ -1,6 +1,3 @@
-import { goto } from "$app/navigation";
-import { base } from "$app/paths";
-import { page } from "$app/state";
 import { withoutWarp, type WarpListEntry } from "$lib/warp-list";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
@@ -8,7 +5,8 @@ import type { HttpBackend } from "$lib/backend/http-backend.js";
 import { BackendError } from "$lib/backend/contract.js";
 import { parseWarpEntries } from "$lib/backend/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
-import { crossNamespaceWarpHref, reachableWarps } from "./warp-navigation.js";
+import type { NavigationAdapter } from "$lib/navigation.js";
+import { reachableWarps } from "./warp-navigation.js";
 
 /** The parts of the canvas warp navigation moves. */
 export type WarpCanvas = {
@@ -19,6 +17,8 @@ export type WarpCanvas = {
 
 type BoardWarpsHost = {
   s: NamespaceState;
+  navigation: () => NavigationAdapter;
+  navigate: (href: string) => Promise<void>;
   backend: {
     warpDirectory: Pick<HttpBackend["warpDirectory"], "get">;
     warps: Pick<HttpBackend["warps"], "remove">;
@@ -90,7 +90,7 @@ export class BoardWarps {
       this.focus(entry.id);
       return;
     }
-    void goto(crossNamespaceWarpHref(base, page.url.pathname, entry));
+    void this.#host.navigate(this.#host.navigation().board(entry.namespaceId, { warp: entry.id }));
   }
 
   /**
