@@ -4,12 +4,9 @@ import { page } from "$app/state";
 import { withoutWarp, type WarpListEntry } from "$lib/warp-list";
 import type { NamespaceState } from "../namespace-state.svelte.js";
 import type { BoardPoint } from "./canvas-viewport.js";
-import {
-  deleteWarp,
-  failureMessage,
-  fetchWarpDirectory,
-  parseWarpEntries,
-} from "./namespace-api.js";
+import type { HttpBackend } from "$lib/backend/http-backend.js";
+import { BackendError } from "$lib/backend/contract.js";
+import { parseWarpEntries } from "$lib/backend/decoders/warp-directory.js";
 import { ARROW_DIRECTIONS, warpInDirection } from "./namespace-page.js";
 import { crossNamespaceWarpHref, reachableWarps } from "./warp-navigation.js";
 
@@ -22,6 +19,10 @@ export type WarpCanvas = {
 
 type BoardWarpsHost = {
   s: NamespaceState;
+  backend: {
+    warpDirectory: Pick<HttpBackend["warpDirectory"], "get">;
+    warps: Pick<HttpBackend["warps"], "remove">;
+  };
   /** A static export has no endpoints, so it neither refreshes nor deletes. */
   readonly: boolean;
   /** Removes a warp on this board. The palette and the `x` key share it. */
@@ -36,6 +37,7 @@ type BoardWarpsHost = {
  */
 export class BoardWarps {
   readonly #host: BoardWarpsHost;
+  #directoryRequest = 0;
 
   /** Whether warp markers are drawn. */
   visible = $state(true);
@@ -67,11 +69,13 @@ export class BoardWarps {
   async refreshDirectory(): Promise<void> {
     // A static export has no endpoint to ask, and nothing can have changed under it.
     if (this.#host.readonly) return;
-    const { s } = this.#host;
+    const { s, backend } = this.#host;
+    const namespaceId = s.namespaceId;
+    const request = ++this.#directoryRequest;
     try {
-      const res = await fetchWarpDirectory(s.fetcher, s.namespaceId);
-      if (!res.ok) return;
-      const parsed = parseWarpEntries(await res.json().catch(() => null));
+      const result = await backend.warpDirectory.get(namespaceId);
+      if (request !== this.#directoryRequest || namespaceId !== s.namespaceId) return;
+      const parsed = parseWarpEntries(result);
       // An answer that is not a list of rows is treated as no answer at all.
       if (parsed) this.directory = parsed;
     } catch {
@@ -94,19 +98,24 @@ export class BoardWarps {
    * affects only the focused marker on this board.
    */
   async remove(entry: WarpListEntry): Promise<void> {
-    const { s } = this.#host;
+    if (this.#host.readonly) return;
+    const { s, backend } = this.#host;
     if (entry.namespaceId === s.namespaceId) {
       // Same path the `x` key takes, so one warp cannot be removed two different ways.
       await this.#host.removeWarp(entry.id);
       return;
     }
-    const previous = this.directory;
-    this.directory = withoutWarp(this.directory, entry.id);
-    const res = await deleteWarp(s.mutationFetcher, entry.namespaceId, entry.id);
-    if (!res.ok) {
-      this.directory = previous;
-      s.setError(await failureMessage(res, "Failed to remove warp"));
-    }
+    await s.mutations.track(async () => {
+      ++this.#directoryRequest;
+      const previous = this.directory;
+      this.directory = withoutWarp(this.directory, entry.id);
+      try {
+        await backend.warps.remove(entry.namespaceId, entry.id);
+      } catch (error) {
+        this.directory = previous;
+        s.setError(error instanceof BackendError ? error.message : "Failed to remove warp");
+      }
+    });
   }
 
   /** Center on a warp in the arrow key's direction and return whether one was found. */

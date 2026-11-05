@@ -378,7 +378,14 @@ describe("Warps", () => {
 
   describe("palette", () => {
     const directoryResponse = (entries: unknown[]) =>
-      vi.fn().mockResolvedValue({ ok: true, json: async () => entries });
+      vi
+        .fn()
+        .mockImplementation(
+          async () =>
+            new Response(JSON.stringify(entries), {
+              headers: { "content-type": "application/json" },
+            }),
+        );
 
     function openPalette() {
       return fireEvent.keyDown(window, { key: "ArrowRight", shiftKey: true });
@@ -408,7 +415,10 @@ describe("Warps", () => {
 
       await openPalette();
 
-      expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warp-directory");
+      expect(fetch).toHaveBeenCalledWith(
+        "/namespace-1/api/warp-directory",
+        expect.objectContaining({ method: "GET" }),
+      );
       await waitFor(() =>
         expect(screen.getByRole("option", { name: /set in another tab/ })).toBeInTheDocument(),
       );
@@ -483,7 +493,10 @@ describe("Warps", () => {
       await openPalette();
       await fireEvent.click(screen.getByRole("button", { name: "Remove warp 1 in Research" }));
 
-      expect(fetch).toHaveBeenCalledWith("/namespace-2/api/warps/warp-9", { method: "DELETE" });
+      expect(fetch).toHaveBeenCalledWith(
+        "/namespace-2/api/warps/warp-9",
+        expect.objectContaining({ method: "DELETE" }),
+      );
       await waitFor(() =>
         expect(screen.queryByRole("option", { name: /Umesao 1969/ })).not.toBeInTheDocument(),
       );
@@ -496,8 +509,20 @@ describe("Warps", () => {
         .fn()
         .mockImplementation((url: string) =>
           url.includes("warp-directory")
-            ? Promise.resolve({ ok: true, json: async () => data.warpDirectory })
-            : Promise.resolve({ ok: false, json: async () => ({ message: "gone wrong" }) }),
+            ? Promise.resolve(
+                new Response(JSON.stringify(data.warpDirectory), {
+                  headers: { "content-type": "application/json" },
+                }),
+              )
+            : Promise.resolve(
+                new Response(JSON.stringify({ message: "gone wrong" }), {
+                  status: 409,
+                  headers: {
+                    "content-type": "application/json",
+                    "X-Kozane-Error-Code": "conflict",
+                  },
+                }),
+              ),
         );
       vi.stubGlobal("fetch", fetch);
       renderPage();

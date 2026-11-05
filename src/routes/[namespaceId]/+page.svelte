@@ -93,6 +93,7 @@
     {
       s,
       readonly,
+      backend,
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
       canvas: () => canvasComponent,
     },
