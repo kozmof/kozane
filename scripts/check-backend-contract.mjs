@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { matrixOperations } from "./backend-contract-matrix.mjs";
 
 const root = new URL("../", import.meta.url);
 function source(path) {
@@ -36,7 +37,7 @@ for (const member of backend.members) {
 }
 const matrixURL = new URL("src/lib/backend/operation-matrix.md", root);
 const matrix = readFileSync(matrixURL, "utf8");
-const rows = [...matrix.matchAll(/^\| `([\w.]+)` \|/gm)].map((match) => match[1]);
+const rows = matrixOperations(matrix);
 const problems = [];
 for (const method of expected) {
   const count = rows.filter((row) => row === method).length;
