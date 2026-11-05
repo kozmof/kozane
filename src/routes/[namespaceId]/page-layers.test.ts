@@ -498,20 +498,18 @@ describe("Layers", () => {
   });
 
   it("shows the reason the server gives for a refused reorder", async () => {
-    const fetch = vi
-      .fn()
-      .mockImplementation(
-        async () =>
-          new Response(
-            JSON.stringify({
-              message: "The namespace's layers changed elsewhere. Reload to see the current order.",
-            }),
-            {
-              status: 409,
-              headers: { "content-type": "application/json", "X-Kozane-Error-Code": "conflict" },
-            },
-          ),
-      );
+    const fetch = vi.fn().mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            message: "The namespace's layers changed elsewhere. Reload to see the current order.",
+          }),
+          {
+            status: 409,
+            headers: { "content-type": "application/json", "X-Kozane-Error-Code": "conflict" },
+          },
+        ),
+    );
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
@@ -560,4 +558,48 @@ describe("Layers", () => {
       expect(layerGroup(container, "l3")).toHaveStyle({ opacity: "1", "z-index": "2" }),
     );
   });
+});
+
+it("uses injected memory preferences across remounts and resets layers for a new generation without legacy storage", async () => {
+  const { createMemoryPreferences } = await import("$lib/preferences.js");
+  const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
+  const legacy = globalThis.sessionStorage;
+  legacy.setItem("kozane:active-layer:namespace-1", "l2");
+  const access = vi.fn(() => {
+    throw new Error("storage denied");
+  });
+  Object.defineProperty(globalThis, "sessionStorage", { configurable: true, get: access });
+  try {
+    let generation = 0;
+    const preferences = createMemoryPreferences(() => generation);
+    const props = {
+      data: { ...data, readonly: true },
+      params: { namespaceId: "namespace-1" },
+      form: null,
+      preferences,
+    };
+    const first = render(NamespacePage, { props });
+    expect(first.container.querySelector('[data-layer-id="l1"]')).toHaveStyle({ opacity: "1" });
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("button", { name: /^Draft/ }));
+    await waitFor(() => expect(preferences.readActiveLayer("namespace-1")).toBe("l2"));
+    first.unmount();
+    const second = render(NamespacePage, { props });
+    expect(second.container.querySelector('[data-layer-id="l2"]')).toHaveStyle({ opacity: "1" });
+    generation++;
+    await second.rerender({ ...props, data: { ...props.data } });
+    await waitFor(() =>
+      expect(second.container.querySelector('[data-layer-id="l1"]')).toHaveStyle({ opacity: "1" }),
+    );
+    await waitFor(() => expect(preferences.readActiveLayer("namespace-1")).toBe("l1"));
+    await fireEvent.mouseEnter(screen.getByLabelText("Layers").parentElement!);
+    await fireEvent.click(screen.getByRole("button", { name: /^Draft/ }));
+    await waitFor(() => expect(preferences.readActiveLayer("namespace-1")).toBe("l2"));
+    expect(access).not.toHaveBeenCalled();
+    expect(legacy.getItem("kozane:active-layer:namespace-1")).toBe("l2");
+    second.unmount();
+  } finally {
+    if (original) Object.defineProperty(globalThis, "sessionStorage", original);
+    else Reflect.deleteProperty(globalThis, "sessionStorage");
+  }
 });

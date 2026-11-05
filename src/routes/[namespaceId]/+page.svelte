@@ -12,7 +12,8 @@
   import { hasCommandModifier, isTypingTarget, runKeyBindings } from "./lib/board-keymap.js";
   import { boardKeyBindings } from "./lib/board-bindings.js";
   import { createBackendBoardPersistence } from "./lib/board-backend-persistence.js";
-  import { NamespaceState, storeActiveLayerId } from "./namespace-state.svelte.js";
+  import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
+  import { NamespaceState } from "./namespace-state.svelte.js";
   import { createNamespaceActions } from "./namespace-actions.svelte.js";
   import PartitionSidebar from "./components/PartitionSidebar.svelte";
   import KozaneCanvas from "./components/KozaneCanvas.svelte";
@@ -43,7 +44,8 @@
     data,
     navigation = createNodeNavigation({ base, boardTrailingSlash: () => page.url.pathname.endsWith("/") }),
     routing = createAppNavigationDriver(),
-  }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver } = $props();
+    preferences = createSessionPreferences(),
+  }: PageProps & { navigation?: NavigationAdapter; routing?: NavigationDriver; preferences?: PreferenceStorage } = $props();
 
   // Static exports have no mutation endpoints. Disable editing controls and live polling for
   // the entire build.
@@ -54,7 +56,7 @@
   const staticFiles = $derived(data.taskspaceFiles);
 
   // ── Reactive namespace state ────────────────────────────────────
-  const s = new NamespaceState();
+  const s = new NamespaceState(untrack(() => preferences));
   s.fetcher = fetch;
   // Use the same namespace-loading path as later navigation so layer restoration and other
   // initialization stay consistent.
@@ -206,7 +208,7 @@
   }
 
   // Remember the layer being worked on, so a reload comes back to it instead of to Base.
-  $effect(() => storeActiveLayerId(s.namespaceId, s.activeLayerId));
+  $effect(() => s.rememberActiveLayer());
 
   // Resolved before the canvas mounts, so a page loaded with `?warp=` opens on the warp
   // instead of scrolling to it once the middle of the board has already been painted.

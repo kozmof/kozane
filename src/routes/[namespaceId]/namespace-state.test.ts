@@ -1,3 +1,4 @@
+import { createMemoryPreferences } from "$lib/preferences.js";
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   NamespaceState,
@@ -410,5 +411,41 @@ describe("NamespaceState.mutationFetcher", () => {
     const res = await s.mutationFetcher("/x");
     expect(s.mutations.idle).toBe(true);
     await expect(res.json()).rejects.toThrow();
+  });
+});
+
+describe("injected layer preferences", () => {
+  it("restores namespace selections across navigation and new view instances", () => {
+    const preferences = createMemoryPreferences();
+    const board = snapshot({ layers: [layer("l1", true), layer("l2")] });
+    const state = new NamespaceState(preferences);
+    state.resetFromData(board);
+    state.activeLayerId = "l2";
+    state.rememberActiveLayer();
+    state.resetFromData(
+      snapshot({ namespace: { id: "p2" }, layers: [{ ...layer("l9", true), namespaceId: "p2" }] }),
+    );
+    expect(state.activeLayerId).toBe("l9");
+    state.resetFromData(board);
+    expect(state.activeLayerId).toBe("l2");
+    const remounted = new NamespaceState(preferences);
+    remounted.resetFromData(board);
+    expect(remounted.activeLayerId).toBe("l2");
+  });
+  it("does not save an old generation's selection before the fresh snapshot applies", () => {
+    let generation = 0;
+    const preferences = createMemoryPreferences(() => generation);
+    const board = snapshot({ layers: [layer("l1", true), layer("l2")] });
+    const state = new NamespaceState(preferences);
+    state.resetFromData(board);
+    state.activeLayerId = "l2";
+    state.rememberActiveLayer();
+    generation++;
+    state.rememberActiveLayer();
+    expect(preferences.readActiveLayer("p1")).toBeNull();
+    state.refreshFromData(board);
+    expect(state.activeLayerId).toBe("l1");
+    state.rememberActiveLayer();
+    expect(preferences.readActiveLayer("p1")).toBe("l1");
   });
 });

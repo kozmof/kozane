@@ -1,4 +1,4 @@
-import type { WarpListEntry } from "$lib/warp-list.js";
+import type { WarpListEntry } from "../../warp-list.js";
 import { readBoolean, readFiniteNumber, readNullableString, readString } from "./response.js";
 
 /**

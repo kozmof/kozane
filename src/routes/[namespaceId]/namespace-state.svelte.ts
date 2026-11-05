@@ -1,3 +1,5 @@
+import { createSessionPreferences, type PreferenceStorage } from "$lib/preferences.js";
+export { readStoredLayerId, storeActiveLayerId } from "$lib/preferences.js";
 import type {
   CardWithGlue,
   Partition,
@@ -21,30 +23,6 @@ export type { NamespaceDataSnapshot } from "$lib/types";
 export function resolveActiveLayerId(layers: Layer[], preferredId: string | null): string | null {
   if (preferredId && layers.some(({ id }) => id === preferredId)) return preferredId;
   return layers.find(({ isDefault }) => isDefault)?.id ?? layers[0]?.id ?? null;
-}
-
-const ACTIVE_LAYER_STORAGE_PREFIX = "kozane:active-layer:";
-
-/**
- * Remember each namespace's active layer in per-tab storage. Ignore unavailable or failing
- * storage so losing a preference does not block the board.
- */
-export function readStoredLayerId(namespaceId: string): string | null {
-  try {
-    return globalThis.sessionStorage?.getItem(ACTIVE_LAYER_STORAGE_PREFIX + namespaceId) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-export function storeActiveLayerId(namespaceId: string, layerId: string | null): void {
-  try {
-    const key = ACTIVE_LAYER_STORAGE_PREFIX + namespaceId;
-    if (layerId) globalThis.sessionStorage?.setItem(key, layerId);
-    else globalThis.sessionStorage?.removeItem(key);
-  } catch {
-    // Ignore storage failures so saving a preference cannot block the board.
-  }
 }
 
 /**
@@ -104,6 +82,17 @@ export class SidebarState {
 }
 
 export class NamespaceState {
+  #preferenceGeneration: number | undefined;
+  constructor(private readonly preferences: PreferenceStorage = createSessionPreferences()) {}
+
+  /** Save only after this generation's layer selection has been applied. */
+  rememberActiveLayer(): void {
+    const namespaceId = this.namespaceId;
+    const layerId = this.activeLayerId;
+    if (this.#preferenceGeneration !== this.preferences.generation) return;
+    this.preferences.writeActiveLayer(namespaceId, layerId);
+  }
+
   namespaceId = $state("");
   fetcher: typeof fetch = fetch;
   /**
@@ -170,7 +159,11 @@ export class NamespaceState {
     this.cards = data.cards;
     this.partitions = data.partitions;
     this.layers = data.layers;
-    this.activeLayerId = resolveActiveLayerId(data.layers, readStoredLayerId(data.namespace.id));
+    this.#preferenceGeneration = this.preferences.generation;
+    this.activeLayerId = resolveActiveLayerId(
+      data.layers,
+      this.preferences.readActiveLayer(data.namespace.id),
+    );
     this.warps = data.warps;
     this.focusedWarpId = null;
     this.inventories = data.inventories;
@@ -192,7 +185,13 @@ export class NamespaceState {
     this.layers = data.layers;
     // Resolve a fallback if the selected layer is deleted elsewhere. Unlike `prunedRef`,
     // `resolveActiveLayerId` selects a replacement.
-    this.activeLayerId = resolveActiveLayerId(data.layers, this.activeLayerId);
+    const generation = this.preferences.generation;
+    const preferred =
+      generation === this.#preferenceGeneration
+        ? this.activeLayerId
+        : this.preferences.readActiveLayer(this.namespaceId);
+    this.activeLayerId = resolveActiveLayerId(data.layers, preferred);
+    this.#preferenceGeneration = generation;
     this.warps = data.warps;
     this.inventories = data.inventories;
     this.scopes = data.scopes;
