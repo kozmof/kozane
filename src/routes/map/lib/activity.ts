@@ -51,11 +51,7 @@ export function activityCells(rows: ActivityCount[], today = utcDay(new Date()))
   });
 }
 
-export function validActivityDay(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsed = dayDate(value);
-  return !Number.isNaN(parsed.getTime()) && utcDay(parsed) === value;
-}
+export { validActivityDay } from "$lib/backend/views/map.js";
 
 /**
  * Filter partition activity and card tags by the same selected day. Return inputs unchanged

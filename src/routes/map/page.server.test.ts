@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { addNamespace } from "$db/api/namespace";
 import { addPartition } from "$db/api/partition";
 import { addLayer } from "$db/api/layer";
@@ -15,6 +15,9 @@ import type { MapPartition, MapScope } from "./+page.server.js";
 import { buildTagTree } from "$lib/tag";
 import type { TagHit } from "$lib/types";
 import { tagPartitionIndex, type MapTagCard } from "./lib/graph.js";
+
+beforeEach(() => vi.stubEnv("DATABASE_URL", "file::memory:"));
+afterEach(() => vi.unstubAllEnvs());
 
 /**
  * Test the loader's namespace, partition-area, scope-edge, and tag-graph data used to derive

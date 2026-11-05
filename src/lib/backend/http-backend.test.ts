@@ -141,7 +141,22 @@ it("routes structure membership area and inventory operations to retained endpoi
 });
 
 it("routes workspace view reads without dispatching content-bearing tag filters", async () => {
-  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  const fetcher = vi
+    .fn()
+    .mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            namespaces: [],
+            partitions: [],
+            activity: [],
+            scopes: [],
+            partitionUsage: [],
+            namespaceUsage: [],
+            tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+          }),
+        ),
+    );
   const backend = new HttpBackend({ fetcher, capabilities });
   const changed = vi.fn();
   backend.subscribe(changed);

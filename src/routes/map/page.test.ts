@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { tick } from "svelte";
 import MapPage from "./+page.svelte";
 import { DEFAULT_ZOOM, zoomPercent } from "./lib/view.js";
@@ -612,5 +612,62 @@ describe("zooming into something too small to read", () => {
     // size the map opens at.
     expect(screen.getByText(`${zoomPercent(2)}%`)).toBeInTheDocument();
     expect(labelled(container, "Scraps")).toBe(true);
+  });
+});
+
+describe("backend map data", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("refreshes through the backend while retaining filters and zoom", async () => {
+    let finish!: (value: Response) => void;
+    const fetcher = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const { container } = draw({
+      namespaceId: "p1",
+      tag: "perf",
+      backendCapabilities: {
+        writable: true,
+        persistent: true,
+        taskspaces: false,
+        externalWrites: false,
+        auth: false,
+      },
+    });
+    await fireEvent.click(screen.getByLabelText("Zoom in"));
+    const initial = pageData();
+    finish(
+      new Response(
+        JSON.stringify({
+          namespaces: initial.namespaces,
+          partitions: [
+            partition("updated", "p1", "Updated", 6),
+            partition("other", "p2", "Elsewhere", 9),
+          ],
+          activity: [],
+          scopes: [],
+          partitionUsage: [],
+          namespaceUsage: [],
+          tags: { hits: [], cardData: {}, cardNamespaces: {}, truncated: false },
+        }),
+      ),
+    );
+    await waitFor(() => expect(rectOf(container, "Updated")).toBeDefined());
+    expect(rectOf(container, "Elsewhere")).toBeUndefined();
+    expect(screen.getByText(`${zoomPercent(DEFAULT_ZOOM + 0.05)}%`)).toBeInTheDocument();
+    expect(container.querySelector('a[href="/map?tag=perf"]')).not.toBeNull();
+    expect(fetcher).toHaveBeenCalledWith(
+      "/api/map",
+      expect.objectContaining({ method: "GET", cache: "no-store" }),
+    );
+  });
+  it("uses only embedded data when capabilities are absent from an export", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    draw();
+    expect(fetcher).not.toHaveBeenCalled();
   });
 });

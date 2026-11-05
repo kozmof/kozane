@@ -6,7 +6,7 @@ import type {
 } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
 import type { TagsViewData } from "../../services/tags.js";
-import type { TreemapSnapshot } from "../../services/map.js";
+import { readMapSnapshot } from "./decoders/map.js";
 import type { WarpListEntry } from "../warp-list.js";
 import type * as inventoriesServices from "../../services/inventories.js";
 import type * as warpsServices from "../../services/warps.js";
@@ -82,7 +82,10 @@ export class HttpBackend {
   private ns(namespaceId: string, path: string) {
     return `/${encodeURIComponent(namespaceId)}/api${path}`;
   }
-  private async read<T>(path: string, options?: { signal?: AbortSignal }): Promise<T> {
+  private async read<T>(
+    path: string,
+    options?: { signal?: AbortSignal; cache?: RequestInit["cache"] },
+  ): Promise<T> {
     const response = await this.transport.request(path, "GET", undefined, options);
     try {
       return (await response.json()) as T;
@@ -427,7 +430,13 @@ export class HttpBackend {
           (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
       ),
   };
-  readonly map = { get: () => this.read<TreemapSnapshot>("/api/map") };
+  readonly map = {
+    get: async () => {
+      const result = readMapSnapshot(await this.read<unknown>("/api/map", { cache: "no-store" }));
+      if (!result) throw new BackendError("unavailable", "Invalid map dataset");
+      return result;
+    },
+  };
   readonly warpDirectory = {
     get: (namespaceId: string) =>
       this.read<WarpListEntry[]>(this.ns(namespaceId, "/warp-directory")),

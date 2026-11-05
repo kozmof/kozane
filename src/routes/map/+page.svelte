@@ -1,5 +1,9 @@
 <script lang="ts">
   import type { PageProps } from "./$types";
+  import { untrack } from "svelte";
+  import { HttpBackend } from "$lib/backend/http-backend.js";
+  import { startDatasetView } from "$lib/backend/dataset-view.js";
+  import { mapView, type MapViewData } from "$lib/backend/views/map.js";
   import { css } from "styled-system/css";
   import { base } from "$app/paths";
   import { browser } from "$app/environment";
@@ -42,6 +46,26 @@
    */
 
   let { data }: PageProps = $props();
+  const backend = untrack(() => data.backendCapabilities
+    ? new HttpBackend({
+        base, fetcher: fetch, capabilities: data.backendCapabilities, pollingInitialDelayMs: 1000,
+      })
+    : undefined);
+  let refreshed = $state.raw<{ source: PageProps["data"]; value: MapViewData } | null>(null);
+  const display = $derived(refreshed?.source === data ? { ...data, ...refreshed.value } : data);
+  $effect(() => {
+    const source = data;
+    if (!backend) return;
+    return untrack(() => startDatasetView({
+      backend,
+      dataset: "map",
+      read: async () => mapView(await backend.map.get(), {
+        namespaceId: source.namespaceId, tag: source.tag, day: source.day, zoomStep: source.zoomStep,
+      }),
+      apply: (value) => { refreshed = { source, value }; },
+      isHidden: () => document.hidden,
+    }));
+  });
 
   /**
    * Read the selected tag from URL-derived state. Clicking toggles its links, while hover
@@ -49,29 +73,29 @@
    * the browser URL.
    */
   const selectedTag = $derived.by(() => {
-    if (data.tag) return data.tag;
+    if (display.tag) return display.tag;
     if (!browser) return null;
     const requested = page.url.searchParams.get("tag");
     return requested ? normalizeTag(requested) : null;
   });
 
   const selectedNamespaceId = $derived(
-    data.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
+    display.namespaceId ?? (browser ? page.url.searchParams.get("namespaceId") : null),
   );
-  const selectedNamespace = $derived(data.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null);
+  const selectedNamespace = $derived(display.namespaces.find(({ id }) => id === selectedNamespaceId) ?? null);
   const selectedDay = $derived(
-    data.day ?? (browser ? page.url.searchParams.get("day") : null),
+    display.day ?? (browser ? page.url.searchParams.get("day") : null),
   );
 
   // Keep day filtering of partition sizes and tag hits aligned. See `partitionsForDay`.
-  const displayedPartitions = $derived(partitionsForDay(data.partitions, data.activity, selectedDay));
-  const displayedTagHits = $derived(tagHitsForDay(data.tagHits, data.tagCards, selectedDay));
+  const displayedPartitions = $derived(partitionsForDay(display.partitions, display.activity, selectedDay));
+  const displayedTagHits = $derived(tagHitsForDay(display.tagHits, display.tagCards, selectedDay));
   const tree = $derived(buildTagTree(displayedTagHits));
-  const mapTags = $derived(tagPartitionIndex(displayedTagHits, data.tagCards));
+  const mapTags = $derived(tagPartitionIndex(displayedTagHits, display.tagCards));
 
   const heatmap = $derived(
     activityCells(
-      data.activity.map(({ day, cards }) => ({ day, cards })),
+      display.activity.map(({ day, cards }) => ({ day, cards })),
     ),
   );
   const activityRange = $derived(activityRangeLabel(heatmap));
@@ -105,9 +129,9 @@
    */
   const layout = $derived(
     buildMapLayout({
-      namespaces: data.drawn,
+      namespaces: display.drawn,
       partitions: displayedPartitions,
-      scopes: data.scopes,
+      scopes: display.scopes,
       area: viewedArea(size, view),
     }),
   );
@@ -176,7 +200,7 @@
       event.preventDefault();
       const box = el!.getBoundingClientRect();
       const at = { x: event.clientX - box.left, y: event.clientY - box.top };
-      const delta = event.deltaY < 0 ? data.zoomStep : -data.zoomStep;
+      const delta = event.deltaY < 0 ? display.zoomStep : -display.zoomStep;
       movedView = zoomedTo(view, size, at, view.zoom + delta);
     }
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -305,7 +329,7 @@
         scrollbarWidth: "none",
       })}
     >
-      {#each data.namespaces as namespace (namespace.id)}
+      {#each display.namespaces as namespace (namespace.id)}
         {@const selected = selectedNamespaceId === namespace.id}
         <a
           href={namespaceHref(selected ? null : namespace.id)}
@@ -323,12 +347,12 @@
     </nav>
   </header>
 
-  {#if data.drawn.length !== 0}
+  {#if display.drawn.length !== 0}
     {#if tree.length !== 0}
       <TagPanel
         {tree}
         {selectedTag}
-        cardsTruncated={data.cardsTruncated}
+        cardsTruncated={display.cardsTruncated}
         {tagHref}
         onScroll={(scrollTop) => (panelScroll = scrollTop)}
       />
@@ -360,7 +384,7 @@
 
         <MapZoomControl
           zoom={view.zoom}
-          zoomStep={data.zoomStep}
+          zoomStep={display.zoomStep}
           {atDefault}
           onZoomBy={(delta) => (movedView = zoomedBy(view, size, delta))}
           onReset={() => (movedView = null)}
