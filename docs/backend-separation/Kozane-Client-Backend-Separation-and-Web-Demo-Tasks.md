@@ -266,6 +266,8 @@ Run every case in the specification's [demo acceptance checks](Kozane-Client-Bac
 
 ## Gate evidence
 
+The subsequent user-reported CI run passes typing, browser boundary checks, contract coverage, lint and formatting. Its test suite has 3,755 passing tests and one failure in HTTP documentation coverage for six workspace endpoints. The HTTP reference now documents all six endpoints and corrects namespace scoping conventions. All 10 targeted spec, namespace, tags/map and change-token checks pass locally. The local Markdown formatter remains blocked by its worker memory-stat permission error. Full CI confirmation remains pending.
+
 The user reports that the CI browser-e2e job passed before the matrix-parser fix. No CI run URL was supplied. The verify job failed because Markdown table alignment padded the first column and the coverage checker expected a single space. The checker now accepts horizontal table padding, with four regression cases for aligned CRLF tables, indentation, duplicate/unknown names and non-table text. Local verification passes all four regression cases, typing, browser boundary checks, contract coverage and lint. The production build passes with limited worker threads. The broad coverage run was interrupted after three CLI subprocess failures while this environment also reported thread exhaustion. Full local verify is interrupted by an environment permission error in the formatter worker (`uv_resident_set_memory`). CI verification of this fix remains pending.
 
 | Gate | Required outcome                                                            | Evidence | Status      |
