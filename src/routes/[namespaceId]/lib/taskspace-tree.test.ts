@@ -610,3 +610,68 @@ describe("TaskspaceTreeState rename and remove while listings are in flight", ()
     expect(tree.creating).toEqual({ taskspaceId: TS, path: "gone-too", kind: "file" });
   });
 });
+
+describe("taskspace backend tree integration", () => {
+  it("uses the backend for listing and mutations and refreshes the parent", async () => {
+    const { HttpBackend } = await import("$lib/backend/http-backend");
+    const fetcher = vi.fn(async (_url: unknown, options?: RequestInit) =>
+      jsonResponse(
+        options?.method && options.method !== "GET"
+          ? { path: "renamed", kind: "directory" }
+          : listing(["renamed"]),
+      ),
+    );
+    const backend = new HttpBackend({
+      base: "/demo",
+      fetcher: fetcher as typeof fetch,
+      capabilities: {
+        writable: true,
+        persistent: true,
+        taskspaces: true,
+        externalWrites: false,
+        auth: false,
+      },
+    });
+    const legacy = vi.fn();
+    const ctx = { namespaceId: "namespace-1", fetcher: legacy as typeof fetch, backend };
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    expect(tree.node(TS, "").entries?.[0].name).toBe("renamed");
+    expect(await tree.rename(ctx, TS, "old", "renamed")).toEqual({ path: "renamed" });
+    expect(await tree.create(ctx, { taskspaceId: TS, path: "", kind: "directory" }, "new")).toEqual(
+      { taskspaceId: TS, path: "new", kind: "directory" },
+    );
+    expect(await tree.remove(ctx, TS, "renamed")).toBeNull();
+    expect(fetcher.mock.calls.map(([, options]) => options?.method ?? "GET")).toEqual([
+      "GET",
+      "PATCH",
+      "GET",
+      "POST",
+      "GET",
+      "DELETE",
+      "GET",
+    ]);
+    expect(
+      fetcher.mock.calls.every(([url]) =>
+        String(url).startsWith("/demo/namespace-1/api/taskspaces/"),
+      ),
+    ).toBe(true);
+    expect(legacy).not.toHaveBeenCalled();
+  });
+
+  it("reports unavailable taskspaces without falling back to HTTP", async () => {
+    const fetcher = vi.fn();
+    const ctx = {
+      namespaceId: "namespace-1",
+      fetcher: fetcher as typeof fetch,
+      backend: { taskspaces: undefined },
+    };
+    const tree = new TaskspaceTreeState();
+    await tree.toggle(ctx, TS, "");
+    expect(tree.node(TS, "").error).toBe("Taskspaces are not available");
+    expect(await tree.remove(ctx, TS, "file.txt")).toEqual({
+      error: "Taskspaces are not available",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

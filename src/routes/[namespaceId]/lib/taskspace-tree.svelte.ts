@@ -1,3 +1,5 @@
+import type { HttpBackend } from "$lib/backend/http-backend.js";
+import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceEntry, TaskspaceFileTree, TaskspaceTruncation } from "$lib/types";
 import { entryNameIssue } from "$lib/entry-name";
 import {
@@ -42,6 +44,7 @@ export type TaskspaceCreated = {
 
 export type TaskspaceTreeContext = {
   fetcher: typeof fetch;
+  backend?: Pick<HttpBackend, "taskspaces">;
   namespaceId: string;
   /**
    * Embedded taskspace trees keyed by taskspace ID. Use them instead of live directory
@@ -49,6 +52,12 @@ export type TaskspaceTreeContext = {
    */
   staticFiles?: Record<string, TaskspaceFileTree>;
 };
+
+function taskspaceApi(ctx: TaskspaceTreeContext) {
+  const api = ctx.backend?.taskspaces;
+  if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+  return api;
+}
 
 /** Why `name` cannot become a new entry, or null when it can. See {@link entryNameIssue}. */
 function invalidName(kind: TaskspaceCreateKind, name: string): string | null {
@@ -237,18 +246,26 @@ export class TaskspaceTreeState {
 
     let next: string;
     try {
-      const res = await renameTaskspaceEntry(
-        ctx.fetcher,
-        ctx.namespaceId,
-        taskspaceId,
-        path,
-        trimmed,
-      );
-      if (!res.ok) return { error: await failureMessage(res, "Failed to rename") };
-      const body = await res.json().catch(() => null);
+      let body;
+      if (ctx.backend) {
+        body = await taskspaceApi(ctx).renameEntry(ctx.namespaceId, taskspaceId, {
+          path,
+          name: trimmed,
+        });
+      } else {
+        const res = await renameTaskspaceEntry(
+          ctx.fetcher,
+          ctx.namespaceId,
+          taskspaceId,
+          path,
+          trimmed,
+        );
+        if (!res.ok) return { error: await failureMessage(res, "Failed to rename") };
+        body = await res.json().catch(() => null);
+      }
       next = typeof body?.path === "string" ? body.path : siblingPath(path, trimmed);
-    } catch {
-      return { error: "Failed to rename" };
+    } catch (error) {
+      return { error: error instanceof BackendError ? error.message : "Failed to rename" };
     }
 
     const to = nodeKey(taskspaceId, next);
@@ -317,10 +334,13 @@ export class TaskspaceTreeState {
     path: string,
   ): Promise<{ error: string } | null> {
     try {
-      const res = await deleteTaskspaceEntry(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
-      if (!res.ok) return { error: await failureMessage(res, "Failed to delete") };
-    } catch {
-      return { error: "Failed to delete" };
+      if (ctx.backend) await taskspaceApi(ctx).removeEntry(ctx.namespaceId, taskspaceId, path);
+      else {
+        const res = await deleteTaskspaceEntry(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
+        if (!res.ok) return { error: await failureMessage(res, "Failed to delete") };
+      }
+    } catch (error) {
+      return { error: error instanceof BackendError ? error.message : "Failed to delete" };
     }
 
     this.rekeySubtree(taskspaceId, path, () => null);
@@ -341,11 +361,20 @@ export class TaskspaceTreeState {
     const what = target.kind === "file" ? "file" : "folder";
     const path = target.path ? `${target.path}/${trimmed}` : trimmed;
     try {
-      const create = target.kind === "file" ? createTaskspaceFile : createTaskspaceFolder;
-      const res = await create(ctx.fetcher, ctx.namespaceId, target.taskspaceId, path);
-      if (!res.ok) return { error: await failureMessage(res, `Failed to create ${what}`) };
-    } catch {
-      return { error: `Failed to create ${what}` };
+      if (ctx.backend) {
+        const api = taskspaceApi(ctx);
+        await (target.kind === "file" ? api.createFile : api.createDirectory)(
+          ctx.namespaceId,
+          target.taskspaceId,
+          { path },
+        );
+      } else {
+        const create = target.kind === "file" ? createTaskspaceFile : createTaskspaceFolder;
+        const res = await create(ctx.fetcher, ctx.namespaceId, target.taskspaceId, path);
+        if (!res.ok) return { error: await failureMessage(res, `Failed to create ${what}`) };
+      }
+    } catch (error) {
+      return { error: error instanceof BackendError ? error.message : `Failed to create ${what}` };
     }
     return { taskspaceId: target.taskspaceId, kind: target.kind, path };
   }
@@ -381,15 +410,20 @@ export class TaskspaceTreeState {
     const superseded = () => this.#pending.get(key) !== request;
 
     try {
-      const res = await fetchTaskspaceFiles(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
-      if (!res.ok) {
-        const message = await failureMessage(res, "Failed to list files");
-        if (superseded()) return;
-        this.#pending.delete(key);
-        this.nodes[key] = { ...(this.nodes[key] ?? EMPTY_NODE), loading: false, error: message };
-        return;
+      let body;
+      if (ctx.backend) {
+        body = await taskspaceApi(ctx).list(ctx.namespaceId, taskspaceId, path);
+      } else {
+        const res = await fetchTaskspaceFiles(ctx.fetcher, ctx.namespaceId, taskspaceId, path);
+        if (!res.ok) {
+          const message = await failureMessage(res, "Failed to list files");
+          if (superseded()) return;
+          this.#pending.delete(key);
+          this.nodes[key] = { ...(this.nodes[key] ?? EMPTY_NODE), loading: false, error: message };
+          return;
+        }
+        body = await res.json();
       }
-      const body = await res.json();
       if (superseded()) return;
       this.#pending.delete(key);
       this.nodes[key] = {
@@ -399,13 +433,13 @@ export class TaskspaceTreeState {
         loading: false,
         error: null,
       };
-    } catch {
+    } catch (error) {
       if (superseded()) return;
       this.#pending.delete(key);
       this.nodes[key] = {
         ...(this.nodes[key] ?? EMPTY_NODE),
         loading: false,
-        error: "Failed to list files",
+        error: error instanceof BackendError ? error.message : "Failed to list files",
       };
     }
   }
