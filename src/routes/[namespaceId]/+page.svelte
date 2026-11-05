@@ -32,7 +32,8 @@
   import type { FileManagementActions } from "./lib/file-management.js";
   import { EditorSession } from "./lib/editor/editor-session.svelte.js";
   import { InFlight } from "./lib/in-flight.js";
-  import { startSnapshotPoll } from "./lib/snapshot-poll.js";
+  import { startSnapshotView } from "$lib/backend/snapshot-view.js";
+  import { HttpBackend } from "$lib/backend/http-backend.js";
 
   let { data }: PageProps = $props();
 
@@ -204,8 +205,15 @@
   onMount(() => {
     // A static export has no /api/snapshot endpoint and no writers to sync with.
     if (readonly) return;
-    return startSnapshotPoll({
+    const backend = new HttpBackend({
+      base,
       fetcher: s.fetcher,
+      pollingInitialDelayMs: 1000,
+      capabilities: data.backendCapabilities ?? { writable: !readonly, persistent: true, taskspaces: true, externalWrites: true, auth: false },
+    });
+    return startSnapshotView({
+      backend,
+      initialDataApplied: true,
       namespaceId: () => s.namespaceId,
       activities: [positionActivity, s.mutations],
       apply: (snapshot) => s.refreshFromData(snapshot),

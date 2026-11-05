@@ -78,6 +78,7 @@ export class HttpTransport {
       keepalive?: boolean;
       headers?: RequestInit["headers"];
       allowNotModified?: boolean;
+      cache?: RequestInit["cache"];
     } = {},
   ): Promise<Response> {
     let body: string | undefined;
@@ -98,6 +99,7 @@ export class HttpTransport {
     try {
       response = await this.fetcher(this.url(path), {
         method,
+        ...(options.cache ? { cache: options.cache } : {}),
         headers,
         body,
         keepalive:

@@ -197,7 +197,11 @@ describe("Namespace page", () => {
         json: snapshotJson,
       })
       .mockResolvedValue({ ok: false, status: 304, headers: new Headers({ etag: '"board-1"' }) });
-    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("fetch", (input: unknown, init?: RequestInit) =>
+      String(input) === "/api/changes"
+        ? Promise.resolve(new Response('{"token":"baseline"}'))
+        : fetch(input, init),
+    );
 
     render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
@@ -205,7 +209,7 @@ describe("Namespace page", () => {
 
     await poll(fetch);
     // Nothing to revalidate against yet, so the first poll asks for the whole board.
-    expect(fetch.mock.calls[0][1]).not.toHaveProperty("headers");
+    expect(new Headers(fetch.mock.calls[0][1].headers).has("if-none-match")).toBe(false);
     expect(snapshotJson).toHaveBeenCalledOnce();
 
     await poll(fetch);
@@ -213,8 +217,8 @@ describe("Namespace page", () => {
     expect(fetch.mock.calls[1][0]).toBe("/namespace-1/api/snapshot");
     expect(fetch.mock.calls[1][1]).toMatchObject({
       cache: "no-store",
-      headers: { "if-none-match": '"board-1"' },
     });
+    expect(new Headers(fetch.mock.calls[1][1].headers).get("if-none-match")).toBe('"board-1"');
     // A 304 carries no body at all, so nothing is parsed and nothing is re-applied.
     expect(snapshotJson).toHaveBeenCalledOnce();
   });
@@ -238,7 +242,11 @@ describe("Namespace page", () => {
       firstPoll = false;
       return inFlight;
     });
-    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("fetch", (input: unknown, init?: RequestInit) =>
+      String(input) === "/api/changes"
+        ? Promise.resolve(new Response('{"token":"baseline"}'))
+        : fetch(input, init),
+    );
 
     render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },
@@ -270,7 +278,7 @@ describe("Namespace page", () => {
     // the page waiting forever on a change the server had already sent.
     const pollCall = fetch.mock.calls.find(([url]) => String(url).endsWith("/api/snapshot"))!;
     expect(pollCall).toBeDefined();
-    expect(pollCall[1]).not.toHaveProperty("headers");
+    expect(new Headers(pollCall![1]?.headers).has("if-none-match")).toBe(false);
   });
 
   it("carries a glued partner along with the card under the pointer", async () => {

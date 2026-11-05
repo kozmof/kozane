@@ -35,6 +35,7 @@ export class HttpBackend {
       base?: string;
       capabilities: BackendCapabilities;
       lifecycle?: PollLifecycle;
+      pollingInitialDelayMs?: number;
     },
   ) {
     this.capabilities = Object.freeze({ ...options.capabilities });
@@ -42,6 +43,7 @@ export class HttpBackend {
     if (this.capabilities.externalWrites)
       this.poller = new WorkspacePoller({
         lifecycle: options.lifecycle ?? browserPollLifecycle(),
+        initialDelayMs: options.pollingInitialDelayMs,
         throttleMs: () => this.transport.retryAfterMs,
         token: async () => {
           const value = await this.read<{ token?: unknown }>("/api/changes");
@@ -381,6 +383,7 @@ export class HttpBackend {
       {
         headers: etag ? { "if-none-match": etag } : undefined,
         allowNotModified: etag !== undefined,
+        cache: "no-store",
       },
     );
     if (response.status === 304) {

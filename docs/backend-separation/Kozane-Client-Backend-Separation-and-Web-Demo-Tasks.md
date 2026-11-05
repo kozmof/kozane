@@ -139,7 +139,9 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 - [ ] P2-15 Replace `s.fetcher`, direct fetches, API URL construction and deployment-mode branches in components/actions with backend methods and capability checks.
 - [ ] P2-16 Move board, namespace discovery/creation, tags, map and warp navigation onto shared backend data and navigation adapters.
 - [ ] P2-17 Subscribe before initial reads. Reject superseded or inactive-generation results and disable editing until current data and backend readiness agree.
+  - Board snapshot refresh now uses backend subscriptions and `startSnapshotView` instead of direct snapshot HTTP polling. Shared refresh guards reject invalidation/activity/navigation/lifecycle-superseded reads and retain applied validators only with their view. SSR-applied data preserves the existing one-second polling start; first successful workspace baseline still forces a fresh read. All 137 backend/board tests pass, with CLI compilation, lint and application typing. Remaining action modules, capability-based editing readiness and shared view extraction are pending.
 - [ ] P2-18 Derive HTTP capabilities from resolved Node configuration before SSR. Verify read-only and server-memory lifetime behavior during hydration.
+  - Board loader now resolves writable/persistent/taskspace/external-write/auth capabilities in Node before SSR and supplies them to the HTTP snapshot backend. Hydration/lifetime UI and explicit mode tests remain pending.
 - [ ] P2-19 Verify snapshot validators, cross-namespace invalidations, first-poll races, external CLI writes, taskspace refresh, throttle behavior and unsubscribe cleanup.
 - [ ] P2-20 Verify the existing app and SSG retain their URLs, behavior and read-only guarantees.
 - [ ] G3 Record complete public declarations/matrix coverage and passing checks that UI modules neither fetch nor construct API URLs.

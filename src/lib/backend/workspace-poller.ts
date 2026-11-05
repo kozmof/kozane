@@ -33,6 +33,7 @@ export class WorkspacePoller {
   constructor(
     private readonly options: {
       lifecycle: PollLifecycle;
+      initialDelayMs?: number;
       token: () => Promise<string>;
       throttleMs: () => number;
       changed: () => void;
@@ -45,7 +46,9 @@ export class WorkspacePoller {
       const session: Session = { running: false, stop: () => {} };
       this.session = session;
       session.stop = this.options.lifecycle.listen(() => this.refresh(session));
-      this.refresh(session);
+      if ((this.options.initialDelayMs ?? 0) > 0)
+        session.timer = setTimeout(() => this.refresh(session), this.options.initialDelayMs);
+      else this.refresh(session);
     }
     let released = false;
     return () => {
