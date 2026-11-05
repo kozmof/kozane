@@ -362,7 +362,10 @@ describe("Layers", () => {
   });
 
   it("moves the selected cards to another layer and follows them there", async () => {
-    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    const fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, stacking: [{ cardId: "card-1", zIndex: 1 }] }),
+    });
     vi.stubGlobal("fetch", fetch);
     const { container } = render(NamespacePage, {
       props: { data, params: { namespaceId: "namespace-1" }, form: null },

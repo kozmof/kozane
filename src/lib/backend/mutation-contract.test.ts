@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { cardResults } from "../../test-utils/card-results.js";
 import { inventoryResults } from "../../test-utils/inventory-results.js";
 import { geometryResults } from "../../test-utils/geometry-results.js";
 import { structureResults } from "../../test-utils/structure-results.js";
@@ -299,10 +300,11 @@ const capabilities = {
   externalWrites: false,
   auth: false,
 };
-const responses: Partial<Record<MutationName, unknown>> = {
+const responses: Record<MutationName, unknown> = {
   ...structureResults,
   ...geometryResults,
   ...inventoryResults,
+  ...cardResults,
 };
 const datasets = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
@@ -333,7 +335,7 @@ describe.each(entries)("%s mutation contract", (_name, operation) => {
     expect(request.keepalive).toBe(operation.keepalive);
     expect(events).toEqual([]);
     expect(backend.version).toBe(prior);
-    respond(Response.json(responses[_name] ?? { ok: true }));
+    respond(Response.json(responses[_name]));
     await pending;
     expect(events).toEqual([{ generation: 0, revision: 1, datasets }]);
     expect(prior).toEqual({ generation: 0, revision: 0 });

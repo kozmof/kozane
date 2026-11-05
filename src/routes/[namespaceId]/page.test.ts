@@ -358,7 +358,7 @@ describe("Namespace page", () => {
   it("glues selected cards through the composed board UI", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ glueId: "glue-1" }),
+      json: async () => ({ glueId: "glue-1", clearedCardIds: [] }),
     });
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {

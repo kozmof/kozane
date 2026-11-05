@@ -23,6 +23,8 @@ describe("Squash", () => {
   const pieces = [
     {
       id: "card-3",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
       partitionId: "b1",
       layerId: "l1",
       content: "First thought",
@@ -36,6 +38,8 @@ describe("Squash", () => {
     },
     {
       id: "card-4",
+      createdAt: "2026-11-05T00:00:00.000Z",
+      updatedAt: "2026-11-05T00:00:00.000Z",
       partitionId: "b1",
       layerId: "l1",
       content: "Second thought",
@@ -60,7 +64,7 @@ describe("Squash", () => {
   it("replaces the selected card with an open inventory holding the pieces", async () => {
     const fetch = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ inventory: squashInventory, cards: pieces }),
+      json: async () => ({ inventory: squashInventory, cards: pieces, stacking: [] }),
     });
     vi.stubGlobal("fetch", fetch);
     render(NamespacePage, {
@@ -102,7 +106,7 @@ describe("Squash", () => {
     );
     await fireEvent.keyDown(window, { key: "s" });
 
-    expect(await screen.findByText("Failed to squash card")).toBeInTheDocument();
+    expect(await screen.findByText("Invalid mutation response")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Card: First thought. Second thought" }),
     ).toBeInTheDocument();
@@ -317,6 +321,7 @@ describe("Namespace page inventories", () => {
         glueId: null,
         width: null,
         inventory: { id: "inv-1", slot: 0 },
+        placements: [{ cardId: "card-new", inventoryId: "inv-1", slot: 0 }],
       }),
     });
     vi.stubGlobal("fetch", fetch);

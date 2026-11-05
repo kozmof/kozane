@@ -29,18 +29,23 @@ import {
 } from "./decoders/inventories.js";
 import { prepareInput } from "../../services/prepare-input.js";
 import { ValidationError } from "../../services/errors.js";
+import {
+  readCardCreated,
+  readCardUpdated,
+  readCardStacked,
+  readCardSquashed,
+  readGlueCreated,
+  readGlueRemoved,
+} from "./decoders/cards.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
-import type * as gluesServices from "../../services/glues.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
 import type { SnapshotResult } from "./contract.js";
-import type * as CardServices from "../../services/cards.js";
 import { BackendError, type BackendCapabilities, type BackendDataset } from "./contract.js";
 import { BackendSignals } from "./signals.js";
 import { HttpTransport, type HttpTransportOptions } from "./http-transport.js";
 
-type Result<F extends (...args: never[]) => unknown> = Awaited<ReturnType<F>>;
 const ALL: readonly BackendDataset[] = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 
 /** HTTP implementation of the shared backend data and lifecycle contract. */
@@ -192,64 +197,44 @@ export class HttpBackend implements KozaneBackend {
       this.writeDomain("/api/namespaces", "POST", input, readNamespaceCreated),
   };
   readonly cards: KozaneBackend["cards"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof CardServices.create>>(this.ns(ns, "/cards"), "POST", input, options),
-    update: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof CardServices.update>>(
+    create: (ns, input, options) =>
+      this.writeDomain(this.ns(ns, "/cards"), "POST", input, readCardCreated, options),
+    update: (ns, id, input, options) =>
+      this.writeDomain(
         this.ns(ns, `/cards/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        (value, prepared) => readCardUpdated(value, id, prepared),
         options,
       ),
-    updatePositions: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof CardServices.updatePositions>>(
-        this.ns(ns, "/cards"),
-        "PATCH",
-        input,
-        options,
-      ),
-    remove: (ns: string, input) =>
-      this.write<Result<typeof CardServices.remove>>(this.ns(ns, "/cards"), "DELETE", input),
-    removeOne: (ns: string, id: string) =>
-      this.write<Result<typeof CardServices.removeOne>>(
+    updatePositions: (ns, input, options) =>
+      this.writeDomain(this.ns(ns, "/cards"), "PATCH", input, readMutationOk, options),
+    remove: (ns, input) => this.writeDomain(this.ns(ns, "/cards"), "DELETE", input, readMutationOk),
+    removeOne: (ns, id) =>
+      this.writeDomain(
         this.ns(ns, `/cards/${encodeURIComponent(id)}`),
         "DELETE",
+        undefined,
+        readMutationOk,
       ),
-    move: (ns: string, input) =>
-      this.write<Result<typeof CardServices.move>>(this.ns(ns, "/cards/move"), "POST", input),
-    setLayer: (ns: string, input) =>
-      this.write<Result<typeof CardServices.setLayer>>(this.ns(ns, "/cards/layer"), "PATCH", input),
-    setPartition: (ns: string, input) =>
-      this.write<Result<typeof CardServices.setPartition>>(
-        this.ns(ns, "/cards/partition"),
-        "PATCH",
-        input,
+    move: (ns, input) =>
+      this.writeDomain(this.ns(ns, "/cards/move"), "POST", input, readMutationOk),
+    setLayer: (ns, input) =>
+      this.writeDomain(this.ns(ns, "/cards/layer"), "PATCH", input, readCardStacked),
+    setPartition: (ns, input) =>
+      this.writeDomain(this.ns(ns, "/cards/partition"), "PATCH", input, readMutationOk),
+    setStacking: (ns, input) =>
+      this.writeDomain(this.ns(ns, "/cards/stacking"), "PATCH", input, readCardStacked),
+    squash: (ns, input) =>
+      this.writeDomain(this.ns(ns, "/cards/squash"), "POST", input, (value) =>
+        readCardSquashed(value, ns),
       ),
-    setStacking: (ns: string, input) =>
-      this.write<Result<typeof CardServices.setStacking>>(
-        this.ns(ns, "/cards/stacking"),
-        "PATCH",
-        input,
-      ),
-    squash: (ns: string, input) =>
-      this.write<Result<typeof CardServices.squash>>(this.ns(ns, "/cards/squash"), "POST", input),
   };
-
   readonly glues: KozaneBackend["glues"] = {
-    create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof gluesServices.create>>(
-        this.ns(ns, "/glues"),
-        "POST",
-        input,
-        options,
-      ),
-    remove: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof gluesServices.remove>>(
-        this.ns(ns, "/glues"),
-        "DELETE",
-        input,
-        options,
-      ),
+    create: (ns, input, options) =>
+      this.writeDomain(this.ns(ns, "/glues"), "POST", input, readGlueCreated, options),
+    remove: (ns, input, options) =>
+      this.writeDomain(this.ns(ns, "/glues"), "DELETE", input, readGlueRemoved, options),
   };
 
   readonly layers: KozaneBackend["layers"] = {

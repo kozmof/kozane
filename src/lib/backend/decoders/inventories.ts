@@ -1,4 +1,3 @@
-import { INVENTORY_SLOT_MAX } from "../../constants.js";
 import type {
   InventoryCreateResult,
   InventoryRemoveResult,
@@ -6,8 +5,8 @@ import type {
   InventoryTakeResult,
 } from "../resources.js";
 import { readInventory } from "./snapshot-reader.js";
-import { readPlacements } from "./placements.js";
-import { readArray, readFiniteNumber, readString, readStringArray } from "./response.js";
+import { readUniqueIds, readValidPlacements } from "./collections.js";
+import { readArray, readFiniteNumber, readString } from "./response.js";
 
 export function readInventoryResult(
   value: unknown,
@@ -21,36 +20,18 @@ export function readInventoryResult(
     ? inventory
     : null;
 }
-function uniqueIds(value: unknown, key: string): string[] | null {
-  const ids = readStringArray(value, key);
-  return ids && new Set(ids).size === ids.length ? [...ids] : null;
-}
 export function readInventoryRemoved(value: unknown): InventoryRemoveResult | null {
-  const releasedCardIds = uniqueIds(value, "releasedCardIds");
+  const releasedCardIds = readUniqueIds(value, "releasedCardIds");
   return releasedCardIds ? { releasedCardIds } : null;
 }
 export function readInventoryStowed(
   value: unknown,
   inventoryId: string,
 ): InventoryStowResult | null {
-  const placements = readPlacements(value);
-  const clearedCardIds = uniqueIds(value, "clearedCardIds");
+  const placements = readValidPlacements(value);
+  const clearedCardIds = readUniqueIds(value, "clearedCardIds");
   if (!placements || !clearedCardIds) return null;
-  const ids = new Set<string>();
-  const slots = new Set<number>();
-  for (const row of placements) {
-    if (
-      row.inventoryId !== inventoryId ||
-      !Number.isInteger(row.slot) ||
-      row.slot < 0 ||
-      row.slot > INVENTORY_SLOT_MAX ||
-      ids.has(row.cardId) ||
-      slots.has(row.slot)
-    )
-      return null;
-    ids.add(row.cardId);
-    slots.add(row.slot);
-  }
+  if (placements.some((row) => row.inventoryId !== inventoryId)) return null;
   return { placements, clearedCardIds };
 }
 export function readInventoryTaken(value: unknown, input: unknown): InventoryTakeResult | null {

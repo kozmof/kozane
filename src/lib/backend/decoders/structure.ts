@@ -6,7 +6,8 @@ import type {
   PartitionRemoveResult,
 } from "../resources.js";
 import { readNamespaceMetadata } from "./namespaces.js";
-import { readArray, readBoolean, readFiniteNumber, readString } from "./response.js";
+import { readStackingRows } from "./collections.js";
+import { readBoolean, readFiniteNumber, readString } from "./response.js";
 
 export function readMutationOk(value: unknown): { ok: true } | null {
   return readBoolean(value, "ok") === true ? { ok: true } : null;
@@ -29,17 +30,8 @@ export function readLayerCreated(value: unknown): LayerCreateResult | null {
 }
 export function readLayerRemoved(value: unknown): LayerRemoveResult | null {
   const defaultLayerId = readString(value, "defaultLayerId");
-  const rows = readArray(value, "stacking");
-  if (!readMutationOk(value) || !defaultLayerId || !rows) return null;
-  const stacking: LayerRemoveResult["stacking"] = [];
-  const ids = new Set<string>();
-  for (const row of rows) {
-    const cardId = readString(row, "cardId");
-    const zIndex = readFiniteNumber(row, "zIndex");
-    if (!cardId || zIndex === undefined || ids.has(cardId)) return null;
-    ids.add(cardId);
-    stacking.push({ cardId, zIndex });
-  }
+  const stacking = readStackingRows(value);
+  if (!readMutationOk(value) || !defaultLayerId || !stacking) return null;
   return { ok: true, defaultLayerId, stacking };
 }
 export function readPartitionRemoved(value: unknown): PartitionRemoveResult | null {

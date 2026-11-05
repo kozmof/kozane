@@ -9,11 +9,12 @@ const capabilities = {
   auth: false,
 };
 it("routes opaque card IDs and publishes current stamps after successful mutation", async () => {
-  const fetcher = vi
-    .fn()
-    .mockImplementation(
-      async () => new Response('{"ok":true}', { headers: { "content-type": "application/json" } }),
-    );
+  const fetcher = vi.fn().mockImplementation(
+    async () =>
+      new Response('{"ok":true,"content":"edited","stacking":[]}', {
+        headers: { "content-type": "application/json" },
+      }),
+  );
   const backend = new HttpBackend({ fetcher, base: "/base", capabilities });
   const observed = vi.fn();
   backend.subscribe((event) => {
@@ -135,7 +136,9 @@ it("routes structure membership area and inventory operations to retained endpoi
           ? { placements: [{ cardId: "a", inventoryId: "tray", slot: 0 }], clearedCardIds: [] }
           : path.endsWith("/inventories/take")
             ? { cards: [{ cardId: "a" }] }
-            : { ok: true },
+            : path.endsWith("/glues")
+              ? { glueId: "g", clearedCardIds: [] }
+              : { ok: true },
     ),
   );
   const backend = new HttpBackend({ fetcher, capabilities });

@@ -245,6 +245,7 @@ Return `{ inventory, cards: [...], stacking: [{ cardId, zIndex }] }`.
 order, with null `glueId`. Their `posX` and `posY` are where a take without a position
 returns them, laid out from the original and clamped to the board. They take consecutive
 stacking values from the original. Cards above them are raised and included in `stacking`.
+Each piece includes `createdAt` and `updatedAt` timestamps as ISO 8601 strings.
 
 Return 400 for a card outside this namespace, a card stored in an inventory,
 fewer than two pieces, more than 2,000 pieces, or pieces that do not fit in one
