@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { inventoryResults } from "../../test-utils/inventory-results.js";
 import { geometryResults } from "../../test-utils/geometry-results.js";
 import { structureResults } from "../../test-utils/structure-results.js";
 import {
@@ -301,6 +302,7 @@ const capabilities = {
 const responses: Partial<Record<MutationName, unknown>> = {
   ...structureResults,
   ...geometryResults,
+  ...inventoryResults,
 };
 const datasets = ["snapshot", "tags", "map", "namespaces", "warpDirectory"];
 

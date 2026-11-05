@@ -21,9 +21,16 @@ import {
   readPartitionRemoved,
 } from "./decoders/structure.js";
 import { readScopeRenamed, readScopeAreaResult, readWarpResult } from "./decoders/geometry.js";
+import {
+  readInventoryResult,
+  readInventoryRemoved,
+  readInventoryStowed,
+  readInventoryTaken,
+} from "./decoders/inventories.js";
+import { prepareInput } from "../../services/prepare-input.js";
+import { ValidationError } from "../../services/errors.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
-import type * as inventoriesServices from "../../services/inventories.js";
 import type * as gluesServices from "../../services/glues.js";
 import { SnapshotValidators } from "./snapshot-validators.js";
 import { readNamespaceSnapshot } from "./decoders/snapshot-reader.js";
@@ -143,16 +150,27 @@ export class HttpBackend implements KozaneBackend {
     // Preserve committed invalidation even when a successful response has malformed fields.
     return this.checked(await this.write<unknown>(path, method, input, options), decode);
   }
-  private async writeDomain<T>(
+  private async writeDomain<T, Input>(
     path: string,
     method: string,
-    input: unknown,
-    decode: (value: unknown) => T | null,
+    input: Input,
+    decode: (value: unknown, input: Input) => T | null,
     options?: MutationOptions,
   ): Promise<T> {
+    if (!this.capabilities.writable)
+      throw new BackendError("read_only", "This backend is read-only");
+    let prepared = input;
+    if (input !== undefined) {
+      try {
+        prepared = prepareInput(input);
+      } catch (error) {
+        if (error instanceof ValidationError) throw new BackendError("validation", error.message);
+        throw error;
+      }
+    }
     return this.checked(
-      await this.write<unknown>(path, method, input, options),
-      decode,
+      await this.write<unknown>(path, method, prepared, options),
+      (value) => decode(value, prepared),
       "Invalid mutation response",
     );
   }
@@ -368,38 +386,43 @@ export class HttpBackend implements KozaneBackend {
 
   readonly inventories: KozaneBackend["inventories"] = {
     create: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof inventoriesServices.create>>(
+      this.writeDomain(
         this.ns(ns, "/inventories"),
         "POST",
         input,
+        (value) => readInventoryResult(value, ns),
         options,
       ),
     update: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof inventoriesServices.update>>(
+      this.writeDomain(
         this.ns(ns, `/inventories/${encodeURIComponent(id)}`),
         "PATCH",
         input,
+        (value) => readInventoryResult(value, ns, id),
         options,
       ),
     remove: (ns: string, id: string, options?: MutationOptions) =>
-      this.write<Result<typeof inventoriesServices.remove>>(
+      this.writeDomain(
         this.ns(ns, `/inventories/${encodeURIComponent(id)}`),
         "DELETE",
         undefined,
+        readInventoryRemoved,
         options,
       ),
     stow: (ns: string, id: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof inventoriesServices.stow>>(
+      this.writeDomain(
         this.ns(ns, `/inventories/${encodeURIComponent(id)}/cards`),
         "POST",
         input,
+        (value) => readInventoryStowed(value, id),
         options,
       ),
     take: (ns: string, input, options?: MutationOptions) =>
-      this.write<Result<typeof inventoriesServices.take>>(
+      this.writeDomain(
         this.ns(ns, "/inventories/take"),
         "POST",
         input,
+        readInventoryTaken,
         options,
       ),
   };

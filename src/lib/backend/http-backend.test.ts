@@ -131,7 +131,11 @@ it("routes structure membership area and inventory operations to retained endpoi
             width: 100,
             height: 100,
           }
-        : { ok: true },
+        : path.endsWith("/inventories/tray/cards")
+          ? { placements: [{ cardId: "a", inventoryId: "tray", slot: 0 }], clearedCardIds: [] }
+          : path.endsWith("/inventories/take")
+            ? { cards: [{ cardId: "a" }] }
+            : { ok: true },
     ),
   );
   const backend = new HttpBackend({ fetcher, capabilities });
