@@ -1,15 +1,13 @@
+import type { HttpBackend, MutationOptions as SaveOptions } from "$lib/backend/http-backend.js";
+import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceFileTree } from "$lib/types";
-import {
-  failureMessage,
-  fetchTaskspaceFile,
-  type SaveOptions,
-  saveTaskspaceFile,
-} from "../namespace-api.js";
+import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../namespace-api.js";
 import { findStaticNode } from "../taskspace-static.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
   fetcher: typeof fetch;
+  backend?: Pick<HttpBackend, "taskspaces">;
   namespaceId: string;
   /** Embedded taskspace trees for reading files in a static export. */
   staticFiles?: Record<string, TaskspaceFileTree>;
@@ -154,23 +152,31 @@ export class EditorSession {
     // session's document, error, or loading state.
     const current = () => !opening.aborted;
     try {
-      const res = await fetchTaskspaceFile(
-        ctx.fetcher,
-        ctx.namespaceId,
-        ref.taskspaceId,
-        ref.path,
-        opening,
-      );
-      if (!res.ok) {
-        const message = await failureMessage(res, "Failed to open file");
-        if (current()) this.error = message;
-        return;
+      let body;
+      if (ctx.backend) {
+        const api = ctx.backend.taskspaces;
+        if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+        body = await api.readFile(ctx.namespaceId, ref.taskspaceId, ref.path, { signal: opening });
+      } else {
+        const res = await fetchTaskspaceFile(
+          ctx.fetcher,
+          ctx.namespaceId,
+          ref.taskspaceId,
+          ref.path,
+          opening,
+        );
+        if (!res.ok) {
+          const message = await failureMessage(res, "Failed to open file");
+          if (current()) this.error = message;
+          return;
+        }
+        body = await res.json();
       }
-      const body = await res.json();
       if (!current()) return;
       this.#adopt(typeof body?.content === "string" ? body.content : "", body?.signature ?? null);
-    } catch {
-      if (current()) this.error = "Failed to open file";
+    } catch (error) {
+      if (current())
+        this.error = error instanceof BackendError ? error.message : "Failed to open file";
     } finally {
       if (current()) this.loading = false;
     }
@@ -261,29 +267,44 @@ export class EditorSession {
     const content = doc.text();
 
     try {
-      const res = await saveTaskspaceFile(
-        ctx.fetcher,
-        ctx.namespaceId,
-        ref.taskspaceId,
-        { path: ref.path, content, signature: this.#signature },
-        options,
-      );
-      if (!res.ok) {
-        const message = await failureMessage(res, "Failed to save file");
-        if (this.doc !== doc) return false;
-        this.conflict = res.status === 409;
-        this.error = message;
-        return false;
+      let body;
+      if (ctx.backend) {
+        const api = ctx.backend.taskspaces;
+        if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
+        body = await api.saveFile(
+          ctx.namespaceId,
+          ref.taskspaceId,
+          { path: ref.path, content, signature: this.#signature },
+          options,
+        );
+      } else {
+        const res = await saveTaskspaceFile(
+          ctx.fetcher,
+          ctx.namespaceId,
+          ref.taskspaceId,
+          { path: ref.path, content, signature: this.#signature },
+          options,
+        );
+        if (!res.ok) {
+          const message = await failureMessage(res, "Failed to save file");
+          if (this.doc !== doc) return false;
+          this.conflict = res.status === 409;
+          this.error = message;
+          return false;
+        }
+        body = await res.json();
       }
-      const body = await res.json();
       // The file was closed or another opened while this save ran. Its state is no longer
       // the session's, so leave the new file's signature, errors, and saving flag alone.
       if (this.doc !== doc) return true;
       this.#signature = body?.signature ?? null;
       doc.markSaved(content);
       return true;
-    } catch {
-      if (this.doc === doc) this.error = "Failed to save file";
+    } catch (error) {
+      if (this.doc === doc) {
+        this.conflict = error instanceof BackendError && error.code === "conflict";
+        this.error = error instanceof BackendError ? error.message : "Failed to save file";
+      }
       return false;
     } finally {
       if (this.doc === doc) this.saving = false;

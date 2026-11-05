@@ -84,3 +84,37 @@ export interface TaskspaceLifecycleApi {
     input: { path: string },
   ): Promise<TaskspaceFileData>;
 }
+export interface TaskspaceLifecycleApi {
+  readFile(
+    namespaceId: string,
+    taskspaceId: string,
+    path: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<TaskspaceFileData>;
+  saveFile(
+    namespaceId: string,
+    taskspaceId: string,
+    input: TaskspaceFileData,
+    options?: { keepalive?: boolean },
+  ): Promise<TaskspaceFileData>;
+  list(
+    namespaceId: string,
+    taskspaceId: string,
+    path: string,
+  ): Promise<import("../types.js").TaskspaceListing>;
+  createDirectory(
+    namespaceId: string,
+    taskspaceId: string,
+    input: { path: string },
+  ): Promise<import("../types.js").TaskspaceListing>;
+  renameEntry(
+    namespaceId: string,
+    taskspaceId: string,
+    input: { path: string; name: string },
+  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
+  removeEntry(
+    namespaceId: string,
+    taskspaceId: string,
+    path: string,
+  ): Promise<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>;
+}

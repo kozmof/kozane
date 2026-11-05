@@ -79,6 +79,7 @@ export class HttpTransport {
       headers?: RequestInit["headers"];
       allowNotModified?: boolean;
       cache?: RequestInit["cache"];
+      signal?: AbortSignal;
     } = {},
   ): Promise<Response> {
     let body: string | undefined;
@@ -99,6 +100,7 @@ export class HttpTransport {
     try {
       response = await this.fetcher(this.url(path), {
         method,
+        ...(options.signal ? { signal: options.signal } : {}),
         ...(options.cache ? { cache: options.cache } : {}),
         headers,
         body,

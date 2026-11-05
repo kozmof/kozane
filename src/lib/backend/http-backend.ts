@@ -82,8 +82,8 @@ export class HttpBackend {
   private ns(namespaceId: string, path: string) {
     return `/${encodeURIComponent(namespaceId)}/api${path}`;
   }
-  private async read<T>(path: string): Promise<T> {
-    const response = await this.transport.request(path);
+  private async read<T>(path: string, options?: { signal?: AbortSignal }): Promise<T> {
+    const response = await this.transport.request(path, "GET", undefined, options);
     try {
       return (await response.json()) as T;
     } catch (cause) {
@@ -434,6 +434,39 @@ export class HttpBackend {
   };
 
   private readonly taskspaceApi: TaskspaceLifecycleApi = {
+    readFile: (ns, id, path, options) =>
+      this.read<TaskspaceFileData>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`),
+        options,
+      ),
+    saveFile: (ns, id, input, options) =>
+      this.write<TaskspaceFileData>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
+        "PUT",
+        input,
+        options,
+      ),
+    list: (ns, id, path) =>
+      this.read<import("../types.js").TaskspaceListing>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
+      ),
+    createDirectory: (ns, id, input) =>
+      this.write<import("../types.js").TaskspaceListing>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
+        "POST",
+        input,
+      ),
+    renameEntry: (ns, id, input) =>
+      this.write<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
+        "PATCH",
+        input,
+      ),
+    removeEntry: (ns, id, path) =>
+      this.write<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>(
+        this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
+        "DELETE",
+      ),
     create: (ns, input) => this.write<TaskspaceCreated>(this.ns(ns, "/taskspaces"), "POST", input),
     rename: (ns, id, input) =>
       this.write<TaskspaceRenamed>(
