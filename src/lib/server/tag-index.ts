@@ -1,10 +1,8 @@
 import { get as getTags } from "../../services/tags.js";
 import { workspaceServiceContext } from "./service-context.js";
 import type { AnyDB } from "../../db/client.js";
-import { type CardTagHits } from "../../db/api/tag.js";
 import { getAllTaskspaces, getTaskspacesInNamespace } from "../../db/api/taskspace.js";
 import { getWorkspaceRoot } from "../../db/internal/config.js";
-import type { TagHit, TagScanTruncation } from "../types.js";
 import { resolveTaskspacePath } from "./taskspace-path.js";
 import { createScanPool, scanTaskspaceTags, type ScanLimits } from "./taskspace-tags.js";
 import { openTagCache } from "./tag-cache.js";
@@ -25,52 +23,13 @@ function yieldToEventLoop(): Promise<void> {
  * Reasons a taskspace scan stopped early. Omit fully scanned taskspaces from this list.
  * Resolve taskspace names through {@link TagIndex.taskspaces}.
  */
-export type TagIndexTruncation = {
-  taskspaceId: string;
-  reasons: TagScanTruncation[];
-  /** Sample taskspace-relative paths for scan failures. Empty when no path applies.
-   *  See `TaskspaceTagScan.paths`. */
-  paths: string[];
-};
-
-/**
- * Name and namespace for a scanned taskspace. Keep them together because readers use both to
- * label file hits and link to boards. A null namespace identifies an unplaced taskspace shown
- * on every board.
- */
-export type TagIndexTaskspace = { name: string; namespaceId: string | null };
-
-/** Scanned taskspace metadata keyed by ID, with optional lookup values. */
-export type TagIndexTaskspaces = Record<string, TagIndexTaskspace | undefined>;
-
-export type TagIndex = {
-  /** Card and file hits share one list. `hit.source.kind` identifies their source. */
-  hits: TagHit[];
-  /** Cached partition/namespace/change-day dimensions for every card carrying a hit. */
-  cardData: CardTagHits["cardData"];
-  /** Which namespace each card carrying a hit belongs to. See `CardTagHits`. */
-  cardNamespaces: Record<string, string | undefined>;
-  /**
-   * Metadata for taskspaces considered by this gather. Return an empty map when file scanning
-   * is disabled, and allow missing lookups in page-filtered or older data.
-   *
-   * Reuse gathered metadata so readers do not fetch or publish unrelated taskspace names.
-   */
-  taskspaces: TagIndexTaskspaces;
-  truncated: TagIndexTruncation[];
-  /**
-   * IDs of taskspaces whose root directories could not be opened. Keep these separate from
-   * partial scans so readers can suggest checking or cleaning up the records. Resolve names
-   * through {@link TagIndex.taskspaces}.
-   */
-  missing: string[];
-  /**
-   * Whether card scanning stopped at {@link TAG_CARD_HITS_MAX}. If true, the hits contain
-   * only part of the workspace's card tags. Display this alongside the per-taskspace notices
-   * in {@link TagIndex.truncated}.
-   */
-  cardsTruncated: boolean;
-};
+export type {
+  TagIndex,
+  TagIndexTruncation,
+  TagIndexTaskspace,
+  TagIndexTaskspaces,
+} from "../../services/tags.js";
+import type { TagIndex, TagIndexTruncation, TagIndexTaskspace } from "../../services/tags.js";
 
 type LoadTagIndex = {
   db: AnyDB;

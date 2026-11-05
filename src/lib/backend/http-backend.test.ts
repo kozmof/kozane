@@ -82,15 +82,13 @@ it("binds snapshot validators and translates ETag/304 without exposing HTTP", as
   expect(new Headers(fetcher.mock.calls[1][1].headers).get("if-none-match")).toBe('"one"');
 });
 it("does not reuse a validator across instances or namespaces and never hides a missing namespace", async () => {
-  const fetcher = vi
-    .fn()
-    .mockImplementation(async (url: string) =>
-      url.includes("other")
-        ? new Response(JSON.stringify({ ...snapshotData, namespace: { id: "other" } }), {
-            headers: { etag: '"one"' },
-          })
-        : new Response(JSON.stringify(snapshotData), { headers: { etag: '"one"' } }),
-    );
+  const fetcher = vi.fn().mockImplementation(async (url: string) =>
+    url.includes("other")
+      ? new Response(JSON.stringify({ ...snapshotData, namespace: { id: "other" } }), {
+          headers: { etag: '"one"' },
+        })
+      : new Response(JSON.stringify(snapshotData), { headers: { etag: '"one"' } }),
+  );
   const backend = new HttpBackend({ fetcher, capabilities });
   const first = await backend.snapshot("ns");
   expect((await backend.snapshot("other", { validator: first.validator })).status).toBe("changed");
@@ -140,4 +138,20 @@ it("routes structure membership area and inventory operations to retained endpoi
     ["/ns/api/inventories/tray/cards", "POST"],
     ["/ns/api/inventories/take", "POST"],
   ]);
+});
+
+it("routes workspace view reads without dispatching content-bearing tag filters", async () => {
+  const fetcher = vi.fn().mockImplementation(async () => new Response("{}"));
+  const backend = new HttpBackend({ fetcher, capabilities });
+  const changed = vi.fn();
+  backend.subscribe(changed);
+  await backend.tags.get("opaque /ns");
+  await backend.map.get();
+  await backend.warpDirectory.get("opaque /ns");
+  expect(fetcher.mock.calls.map(([path]) => path)).toEqual([
+    "/api/tags?namespaceId=opaque%20%2Fns",
+    "/api/map",
+    "/opaque%20%2Fns/api/warp-directory",
+  ]);
+  expect(changed).not.toHaveBeenCalled();
 });

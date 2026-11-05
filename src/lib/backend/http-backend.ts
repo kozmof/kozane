@@ -1,3 +1,6 @@
+import type { TagsViewData } from "../../services/tags.js";
+import type { TreemapSnapshot } from "../../services/map.js";
+import type { WarpListEntry } from "../warp-list.js";
 import type * as inventoriesServices from "../../services/inventories.js";
 import type * as warpsServices from "../../services/warps.js";
 import type * as scopesServices from "../../services/scopes.js";
@@ -379,4 +382,17 @@ export class HttpBackend {
       options.validator,
     );
   }
+
+  readonly tags = {
+    get: (namespaceId?: string) =>
+      this.read<TagsViewData>(
+        "/api/tags" +
+          (namespaceId !== undefined ? "?namespaceId=" + encodeURIComponent(namespaceId) : ""),
+      ),
+  };
+  readonly map = { get: () => this.read<TreemapSnapshot>("/api/map") };
+  readonly warpDirectory = {
+    get: (namespaceId: string) =>
+      this.read<WarpListEntry[]>(this.ns(namespaceId, "/warp-directory")),
+  };
 }
