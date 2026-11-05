@@ -616,9 +616,11 @@ describe("taskspace backend tree integration", () => {
     const { HttpBackend } = await import("$lib/backend/http-backend");
     const fetcher = vi.fn(async (_url: unknown, options?: RequestInit) =>
       jsonResponse(
-        options?.method && options.method !== "GET"
-          ? { path: "renamed", kind: "directory" }
-          : listing(["renamed"]),
+        options?.method === "POST"
+          ? { path: "new", entries: [], truncated: false }
+          : options?.method && options.method !== "GET"
+            ? { path: "renamed", kind: "directory" }
+            : listing(["renamed"]),
       ),
     );
     const backend = new HttpBackend({

@@ -1,14 +1,17 @@
 import type { KozaneBackend, MutationOptions } from "./contract.js";
 export type { MutationOptions } from "./contract.js";
-import type {
-  TaskspaceLifecycleApi,
-  TaskspaceCreated,
-  TaskspaceRenamed,
-  TaskspaceFileData,
-} from "./contract.js";
+import type { TaskspaceLifecycleApi } from "./contract.js";
 import { WorkspacePoller, browserPollLifecycle, type PollLifecycle } from "./workspace-poller.js";
 import { readNamespaceList, readNamespaceMetadata } from "./decoders/namespaces.js";
 import { parseWarpEntries } from "./decoders/warp-directory.js";
+import {
+  readTaskspaceCreated,
+  readTaskspaceRenamed,
+  readTaskspaceRemoved,
+  readTaskspaceFile,
+  readTaskspaceEntryResult,
+  readTaskspaceListing,
+} from "./decoders/taskspaces.js";
 import { readTagsViewData } from "./decoders/tags.js";
 import { readMapSnapshot } from "./decoders/map.js";
 import type * as inventoriesServices from "../../services/inventories.js";
@@ -109,6 +112,28 @@ export class HttpBackend implements KozaneBackend {
     } catch (cause) {
       throw new BackendError("unavailable", "Invalid backend response", { cause });
     }
+  }
+  private checked<T>(value: unknown, decode: (value: unknown) => T | null): T {
+    const result = decode(value);
+    if (result === null) throw new BackendError("unavailable", "Invalid taskspace response");
+    return result;
+  }
+  private async readTaskspace<T>(
+    path: string,
+    decode: (value: unknown) => T | null,
+    options?: { signal?: AbortSignal },
+  ): Promise<T> {
+    return this.checked(await this.read<unknown>(path, options), decode);
+  }
+  private async writeTaskspace<T>(
+    path: string,
+    method: string,
+    input: unknown,
+    decode: (value: unknown) => T | null,
+    options?: MutationOptions,
+  ): Promise<T> {
+    // Preserve committed invalidation even when a successful response has malformed fields.
+    return this.checked(await this.write<unknown>(path, method, input, options), decode);
   }
   readonly namespaces: KozaneBackend["namespaces"] = {
     list: async () => {
@@ -442,55 +467,70 @@ export class HttpBackend implements KozaneBackend {
 
   private readonly taskspaceApi: TaskspaceLifecycleApi = {
     readFile: (ns, id, path, options) =>
-      this.read<TaskspaceFileData>(
+      this.readTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file?path=${encodeURIComponent(path)}`),
+        readTaskspaceFile,
         options,
       ),
     saveFile: (ns, id, input, options) =>
-      this.write<TaskspaceFileData>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
         "PUT",
         input,
+        readTaskspaceFile,
         options,
       ),
     list: (ns, id, path) =>
-      this.read<import("../types.js").TaskspaceListing>(
+      this.readTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
+        readTaskspaceListing,
       ),
     createDirectory: (ns, id, input) =>
-      this.write<import("../types.js").TaskspaceListing>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
         "POST",
         input,
+        readTaskspaceListing,
       ),
     renameEntry: (ns, id, input) =>
-      this.write<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files`),
         "PATCH",
         input,
+        readTaskspaceEntryResult,
       ),
     removeEntry: (ns, id, path) =>
-      this.write<{ path: string; kind: import("../types.js").TaskspaceEntryKind }>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/files?path=${encodeURIComponent(path)}`),
         "DELETE",
+        undefined,
+        readTaskspaceEntryResult,
       ),
-    create: (ns, input) => this.write<TaskspaceCreated>(this.ns(ns, "/taskspaces"), "POST", input),
-    rename: (ns, id, input) =>
-      this.write<TaskspaceRenamed>(
+    create: (ns, input) =>
+      this.writeTaskspace(this.ns(ns, "/taskspaces"), "POST", input, readTaskspaceCreated),
+    rename: async (ns, id, input) => {
+      const result = await this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
         "PATCH",
         input,
-      ),
+        readTaskspaceRenamed,
+      );
+      if (result.id !== id) throw new BackendError("unavailable", "Invalid taskspace response");
+      return result;
+    },
     remove: (ns, id) =>
-      this.write<{ ok: boolean; directory: import("../types.js").TaskspaceDirectoryOutcome }>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}`),
         "DELETE",
+        undefined,
+        readTaskspaceRemoved,
       ),
     createFile: (ns, id, input) =>
-      this.write<TaskspaceFileData>(
+      this.writeTaskspace(
         this.ns(ns, `/taskspaces/${encodeURIComponent(id)}/file`),
         "POST",
         input,
+        readTaskspaceFile,
       ),
   };
   get taskspaces(): TaskspaceLifecycleApi | undefined {
