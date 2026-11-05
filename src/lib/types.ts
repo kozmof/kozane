@@ -67,10 +67,12 @@ export interface TaskspaceEntry {
 }
 
 export interface TaskspaceListing {
+  /** Static exports retain the reason a directory listing is incomplete. */
+  truncation?: TaskspaceTruncation | null;
   /** The listed directory, relative to the taskspace root and always `/`-separated. */
   path: string;
   entries: TaskspaceEntry[];
-  /** True when the directory held more than {@link TASKSPACE_DIR_ENTRIES_MAX} entries. */
+  /** Whether the listing is incomplete. Live listings report the directory entry limit. */
   truncated: boolean;
 }
 

@@ -675,3 +675,47 @@ describe("taskspace backend tree integration", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+it("keeps static backend directory truncation reasons without falling back to HTTP", async () => {
+  const { StaticBackend } = await import("$lib/backend/static-backend.js");
+  const backend = new StaticBackend({
+    namespaces: [{ id: "namespace-1", name: "One", isDefault: true }],
+    snapshots: [
+      {
+        namespace: { id: "namespace-1" },
+        cards: [],
+        partitions: [],
+        layers: [],
+        warps: [],
+        inventories: [],
+        scopes: [],
+        scopeAreas: [],
+        scopeRels: [],
+        glueRels: [],
+        taskspaces: [
+          { id: TS, name: "Notes", scopeId: null, path: null, pathKind: "workspace_relative" },
+        ],
+      },
+    ],
+    files: {
+      [TS]: {
+        root: {
+          kind: "directory",
+          name: "notes",
+          truncated: "depth",
+          children: [{ kind: "file", name: "hello.md", content: "hello", size: 5 }],
+        },
+      },
+    },
+  });
+  const fetcher = vi.fn();
+  const tree = new TaskspaceTreeState();
+  await tree.toggle(
+    { namespaceId: "namespace-1", fetcher: fetcher as typeof fetch, backend },
+    TS,
+    "",
+  );
+  expect(tree.node(TS, "").truncated).toBe("depth");
+  expect(tree.node(TS, "").entries?.[0].name).toBe("hello.md");
+  expect(fetcher).not.toHaveBeenCalled();
+});

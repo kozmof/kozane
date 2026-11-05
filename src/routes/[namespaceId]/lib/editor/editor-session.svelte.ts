@@ -2,7 +2,10 @@ import type { HttpBackend, MutationOptions as SaveOptions } from "$lib/backend/h
 import { BackendError } from "$lib/backend/contract.js";
 import type { TaskspaceFileTree } from "$lib/types";
 import { failureMessage, fetchTaskspaceFile, saveTaskspaceFile } from "../namespace-api.js";
-import { findStaticNode } from "../taskspace-static.js";
+import {
+  findStaticNode,
+  STATIC_FILE_SKIP_MESSAGES as SKIP_REASON_MESSAGE,
+} from "$lib/backend/static-files.js";
 import { type Caret, EditorDocument } from "./document-store.svelte.js";
 
 export type EditorSessionContext = {
@@ -11,14 +14,6 @@ export type EditorSessionContext = {
   namespaceId: string;
   /** Embedded taskspace trees for reading files in a static export. */
   staticFiles?: Record<string, TaskspaceFileTree>;
-};
-
-/** Reason an exported file is listed without readable content. */
-const SKIP_REASON_MESSAGE: Record<"too-large" | "not-text" | "budget" | "unreadable", string> = {
-  "too-large": "This file is too large to open.",
-  "not-text": "This file is not text and cannot be opened.",
-  budget: "This export's size budget ran out before reaching this file.",
-  unreadable: "This file could not be read when the export was built.",
 };
 
 /** Which file an editor is open on. */

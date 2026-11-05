@@ -852,3 +852,62 @@ describe("EditorSession", () => {
     });
   });
 });
+
+it("reads static backend files and skip messages and retains edits after a rejected save", async () => {
+  const { StaticBackend } = await import("$lib/backend/static-backend.js");
+  const backend = new StaticBackend({
+    namespaces: [{ id: "p-1", name: "One", isDefault: true }],
+    snapshots: [
+      {
+        namespace: { id: "p-1" },
+        cards: [],
+        partitions: [],
+        layers: [],
+        warps: [],
+        inventories: [],
+        scopes: [],
+        scopeAreas: [],
+        scopeRels: [],
+        glueRels: [],
+        taskspaces: [
+          {
+            id: REF.taskspaceId,
+            name: "Notes",
+            scopeId: null,
+            path: null,
+            pathKind: "workspace_relative",
+          },
+        ],
+      },
+    ],
+    files: {
+      [REF.taskspaceId]: {
+        root: {
+          kind: "directory",
+          name: "notes",
+          truncated: null,
+          children: [
+            { kind: "file", name: REF.path, content: "hello", size: 5 },
+            { kind: "file-skipped", name: "skipped.md", reason: "unreadable", size: null },
+          ],
+        },
+      },
+    },
+  });
+  const fetcher = vi.fn();
+  const ctx = { namespaceId: "p-1", fetcher: fetcher as typeof fetch, backend };
+  const session = new EditorSession();
+  try {
+    await session.open(ctx, REF);
+    expect(session.doc?.text()).toBe("hello");
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await session.save(ctx);
+    expect(session.dirty).toBe(true);
+    expect(session.error).toBe("This backend is read-only");
+    await session.open(ctx, { ...REF, path: "skipped.md" });
+    expect(session.error).toBe("This file could not be read when the export was built.");
+    expect(fetcher).not.toHaveBeenCalled();
+  } finally {
+    session.close();
+  }
+});

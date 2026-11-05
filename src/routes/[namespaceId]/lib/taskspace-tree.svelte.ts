@@ -428,8 +428,16 @@ export class TaskspaceTreeState {
       this.#pending.delete(key);
       this.nodes[key] = {
         entries: Array.isArray(body?.entries) ? body.entries : [],
-        // Live listings are truncated only by the entry limit.
-        truncated: body?.truncated === true ? "entries" : null,
+        // Static listings retain depth, node-budget and read-failure reasons.
+        truncated:
+          body?.truncation === "depth" ||
+          body?.truncation === "nodes" ||
+          body?.truncation === "unreadable" ||
+          body?.truncation === "entries"
+            ? body.truncation
+            : body?.truncated === true
+              ? "entries"
+              : null,
         loading: false,
         error: null,
       };
