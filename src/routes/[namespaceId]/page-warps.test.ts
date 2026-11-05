@@ -73,11 +73,14 @@ describe("Warps", () => {
     await fireEvent.keyDown(window, { key: "w" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ posX: 1200, posY: 850 }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/warps",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ posX: 1200, posY: 850 }),
+      }),
+    );
     await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
   });
 
@@ -94,11 +97,14 @@ describe("Warps", () => {
     await fireEvent.keyDown(window, { key: "w" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ posX: 1400, posY: 1000 }),
-    });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/warps",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.any(Headers),
+        body: JSON.stringify({ posX: 1400, posY: 1000 }),
+      }),
+    );
     await waitFor(() => expect(screen.getByLabelText("Warp 1")).toBeInTheDocument());
   });
 
@@ -268,7 +274,10 @@ describe("Warps", () => {
     await fireEvent.keyDown(window, { key: "q" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-    expect(fetch).toHaveBeenCalledWith("/namespace-1/api/warps/warp-1", { method: "DELETE" });
+    expect(fetch).toHaveBeenCalledWith(
+      "/namespace-1/api/warps/warp-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
     // Renumber the two remaining warps so the former warp 2 becomes warp 1.
     expect(screen.queryByLabelText("Warp 3")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Warp 1")).toHaveAttribute("data-warp-id", "warp-2");

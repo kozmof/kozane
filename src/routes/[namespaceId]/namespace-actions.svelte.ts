@@ -1,3 +1,4 @@
+import { createBackendBoardActions } from "./lib/actions/backend-board-actions.js";
 import type { HttpBackend } from "$lib/backend/http-backend.js";
 import { createBackendCardActions } from "./lib/actions/backend-card-actions.js";
 import type { NamespaceState } from "./namespace-state.svelte.js";
@@ -11,11 +12,11 @@ import { createScopeActions } from "./lib/actions/scope-actions.js";
  */
 export function createNamespaceActions(
   state: NamespaceState,
-  backend?: Pick<HttpBackend, "cards" | "glues">,
+  backend?: Pick<HttpBackend, "cards" | "glues" | "layers" | "partitions" | "warps">,
 ) {
   return {
     ...(backend ? createBackendCardActions(state, backend) : createCardActions(state)),
-    ...createBoardActions(state),
+    ...(backend ? createBackendBoardActions(state, backend) : createBoardActions(state)),
     ...createScopeActions(state),
   };
 }
