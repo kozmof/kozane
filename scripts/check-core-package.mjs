@@ -302,6 +302,22 @@ snapshots:
   console.log(
     "Packed core public runtime, declarations, adapter hooks and browser exports passed in an isolated offline installation.",
   );
+  const corpusOption = process.argv.find((value) => value.startsWith("--bootstrap-corpus="));
+  if (corpusOption) {
+    const { bootstrapCorpus } = await import("./compatibility/bootstrap.mjs");
+    await bootstrapCorpus({
+      consumer: temporary,
+      archive: join(temporary, archive),
+      candidate,
+      id: corpusOption.slice("--bootstrap-corpus=".length),
+      run,
+      repository,
+    });
+  }
+  {
+    const { checkCorpus } = await import("./compatibility/check.mjs");
+    checkCorpus({ consumer: temporary, repository, run });
+  }
   if (process.argv.includes("--restoration-harness")) {
     const { buildRestorationHarness } = await import("./restoration-harness/build.mjs");
     await buildRestorationHarness(temporary);

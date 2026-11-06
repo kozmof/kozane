@@ -1,0 +1,78 @@
+import { afterEach, expect, it } from "vitest";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { readCorpus } from "../../../scripts/compatibility/read-corpus.mjs";
+import { summarizeView } from "../../../scripts/compatibility/view-summary";
+const temporary: string[] = [];
+afterEach(() => {
+  for (const directory of temporary.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+function copy() {
+  const root = mkdtempSync(join(tmpdir(), "kozane-corpus-test-"));
+  temporary.push(root);
+  cpSync(resolve("tests/compatibility/corpus"), root, { recursive: true });
+  return root;
+}
+it("validates retained producers, original bytes and recorded outcomes", () => {
+  const cohorts = readCorpus(resolve("tests/compatibility/corpus"));
+  expect(cohorts.length).toBeGreaterThan(0);
+  expect(
+    cohorts[0].fixtures.flatMap((fixture: { expected: unknown[] }) => fixture.expected),
+  ).toHaveLength(11);
+});
+it.each(["manifest.json", "producer.tgz", "sole.sqlite3"])(
+  "rejects altered retained %s bytes",
+  (file) => {
+    const root = copy();
+    const path = join(root, "core-0.1.0-rc1-wasm", file);
+    const bytes = readFileSync(path);
+    bytes[bytes.length - 1] ^= 1;
+    writeFileSync(path, bytes);
+    expect(() => readCorpus(root)).toThrow(/changed/);
+  },
+);
+it("rejects fixture path traversal even with an updated manifest hash", () => {
+  const root = copy();
+  const indexPath = join(root, "index.json");
+  const index = JSON.parse(readFileSync(indexPath, "utf8"));
+  const path = join(root, index.cohorts[0].id, "manifest.json");
+  const manifest = JSON.parse(readFileSync(path, "utf8"));
+  manifest.fixtures[0].file = "../outside.sqlite3";
+  const bytes = JSON.stringify(manifest);
+  writeFileSync(path, bytes);
+  index.cohorts[0].sha256 = createHash("sha256").update(bytes).digest("hex");
+  writeFileSync(indexPath, JSON.stringify(index));
+  expect(() => readCorpus(root)).toThrow(/fixture filename/);
+});
+function selected() {
+  return {
+    kind: "selected",
+    namespaceId: "n",
+    snapshot: {
+      namespace: { id: "n", name: "日本語", isDefault: false },
+      snapshot: {
+        cards: [
+          { id: "a", content: "One", createdAt: new Date(0) },
+          { id: "b", content: "Two" },
+        ],
+        partitions: [],
+        layers: [],
+        scopes: [],
+        scopeRels: [],
+        glueRels: [],
+      },
+    },
+  };
+}
+it("ignores row ordering and added derived fields but detects changed stored content", async () => {
+  const before = selected();
+  const expected = await summarizeView(before);
+  const after = selected();
+  after.snapshot.snapshot.cards.reverse();
+  Object.assign(after.snapshot.snapshot.cards[0], { futureDerived: "new DTO field" });
+  expect(await summarizeView(after)).toEqual(expected);
+  after.snapshot.snapshot.cards[0].content = "Changed";
+  expect((await summarizeView(after)).dataHash).not.toBe(expected.dataHash);
+});
