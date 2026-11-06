@@ -30,8 +30,9 @@
   async function createNamespace(event: SubmitEvent) {
     event.preventDefault();
     const current = index;
+    const generation = backend.version.generation;
     const created = await current.create(nameInput?.value ?? "");
-    if (current !== index) return;
+    if (current !== index || generation !== backend.version.generation || backend.state.status !== "ready") return;
     if (created) {
       if (nameInput) nameInput.value = "";
     }
@@ -169,7 +170,7 @@
         />
         <button
           type="submit"
-          disabled={index.submitting || !backend.capabilities.writable}
+          disabled={index.submitting || !backend.capabilities.writable || !index.current}
           title="Create namespace"
           aria-label="Create namespace"
           class={css({
@@ -199,6 +200,9 @@
         >+</button>
       </div>
 
+      {#if !index.current}
+        <p role="status" class={css({ margin: "0", fontSize: "12px", color: "neutral.subtle" })}>Namespace creation is paused while current data loads.</p>
+      {/if}
       {#if index.error || formError}
         <p role="alert" class={css({ margin: "0", fontSize: "12px", color: "state.error" })}>
           {index.error ?? formError}

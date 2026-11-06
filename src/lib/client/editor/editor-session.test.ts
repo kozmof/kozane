@@ -912,3 +912,26 @@ it("reads static backend files and skip messages and retains edits after a rejec
     session.close();
   }
 });
+
+it("does not dispatch the next flush save after the host pauses writes", async () => {
+  const { ctx: original, answer, bodies } = heldSaves();
+  let writable = true;
+  const ctx = { ...original, canWrite: () => writable };
+  const session = new EditorSession();
+  await session.open(ctx, REF);
+  session.doc!.insert({ line: 0, column: 0 }, "x");
+  const flushing = session.flush(ctx);
+  await vi.waitFor(() => expect(bodies).toHaveLength(1));
+  session.doc!.insert({ line: 0, column: 1 }, "y");
+  writable = false;
+  await answer(0, ok({ signature: "sig-2" }));
+  expect(await flushing).toBe("unsaved");
+  expect(bodies).toHaveLength(1);
+  expect(session.dirty).toBe(true);
+  expect(session.doc!.text()).toBe("xya\n");
+  writable = true;
+  const resumed = session.flush(ctx);
+  await answer(1, ok({ signature: "sig-3" }));
+  expect(await resumed).toBe("saved");
+  expect(session.dirty).toBe(false);
+});

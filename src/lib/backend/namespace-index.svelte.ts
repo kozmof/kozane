@@ -19,6 +19,9 @@ function rows(value: unknown): NamespaceRow[] {
 export class NamespaceIndex {
   namespaces = $state.raw<NamespaceRow[]>([]);
   submitting = $state(false);
+  current = $state(false);
+  #generation: number;
+  #creation = 0;
   error = $state<string | null>(null);
   #active = false;
   #running = false;
@@ -30,6 +33,8 @@ export class NamespaceIndex {
     initial: NamespaceRow[],
   ) {
     this.namespaces = initial;
+    this.#generation = backend.version.generation;
+    this.current = backend.state.status === "ready";
   }
 
   start(options: { retryIntervalMs?: number | false } = {}): () => void {
@@ -37,10 +42,19 @@ export class NamespaceIndex {
     this.#active = true;
     this.#dirty = true;
     const unsubscribe = this.backend.subscribe((event) => {
-      if (event.datasets.includes("namespaces")) this.#invalidate();
+      const replaced = event.generation !== this.#generation;
+      if (replaced) {
+        this.#generation = event.generation;
+        this.current = false;
+        this.#creation++;
+        this.submitting = false;
+        this.error = null;
+      }
+      if (replaced || event.datasets.includes("namespaces")) this.#invalidate();
     });
     const unsubscribeState = this.backend.subscribeState((state) => {
       if (state.status !== "ready") {
+        this.current = false;
         this.#sequence++;
         this.#dirty = true;
       } else void this.#refresh();
@@ -62,13 +76,26 @@ export class NamespaceIndex {
   }
 
   async create(name: string): Promise<boolean> {
-    if (this.submitting) return false;
+    if (this.submitting || !this.current || this.backend.state.status !== "ready") return false;
+    const creation = ++this.#creation;
+    const generation = this.backend.version.generation;
     this.submitting = true;
     this.error = null;
     try {
       await this.backend.namespaces.create({ name: name.trim() });
-      return true;
+      return (
+        creation === this.#creation &&
+        generation === this.backend.version.generation &&
+        this.current &&
+        this.backend.state.status === "ready"
+      );
     } catch (error) {
+      if (
+        creation !== this.#creation ||
+        generation !== this.backend.version.generation ||
+        this.backend.state.status !== "ready"
+      )
+        return false;
       const compatible: Record<string, string> = {
         "name is required": "Namespace name is required.",
         [`name must be ${NAME_MAX} characters or fewer`]: `Namespace name must be ${NAME_MAX} characters or fewer.`,
@@ -79,7 +106,7 @@ export class NamespaceIndex {
           : "Failed to create namespace";
       return false;
     } finally {
-      this.submitting = false;
+      if (creation === this.#creation) this.submitting = false;
     }
   }
 
@@ -108,6 +135,8 @@ export class NamespaceIndex {
         return;
       }
       this.namespaces = result;
+      this.#generation = generation;
+      this.current = true;
     } catch {
       if (this.#active) this.#dirty = true;
     } finally {

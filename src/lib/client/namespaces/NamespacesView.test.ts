@@ -1,3 +1,4 @@
+import { BackendSignals } from "../../backend/signals.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { NamespacesView } from "../index.js";
@@ -117,4 +118,38 @@ it("does not clear a new backend's draft when an old creation finishes", async (
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(input).toHaveValue("New draft");
   expect(screen.getByRole("button", { name: "Create namespace" })).toBeEnabled();
+});
+
+it("retains the namespace draft while recovery blocks submission", async () => {
+  const signals = new BackendSignals({ status: "ready" });
+  let finish!: (value: Response) => void;
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json(rows))
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+  const backend = new HttpBackend({ capabilities, fetcher });
+  vi.spyOn(backend, "state", "get").mockImplementation(() => signals.state);
+  vi.spyOn(backend, "version", "get").mockImplementation(() => signals.version);
+  vi.spyOn(backend, "subscribe").mockImplementation(signals.subscribe.bind(signals));
+  vi.spyOn(backend, "subscribeState").mockImplementation(signals.subscribeState.bind(signals));
+  render(NamespacesView, { props: { ...props, backend } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const input = screen.getByRole("textbox", { name: "New namespace name" });
+  await fireEvent.input(input, { target: { value: "Retained name" } });
+  signals.transition({ status: "recovering" });
+  const button = screen.getByRole("button", { name: "Create namespace" });
+  await waitFor(() => expect(button).toBeDisabled());
+  await fireEvent.submit(input.closest("form")!);
+  expect(fetcher).toHaveBeenCalledOnce();
+  signals.transition({ status: "ready" });
+  await waitFor(() => expect(finish).toBeTypeOf("function"));
+  expect(button).toBeDisabled();
+  finish(Response.json(rows));
+  await waitFor(() => expect(button).toBeEnabled());
+  expect(input).toHaveValue("Retained name");
 });

@@ -5,6 +5,8 @@ import { type Caret, EditorDocument } from "./document-store.svelte.js";
 export type EditorSessionContext = {
   backend: Pick<KozaneBackend, "taskspaces">;
   namespaceId: string;
+  /** Checked immediately before each save dispatch, including queued flushes. */
+  canWrite?: () => boolean;
 };
 
 /** Which file an editor is open on. */
@@ -228,6 +230,8 @@ export class EditorSession {
     const content = doc.text();
 
     try {
+      if (ctx.canWrite && !ctx.canWrite())
+        throw new BackendError("unavailable", "The backend is not ready");
       const api = ctx.backend.taskspaces;
       if (!api) throw new BackendError("unavailable", "Taskspaces are not available");
       const body = await api.saveFile(

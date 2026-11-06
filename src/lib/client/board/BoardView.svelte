@@ -1,9 +1,9 @@
 <script lang="ts">
-  import BoardPage from "./BoardPage.svelte";
+  import BoardGeneration from "./BoardGeneration.svelte";
   import type { BoardViewProps } from "./types.js";
   let { backend, ...props }: BoardViewProps = $props();
 </script>
 
 {#key backend}
-  <BoardPage {backend} {...props} />
+  <BoardGeneration {backend} {...props} />
 {/key}

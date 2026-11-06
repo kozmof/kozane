@@ -1,3 +1,6 @@
+import { BackendError } from "../../backend/contract.js";
+import { BackendSignals } from "../../backend/signals.js";
+import type { KozaneBackend, SnapshotResult } from "../../backend/contract.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { BoardView } from "../index.js";
@@ -123,4 +126,110 @@ it("handles a new card arrival on an already-mounted board", async () => {
   });
   await waitFor(() => expect(card).toHaveAttribute("aria-pressed", "true"));
   expect(replace).toHaveBeenCalledWith("/demo/board/?namespaceId=board&keep=value#other=kept");
+});
+
+function recoveringHost() {
+  const props = boardViewProps();
+  const signals = new BackendSignals({ status: "ready" });
+  const snapshot = vi.fn<KozaneBackend["snapshot"]>();
+  const create = vi.fn<KozaneBackend["cards"]["create"]>();
+  const backend = new Proxy(props.backend, {
+    get(target, key) {
+      if (key === "capabilities") return capabilities;
+      if (key === "state") return signals.state;
+      if (key === "version") return signals.version;
+      if (key === "subscribe") return signals.subscribe.bind(signals);
+      if (key === "subscribeState") return signals.subscribeState.bind(signals);
+      if (key === "snapshot") return snapshot;
+      if (key === "cards") return { ...target.cards, create };
+      const value = Reflect.get(target, key, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  return { props: { ...props, backend, initialDataApplied: true }, signals, snapshot, create };
+}
+
+it("retains a composer draft and blocks dispatch until recovery data is applied", async () => {
+  const f = recoveringHost();
+  render(BoardView, { props: f.props });
+  const input = screen.getByRole("textbox", { name: "Write a card" });
+  const submit = screen.getByRole("button", { name: "Create card" });
+  await fireEvent.input(input, { target: { value: "Healthy draft" } });
+  f.signals.transition({ status: "recovering" });
+  await waitFor(() => expect(submit).toBeDisabled());
+  await fireEvent.click(submit);
+  expect(f.create).not.toHaveBeenCalled();
+  let finish!: (value: SnapshotResult) => void;
+  f.snapshot.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  f.signals.transition({ status: "ready" });
+  await waitFor(() => expect(f.snapshot).toHaveBeenCalledOnce());
+  expect(submit).toBeDisabled();
+  expect(input).toHaveValue("Healthy draft");
+  finish({ status: "changed", validator: "fresh", data: f.props.data });
+  await waitFor(() => expect(submit).toBeEnabled());
+  expect(input).toHaveValue("Healthy draft");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+});
+
+it("discards generation-scoped drafts and waits for the new generation snapshot", async () => {
+  const f = recoveringHost();
+  render(BoardView, { props: f.props });
+  await fireEvent.input(screen.getByRole("textbox", { name: "Write a card" }), {
+    target: { value: "Old generation draft" },
+  });
+  let finish!: (value: SnapshotResult) => void;
+  f.snapshot.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  f.signals.publish(["snapshot"], undefined, true);
+  await waitFor(() =>
+    expect(screen.getByRole("textbox", { name: "Write a card" })).toHaveValue(""),
+  );
+  expect(screen.getByRole("button", { name: "Create card" })).toBeDisabled();
+  finish({
+    status: "changed",
+    validator: "next",
+    data: {
+      ...f.props.data,
+      cards: f.props.data.cards.map((card) => ({ ...card, content: "New generation card" })),
+    },
+  });
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Write a card" })).toBeEnabled());
+  expect(screen.getByRole("textbox", { name: "Write a card" })).toHaveValue("");
+  expect(screen.getByText("New generation card")).toBeInTheDocument();
+});
+
+it("keeps a late mutation failure out of the replacement generation", async () => {
+  const f = recoveringHost();
+  let fail!: (reason: unknown) => void;
+  f.create.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  f.snapshot.mockResolvedValue({ status: "changed", validator: "fresh", data: f.props.data });
+  render(BoardView, { props: f.props });
+  await fireEvent.input(screen.getByRole("textbox", { name: "Write a card" }), {
+    target: { value: "Old write" },
+  });
+  await fireEvent.click(screen.getByRole("button", { name: "Create card" }));
+  await waitFor(() => expect(f.create).toHaveBeenCalledOnce());
+  f.signals.publish(["snapshot"], undefined, true);
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "Write a card" })).toBeEnabled());
+  const input = screen.getByRole("textbox", { name: "Write a card" });
+  await fireEvent.input(input, { target: { value: "New generation draft" } });
+  fail(new BackendError("validation", "Old generation failure"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(screen.queryByText("Old generation failure")).not.toBeInTheDocument();
+  expect(input).toHaveValue("New generation draft");
+  expect(f.create).toHaveBeenCalledOnce();
 });

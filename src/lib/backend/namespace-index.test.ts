@@ -132,3 +132,62 @@ it("loads a static namespace index without retry timers", async () => {
   expect(vi.getTimerCount()).toBe(0);
   stop();
 });
+
+it("blocks creation until recovery metadata has been validated", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const stop = f.index.start({ retryIntervalMs: false });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.index.current).toBe(true);
+  f.signals.transition({ status: "recovering" });
+  expect(await f.index.create("Draft")).toBe(false);
+  expect(f.backend.namespaces.create).not.toHaveBeenCalled();
+  let finish!: (value: typeof initial) => void;
+  f.list.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  f.signals.transition({ status: "ready" });
+  expect(f.index.current).toBe(false);
+  finish(initial);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.index.current).toBe(true);
+  stop();
+});
+
+it("isolates namespace creation completions across generations", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const stop = f.index.start({ retryIntervalMs: false });
+  await vi.advanceTimersByTimeAsync(0);
+  let oldDone!: () => void;
+  let newDone!: () => void;
+  f.backend.namespaces.create
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          oldDone = resolve;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          newDone = resolve;
+        }),
+    );
+  const old = f.index.create("Old draft");
+  f.signals.publish(["snapshot"], undefined, true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.index.current).toBe(true);
+  expect(f.index.submitting).toBe(false);
+  const next = f.index.create("New draft");
+  oldDone();
+  expect(await old).toBe(false);
+  expect(f.index.submitting).toBe(true);
+  newDone();
+  expect(await next).toBe(true);
+  expect(f.index.submitting).toBe(false);
+  stop();
+});

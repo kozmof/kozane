@@ -31,7 +31,8 @@
   import FileBrowser from "./components/FileBrowser.svelte";
   import type { FileManagementActions } from "./lib/file-management.js";
   import { InFlight } from "./lib/in-flight.js";
-  import { startSnapshotView } from "$lib/backend/snapshot-view.js";
+  import { bindViewWrites } from "./lib/view-writes.js";
+  import { startSnapshotView, type SnapshotViewStatus } from "$lib/backend/snapshot-view.js";
 
   let { data, backend, navigation, routing, preferences, readRouteUrl = () => null, initialDataApplied = false, retryIntervalMs, lifecycle, isHidden = () => false }: BoardViewProps = $props();
 
@@ -42,6 +43,17 @@
   untrack(() => s.resetFromData(data));
 
   const readonly = $derived(!backend.capabilities.writable);
+  let snapshotStatus = $state.raw<SnapshotViewStatus>(untrack(() => ({ current: initialDataApplied && backend.state.status === "ready", namespaceId: data.namespace.id, generation: backend.version.generation })));
+  const editingBlocked = $derived(!readonly && (!snapshotStatus.current || snapshotStatus.namespaceId !== data.namespace.id || snapshotStatus.generation !== backend.version.generation));
+  const mutationBackend = untrack(() => bindViewWrites(backend, () => !editingBlocked));
+  let appliedGeneration = untrack(() => backend.version.generation);
+  let editorGeneration = $state(untrack(() => backend.version.generation));
+  $effect(() => {
+    const generation = snapshotStatus.generation;
+    if (generation === editorGeneration) return;
+    editorGeneration = generation;
+    untrack(() => { editor.close(); frame.cancel(); warps.paletteOpen = false; warps.directory = []; filePaletteOpen = false; fileBrowserOpen = false; });
+  });
 
   // ── UI state ──────────────────────────────────────────────────
   let sidebarsVisible = $state(untrack(() => data.uiConfig.defaultShowSidePanel));
@@ -80,7 +92,7 @@
     {
       s,
       readonly: untrack(() => readonly),
-      backend: untrack(() => backend),
+      backend: mutationBackend,
       navigation: () => navigation,
       navigate: (href) => routing.navigate(href),
       removeWarp: (warpId) => actions.handleRemoveWarp(warpId),
@@ -227,6 +239,7 @@
   // Keep live subscriptions stable and read each static export namespace once.
   $effect(() => {
     const current = backend;
+    const namespaceId = data.namespace.id;
     const applied = initialDataApplied;
     const interval = retryIntervalMs;
     const wake = lifecycle;
@@ -236,21 +249,25 @@
       initialDataApplied: applied,
       retryIntervalMs: interval,
       lifecycle: wake,
-      namespaceId: () => s.namespaceId,
+      namespaceId: () => namespaceId,
       activities: [positionActivity, s.mutations],
-      apply: (snapshot) => s.refreshFromData(snapshot),
+      apply: (snapshot) => {
+        if (appliedGeneration !== current.version.generation) { s.resetFromData(snapshot); appliedGeneration = current.version.generation; }
+        else s.refreshFromData(snapshot);
+      },
+      status: (value) => { snapshotStatus = value; },
       isHidden: hidden,
     }));
   });
 
   // ── Domain action handlers ────────────────────────────────────
-  const actions = createNamespaceActions(s, untrack(() => backend));
+  const actions = createNamespaceActions(s, mutationBackend);
 
   // Persist optimistic canvas and composer edits. Return success so callers can roll back
   // failed saves.
-  const persistence = createBackendBoardPersistence(s, untrack(() => backend));
+  const persistence = createBackendBoardPersistence(s, mutationBackend);
 
-  const inventoryActions = createBackendInventoryActions(s, untrack(() => backend));
+  const inventoryActions = createBackendInventoryActions(s, mutationBackend);
 
   /** The drag the canvas reports, for slot highlighting and the preview of a stored card. */
   let inventoryDrag = $state<InventoryDrag>({
@@ -280,6 +297,7 @@
   }
 
   const editorContext = $derived({
+    canWrite: () => !readonly && !editingBlocked,
     backend,
     namespaceId: s.namespaceId,
   });
@@ -348,6 +366,7 @@
   );
 
   function handleKeydown(e: KeyboardEvent) {
+    if (editingBlocked) return;
     // Apply keyboard ownership gates before resolving shortcuts. Open palettes own all keys,
     // including their close shortcut.
     if (warps.paletteOpen) return;
@@ -365,6 +384,11 @@
 
     runKeyBindings(e, keyBindings);
   }
+  function blockEditing(event: Event) {
+    if (!editingBlocked) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
 </script>
 
 <svelte:head>
@@ -373,6 +397,13 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
+{#if editingBlocked}
+  <p role="status" class={css({ position: "fixed", top: "12px", left: "50%", zIndex: 1000, padding: "8px 12px", backgroundColor: "ink.white", color: "ink.black", fontSize: "12px" })}>Board editing is paused while current data loads.</p>
+{/if}
+{#key snapshotStatus.generation}
+<fieldset disabled={editingBlocked} inert={editingBlocked} aria-busy={editingBlocked}
+  onkeydowncapture={blockEditing} onclickcapture={blockEditing} onmousedowncapture={blockEditing} onpointerdowncapture={blockEditing}
+  class={css({ border: "0", margin: "0", padding: "0", minWidth: "0" })}>
 <div class={css({ display: "flex", height: "100vh", overflow: "hidden", position: "relative", backgroundColor: "ink.lighter" })}>
   <PartitionSidebar
     namespacesHref={navigation.namespaces()}
@@ -547,9 +578,12 @@
     ctx={editorContext}
     vimMode={data.uiConfig.editorVimMode}
     autoSave={data.uiConfig.editorAutoSave}
-    {readonly}
+    readonly={readonly || editingBlocked}
     bind:width={editorWidth}
     bind:pinned={editorPinned}
     onClose={() => undefined}
   />
 </div>
+
+</fieldset>
+{/key}

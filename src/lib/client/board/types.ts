@@ -18,6 +18,7 @@ export interface BoardViewProps {
   preferences: PreferenceStorage;
   /** Read the current route reactively and during cleanup, or return null without a route. */
   readRouteUrl?: () => URL | null;
+  /** Trust the seed only when it was validated for the current backend generation. */
   initialDataApplied?: boolean;
   retryIntervalMs?: number | false;
   lifecycle?: Pick<PollLifecycle, "listen">;

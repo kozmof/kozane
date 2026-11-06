@@ -41,7 +41,7 @@ async function mount(
   const onClose = vi.fn();
   const rendered = render(FileEditor, { props: { session, ctx, onClose, routing, ...props } });
   await session.open(ctx, REF);
-  return { session, ctx, calls, onClose, unmount: rendered.unmount };
+  return { session, ctx, calls, onClose, unmount: rendered.unmount, rerender: rendered.rerender };
 }
 
 describe("FileEditor", () => {
@@ -693,6 +693,26 @@ describe("FileEditor auto save", () => {
     await vi.advanceTimersByTimeAsync(600);
     expect(calls).toHaveLength(2);
     expect(calls[1]).toMatchObject({ method: "PUT", body: { content: "xyhello\n" } });
+    expect(session.dirty).toBe(false);
+  });
+
+  it("pauses a queued autosave without losing its dirty document", async () => {
+    const { session, ctx, calls, onClose, rerender } = await mount(
+      [loaded(), ok({ signature: "sig-2" })],
+      { autoSave: true },
+    );
+    await screen.findByRole("dialog");
+    vi.useFakeTimers();
+    session.doc!.insert({ line: 0, column: 0 }, "x");
+    await vi.advanceTimersByTimeAsync(500);
+    await rerender({ session, ctx, onClose, routing, autoSave: true, readonly: true });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(calls).toHaveLength(1);
+    expect(session.doc!.text()).toBe("xhello\n");
+    expect(session.dirty).toBe(true);
+    await rerender({ session, ctx, onClose, routing, autoSave: true, readonly: false });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toHaveLength(2);
     expect(session.dirty).toBe(false);
   });
 
