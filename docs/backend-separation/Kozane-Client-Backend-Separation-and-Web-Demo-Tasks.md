@@ -187,7 +187,9 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 ### Workspace and artifacts
 
 - [ ] P3-01 Convert the repository to a pnpm workspace with core, client and unscoped CLI packages. Preserve global installation and CLI entry points.
+  - Started the workspace conversion with `packages/*` discovery and a buildable `@kozane/core@0.1.0` alongside the existing root `kozane` package. Core emits a self-contained JavaScript/declaration closure from the current portable source, with generated output ignored. The root CLI name, version, bin paths and package contents remain intact. Frozen offline installation, the existing CLI tarball/server-entry checks and all three CLI parser checks pass. Client/CLI package moves and final source ownership remain pending, so P3-01 stays open.
 - [ ] P3-02 Add the specified public export maps, packaged declarations and runtime dependency declarations. Keep test-runner dependencies outside runtime entry points.
+  - Added real core exports for `.`, `./database`, `./schema` and `./services`, each with JavaScript and declarations. The package pins its tested Drizzle and UUID runtime dependencies, declares public publishing metadata, and ships its README and licence. Runtime imports share domain error/context identity across public entries. The public migration export and client/CLI export maps remain pending.
 - [ ] P3-03 Package shared Svelte source with `@sveltejs/package`. Remove source-workspace aliases and SvelteKit dependencies from shared runtime modules.
 - [ ] P3-04 Build and ship shared Panda styles, tokens and base styles through `./styles.css`, preserving CSS layer order and stylesheet side effects.
 - [ ] P3-05 Declare the exact tested core peer and development dependency in client. Pin tested direct core/client dependencies in consumers and declare the editor's runtime dependencies.
@@ -205,6 +207,7 @@ Additional P1 progress: shared domain error classes are introduced, preserving e
 ### Consumer checks and publication
 
 - [ ] P3-13 Verify packed public exports can initialize both adapters, apply migrations, call services and type-check representative calls to every resource API without private imports.
+  - Added `pnpm check:core-package` to verification. It builds and packs core, installs the tarball outside the workspace with only its two declared dependencies, checks public runtime exports and transaction hooks, verifies shared error identity, type-checks public DTO/service calls and branded read/write negatives, rejects a real private module path, and builds all four browser exports with Node/framework imports rejected. The isolated frozen lock reuses existing registry artifact records without optional workspace driver peers, avoiding unavailable local registry metadata. The final artifact check, application typing, full lint and targeted formatting pass. Public migrations, real driver-backed adapter execution, complete client resource calls and the other packed consumers remain pending.
 - [ ] P3-14 Verify an isolated plain Svelte consumer without SvelteKit can SSR and hydrate board, tags and map, navigate through supplied adapters and exercise the editor.
 - [ ] P3-15 Verify a separate SvelteKit consumer can SSR/prerender and hydrate shared views. Check browser-global safety, initial readiness and hydration consistency.
 - [ ] P3-16 Verify stylesheet inclusion, representative computed styles/tokens, editor runtime dependencies and isolated `./testing` imports in production builds.

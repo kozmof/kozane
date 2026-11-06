@@ -101,6 +101,15 @@ importers:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@25.9.9)(@vitest/coverage-v8@4.1.12)(jsdom@29.1.1)(vite@8.3.4(@types/node@25.9.9)(esbuild@0.28.2)(tsx@4.23.15))
 
+  packages/core:
+    dependencies:
+      drizzle-orm:
+        specifier: 0.45.4
+        version: 0.45.4(@libsql/client@0.17.4)
+      uuid:
+        specifier: 13.0.2
+        version: 13.0.2
+
 packages:
 
   '@adobe/css-tools@4.5.0':

@@ -50,7 +50,7 @@
     "preflight": "TMPDIR=/tmp npm_config_cache=/tmp/kozane-npm-cache pnpm publish --dry-run",
     "pre-release-check": "pnpm preflight && pnpm pack:check",
     "clean": "node scripts/clean.mjs",
-    "verify": "pnpm check && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
+    "verify": "pnpm check && pnpm check:core-package && pnpm check:client-browser && pnpm check:core-browser && pnpm check:backend-contract && pnpm lint && pnpm fmt:check && pnpm test:coverage && pnpm build",
     "prepack": "pnpm build",
     "test:e2e": "TMPDIR=/tmp playwright test",
     "verify:production": "pnpm verify && pnpm audit:production && pnpm smoke:package && pnpm test:e2e",
@@ -58,7 +58,9 @@
     "check:client-browser": "node scripts/check-client-browser.mjs",
     "check:core-browser": "node scripts/check-core-browser.mjs",
     "check:backend-contract": "node scripts/check-backend-contract.mjs",
-    "smoke:ssg": "node scripts/smoke-ssg.mjs"
+    "smoke:ssg": "node scripts/smoke-ssg.mjs",
+    "build:core": "pnpm --filter @kozane/core build",
+    "check:core-package": "node scripts/check-core-package.mjs"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",
