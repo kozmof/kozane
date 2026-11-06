@@ -7,7 +7,9 @@ import {
 import * as schema from "@kozane/core/schema";
 import { cards } from "@kozane/core/services";
 import { verifiedBytes, verifiedModule, type AssetManifest } from "./verified-loader";
-import { deadline } from "./deadline";
+import { ActiveClock } from "./active-clock";
+import { trackSuspension } from "./suspension";
+import { deadline, validateDeadlineDuration } from "./deadline";
 import { OperationQueue } from "./operation-queue";
 import { HarnessFailure, type Candidate } from "./recovery";
 import { validateCandidate, type NamespaceView } from "./validation";
@@ -36,6 +38,7 @@ class CandidateWorker {
     bytes: ArrayBuffer,
     private readonly buildId: string,
     private readonly timeout: number,
+    private readonly clock: ActiveClock,
     private readonly onDispose: () => void,
   ) {
     const url = URL.createObjectURL(new Blob([bytes], { type: "text/javascript" }));
@@ -95,6 +98,7 @@ class CandidateWorker {
     this.onDispose();
   }
   private async rpc(method: string, extra = {}): Promise<any> {
+    await this.clock.whenRunning();
     if (this.disposed) throw new HarnessFailure("unknown", "Worker is unavailable");
     return deadline(
       new Promise((resolve, reject) => {
@@ -109,6 +113,7 @@ class CandidateWorker {
       }),
       method === "probe" ? 10_000 : this.timeout,
       () => this.dispose(),
+      this.clock,
     );
   }
   async probe(): Promise<void> {
@@ -153,18 +158,29 @@ export class WorkerContext {
   private module: WebAssembly.Module | undefined;
   private sampleBytes: Uint8Array | undefined;
   private disposed = false;
+  readonly clock: ActiveClock;
+  private readonly untrack: () => void;
   constructor(
     readonly manifest: HarnessManifest,
     private readonly timeout = 30_000,
-  ) {}
+  ) {
+    validateDeadlineDuration(timeout);
+    this.clock = new ActiveClock();
+    this.clock.onFailure((error) => this.dispose(error));
+    this.untrack = trackSuspension(this.clock);
+  }
   private assertActive(): void {
     if (this.disposed) throw new HarnessFailure("unknown", "Worker context is closed");
   }
   private create(): CandidateWorker {
     this.assertActive();
     if (!this.workerBytes) throw new Error("Worker assets are not loaded");
-    const client = new CandidateWorker(this.workerBytes, this.manifest.buildId, this.timeout, () =>
-      this.clients.delete(client),
+    const client = new CandidateWorker(
+      this.workerBytes,
+      this.manifest.buildId,
+      this.timeout,
+      this.clock,
+      () => this.clients.delete(client),
     );
     this.clients.add(client);
     return client;
@@ -173,19 +189,23 @@ export class WorkerContext {
     this.workerBytes = await verifiedBytes(
       new URL("./worker.js", assetBase),
       this.manifest.workerHash,
+      this.clock,
     );
     assertCurrent();
     this.assertActive();
     this.bootstrap = this.create();
     await this.bootstrap.probe();
-    this.module = await verifiedModule({
-      ...this.manifest,
-      wasmUrl: new URL("./sqlite3.wasm", assetBase).href,
-    });
+    this.module = await verifiedModule(
+      {
+        ...this.manifest,
+        wasmUrl: new URL("./sqlite3.wasm", assetBase).href,
+      },
+      this.clock,
+    );
     assertCurrent();
     this.assertActive();
     this.sampleBytes = new Uint8Array(
-      await verifiedBytes(new URL("./sample.db", assetBase), this.manifest.sampleHash),
+      await verifiedBytes(new URL("./sample.db", assetBase), this.manifest.sampleHash, this.clock),
     );
     assertCurrent();
     this.assertActive();
@@ -215,5 +235,7 @@ export class WorkerContext {
     this.disposed = true;
     for (const client of [...this.clients]) client.dispose(error);
     this.bootstrap = undefined;
+    this.untrack();
+    this.clock.dispose(error);
   }
 }

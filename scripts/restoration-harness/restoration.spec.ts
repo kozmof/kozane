@@ -439,3 +439,28 @@ test("successful reset discloses failed saved-copy deletion while activating fre
   expect(result.view.snapshot.snapshot.cards).toHaveLength(1);
   expect(result.saved).toBe("older copy");
 });
+test("invalid test RPC deadlines reject before worker creation or asset fetching", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  let workers = 0;
+  page.on("request", (request) => requests.push(request.url()));
+  page.on("worker", () => {
+    workers++;
+  });
+  const errors = await page.evaluate(async () => {
+    const errors: string[] = [];
+    for (const rpcTimeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      try {
+        await (window as any).restorationHarness.run(undefined, { rpcTimeoutMs });
+        errors.push("accepted");
+      } catch (error) {
+        errors.push(error instanceof Error ? error.name : "unknown");
+      }
+    }
+    return errors;
+  });
+  expect(errors).toEqual(["RangeError", "RangeError", "RangeError", "RangeError"]);
+  expect(workers).toBe(0);
+  expect(requests).toEqual([]);
+});

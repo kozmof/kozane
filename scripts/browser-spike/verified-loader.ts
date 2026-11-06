@@ -1,4 +1,4 @@
-import { deadline } from "./deadline";
+import { deadline, type DeadlineClock } from "./deadline";
 export class AssetVerificationError extends Error {}
 export interface AssetManifest {
   buildId: string;
@@ -8,7 +8,11 @@ export interface AssetManifest {
   wasmUrl?: string;
 }
 
-export async function verifiedBytes(url: URL, expectedHash: string): Promise<ArrayBuffer> {
+export async function verifiedBytes(
+  url: URL,
+  expectedHash: string,
+  clock?: DeadlineClock,
+): Promise<ArrayBuffer> {
   const controller = new AbortController();
   return deadline(
     (async () => {
@@ -24,13 +28,18 @@ export async function verifiedBytes(url: URL, expectedHash: string): Promise<Arr
     })(),
     30_000,
     () => controller.abort(),
+    clock,
   );
 }
 
-export async function verifiedWorker(manifest: AssetManifest): Promise<Worker> {
+export async function verifiedWorker(
+  manifest: AssetManifest,
+  clock?: DeadlineClock,
+): Promise<Worker> {
   const bytes = await verifiedBytes(
     new URL(manifest.workerUrl ?? "./worker.js", location.href),
     manifest.workerHash,
+    clock,
   );
   const url = URL.createObjectURL(new Blob([bytes], { type: "text/javascript" }));
   try {
@@ -40,7 +49,10 @@ export async function verifiedWorker(manifest: AssetManifest): Promise<Worker> {
   }
 }
 
-export async function verifiedModule(manifest: AssetManifest): Promise<WebAssembly.Module> {
+export async function verifiedModule(
+  manifest: AssetManifest,
+  clock?: DeadlineClock,
+): Promise<WebAssembly.Module> {
   const controller = new AbortController();
   return deadline(
     (async () => {
@@ -48,8 +60,11 @@ export async function verifiedModule(manifest: AssetManifest): Promise<WebAssemb
         signal: controller.signal,
       });
       if (!response.ok) throw new AssetVerificationError("Asset fetch failed");
-      const compilation = deadline(WebAssembly.compileStreaming(response.clone()), 30_000, () =>
-        controller.abort(),
+      const compilation = deadline(
+        WebAssembly.compileStreaming(response.clone()),
+        30_000,
+        () => controller.abort(),
+        clock,
       );
       // Observe both branches even when integrity verification fails.
       const results = await Promise.allSettled([

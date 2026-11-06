@@ -79,8 +79,20 @@ edits, rejected schema/foreign-key defects, URL/storage preservation and old-han
 Prepared browser cases check the same boundaries with separate workers and assert zero HTTP
 requests during reset, including worker requests.
 
-P3-10 remains in progress. The new browser cases await CI execution. Suspension-aware deadlines
-and compatibility-corpus integration remain. The current loader uses the Phase 0 wall-clock
-deadlines. Basic `run()` cases close their candidate after reporting validation. Retained cases
+A root-owned `ActiveClock` now shares budgets across asset fetching/body consumption/hashing,
+wasm compilation, initialization and RPC replies. BFCache residence and supported freeze/resume
+events pause accounting. Visibility alone does not. A monotonic one-second heartbeat detects
+ambiguous gaps longer than two seconds. Each gap charges one second against retained budgets,
+capped at the remaining amount, without replenishing or restarting them.
+
+Results delivered during suspension are reconciled before overdue work, including completed
+child stages whose parent is awaiting them. New database dispatch waits during confirmed
+suspension and reconciliation. Queue waiting consumes no RPC deadline. Expiry cancels remaining
+stage resources and terminates the context's workers. No operation is replayed. Test deadlines
+must be positive and finite. The Phase 0 standalone default remains a wall-clock deadline.
+
+P3-10 remains in progress. The new browser cases await CI execution. Two-stage resume health
+checks, browser suspension fault coverage and compatibility-corpus integration remain. Basic
+`run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
