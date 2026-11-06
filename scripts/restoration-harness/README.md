@@ -37,13 +37,22 @@ history, missing indexes and triggers, corrupt bytes, and dangling references ou
 initial namespace. Unit tests cover decoder limits, padding bits, uncertain failures,
 cleanup, storage errors and deferred deletion. Browser cases cover fresh startup, restoration to a missing namespace, malformed-copy fallback,
 worker and asset failures, executed operations with lost replies, unclassified service failures
-and stale navigation. These cases are prepared for browser execution.
+and stale navigation. The user reported the CI browser job passing after this suite was added.
+New attempt/generation race cases are prepared for the next CI run.
 
 `DestinationTracker` captures a monotonic destination sequence and discards superseded view
 results and errors. The startup policy checks the destination again before readiness and saved-copy
 deletion. Call the browser harness's `start(namespaceId, beforeView)` to obtain `navigate(id)`
 and a result promise. The optional view hook and RPC deadline control support fault injection.
 Database-wide failures retain their classification when the destination changes.
+
+`AttemptOwner` issues leases containing startup attempt and candidate-generation stamps.
+Beginning another attempt or replacing the generation invalidates old leases and terminates
+their workers. Guards run before database work, readiness and saved-copy deletion. Late opened
+candidates are closed, and obsolete outcomes return `status: "superseded"`. Ready reports
+include their attempt and generation. Check `restorationHarness.isCurrent(report)` before
+applying a report after another asynchronous step. Generation replacement belongs to the root
+when it replaces a candidate. Failed reset validation must preserve the existing generation.
 
 `ResetSession` accepts a whole-operation serializer shared with reads, edits and export.
 Its opener must stage an independent candidate while preserving the live handle. The session
@@ -52,8 +61,7 @@ the next generation. Failed validation preserves the prior state, URL and saved 
 activation precedes deletion and old-handle cleanup. Deletion and cleanup failures have separate
 result flags. Confirmed sample defects block further reset attempts until reload.
 
-P3-10 remains in progress. Browser execution, initialization-attempt/generation supersession,
-staged worker reset integration, suspension-aware deadlines and compatibility-corpus integration
-remain. The current loader uses the Phase 0 wall-clock deadlines. The harness reports validation results and closes the
+P3-10 remains in progress. The new browser races await CI execution. Staged worker reset
+integration, suspension-aware deadlines and compatibility-corpus integration remain. The current loader uses the Phase 0 wall-clock deadlines. The harness reports validation results and closes the
 candidate after each case. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

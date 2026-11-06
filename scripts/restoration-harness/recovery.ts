@@ -1,3 +1,4 @@
+import { SupersededAttemptError, type AttemptLease } from "./attempt";
 import type { DestinationTracker } from "./navigation";
 export const RECOVERY_KEY = "kozane-demo:session";
 export const RECOVERY_DB_MAX_BYTES = 2_097_152;
@@ -81,6 +82,7 @@ export interface StorageAccess {
 }
 export interface RestoreOptions<View> {
   schemaVersion: string;
+  attempt?: AttemptLease;
   namespaceId?: string;
   navigation?: DestinationTracker;
   beforeView?: (namespaceId?: string) => Promise<void>;
@@ -98,7 +100,8 @@ export type RestoreResult<View> =
       olderCopyMayRestore: boolean;
       fallbackReason?: string;
     }
-  | { status: "unavailable"; action: "retry" | "reload"; kind: FailureKind };
+  | { status: "unavailable"; action: "retry" | "reload"; kind: FailureKind }
+  | { status: "superseded" };
 export function failureKind(error: unknown): FailureKind {
   const seen = new Set<unknown>();
   let cause = error;
@@ -114,8 +117,10 @@ async function validate<View>(
   bytes: Uint8Array,
   sampleNamespaceId?: string,
 ) {
+  options.attempt?.assertCurrent();
   const candidate = await options.open(bytes);
   try {
+    options.attempt?.assertCurrent();
     let view: View;
     while (true) {
       const ticket = options.navigation?.capture();
@@ -125,6 +130,7 @@ async function validate<View>(
         navigation: options.navigation,
         beforeView: options.beforeView,
       });
+      options.attempt?.assertCurrent();
       if (!ticket || options.navigation!.isCurrent(ticket)) break;
     }
     return { candidate, view };
@@ -135,13 +141,13 @@ async function validate<View>(
     } catch {
       throw new HarnessFailure("unknown", "Candidate cleanup failed");
     }
+    options.attempt?.assertCurrent();
     throw error;
   }
 }
 /** Startup policy. Destination checks guard readiness and saved-copy deletion. */
-export async function restoreCandidate<View>(
-  options: RestoreOptions<View>,
-): Promise<RestoreResult<View>> {
+async function restoreCurrent<View>(options: RestoreOptions<View>): Promise<RestoreResult<View>> {
+  options.attempt?.assertCurrent();
   let storage: StorageAccess | undefined,
     saved: string | null = null;
   let recoveryUnavailable = false,
@@ -172,6 +178,7 @@ export async function restoreCandidate<View>(
       throw new HarnessFailure("unknown", "Candidate cleanup failed");
     }
   } catch (error) {
+    options.attempt?.assertCurrent();
     const kind = failureKind(error);
     return {
       status: "unavailable",
@@ -182,6 +189,7 @@ export async function restoreCandidate<View>(
   if (recovery) {
     try {
       const restored = await validate(options, recovery.bytes);
+      options.attempt?.assertCurrent();
       return {
         status: "ready",
         source: "restored",
@@ -190,6 +198,7 @@ export async function restoreCandidate<View>(
         olderCopyMayRestore,
       };
     } catch (error) {
+      options.attempt?.assertCurrent();
       const kind = failureKind(error);
       if (kind !== "database_content")
         return { status: "unavailable", action: kind === "asset" ? "reload" : "retry", kind };
@@ -198,6 +207,7 @@ export async function restoreCandidate<View>(
   }
   try {
     const fallback = await validate(options, sample.bytes, sample.namespaceId);
+    options.attempt?.assertCurrent();
     if (saved !== null && fallbackReason && storage) {
       try {
         storage.removeItem(RECOVERY_KEY);
@@ -221,5 +231,50 @@ export async function restoreCandidate<View>(
       action: kind === "database_content" || kind === "asset" ? "reload" : "retry",
       kind,
     };
+  }
+}
+
+/** Close any late candidate and suppress all outcomes from an obsolete attempt or generation. */
+export async function restoreCandidate<View>(
+  options: RestoreOptions<View>,
+): Promise<RestoreResult<View>> {
+  const candidates = new Set<Candidate<View>>();
+  const tracked: RestoreOptions<View> = {
+    ...options,
+    open: async (bytes) => {
+      const original = await options.open(bytes);
+      let closed = false;
+      const candidate: Candidate<View> = {
+        validate: (request) => original.validate(request),
+        close: async () => {
+          if (closed) return;
+          closed = true;
+          candidates.delete(candidate);
+          await original.close();
+        },
+      };
+      candidates.add(candidate);
+      return candidate;
+    },
+  };
+  try {
+    const result = await restoreCurrent(tracked);
+    options.attempt?.assertCurrent();
+    return result;
+  } catch (error) {
+    if (
+      error instanceof SupersededAttemptError ||
+      (options.attempt && !options.attempt.isCurrent())
+    ) {
+      for (const candidate of candidates) {
+        try {
+          await candidate.close();
+        } catch {
+          /* The host quarantines the obsolete worker. */
+        }
+      }
+      return { status: "superseded" };
+    }
+    throw error;
   }
 }

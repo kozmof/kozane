@@ -188,3 +188,117 @@ test("preserves recovery after an executed open loses its reply", async ({ page 
     saved: "malformed",
   });
 });
+test("a superseded startup cannot delete a newer restored copy", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const harness = (window as any).restorationHarness;
+    sessionStorage.setItem("kozane-demo:session", "malformed");
+    let release!: () => void, entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const old = harness.start(undefined, async () => {
+      entered();
+      await gate;
+    });
+    await waiting;
+    const bytes = new Uint8Array(await (await fetch("/sample.db")).arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const saved = JSON.stringify({
+      schemaVersion: harness.schemaVersion,
+      savedAt: 1,
+      db: btoa(binary),
+    });
+    sessionStorage.setItem("kozane-demo:session", saved);
+    const current = await harness.run();
+    release();
+    return {
+      old: await old.result,
+      current,
+      currentOwns: harness.isCurrent(current),
+      preserved: sessionStorage.getItem("kozane-demo:session") === saved,
+    };
+  });
+  expect(result).toMatchObject({
+    old: { status: "superseded" },
+    current: { status: "ready", source: "restored" },
+    currentOwns: true,
+    preserved: true,
+  });
+});
+test("generation replacement suppresses late startup readiness and deletion", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const harness = (window as any).restorationHarness;
+    sessionStorage.setItem("kozane-demo:session", "malformed");
+    let release!: () => void, entered!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const old = harness.start(undefined, async () => {
+      entered();
+      await gate;
+    });
+    await waiting;
+    harness.replaceGeneration();
+    sessionStorage.setItem("kozane-demo:session", "newer copy");
+    release();
+    const obsolete = await old.result;
+    const saved = sessionStorage.getItem("kozane-demo:session");
+    const current = await harness.run();
+    return { obsolete, saved, current };
+  });
+  expect(result).toMatchObject({
+    obsolete: { status: "superseded" },
+    saved: "newer copy",
+    current: { status: "ready", generation: 1 },
+  });
+});
+test("a late verified worker from an obsolete attempt cannot open a database", async ({ page }) => {
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let first = true;
+  await page.route("**/worker.js", async (route) => {
+    if (first) {
+      first = false;
+      entered();
+      await gate;
+    }
+    await route.continue();
+  });
+  await page.evaluate(() => {
+    sessionStorage.setItem("kozane-demo:session", "malformed");
+    (window as any).obsoleteStartup = (window as any).restorationHarness.start();
+  });
+  await waiting;
+  const current = await page.evaluate(async () => {
+    const harness = (window as any).restorationHarness;
+    const bytes = new Uint8Array(await (await fetch("/sample.db")).arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const saved = JSON.stringify({
+      schemaVersion: harness.schemaVersion,
+      savedAt: 0,
+      db: btoa(binary),
+    });
+    sessionStorage.setItem("kozane-demo:session", saved);
+    return { result: await harness.run(), saved };
+  });
+  release();
+  const late = await page.evaluate(async () => ({
+    result: await (window as any).obsoleteStartup.result,
+    saved: sessionStorage.getItem("kozane-demo:session"),
+  }));
+  expect(current.result).toMatchObject({ status: "ready", source: "restored" });
+  expect(late).toEqual({ result: { status: "superseded" }, saved: current.saved });
+});

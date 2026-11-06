@@ -19,6 +19,7 @@ export async function buildRestorationHarness(
     "worker.ts",
     "recovery.ts",
     "navigation.ts",
+    "attempt.ts",
     "reset.ts",
     "validation.ts",
     "generate-fixture.mjs",

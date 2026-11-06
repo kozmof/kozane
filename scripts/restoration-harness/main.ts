@@ -9,6 +9,7 @@ import {
   AssetVerificationError,
   type AssetManifest,
 } from "./verified-loader";
+import { AttemptOwner, SupersededAttemptError } from "./attempt";
 import { DestinationTracker } from "./navigation";
 import { deadline } from "./deadline";
 import { OperationQueue } from "./operation-queue";
@@ -19,6 +20,7 @@ declare const __RESTORATION_MANIFEST__: AssetManifest & {
   sampleNamespaceId: string;
 };
 const manifest = __RESTORATION_MANIFEST__;
+const attempts = new AttemptOwner();
 async function run(
   namespaceId?: string,
   controls: {
@@ -27,19 +29,22 @@ async function run(
     beforeView?: (namespaceId?: string) => Promise<void>;
   } = {},
 ) {
+  const attempt = attempts.begin();
   let worker: Worker | undefined;
   let sequence = 0;
   let unavailable = false;
   const pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>();
   const queue = new OperationQueue();
-  function terminate(error = new HarnessFailure("unknown", "Worker is unavailable")) {
+  function terminate(error: Error = new HarnessFailure("unknown", "Worker is unavailable")) {
     unavailable = true;
     queue.dispose();
     worker?.terminate();
     for (const request of pending.values()) request.reject(error);
     pending.clear();
   }
+  const unsubscribe = attempt.onSuperseded(() => terminate(new SupersededAttemptError()));
   async function rpc(method: string, extra = {}): Promise<any> {
+    attempt.assertCurrent();
     if (unavailable) throw new HarnessFailure("unknown", "Worker is unavailable");
     return deadline(
       new Promise((resolve, reject) => {
@@ -57,7 +62,9 @@ async function run(
     );
   }
   try {
+    attempt.assertCurrent();
     worker = await verifiedWorker(manifest);
+    attempt.assertCurrent();
     worker.onerror = () => terminate();
     worker.onmessageerror = () => terminate();
     worker.onmessage = ({ data }) => {
@@ -77,6 +84,7 @@ async function run(
     const sampleBytes = new Uint8Array(
       await verifiedBytes(new URL("./sample.db", location.href), manifest.sampleHash),
     );
+    attempt.assertCurrent();
     const handle = drizzle((sql, args, method) => rpc(method, { sql, args }), { schema });
     const db = createDatabaseAdapter(handle, {
       read: async (operation) => {
@@ -100,6 +108,7 @@ async function run(
     });
     const result = await restoreCandidate<NamespaceView>({
       schemaVersion,
+      attempt,
       namespaceId,
       navigation: controls.navigation,
       beforeView: controls.beforeView,
@@ -123,13 +132,17 @@ async function run(
         return candidate;
       },
     });
+    attempt.assertCurrent();
     if (result.status === "ready") {
       const { candidate, ...report } = result;
       await candidate.close();
-      return report;
+      attempt.assertCurrent();
+      return { ...report, attempt: attempt.attempt, generation: attempt.generation };
     }
     return result;
   } catch (error) {
+    if (!attempt.isCurrent() || error instanceof SupersededAttemptError)
+      return { status: "superseded" };
     const failure =
       error instanceof AssetVerificationError
         ? new HarnessFailure("asset", "Build asset verification failed")
@@ -140,6 +153,7 @@ async function run(
       kind: failure instanceof HarnessFailure ? failure.kind : "unknown",
     };
   } finally {
+    unsubscribe();
     terminate();
   }
 }
@@ -150,5 +164,14 @@ function start(namespaceId?: string, beforeView?: (namespaceId?: string) => Prom
     result: run(namespaceId, { navigation, beforeView }),
   };
 }
-Object.assign(window, { restorationHarness: { run, start, manifest, schemaVersion } });
+Object.assign(window, {
+  restorationHarness: {
+    run,
+    start,
+    manifest,
+    schemaVersion,
+    replaceGeneration: () => attempts.replaceGeneration(),
+    isCurrent: (ticket: { attempt: number; generation: number }) => attempts.isCurrent(ticket),
+  },
+});
 document.body.dataset.harness = "ready";

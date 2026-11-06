@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { createDatabaseAdapter } from "@kozane/core/database";
 import { schemaVersion } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
+import { AttemptOwner } from "./attempt.ts";
 import { DestinationTracker } from "./navigation.ts";
 import { validateCandidate } from "./validation.ts";
 import { restoreCandidate, HarnessFailure } from "./recovery.ts";
@@ -151,6 +152,39 @@ navigation.select(sampleNamespaceId);
 release();
 assert.equal((await changing).namespaceId, sampleNamespaceId);
 await navigating.close();
+const attempts = new AttemptOwner();
+let savedAttemptCopy = "malformed",
+  releaseAttempt,
+  enteredAttempt;
+const attemptGate = new Promise((resolve) => {
+  releaseAttempt = resolve;
+});
+const attemptWaiting = new Promise((resolve) => {
+  enteredAttempt = resolve;
+});
+const obsolete = restoreCandidate({
+  schemaVersion,
+  attempt: attempts.begin(),
+  storage: () => ({
+    getItem: () => savedAttemptCopy,
+    removeItem: () => {
+      savedAttemptCopy = "deleted";
+    },
+  }),
+  sample: async () => ({ bytes: sample, namespaceId: sampleNamespaceId }),
+  open: async (bytes) => open(bytes),
+  beforeView: async () => {
+    enteredAttempt();
+    await attemptGate;
+  },
+});
+await attemptWaiting;
+attempts.replaceGeneration();
+savedAttemptCopy = "newer copy";
+releaseAttempt();
+assert.deepEqual(await obsolete, { status: "superseded" });
+assert.equal(savedAttemptCopy, "newer copy");
+assert.equal(active, false);
 console.log(
   "Restoration policy and candidate validation passed with packed core and real wasm bytes under Node.",
 );
