@@ -109,8 +109,21 @@ actual bundled worker under Node to check early probes, instance binding and tra
 preservation through connection checks. Prepared browser cases cover healthy resume with
 unsaved edits, a mutation reply held across suspension and a stalled resume probe.
 
-P3-10 remains in progress. The new browser cases await CI execution. Expanded suspension
-fault coverage and compatibility-corpus integration remain. Basic
+`suspension.spec.ts` holds startup at worker fetch, partial response consumption, hashing,
+wasm compilation, initialization delivery, service-view validation and a dispatched validation
+reply. It simulates a confirmed 90-second pause with Playwright's clock, preserves the saved
+copy, and verifies worker health before releasing the held stage. A separate case covers
+supported document freeze/resume events. The freeze case skips only when the browser does
+not expose those lifecycle events.
+
+The real navigation case leaves for `/away`, waits longer than its configured RPC and health
+deadlines, and returns through browser history. It requires `pageshow.persisted`, the same
+in-memory session and retained unsaved edits. Additional cases check that hidden execution
+still expires stalled replies and repeated ambiguous gaps exhaust a pre-worker asset budget.
+These tests are discovered by the existing CI command alongside the restoration cases.
+
+P3-10 remains in progress. The expanded browser cases await CI execution. Compatibility-corpus
+integration remains. Basic
 `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

@@ -142,5 +142,9 @@ export async function buildRestorationHarness(
     join(output, "index.html"),
     `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'"><title>Packed restoration harness</title><body>Preparing restoration harness<script type="module" src="./main.js"></script>`,
   );
+  await writeFile(
+    join(output, "away.html"),
+    "<!doctype html><meta charset=utf-8><title>BFCache navigation target</title><p>Return to the restoration harness.</p>",
+  );
   console.log(`Built packed restoration harness at ${output}. Browser tests have not run.`);
 }

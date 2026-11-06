@@ -8,9 +8,9 @@ import { WorkerContext, type WorkerCandidate, type HarnessManifest } from "./wor
 export async function openResetSession(
   manifest: HarnessManifest,
   namespaceId?: string,
-  controls: { healthTimeoutMs?: number } = {},
+  controls: { healthTimeoutMs?: number; rpcTimeoutMs?: number } = {},
 ) {
-  const context = new WorkerContext(manifest, undefined, controls.healthTimeoutMs);
+  const context = new WorkerContext(manifest, controls.rpcTimeoutMs, controls.healthTimeoutMs);
   const queue = new OperationQueue();
   let closed = false;
   const assertActive = () => {

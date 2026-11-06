@@ -73,8 +73,10 @@ Object.assign(window, {
     start,
     manifest,
     schemaVersion,
-    openSession: (namespaceId?: string, controls?: { healthTimeoutMs?: number }) =>
-      openResetSession(manifest, namespaceId, controls),
+    openSession: (
+      namespaceId?: string,
+      controls?: { healthTimeoutMs?: number; rpcTimeoutMs?: number },
+    ) => openResetSession(manifest, namespaceId, controls),
     replaceGeneration: () => attempts.replaceGeneration(),
     isCurrent: (ticket: { attempt: number; generation: number }) => attempts.isCurrent(ticket),
   },

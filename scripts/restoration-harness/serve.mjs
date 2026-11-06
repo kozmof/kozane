@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 const files = new Map([
   ["/", ["index.html", "text/html"]],
+  ["/away", ["away.html", "text/html"]],
   ["/main.js", ["main.js", "text/javascript"]],
   ["/worker.js", ["worker.js", "text/javascript"]],
   ["/sqlite3.wasm", ["sqlite3.wasm", "application/wasm"]],
