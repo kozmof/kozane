@@ -13,7 +13,8 @@ imports. It does not launch a browser.
 Run `pnpm test:restoration-harness` to rebuild and execute the browser tests in Playwright
 Chromium. The local server uses the demo CSP and serves worker, wasm and database assets.
 The browser entry uses the embedded hashes and build-ID handshake before database access.
-The fixture and its metadata are regenerated on each build.
+The fixture and its metadata are regenerated on each build. The CI `browser-e2e` job runs
+this command on Node 24 with Chromium for pushes and pull requests.
 
 The shared startup policy reads recovery storage before opening a database. It bounds JSON
 and decoded database sizes, validates required own fields and canonical padded base64,

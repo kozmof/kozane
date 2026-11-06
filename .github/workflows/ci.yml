@@ -42,3 +42,4 @@ jobs:
       - run: pnpm test:e2e
       - run: node scripts/browser-spike/build.mjs
       - run: pnpm exec playwright test --config scripts/browser-spike/playwright.config.ts
+      - run: pnpm test:restoration-harness
