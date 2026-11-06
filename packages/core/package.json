@@ -30,6 +30,10 @@
     "./services": {
       "types": "./dist/packages/core/src/services.d.ts",
       "import": "./dist/packages/core/src/services.js"
+    },
+    "./migrations": {
+      "types": "./dist/packages/core/src/migrations.d.ts",
+      "import": "./dist/packages/core/src/migrations.js"
     }
   },
   "publishConfig": {
@@ -37,7 +41,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "prepack": "pnpm run build"
+    "prepack": "pnpm run build",
+    "check:migrations": "node scripts/generate-migrations.mjs --check"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",

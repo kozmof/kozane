@@ -24,6 +24,7 @@ function run(command, args, cwd = repository) {
   }
 }
 try {
+  run("pnpm", ["--filter", "@kozane/core", "check:migrations"]);
   run("pnpm", ["--filter", "@kozane/core", "pack", "--pack-destination", temporary]);
   const archive = readdirSync(temporary).find((name) => name.endsWith(".tgz"));
   assert.ok(archive, "Missing core tarball");
@@ -128,10 +129,12 @@ snapshots:
     join(temporary, "runtime.mjs"),
     `
     import assert from 'node:assert/strict';
-    import { ValidationError, domainErrorCode } from '@kozane/core';
+    import { ValidationError, domainErrorCode, MigrationHistoryError as RootMigrationHistoryError } from '@kozane/core';
     import { createDatabaseAdapter, withTx, withReadTx, createServiceContext } from '@kozane/core/database';
     import * as schema from '@kozane/core/schema';
     import * as services from '@kozane/core/services';
+    import { migrations, schemaVersion, validateMigrationHistory, MigrationHistoryError } from '@kozane/core/migrations';
+    import { DatabaseSync } from 'node:sqlite';
     assert.equal(ValidationError, services.ValidationError);
     assert.equal(domainErrorCode(new ValidationError('invalid')), 'validation');
     assert.equal(createServiceContext, services.createServiceContext);
@@ -144,6 +147,20 @@ snapshots:
     assert.equal(await withTx(db, async tx => tx), handle);
     assert.equal(await withReadTx(db, async tx => tx), handle);
     assert.equal(writes, 1); assert.equal(reads, 1);
+    assert.equal(MigrationHistoryError, RootMigrationHistoryError);
+    assert.ok(Object.isFrozen(migrations));
+    assert.equal(schemaVersion, migrations.at(-1).id);
+    const history = migrations.map(record => ({hash: record.hash, created_at: record.when}));
+    assert.equal(validateMigrationHistory(history, 'complete').complete, true);
+    assert.throws(() => validateMigrationHistory([{...history[0], hash:'altered'}], 'prefix'), error => error instanceof MigrationHistoryError && error instanceof ValidationError);
+    const sqlite = new DatabaseSync(':memory:');
+    try {
+      sqlite.exec('PRAGMA foreign_keys=OFF; BEGIN DEFERRED');
+      for (const record of migrations) for (const statement of record.statements) sqlite.exec(statement);
+      sqlite.exec('COMMIT; PRAGMA foreign_keys=ON');
+      for (const name of ['namespace', 'scope_area', 'inventory']) assert.ok(sqlite.prepare('SELECT name FROM sqlite_schema WHERE name=?').get(name));
+      assert.ok(sqlite.prepare("SELECT name FROM sqlite_schema WHERE type='trigger' AND name='card_stamp_missing_timestamps'").get());
+    } finally { sqlite.close(); }
     await assert.rejects(import('@kozane/core/dist/src/services/errors.js'), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
   `,
   );
@@ -155,6 +172,7 @@ snapshots:
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
+    import { migrations, schemaVersion, validateMigrationHistory, type MigrationRecord } from '@kozane/core/migrations';
     declare const db: DB;
     declare const error: ValidationError;
     const input: CardCreateInput = { partitionId: 'p', content: 'Typed public consumer' };
@@ -169,6 +187,11 @@ snapshots:
     // @ts-expect-error Domain input types reject non-string content.
     const invalid: CardCreateInput = { partitionId: 'p', content: 7 };
     void invalid; void error; void cardTable;
+    const record: MigrationRecord = migrations[0];
+    void record.statements; void schemaVersion;
+    void validateMigrationHistory([], 'prefix');
+    // @ts-expect-error History checks require an explicit supported mode.
+    void validateMigrationHistory([], 'automatic');
   `,
   );
   writeFileSync(
