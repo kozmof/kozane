@@ -36,7 +36,7 @@ describe("CARD_BOX", () => {
   // Read card style constants from the component to detect drift in the hint geometry model.
   // Resolve from the repository root because Vite transforms test-module URLs.
   const cardSource = readFileSync(
-    resolve("src/routes/[namespaceId]/components/KozaneCard.svelte"),
+    resolve("src/lib/client/board/components/KozaneCard.svelte"),
     "utf8",
   );
   // The content block is the styled element that sets a minimum height.
