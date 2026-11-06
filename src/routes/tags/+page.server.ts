@@ -62,6 +62,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
       db,
       ...(requestedNamespace ? { namespaceId: requestedNamespace } : {}),
       includeFiles,
+      scopedFilesOnly: prerender,
       // Reuse the cached index across tag selections to avoid repeating unchanged scans.
       // Static prerendering skips persistent caching.
       ...cacheLocation(),

@@ -8,6 +8,7 @@ import { addPartition } from "$db/api/partition";
 import { addLayer } from "$db/api/layer";
 import { addCard, addCards } from "$db/api/card";
 import { addTaskspace } from "$db/api/taskspace";
+import { addScope } from "$db/api/scope";
 import type { DB } from "$db/tx";
 import { createTestDB } from "../../test-utils/db.js";
 import { TAG_HITS_SHOWN_MAX } from "$lib/constants";
@@ -195,21 +196,26 @@ describe("as a static export", () => {
     ).toBe(true);
   });
 
-  it("names them once the export was built to carry files", async () => {
+  it("exports scoped file tags while excluding unscoped metadata and contents", async () => {
     const root = mkdtempSync(join(tmpdir(), "kozane-tags-ssg-"));
     roots.push(root);
     mkdirSync(join(root, ".kozane"), { recursive: true });
     writeFileSync(join(root, ".kozane", "config.json"), "{}");
     mkdirSync(join(root, "client-work"), { recursive: true });
     writeFileSync(join(root, "client-work", "notes.md"), ":perf in a file\n");
+    mkdirSync(join(root, "private-work"));
+    writeFileSync(join(root, "private-work", "private.md"), ":privateexport secret excerpt\n");
 
     const { db, namespaceId } = await setup();
+    const scopeId = await addScope({ db, name: "Published" });
     const taskspaceId = await addTaskspace({
       db,
       namespaceId,
+      scopeId,
       name: "client-work",
       path: "client-work",
     });
+    await addTaskspace({ db, namespaceId, name: "Private taskspace", path: "private-work" });
 
     const data = await loadUnderSsg(db, {
       KOZANE_SSG_INCLUDE_SCOPED_FILES: "1",
@@ -221,6 +227,15 @@ describe("as a static export", () => {
       name: "client-work",
       namespaceId,
     });
+    expect(Object.keys(data.taskspaces)).toEqual([taskspaceId]);
+    expect(
+      data.staticBackendData?.tags?.index.hits.some(
+        (hit) => hit.source.kind === "file" && hit.tag === "perf",
+      ),
+    ).toBe(true);
+    expect(JSON.stringify(data)).not.toMatch(
+      /privateexport|secret excerpt|Private taskspace|private-work/,
+    );
   });
 
   /** An export has no query string, so it bakes every hit and the browser selects. */

@@ -44,6 +44,8 @@ type LoadTagIndex = {
    * exported page data. Apply this restriction here before serializing the data.
    */
   includeFiles: boolean;
+  /** Static exports must exclude unscoped taskspaces before scanning files. */
+  scopedFilesOnly?: boolean;
   /**
    * Workspace root used to resolve taskspace paths. Discover it from the environment when
    * omitted. The CLI passes the root already found by `requireWorkspace()`.
@@ -68,6 +70,7 @@ export async function loadTagIndex({
   db,
   namespaceId,
   includeFiles,
+  scopedFilesOnly = false,
   root = getWorkspaceRoot(),
   limits,
   cache,
@@ -75,7 +78,7 @@ export async function loadTagIndex({
   // Use the same workspace root for persistent caching and taskspace scanning.
   // Without a root, skip both.
   const store =
-    cache && root
+    cache && root && !scopedFilesOnly
       ? openTagCache({ root, dbUrl: cache.dbUrl, ...(namespaceId && { namespaceId }) })
       : null;
 
@@ -114,6 +117,7 @@ export async function loadTagIndex({
   const pool = createScanPool(limits?.gather);
   let scannedAny = false;
   for (const taskspace of rows) {
+    if (scopedFilesOnly && taskspace.scopeId === null) continue;
     if (!taskspace.path) continue;
     const baseDir = resolveTaskspacePath(taskspace.path, taskspace.pathKind, root);
     if (!baseDir) continue;
