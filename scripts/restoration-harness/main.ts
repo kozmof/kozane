@@ -9,6 +9,7 @@ import {
   AssetVerificationError,
   type AssetManifest,
 } from "./verified-loader";
+import { DestinationTracker } from "./navigation";
 import { deadline } from "./deadline";
 import { OperationQueue } from "./operation-queue";
 import { restoreCandidate, HarnessFailure, type Candidate } from "./recovery";
@@ -18,7 +19,14 @@ declare const __RESTORATION_MANIFEST__: AssetManifest & {
   sampleNamespaceId: string;
 };
 const manifest = __RESTORATION_MANIFEST__;
-async function run(namespaceId?: string) {
+async function run(
+  namespaceId?: string,
+  controls: {
+    navigation?: DestinationTracker;
+    rpcTimeoutMs?: number;
+    beforeView?: (namespaceId?: string) => Promise<void>;
+  } = {},
+) {
   let worker: Worker | undefined;
   let sequence = 0;
   let unavailable = false;
@@ -44,7 +52,7 @@ async function run(namespaceId?: string) {
           reject(error);
         }
       }),
-      method === "probe" ? 10_000 : 30_000,
+      method === "probe" ? 10_000 : (controls.rpcTimeoutMs ?? 30_000),
       () => terminate(),
     );
   }
@@ -93,6 +101,8 @@ async function run(namespaceId?: string) {
     const result = await restoreCandidate<NamespaceView>({
       schemaVersion,
       namespaceId,
+      navigation: controls.navigation,
+      beforeView: controls.beforeView,
       storage: () => sessionStorage,
       sample: async () => ({ bytes: sampleBytes, namespaceId: manifest.sampleNamespaceId }),
       open: async (bytes) => {
@@ -133,5 +143,12 @@ async function run(namespaceId?: string) {
     terminate();
   }
 }
-Object.assign(window, { restorationHarness: { run, manifest, schemaVersion } });
+function start(namespaceId?: string, beforeView?: (namespaceId?: string) => Promise<void>) {
+  const navigation = new DestinationTracker(namespaceId);
+  return {
+    navigate: (id?: string) => navigation.select(id),
+    result: run(namespaceId, { navigation, beforeView }),
+  };
+}
+Object.assign(window, { restorationHarness: { run, start, manifest, schemaVersion } });
 document.body.dataset.harness = "ready";

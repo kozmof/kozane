@@ -12,7 +12,7 @@ import {
   validateDatabaseSchema,
 } from "@kozane/core/migrations";
 import { namespaces, snapshot } from "@kozane/core/services";
-import { HarnessFailure, failureKind } from "./recovery";
+import { HarnessFailure, failureKind, type CandidateRequest } from "./recovery";
 export type NamespaceView =
   | {
       kind: "selected";
@@ -21,10 +21,7 @@ export type NamespaceView =
     }
   | { kind: "empty" | "selection_required" | "missing" };
 /** Complete database checks precede service reads. The worker adapter owns whole-operation serialization. */
-export async function validateCandidate(
-  db: DB,
-  request: { namespaceId?: string; sampleNamespaceId?: string },
-): Promise<NamespaceView> {
+export async function validateCandidate(db: DB, request: CandidateRequest): Promise<NamespaceView> {
   try {
     await withReadTx(db, async (tx) => {
       const integrity = await tx.values<unknown[]>(sql`PRAGMA integrity_check`);
@@ -44,20 +41,28 @@ export async function validateCandidate(
       )
         throw new HarnessFailure("database_content", "Required sample namespace is missing");
     }
-    let selected: string | undefined;
-    if (request.namespaceId !== undefined) {
-      if (!rows.some((row) => row.id === request.namespaceId)) return { kind: "missing" };
-      selected = request.namespaceId;
-    } else {
-      if (!rows.length) return { kind: "empty" };
-      const defaults = rows.filter((row) => row.isDefault);
-      if (defaults.length === 1) selected = defaults[0].id;
-      else if (rows.length === 1) selected = rows[0].id;
-      else return { kind: "selection_required" };
-    }
-    const initial = await snapshot.get(db, context, selected);
-    if (!initial) throw new HarnessFailure("unknown", "Selected namespace snapshot is unavailable");
-    return { kind: "selected", namespaceId: selected, snapshot: initial };
+    const readView = async (namespaceId?: string): Promise<NamespaceView> => {
+      await request.beforeView?.(namespaceId);
+      const rows = await namespaces.list(db, context);
+      let selected: string | undefined;
+      if (namespaceId !== undefined) {
+        if (!rows.some((row) => row.id === namespaceId)) return { kind: "missing" };
+        selected = namespaceId;
+      } else {
+        if (!rows.length) return { kind: "empty" };
+        const defaults = rows.filter((row) => row.isDefault);
+        if (defaults.length === 1) selected = defaults[0].id;
+        else if (rows.length === 1) selected = rows[0].id;
+        else return { kind: "selection_required" };
+      }
+      const initial = await snapshot.get(db, context, selected);
+      if (!initial)
+        throw new HarnessFailure("unknown", "Selected namespace snapshot is unavailable");
+      return { kind: "selected", namespaceId: selected, snapshot: initial };
+    };
+    return request.navigation
+      ? await request.navigation.resolve(readView)
+      : await readView(request.namespaceId);
   } catch (error) {
     if (
       error instanceof MigrationHistoryError ||

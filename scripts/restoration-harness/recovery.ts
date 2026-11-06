@@ -1,3 +1,4 @@
+import type { DestinationTracker } from "./navigation";
 export const RECOVERY_KEY = "kozane-demo:session";
 export const RECOVERY_DB_MAX_BYTES = 2_097_152;
 export const RECOVERY_ENVELOPE_MAX_CHARS = 3_145_728;
@@ -64,8 +65,14 @@ export function decodeRecovery(text: string, schemaVersion: string): RecoveryEnv
     bytes: Uint8Array.from(binary, (character) => character.charCodeAt(0)),
   });
 }
+export interface CandidateRequest {
+  namespaceId?: string;
+  sampleNamespaceId?: string;
+  navigation?: DestinationTracker;
+  beforeView?: (namespaceId?: string) => Promise<void>;
+}
 export interface Candidate<View> {
-  validate(request: { namespaceId?: string; sampleNamespaceId?: string }): Promise<View>;
+  validate(request: CandidateRequest): Promise<View>;
   close(): Promise<void>;
 }
 export interface StorageAccess {
@@ -75,6 +82,8 @@ export interface StorageAccess {
 export interface RestoreOptions<View> {
   schemaVersion: string;
   namespaceId?: string;
+  navigation?: DestinationTracker;
+  beforeView?: (namespaceId?: string) => Promise<void>;
   storage(): StorageAccess;
   sample(): Promise<{ bytes: Uint8Array; namespaceId: string }>;
   open(bytes: Uint8Array): Promise<Candidate<View>>;
@@ -107,7 +116,17 @@ async function validate<View>(
 ) {
   const candidate = await options.open(bytes);
   try {
-    const view = await candidate.validate({ namespaceId: options.namespaceId, sampleNamespaceId });
+    let view: View;
+    while (true) {
+      const ticket = options.navigation?.capture();
+      view = await candidate.validate({
+        namespaceId: options.namespaceId,
+        sampleNamespaceId,
+        navigation: options.navigation,
+        beforeView: options.beforeView,
+      });
+      if (!ticket || options.navigation!.isCurrent(ticket)) break;
+    }
     return { candidate, view };
   } catch (error) {
     // Failed cleanup makes the candidate outcome uncertain and prohibits corruption fallback.
@@ -119,7 +138,7 @@ async function validate<View>(
     throw error;
   }
 }
-/** Startup policy only. Saving, reset barriers and navigation races are separate harness stages. */
+/** Startup policy. Destination checks guard readiness and saved-copy deletion. */
 export async function restoreCandidate<View>(
   options: RestoreOptions<View>,
 ): Promise<RestoreResult<View>> {

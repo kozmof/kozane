@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { createDatabaseAdapter } from "@kozane/core/database";
 import { schemaVersion } from "@kozane/core/migrations";
 import * as schema from "@kozane/core/schema";
+import { DestinationTracker } from "./navigation.ts";
 import { validateCandidate } from "./validation.ts";
 import { restoreCandidate, HarnessFailure } from "./recovery.ts";
 const sqlite = await sqlite3InitModule();
@@ -126,6 +127,30 @@ assert.equal(invalidSample.result.status, "unavailable");
 assert.equal(invalidSample.result.action, "reload");
 assert.equal(invalidSample.copy, "malformed");
 assert.equal(invalidSample.deleted, false);
+const navigating = open(sample);
+const navigation = new DestinationTracker("obsolete-id");
+let release, entered;
+const gate = new Promise((resolve) => {
+  release = resolve;
+});
+const waiting = new Promise((resolve) => {
+  entered = resolve;
+});
+const changing = navigating.validate({
+  navigation,
+  beforeView: async (id) => {
+    if (id === "obsolete-id") {
+      entered();
+      await gate;
+      throw new HarnessFailure("database_content", "obsolete read defect");
+    }
+  },
+});
+await waiting;
+navigation.select(sampleNamespaceId);
+release();
+assert.equal((await changing).namespaceId, sampleNamespaceId);
+await navigating.close();
 console.log(
   "Restoration policy and candidate validation passed with packed core and real wasm bytes under Node.",
 );

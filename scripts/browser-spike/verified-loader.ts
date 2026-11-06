@@ -59,7 +59,15 @@ export async function verifiedModule(manifest: AssetManifest): Promise<WebAssemb
             throw new AssetVerificationError("Asset integrity mismatch");
         })(),
       ]);
-      for (const result of results) if (result.status === "rejected") throw result.reason;
+      // A verified integrity defect takes precedence over a parallel compilation failure.
+      if (results[1].status === "rejected") throw results[1].reason;
+      if (results[0].status === "rejected") {
+        if (results[0].reason instanceof WebAssembly.CompileError)
+          throw new AssetVerificationError("Asset compilation failed", {
+            cause: results[0].reason,
+          });
+        throw results[0].reason;
+      }
       return (results[0] as PromiseFulfilledResult<WebAssembly.Module>).value;
     })(),
     30_000,
