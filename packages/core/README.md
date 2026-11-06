@@ -30,9 +30,11 @@ The ordinary Node workspace compatibility path remains separate from these stric
 Build from the repository root with `pnpm build:core`. This regenerates migration records
 from the original journal and SQL. Run `pnpm --filter @kozane/core check:migrations` to check
 that committed records are current. `pnpm check:core-package` checks freshness, installs the
-tarball outside the workspace with only its declared dependencies, checks its public types
-and runtime exports, executes its migration statements in native SQLite, and builds its
-browser entries.
+tarball outside the workspace with its declared dependencies and the adapter fixture’s explicit
+Drizzle dependency. It checks public types and runtime exports, applies migrations through a
+SQLite proxy adapter, compares history and application schema with the existing Node migrator,
+and builds the browser entries. It also checks upgrades, relation preservation, rollback,
+read-only history validation and driver commit boundaries.
 
 Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history in one read
 transaction. A missing history table counts as empty and is never created by validation.

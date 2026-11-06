@@ -6,11 +6,13 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { createClient } from "@libsql/client";
 import {
   migrations,
+  applyMigrations,
   schemaVersion,
   validateMigrationHistory,
   MigrationHistoryError,
 } from "../../../packages/core/src/migrations.js";
 import { runMigrations, getMigrationStatus } from "./db.js";
+import { openDb } from "../../db/client.js";
 const rows = () => migrations.map((record) => ({ hash: record.hash, created_at: record.when }));
 const roots: string[] = [];
 afterEach(() => {
@@ -146,6 +148,12 @@ it.each(["hash", "duplicate", "unknown", "gap"] as const)(
         )
       ).rows.map((row) => ({ id: row.id, hash: row.hash, created_at: row.created_at }));
       expect(() => validateMigrationHistory(before, "complete")).toThrow(MigrationHistoryError);
+      const candidate = await openDb(url);
+      try {
+        await expect(applyMigrations(candidate.db)).rejects.toBeInstanceOf(MigrationHistoryError);
+      } finally {
+        candidate.close();
+      }
       expect((await getMigrationStatus(url)).state).toBe(kind === "gap" ? "gapped" : "current");
       await runMigrations(url);
       const after = (

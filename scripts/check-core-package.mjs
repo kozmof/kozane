@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
+import { migrate } from "drizzle-orm/libsql/migrator";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,7 +55,10 @@ try {
     JSON.stringify({
       private: true,
       type: "module",
-      dependencies: { "@kozane/core": `file:${join(temporary, archive)}` },
+      dependencies: {
+        "@kozane/core": `file:${join(temporary, archive)}`,
+        "drizzle-orm": drizzleVersion,
+      },
     }),
   );
   const store = dirname(run("pnpm", ["store", "path"]).trim());
@@ -64,7 +70,7 @@ try {
       .update(readFileSync(join(temporary, archive)))
       .digest("base64");
   // Reuse locked registry artifacts without importing the workspace's optional
-  // driver peers. Only the package's two declared runtime dependencies are installed.
+  // driver peers. The adapter fixture also directly declares the same Drizzle version.
   const registry = readFileSync(join(repository, "pnpm-lock.yaml"), "utf8")
     .split("\npackages:\n")[1]
     .split("\nsnapshots:\n")[0];
@@ -87,6 +93,9 @@ importers:
       '@kozane/core':
         specifier: ${JSON.stringify(archiveReference)}
         version: ${JSON.stringify(archiveReference)}
+      drizzle-orm:
+        specifier: ${drizzleVersion}
+        version: ${drizzleVersion}
 packages:
   ${packageKey}:
     resolution: {integrity: ${integrity}, tarball: ${JSON.stringify(archiveReference)}}
@@ -165,6 +174,20 @@ snapshots:
   `,
   );
   run(process.execPath, [join(temporary, "runtime.mjs")], temporary);
+  const referencePath = join(temporary, "reference.sqlite");
+  const referenceClient = createClient({ url: `file:${referencePath}` });
+  try {
+    await migrate(drizzle(referenceClient), { migrationsFolder: join(repository, "drizzle") });
+  } finally {
+    referenceClient.close();
+  }
+  writeFileSync(
+    join(temporary, "migrations.mjs"),
+    readFileSync(join(repository, "scripts/fixtures/core-consumer-migrations.mjs")),
+  );
+  console.log(
+    run(process.execPath, [join(temporary, "migrations.mjs"), referencePath], temporary).trim(),
+  );
   writeFileSync(
     join(temporary, "consumer.ts"),
     `
@@ -172,7 +195,7 @@ snapshots:
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
-    import { migrations, schemaVersion, validateMigrationHistory, type MigrationRecord } from '@kozane/core/migrations';
+    import { migrations, schemaVersion, validateMigrationHistory, applyMigrations, validateDatabaseMigrationHistory, type MigrationRecord } from '@kozane/core/migrations';
     declare const db: DB;
     declare const error: ValidationError;
     const input: CardCreateInput = { partitionId: 'p', content: 'Typed public consumer' };
@@ -190,6 +213,10 @@ snapshots:
     const record: MigrationRecord = migrations[0];
     void record.statements; void schemaVersion;
     void validateMigrationHistory([], 'prefix');
+    void applyMigrations(db).then(result => result.appliedIds);
+    void validateDatabaseMigrationHistory(db, 'complete');
+    // @ts-expect-error Database history checks require an explicit supported mode.
+    void validateDatabaseMigrationHistory(db, 'automatic');
     // @ts-expect-error History checks require an explicit supported mode.
     void validateMigrationHistory([], 'automatic');
   `,
