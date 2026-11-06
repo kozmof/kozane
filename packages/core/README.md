@@ -8,7 +8,7 @@ Kozane database contracts, schema and domain services for Node and browsers.
 | `@kozane/core/database`   | Adapter factory, branded handles, transaction helpers and service context |
 | `@kozane/core/schema`     | Drizzle tables and relations                                              |
 | `@kozane/core/services`   | Domain services and input validation                                      |
-| `@kozane/core/migrations` | Migration records, application and strict history validation              |
+| `@kozane/core/migrations` | Migration application, history validation and schema comparison           |
 
 The host supplies its database driver and transaction hooks through the adapter factory.
 The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
@@ -30,11 +30,12 @@ The ordinary Node workspace compatibility path remains separate from these stric
 Build from the repository root with `pnpm build:core`. This regenerates migration records
 from the original journal and SQL. Run `pnpm --filter @kozane/core check:migrations` to check
 that committed records are current. `pnpm check:core-package` checks freshness, installs the
-tarball outside the workspace with its declared dependencies and the adapter fixture’s explicit
-Drizzle dependency. It checks public types and runtime exports, applies migrations through a
+tarball outside the workspace with its declared dependencies and the adapter fixtures’ explicit
+Drizzle and sqlite-wasm dependencies. It checks public types and runtime exports, applies migrations through a
 SQLite proxy adapter, compares history and application schema with the existing Node migrator,
 and builds the browser entries. It also checks upgrades, relation preservation, rollback,
-read-only history validation and driver commit boundaries.
+read-only history validation and driver commit boundaries. Schema checks run against native
+SQLite and sqlite-wasm under Node. Browser runtime entries are bundled separately.
 
 Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history in one read
 transaction. A missing history table counts as empty and is never created by validation.
@@ -51,5 +52,31 @@ Ordinary write transactions cannot provide this boundary. An adapter without the
 application before preparation. Failures propagate without automatic retries or history repair.
 The Node adapter uses the existing native migration batch operation.
 
-Schema comparison and the remaining workspace conversion are being
-completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
+The core build applies bundled migrations to a fresh database and generates
+`canonicalSchemaManifest`, including the history table. Run
+`node packages/core/scripts/generate-schema.mjs --check` to check freshness.
+The manifest is deeply frozen. It covers table definitions, columns, declared types,
+nullability, defaults, primary and foreign keys, constraints, indexes, triggers and views.
+
+Call `validateDatabaseSchema(db)` to compare an entire database in one read transaction.
+It returns a frozen successful comparison or throws `SchemaMismatchError` with
+`reason: "schema_mismatch"` and a `comparison` containing missing, unexpected and altered
+object keys. Other read failures propagate without becoming schema mismatches. History,
+integrity and foreign-key checks remain separate requirements. Schema validation never
+repairs or migrates a database.
+
+For custom inspection, pass an async SQL-to-row-array callback to `readSchemaManifest`.
+Compare its output with `compareSchemaManifests(actual, expected)`. Omit `expected` to use
+the canonical manifest. Keep custom inspection inside the driver's read transaction.
+
+Schema objects are ordered by SQLite's binary ordering of type and name. Columns retain
+ordinal order, foreign keys use ID and sequence order, and index shapes sort by their JSON
+representation. Implicit index names are excluded from index shapes. Ordered index columns,
+uniqueness, origin and partial flags remain. SQLite-owned objects with names beginning
+`sqlite_`, including runtime statistics, are excluded. Other extra objects are rejected.
+`normalizeSchemaSql` removes whitespace and comments outside quoted tokens and trailing
+statement terminators. It preserves token spelling, case, quoting, literals, operators and
+expressions. Declared types and column defaults use the same normalization. Constraints,
+partial predicates, triggers and views retain their normalized SQL definitions.
+
+The remaining workspace conversion is being completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

@@ -5,4 +5,10 @@ export * from "../../../src/services/errors.js";
 export { domainErrorCode, type DomainErrorCode } from "../../../src/services/error-code.js";
 
 export type * from "./migration-types.js";
-export { MigrationHistoryError, type MigrationHistoryFailure } from "./migrations/errors.js";
+export {
+  MigrationHistoryError,
+  SchemaMismatchError,
+  type MigrationHistoryFailure,
+} from "./migrations/errors.js";
+
+export type * from "./schema-types.js";

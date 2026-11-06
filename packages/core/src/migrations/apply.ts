@@ -13,6 +13,7 @@ import type {
   MigrationApplicationResult,
 } from "../migration-types.js";
 import { validateMigrationHistory } from "./history.js";
+import { migrationHistoryTableSql } from "./history-sql.js";
 
 async function history(handle: DatabaseHandle): Promise<unknown[]> {
   const rows = await handle.values<unknown[]>(
@@ -37,11 +38,7 @@ export async function applyMigrations(db: DB): Promise<MigrationApplicationResul
   let appliedIds: readonly string[] = [];
   await withMigration(db, async (handle) => {
     // Match Drizzle's history format and initialization outside the atomic migration batch.
-    await handle.run(sql`CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
-      id SERIAL PRIMARY KEY,
-      hash text NOT NULL,
-      created_at numeric
-    )`);
+    await handle.run(sql.raw(migrationHistoryTableSql));
     const prefix = validateMigrationHistory(await history(handle), "prefix");
     appliedIds = Object.freeze(prefix.pending.map((record) => record.id));
     const statements: MigrationBatchStatement[] = [];

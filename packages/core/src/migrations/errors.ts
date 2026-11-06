@@ -16,3 +16,13 @@ export class MigrationHistoryError extends ValidationError {
     Object.freeze(this);
   }
 }
+
+import type { SchemaComparison } from "../schema-types.js";
+export class SchemaMismatchError extends ValidationError {
+  override readonly name = "SchemaMismatchError";
+  readonly reason = "schema_mismatch";
+  constructor(readonly comparison: SchemaComparison) {
+    super("Database schema does not match the required schema");
+    Object.freeze(this);
+  }
+}

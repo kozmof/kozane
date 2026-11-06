@@ -28,6 +28,7 @@ function run(command, args, cwd = repository) {
 }
 try {
   run("pnpm", ["--filter", "@kozane/core", "check:migrations"]);
+  run(process.execPath, ["packages/core/scripts/generate-schema.mjs", "--check"]);
   run("pnpm", ["--filter", "@kozane/core", "pack", "--pack-destination", temporary]);
   const archive = readdirSync(temporary).find((name) => name.endsWith(".tgz"));
   assert.ok(archive, "Missing core tarball");
@@ -44,6 +45,8 @@ try {
   assert.deepEqual(Object.keys(candidate.dependencies).sort(), ["drizzle-orm", "uuid"]);
   const drizzleVersion = candidate.dependencies["drizzle-orm"];
   const uuidVersion = candidate.dependencies.uuid;
+  const wasmVersion = JSON.parse(readFileSync(join(repository, "package.json"), "utf8"))
+    .dependencies["@sqlite.org/sqlite-wasm"];
   for (const version of [drizzleVersion, uuidVersion])
     assert.match(
       version,
@@ -58,6 +61,7 @@ try {
       dependencies: {
         "@kozane/core": `file:${join(temporary, archive)}`,
         "drizzle-orm": drizzleVersion,
+        "@sqlite.org/sqlite-wasm": wasmVersion,
       },
     }),
   );
@@ -70,7 +74,7 @@ try {
       .update(readFileSync(join(temporary, archive)))
       .digest("base64");
   // Reuse locked registry artifacts without importing the workspace's optional
-  // driver peers. The adapter fixture also directly declares the same Drizzle version.
+  // driver peers. Adapter fixtures explicitly declare the pinned Drizzle and wasm drivers.
   const registry = readFileSync(join(repository, "pnpm-lock.yaml"), "utf8")
     .split("\npackages:\n")[1]
     .split("\nsnapshots:\n")[0];
@@ -96,12 +100,16 @@ importers:
       drizzle-orm:
         specifier: ${drizzleVersion}
         version: ${drizzleVersion}
+      '@sqlite.org/sqlite-wasm':
+        specifier: ${wasmVersion}
+        version: ${wasmVersion}
 packages:
   ${packageKey}:
     resolution: {integrity: ${integrity}, tarball: ${JSON.stringify(archiveReference)}}
     version: ${candidate.version}
 ${lockedPackage(`drizzle-orm@${drizzleVersion}`)}
 ${lockedPackage(`uuid@${uuidVersion}`)}
+${lockedPackage(`'@sqlite.org/sqlite-wasm@${wasmVersion}'`)}
 snapshots:
   ${packageKey}:
     dependencies:
@@ -109,6 +117,7 @@ snapshots:
       uuid: ${uuidVersion}
   drizzle-orm@${drizzleVersion}: {}
   uuid@${uuidVersion}: {}
+  '@sqlite.org/sqlite-wasm@${wasmVersion}': {}
 `,
   );
   run(
@@ -189,13 +198,18 @@ snapshots:
     run(process.execPath, [join(temporary, "migrations.mjs"), referencePath], temporary).trim(),
   );
   writeFileSync(
+    join(temporary, "schema.mjs"),
+    readFileSync(join(repository, "scripts/fixtures/core-consumer-schema.mjs")),
+  );
+  console.log(run(process.execPath, [join(temporary, "schema.mjs")], temporary).trim());
+  writeFileSync(
     join(temporary, "consumer.ts"),
     `
     import type { CardCreateInput, Namespace, ValidationError } from '@kozane/core';
     import { createServiceContext, withTx, withReadTx, type DB } from '@kozane/core/database';
     import { cards, namespaces } from '@kozane/core/services';
     import { cardTable } from '@kozane/core/schema';
-    import { migrations, schemaVersion, validateMigrationHistory, applyMigrations, validateDatabaseMigrationHistory, type MigrationRecord } from '@kozane/core/migrations';
+    import { migrations, schemaVersion, validateMigrationHistory, applyMigrations, validateDatabaseMigrationHistory, canonicalSchemaManifest, compareSchemaManifests, validateDatabaseSchema, type MigrationRecord } from '@kozane/core/migrations';
     declare const db: DB;
     declare const error: ValidationError;
     const input: CardCreateInput = { partitionId: 'p', content: 'Typed public consumer' };
@@ -215,6 +229,10 @@ snapshots:
     void validateMigrationHistory([], 'prefix');
     void applyMigrations(db).then(result => result.appliedIds);
     void validateDatabaseMigrationHistory(db, 'complete');
+    void validateDatabaseSchema(db).then(result => result.matches);
+    void compareSchemaManifests(canonicalSchemaManifest);
+    // @ts-expect-error Canonical manifests are immutable.
+    canonicalSchemaManifest.push({});
     // @ts-expect-error Database history checks require an explicit supported mode.
     void validateDatabaseMigrationHistory(db, 'automatic');
     // @ts-expect-error History checks require an explicit supported mode.
