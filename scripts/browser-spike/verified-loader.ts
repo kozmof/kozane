@@ -4,6 +4,8 @@ export interface AssetManifest {
   buildId: string;
   workerHash: string;
   wasmHash: string;
+  workerUrl?: string;
+  wasmUrl?: string;
 }
 
 export async function verifiedBytes(url: URL, expectedHash: string): Promise<ArrayBuffer> {
@@ -26,7 +28,10 @@ export async function verifiedBytes(url: URL, expectedHash: string): Promise<Arr
 }
 
 export async function verifiedWorker(manifest: AssetManifest): Promise<Worker> {
-  const bytes = await verifiedBytes(new URL("./worker.js", location.href), manifest.workerHash);
+  const bytes = await verifiedBytes(
+    new URL(manifest.workerUrl ?? "./worker.js", location.href),
+    manifest.workerHash,
+  );
   const url = URL.createObjectURL(new Blob([bytes], { type: "text/javascript" }));
   try {
     return new Worker(url, { type: "module" });
@@ -39,7 +44,7 @@ export async function verifiedModule(manifest: AssetManifest): Promise<WebAssemb
   const controller = new AbortController();
   return deadline(
     (async () => {
-      const response = await fetch(new URL("./sqlite3.wasm", location.href), {
+      const response = await fetch(new URL(manifest.wasmUrl ?? "./sqlite3.wasm", location.href), {
         signal: controller.signal,
       });
       if (!response.ok) throw new AssetVerificationError("Asset fetch failed");

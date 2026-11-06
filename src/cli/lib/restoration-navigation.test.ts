@@ -203,3 +203,31 @@ it("reports old-handle cleanup separately from storage failure after activation"
   });
   expect(f.session.state.generation).toBe(4);
 });
+it("keeps the old generation and copy when browser navigation rejects the reset destination", async () => {
+  const f = fixture();
+  f.options.navigate = () => {
+    throw new Error("replaceState failed");
+  };
+  expect(await f.session.reset(f.options)).toMatchObject({
+    status: "unavailable",
+    action: "retry",
+  });
+  expect(f.session.state.generation).toBe(3);
+  expect(f.storage.removeItem).not.toHaveBeenCalled();
+  expect(f.original.close).not.toHaveBeenCalled();
+  expect(f.staged.close).toHaveBeenCalledOnce();
+});
+it("applies navigation inside the barrier before queued reads see the new state", async () => {
+  const f = fixture();
+  f.options.navigate = (url) => {
+    f.events.push(url);
+  };
+  const resetting = f.session.reset(f.options);
+  const reading = f.queue.run(async () => ({
+    generation: f.session.state.generation,
+    url: f.session.state.url,
+  }));
+  await resetting;
+  expect(await reading).toEqual({ generation: 4, url: "/board/?namespaceId=sample" });
+  expect(f.events).toEqual(["/board/?namespaceId=sample", "delete", "old closed"]);
+});

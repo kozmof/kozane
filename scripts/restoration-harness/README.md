@@ -38,7 +38,7 @@ initial namespace. Unit tests cover decoder limits, padding bits, uncertain fail
 cleanup, storage errors and deferred deletion. Browser cases cover fresh startup, restoration to a missing namespace, malformed-copy fallback,
 worker and asset failures, executed operations with lost replies, unclassified service failures
 and stale navigation. The user reported the CI browser job passing after this suite was added.
-New attempt/generation race cases are prepared for the next CI run.
+New attempt/generation and staged-worker reset cases are prepared for the next CI run.
 
 `DestinationTracker` captures a monotonic destination sequence and discards superseded view
 results and errors. The startup policy checks the destination again before readiness and saved-copy
@@ -61,7 +61,26 @@ the next generation. Failed validation preserves the prior state, URL and saved 
 activation precedes deletion and old-handle cleanup. Deletion and cleanup failures have separate
 result flags. Confirmed sample defects block further reset attempts until reload.
 
-P3-10 remains in progress. The new browser races await CI execution. Staged worker reset
-integration, suspension-aware deadlines and compatibility-corpus integration remain. The current loader uses the Phase 0 wall-clock deadlines. The harness reports validation results and closes the
-candidate after each case. The persistent editing backend is implemented in Phase 4.
+`WorkerContext` shares verified original worker bytes, the compiled wasm module and sample
+bytes across candidate creation. Asset URLs resolve from the emitted module URL and stay
+content-free after navigation. Each candidate owns a separate worker and memory database.
+Closing a candidate terminates its worker. Reset uses cached assets and makes no HTTP requests.
+
+Call `restorationHarness.openSession(namespaceId)` for a retained reset case. Its isolated root
+lifetime shares one operation queue across `read()`, `addCard(content)`, `reset()` and `close()`.
+Card creation uses public core services. Reset validates a separate worker candidate, applies
+the sample board URL inside the barrier, activates the new generation, attempts saved-copy
+deletion and closes the old worker. Later queued reads resolve the new namespace. Failed reset
+keeps the live worker and its edits. The optional reset controls inject fixture SQL, view failures
+or deletion failures into the harness. Close every retained case explicitly.
+
+Real-wasm Node checks keep separate candidate handles open during reset and verify retained
+edits, rejected schema/foreign-key defects, URL/storage preservation and old-handle cleanup.
+Prepared browser cases check the same boundaries with separate workers and assert zero HTTP
+requests during reset, including worker requests.
+
+P3-10 remains in progress. The new browser cases await CI execution. Suspension-aware deadlines
+and compatibility-corpus integration remain. The current loader uses the Phase 0 wall-clock
+deadlines. Basic `run()` cases close their candidate after reporting validation. Retained cases
+keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

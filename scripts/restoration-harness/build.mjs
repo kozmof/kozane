@@ -17,6 +17,8 @@ export async function buildRestorationHarness(
   for (const name of [
     "main.ts",
     "worker.ts",
+    "worker-context.ts",
+    "session.ts",
     "recovery.ts",
     "navigation.ts",
     "attempt.ts",

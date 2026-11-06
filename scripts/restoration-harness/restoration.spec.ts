@@ -302,3 +302,140 @@ test("a late verified worker from an obsolete attempt cannot open a database", a
   expect(current.result).toMatchObject({ status: "ready", source: "restored" });
   expect(late).toEqual({ result: { status: "superseded" }, saved: current.saved });
 });
+test("stages reset in another worker and resets URL and data without network access", async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    history.replaceState(null, "", "/tags/?namespaceId=old#tag=private");
+    const session = await (window as any).restorationHarness.openSession();
+    if (session.status !== "ready") throw new Error("Session failed to open");
+    await session.addCard("Retained user edit");
+    sessionStorage.setItem("kozane-demo:session", "older copy");
+    (window as any).retainedResetSession = session;
+  });
+  const requests: string[] = [];
+  page.on("request", (request) => {
+    if (/^https?:/.test(request.url())) requests.push(request.url());
+  });
+  const result = await page.evaluate(async () => {
+    const session = (window as any).retainedResetSession;
+    try {
+      const reset = await session.reset();
+      const view = await session.read();
+      return {
+        reset,
+        view,
+        url: location.pathname + location.search + location.hash,
+        saved: sessionStorage.getItem("kozane-demo:session"),
+        sample: (window as any).restorationHarness.manifest.sampleNamespaceId,
+      };
+    } finally {
+      await session.close();
+    }
+  });
+  expect(result.reset).toMatchObject({ status: "ready", state: { generation: 1, liveWorkers: 1 } });
+  expect(result.view.snapshot.snapshot.cards).toHaveLength(1);
+  expect(result.url).toBe(`/board/?namespaceId=${result.sample}`);
+  expect(result.saved).toBeNull();
+  expect(requests).toEqual([]);
+});
+test("keeps the live worker, user edit, saved copy and URL after reset read failure", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const harness = (window as any).restorationHarness;
+    const session = await harness.openSession();
+    if (session.status !== "ready") throw new Error("Session failed to open");
+    try {
+      await session.addCard("Edit survives failed reset");
+      history.replaceState(null, "", "/map/?namespaceId=user#search=private");
+      sessionStorage.setItem("kozane-demo:session", "saved copy");
+      const reset = await session.reset({
+        beforeView: async () => {
+          throw new Error("unclassified read failure");
+        },
+      });
+      const view = await session.read();
+      return {
+        reset,
+        view,
+        state: session.state(),
+        url: location.pathname + location.search + location.hash,
+        saved: sessionStorage.getItem("kozane-demo:session"),
+      };
+    } finally {
+      await session.close();
+    }
+  });
+  expect(result.reset).toMatchObject({ status: "unavailable", action: "retry", kind: "unknown" });
+  expect(result.state).toMatchObject({ generation: 0, liveWorkers: 1 });
+  expect(result.view.snapshot.snapshot.cards.map((card: any) => card.content)).toContain(
+    "Edit survives failed reset",
+  );
+  expect(result.saved).toBe("saved copy");
+  expect(result.url).toBe("/map/?namespaceId=user#search=private");
+});
+for (const fixtureSQL of [
+  "DROP INDEX scope_rel_card",
+  "PRAGMA foreign_keys=OFF; INSERT INTO scope(id,name) VALUES ('dangling','Outside current view'); INSERT INTO scope_rel(scope_id,card_id) VALUES ('dangling','absent-card')",
+]) {
+  test(`rejects a staged reset defect and preserves the current worker: ${fixtureSQL.split(";")[0]}`, async ({
+    page,
+  }) => {
+    const result = await page.evaluate(async (sql) => {
+      const session = await (window as any).restorationHarness.openSession();
+      if (session.status !== "ready") throw new Error("Session failed to open");
+      try {
+        await session.addCard("Live content");
+        sessionStorage.setItem("kozane-demo:session", "saved copy");
+        const reset = await session.reset({ fixtureSQL: sql });
+        const view = await session.read();
+        return {
+          reset,
+          view,
+          state: session.state(),
+          saved: sessionStorage.getItem("kozane-demo:session"),
+          url: location.href,
+        };
+      } finally {
+        await session.close();
+      }
+    }, fixtureSQL);
+    expect(result.reset).toMatchObject({
+      status: "unavailable",
+      action: "reload",
+      kind: "database_content",
+    });
+    expect(result.state).toMatchObject({ generation: 0, liveWorkers: 1 });
+    expect(result.view.snapshot.snapshot.cards).toHaveLength(2);
+    expect(result.saved).toBe("saved copy");
+    expect(new URL(result.url).pathname).toBe("/");
+  });
+}
+test("successful reset discloses failed saved-copy deletion while activating fresh data", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const session = await (window as any).restorationHarness.openSession();
+    if (session.status !== "ready") throw new Error("Session failed to open");
+    try {
+      sessionStorage.setItem("kozane-demo:session", "older copy");
+      const reset = await session.reset({ deleteFails: true });
+      return {
+        reset,
+        view: await session.read(),
+        saved: sessionStorage.getItem("kozane-demo:session"),
+      };
+    } finally {
+      await session.close();
+    }
+  });
+  expect(result.reset).toMatchObject({
+    status: "ready",
+    recoveryUnavailable: true,
+    olderCopyMayRestore: true,
+    state: { generation: 1, liveWorkers: 1 },
+  });
+  expect(result.view.snapshot.snapshot.cards).toHaveLength(1);
+  expect(result.saved).toBe("older copy");
+});

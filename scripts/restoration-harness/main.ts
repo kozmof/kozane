@@ -1,24 +1,11 @@
-import { drizzle } from "drizzle-orm/sqlite-proxy";
-import { createDatabaseAdapter } from "@kozane/core/database";
 import { schemaVersion } from "@kozane/core/migrations";
-import * as schema from "@kozane/core/schema";
-import {
-  verifiedBytes,
-  verifiedWorker,
-  verifiedModule,
-  AssetVerificationError,
-  type AssetManifest,
-} from "./verified-loader";
+import { AssetVerificationError } from "./verified-loader";
 import { AttemptOwner, SupersededAttemptError } from "./attempt";
 import { DestinationTracker } from "./navigation";
-import { deadline } from "./deadline";
-import { OperationQueue } from "./operation-queue";
-import { restoreCandidate, HarnessFailure, type Candidate } from "./recovery";
-import { validateCandidate, type NamespaceView } from "./validation";
-declare const __RESTORATION_MANIFEST__: AssetManifest & {
-  sampleHash: string;
-  sampleNamespaceId: string;
-};
+import { restoreCandidate, HarnessFailure } from "./recovery";
+import { WorkerContext, type HarnessManifest } from "./worker-context";
+import { openResetSession } from "./session";
+declare const __RESTORATION_MANIFEST__: HarnessManifest;
 const manifest = __RESTORATION_MANIFEST__;
 const attempts = new AttemptOwner();
 async function run(
@@ -30,107 +17,20 @@ async function run(
   } = {},
 ) {
   const attempt = attempts.begin();
-  let worker: Worker | undefined;
-  let sequence = 0;
-  let unavailable = false;
-  const pending = new Map<number, { resolve(value: any): void; reject(error: Error): void }>();
-  const queue = new OperationQueue();
-  function terminate(error: Error = new HarnessFailure("unknown", "Worker is unavailable")) {
-    unavailable = true;
-    queue.dispose();
-    worker?.terminate();
-    for (const request of pending.values()) request.reject(error);
-    pending.clear();
-  }
-  const unsubscribe = attempt.onSuperseded(() => terminate(new SupersededAttemptError()));
-  async function rpc(method: string, extra = {}): Promise<any> {
-    attempt.assertCurrent();
-    if (unavailable) throw new HarnessFailure("unknown", "Worker is unavailable");
-    return deadline(
-      new Promise((resolve, reject) => {
-        const id = ++sequence;
-        pending.set(id, { resolve, reject });
-        try {
-          worker!.postMessage({ id, method, ...extra });
-        } catch (error) {
-          pending.delete(id);
-          reject(error);
-        }
-      }),
-      method === "probe" ? 10_000 : (controls.rpcTimeoutMs ?? 30_000),
-      () => terminate(),
-    );
-  }
+  const context = new WorkerContext(manifest, controls.rpcTimeoutMs);
+  const unsubscribe = attempt.onSuperseded(() => context.dispose(new SupersededAttemptError()));
   try {
     attempt.assertCurrent();
-    worker = await verifiedWorker(manifest);
-    attempt.assertCurrent();
-    worker.onerror = () => terminate();
-    worker.onmessageerror = () => terminate();
-    worker.onmessage = ({ data }) => {
-      const request = pending.get(data.id);
-      if (!request) return;
-      pending.delete(data.id);
-      if (data.error) {
-        const kind = ["database_content", "transient"].includes(data.error.kind)
-          ? data.error.kind
-          : "unknown";
-        request.reject(new HarnessFailure(kind, "Candidate database operation failed"));
-      } else request.resolve(data.result);
-    };
-    if ((await rpc("probe")) !== manifest.buildId)
-      throw new HarnessFailure("asset", "Worker build mismatch");
-    await rpc("initialize", { module: await verifiedModule(manifest) });
-    const sampleBytes = new Uint8Array(
-      await verifiedBytes(new URL("./sample.db", location.href), manifest.sampleHash),
-    );
-    attempt.assertCurrent();
-    const handle = drizzle((sql, args, method) => rpc(method, { sql, args }), { schema });
-    const db = createDatabaseAdapter(handle, {
-      read: async (operation) => {
-        await rpc("run", { sql: "BEGIN DEFERRED" });
-        try {
-          const result = await operation(handle);
-          await rpc("run", { sql: "COMMIT" });
-          return result;
-        } catch (error) {
-          try {
-            await rpc("run", { sql: "ROLLBACK" });
-          } catch {
-            throw new HarnessFailure("unknown", "Rollback failed");
-          }
-          throw error;
-        }
-      },
-      write: async () => {
-        throw new Error("Restoration harness does not migrate or edit candidates");
-      },
-    });
-    const result = await restoreCandidate<NamespaceView>({
+    await context.load(() => attempt.assertCurrent());
+    const result = await restoreCandidate({
       schemaVersion,
       attempt,
       namespaceId,
       navigation: controls.navigation,
       beforeView: controls.beforeView,
       storage: () => sessionStorage,
-      sample: async () => ({ bytes: sampleBytes, namespaceId: manifest.sampleNamespaceId }),
-      open: async (bytes) => {
-        try {
-          await rpc("open", { bytes });
-        } catch (error) {
-          try {
-            await rpc("close");
-          } catch {
-            throw new HarnessFailure("unknown", "Candidate cleanup failed");
-          }
-          throw error;
-        }
-        const candidate: Candidate<NamespaceView> = {
-          validate: (request) => queue.run(() => validateCandidate(db, request)),
-          close: () => queue.run(() => rpc("close")),
-        };
-        return candidate;
-      },
+      sample: async () => context.sample(),
+      open: (bytes) => context.open(bytes),
     });
     attempt.assertCurrent();
     if (result.status === "ready") {
@@ -154,7 +54,7 @@ async function run(
     };
   } finally {
     unsubscribe();
-    terminate();
+    context.dispose();
   }
 }
 function start(namespaceId?: string, beforeView?: (namespaceId?: string) => Promise<void>) {
@@ -170,6 +70,7 @@ Object.assign(window, {
     start,
     manifest,
     schemaVersion,
+    openSession: (namespaceId?: string) => openResetSession(manifest, namespaceId),
     replaceGeneration: () => attempts.replaceGeneration(),
     isCurrent: (ticket: { attempt: number; generation: number }) => attempts.isCurrent(ticket),
   },

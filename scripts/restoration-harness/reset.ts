@@ -18,6 +18,8 @@ export interface ResetOptions<View> {
   open(bytes: Uint8Array): Promise<Candidate<View>>;
   storage(): StorageAccess;
   destination(namespaceId: string): string;
+  /** Apply the validated destination synchronously inside the reset barrier. */
+  navigate?(url: string): void;
 }
 export type ResetResult<View> =
   | {
@@ -57,6 +59,7 @@ export class ResetSession<View> {
         staged = await options.open(sample.bytes);
         view = await staged.validate({ namespaceId, sampleNamespaceId: namespaceId });
         url = options.destination(namespaceId);
+        options.navigate?.(url);
       } catch (error) {
         let failure = error;
         if (staged) {
