@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend, NamespaceGetResult } from "$lib/backend/contract.js";
@@ -23,9 +24,12 @@
     /** Disable scheduled read retries when the host provides immutable data. */
     retryIntervalMs?: number | false;
   } = $props();
+  let refreshAttempt = $state(0);
   const index = $derived(new NamespaceIndex(backend, initialNamespaces));
   $effect(() => {
     const current = index;
+    // oxlint-disable-next-line no-unused-expressions
+    refreshAttempt;
     const interval = retryIntervalMs;
     return untrack(() => current.start({ retryIntervalMs: interval }));
   });
@@ -86,6 +90,7 @@
   </div>
 
   <BackendNotice capabilities={backend.capabilities} {lifetimeNotice} />
+  <RefreshNotice {backend} failed={index.refreshError !== null} message="Could not refresh namespaces. Showing the last results." retry={() => refreshAttempt++} />
 
   {#if index.namespaces.length === 0}
     {#if !backend.capabilities.writable && emptyState}

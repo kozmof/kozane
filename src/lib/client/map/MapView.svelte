@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend } from "$lib/backend/contract.js";
@@ -59,9 +60,13 @@
   const selectedDay = $derived(selection.day);
   const source = $derived({ data, backend, namespaceId: selectedNamespaceId, tag: selectedTag, day: selectedDay });
   let refreshed = $state.raw<{ source: typeof source; value: MapViewData } | null>(null);
+  let refreshAttempt = $state(0);
+  let failedSource = $state.raw<typeof source | null>(null);
+  const refreshFailed = $derived(failedSource === source);
   const display = $derived(refreshed?.source === source ? { ...data, ...refreshed.value } : data);
   $effect(() => {
     const currentSource = source;
+    const attempt = refreshAttempt;
     const current = currentSource.backend;
     const interval = retryIntervalMs;
     const wake = lifecycle;
@@ -73,7 +78,8 @@
       lifecycle: wake,
       dataset: "map",
       read: async () => mapView(await current.map.get(), { namespaceId: currentSource.namespaceId, tag: currentSource.tag, day: currentSource.day, zoomStep: currentSource.data.zoomStep }),
-      apply: (value) => { refreshed = { source: currentSource, value }; },
+      apply: (value) => { if (attempt !== refreshAttempt) return; refreshed = { source: currentSource, value }; failedSource = null; },
+      error: () => { if (attempt === refreshAttempt) failedSource = currentSource; },
       isHidden: hidden,
     }));
   });
@@ -262,6 +268,7 @@
 
 <!-- Fill the fixed-height viewport with the map and overlay controls. Hide page overflow so panning is the single way to move the map and graph coordinates remain aligned. -->
 {#if backend}<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
+<RefreshNotice {backend} failed={refreshFailed} message="Could not refresh map. Showing the last map." retry={() => refreshAttempt++} floating />
 
 <main
   class={css({

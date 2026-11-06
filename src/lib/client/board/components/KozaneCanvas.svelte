@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { onMount } from "svelte";
   import { css } from "styled-system/css";
   import { token } from "styled-system/tokens";
@@ -294,6 +295,13 @@
    * pending loads, so repeated calls only traverse the list.
    */
   $effect(() => areaFiles.readShown());
+  $effect(() => {
+    const tree = taskspaceTree, directories = areaFiles.directoriesToRead;
+    return untrack(() => {
+      const releases = directories.map(({ taskspaceId, path }) => tree.watch(taskspaceId, path));
+      return () => { for (const release of releases) release(); };
+    });
+  });
   $effect(() => areaFiles.prune());
 
   // Track pointers on the window so drags can continue and finish outside the board.
@@ -393,6 +401,7 @@
             {groups}
             {onOpenFile}
             onNavigate={(taskspaceId, path) => areaFiles.navigate(area.id, taskspaceId, path)}
+            onRefresh={(taskspaceId, path) => { void taskspaceTree.ensure(treeContext, taskspaceId, path, true); }}
             onCreate={live
               ? (taskspaceId, path, kind, name) => areaFiles.create(taskspaceId, path, kind, name)
               : undefined}

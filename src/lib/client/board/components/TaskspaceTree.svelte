@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { css, cx } from "styled-system/css";
   import type {
     TaskspaceCreateKind,
@@ -37,6 +38,11 @@
      */
     canCreate?: boolean;
   } = $props();
+
+  $effect(() => {
+    const current = tree, id = taskspaceId, directory = path;
+    return untrack(() => current.watch(id, directory));
+  });
 
   const node = $derived(tree.node(taskspaceId, path));
 
@@ -135,8 +141,10 @@
 {#if node.error}
   <div class={css({ padding: "3px 6px", fontSize: "11px", color: "state.error" })} style:padding-left={`${indent}px`}>
     {node.error}
+    <button type="button" onclick={() => tree.ensure(ctx, taskspaceId, path, true)}>Retry</button>
   </div>
-{:else if node.loading && !node.entries}
+{/if}
+{#if node.loading && !node.entries}
   <div class={noteClass} style:padding-left={`${indent}px`}>Loading…</div>
 {:else if node.entries}
   <!-- Show empty state only for a complete, empty listing. A truncated listing may also have no rows. -->

@@ -122,3 +122,20 @@ it("uses injected visibility and wake callbacks and releases the lifecycle", asy
   view.unmount();
   expect(release).toHaveBeenCalledOnce();
 });
+
+it("retains map data and viewport while a failed refresh is retried", async () => {
+  const fetcher = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementation(async () => Response.json(mapDataset("Recovered partition")));
+  const backend = new HttpBackend({ capabilities, fetcher });
+  const view = render(MapView, { props: { ...props, backend } });
+  await fireEvent.click(screen.getByLabelText("Zoom in"));
+  const zoom = `${zoomPercent(DEFAULT_ZOOM + 0.05)}%`;
+  expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(partition(view.container, "Seed partition")).not.toBeNull();
+  await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(partition(view.container, "Recovered partition")).not.toBeNull());
+  expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  expect(screen.getByText(zoom)).toBeInTheDocument();
+});

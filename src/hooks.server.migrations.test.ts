@@ -15,7 +15,10 @@ vi.mock("./db/internal/config", () => ({
   getWorkspaceRoot: () => state.root,
   getDBURL: () => state.dbUrl,
 }));
-vi.mock("./db/client", () => ({ getDb: vi.fn(async () => ({ ready: true })) }));
+vi.mock("./db/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./db/client")>()),
+  getDb: vi.fn(async () => ({ ready: true })),
+}));
 
 /** Workspace directory and expected database path, whether or not the file exists. */
 function workspace(): { root: string; dbPath: string } {

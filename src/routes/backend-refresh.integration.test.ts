@@ -19,6 +19,7 @@ import {
   type TagsResult,
   type MapResult,
 } from "../lib/backend/index.js";
+import { TaskspaceTreeState } from "../lib/client/board/lib/taskspace-tree.svelte.js";
 import { startSnapshotView } from "../lib/backend/snapshot-view.js";
 import { startDatasetView } from "../lib/backend/dataset-view.js";
 import { GET as changes } from "./api/changes/+server.js";
@@ -148,6 +149,21 @@ it("refreshes real HTTP views after external CLI commits and token-stable file c
       return response;
     },
   });
+  const tree = new TaskspaceTreeState();
+  const contextForFiles = { backend, namespaceId: first.id };
+  releases.push(tree.watch(taskspaceId, ""));
+  releases.push(
+    startDatasetView({
+      backend,
+      dataset: "snapshot",
+      isHidden: () => !visible,
+      retryIntervalMs: 20,
+      read: async () => {
+        await tree.refreshWatched(contextForFiles, () => visible);
+      },
+      apply: () => {},
+    }),
+  );
   const seeded = await backend.snapshot(first.id);
   expect(seeded.status).toBe("changed");
   let firstView: SnapshotData | undefined = seeded.status === "changed" ? seeded.data : undefined;
@@ -264,6 +280,9 @@ it("refreshes real HTTP views after external CLI commits and token-stable file c
           hit.tag === "files:after" && hit.source.kind === "file" && hit.source.path === "after.md",
       ),
     ).toBe(true),
+  );
+  await vi.waitFor(() =>
+    expect(tree.node(taskspaceId, "").entries?.map((entry) => entry.name)).toEqual(["after.md"]),
   );
   expect(
     (await backend.taskspaces!.list(first.id, taskspaceId, "")).entries.map((entry) => entry.name),

@@ -70,8 +70,7 @@ function siblingPath(path: string, name: string): string {
 
 /**
  * Track open directories and cache their listings. Reopening a folder reuses its result.
- * Refresh explicitly to see disk changes because database polling does not refresh filesystem
- * data.
+ * Displayed directories can be watched by the board's filesystem refresh controller.
  */
 export class TaskspaceTreeState {
   expanded = $state<Set<string>>(new Set());
@@ -93,6 +92,42 @@ export class TaskspaceTreeState {
    */
   #pending = new Map<string, number>();
   #nextRequest = 0;
+  #watched = new Map<string, { taskspaceId: string; path: string; count: number }>();
+
+  /** Retain only directories currently displayed by a panel or scope frame. */
+  watch(taskspaceId: string, path: string): () => void {
+    const key = nodeKey(taskspaceId, path);
+    const current = this.#watched.get(key);
+    if (current) current.count++;
+    else this.#watched.set(key, { taskspaceId, path, count: 1 });
+    let watching = true;
+    return () => {
+      if (!watching) return;
+      watching = false;
+      const entry = this.#watched.get(key);
+      if (!entry || --entry.count > 0) return;
+      this.#watched.delete(key);
+      this.#pending.delete(key);
+      if (this.nodes[key]?.loading) this.nodes[key] = { ...this.nodes[key], loading: false };
+    };
+  }
+
+  async refreshWatched(ctx: TaskspaceTreeContext, active: () => boolean): Promise<boolean> {
+    const wanted = [...this.#watched.entries()];
+    // Read sequentially so a server throttle stops dispatch rather than fanning out.
+    for (const [key, entry] of wanted) {
+      if (!active()) return false;
+      if (this.#watched.get(key) !== entry) continue;
+      await this.load(
+        ctx,
+        entry.taskspaceId,
+        entry.path,
+        true,
+        () => active() && this.#watched.get(key) === entry,
+      );
+    }
+    return wanted.every(([key]) => !this.#watched.has(key) || this.nodes[key]?.error == null);
+  }
 
   isExpanded(taskspaceId: string, path: string): boolean {
     return this.expanded.has(nodeKey(taskspaceId, path));
@@ -345,6 +380,7 @@ export class TaskspaceTreeState {
     taskspaceId: string,
     path: string,
     force = false,
+    active: () => boolean = () => true,
   ): Promise<void> {
     const key = nodeKey(taskspaceId, path);
     const current = this.nodes[key];
@@ -358,7 +394,7 @@ export class TaskspaceTreeState {
     const request = ++this.#nextRequest;
     this.#pending.set(key, request);
     /** Whether a later read, rename, delete, or reset took this directory over. */
-    const superseded = () => this.#pending.get(key) !== request;
+    const superseded = () => this.#pending.get(key) !== request || !active();
 
     try {
       const body = await taskspaceApi(ctx).list(ctx.namespaceId, taskspaceId, path);

@@ -76,7 +76,19 @@ export class HttpBackend implements KozaneBackend {
             throw new BackendError("unavailable", "Invalid change token");
           return value.token;
         },
-        changed: () => this.signals.publish(ALL),
+        changed: () => this.invalidateAll(),
+        failed: (cause) =>
+          this.signals.transition({
+            status: "ready",
+            refreshError:
+              cause instanceof BackendError
+                ? cause
+                : new BackendError("unavailable", "Could not check workspace changes"),
+          }),
+        succeeded: () => {
+          if (this.state.status === "ready" && this.state.refreshError)
+            this.signals.transition({ status: "ready" });
+        },
         filesystemRefresh: () => {
           if (this.capabilities.taskspaces) this.signals.publish(["tags", "snapshot"]);
         },
@@ -122,12 +134,18 @@ export class HttpBackend implements KozaneBackend {
       throw new BackendError("read_only", "This backend is read-only");
     const response = await this.transport.request(path, method, input, options);
     // The HTTP mutation committed even if its response body cannot be decoded.
-    this.signals.publish(ALL);
+    this.invalidateAll();
     try {
       return (await response.json()) as T;
     } catch (cause) {
       throw new BackendError("unavailable", "Invalid backend response", { cause });
     }
+  }
+  private invalidateAll(): void {
+    // Conservative tokens and committed writes must force a server read, rather
+    // than reuse a metadata-only conditional-response cache entry.
+    this.validators.clear();
+    this.signals.publish(ALL);
   }
   private checked<T>(
     value: unknown,

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { startDatasetView } from "$lib/backend/dataset-view.js";
+  import { BackendError } from "$lib/backend/contract.js";
+  import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { BoardViewProps } from "./types.js";
@@ -47,6 +50,9 @@
   let snapshotStatus = $state.raw<SnapshotViewStatus>(untrack(() => ({ current: initialDataApplied && backend.state.status === "ready", namespaceId: data.namespace.id, generation: backend.version.generation })));
   const editingBlocked = $derived(!readonly && (!snapshotStatus.current || snapshotStatus.namespaceId !== data.namespace.id || snapshotStatus.generation !== backend.version.generation));
   const mutationBackend = untrack(() => bindViewWrites(backend, () => !editingBlocked));
+  let refreshAttempt = $state(0);
+  let refreshFailed = $state(false);
+  let filesRefreshFailed = $state(false);
   let appliedGeneration = untrack(() => backend.version.generation);
   let editorGeneration = $state(untrack(() => backend.version.generation));
   $effect(() => {
@@ -242,12 +248,14 @@
     const current = backend;
     const namespaceId = data.namespace.id;
     const applied = initialDataApplied;
+    const attempt = refreshAttempt;
     const interval = retryIntervalMs;
     const wake = lifecycle;
     const hidden = isHidden;
     return untrack(() => startSnapshotView({
       backend: current,
       initialDataApplied: applied,
+      refreshInitially: attempt > 0,
       retryIntervalMs: interval,
       lifecycle: wake,
       namespaceId: () => namespaceId,
@@ -257,6 +265,8 @@
         else s.refreshFromData(snapshot);
       },
       status: (value) => { snapshotStatus = value; },
+      error: () => { if (attempt === refreshAttempt) refreshFailed = true; },
+      refreshed: () => { if (attempt === refreshAttempt) refreshFailed = false; },
       isHidden: hidden,
     }));
   });
@@ -301,6 +311,26 @@
     canWrite: () => !readonly && !editingBlocked,
     backend,
     namespaceId: s.namespaceId,
+  });
+
+  $effect(() => {
+    const current = backend, tree = s.taskspaceTree, context = editorContext;
+    const attempt = refreshAttempt, interval = retryIntervalMs, wake = lifecycle, hidden = isHidden;
+    if (!current.capabilities.externalWrites || !current.taskspaces) return;
+    return untrack(() => {
+      let active = true;
+      const generation = current.version.generation;
+      const stop = startDatasetView({
+        backend: current, dataset: "snapshot", retryIntervalMs: interval, lifecycle: wake, isHidden: hidden,
+        read: async (isCurrent) => {
+          const ok = await tree.refreshWatched(context, () => active && current.version.generation === generation && isCurrent());
+          if (!ok) throw new BackendError("unavailable", "Could not refresh files");
+        },
+        apply: () => { if (attempt === refreshAttempt) filesRefreshFailed = false; },
+        error: () => { if (attempt === refreshAttempt) filesRefreshFailed = true; },
+      });
+      return () => { active = false; stop(); };
+    });
   });
 
   /** What the file browser changes. */
@@ -398,6 +428,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 <BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />
+<RefreshNotice {backend} failed={refreshFailed || filesRefreshFailed} message={filesRefreshFailed ? "Could not refresh files. Showing the last listings." : "Could not refresh the board. Showing the last board."} retry={() => refreshAttempt++} floating />
 
 {#if editingBlocked}
   <p role="status" class={css({ position: "fixed", top: "12px", left: "50%", zIndex: 1000, padding: "8px 12px", backgroundColor: "ink.white", color: "ink.black", fontSize: "12px" })}>Board editing is paused while current data loads.</p>

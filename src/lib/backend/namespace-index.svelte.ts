@@ -23,6 +23,7 @@ export class NamespaceIndex {
   #generation: number;
   #creation = 0;
   error = $state<string | null>(null);
+  refreshError = $state<string | null>(null);
   #active = false;
   #running = false;
   #dirty = true;
@@ -49,6 +50,7 @@ export class NamespaceIndex {
         this.#creation++;
         this.submitting = false;
         this.error = null;
+        this.refreshError = null;
       }
       if (replaced || event.datasets.includes("namespaces")) this.#invalidate();
     });
@@ -137,8 +139,17 @@ export class NamespaceIndex {
       this.namespaces = result;
       this.#generation = generation;
       this.current = true;
+      this.refreshError = null;
     } catch {
-      if (this.#active) this.#dirty = true;
+      if (this.#active) {
+        this.#dirty = true;
+        if (
+          sequence === this.#sequence &&
+          generation === this.backend.version.generation &&
+          this.backend.state.status === "ready"
+        )
+          this.refreshError = "Could not refresh namespaces";
+      }
     } finally {
       this.#running = false;
       // An invalidation during this read must not depend on a retry timer.

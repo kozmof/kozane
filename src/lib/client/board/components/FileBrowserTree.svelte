@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { css, cx } from "styled-system/css";
   import type { TaskspaceEntryKind } from "$lib/types";
   import type {
@@ -50,6 +51,11 @@
     onCancelRename: (focusTo?: EventTarget | null) => void;
     onDelete: (path: string, kind: TaskspaceEntryKind) => void;
   } = $props();
+
+  $effect(() => {
+    const current = tree, id = taskspaceId, directory = path;
+    return untrack(() => current.watch(id, directory));
+  });
 
   const node = $derived(tree.node(taskspaceId, path));
   const creatingHere = $derived(
@@ -134,8 +140,10 @@
 {#if node.error}
   <div class={css({ padding: "3px 6px", fontSize: "11px", color: "state.error" })} style:padding-left={`${indent}px`}>
     {node.error}
+    <button type="button" onclick={() => tree.ensure(ctx, taskspaceId, path, true)}>Retry</button>
   </div>
-{:else if node.loading && !node.entries}
+{/if}
+{#if node.loading && !node.entries}
   <div class={noteClass} style:padding-left={`${indent}px`}>Loading…</div>
 {:else if node.entries}
   {#if node.entries.length === 0 && !node.truncated && !creatingHere}

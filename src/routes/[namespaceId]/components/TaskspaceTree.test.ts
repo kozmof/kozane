@@ -311,3 +311,17 @@ describe("TaskspaceTree creation", () => {
     expect(tree.creating).toBeNull();
   });
 });
+
+it("keeps old files visible after refresh failure and retries the directory", async () => {
+  const user = userEvent.setup();
+  const { tree, ctx, fetcher } = await mount({
+    "": { entries: [{ name: "kept.md", kind: "file" }] },
+  });
+  fetcher.mockResolvedValueOnce(Response.json({ message: "Could not list" }, { status: 503 }));
+  await tree.ensure(ctx, TS, "", true);
+  expect(await screen.findByText("Could not list")).toBeInTheDocument();
+  expect(screen.getByText("kept.md")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Retry" }));
+  expect(screen.getByText("kept.md")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+});

@@ -135,3 +135,31 @@ it("reads static data after a visibility wake-up without starting a retry timer"
   expect(release).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it("lets incremental readers reject superseded and disposed work", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const guards: (() => boolean)[] = [];
+  let finish!: (value: string) => void;
+  const read = vi.fn((isCurrent: () => boolean) => {
+    guards.push(isCurrent);
+    return new Promise<string>((resolve) => {
+      finish = resolve;
+    });
+  });
+  const stop = startDatasetView({ ...f, read, dataset: "tags", isHidden: () => false });
+  expect(guards[0]()).toBe(true);
+  f.signals.publish(["map"]);
+  expect(guards[0]()).toBe(true);
+  f.signals.publish(["tags"]);
+  expect(guards[0]()).toBe(false);
+  finish("stale");
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(guards[1]()).toBe(true);
+  stop();
+  expect(guards[1]()).toBe(false);
+  finish("disposed");
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.apply).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
+});

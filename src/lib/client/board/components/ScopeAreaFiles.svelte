@@ -26,6 +26,7 @@
     groups,
     onOpenFile,
     onNavigate,
+    onRefresh,
     onCreate,
     onCreateTaskspace,
   }: {
@@ -39,6 +40,7 @@
     onOpenFile?: (taskspaceId: string, path: string) => void;
     /** Points this frame's view of one taskspace at another of its directories. */
     onNavigate: (taskspaceId: string, path: string) => void;
+    onRefresh?: (taskspaceId: string, path: string) => void;
     /**
      * Create a file or folder named `name` in `path` of one taskspace. Without it, the strip
      * offers no create controls, as in read-only boards and static exports.
@@ -187,8 +189,10 @@
       {#if group.error}
         <div class={css({ fontSize: "10px", color: "state.error", textAlign: "right" })}>
           {group.error}
+          {#if onRefresh}<button type="button" onclick={() => onRefresh?.(group.taskspaceId, group.path)}>Retry</button>{/if}
         </div>
-      {:else if !group.read}
+      {/if}
+      {#if !group.read}
         <!-- Show loading feedback so a pending listing does not appear empty. -->
         {#if group.loading}
           <div class={noteClass}>Loading…</div>

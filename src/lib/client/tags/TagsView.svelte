@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RefreshNotice from "../RefreshNotice.svelte";
   import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend } from "$lib/backend/contract.js";
@@ -307,12 +308,7 @@
     </nav>
   </header>
 
-  {#if refreshFailed}
-    <p role="status" class={css({ fontSize: "12px", color: "state.error", marginBottom: "16px" })}>
-      Could not refresh tags. Showing the last results.
-      <button type="button" onclick={() => refreshAttempt++} class={css({ marginLeft: "8px", fontSize: "12px", cursor: "pointer" })}>Retry</button>
-    </p>
-  {/if}
+  <RefreshNotice {backend} failed={refreshFailed} message="Could not refresh tags. Showing the last results." retry={() => refreshAttempt++} />
 
   {#if tree.length !== 0}
     <div

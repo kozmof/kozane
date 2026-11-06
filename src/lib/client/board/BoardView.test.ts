@@ -233,3 +233,47 @@ it("keeps a late mutation failure out of the replacement generation", async () =
   expect(input).toHaveValue("New generation draft");
   expect(f.create).toHaveBeenCalledOnce();
 });
+
+it("keeps board drafts editable while failed snapshot reads are retried", async () => {
+  const f = recoveringHost();
+  f.snapshot
+    .mockRejectedValueOnce(new BackendError("network", "offline"))
+    .mockResolvedValue({ status: "changed", validator: "recovered", data: f.props.data });
+  render(BoardView, { props: f.props });
+  const input = screen.getByRole("textbox", { name: "Write a card" });
+  await fireEvent.input(input, { target: { value: "Keep this draft" } });
+  f.signals.publish(["snapshot"]);
+  expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(input).toHaveValue("Keep this draft");
+  expect(input).toBeEnabled();
+  await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument(),
+  );
+  expect(input).toHaveValue("Keep this draft");
+  expect(input).toBeEnabled();
+  expect(f.snapshot).toHaveBeenCalledTimes(2);
+});
+
+it("keeps editing available until polling recovery clears its transient notice", async () => {
+  const f = recoveringHost();
+  f.snapshot.mockResolvedValue({ status: "changed", validator: "current", data: f.props.data });
+  render(BoardView, { props: f.props });
+  const input = screen.getByRole("textbox", { name: "Write a card" });
+  await fireEvent.input(input, { target: { value: "Still editable" } });
+  f.signals.transition({
+    status: "ready",
+    refreshError: new BackendError("unavailable", "Metadata unavailable"),
+  });
+  expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(input).toBeEnabled();
+  await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await waitFor(() => expect(f.snapshot).toHaveBeenCalledOnce());
+  expect(screen.getByText(/Could not check workspace changes/)).toBeInTheDocument();
+  expect(input).toHaveValue("Still editable");
+  f.signals.transition({ status: "ready" });
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument(),
+  );
+  expect(input).toBeEnabled();
+});

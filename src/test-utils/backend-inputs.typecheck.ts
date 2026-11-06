@@ -14,7 +14,13 @@ import type {
 /** Compiled consumer fixture. Never invoked or included in a runtime entry point. */
 export function checkBackendInputs(backend: KozaneBackend): void {
   void backend.subscribe(() => {});
-  void backend.subscribeState(() => {});
+  void backend.subscribeState((state) => {
+    if (state.status === "ready") {
+      const refreshError: import("../lib/backend/index.js").BackendError | undefined =
+        state.refreshError;
+      void refreshError?.retryAfterMs;
+    }
+  });
   const card: CardCreateInput = {
     partitionId: "p",
     content: "Text",

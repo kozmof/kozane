@@ -179,11 +179,13 @@ describe("ScopeAreaFiles", () => {
     expect(container.textContent?.trim()).toBe("");
   });
 
-  it("reports a listing that failed, in place of the cells", () => {
-    mount({ groups: [group({ error: "Failed to list files" })] });
-
+  it("keeps cells visible when a refresh fails and offers a directory retry", async () => {
+    const onRefresh = vi.fn();
+    mount({ groups: [group({ error: "Failed to list files", path: "src" })], onRefresh });
     expect(screen.getByText("Failed to list files")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open file app.ts" })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRefresh).toHaveBeenCalledWith("t1", "src");
   });
 
   it("says why a listing was cut off", () => {

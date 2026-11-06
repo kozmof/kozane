@@ -267,3 +267,30 @@ it("does not publish errors from an old recovery session", async () => {
   expect(status).toHaveBeenLastCalledWith({ current: true, namespaceId: "ns", generation: 1 });
   stop();
 });
+
+it("clears refresh errors on a validated unchanged result without replacing applied data", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const refreshed = vi.fn(),
+    error = vi.fn();
+  const stop = startSnapshotView({
+    ...f,
+    namespaceId: () => "ns",
+    activities: [],
+    isHidden: () => false,
+    retryIntervalMs: false,
+    refreshed,
+    error,
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  f.snapshot.mockRejectedValueOnce(new Error("offline"));
+  f.signals.publish(["snapshot"]);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(error).toHaveBeenCalledOnce();
+  f.snapshot.mockResolvedValueOnce({ status: "unchanged", validator: "one" });
+  f.signals.publish(["snapshot"]);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(refreshed).toHaveBeenCalledTimes(2);
+  expect(f.apply).toHaveBeenCalledOnce();
+  stop();
+});

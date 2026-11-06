@@ -153,3 +153,17 @@ it("retains the namespace draft while recovery blocks submission", async () => {
   await waitFor(() => expect(button).toBeEnabled());
   expect(input).toHaveValue("Retained name");
 });
+
+it("retains namespace links and retries a failed metadata refresh", async () => {
+  const fetcher = vi
+    .fn()
+    .mockRejectedValueOnce(new Error("offline"))
+    .mockImplementation(async () => Response.json([{ ...rows[0], name: "Recovered namespace" }]));
+  const backend = new HttpBackend({ capabilities, fetcher });
+  render(NamespacesView, { props: { ...props, backend } });
+  expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /Research/ })).toBeInTheDocument();
+  await fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(await screen.findByRole("link", { name: /Recovered namespace/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+});

@@ -8,7 +8,8 @@ export type DatasetBackend = Pick<
 export function startDatasetView<T>(options: {
   backend: DatasetBackend;
   dataset: BackendDataset;
-  read: () => Promise<T>;
+  /** Internal readers can guard incremental results before their promise settles. */
+  read: (isCurrent: () => boolean) => Promise<T>;
   apply: (value: T) => void;
   isHidden: () => boolean;
   /** Static data needs no scheduled retries. */
@@ -29,7 +30,14 @@ export function startDatasetView<T>(options: {
     const request = sequence,
       generation = backend.version.generation;
     try {
-      const result = await options.read();
+      const result = await options.read(
+        () =>
+          !disposed &&
+          sequence === request &&
+          generation === backend.version.generation &&
+          backend.state.status === "ready" &&
+          !options.isHidden(),
+      );
       if (disposed) return;
       if (
         sequence !== request ||

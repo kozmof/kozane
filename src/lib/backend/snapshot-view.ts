@@ -19,6 +19,8 @@ export interface SnapshotViewStatus {
 export function startSnapshotView(options: {
   backend: SnapshotBackend;
   initialDataApplied?: boolean;
+  /** Revalidate a trusted seed without discarding its current-generation status. */
+  refreshInitially?: boolean;
   namespaceId: () => string;
   activities: readonly ViewActivity[];
   apply: (data: SnapshotData) => void;
@@ -27,12 +29,13 @@ export function startSnapshotView(options: {
   retryIntervalMs?: number | false;
   lifecycle?: Pick<PollLifecycle, "listen">;
   error?: (error: unknown) => void;
+  refreshed?: () => void;
   status?: (status: SnapshotViewStatus) => void;
 }): () => void {
   const { backend } = options;
   let disposed = false,
     running = false,
-    dirty = !options.initialDataApplied,
+    dirty = !options.initialDataApplied || options.refreshInitially === true,
     sequence = 0;
   let currentNamespace = options.namespaceId();
   let applied: { namespaceId: string; generation: number; validator: string } | undefined;
@@ -94,6 +97,7 @@ export function startSnapshotView(options: {
         options.apply(result.data);
       }
       validated = { namespaceId, generation };
+      options.refreshed?.();
       report();
       applied = { namespaceId, generation, validator: result.validator };
     } catch (error) {

@@ -1,6 +1,6 @@
 # Backend operation matrix
 
-Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented domain, read, taskspace and lifecycle surface. The LocalBackend contract runner and isolated packed-consumer verification remain pending. This document does not establish Gate 3 completion.
+Use the exported declarations in [contract.ts](contract.ts), [resources.ts](resources.ts) and [taskspaces-api.ts](taskspaces-api.ts) for exact call and result types. This matrix records the implemented domain, read, taskspace and lifecycle surface. The LocalBackend contract runner and isolated packed-consumer verification remain pending. See the [Phase 2 task record](../../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md) for Gate 3 acceptance evidence.
 
 ## Shared rules
 
@@ -15,6 +15,12 @@ Keepalive is supported only by methods that accept `MutationOptions`. It request
 Hosts can import `PollLifecycle`, `NavigationAdapter`, `NavigationDriver` and `PreferenceStorage` from the public client entry. These adapters keep visibility, wake events, routing and preference storage in the host.
 
 While subscribed, the HTTP backend polls visible workspaces and starts a fresh token baseline for each subscription session. A successful poll after a failure revalidates all datasets even when its token matches the last successful baseline. Hidden or disposed views defer or discard pending work.
+
+Committed writes and workspace-wide external invalidations expire HTTP snapshot validators. The next snapshot request therefore forces server assembly instead of reusing a metadata-only conditional cache entry, including after conservative change tokens. Known unchanged-token filesystem refreshes can retain conditional snapshot reads.
+
+A failed HTTP change-token poll leaves the backend ready and its data version unchanged. The ready state carries an optional `refreshError` until the next successful poll. Shared views show a retry notice and retain their last data. Renewing a subscription retries a failed polling session through the shared throttle deadline. Healthy polling sessions keep their normal timing.
+
+Active file-tree and scope-frame directories share watched listings. Successful snapshot invalidations refresh only displayed directories, including when the database token is unchanged. Failed reads retain existing rows and offer Retry. Closed directories and superseded requests cannot apply late results. Static views retain their embedded listings.
 
 ## Dataset reads
 

@@ -13,6 +13,8 @@ function fixture() {
   const token = vi.fn().mockResolvedValue("same"),
     changed = vi.fn(),
     filesystemRefresh = vi.fn();
+  const failed = vi.fn(),
+    succeeded = vi.fn();
   let wait = 0;
   const poller = new WorkspacePoller({
     lifecycle: {
@@ -25,6 +27,8 @@ function fixture() {
     token,
     changed,
     filesystemRefresh,
+    failed,
+    succeeded,
     throttleMs: () => wait,
   });
   return {
@@ -32,6 +36,8 @@ function fixture() {
     token,
     changed,
     filesystemRefresh,
+    failed,
+    succeeded,
     stop,
     setVisible: (value: boolean) => {
       visible = value;
@@ -169,6 +175,7 @@ it("ignores late failures from a stopped session after a fresh session establish
   expect(f.changed).toHaveBeenCalledOnce();
   fail(new Error("old session"));
   await vi.advanceTimersByTimeAsync(1000);
+  expect(f.failed).not.toHaveBeenCalled();
   expect(f.changed).toHaveBeenCalledOnce();
   expect(f.filesystemRefresh).toHaveBeenCalledOnce();
   current();

@@ -39,11 +39,15 @@ export class WorkspacePoller {
       throttleMs: () => number;
       changed: () => void;
       filesystemRefresh: () => void;
+      failed?: (error: unknown) => void;
+      succeeded?: () => void;
     },
   ) {}
   retain(): () => void {
     this.subscribers++;
-    if (!this.session) {
+    if (this.session) {
+      if (this.session.refreshRequired) this.refresh(this.session);
+    } else {
       const session: Session = { running: false, stop: () => {} };
       this.session = session;
       session.stop = this.options.lifecycle.listen(() => this.refresh(session));
@@ -88,11 +92,15 @@ export class WorkspacePoller {
         session.refreshRequired = false;
         if (changed) this.options.changed();
         else this.options.filesystemRefresh();
+        this.options.succeeded?.();
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         // Retain the last successful baseline and data. Recovery must revalidate all
         // datasets even when the next successful token equals that baseline.
-        if (this.session === session) session.refreshRequired = true;
+        if (this.session === session) {
+          session.refreshRequired = true;
+          this.options.failed?.(error);
+        }
       })
       .finally(() => {
         session.running = false;

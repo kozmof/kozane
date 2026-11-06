@@ -737,3 +737,51 @@ it("keeps static backend directory truncation reasons without falling back to HT
   expect(tree.node(TS, "").entries?.[0].name).toBe("hello.md");
   expect(fetcher).not.toHaveBeenCalled();
 });
+
+it("refreshes only watched directories, shares watchers and retains listings after failure", async () => {
+  const fetcher = vi.fn(async (url: RequestInfo | URL) =>
+    Response.json({
+      ...listing(["before.md"]),
+      path: new URL(String(url), "http://localhost").searchParams.get("path") ?? "",
+    }),
+  );
+  const ctx = context(fetcher as typeof fetch);
+  const tree = new TaskspaceTreeState();
+  await tree.ensure(ctx, TS, "");
+  await tree.ensure(ctx, TS, "closed");
+  const one = tree.watch(TS, ""),
+    two = tree.watch(TS, "");
+  fetcher.mockClear();
+  fetcher.mockResolvedValueOnce(Response.json({ message: "offline" }, { status: 503 }));
+  expect(await tree.refreshWatched(ctx, () => true)).toBe(false);
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(tree.node(TS, "").entries?.map((entry) => entry.name)).toEqual(["before.md"]);
+  expect(tree.node(TS, "").error).not.toBeNull();
+  one();
+  one();
+  fetcher.mockResolvedValueOnce(Response.json(listing(["after.md"])));
+  expect(await tree.refreshWatched(ctx, () => true)).toBe(true);
+  expect(tree.node(TS, "").entries?.map((entry) => entry.name)).toEqual(["after.md"]);
+  expect(tree.node(TS, "").error).toBeNull();
+  two();
+  fetcher.mockClear();
+  await tree.refreshWatched(ctx, () => true);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+it("rejects directory results after the last watcher closes", async () => {
+  let finish!: (response: Response) => void;
+  const fetcher = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const tree = new TaskspaceTreeState();
+  const release = tree.watch(TS, "");
+  const pending = tree.refreshWatched(context(fetcher as typeof fetch), () => true);
+  release();
+  finish(Response.json(listing(["late.md"])));
+  await pending;
+  expect(tree.node(TS, "").entries).toBeNull();
+  expect(tree.node(TS, "").loading).toBe(false);
+});

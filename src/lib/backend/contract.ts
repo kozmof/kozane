@@ -46,7 +46,12 @@ export interface BackendCapabilities {
   readonly externalWrites: boolean;
 }
 export type BackendState =
-  | { readonly status: "initializing" | "ready" | "recovering" }
+  | { readonly status: "initializing" | "recovering" }
+  | {
+      readonly status: "ready";
+      /** A retryable external-refresh failure. Data and write readiness remain intact. */
+      readonly refreshError?: BackendError;
+    }
   | {
       readonly status: "unavailable";
       readonly error: BackendError;
