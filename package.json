@@ -60,7 +60,9 @@
     "check:backend-contract": "node scripts/check-backend-contract.mjs",
     "smoke:ssg": "node scripts/smoke-ssg.mjs",
     "build:core": "pnpm --filter @kozane/core build",
-    "check:core-package": "node scripts/check-core-package.mjs"
+    "check:core-package": "node scripts/check-core-package.mjs",
+    "build:restoration-harness": "node scripts/check-core-package.mjs --restoration-harness",
+    "test:restoration-harness": "pnpm build:restoration-harness && playwright test --config scripts/restoration-harness/playwright.config.ts"
   },
   "dependencies": {
     "@kozmof/reed": "^4.1.0",

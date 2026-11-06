@@ -1,4 +1,5 @@
 import { deadline } from "./deadline";
+export class AssetVerificationError extends Error {}
 export interface AssetManifest {
   buildId: string;
   workerHash: string;
@@ -10,13 +11,13 @@ export async function verifiedBytes(url: URL, expectedHash: string): Promise<Arr
   return deadline(
     (async () => {
       const response = await fetch(url, { signal: controller.signal });
-      if (!response.ok) throw new Error("Asset fetch failed");
+      if (!response.ok) throw new AssetVerificationError("Asset fetch failed");
       const bytes = await response.arrayBuffer();
       const digest = await crypto.subtle.digest("SHA-256", bytes);
       const hash = Array.from(new Uint8Array(digest), (byte) =>
         byte.toString(16).padStart(2, "0"),
       ).join("");
-      if (hash !== expectedHash) throw new Error("Asset integrity mismatch");
+      if (hash !== expectedHash) throw new AssetVerificationError("Asset integrity mismatch");
       return bytes;
     })(),
     30_000,
@@ -41,7 +42,7 @@ export async function verifiedModule(manifest: AssetManifest): Promise<WebAssemb
       const response = await fetch(new URL("./sqlite3.wasm", location.href), {
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error("Asset fetch failed");
+      if (!response.ok) throw new AssetVerificationError("Asset fetch failed");
       const compilation = deadline(WebAssembly.compileStreaming(response.clone()), 30_000, () =>
         controller.abort(),
       );
@@ -54,7 +55,8 @@ export async function verifiedModule(manifest: AssetManifest): Promise<WebAssemb
           const hash = Array.from(new Uint8Array(digest), (byte) =>
             byte.toString(16).padStart(2, "0"),
           ).join("");
-          if (hash !== manifest.wasmHash) throw new Error("Asset integrity mismatch");
+          if (hash !== manifest.wasmHash)
+            throw new AssetVerificationError("Asset integrity mismatch");
         })(),
       ]);
       for (const result of results) if (result.status === "rejected") throw result.reason;

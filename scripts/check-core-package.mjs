@@ -302,6 +302,10 @@ snapshots:
   console.log(
     "Packed core public runtime, declarations, adapter hooks and browser exports passed in an isolated offline installation.",
   );
+  if (process.argv.includes("--restoration-harness")) {
+    const { buildRestorationHarness } = await import("./restoration-harness/build.mjs");
+    await buildRestorationHarness(temporary);
+  }
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }
