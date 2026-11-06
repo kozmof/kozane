@@ -5,8 +5,12 @@ import { restoreCandidate, HarnessFailure, type CandidateRequest } from "./recov
 import { ResetSession } from "./reset";
 import { WorkerContext, type WorkerCandidate, type HarnessManifest } from "./worker-context";
 /** A retained harness case has its own root lifetime and queue; all reset candidates are staged. */
-export async function openResetSession(manifest: HarnessManifest, namespaceId?: string) {
-  const context = new WorkerContext(manifest);
+export async function openResetSession(
+  manifest: HarnessManifest,
+  namespaceId?: string,
+  controls: { healthTimeoutMs?: number } = {},
+) {
+  const context = new WorkerContext(manifest, undefined, controls.healthTimeoutMs);
   const queue = new OperationQueue();
   let closed = false;
   const assertActive = () => {
@@ -17,6 +21,7 @@ export async function openResetSession(manifest: HarnessManifest, namespaceId?: 
     let latest: WorkerCandidate | undefined;
     const restored = await restoreCandidate({
       schemaVersion,
+      publication: context,
       namespaceId,
       storage: () => sessionStorage,
       sample: async () => context.sample(),
@@ -83,6 +88,7 @@ export async function openResetSession(manifest: HarnessManifest, namespaceId?: 
       ) => {
         assertActive();
         const result = await session.reset({
+          publication: context,
           sample: async () => context.sample(),
           open: async (bytes) => {
             const candidate = await context.open(bytes);

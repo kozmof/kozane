@@ -83,6 +83,7 @@ export interface StorageAccess {
 export interface RestoreOptions<View> {
   schemaVersion: string;
   attempt?: AttemptLease;
+  publication?: { ready(): Promise<void>; isReady(): boolean };
   namespaceId?: string;
   navigation?: DestinationTracker;
   beforeView?: (namespaceId?: string) => Promise<void>;
@@ -112,10 +113,11 @@ export function failureKind(error: unknown): FailureKind {
   }
   return "unknown";
 }
-async function validate<View>(
+async function validate<View, Result>(
   options: RestoreOptions<View>,
   bytes: Uint8Array,
-  sampleNamespaceId?: string,
+  sampleNamespaceId: string | undefined,
+  commit: (view: View, candidate: Candidate<View>) => Result,
 ) {
   options.attempt?.assertCurrent();
   const candidate = await options.open(bytes);
@@ -130,10 +132,14 @@ async function validate<View>(
         navigation: options.navigation,
         beforeView: options.beforeView,
       });
+      await options.publication?.ready();
       options.attempt?.assertCurrent();
-      if (!ticket || options.navigation!.isCurrent(ticket)) break;
+      if (
+        (!ticket || options.navigation!.isCurrent(ticket)) &&
+        (!options.publication || options.publication.isReady())
+      )
+        return commit(view, candidate);
     }
-    return { candidate, view };
   } catch (error) {
     // Failed cleanup makes the candidate outcome uncertain and prohibits corruption fallback.
     try {
@@ -171,7 +177,12 @@ async function restoreCurrent<View>(options: RestoreOptions<View>): Promise<Rest
   let sample: { bytes: Uint8Array; namespaceId: string };
   try {
     sample = await options.sample();
-    const preflight = await validate(options, sample.bytes, sample.namespaceId);
+    const preflight = await validate(
+      options,
+      sample.bytes,
+      sample.namespaceId,
+      (view, candidate) => ({ view, candidate }),
+    );
     try {
       await preflight.candidate.close();
     } catch {
@@ -188,15 +199,14 @@ async function restoreCurrent<View>(options: RestoreOptions<View>): Promise<Rest
   }
   if (recovery) {
     try {
-      const restored = await validate(options, recovery.bytes);
-      options.attempt?.assertCurrent();
-      return {
-        status: "ready",
-        source: "restored",
-        ...restored,
+      return await validate(options, recovery.bytes, undefined, (view, candidate) => ({
+        status: "ready" as const,
+        source: "restored" as const,
+        view,
+        candidate,
         recoveryUnavailable,
         olderCopyMayRestore,
-      };
+      }));
     } catch (error) {
       options.attempt?.assertCurrent();
       const kind = failureKind(error);
@@ -206,24 +216,25 @@ async function restoreCurrent<View>(options: RestoreOptions<View>): Promise<Rest
     }
   }
   try {
-    const fallback = await validate(options, sample.bytes, sample.namespaceId);
-    options.attempt?.assertCurrent();
-    if (saved !== null && fallbackReason && storage) {
-      try {
-        storage.removeItem(RECOVERY_KEY);
-      } catch {
-        recoveryUnavailable = true;
-        olderCopyMayRestore = true;
+    return await validate(options, sample.bytes, sample.namespaceId, (view, candidate) => {
+      if (saved !== null && fallbackReason && storage) {
+        try {
+          storage.removeItem(RECOVERY_KEY);
+        } catch {
+          recoveryUnavailable = true;
+          olderCopyMayRestore = true;
+        }
       }
-    }
-    return {
-      status: "ready",
-      source: "sample",
-      ...fallback,
-      recoveryUnavailable,
-      olderCopyMayRestore,
-      ...(fallbackReason ? { fallbackReason } : {}),
-    };
+      return {
+        status: "ready" as const,
+        source: "sample" as const,
+        view,
+        candidate,
+        recoveryUnavailable,
+        olderCopyMayRestore,
+        ...(fallbackReason ? { fallbackReason } : {}),
+      };
+    });
   } catch (error) {
     const kind = failureKind(error);
     return {

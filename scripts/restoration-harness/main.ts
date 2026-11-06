@@ -13,11 +13,12 @@ async function run(
   controls: {
     navigation?: DestinationTracker;
     rpcTimeoutMs?: number;
+    healthTimeoutMs?: number;
     beforeView?: (namespaceId?: string) => Promise<void>;
   } = {},
 ) {
   const attempt = attempts.begin();
-  const context = new WorkerContext(manifest, controls.rpcTimeoutMs);
+  const context = new WorkerContext(manifest, controls.rpcTimeoutMs, controls.healthTimeoutMs);
   const unsubscribe = attempt.onSuperseded(() => context.dispose(new SupersededAttemptError()));
   try {
     attempt.assertCurrent();
@@ -25,6 +26,7 @@ async function run(
     const result = await restoreCandidate({
       schemaVersion,
       attempt,
+      publication: context,
       namespaceId,
       navigation: controls.navigation,
       beforeView: controls.beforeView,
@@ -32,6 +34,7 @@ async function run(
       sample: async () => context.sample(),
       open: (bytes) => context.open(bytes),
     });
+    await context.ready();
     attempt.assertCurrent();
     if (result.status === "ready") {
       const { candidate, ...report } = result;
@@ -70,7 +73,8 @@ Object.assign(window, {
     start,
     manifest,
     schemaVersion,
-    openSession: (namespaceId?: string) => openResetSession(manifest, namespaceId),
+    openSession: (namespaceId?: string, controls?: { healthTimeoutMs?: number }) =>
+      openResetSession(manifest, namespaceId, controls),
     replaceGeneration: () => attempts.replaceGeneration(),
     isCurrent: (ticket: { attempt: number; generation: number }) => attempts.isCurrent(ticket),
   },

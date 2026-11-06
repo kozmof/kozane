@@ -23,11 +23,13 @@ export async function buildRestorationHarness(
     "navigation.ts",
     "attempt.ts",
     "active-clock.ts",
+    "resume-gate.ts",
     "suspension.ts",
     "reset.ts",
     "validation.ts",
     "generate-fixture.mjs",
     "node-check.mjs",
+    "worker-check.mjs",
   ]) {
     await copyFile(new URL(name, import.meta.url), join(sources, name));
   }
@@ -120,6 +122,17 @@ export async function buildRestorationHarness(
       join(sources, "node-check.mjs"),
       join(output, "sample.db"),
       fixture.sampleNamespaceId,
+    ],
+    { cwd: consumer, stdio: "inherit" },
+  );
+  execFileSync(
+    process.execPath,
+    [
+      join(sources, "worker-check.mjs"),
+      join(output, "worker.js"),
+      join(output, "sqlite3.wasm"),
+      join(output, "sample.db"),
+      buildId,
     ],
     { cwd: consumer, stdio: "inherit" },
   );

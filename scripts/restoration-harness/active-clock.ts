@@ -29,6 +29,14 @@ export class ActiveClock {
     this.heartbeat = this.observation = now();
     this.plan();
   }
+  get running(): boolean {
+    return (
+      !this.disposed &&
+      !this.paused &&
+      !this.resumes.length &&
+      ![...this.entries].some((entry) => !entry.settled && entry.remaining === 0)
+    );
+  }
   get paused(): boolean {
     return this.reasons.size > 0;
   }
@@ -62,9 +70,14 @@ export class ActiveClock {
     });
   }
   wait<T>(operation: Promise<T>, milliseconds: number, cleanup: () => void = () => {}): Promise<T> {
-    if (!Number.isFinite(milliseconds) || milliseconds <= 0)
+    if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+      void operation.catch(() => {});
       throw new RangeError("Deadline must be a positive finite duration");
-    if (this.disposed) return Promise.reject(new Error("Deadline clock is disposed"));
+    }
+    if (this.disposed) {
+      void operation.catch(() => {});
+      return Promise.reject(new Error("Deadline clock is disposed"));
+    }
     this.check();
     let entry: Pending;
     const result = new Promise<T>((resolve, reject) => {

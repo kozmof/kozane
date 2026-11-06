@@ -91,8 +91,26 @@ suspension and reconciliation. Queue waiting consumes no RPC deadline. Expiry ca
 stage resources and terminates the context's workers. No operation is replayed. Test deadlines
 must be positive and finite. The Phase 0 standalone default remains a wall-clock deadline.
 
-P3-10 remains in progress. The new browser cases await CI execution. Two-stage resume health
-checks, browser suspension fault coverage and compatibility-corpus integration remain. Basic
+`ResumeGate` runs two checks after suspension. A responsiveness probe bypasses wasm loading,
+database readiness and both operation queues. Once a handle exists, a read-only `SELECT 1`
+check waits for already dispatched database replies to settle. It bypasses the service queue
+and never commits or rolls back an existing transaction. Both checks have separate 10-second
+active-time deadlines. Tests may inject shorter positive finite health deadlines.
+
+Pending database replies and health checks retain their own budgets across further pauses.
+A successful probe cannot extend a lost SQL reply's deadline. Repeated gaps do not redispatch
+pending checks. New database work, startup readiness, recovery deletion and reset activation
+wait for the current checks. Stale health outcomes cannot open the gate. Failure closes the
+context and preserves recovery data.
+
+Every worker message carries a request and worker-instance ID. Replies must match both.
+Verified Blob URLs stay alive until worker termination. The packed build also executes the
+actual bundled worker under Node to check early probes, instance binding and transaction
+preservation through connection checks. Prepared browser cases cover healthy resume with
+unsaved edits, a mutation reply held across suspension and a stalled resume probe.
+
+P3-10 remains in progress. The new browser cases await CI execution. Expanded suspension
+fault coverage and compatibility-corpus integration remain. Basic
 `run()` cases close their candidate after reporting validation. Retained cases
 keep it until `close()`. The persistent editing backend is implemented in Phase 4.
 See the [task list](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).

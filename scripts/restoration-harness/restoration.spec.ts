@@ -464,3 +464,183 @@ test("invalid test RPC deadlines reject before worker creation or asset fetching
   expect(workers).toBe(0);
   expect(requests).toEqual([]);
 });
+test("resume probes and connection checks precede new SQL while retaining unsaved edits", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const OriginalWorker = window.Worker;
+    const methods: string[] = [];
+    window.Worker = class extends OriginalWorker {
+      postMessage(message: any, options?: Transferable[] | StructuredSerializeOptions) {
+        methods.push(message.method);
+        if (Array.isArray(options)) super.postMessage(message, options);
+        else super.postMessage(message, options);
+      }
+    };
+    let session: any;
+    try {
+      session = await (window as any).restorationHarness.openSession();
+      if (session.status !== "ready") throw new Error("Session failed");
+      await session.addCard("Unsaved edit before suspension");
+      sessionStorage.setItem("kozane-demo:session", "preserved copy");
+      methods.length = 0;
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      const reading = session.read();
+      for (let i = 0; i < 8; i++) await Promise.resolve();
+      const paused = methods.slice();
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      const view = await reading;
+      return {
+        view,
+        paused,
+        methods: methods.slice(),
+        saved: sessionStorage.getItem("kozane-demo:session"),
+      };
+    } finally {
+      if (session?.status === "ready") await session.close();
+      window.Worker = OriginalWorker;
+    }
+  });
+  expect(result.paused).toEqual([]);
+  const firstSQL = result.methods.indexOf("run");
+  expect(firstSQL).toBeGreaterThan(1);
+  expect(result.methods[0]).toBe("probe");
+  expect(result.methods[firstSQL - 1]).toBe("connection");
+  expect(result.view.snapshot.snapshot.cards.map((card: any) => card.content)).toContain(
+    "Unsaved edit before suspension",
+  );
+  expect(result.saved).toBe("preserved copy");
+});
+test("resume waits for a dispatched mutation reply without replay or transaction changes", async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const OriginalWorker = window.Worker;
+    let entered!: () => void, probed!: () => void, releaseMutation!: () => void;
+    const held = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const responsive = new Promise<void>((resolve) => {
+      probed = resolve;
+    });
+    let capture = false,
+      inserts = 0;
+    const trace: { method: string; sql?: string }[] = [];
+    window.Worker = class extends OriginalWorker {
+      private holdId: number | undefined;
+      private heldReply: any;
+      private released = false;
+      private healthId: number | undefined;
+      constructor(...args: ConstructorParameters<typeof Worker>) {
+        super(...args);
+        this.addEventListener("message", (event) => {
+          if (event.data.id === this.holdId && !this.released) {
+            this.heldReply = event.data;
+            releaseMutation = () => this.release();
+            event.stopImmediatePropagation();
+            entered();
+          }
+          if (event.data.id === this.healthId) probed();
+        });
+      }
+      release() {
+        this.released = true;
+        this.dispatchEvent(new MessageEvent("message", { data: this.heldReply }));
+      }
+      postMessage(message: any, options?: Transferable[] | StructuredSerializeOptions) {
+        if (typeof message.sql === "string" && /insert\s+into\s+["`]?card\b/i.test(message.sql)) {
+          inserts++;
+          this.holdId = message.id;
+        }
+        if (capture) {
+          trace.push({ method: message.method, sql: message.sql });
+          if (message.method === "probe") this.healthId = message.id;
+        }
+        if (Array.isArray(options)) super.postMessage(message, options);
+        else super.postMessage(message, options);
+      }
+    };
+    let session: any;
+    try {
+      session = await (window as any).restorationHarness.openSession();
+      if (session.status !== "ready") throw new Error("Session failed");
+      sessionStorage.setItem("kozane-demo:session", "preserved copy");
+      const mutation = session.addCard("Mutation spanning suspension");
+      await held;
+      capture = true;
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      await responsive;
+      for (let i = 0; i < 12; i++) await Promise.resolve();
+      const beforeRelease = trace.slice();
+      releaseMutation();
+      await mutation;
+      const mutationTrace = trace.slice();
+      return {
+        beforeRelease,
+        mutationTrace,
+        inserts,
+        view: await session.read(),
+        saved: sessionStorage.getItem("kozane-demo:session"),
+      };
+    } finally {
+      if (session?.status === "ready") await session.close();
+      window.Worker = OriginalWorker;
+    }
+  });
+  expect(result.beforeRelease.length).toBeGreaterThan(0);
+  expect(result.beforeRelease.every((item) => item.method === "probe")).toBe(true);
+  const connection = result.mutationTrace.findIndex((item) => item.method === "connection");
+  expect(connection).toBeGreaterThan(0);
+  expect(result.mutationTrace.slice(0, connection).every((item) => item.method === "probe")).toBe(
+    true,
+  );
+  expect(result.mutationTrace.filter((item) => item.sql === "COMMIT")).toHaveLength(1);
+  expect(result.mutationTrace.filter((item) => item.sql === "ROLLBACK")).toHaveLength(0);
+  expect(result.inserts).toBe(1);
+  expect(result.view.snapshot.snapshot.cards).toHaveLength(2);
+  expect(result.saved).toBe("preserved copy");
+});
+test("an expired resume probe closes the connection and preserves recovery", async ({ page }) => {
+  const result = await page.evaluate(async () => {
+    const OriginalWorker = window.Worker;
+    let stall = false;
+    window.Worker = class extends OriginalWorker {
+      postMessage(message: any, options?: Transferable[] | StructuredSerializeOptions) {
+        if (stall && message.method === "probe") return;
+        if (Array.isArray(options)) super.postMessage(message, options);
+        else super.postMessage(message, options);
+      }
+    };
+    let session: any;
+    try {
+      session = await (window as any).restorationHarness.openSession(undefined, {
+        healthTimeoutMs: 2000,
+      });
+      if (session.status !== "ready") throw new Error("Session failed");
+      sessionStorage.setItem("kozane-demo:session", "preserved copy");
+      stall = true;
+      window.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+      let rejected = false;
+      try {
+        await session.read();
+      } catch {
+        rejected = true;
+      }
+      return {
+        rejected,
+        state: session.state(),
+        saved: sessionStorage.getItem("kozane-demo:session"),
+      };
+    } finally {
+      if (session?.status === "ready") await session.close();
+      window.Worker = OriginalWorker;
+    }
+  });
+  expect(result).toMatchObject({
+    rejected: true,
+    state: { liveWorkers: 0 },
+    saved: "preserved copy",
+  });
+});

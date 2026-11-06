@@ -250,3 +250,11 @@ it("never replenishes a partly consumed budget after an ambiguous gap", async ()
   await rejected;
   expect(cleanup).toHaveBeenCalledOnce();
 });
+it("observes an already rejected transport promise when disposal preceded deadline registration", async () => {
+  const active = clock();
+  active.dispose();
+  await expect(
+    active.wait(Promise.reject(new Error("synchronous worker failure")), 100),
+  ).rejects.toThrow("disposed");
+  await Promise.resolve();
+});

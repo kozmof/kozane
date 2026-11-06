@@ -13,6 +13,7 @@ export interface ResetState<View> {
   readonly url: string;
 }
 export interface ResetOptions<View> {
+  publication?: { ready(): Promise<void>; isReady(): boolean };
   sample(): Promise<{ bytes: Uint8Array; namespaceId: string }>;
   /** Stage an independent candidate. Opening it must preserve the current live handle. */
   open(bytes: Uint8Array): Promise<Candidate<View>>;
@@ -58,6 +59,11 @@ export class ResetSession<View> {
         namespaceId = sample.namespaceId;
         staged = await options.open(sample.bytes);
         view = await staged.validate({ namespaceId, sampleNamespaceId: namespaceId });
+        if (options.publication) {
+          do {
+            await options.publication.ready();
+          } while (!options.publication.isReady());
+        }
         url = options.destination(namespaceId);
         options.navigate?.(url);
       } catch (error) {

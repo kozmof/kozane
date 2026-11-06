@@ -231,3 +231,35 @@ it("applies navigation inside the barrier before queued reads see the new state"
   expect(await reading).toEqual({ generation: 4, url: "/board/?namespaceId=sample" });
   expect(f.events).toEqual(["/board/?namespaceId=sample", "delete", "old closed"]);
 });
+it.each([false, true])(
+  "reset activation and navigation wait for resume health (failure %s)",
+  async (fails) => {
+    const f = fixture(),
+      gate = deferred<void>(),
+      entered = deferred<void>(),
+      navigate = vi.fn();
+    f.options.navigate = navigate;
+    f.options.publication = {
+      ready: async () => {
+        entered.resolve();
+        await gate.promise;
+        if (fails) throw new Error("connection check failed");
+      },
+      isReady: () => true,
+    };
+    const result = f.session.reset(f.options);
+    await entered.promise;
+    expect(f.session.state.generation).toBe(3);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(f.storage.removeItem).not.toHaveBeenCalled();
+    gate.resolve();
+    if (fails) {
+      expect(await result).toMatchObject({ status: "unavailable", action: "retry" });
+      expect(f.session.state.generation).toBe(3);
+      expect(navigate).not.toHaveBeenCalled();
+    } else {
+      expect(await result).toMatchObject({ status: "ready" });
+      expect(navigate).toHaveBeenCalledOnce();
+    }
+  },
+);

@@ -9,16 +9,31 @@ const initialize = sqlite3InitModule as unknown as (options: {
 }) => Promise<SQLite>;
 import { OperationQueue } from "./operation-queue";
 declare const __SPIKE_BUILD_ID__: string;
-let sqlite: Awaited<ReturnType<typeof sqlite3InitModule>>;
+let sqlite: SQLite;
 let database: InstanceType<typeof sqlite.oo1.DB> | undefined;
+let instanceId: string | undefined;
 const queue = new OperationQueue();
 self.onmessage = ({ data }) => {
+  if (
+    !data ||
+    !Number.isSafeInteger(data.id) ||
+    typeof data.instanceId !== "string" ||
+    !data.instanceId
+  )
+    return;
+  if (instanceId === undefined) instanceId = data.instanceId;
+  if (data.instanceId !== instanceId) return;
+  const { id, method } = data;
+  const reply = (result: unknown) => self.postMessage({ id, instanceId, result });
+  // Installed before initialization. Never wait for wasm, a database handle or the SQL queue.
+  if (method === "probe") {
+    reply(__SPIKE_BUILD_ID__);
+    return;
+  }
   void queue.run(async () => {
-    const { id, method } = data;
     try {
       let result: unknown;
-      if (method === "probe") result = __SPIKE_BUILD_ID__;
-      else if (method === "initialize") {
+      if (method === "initialize") {
         sqlite = await initialize({
           instantiateWasm(imports, receive) {
             const instance = new WebAssembly.Instance(data.module, imports);
@@ -41,10 +56,18 @@ self.onmessage = ({ data }) => {
       } else {
         if (!database) throw new Error("Candidate is not open");
         const rows: SqlValue[][] = [];
-        database.exec({ sql: data.sql, bind: data.args ?? [], rowMode: "array", resultRows: rows });
-        result = { rows: method === "get" ? (rows[0] ?? []) : rows };
+        database.exec({
+          sql: method === "connection" ? "SELECT 1" : data.sql,
+          bind: method === "connection" ? [] : (data.args ?? []),
+          rowMode: "array",
+          resultRows: rows,
+        });
+        result =
+          method === "connection"
+            ? rows.length === 1 && rows[0][0] === 1
+            : { rows: method === "get" ? (rows[0] ?? []) : rows };
       }
-      self.postMessage({ id, result });
+      reply(result);
     } catch (error) {
       const code = sqlite && error instanceof sqlite.SQLite3Error ? error.resultCode & 255 : 0;
       const kind =
@@ -53,7 +76,11 @@ self.onmessage = ({ data }) => {
           : code === 5 || code === 6
             ? "transient"
             : "unknown";
-      self.postMessage({ id, error: { kind, message: "Candidate database operation failed" } });
+      self.postMessage({
+        id,
+        instanceId,
+        error: { kind, message: "Candidate database operation failed" },
+      });
     }
   });
 };
