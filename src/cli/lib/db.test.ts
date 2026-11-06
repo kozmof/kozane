@@ -1,3 +1,5 @@
+import { openDb } from "../../db/client.js";
+import { nodeCommitRevision } from "../../db/tx.js";
 import { createClient } from "@libsql/client";
 import {
   existsSync,
@@ -442,4 +444,20 @@ describe("requireCurrentMigrations", () => {
       restore();
     }
   });
+});
+
+it("tracks CLI migrations through the same database instance as existing Node handles", async () => {
+  const url = tempDbUrl(join(tempRoot(), "tracked-migrations.db"));
+  const { db, close } = await openDb(url);
+  try {
+    const before = nodeCommitRevision(db);
+    await runMigrations(url);
+    const after = nodeCommitRevision(db);
+    expect(after.nonce).toBe(before.nonce);
+    // The migration table initialization and the atomic migration batch each commit once.
+    expect(after.revision).toBe(before.revision + 2);
+    expect((await getMigrationStatus(url)).state).toBe("current");
+  } finally {
+    close();
+  }
 });

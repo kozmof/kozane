@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
+import { openDb } from "../../db/client.js";
+import { migrateNodeDatabase } from "../../db/tx.js";
 import { createClient } from "@libsql/client";
 import {
   closeSync,
@@ -13,13 +13,12 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileDbUrl } from "../../lib/db-url.js";
-import * as schema from "../../db/schema.js";
 import {
   getMigrationStatus,
   resolveMigrationsFolder,
   type MigrationStatus,
 } from "../../db/internal/migrations.js";
-import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "../../db/pragmas.js";
+import { BUSY_TIMEOUT_MS } from "../../db/pragmas.js";
 import { dbPath } from "./config.js";
 
 // Read migration state through `db/internal/migrations.ts`, which the server can also import.
@@ -138,17 +137,11 @@ export async function requireCurrentMigrations(dbUrl: string, purpose: string): 
 }
 
 export async function runMigrations(dbUrl: string): Promise<void> {
-  // Apply the connection timeout used after transactions. See `openDb`.
-  const client = createClient({ url: dbUrl, timeout: BUSY_TIMEOUT_MS });
-  const db = drizzle(client, { schema });
-
+  const { db, close } = await openDb(dbUrl);
   try {
-    // Use the server's database pragmas, including during initialization, so the workspace
-    // uses WAL from its first migration.
-    await applyConnectionPragmas(client, dbUrl);
-    await migrate(db, { migrationsFolder: resolveMigrationsFolder() });
+    await migrateNodeDatabase(db, { migrationsFolder: resolveMigrationsFolder() });
   } finally {
-    client.close();
+    close();
   }
 }
 

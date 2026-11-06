@@ -30,9 +30,12 @@ export function trackedClient(client: Client, state: CommitRevision): Client {
           if (writes(statement)) state.revision++;
           return result;
         };
-      if (key === "batch")
+      if (key === "batch" || key === "migrate")
         return async (statements: InStatement[], mode?: "write" | "read" | "deferred") => {
-          const result = await target.batch(statements, mode);
+          const result =
+            key === "migrate"
+              ? await target.migrate(statements)
+              : await target.batch(statements, mode);
           if (statements.some(writes)) state.revision++;
           return result;
         };

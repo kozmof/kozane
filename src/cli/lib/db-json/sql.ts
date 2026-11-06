@@ -11,17 +11,6 @@ export function selectSql(table: (typeof TABLES)[number]): string {
   return `SELECT ${columns} FROM ${quoteIdent(table.name)} ORDER BY ${orderBy}`;
 }
 
-/**
- * Build a multi-row insert for `rowCount` rows. The caller uses {@link chunked} to stay
- * within the parameter budget.
- */
-export function insertSql(table: (typeof TABLES)[number], rowCount: number): string {
-  const columns = table.columns.map(quoteIdent).join(", ");
-  const tuple = `(${table.columns.map(() => "?").join(", ")})`;
-  const values = Array.from({ length: rowCount }, () => tuple).join(", ");
-  return `INSERT INTO ${quoteIdent(table.name)} (${columns}) VALUES ${values}`;
-}
-
 export function deleteSql(table: (typeof TABLES)[number]): string {
   return `DELETE FROM ${quoteIdent(table.name)}`;
 }

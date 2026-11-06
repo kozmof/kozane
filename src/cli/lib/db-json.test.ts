@@ -926,3 +926,26 @@ describe("dumpLimitWarnings", () => {
     expect(dumpLimitWarnings({ tables: { card: [null, 7, "x"] } }, limits)).toEqual([]);
   });
 });
+
+import { openDb } from "../../db/client.js";
+import { nodeCommitRevision } from "../../db/tx.js";
+it("advances the shared Node revision once after importing every table", async () => {
+  const url = await migratedDbUrl("tracked-import.db");
+  await seedDb(url);
+  const dump = await exportDbJson(url);
+  const { db, close } = await openDb(url);
+  try {
+    const before = nodeCommitRevision(db);
+    await importDbJson(url, dump);
+    expect(nodeCommitRevision(db)).toEqual({ nonce: before.nonce, revision: before.revision + 1 });
+    const invalid = structuredClone(dump);
+    // This passes structural validation but fails the database's nonempty-name constraint.
+    invalid.tables.scope[0].name = "";
+    const committed = nodeCommitRevision(db);
+    await expect(importDbJson(url, invalid)).rejects.toThrow();
+    expect(nodeCommitRevision(db)).toEqual(committed);
+    expect((await exportDbJson(url)).tables).toEqual(dump.tables);
+  } finally {
+    close();
+  }
+});

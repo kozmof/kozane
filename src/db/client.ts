@@ -2,10 +2,10 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { migrateNodeDatabase as migrate } from "./tx.js";
 import { getDBURL } from "./internal/config.js";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileDbUrl, isMemoryDbUrl } from "../lib/db-url.js";
+import { dbPathFromUrl, fileDbUrl, isMemoryDbUrl } from "../lib/db-url.js";
 import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "./pragmas.js";
 import { resolveMigrationsFolder } from "./internal/migrations.js";
 import * as schema from "./schema.js";
@@ -25,8 +25,18 @@ export async function openDb(url: string): Promise<OpenedDb> {
   // Set the client timeout for new connections after the transaction. A connection-local
   // pragma is insufficient.
   const client = createClient({ url, timeout: BUSY_TIMEOUT_MS });
-  await applyConnectionPragmas(client, url);
-  return { db: brandDb(drizzle(client, { schema }), url), close: () => client.close() };
+  try {
+    await applyConnectionPragmas(client, url);
+    const path = dbPathFromUrl(url);
+    const file = path ? statSync(path, { bigint: true }) : null;
+    // URL aliases share one instance. Atomic replacement starts a new instance even
+    // while an old handle still retains its revision state.
+    const identity = file ? `file:${file.dev}:${file.ino}:${file.birthtimeNs}` : url;
+    return { db: brandDb(drizzle(client, { schema }), identity), close: () => client.close() };
+  } catch (error) {
+    client.close();
+    throw error;
+  }
 }
 
 /**

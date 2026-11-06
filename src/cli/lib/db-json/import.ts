@@ -1,9 +1,10 @@
 /** Replacing a workspace database's rows with a JSON dump. */
-import { createClient, type InValue } from "@libsql/client";
+import { sql } from "drizzle-orm";
+import { openDb } from "../../../db/client.js";
+import { withTx } from "../../../db/database.js";
 import { chunked } from "../../../lib/constants.js";
-import { applyConnectionPragmas, BUSY_TIMEOUT_MS } from "../../../db/pragmas.js";
 import { TABLES, type TableName } from "./format.js";
-import { insertSql, deleteSql } from "./sql.js";
+import { deleteSql } from "./sql.js";
 import { parseDump } from "./parse.js";
 import { validateDumpRefs, validateDumpPaths } from "./validate.js";
 
@@ -24,42 +25,37 @@ export async function importDbJson(
   const dump = parseDump(input);
   validateDumpRefs(dump.tables);
   validateDumpPaths(dump.tables, options);
-  const client = createClient({ url: dbUrl, timeout: BUSY_TIMEOUT_MS });
+  const { db, close } = await openDb(dbUrl);
 
   try {
-    await applyConnectionPragmas(client, dbUrl);
-    await client.execute("BEGIN");
-    try {
-      for (const table of [...TABLES].reverse()) {
-        await client.execute(deleteSql(table));
-      }
-
+    await withTx(db, async (tx) => {
+      for (const table of [...TABLES].reverse()) await tx.run(sql.raw(deleteSql(table)));
       for (const table of TABLES) {
         for (const batch of chunked(dump.tables[table.name], {
           columnsPerRow: table.columns.length,
         })) {
-          await client.execute({
-            sql: insertSql(table, batch.length),
-            args: batch.flatMap((row) => table.columns.map((column) => row[column] as InValue)),
-          });
+          const columns = sql.join(
+            table.columns.map((column) => sql.identifier(column)),
+            sql`, `,
+          );
+          const rows = batch.map(
+            (row) =>
+              sql`(${sql.join(
+                table.columns.map((column) => sql`${row[column]}`),
+                sql`, `,
+              )})`,
+          );
+          await tx.run(
+            sql`INSERT INTO ${sql.identifier(table.name)} (${columns}) VALUES ${sql.join(rows, sql`, `)}`,
+          );
         }
       }
-
-      await client.execute("COMMIT");
-    } catch (e) {
-      // Report the failure that stopped the import, not a rollback failing after it.
-      try {
-        await client.execute("ROLLBACK");
-      } catch {
-        // SQLite may already have rolled back, for example after SQLITE_FULL.
-      }
-      throw e;
-    }
+    });
 
     return Object.fromEntries(
       TABLES.map((table) => [table.name, dump.tables[table.name].length]),
     ) as Record<TableName, number>;
   } finally {
-    client.close();
+    close();
   }
 }
