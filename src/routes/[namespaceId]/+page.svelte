@@ -20,6 +20,7 @@
 </script>
 
 <BoardView
+  lifetimeNotice={data.backendLifetimeNotice}
   {data} {backend} {navigation} {routing} {preferences}
   readRouteUrl={() => browser ? page.url : null}
   initialDataApplied={backend.kind !== "static"}

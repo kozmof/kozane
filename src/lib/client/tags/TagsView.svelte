@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend } from "$lib/backend/contract.js";
   import type { PollLifecycle } from "$lib/backend/workspace-poller.js";
@@ -30,11 +31,12 @@
   import TagResults from "./TagResults.svelte";
   import { activeRowClass, countClass, noteClass, rowClass } from "./styles.js";
 
-  let { data, selection, navigation, backend, retryIntervalMs, lifecycle, isHidden = () => false }: {
+  let { data, selection, navigation, backend, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
     data: TagsPageData;
     selection: TagsSelection;
     navigation: NavigationAdapter;
     backend?: KozaneBackend;
+    lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
     isHidden?: () => boolean;
@@ -231,6 +233,8 @@
     {/each}
   </ul>
 {/snippet}
+
+{#if backend}<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
 
 <main
   class={css({

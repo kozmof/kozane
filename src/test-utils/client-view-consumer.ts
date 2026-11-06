@@ -1,3 +1,4 @@
+import { capabilityViewProps } from "./capability-view-props.js";
 import { render } from "svelte/server";
 import {
   EditorDocument,
@@ -99,5 +100,16 @@ export async function renderViews() {
     map: map.body,
     board: board.body,
     fullBoard: fullBoard.body,
+  };
+}
+
+export function renderCapabilityViews(
+  capabilities: import("../lib/client/index.js").BackendCapabilities,
+  lifetimeNotice?: string,
+) {
+  const props = capabilityViewProps(capabilities, lifetimeNotice);
+  return {
+    index: render(NamespacesView, { props: props.index }).body,
+    board: render(BoardView, { props: props.board }).body,
   };
 }

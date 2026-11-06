@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend, NamespaceGetResult } from "$lib/backend/contract.js";
   import type { Snippet } from "svelte";
@@ -7,11 +8,12 @@
   import { css } from "styled-system/css";
   import NavIcon from "$lib/components/NavIcon.svelte";
 
-  let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, createAction, emptyState, retryIntervalMs = 1000 }: {
+  let { backend, initialNamespaces, navigation, workspaceName = null, workspaceLabel = "Kozane", formError = null, lifetimeNotice, createAction, emptyState, retryIntervalMs = 1000 }: {
     backend: KozaneBackend;
     initialNamespaces: NamespaceGetResult[];
     navigation: NavigationAdapter;
     workspaceName?: string | null;
+    lifetimeNotice?: string;
     workspaceLabel?: string;
     formError?: string | null;
     /** Optional app-owned endpoint for progressive form submission. */
@@ -82,6 +84,8 @@
       </a>
     </nav>
   </div>
+
+  <BackendNotice capabilities={backend.capabilities} {lifetimeNotice} />
 
   {#if index.namespaces.length === 0}
     {#if !backend.capabilities.writable && emptyState}

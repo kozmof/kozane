@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BackendNotice from "../BackendNotice.svelte";
   import type { NavigationAdapter } from "$lib/navigation.js";
   import type { KozaneBackend } from "$lib/backend/contract.js";
   import type { PollLifecycle } from "$lib/backend/workspace-poller.js";
@@ -43,11 +44,12 @@
    * Interactions navigate or change the view without writing workspace data.
    */
 
-  let { data, selection, navigation, backend, retryIntervalMs, lifecycle, isHidden = () => false }: {
+  let { data, selection, navigation, backend, lifetimeNotice, retryIntervalMs, lifecycle, isHidden = () => false }: {
     data: MapPageData;
     selection: MapSelection;
     navigation: NavigationAdapter;
     backend?: KozaneBackend;
+    lifetimeNotice?: string;
     retryIntervalMs?: number | false;
     lifecycle?: Pick<PollLifecycle, "listen">;
     isHidden?: () => boolean;
@@ -259,6 +261,8 @@
 </svelte:head>
 
 <!-- Fill the fixed-height viewport with the map and overlay controls. Hide page overflow so panning is the single way to move the map and graph coordinates remain aligned. -->
+{#if backend}<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />{/if}
+
 <main
   class={css({
     position: "relative",

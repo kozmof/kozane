@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BackendNotice from "../BackendNotice.svelte";
   import { onMount, onDestroy, tick, untrack } from "svelte";
   import type { BoardViewProps } from "./types.js";
   import { css } from "styled-system/css";
@@ -34,7 +35,7 @@
   import { bindViewWrites } from "./lib/view-writes.js";
   import { startSnapshotView, type SnapshotViewStatus } from "$lib/backend/snapshot-view.js";
 
-  let { data, backend, navigation, routing, preferences, readRouteUrl = () => null, initialDataApplied = false, retryIntervalMs, lifecycle, isHidden = () => false }: BoardViewProps = $props();
+  let { data, backend, lifetimeNotice, navigation, routing, preferences, readRouteUrl = () => null, initialDataApplied = false, retryIntervalMs, lifecycle, isHidden = () => false }: BoardViewProps = $props();
 
   // ── Reactive namespace state ────────────────────────────────────
   const s = new NamespaceState(untrack(() => preferences));
@@ -396,6 +397,7 @@
 </svelte:head>
 
 <svelte:window onkeydown={handleKeydown} />
+<BackendNotice capabilities={backend.capabilities} {lifetimeNotice} floating />
 
 {#if editingBlocked}
   <p role="status" class={css({ position: "fixed", top: "12px", left: "50%", zIndex: 1000, padding: "8px 12px", backgroundColor: "ink.white", color: "ink.black", fontSize: "12px" })}>Board editing is paused while current data loads.</p>

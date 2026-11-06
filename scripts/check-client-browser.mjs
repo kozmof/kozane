@@ -1,3 +1,4 @@
+import { checkClientHydration } from "./check-client-hydration.mjs";
 import { build } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { builtinModules } from "node:module";
@@ -65,7 +66,21 @@ async function main() {
       rollupOptions: { output: { entryFileNames: "views.js" } },
     },
   });
-  const { renderViews } = await import(new URL("../tmp/client-ssr/views.js", import.meta.url));
+  await build({
+    ...shared,
+    build: {
+      outDir: "tmp/client-hydration",
+      emptyOutDir: true,
+      lib: {
+        entry: "src/test-utils/client-hydration-consumer.ts",
+        formats: ["es"],
+        fileName: () => "consumer.js",
+      },
+    },
+  });
+  const { renderViews, renderCapabilityViews } = await import(
+    new URL("../tmp/client-ssr/views.js", import.meta.url)
+  );
   const rendered = await renderViews();
   assert.match(rendered.surface, /Shared editor SSR/);
   assert.match(rendered.surface, /editor-sink/);
@@ -106,6 +121,7 @@ async function main() {
     rendered.fullBoard.includes('data-card-id="card"'),
     "Board view SSR must include the canvas",
   );
+  await checkClientHydration(renderCapabilityViews);
   console.log(
     "Shared client browser bundle and standalone editor/namespace/tags/map/board SSR passed.",
   );

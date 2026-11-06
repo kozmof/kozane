@@ -24,6 +24,7 @@
 </script>
 
 <MapView
+  lifetimeNotice={data.backendLifetimeNotice}
   {data}
   {selection}
   {navigation}

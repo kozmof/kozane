@@ -24,6 +24,7 @@
 </script>
 
 <TagsView
+  lifetimeNotice={data.backendLifetimeNotice}
   {data}
   {selection}
   {navigation}

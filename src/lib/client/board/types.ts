@@ -16,6 +16,8 @@ export interface BoardViewProps {
   navigation: NavigationAdapter;
   routing: NavigationDriver;
   preferences: PreferenceStorage;
+  /** Host-supplied lifetime wording. Does not imply recovery storage support. */
+  lifetimeNotice?: string;
   /** Read the current route reactively and during cleanup, or return null without a route. */
   readRouteUrl?: () => URL | null;
   /** Trust the seed only when it was validated for the current backend generation. */

@@ -30,6 +30,7 @@
 {/snippet}
 
 <NamespacesView
+  lifetimeNotice={data.backendLifetimeNotice}
   {backend}
   {navigation}
   retryIntervalMs={backend.kind === "static" ? false : undefined}

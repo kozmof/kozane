@@ -8,7 +8,7 @@ export function httpBackendCapabilities(): BackendCapabilities {
   const auth = root ? readApiKeyResult(root) : null;
   return Object.freeze({
     writable: process.env.KOZANE_READONLY !== "1",
-    persistent: !isMemoryDbUrl(getDBURL()),
+    persistent: process.env.KOZANE_MEMORY_MODE !== "1" && !isMemoryDbUrl(getDBURL()),
     taskspaces: true,
     externalWrites: true,
     auth: auth?.ok === true && auth.key !== null,
