@@ -21,3 +21,8 @@ export interface MigrationHistoryValidation {
   readonly complete: boolean;
   readonly pending: readonly MigrationRecord[];
 }
+
+export interface MigrationApplicationResult {
+  readonly schemaVersion: string;
+  readonly appliedIds: readonly string[];
+}

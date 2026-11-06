@@ -64,6 +64,11 @@ export function brandDb(
   const branded = createDatabaseAdapter(db, {
     write: (operation) => run("write", operation),
     read: (operation) => run("deferred", operation),
+    migrate: async (prepare) => {
+      if (invalid) throw new UnavailableError("Database connection is unavailable");
+      const statements = await prepare(db);
+      await db.$client.migrate(statements.map(({ sql, args }) => ({ sql, args: [...args] })));
+    },
   });
   nodeHandles.set(branded, db);
   revisions.set(branded, state);

@@ -8,7 +8,7 @@ Kozane database contracts, schema and domain services for Node and browsers.
 | `@kozane/core/database`   | Adapter factory, branded handles, transaction helpers and service context |
 | `@kozane/core/schema`     | Drizzle tables and relations                                              |
 | `@kozane/core/services`   | Domain services and input validation                                      |
-| `@kozane/core/migrations` | Immutable migration records, schema version and strict history validation |
+| `@kozane/core/migrations` | Migration records, application and strict history validation              |
 
 The host supplies its database driver and transaction hooks through the adapter factory.
 The package declares Drizzle and UUID as runtime dependencies and includes JavaScript and
@@ -34,5 +34,20 @@ tarball outside the workspace with only its declared dependencies, checks its pu
 and runtime exports, executes its migration statements in native SQLite, and builds its
 browser entries.
 
-Migration application, schema comparison and the remaining workspace conversion are being
+Call `validateDatabaseMigrationHistory(db, mode)` to read and validate history in one read
+transaction. A missing history table counts as empty and is never created by validation.
+Call `applyMigrations(db)` to apply the pending prefix and verify complete history after commit.
+The result contains `schemaVersion` and the IDs applied by that call.
+
+Provide the optional `migrate(prepare)` adapter hook to support application. Invoke `prepare`
+with the database handle before opening the migration transaction. It initializes the history
+table and returns ordered SQL statements with bound arguments. Execute those statements
+atomically with foreign keys disabled before the transaction begins. Restore foreign keys
+after commit or rollback, and resolve the hook only after commit. Keep preparation and the
+batch exclusive to that migration operation. Preserve statement boundaries and bound arguments.
+Ordinary write transactions cannot provide this boundary. An adapter without the hook rejects
+application before preparation. Failures propagate without automatic retries or history repair.
+The Node adapter uses the existing native migration batch operation.
+
+Schema comparison and the remaining workspace conversion are being
 completed under [Phase 3](../../docs/backend-separation/Kozane-Client-Backend-Separation-and-Web-Demo-Tasks.md).
