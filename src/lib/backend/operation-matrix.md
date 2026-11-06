@@ -12,6 +12,10 @@ HTTP requests share authentication, permission, throttling and network handling.
 
 Keepalive is supported only by methods that accept `MutationOptions`. It requests fetch keepalive for a JSON body within the 60 KiB transport budget. It does not guarantee delivery. Reads and other methods below do not accept it.
 
+Hosts can import `PollLifecycle`, `NavigationAdapter`, `NavigationDriver` and `PreferenceStorage` from the public client entry. These adapters keep visibility, wake events, routing and preference storage in the host.
+
+While subscribed, the HTTP backend polls visible workspaces and starts a fresh token baseline for each subscription session. A successful poll after a failure revalidates all datasets even when its token matches the last successful baseline. Hidden or disposed views defer or discard pending work.
+
 ## Dataset reads
 
 No write capability is required. All results are promises of the named type. Namespace metadata uses direct database reads. Snapshot rows share one read transaction. Tags, map and warp-directory aggregation currently use multiple database reads and may include Node enrichment outside a database transaction. Consolidating those read boundaries remains pending in Phase 1. Static reads use embedded data and open no transaction.

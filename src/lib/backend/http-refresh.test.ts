@@ -70,3 +70,50 @@ it("shares polling throttle with subscribed reads without replaying rejected wri
   await vi.advanceTimersByTimeAsync(10000);
   expect(fetcher).toHaveBeenCalledTimes(count);
 });
+
+it("publishes all workspace datasets when polling recovers without a token change", async () => {
+  vi.useFakeTimers();
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(Response.json({ token: "stable" }))
+    .mockResolvedValueOnce(Response.json({ message: "Metadata unavailable" }, { status: 503 }))
+    .mockImplementation(async () => Response.json({ token: "stable" }));
+  const stop = vi.fn();
+  const backend = new HttpBackend({
+    fetcher,
+    capabilities: {
+      writable: true,
+      persistent: true,
+      externalWrites: true,
+      taskspaces: true,
+      auth: false,
+    },
+    lifecycle: { visible: () => true, listen: () => stop },
+  });
+  const observed = vi.fn();
+  const release = backend.subscribe((event) => {
+    expect(backend.version).toEqual({ generation: event.generation, revision: event.revision });
+    observed(event);
+  });
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(observed).toHaveBeenCalledOnce();
+    const stamp = backend.version;
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(observed).toHaveBeenCalledOnce();
+    expect(backend.version).toBe(stamp);
+    expect(backend.state.status).toBe("ready");
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(observed).toHaveBeenCalledTimes(2);
+    expect(observed.mock.calls[1][0]).toEqual({
+      generation: 0,
+      revision: 2,
+      datasets: ["snapshot", "tags", "map", "namespaces", "warpDirectory"],
+    });
+    expect(stamp).toEqual({ generation: 0, revision: 1 });
+  } finally {
+    release();
+  }
+  expect(stop).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
+});

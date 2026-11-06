@@ -57,3 +57,27 @@ it("isolates listener failures from later subscribers and committed publications
   expect(later).toHaveBeenCalledOnce();
   expect(signals.version.revision).toBe(1);
 });
+
+it("copies and freezes namespace-scoped targets independently of caller-owned arrays", () => {
+  const signals = new BackendSignals({ status: "ready" });
+  const datasets = ["snapshot", "tags"] as ("snapshot" | "tags")[];
+  const namespaces = ["one"];
+  const events: unknown[] = [];
+  signals.subscribe((event) => events.push(event));
+  const event = signals.publish(datasets, namespaces);
+  datasets.pop();
+  namespaces.push("two");
+  expect(event).toEqual({
+    generation: 0,
+    revision: 1,
+    datasets: ["snapshot", "tags"],
+    namespaceIds: ["one"],
+  });
+  expect(Object.isFrozen(event)).toBe(true);
+  expect(Object.isFrozen(event.namespaceIds)).toBe(true);
+  expect(Object.isFrozen(event.datasets)).toBe(true);
+  signals.publish(["map"]);
+  expect(events[0]).toBe(event);
+  expect(event.revision).toBe(1);
+  expect(signals.version.revision).toBe(2);
+});

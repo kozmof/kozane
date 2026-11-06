@@ -129,3 +129,49 @@ it("retains an unset baseline after polling failure", async () => {
   expect(f.changed).toHaveBeenCalledOnce();
   release();
 });
+
+it("invalidates every dataset after a failed poll recovers with the previous token", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  const release = f.poller.retain();
+  await flush();
+  expect(f.changed).toHaveBeenCalledOnce();
+  f.token.mockRejectedValueOnce(new Error("metadata unavailable"));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(f.changed).toHaveBeenCalledOnce();
+  expect(f.filesystemRefresh).not.toHaveBeenCalled();
+  f.setVisible(false);
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(f.token).toHaveBeenCalledTimes(2);
+  f.setVisible(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(f.changed).toHaveBeenCalledTimes(2);
+  expect(f.filesystemRefresh).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(f.filesystemRefresh).toHaveBeenCalledOnce();
+  release();
+  expect(vi.getTimerCount()).toBe(0);
+});
+it("ignores late failures from a stopped session after a fresh session establishes its baseline", async () => {
+  vi.useFakeTimers();
+  const f = fixture();
+  let fail!: (error: Error) => void;
+  f.token.mockImplementationOnce(
+    () =>
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+  );
+  const release = f.poller.retain();
+  release();
+  const current = f.poller.retain();
+  await flush();
+  expect(f.changed).toHaveBeenCalledOnce();
+  fail(new Error("old session"));
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(f.changed).toHaveBeenCalledOnce();
+  expect(f.filesystemRefresh).toHaveBeenCalledOnce();
+  current();
+  expect(f.stop).toHaveBeenCalledTimes(2);
+  expect(vi.getTimerCount()).toBe(0);
+});

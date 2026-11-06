@@ -22,6 +22,7 @@ export function browserPollLifecycle(): PollLifecycle {
 }
 interface Session {
   baseline?: string;
+  refreshRequired?: boolean;
   running: boolean;
   timer?: ReturnType<typeof setTimeout>;
   stop: () => void;
@@ -81,13 +82,17 @@ export class WorkspacePoller {
       .token()
       .then((token) => {
         if (this.session !== session) return;
-        const changed = session.baseline === undefined || token !== session.baseline;
+        const changed =
+          session.refreshRequired || session.baseline === undefined || token !== session.baseline;
         session.baseline = token;
+        session.refreshRequired = false;
         if (changed) this.options.changed();
         else this.options.filesystemRefresh();
       })
       .catch(() => {
-        // View data remains intact. A failed first poll leaves the baseline unset.
+        // Retain the last successful baseline and data. Recovery must revalidate all
+        // datasets even when the next successful token equals that baseline.
+        if (this.session === session) session.refreshRequired = true;
       })
       .finally(() => {
         session.running = false;

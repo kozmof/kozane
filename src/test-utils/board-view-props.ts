@@ -4,11 +4,13 @@ import {
   DEFAULT_UI_CONFIG,
   type BoardPageData,
   type BoardViewProps,
+  type PollLifecycle,
 } from "../lib/client/index.js";
 import { boardCanvasProps } from "./board-canvas-props.js";
 
 /** Fully typed host props for rendering the public board without a router framework. */
 export function boardViewProps(): BoardViewProps {
+  const lifecycle: PollLifecycle = { visible: () => true, listen: () => () => {} };
   const canvas = boardCanvasProps();
   const data: BoardPageData = {
     namespace: { id: "board", name: "Standalone workspace board", isDefault: true },
@@ -37,5 +39,7 @@ export function boardViewProps(): BoardViewProps {
     routing: { beforeNavigate: () => () => {}, navigate: async () => {}, replace: () => {} },
     preferences: { generation: 0, readActiveLayer: () => null, writeActiveLayer: () => {} },
     retryIntervalMs: false,
+    lifecycle,
+    isHidden: () => !lifecycle.visible(),
   };
 }
