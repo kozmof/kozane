@@ -385,6 +385,9 @@ ${client.snapshots}
     const { buildRestorationHarness } = await import("./restoration-harness/build.mjs");
     await buildRestorationHarness(temporary);
   }
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

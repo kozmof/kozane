@@ -247,6 +247,8 @@ export async function checkClientPackage({ consumer, run, manifest, browserOutpu
     rmSync(browserOutput, { recursive: true, force: true });
     cpSync(production, browserOutput, { recursive: true });
   }
+  const { checkSvelteKit } = await import("./check-sveltekit.mjs");
+  checkSvelteKit({ consumer, run, browserOutput });
   console.log(
     "Packed client source/declaration closure, SSR, browser compilation and production stylesheet retention passed without workspace aliases or consumer codegen.",
   );

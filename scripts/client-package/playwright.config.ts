@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: ".",
-  testMatch: ["styles.spec.ts", "views.spec.ts"],
+  testMatch: ["styles.spec.ts", "views.spec.ts", "sveltekit.spec.ts"],
   workers: 1,
   use: { browserName: "chromium", trace: "retain-on-failure" },
   webServer: {

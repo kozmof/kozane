@@ -46,6 +46,14 @@ exercise editor typing and undo. Each page starts with server-rendered content.
 Declaration checks require every relative type dependency to ship its declaration
 and reject a deliberately removed declaration.
 
+The same command installs a separate SvelteKit consumer from the candidate tarballs
+and exact locked build tools. It type-checks and prerenders board, tags, map, editor
+and namespace pages under `/kit`, without consumer Panda or workspace aliases.
+Checks verify meaningful server HTML, initial readiness and stylesheet/asset links.
+Four additional browser cases hydrate the views, check editor input/undo and verify
+that SvelteKit handles shared navigation links without reloading the document.
+The fixture treats tag/day fragments as filters when checking prerendered links.
+
 ## Backend contract checks
 
 Import the framework-independent suite from `@kozane/client/testing`. The root and
